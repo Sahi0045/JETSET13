@@ -11,6 +11,7 @@ export default function TravelDashboard() {
   const [isGuest, setIsGuest] = useState(false)
   const [showLoginPopup, setShowLoginPopup] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [bookings, setBookings] = useState([])
 
   useEffect(() => {
     // Check if user is authenticated
@@ -25,7 +26,66 @@ export default function TravelDashboard() {
     } else {
       setIsAuthenticated(true)
     }
+
+    // Load bookings from localStorage
+    loadBookings()
+
+    // Reload bookings when the window regains focus (user comes back from booking)
+    const handleFocus = () => {
+      loadBookings()
+    }
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [navigate])
+
+  const loadBookings = () => {
+    const allBookings = []
+    
+    console.log('🔍 Loading bookings from localStorage...')
+    
+    // Load flight bookings
+    const flightBooking = localStorage.getItem('completedFlightBooking')
+    console.log('Flight booking raw data:', flightBooking)
+    
+    if (flightBooking) {
+      try {
+        const booking = JSON.parse(flightBooking)
+        console.log('Parsed flight booking:', booking)
+        allBookings.push({
+          ...booking,
+          type: 'flight',
+          bookingDate: booking.orderCreatedAt || new Date().toISOString()
+        })
+      } catch (error) {
+        console.error('Error parsing flight booking:', error)
+      }
+    }
+
+    // Load cruise bookings
+    const cruiseBooking = localStorage.getItem('completedBooking')
+    console.log('Cruise booking raw data:', cruiseBooking)
+    
+    if (cruiseBooking) {
+      try {
+        const booking = JSON.parse(cruiseBooking)
+        console.log('Parsed cruise booking:', booking)
+        allBookings.push({
+          ...booking,
+          type: 'cruise',
+          bookingDate: booking.orderCreatedAt || new Date().toISOString()
+        })
+      } catch (error) {
+        console.error('Error parsing cruise booking:', error)
+      }
+    }
+
+    console.log('📋 Total bookings loaded:', allBookings.length)
+    console.log('All bookings:', allBookings)
+    setBookings(allBookings)
+  }
 
   const handleTabChange = (tab) => {
     setActiveTab(tab)
@@ -46,6 +106,115 @@ export default function TravelDashboard() {
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen)
+  }
+
+  // Filter bookings based on active tab and sidebar selection
+  const getFilteredBookings = () => {
+    let filtered = bookings
+    console.log('🔍 Filtering bookings...', { 
+      totalBookings: bookings.length, 
+      activeTab, 
+      activeSidebarItem 
+    })
+
+    // Filter by booking type (sidebar)
+    if (activeSidebarItem !== "All Bookings") {
+      const typeMap = {
+        "Flights": "flight",
+        "Cruise": "cruise", 
+        "Packages": "package"
+      }
+      const targetType = typeMap[activeSidebarItem]
+      filtered = filtered.filter(booking => booking.type === targetType)
+      console.log(`Filtered by type "${targetType}":`, filtered.length)
+    }
+
+    // Filter by status (tab) - FIXED: Show bookings based on status, not travel date
+    if (activeTab === "Upcoming") {
+      // Show all confirmed bookings (regardless of travel date)
+      filtered = filtered.filter(booking => {
+        const isUpcoming = booking.status !== 'CANCELLED' && booking.status !== 'FAILED'
+        console.log(`Booking ${booking.orderId}: status=${booking.status}, isUpcoming=${isUpcoming}`)
+        return isUpcoming
+      })
+    } else if (activeTab === "Past") {
+      // For now, show no bookings in Past (travel date logic would need flight/cruise departure dates)
+      filtered = []
+    } else if (activeTab === "Cancelled") {
+      filtered = filtered.filter(booking => booking.status === 'CANCELLED')
+    } else if (activeTab === "Failed") {
+      filtered = filtered.filter(booking => booking.status === 'FAILED')
+    }
+
+    console.log(`Final filtered bookings for ${activeTab}:`, filtered.length)
+    return filtered
+  }
+
+  const filteredBookings = getFilteredBookings()
+
+  const renderBookingCard = (booking) => {
+    const isFlightBooking = booking.type === 'flight'
+    
+    return (
+      <div key={booking.orderId || booking.bookingReference} 
+           className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {isFlightBooking ? 'Flight Booking' : 'Cruise Booking'}
+            </h3>
+            <p className="text-sm text-gray-500">
+              {booking.orderId || booking.bookingReference}
+            </p>
+          </div>
+          <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+            booking.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
+            booking.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+            'bg-blue-100 text-blue-800'
+          }`}>
+            {booking.status || 'Confirmed'}
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <p className="text-sm text-gray-500">PNR Number</p>
+            <p className="font-medium">{booking.pnr || 'N/A'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Transaction ID</p>
+            <p className="font-medium">{booking.transactionId || 'N/A'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Amount</p>
+            <p className="font-medium">${booking.amount || 'N/A'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Booking Date</p>
+            <p className="font-medium">
+              {new Date(booking.bookingDate || booking.orderCreatedAt).toLocaleDateString()}
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex gap-2">
+          <button 
+            onClick={() => navigate('/booking-confirmation', { state: { bookingData: booking } })}
+            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition"
+          >
+            View Details
+          </button>
+          {isFlightBooking && (
+            <button 
+              onClick={() => navigate('/manage-booking', { state: { bookingData: booking } })}
+              className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50 transition"
+            >
+              Manage Booking
+            </button>
+          )}
+        </div>
+      </div>
+    )
   }
 
   // Allow rendering for both authenticated and guest users
@@ -174,6 +343,36 @@ export default function TravelDashboard() {
 
           {/* Enhanced main content */}
           <div className="flex-1 bg-white rounded-lg shadow-sm">
+            {filteredBookings.length > 0 ? (
+              <div className="p-6">
+                <div className="mb-6 flex justify-between items-center">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      {activeTab} {activeSidebarItem === "All Bookings" ? "Bookings" : activeSidebarItem}
+                    </h2>
+                    <p className="text-gray-600">
+                      {filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''} found
+                    </p>
+                    {/* Debug info */}
+                    <p className="text-xs text-gray-400 mt-1">
+                      Total loaded: {bookings.length} | localStorage keys: {localStorage.getItem('completedFlightBooking') ? 'flight✓' : ''} {localStorage.getItem('completedBooking') ? 'cruise✓' : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={loadBookings}
+                    className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition"
+                    title="Refresh bookings"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  {filteredBookings.map(renderBookingCard)}
+                </div>
+              </div>
+            ) : (
             <div className="flex flex-col items-center justify-center p-6 sm:p-8 md:p-10">
               <div className="w-48 h-48 sm:w-64 sm:h-64 flex items-center justify-center">
                 <img
@@ -213,6 +412,7 @@ export default function TravelDashboard() {
                 )}
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>

@@ -108,7 +108,7 @@ export const endpoints = {
   // Flight endpoints
   flights: {
     search: createEndpoint('/flights/search'),
-    booking: createEndpoint('/flights/booking/flight-orders')
+    booking: createEndpoint('/flights/order')
   },
   
   // Hotel endpoints

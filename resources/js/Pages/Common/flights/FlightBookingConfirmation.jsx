@@ -128,8 +128,14 @@ function FlightBookingConfirmation() {
   const transformFlightData = (flightData) => {
     if (!flightData) return null;
 
-    // Calculate base price
-    const basePrice = parseFloat(flightData.price.base) || 0;
+    // Calculate base price - try multiple sources
+    const basePrice = parseFloat(
+      flightData.price?.base || 
+      flightData.originalOffer?.price?.base || 
+      flightData.price?.total || 
+      flightData.price?.amount || 
+      0
+    );
 
     // Calculate platform fee (10% of base price)
     const platformFee = basePrice * 0.10;
@@ -197,7 +203,7 @@ function FlightBookingConfirmation() {
           countryTax: countryTax,
           totalTaxes: totalTaxes,
           total: basePrice + totalTaxes,
-          currency: flightData.price.currency || 'EUR'
+          currency: flightData.price?.currency || flightData.originalOffer?.price?.currency || 'USD'
         }
       },
       baggage: {
@@ -494,7 +500,8 @@ function FlightBookingConfirmation() {
         passengerData,
         selectedAddons,
         vipService,
-        calculatedFare
+        calculatedFare,
+        selectedFlight: location.state?.flightData // Pass the original flight data
       } 
     });
   };

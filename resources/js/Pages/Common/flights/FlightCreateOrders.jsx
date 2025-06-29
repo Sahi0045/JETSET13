@@ -13,34 +13,33 @@ import { endpoints } from '../../../../../src/config/api';
 import ArcPayService from '../../../Services/ArcPayService';
 
 function FlightCreateOrders() {
-  const location = useLocation();
   const navigate = useNavigate();
-  const [orderData, setOrderData] = useState(null);
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [processingOrder, setProcessingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
-  const [bookingReference, setBookingReference] = useState(null);
-  const [pnr, setPnr] = useState(null);
   const [error, setError] = useState(null);
+  const [bookingReference, setBookingReference] = useState('');
+  const [pnr, setPnr] = useState('');
   const [pageLoaded, setPageLoaded] = useState(false);
 
-  useEffect(() => {
-    // Check if we have the required data from the payment step
-    if (location.state && location.state.paymentSuccess) {
-      setOrderData(location.state);
-      setLoading(false);
-      // Process the order automatically when component loads
-      processFlightOrder(location.state);
-    } else {
-      // If no data or payment was not successful, redirect to payment page
-      navigate("/flight-payment");
-    }
-  }, [location, navigate]);
+  console.log('🔍 FlightCreateOrders - Component loaded');
+  console.log('📍 Location state:', location.state);
+  console.log('📍 Navigation location:', location);
 
   useEffect(() => {
+    console.log('🔍 FlightCreateOrders - useEffect triggered');
+    if (location.state) {
+      console.log('📝 Processing order with data:', location.state);
+      processFlightOrder(location.state);
+    } else {
+      console.log('❌ No location.state found - redirecting to payment');
+      navigate('/flight-payment');
+    }
+    setLoading(false);
     const timer = setTimeout(() => setPageLoaded(true), 100);
     return () => clearTimeout(timer);
-  }, []);
+  }, [location.state, navigate]);
 
   // Function to call the Flight Create Orders API
   // API: POST /v1/booking/flight-orders (https://api.amadeus.com/v1/booking/flight-orders)
@@ -60,7 +59,17 @@ function FlightCreateOrders() {
 
       // Proceed with creating the flight order
       const flightBookingData = {
-        travelerDetails: orderData.passengerData && orderData.passengerData.length > 0 
+        flightOffer: orderData.selectedFlight || orderData.flightData || {
+          type: "flight-offer",
+          id: "test-flight",
+          source: "GDS",
+          instantTicketingRequired: false,
+          price: {
+            currency: "USD",
+            total: orderData.amount || "100.00"
+          }
+        },
+        travelers: orderData.passengerData && orderData.passengerData.length > 0 
           ? orderData.passengerData.map((passenger, index) => ({
               id: `${index + 1}`,
               firstName: passenger.firstName || orderData.paymentDetails?.cardHolder?.split(' ')[0] || "Test",
@@ -79,16 +88,6 @@ function FlightCreateOrders() {
           email: orderData.customerEmail || "test@jetsetgo.com",
           countryCode: "1",
           phoneNumber: "1234567890"
-        },
-        flightOffer: orderData.selectedFlight || orderData.flightData || {
-          type: "flight-offer",
-          id: "test-flight",
-          source: "GDS",
-          instantTicketingRequired: false,
-          price: {
-            currency: "USD",
-            total: orderData.amount || "100.00"
-          }
         }
       };
 
@@ -110,7 +109,9 @@ function FlightCreateOrders() {
           travelers: response.data.data.travelers || orderData.passengerData || []
         };
         
-        // Store booking data in localStorage for BookingConfirmation page
+        // Clear any old booking data and store fresh flight booking with PNR
+        localStorage.removeItem('completedBooking'); // Clear old cruise bookings
+        
         const completedFlightBooking = {
           type: 'flight',
           orderId: orderDetails.reference,
@@ -134,7 +135,20 @@ function FlightCreateOrders() {
       }
     } catch (error) {
       console.error('Order processing error:', error);
-      setError(error.message || 'Failed to process order');
+      console.error('Error response data:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      
+      // Extract more detailed error message
+      let errorMessage = 'Failed to process order';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.details) {
+        errorMessage = error.response.data.details;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setProcessingOrder(false);
     }

@@ -9,15 +9,30 @@ function BookingConfirmation() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get booking data from localStorage
-    const cruiseBooking = localStorage.getItem('completedBooking');
+    // Get booking data from localStorage - prioritize flight bookings
     const flightBooking = localStorage.getItem('completedFlightBooking');
+    const cruiseBooking = localStorage.getItem('completedBooking');
     
-    if (cruiseBooking) {
-      setBookingData({ ...JSON.parse(cruiseBooking), type: 'cruise' });
-    } else if (flightBooking) {
-      setBookingData({ ...JSON.parse(flightBooking), type: 'flight' });
+    // Debug: Check what's in localStorage
+    console.log('🔍 BookingConfirmation - localStorage check:');
+    console.log('flightBooking:', flightBooking);
+    console.log('cruiseBooking:', cruiseBooking);
+    console.log('All localStorage items:');
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      console.log(`  ${key}:`, localStorage.getItem(key));
+    }
+    
+    if (flightBooking) {
+      const flightData = JSON.parse(flightBooking);
+      console.log('📝 Parsed flight data:', flightData);
+      setBookingData({ ...flightData, type: 'flight' });
+    } else if (cruiseBooking) {
+      const cruiseData = JSON.parse(cruiseBooking);
+      console.log('📝 Parsed cruise data:', cruiseData);
+      setBookingData({ ...cruiseData, type: 'cruise' });
     } else {
+      console.log('❌ No booking data found in localStorage - redirecting to home in 2 seconds');
       // No booking data found, redirect to home
       setTimeout(() => navigate('/'), 2000);
     }
@@ -140,9 +155,21 @@ function BookingConfirmation() {
                 ) : (
                   <>
                     <div>
-                      <label className="text-sm font-medium text-gray-500">Flight</label>
+                      <label className="text-sm font-medium text-gray-500">Order ID</label>
                       <p className="text-lg font-semibold text-gray-900">
-                        Flight Booking Confirmed
+                        {bookingData.orderId || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">PNR Number</label>
+                      <p className="text-lg font-semibold text-blue-600">
+                        {bookingData.pnr || 'Generated'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Transaction ID</label>
+                      <p className="text-lg font-semibold text-gray-900">
+                        {bookingData.transactionId || 'N/A'}
                       </p>
                     </div>
                     <div>

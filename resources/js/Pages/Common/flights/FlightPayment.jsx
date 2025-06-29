@@ -240,25 +240,43 @@ function FlightPayment() {
         setPaymentSuccess(true);
         setShowPaymentResult(true);
         
-        // Store flight booking data in localStorage for BookingConfirmation page
-        const completedFlightBooking = {
-          type: 'flight',
-          orderId: initResponse.orderId,
+        console.log('🔍 Payment successful - preparing navigation to FlightCreateOrders');
+        console.log('📝 Payment data to pass:', {
           transactionId: processResponse.transactionId,
           amount: finalAmount || paymentData?.calculatedFare?.totalPrice || 0,
-          paymentMethod: activePaymentMethod,
-          flightData: paymentData,
+          orderId: initResponse.orderId,
+          selectedFlight: paymentData?.selectedFlight,
+          passengerData: paymentData?.passengerData,
+          customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com'
+        });
+        
+        // Navigate to flight order creation instead of directly to confirmation
+        setTimeout(() => {
+          console.log('🚀 Navigating to FlightCreateOrders...');
+          navigate("/flight-create-orders", {
+            state: {
+              // Payment data
+          transactionId: processResponse.transactionId,
+          amount: finalAmount || paymentData?.calculatedFare?.totalPrice || 0,
+              orderId: initResponse.orderId,
+              
+              // Flight data
+              selectedFlight: paymentData?.selectedFlight,
+              flightData: paymentData?.selectedFlight,
+              
+              // Passenger data
+              passengerData: paymentData?.passengerData,
+              
+              // Contact info
+              customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com',
+              
+              // Payment details
           paymentDetails: {
             ...cardDetails, 
             cardNumber: `**** **** **** ${cardDetails.cardNumber.slice(-4)}`
           }
-        };
-        
-        localStorage.setItem('completedFlightBooking', JSON.stringify(completedFlightBooking));
-        
-        // Navigate directly to booking confirmation page
-        setTimeout(() => {
-          navigate("/booking-confirmation");
+            }
+          });
         }, 2000);
       } else {
         // For UPI and other payment methods, just simulate success for now
@@ -266,21 +284,40 @@ function FlightPayment() {
         setPaymentSuccess(true);
         setShowPaymentResult(true);
         
-        // Store flight booking data in localStorage for BookingConfirmation page
-        const completedFlightBooking = {
-          type: 'flight',
-          orderId: initResponse.orderId,
+        console.log('🔍 Payment successful - preparing navigation to FlightCreateOrders');
+        console.log('📝 Payment data to pass:', {
           transactionId: `TXN-${Date.now()}`,
           amount: finalAmount || paymentData?.calculatedFare?.totalPrice || 0,
-          paymentMethod: activePaymentMethod,
-          flightData: paymentData,
-          paymentDetails: activePaymentMethod === "upi" ? { upiId } : {}
-        };
+          orderId: initResponse.orderId,
+          selectedFlight: paymentData?.selectedFlight,
+          passengerData: paymentData?.passengerData,
+          customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com'
+        });
         
-        localStorage.setItem('completedFlightBooking', JSON.stringify(completedFlightBooking));
-        
+        // Navigate to flight order creation instead of directly to confirmation
         setTimeout(() => {
-          navigate("/booking-confirmation");
+          console.log('🚀 Navigating to FlightCreateOrders...');
+          navigate("/flight-create-orders", {
+            state: {
+              // Payment data
+          transactionId: `TXN-${Date.now()}`,
+          amount: finalAmount || paymentData?.calculatedFare?.totalPrice || 0,
+              orderId: initResponse.orderId,
+              
+              // Flight data
+              selectedFlight: paymentData?.selectedFlight,
+              flightData: paymentData?.selectedFlight,
+              
+              // Passenger data
+              passengerData: paymentData?.passengerData,
+              
+              // Contact info
+              customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com',
+              
+              // Payment details
+              paymentDetails: activePaymentMethod === "upi" ? { upiId } : {}
+            }
+          });
         }, 2000);
       }
 
@@ -459,20 +496,20 @@ function FlightPayment() {
                           Base Fare ({paymentData?.passengerData?.length || 0} Traveller{paymentData?.passengerData?.length > 1 ? 's' : ''})
                         </span>
                         <span className="font-medium">
-                          ₹{paymentData?.calculatedFare?.baseFare?.toFixed(2) || '0.00'}
+                          ${paymentData?.calculatedFare?.baseFare?.toFixed(2) || '0.00'}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Taxes & Fees</span>
                         <span className="font-medium">
-                          ₹{paymentData?.calculatedFare?.tax?.toFixed(2) || '0.00'}
+                          ${paymentData?.calculatedFare?.totalTax?.toFixed(2) || '0.00'}
                         </span>
                       </div>
                       {paymentData?.calculatedFare?.addonsTotal > 0 && (
                         <div className="flex justify-between">
                           <span className="text-gray-600">Add-ons</span>
                           <span className="font-medium">
-                            ₹{paymentData?.calculatedFare?.addonsTotal?.toFixed(2) || '0.00'}
+                            ${paymentData?.calculatedFare?.addonsTotal?.toFixed(2) || '0.00'}
                           </span>
                         </div>
                       )}
@@ -480,14 +517,14 @@ function FlightPayment() {
                         <div className="flex justify-between">
                           <span className="text-gray-600">VIP Service</span>
                           <span className="font-medium">
-                            ₹{paymentData?.calculatedFare?.vipServiceFee?.toFixed(2) || '0.00'}
+                            ${paymentData?.calculatedFare?.vipServiceFee?.toFixed(2) || '0.00'}
                           </span>
                         </div>
                       )}
                       {discountAmount > 0 && (
                         <div className="flex justify-between text-green-600">
                           <span>Discount Applied</span>
-                          <span className="font-medium">- ₹{discountAmount.toFixed(2)}</span>
+                          <span className="font-medium">- ${discountAmount.toFixed(2)}</span>
                         </div>
                       )}
                     </div>
@@ -496,7 +533,7 @@ function FlightPayment() {
                     <div className="border-t border-gray-200 pt-4 mt-4">
                       <div className="flex justify-between items-center">
                         <span className="text-lg font-semibold text-gray-900">Total Payable</span>
-                        <span className="text-xl font-bold text-blue-600">₹{finalAmount.toFixed(2)}</span>
+                        <span className="text-xl font-bold text-blue-600">${finalAmount.toFixed(2)}</span>
                       </div>
                       <p className="text-xs text-gray-500 mt-1 text-right">(Inclusive of all taxes)</p>
                     </div>
@@ -506,7 +543,7 @@ function FlightPayment() {
                       <div className="bg-green-50 p-3 rounded-lg mt-4 flex items-center border border-green-100">
                         <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
                         <span className="text-green-700 text-sm font-medium">
-                          You saved ₹{(paymentData.calculatedFare.baseFare + paymentData.calculatedFare.tax - finalAmount).toFixed(2)} on this booking!
+                          You saved ${(paymentData.calculatedFare.baseFare + paymentData.calculatedFare.totalTax - finalAmount).toFixed(2)} on this booking!
                         </span>
                       </div>
                     )}
@@ -546,7 +583,7 @@ function FlightPayment() {
                 </form>
                 {promoApplied && (
                   <p className="text-green-600 text-sm mt-2 font-medium">
-                    Promo code applied! You saved ₹{discountAmount.toFixed(2)}.
+                    Promo code applied! You saved ${discountAmount.toFixed(2)}.
                   </p>
                 )}
               </div>
