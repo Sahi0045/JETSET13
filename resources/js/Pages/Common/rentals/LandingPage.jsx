@@ -87,9 +87,14 @@ export default function LandingPage() {
         const response = await axios.get(`${API_BASE_URL}/hotels/destinations`);
         if (response.data.success) {
           setDestinationSuggestions(response.data.data);
+        } else {
+          // Fallback to popular destinations if API doesn't return success
+          setDestinationSuggestions(popularDestinations);
         }
       } catch (error) {
         console.error('Error fetching destinations:', error);
+        // Fallback to popular destinations if API fails
+        setDestinationSuggestions(popularDestinations);
       }
     };
     fetchDestinations();
@@ -195,7 +200,7 @@ export default function LandingPage() {
         
         try {
           // If the regular search fails, try the mock search endpoint
-          const mockResponse = await axios.get(`${apiUrl}/hotels/mock-search`, {
+          const mockResponse = await axios.get(`${API_BASE_URL}/hotels/mock-search`, {
             params: {
               destination: cityCode,
               checkInDate: formattedCheckInDate,

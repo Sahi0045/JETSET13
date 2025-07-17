@@ -2,16 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import './Navbar.css';
 import CurrencySelector from '../../Components/CurrencySelector';
+import { useFirebaseAuth } from '../../contexts/FirebaseAuthContext';
 
 const Navbar = ({ forceScrolled }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(forceScrolled || false);
+  
+  // Use Firebase authentication
+  const { user, isAuthenticated, signOut, loading } = useFirebaseAuth();
 
   useEffect(() => {
-    const authStatus = localStorage.getItem('isAuthenticated');
-    setIsAuthenticated(authStatus === 'true');
     
     // Add scroll event listener only if not force scrolled
     if (!forceScrolled) {
@@ -46,18 +47,22 @@ const Navbar = ({ forceScrolled }) => {
   };
 
   const handleLogin = () => {
-    window.location.href = '/login';
+    window.location.href = '/firebase-login';
   };
 
   const handleProfile = () => {
-    window.location.href = '/profiledashboard';
+    window.location.href = '/firebase-profile';
     setIsDropdownOpen(false);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('isAuthenticated');
-    setIsAuthenticated(false);
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      setIsDropdownOpen(false);
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   return (
@@ -108,29 +113,51 @@ const Navbar = ({ forceScrolled }) => {
           <CurrencySelector />
         </div>
 
-        {isAuthenticated ? (
+        {loading ? (
+          <div className="profile-container">
+            <div className="profile-button loading">
+              <div className="loading-spinner"></div>
+            </div>
+          </div>
+        ) : isAuthenticated ? (
           <div className="profile-container">
             <button 
               className="profile-button" 
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             >
-              <div className="profile-icon">
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  strokeWidth="2" 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round"
-                >
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-              </div>
+              {user?.photoURL ? (
+                <img 
+                  src={user.photoURL} 
+                  alt="Profile" 
+                  className="profile-avatar"
+                />
+              ) : (
+                <div className="profile-icon">
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round"
+                  >
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                </div>
+              )}
+              <span className="profile-name">
+                {user?.displayName || user?.email?.split('@')[0] || 'User'}
+              </span>
             </button>
             {isDropdownOpen && (
               <div className="profile-dropdown">
+                <div className="profile-info">
+                  <p className="profile-info-name">{user?.displayName || 'User'}</p>
+                  <p className="profile-info-email">{user?.email}</p>
+                </div>
+                <div className="profile-divider"></div>
                 <button onClick={handleProfile}>
                   <svg 
                     xmlns="http://www.w3.org/2000/svg" 

@@ -63,84 +63,69 @@ export default function Booking() {
     setError('');
 
     try {
-      // Debug logging
-      console.log('API Key:', import.meta.env.VITE_AMADEUS_API_KEY);
-      console.log('API Secret:', import.meta.env.VITE_AMADEUS_API_SECRET);
-
-      // First get access token from Amadeus
-      const tokenResponse = await axios.post('https://test.api.amadeus.com/v1/security/oauth2/token', 
-        new URLSearchParams({
-          grant_type: 'client_credentials',
-          client_id: import.meta.env.REACT_APP_AMADEUS_API_KEY,
-          client_secret: import.meta.env.REACT_APP_AMADEUS_API_SECRET
-        }),
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
-        }
-      );
-
-      const accessToken = tokenResponse.data.access_token;
-      console.log('Access Token:', accessToken);
-
-      // Create hotel booking request according to Amadeus API spec
+      console.log('Starting hotel booking with Arc Pay integration...');
+      
+      // Step 1: Create hotel booking
       const bookingRequestData = {
-        data: {
-          type: "hotel-order",
-          guests: [{
-            id: "1",
-            name: {
-              title: bookingRequest.title,
-              firstName: bookingRequest.name.split(' ')[0].toUpperCase(),
-              lastName: bookingRequest.name.split(' ').slice(1).join(' ').toUpperCase()
-            },
-            contact: {
-              phone: bookingRequest.phone,
-              email: bookingRequest.email
-            }
-          }],
-          rooms: [{
-            guestIds: ["1"],
-            payment: paymentInfo.paymentOption === 'pay_now' ? {
-              method: "CREDIT_CARD",
-              card: {
-                vendorCode: paymentInfo.cardType,
-                cardNumber: paymentInfo.cardNumber,
-                expiryDate: paymentInfo.expiryDate,
-                holderName: paymentInfo.cardHolderName.toUpperCase()
-              }
-            } : undefined,
-            specialRequest: bookingRequest.specialRequests,
-            offerId: bookingData.hotelData.offerId,
-            ratePlanId: bookingData.hotelData.ratePlanId,
-            roomTypeId: bookingData.hotelData.roomTypeId
-          }],
-          hotelId: bookingData.hotelData.hotelId,
-          checkInDate: bookingData.checkInDate,
-          checkOutDate: bookingData.checkOutDate
-        }
+        action: 'bookHotel',
+        hotelId: bookingData?.hotelData?.hotelId || 'HOTEL001',
+        offerId: bookingData?.hotelData?.offerId || 'OFFER001',
+        guestDetails: {
+          firstName: bookingRequest.name.split(' ')[0] || 'Guest',
+          lastName: bookingRequest.name.split(' ').slice(1).join(' ') || 'User',
+          email: bookingRequest.email,
+          phone: bookingRequest.phone
+        },
+        checkInDate: bookingData?.checkInDate || '2025-07-25',
+        checkOutDate: bookingData?.checkOutDate || '2025-07-28',
+        totalPrice: bookingData?.totalPrice || 299.99,
+        currency: 'USD',
+        specialRequests: bookingRequest.specialRequests
       };
 
-      // Make booking request
-      const bookingResponse = await axios.post(
-        'https://test.api.amadeus.com/v2/booking/hotel-orders',
-        bookingRequestData,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/vnd.amadeus+json',
-            'Accept': 'application/vnd.amadeus+json'
+      const hotelBookingResponse = await axios.post('https://prod-opznkssex-shubhams-projects-4a867368.vercel.app/api/hotels', bookingRequestData);
+
+      if (hotelBookingResponse.data.success) {
+        const booking = hotelBookingResponse.data.booking;
+        console.log('Hotel booking created:', booking.bookingReference);
+        setBookingId(booking.bookingReference);
+
+        // Step 2: Create Arc Pay payment order (if paying now)
+        if (paymentInfo.paymentOption === 'pay_now') {
+          const paymentData = {
+            action: 'createPayment',
+            bookingReference: booking.bookingReference,
+            amount: bookingData?.totalPrice || 299.99,
+            currency: 'USD',
+            guestDetails: bookingRequestData.guestDetails,
+            hotelDetails: {
+              name: bookingData?.hotelData?.name || 'Hotel',
+              address: bookingData?.hotelData?.address || 'Location'
+            }
+          };
+
+          const paymentResponse = await axios.post('https://prod-opznkssex-shubhams-projects-4a867368.vercel.app/api/hotels', paymentData);
+
+          if (paymentResponse.data.success) {
+            console.log('Arc Pay order created successfully');
+            
+            // Redirect to Arc Pay payment page or show success
+            if (paymentResponse.data.paymentUrl) {
+              window.location.href = paymentResponse.data.paymentUrl;
+              return;
+            }
           }
         }
-      );
-
-      setBookingId(bookingResponse.data.data.id);
-      setSuccess(true);
+        
+        setSuccess(true);
+      } else {
+        throw new Error(hotelBookingResponse.data.error || 'Failed to create booking');
+      }
     } catch (err) {
       console.error('Booking error:', err);
-      const errorDetail = err.response?.data?.errors?.[0]?.errors?.[0]?.detail || 
-                         err.response?.data?.errors?.[0]?.errors?.[0]?.title ||
+      const errorDetail = err.response?.data?.message || 
+                         err.response?.data?.error ||
+                         err.message ||
                          'Failed to process booking. Please try again.';
       setError(errorDetail);
     } finally {
@@ -308,7 +293,7 @@ export default function Booking() {
                         className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="John Doe"
                         required
-                        pattern="^[A-Za-z \p{Han}\p{Katakana}\p{Hiragana}\p{Hangul}-]*$"
+                        pattern="^[A-Za-z\s\-'\.]*$"
                       />
                     </div>
                   </div>
@@ -322,7 +307,7 @@ export default function Booking() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="john@example.com"
                       required
-                      pattern="^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+                      pattern="^[a-zA-Z0-9._+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+$"
                     />
                   </div>
                   <div>

@@ -272,7 +272,7 @@ async function getAccessToken() {
       return accessToken;
     }
 
-    const response = await axios.post('https://test.api.amadeus.com/v1/security/oauth2/token',
+    const response = await axios.post('https://api.amadeus.com/v1/security/oauth2/token',
       new URLSearchParams({
         grant_type: 'client_credentials',
         client_id: process.env.REACT_APP_AMADEUS_API_KEY,
@@ -352,7 +352,7 @@ export const searchFlights = async (req, res) => {
 
       try {
         console.log(`Searching flights for date: ${date}`);
-        const response = await axios.get('https://test.api.amadeus.com/v2/shopping/flight-offers', {
+        const response = await axios.get('https://api.amadeus.com/v2/shopping/flight-offers', {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -374,7 +374,7 @@ export const searchFlights = async (req, res) => {
           const newToken = await getAccessToken();
           
           // Retry with new token
-          const retryResponse = await axios.get('https://test.api.amadeus.com/v2/shopping/flight-offers', {
+          const retryResponse = await axios.get('https://api.amadeus.com/v2/shopping/flight-offers', {
             headers: {
               Authorization: `Bearer ${newToken}`,
               'Content-Type': 'application/json'

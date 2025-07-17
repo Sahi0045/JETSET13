@@ -1,8 +1,8 @@
 // API URL Configuration
 
 // Default production and development URLs
-const DEFAULT_PROD_URL = 'https://prod-six-phi.vercel.app/api';
-const DEFAULT_DEV_PORT = 5005;
+const DEFAULT_PROD_URL = 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
+const DEFAULT_DEV_PORT = 5006;
 
 // Get the base API URL from environment variables - prioritize frontend-safe variables
 const getApiBaseUrl = () => {

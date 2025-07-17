@@ -21,7 +21,7 @@ const AMADEUS_API_KEY = process.env.AMADEUS_API_KEY;
 const AMADEUS_API_SECRET = process.env.AMADEUS_API_SECRET;
 
 // Amadeus API endpoints
-const AMADEUS_API = 'https://test.api.amadeus.com';
+const AMADEUS_API = 'https://api.amadeus.com';
 const ENDPOINTS = {
   TOKEN: '/v1/security/oauth2/token',
   HOTELS_BY_CITY: '/v1/reference-data/locations/hotels/by-city',

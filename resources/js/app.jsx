@@ -436,15 +436,69 @@ const Careers = React.lazy(() =>
     .catch(() => ({ default: () => <div>Loading Careers...</div> }))
 );
 
+const HotelBookingSuccess = React.lazy(() => 
+  import('./Pages/Common/rentals/HotelBookingSuccess')
+    .catch(() => ({ default: () => <div>Loading Hotel Booking Success...</div> }))
+);
+
+// Firebase Auth Components
+const FirebaseLogin = React.lazy(() => 
+  import('./Pages/Common/login/FirebaseLogin')
+    .catch(() => ({ default: () => <div>Loading Firebase Login...</div> }))
+);
+
+const FirebaseSignup = React.lazy(() => 
+  import('./Pages/Common/login/FirebaseSignup')
+    .catch(() => ({ default: () => <div>Loading Firebase Signup...</div> }))
+);
+
+const FirebaseProfileDashboard = React.lazy(() => 
+  import('./Pages/Common/login/FirebaseProfileDashboard')
+    .catch(() => ({ default: () => <div>Loading Firebase Profile Dashboard...</div> }))
+);
+
+// Import AuthDebug
+const AuthDebug = React.lazy(() => 
+  import('./Pages/AuthDebug')
+    .catch(() => ({ default: () => <div>Loading Auth Debug...</div> }))
+);
+
+// Import ProtectedRoute
+const ProtectedRoute = React.lazy(() => 
+  import('./components/ProtectedRoute')
+    .catch(() => ({ default: ({ children }) => children }))
+);
+
 const App = () => {
   return (
     <React.Suspense fallback={<LoadingComponent />}>
       <Routes>
         <Route path="/" element={<Welcome />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/profiledashboard" element={<ProfileDashboard />} />
+        <Route path="/login" element={<Navigate to="/firebase-login" replace />} />
+        <Route path="/signup" element={<Navigate to="/firebase-signup" replace />} />
+        <Route path="/profiledashboard" element={<Navigate to="/firebase-profile" replace />} />
+        
+        {/* Firebase Auth Routes */}
+        <Route path="/firebase-login" element={
+          <ProtectedRoute requireAuth={false}>
+            <FirebaseLogin />
+          </ProtectedRoute>
+        } />
+        <Route path="/firebase-signup" element={
+          <ProtectedRoute requireAuth={false}>
+            <FirebaseSignup />
+          </ProtectedRoute>
+        } />
+        <Route path="/firebase-profile" element={
+          <ProtectedRoute requireAuth={true}>
+            <FirebaseProfileDashboard />
+          </ProtectedRoute>
+        } />
+        
+        {/* Debug route - remove in production */}
+        <Route path="/auth-debug" element={<AuthDebug />} />
+        
         <Route path="/my-trips" element={<MyTripsPage />} />
         <Route path="/manage-booking/:bookingId" element={<ManageBooking />} />
         <Route path="/manage-booking" element={<ManageBooking />} />
@@ -466,6 +520,7 @@ const App = () => {
         <Route path="/hotel-details" element={<HotelDetails />} />
         <Route path="/hotel-search" element={<HotelSearch />} />
         <Route path="/hotel-search-results" element={<HotelSearchResults />} />
+        <Route path="/hotel-booking-success" element={<HotelBookingSuccess />} />
         <Route path="/rental/booking" element={<Booking />} />
         
         {/* Package Routes */}

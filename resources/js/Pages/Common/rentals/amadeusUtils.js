@@ -3,13 +3,13 @@
 // API credentials and URLs
 export const AMADEUS_API_KEY = 'ZsgV43XBz0GbNk85zQuzvWnhARwXX4IE';
 export const AMADEUS_API_SECRET = '2uFgpTVo5GA4ytwq';
-export const API_URL = 'https://jet-set-go-psi.vercel.app/api';
+export const API_URL = 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
 
 // API version URLs - used for direct API calls if needed
 export const API_VERSIONS = {
-  v1: 'https://test.api.amadeus.com/v1',
-  v2: 'https://test.api.amadeus.com/v2',
-  v3: 'https://test.api.amadeus.com/v3'
+  v1: 'https://api.amadeus.com/v1',
+  v2: 'https://api.amadeus.com/v2',
+  v3: 'https://api.amadeus.com/v3'
 };
 
 // Default parameters for hotel search that were successful in tests

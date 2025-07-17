@@ -13,7 +13,7 @@ const USE_AMADEUS_API = false;
 
 // Amadeus API configuration
 const AMADEUS_API_CONFIG = {
-  baseUrl: "https://test.api.amadeus.com/v2",
+  baseUrl: "https://api.amadeus.com/v2",
   apiKey: "YOUR_AMADEUS_API_KEY", // Replace with your actual API key
   apiSecret: "YOUR_AMADEUS_API_SECRET" // Replace with your actual API secret
 };

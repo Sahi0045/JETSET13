@@ -120,9 +120,12 @@ export default function HotelDetails() {
       return (currentRoomPrice * totalNights) + cleaningFee + serviceFee;
     }
     
-    // Default fallback
-    return 0;
-  }, [hotelOffer, roomTypes, selectedRoom, totalNights]);
+    // Default fallback based on hotel data
+    const fallbackPrice = parseFloat(hotelData?.price) || 199;
+    const cleaningFee = 50;
+    const serviceFee = 30;
+    return (fallbackPrice * totalNights) + cleaningFee + serviceFee;
+  }, [hotelOffer, roomTypes, selectedRoom, totalNights, hotelData]);
 
   useEffect(() => {
     if (!location.state?.hotelData) {
@@ -153,14 +156,14 @@ export default function HotelDetails() {
           {
             id: 1,
             name: "Premium Suite",
-            price: basePrice * 1.5,
+            price: Math.round(basePrice * 1.5),
             capacity: 3,
             features: ["Lake View", "King Bed + Sofa Bed", "Free WiFi", "Jacuzzi"]
           },
           {
             id: 2,
             name: "Family Suite",
-            price: basePrice * 2,
+            price: Math.round(basePrice * 2),
             capacity: 4,
             features: ["Mountain View", "2 Queen Beds", "Free WiFi", "Kitchenette"]
           }
@@ -291,9 +294,22 @@ export default function HotelDetails() {
       if (!selectedHotel) return;
       
       setOfferLoading(true);
+      setOfferError(''); // Clear any previous errors
+      
+      // Set a timeout to ensure loading doesn't persist indefinitely
+      const loadingTimeout = setTimeout(() => {
+        console.log('Loading timeout reached, stopping loading state');
+        setOfferLoading(false);
+        setOfferError('Unable to load current pricing. Showing estimated rates.');
+      }, 10000); // Reduced to 10 seconds for better UX
       
       try {
         console.log('Fetching hotel offers for:', selectedHotel.name, '(ID:', selectedHotel.id, ')');
+        
+        // Force loading to complete after a short delay regardless of API state
+        const fallbackTimeout = setTimeout(() => {
+          setOfferLoading(false);
+        }, 3000); // Force stop loading after 3 seconds max
         
         // Determine if this is a real Amadeus hotel ID or a placeholder
         const isRealHotelId = selectedHotel.hotelId && selectedHotel.hotelId.indexOf('placeholder') === -1;
@@ -310,41 +326,40 @@ export default function HotelDetails() {
         // Layer 1: Try the main production API first, but only for real Amadeus IDs
         if (!isPlaceholder && isRealHotelId) {
           try {
-            const apiUrl = 'https://jet-set-go-psi.vercel.app/api';
-            console.log('First attempt: Using production API for offers with real hotel ID:', apiUrl);
+            console.log('First attempt: Using production API with real hotel ID:', selectedHotel.hotelId);
             
-            // For production API, use hotelId instead of the generated id when available
-            const hotelIdForApi = selectedHotel.hotelId || selectedHotel.id;
-            
-            const response = await axios.get(`${apiUrl}/hotels/offers/${hotelIdForApi}`, {
-              params: {
+            const response = await fetch('https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api/hotels', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                hotelId: selectedHotel.hotelId,
                 checkInDate: amadeusUtils.formatDate(new Date(checkInDate)),
                 checkOutDate: amadeusUtils.formatDate(new Date(checkOutDate)),
-                adults: guestCount.adults,
-                children: guestCount.children,
-                // Include geo coordinates when available
-                ...(selectedHotel.geoCode && {
-                  latitude: selectedHotel.geoCode.latitude,
-                  longitude: selectedHotel.geoCode.longitude
-                })
-              }
+                travelers: guestCount.adults
+              })
             });
-
-            if (response.data?.success && response.data?.data) {
-              console.log('Successfully retrieved offers from production API');
-              setHotelOffer(response.data.data);
-              setOfferLoading(false);
-              return; // Exit if successful
+            
+            if (response.ok) {
+              const result = await response.json();
+              console.log('Production API response:', result);
+              
+              if (result.success && result.offers && result.offers.length > 0) {
+                setHotelOffer(result);
+                clearTimeout(loadingTimeout);
+                clearTimeout(fallbackTimeout);
+                setOfferLoading(false);
+                return; // Exit if successful
+              }
             }
-          } catch (apiError) {
-            console.log('Production API error, falling back to Direct Amadeus:', apiError.message);
-            // Continue to next fallback
+          } catch (productionError) {
+            console.log('Production API error:', productionError.message);
+            // Continue to next layer
           }
-        } else {
-          console.log('Skipping production API for placeholder/generated ID, moving to Direct Amadeus');
         }
         
-        // Layer 2: Use direct Amadeus service if we have a hotelId
+        // Layer 2: Direct Amadeus API (for real hotel IDs only)
         if (selectedHotel.hotelId && !selectedHotel.isPlaceholder) {
           try {
             console.log('Second attempt: Using Direct Amadeus API with hotel ID:', selectedHotel.hotelId);
@@ -377,6 +392,8 @@ export default function HotelDetails() {
               };
               
               setHotelOffer(offerData);
+              clearTimeout(loadingTimeout);
+              clearTimeout(fallbackTimeout);
               setOfferLoading(false);
               return; // Exit if successful
             }
@@ -386,7 +403,7 @@ export default function HotelDetails() {
           }
         }
         
-        // Layer 3: Generate placeholder offers as final fallback
+        // Layer 3: Generate placeholder offers as final fallback (ALWAYS execute this)
         console.log('Using placeholder offers as final fallback');
         
         // Get city code from the hotel or use a default
@@ -436,15 +453,28 @@ export default function HotelDetails() {
           geoCode: geoLocation // Include geo location for map integration
         });
         
+        // Clear all timeouts since we completed successfully
+        clearTimeout(loadingTimeout);
+        clearTimeout(fallbackTimeout);
+        
       } catch (error) {
         console.error('Error in all offer fetch attempts:', error);
         setOfferError('Could not retrieve availability for this hotel. Please try again later.');
+        clearTimeout(loadingTimeout);
       } finally {
+        // Ensure loading is always stopped
         setOfferLoading(false);
       }
     };
 
-    fetchHotelOffer();
+    // Add a small delay before starting the fetch to avoid rapid re-renders
+    const fetchTimeout = setTimeout(() => {
+      fetchHotelOffer();
+    }, 100);
+
+    return () => {
+      clearTimeout(fetchTimeout);
+    };
   }, [selectedHotel?.id, checkInDate, checkOutDate, guestCount.adults, guestCount.children]);
 
   useEffect(() => {
@@ -574,33 +604,74 @@ export default function HotelDetails() {
       // Format dates properly for the API
       const formattedCheckIn = amadeusUtils.formatDate(new Date(checkInDate));
       const formattedCheckOut = amadeusUtils.formatDate(new Date(checkOutDate));
+      const calculatedTotalPrice = calculateTotalPrice();
 
       setError('');
-      // Use direct API URL
-      const apiUrl = 'https://jet-set-go-psi.vercel.app/api';
+      console.log('Starting Arc Pay hotel booking process...');
       
-      console.log('Using API URL for check availability:', apiUrl);
-      
-      const response = await axios.get(`${apiUrl}/hotels/check-availability`, {
-        params: {
-          destination: hotelData.id,
-          checkInDate: formattedCheckIn,
-          checkOutDate: formattedCheckOut,
-          travelers: guestCount.adults
-        }
+      // Step 1: Create hotel booking
+      const bookingData = {
+        hotelId: selectedHotel.hotelId || selectedHotel.id,
+        offerId: hotelOffer?.offers?.[0]?.id || 'fallback-offer',
+        guestDetails: {
+          firstName: callbackForm.name?.split(' ')[0] || 'Guest',
+          lastName: callbackForm.name?.split(' ').slice(1).join(' ') || 'User',
+          email: `${callbackForm.phone?.replace(/\D/g, '') || 'guest'}@example.com`,
+          phone: callbackForm.phone || ''
+        },
+        checkInDate: formattedCheckIn,
+        checkOutDate: formattedCheckOut,
+        totalPrice: calculatedTotalPrice,
+        currency: 'USD'
+      };
+
+      const hotelBookingResponse = await axios.post('https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api/hotels', {
+        action: 'bookHotel',
+        ...bookingData
       });
-      
-      if (response.data.success) {
-        setShowCallbackRequest(true);
+
+      if (hotelBookingResponse.data.success) {
+        const booking = hotelBookingResponse.data.booking;
+        console.log('Hotel booking created:', booking.bookingReference);
+
+        // Step 2: Create Arc Pay payment order
+        const paymentData = {
+          bookingReference: booking.bookingReference,
+          amount: calculatedTotalPrice,
+          currency: 'USD',
+          guestDetails: bookingData.guestDetails,
+          hotelDetails: {
+            name: selectedHotel.name,
+            address: selectedHotel.location
+          }
+        };
+
+        const paymentResponse = await axios.post('https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api/hotels', {
+          action: 'createPayment',
+          ...paymentData
+        });
+
+        if (paymentResponse.data.success) {
+          console.log('Arc Pay order created successfully');
+          
+          // Redirect to Arc Pay payment page or show success
+          if (paymentResponse.data.paymentUrl) {
+            window.location.href = paymentResponse.data.paymentUrl;
+          } else {
+            // If mock payment, redirect to success page
+            window.location.href = `/hotel-booking-success?booking=${booking.bookingReference}&orderId=${paymentResponse.data.orderId}`;
+          }
+        } else {
+          throw new Error('Failed to create payment order');
+        }
       } else {
-        setError(response.data.message || "No availability found for these dates");
+        throw new Error(hotelBookingResponse.data.error || 'Failed to create booking');
       }
     } catch (error) {
-      console.error('Error checking availability:', error);
-      // Still show the callback request form even if there's an error
+      console.error('Error in booking process:', error);
+      // Still show the callback request form as fallback
       setShowCallbackRequest(true);
-      // Set a user-friendly error message
-      setError(error.response?.data?.message || "Error checking availability");
+      setError(error.response?.data?.message || error.message || "Error processing booking");
     }
   };
 
@@ -637,7 +708,7 @@ export default function HotelDetails() {
       // Send confirmation email
       try {
         // Use direct API URL
-        const apiUrl = 'https://jet-set-go-psi.vercel.app/api';
+        const apiUrl = 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
         
         console.log('Using API URL for email:', apiUrl);
         
@@ -759,8 +830,8 @@ export default function HotelDetails() {
     );
   }
 
-  // Use the calculated total price
-  const currentRoomPrice = roomTypes[selectedRoom]?.price || 0;
+  // Use the calculated total price - ensure currentRoomPrice has a fallback
+  const currentRoomPrice = roomTypes[selectedRoom]?.price || parseFloat(hotelData?.price) || 199;
   const totalPrice = calculateTotalPrice();
 
   return (
@@ -1055,12 +1126,13 @@ export default function HotelDetails() {
                   <div>
                     {offerLoading ? (
                       <div className="animate-pulse">
-                        <div className="h-8 w-32 bg-gray-200 rounded"></div>
+                        <div className="h-8 w-32 bg-gray-200 rounded mb-1"></div>
+                        <div className="h-4 w-20 bg-gray-200 rounded"></div>
                       </div>
                     ) : hotelOffer?.offers?.[0]?.price ? (
                       <>
                         <span className="text-2xl font-bold text-gray-900">
-                          ${hotelOffer.offers[0].price.total}
+                          ${typeof hotelOffer.offers[0].price === 'object' ? hotelOffer.offers[0].price.total : hotelOffer.offers[0].price}
                         </span>
                         <span className="text-gray-600 ml-1">per night</span>
                         {hotelOffer.offers[0].rateCode && (
@@ -1072,7 +1144,17 @@ export default function HotelDetails() {
                         )}
                       </>
                     ) : (
-                      <span className="text-2xl font-bold text-gray-900">${currentRoomPrice}</span>
+                      <>
+                        <span className="text-2xl font-bold text-gray-900">${currentRoomPrice}</span>
+                        <span className="text-gray-600 ml-1">per night</span>
+                        {offerError && (
+                          <div className="mt-1">
+                            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">
+                              Estimated Rate
+                            </span>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                   <div className="flex items-center">
@@ -1194,12 +1276,13 @@ export default function HotelDetails() {
                       <div className="h-4 bg-gray-200 rounded w-3/4"></div>
                       <div className="h-4 bg-gray-200 rounded w-1/2"></div>
                       <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                      <div className="text-xs text-gray-500 mt-2">Loading pricing details...</div>
                     </div>
-                  ) : hotelOffer?.offers?.[0]?.price ? (
+                  ) : hotelOffer?.offers?.[0]?.price && typeof hotelOffer.offers[0].price === 'object' ? (
                     <>
                       <div className="flex justify-between">
                         <span className="text-gray-700">Base Price</span>
-                        <span className="text-gray-700">${hotelOffer.offers[0].price.base}</span>
+                        <span className="text-gray-700">${hotelOffer.offers[0].price.base || hotelOffer.offers[0].price.total}</span>
                       </div>
                       {hotelOffer.offers[0].price.variations?.changes?.map((change, index) => (
                         <div key={index} className="flex justify-between text-sm text-gray-600">
@@ -1210,7 +1293,7 @@ export default function HotelDetails() {
                       <div className="flex justify-between">
                         <span className="text-gray-700">Taxes & Fees</span>
                         <span className="text-gray-700">
-                          ${(parseFloat(hotelOffer.offers[0].price.total) - parseFloat(hotelOffer.offers[0].price.base)).toFixed(2)}
+                          ${(parseFloat(hotelOffer.offers[0].price.total) - parseFloat(hotelOffer.offers[0].price.base || hotelOffer.offers[0].price.total)).toFixed(2)}
                         </span>
                       </div>
                       <div className="border-t border-gray-200 pt-4 flex justify-between font-bold">
@@ -1222,7 +1305,7 @@ export default function HotelDetails() {
                     <>
                       <div className="flex justify-between">
                         <span className="text-gray-700">${currentRoomPrice} x {totalNights} nights</span>
-                        <span className="text-gray-700">${currentRoomPrice * totalNights}</span>
+                        <span className="text-gray-700">${(currentRoomPrice * totalNights).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-700">Cleaning fee</span>
@@ -1234,7 +1317,7 @@ export default function HotelDetails() {
                       </div>
                       <div className="border-t border-gray-200 pt-4 flex justify-between font-bold">
                         <span>Total</span>
-                        <span>${totalPrice}</span>
+                        <span>${totalPrice.toFixed(2)}</span>
                       </div>
                     </>
                   )}
@@ -1305,9 +1388,16 @@ export default function HotelDetails() {
                 </div>
 
                 {offerError && (
-                  <p className="text-center text-sm mt-4 text-red-500">
-                    {offerError}
-                  </p>
+                  <div className="text-center text-sm mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-yellow-700">{offerError}</p>
+                    <p className="text-xs text-yellow-600 mt-1">Showing estimated pricing based on similar properties</p>
+                  </div>
+                )}
+                
+                {!offerLoading && !hotelOffer?.offers?.length && !offerError && (
+                  <div className="text-center text-sm mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-blue-700">Contact us for current availability and pricing</p>
+                  </div>
                 )}
               </div>
 

@@ -8,6 +8,9 @@ import '../resources/css/app.css';
 import '../resources/css/fonts.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
+// Import Firebase Auth Provider
+import { FirebaseAuthProvider } from '../resources/js/contexts/FirebaseAuthContext';
+
 // Import App component
 import App from '../resources/js/app.jsx';
 
@@ -19,7 +22,9 @@ if (container) {
     <React.StrictMode>
       <BrowserRouter>
         <HelmetProvider>
-          <App />
+          <FirebaseAuthProvider>
+            <App />
+          </FirebaseAuthProvider>
         </HelmetProvider>
       </BrowserRouter>
     </React.StrictMode>

@@ -9,9 +9,9 @@ dotenv.config();
 
 // API URLs - use consistent versions across the app
 const AMADEUS_API_URLS = {
-  v1: 'https://test.api.amadeus.com/v1',
-  v2: 'https://test.api.amadeus.com/v2',
-  v3: 'https://test.api.amadeus.com/v3'
+  v1: 'https://api.amadeus.com/v1',
+  v2: 'https://api.amadeus.com/v2',
+  v3: 'https://api.amadeus.com/v3'
 };
 
 const router = express.Router();

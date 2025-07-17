@@ -24,6 +24,9 @@ const Welcome = () => {
     return (
         <>
             <Navbar/>
+            
+
+            
             <Homepage/>
             <Footer/>
 {/*         

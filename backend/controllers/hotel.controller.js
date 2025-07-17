@@ -39,7 +39,7 @@ const getAccessToken = async () => {
     }
     
     const response = await axios.post(
-      'https://test.api.amadeus.com/v1/security/oauth2/token',
+      'https://api.amadeus.com/v1/security/oauth2/token',
       new URLSearchParams({ grant_type: 'client_credentials' }).toString(), // form body
       {
         headers: {

@@ -2,6 +2,14 @@
     "version": 2,
     "routes": [
         {
+            "src": "/api/hotels/destinations",
+            "dest": "/api/hotels?endpoint=destinations"
+        },
+        {
+            "src": "/api/hotels/search",
+            "dest": "/api/hotels?endpoint=search"
+        },
+        {
             "src": "/api/(.*)",
             "dest": "/api/$1"
         },
@@ -57,11 +65,21 @@
         "env": {
             "VITE_APP_NAME": "JetSet Travel - Real PNR System",
             "VITE_API_URL": "/api",
-            "VITE_APP_URL": "https://sahi-travel-platform.vercel.app",
-            "VITE_PROD_API_URL": "/api",
-            "VITE_PROD_APP_URL": "https://sahi-travel-platform.vercel.app",
-            "VITE_GOOGLE_CLIENT_ID": "463609792474-nr70b2jrphprah8d4ene5aubrofv484j.apps.googleusercontent.com",
-            "VITE_SECURE": "true"
+                    "VITE_APP_URL": "https://prod-h8l83lxpv-shubhams-projects-4a867368.vercel.app",
+        "VITE_PROD_API_URL": "/api",
+                "VITE_PROD_APP_URL": "https://prod-h8l83lxpv-shubhams-projects-4a867368.vercel.app",
+        "VITE_GOOGLE_CLIENT_ID": "463609792474-nr70b2jrphprah8d4ene5aubrofv484j.apps.googleusercontent.com",
+        "VITE_AMADEUS_API_KEY": "HSdhpX2AHnyj7LnL1TjDFL8MHj8lGz5G",
+        "VITE_AMADEUS_API_SECRET": "bXf2ed12C4ruJ1Nt",
+        "VITE_SECURE": "true",
+        "VITE_FIREBASE_API_KEY": "AIzaSyDQRZgBAkv6rfSqtJUQk6jLY56ftz0eEMg",
+        "VITE_FIREBASE_AUTH_DOMAIN": "jets-1b5fa.firebaseapp.com",
+        "VITE_FIREBASE_PROJECT_ID": "jets-1b5fa",
+        "VITE_FIREBASE_STORAGE_BUCKET": "jets-1b5fa.firebasestorage.app",
+        "VITE_FIREBASE_MESSAGING_SENDER_ID": "84512959275",
+        "VITE_FIREBASE_APP_ID": "1:84512959275:web:ea8a029a10024492dab36e",
+        "VITE_FIREBASE_MEASUREMENT_ID": "G-7W4P45Y75Z",
+        "VITE_USE_FIREBASE_EMULATOR": "false"
         }
     }
 }

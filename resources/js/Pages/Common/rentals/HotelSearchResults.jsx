@@ -6,6 +6,7 @@ import Footer from '../Footer';
 import axios from 'axios';
 import * as amadeusUtils from './amadeusUtils';
 import DirectAmadeusService from '../../../Services/DirectAmadeusService';
+import { popularDestinations } from './hotel';
 
 export default function HotelSearchResults() {
   const location = useLocation();
@@ -64,9 +65,14 @@ export default function HotelSearchResults() {
         });
         if (response.data.success) {
           setDestinationSuggestions(response.data.data);
+        } else {
+          // Fallback to popular destinations if API doesn't return success
+          setDestinationSuggestions(popularDestinations);
         }
       } catch (error) {
         console.error('Error fetching destinations:', error);
+        // Fallback to popular destinations if API fails
+        setDestinationSuggestions(popularDestinations);
       }
     };
     fetchDestinations();
@@ -100,7 +106,7 @@ export default function HotelSearchResults() {
       // LAYER 1: Try the main production API first
       try {
         // Use direct API URL
-        const apiUrl = 'https://jet-set-go-psi.vercel.app/api';
+        const apiUrl = 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
         console.log('LAYER 1: Using production API:', apiUrl);
         
         const response = await axios.get(`${apiUrl}/hotels/search`, {
@@ -317,7 +323,7 @@ export default function HotelSearchResults() {
           console.log('Fetching hotels for:', searchParams);
           
           // Use direct API URL
-          const apiUrl = 'https://jet-set-go-psi.vercel.app/api';
+          const apiUrl = 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
           
           console.log('Using API URL:', apiUrl);
           
