@@ -217,6 +217,47 @@ export const FirebaseAuthProvider = ({ children }) => {
     }
   };
 
+  // Phone Authentication Methods
+  const initializeRecaptcha = (containerId) => {
+    return firebaseAuth.initializeRecaptcha(containerId);
+  };
+
+  const sendOTP = async (phoneNumber) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await firebaseAuth.sendOTP(phoneNumber);
+      return result;
+    } catch (error) {
+      const errorMessage = getFirebaseErrorMessage(error);
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyOTP = async (verificationId, otp) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await firebaseAuth.verifyOTP(verificationId, otp);
+      return result;
+    } catch (error) {
+      const errorMessage = getFirebaseErrorMessage(error);
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const clearRecaptcha = () => {
+    return firebaseAuth.clearRecaptcha();
+  };
+
   // Clear error function
   const clearError = () => {
     setError(null);
@@ -242,6 +283,12 @@ export const FirebaseAuthProvider = ({ children }) => {
     resetPassword,
     getUserToken,
     clearError,
+    
+    // Phone authentication methods
+    initializeRecaptcha,
+    sendOTP,
+    verifyOTP,
+    clearRecaptcha,
     
     // Compatibility functions for existing components
     login: signIn,

@@ -457,6 +457,11 @@ const FirebaseProfileDashboard = React.lazy(() =>
     .catch(() => ({ default: () => <div>Loading Firebase Profile Dashboard...</div> }))
 );
 
+const PhoneLogin = React.lazy(() => 
+  import('./Pages/Common/login/PhoneLogin')
+    .catch(() => ({ default: () => <div>Loading Phone Login...</div> }))
+);
+
 // Import AuthDebug
 const AuthDebug = React.lazy(() => 
   import('./Pages/AuthDebug')
@@ -493,6 +498,11 @@ const App = () => {
         <Route path="/firebase-profile" element={
           <ProtectedRoute requireAuth={true}>
             <FirebaseProfileDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/phone-login" element={
+          <ProtectedRoute requireAuth={false}>
+            <PhoneLogin />
           </ProtectedRoute>
         } />
         

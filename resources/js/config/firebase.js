@@ -5,9 +5,12 @@ import {
   connectAuthEmulator,
   GoogleAuthProvider,
   FacebookAuthProvider,
+  PhoneAuthProvider,
+  RecaptchaVerifier,
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithCredential,
   signOut,
   sendPasswordResetEmail,
   updateProfile,
@@ -245,6 +248,126 @@ export const firebaseAuth = {
       }
     }
     return null;
+  },
+
+  // Phone Authentication Methods
+  
+  // Initialize reCAPTCHA verifier
+  initializeRecaptcha: (containerId = 'recaptcha-container') => {
+    try {
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
+      }
+      
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+        size: 'normal',
+        callback: (response) => {
+          console.log('reCAPTCHA verified successfully');
+        },
+        'expired-callback': () => {
+          console.log('reCAPTCHA expired, reinitializing...');
+        },
+        'error-callback': (error) => {
+          console.error('reCAPTCHA error:', error);
+        }
+      });
+      
+      // Render the reCAPTCHA
+      window.recaptchaVerifier.render().then(() => {
+        console.log('reCAPTCHA rendered successfully');
+      }).catch((error) => {
+        console.error('Error rendering reCAPTCHA:', error);
+      });
+      
+      return window.recaptchaVerifier;
+    } catch (error) {
+      console.error('Error initializing reCAPTCHA:', error);
+      return null;
+    }
+  },
+
+  // Send OTP to phone number
+  sendOTP: async (phoneNumber) => {
+    try {
+      const phoneProvider = new PhoneAuthProvider(auth);
+      const recaptchaVerifier = window.recaptchaVerifier;
+      
+      if (!recaptchaVerifier) {
+        throw new Error('reCAPTCHA not initialized. Please refresh the page and try again.');
+      }
+
+      console.log('Sending OTP to:', phoneNumber);
+      
+      const verificationId = await phoneProvider.verifyPhoneNumber(
+        phoneNumber,
+        recaptchaVerifier
+      );
+      
+      console.log('OTP sent successfully, verification ID:', verificationId);
+      
+      return {
+        success: true,
+        verificationId,
+        message: 'OTP sent successfully'
+      };
+    } catch (error) {
+      console.error('Error sending OTP:', error);
+      
+      // Handle specific Firebase errors
+      let errorMessage = error.message;
+      
+      if (error.code === 'auth/invalid-phone-number') {
+        errorMessage = 'Invalid phone number format. Please enter a valid phone number.';
+      } else if (error.code === 'auth/quota-exceeded') {
+        errorMessage = 'SMS quota exceeded. Please try again later.';
+      } else if (error.code === 'auth/internal-error') {
+        errorMessage = 'reCAPTCHA verification failed. Please refresh the page and try again.';
+      } else if (error.code === 'auth/captcha-check-failed') {
+        errorMessage = 'reCAPTCHA verification failed. Please complete the verification and try again.';
+      }
+      
+      return {
+        success: false,
+        error: errorMessage,
+        code: error.code
+      };
+    }
+  },
+
+  // Verify OTP and sign in
+  verifyOTP: async (verificationId, otp) => {
+    try {
+      const credential = PhoneAuthProvider.credential(verificationId, otp);
+      const userCredential = await signInWithCredential(auth, credential);
+      const user = userCredential.user;
+      
+      return {
+        success: true,
+        user: {
+          uid: user.uid,
+          phoneNumber: user.phoneNumber,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          provider: 'phone'
+        }
+      };
+    } catch (error) {
+      console.error('Error verifying OTP:', error);
+      return {
+        success: false,
+        error: error.message,
+        code: error.code
+      };
+    }
+  },
+
+  // Clear reCAPTCHA
+  clearRecaptcha: () => {
+    if (window.recaptchaVerifier) {
+      window.recaptchaVerifier.clear();
+      window.recaptchaVerifier = null;
+    }
   }
 };
 

@@ -232,3 +232,112 @@
   font-size: 0.875rem;
   color: #111111;
 }
+
+/* Phone number input specific styling */
+.form-input[type="tel"] {
+  background-color: white;
+  pointer-events: auto;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+}
+
+.form-input[type="tel"]:focus {
+  background-color: white;
+  outline: none;
+  border-color: #06457A;
+  box-shadow: 0 0 0 2px rgba(6, 69, 122, 0.2);
+}
+
+/* Phone Login Button */
+.phone-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 12px;
+  background-color: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.phone-button:hover {
+  background-color: #059669;
+  color: white;
+  text-decoration: none;
+}
+
+.phone-button:disabled {
+  background-color: #d1d5db;
+  cursor: not-allowed;
+}
+
+/* OTP Input Field */
+.otp-input {
+  text-align: center;
+  font-size: 2rem;
+  letter-spacing: 0.5rem;
+  font-weight: 600;
+}
+
+/* Alternative Login Section */
+.alternative-login {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.alternative-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px;
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.alternative-button:hover {
+  background-color: #e5e7eb;
+  color: #374151;
+  text-decoration: none;
+}
+
+/* Login Divider */
+.login-divider {
+  display: flex;
+  align-items: center;
+  margin: 1.5rem 0 1rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: #d1d5db;
+}
+
+.login-divider span {
+  padding: 0 1rem;
+  background-color: white;
+}

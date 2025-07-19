@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaGoogle, FaFacebook, FaEye, FaEyeSlash, FaSpinner } from 'react-icons/fa';
+import { FaGoogle, FaFacebook, FaPhone, FaEye, FaEyeSlash, FaSpinner } from 'react-icons/fa';
 import { useFirebaseAuth } from '../../../contexts/FirebaseAuthContext';
 import './login.css';
 
@@ -347,6 +347,14 @@ export default function FirebaseLogin() {
                             <FaFacebook className="mr-2" />
                             Continue with Facebook
                         </button>
+                        
+                        <Link 
+                            to="/phone-login" 
+                            className="social-button phone-button"
+                        >
+                            <FaPhone className="mr-2" />
+                            Continue with Phone
+                        </Link>
                     </div>
                     
                     {/* Signup Link */}
