@@ -67,6 +67,11 @@ try {
   }
   
   console.log('🔥 Firebase initialized successfully');
+  console.log('🔧 Firebase Config:', {
+    projectId: firebaseConfig.projectId,
+    authDomain: firebaseConfig.authDomain,
+    appId: firebaseConfig.appId
+  });
 } catch (error) {
   console.error('❌ Firebase initialization failed:', error);
 }
