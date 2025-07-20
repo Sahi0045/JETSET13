@@ -20,7 +20,7 @@ export default function PhoneLogin() {
     const [step, setStep] = useState('phone'); // 'phone' or 'otp'
     const [phoneNumber, setPhoneNumber] = useState('');
     const [otp, setOtp] = useState('');
-    const [verificationId, setVerificationId] = useState('');
+    const [confirmationResult, setConfirmationResult] = useState(null);
     const [formErrors, setFormErrors] = useState({});
     const [isProcessing, setIsProcessing] = useState(false);
     const [resendTimer, setResendTimer] = useState(0);
@@ -38,36 +38,27 @@ export default function PhoneLogin() {
         }
     }, [isAuthenticated, navigate]);
 
-    // Initialize reCAPTCHA when component mounts
+    // Clean up reCAPTCHA when component unmounts or step changes
+    useEffect(() => {
+        return () => {
+            try {
+                clearRecaptcha();
+            } catch (error) {
+                console.error('Error clearing reCAPTCHA on cleanup:', error);
+            }
+        };
+    }, [clearRecaptcha]);
+
+    // Clear reCAPTCHA container when switching to phone step
     useEffect(() => {
         if (step === 'phone') {
-            const timer = setTimeout(() => {
-                try {
-                    const container = document.getElementById('recaptcha-container');
-                    if (container) {
-                        // Clear any existing content
-                        container.innerHTML = '';
-                        initializeRecaptcha('recaptcha-container');
-                        console.log('reCAPTCHA initialized successfully');
-                    } else {
-                        console.error('reCAPTCHA container not found');
-                    }
-                } catch (error) {
-                    console.error('Error initializing reCAPTCHA:', error);
-                    setFormErrors({ phone: 'Failed to initialize security verification. Please refresh the page.' });
-                }
-            }, 1000); // Increased timeout to ensure DOM is ready
-            
-            return () => {
-                clearTimeout(timer);
-                try {
-                    clearRecaptcha();
-                } catch (error) {
-                    console.error('Error clearing reCAPTCHA:', error);
-                }
-            };
+            const container = document.getElementById('recaptcha-container');
+            if (container) {
+                container.innerHTML = '';
+                console.log('Cleared reCAPTCHA container for fresh start');
+            }
         }
-    }, [step, initializeRecaptcha, clearRecaptcha]);
+    }, [step]);
 
     // Clear errors when form data changes
     useEffect(() => {
@@ -114,22 +105,35 @@ export default function PhoneLogin() {
         }
 
         setIsProcessing(true);
+        setFormErrors({}); // Clear any previous errors
         
         try {
             const fullPhoneNumber = `${countryCode}${phoneNumber}`;
+            console.log('Submitting phone verification for:', fullPhoneNumber);
+            
             const result = await sendOTP(fullPhoneNumber);
             
             if (result.success) {
-                setVerificationId(result.verificationId);
+                setConfirmationResult(result.confirmationResult);
                 setStep('otp');
                 setResendTimer(60); // 60 seconds resend timer
-                console.log('OTP sent successfully');
+                console.log('OTP sent successfully, moving to verification step');
             } else {
-                setFormErrors({ phone: result.error });
+                console.error('OTP sending failed:', result.error);
+                let errorMessage = result.error;
+                
+                // Add helpful context for common errors
+                if (result.code === 'auth/argument-error') {
+                    errorMessage = 'Phone authentication is not properly configured. Please contact support.';
+                } else if (result.code === 'auth/invalid-phone-number') {
+                    errorMessage = 'Invalid phone number. Please check the number and country code.';
+                }
+                
+                setFormErrors({ phone: errorMessage });
             }
         } catch (error) {
             console.error('Phone verification error:', error);
-            setFormErrors({ phone: 'Failed to send OTP. Please try again.' });
+            setFormErrors({ phone: 'Failed to send OTP. Please refresh the page and try again.' });
         } finally {
             setIsProcessing(false);
         }
@@ -152,7 +156,7 @@ export default function PhoneLogin() {
         setIsProcessing(true);
         
         try {
-            const result = await verifyOTP(verificationId, otp);
+            const result = await verifyOTP(confirmationResult, otp);
             
             if (result.success) {
                 console.log('Phone login successful:', result.user);
@@ -179,7 +183,7 @@ export default function PhoneLogin() {
             const result = await sendOTP(fullPhoneNumber);
             
             if (result.success) {
-                setVerificationId(result.verificationId);
+                setConfirmationResult(result.confirmationResult);
                 setResendTimer(60);
                 setFormErrors({});
                 console.log('OTP resent successfully');
@@ -282,7 +286,10 @@ export default function PhoneLogin() {
                                 {/* reCAPTCHA Container */}
                                 <div className="mb-4">
                                     <div id="recaptcha-container"></div>
-                                    {formErrors.phone && formErrors.phone.includes('reCAPTCHA') && (
+                                    <p className="text-sm text-gray-600 mt-2">
+                                        Security verification will appear when you click "Send OTP"
+                                    </p>
+                                    {formErrors.phone && formErrors.phone.includes('verification') && (
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -290,12 +297,11 @@ export default function PhoneLogin() {
                                                 const container = document.getElementById('recaptcha-container');
                                                 if (container) {
                                                     container.innerHTML = '';
-                                                    initializeRecaptcha('recaptcha-container');
                                                 }
                                             }}
                                             className="mt-2 text-blue-600 hover:text-blue-800 text-sm"
                                         >
-                                            Retry Security Verification
+                                            Clear and Retry
                                         </button>
                                     )}
                                 </div>

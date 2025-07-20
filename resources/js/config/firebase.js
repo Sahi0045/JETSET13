@@ -14,7 +14,8 @@ import {
   signOut,
   sendPasswordResetEmail,
   updateProfile,
-  onAuthStateChanged
+  onAuthStateChanged,
+  signInWithPhoneNumber
 } from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
 
@@ -252,79 +253,183 @@ export const firebaseAuth = {
 
   // Phone Authentication Methods
   
-  // Initialize reCAPTCHA verifier
+  // Initialize reCAPTCHA for phone authentication
   initializeRecaptcha: (containerId = 'recaptcha-container') => {
     try {
+      // Clear any existing reCAPTCHA
       if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
+        try {
+          window.recaptchaVerifier.clear();
+        } catch (e) {
+          console.log('Could not clear existing reCAPTCHA:', e);
+        }
         window.recaptchaVerifier = null;
       }
-      
+
+      // Ensure container exists and is empty
+      const container = document.getElementById(containerId);
+      if (!container) {
+        throw new Error(`reCAPTCHA container '${containerId}' not found`);
+      }
+      container.innerHTML = '';
+
+      // Create new reCAPTCHA verifier with proper configuration
+      console.log('Creating reCAPTCHA verifier...');
       window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
         size: 'normal',
         callback: (response) => {
-          console.log('reCAPTCHA verified successfully');
+          console.log('✅ reCAPTCHA verified successfully');
         },
         'expired-callback': () => {
-          console.log('reCAPTCHA expired, reinitializing...');
+          console.log('⚠️ reCAPTCHA expired, user needs to verify again');
         },
         'error-callback': (error) => {
-          console.error('reCAPTCHA error:', error);
+          console.error('❌ reCAPTCHA error:', error);
         }
       });
-      
-      // Render the reCAPTCHA
-      window.recaptchaVerifier.render().then(() => {
-        console.log('reCAPTCHA rendered successfully');
+
+      // Render and return the verifier
+      window.recaptchaVerifier.render().then((widgetId) => {
+        console.log('✅ reCAPTCHA rendered successfully with widget ID:', widgetId);
       }).catch((error) => {
-        console.error('Error rendering reCAPTCHA:', error);
+        console.error('❌ Error rendering reCAPTCHA:', error);
       });
       
       return window.recaptchaVerifier;
     } catch (error) {
-      console.error('Error initializing reCAPTCHA:', error);
+      console.error('❌ Error initializing reCAPTCHA:', error);
       return null;
     }
   },
 
-  // Send OTP to phone number
+  // Send OTP to phone number (Fixed according to Firebase docs)
   sendOTP: async (phoneNumber) => {
     try {
-      const phoneProvider = new PhoneAuthProvider(auth);
-      const recaptchaVerifier = window.recaptchaVerifier;
+      // Check current domain for debugging
+      const currentDomain = window.location.hostname;
+      console.log('🌐 Current domain:', currentDomain);
+      console.log('🔗 Full URL:', window.location.href);
       
-      if (!recaptchaVerifier) {
-        throw new Error('reCAPTCHA not initialized. Please refresh the page and try again.');
+      // Validate phone number format (must include country code)
+      if (!phoneNumber || phoneNumber.length < 10) {
+        throw new Error('Please enter a valid phone number with country code (e.g., +1234567890)');
       }
 
-      console.log('Sending OTP to:', phoneNumber);
+      // Ensure phone number starts with + for international format
+      const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+      console.log('📱 Starting OTP process for:', formattedPhone);
+
+      // Initialize fresh reCAPTCHA for each request (as per Firebase docs)
+      console.log('🔄 Initializing fresh reCAPTCHA verifier...');
       
-      const verificationId = await phoneProvider.verifyPhoneNumber(
-        phoneNumber,
-        recaptchaVerifier
-      );
+      // Clear existing verifier
+      if (window.recaptchaVerifier) {
+        try {
+          window.recaptchaVerifier.clear();
+        } catch (e) {
+          console.log('Could not clear existing reCAPTCHA:', e);
+        }
+        window.recaptchaVerifier = null;
+      }
+
+      // Ensure container exists
+      const container = document.getElementById('recaptcha-container');
+      if (!container) {
+        throw new Error('reCAPTCHA container not found. Please refresh the page.');
+      }
+      container.innerHTML = '';
+
+      // Wait for DOM cleanup
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Create fresh reCAPTCHA verifier for this request
+      try {
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          size: 'normal',
+          callback: (response) => {
+            console.log('✅ reCAPTCHA solved:', response);
+          },
+          'expired-callback': () => {
+            console.log('⚠️ reCAPTCHA expired');
+          }
+        });
+        console.log('✅ reCAPTCHA verifier created successfully');
+      } catch (recaptchaError) {
+        console.error('❌ reCAPTCHA verifier creation failed:', recaptchaError);
+        
+        // Check if it's a domain authorization issue
+        if (recaptchaError.code === 'auth/argument-error' || recaptchaError.message.includes('argument')) {
+          throw new Error('Domain not authorized in Firebase Console. Please add this domain to authorized domains and wait 2-5 minutes.');
+        }
+        
+        throw recaptchaError;
+      }
+
+      // Render reCAPTCHA and wait for completion
+      console.log('🎯 Rendering reCAPTCHA...');
+      await window.recaptchaVerifier.render();
+      console.log('✅ reCAPTCHA rendered successfully');
+
+      // Allow time for reCAPTCHA to be ready
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Send OTP using signInWithPhoneNumber (as per Firebase docs)
+      console.log('📤 Sending OTP to:', formattedPhone);
       
-      console.log('OTP sent successfully, verification ID:', verificationId);
+      const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
+      
+      console.log('✅ OTP sent successfully!');
       
       return {
         success: true,
-        verificationId,
-        message: 'OTP sent successfully'
+        verificationId: confirmationResult.verificationId,
+        confirmationResult,
+        message: `OTP sent to ${formattedPhone}`
       };
     } catch (error) {
-      console.error('Error sending OTP:', error);
+      console.error('❌ Error sending OTP:', error);
+      console.error('❌ Error details:', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
       
-      // Handle specific Firebase errors
+      // Clear failed reCAPTCHA
+      if (window.recaptchaVerifier) {
+        try {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = null;
+        } catch (e) {
+          console.log('Could not clear failed reCAPTCHA:', e);
+        }
+      }
+      
+      // Handle specific Firebase errors with user-friendly messages
       let errorMessage = error.message;
       
-      if (error.code === 'auth/invalid-phone-number') {
-        errorMessage = 'Invalid phone number format. Please enter a valid phone number.';
-      } else if (error.code === 'auth/quota-exceeded') {
-        errorMessage = 'SMS quota exceeded. Please try again later.';
-      } else if (error.code === 'auth/internal-error') {
-        errorMessage = 'reCAPTCHA verification failed. Please refresh the page and try again.';
-      } else if (error.code === 'auth/captcha-check-failed') {
-        errorMessage = 'reCAPTCHA verification failed. Please complete the verification and try again.';
+      switch (error.code) {
+        case 'auth/invalid-phone-number':
+          errorMessage = 'Invalid phone number. Please enter with country code (e.g., +1234567890)';
+          break;
+        case 'auth/quota-exceeded':
+          errorMessage = 'SMS quota exceeded. Please try again later.';
+          break;
+        case 'auth/captcha-check-failed':
+          errorMessage = 'reCAPTCHA verification failed. Please try again.';
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = 'Too many requests. Please wait before trying again.';
+          break;
+        case 'auth/argument-error':
+          errorMessage = 'Domain not authorized. Please add this domain to Firebase Console authorized domains and wait 2-5 minutes.';
+          break;
+        case 'auth/internal-error':
+          errorMessage = 'Phone verification failed. Please refresh and try again.';
+          break;
+        default:
+          if (error.message.includes('reCAPTCHA')) {
+            errorMessage = 'reCAPTCHA failed. Please refresh the page and try again.';
+          }
       }
       
       return {
@@ -335,12 +440,16 @@ export const firebaseAuth = {
     }
   },
 
-  // Verify OTP and sign in
-  verifyOTP: async (verificationId, otp) => {
+  // Verify OTP and complete sign-in (Updated method)
+  verifyOTP: async (confirmationResult, otp) => {
     try {
-      const credential = PhoneAuthProvider.credential(verificationId, otp);
-      const userCredential = await signInWithCredential(auth, credential);
+      console.log('🔍 Verifying OTP:', otp);
+      
+      // Use confirmationResult.confirm() method as per Firebase docs
+      const userCredential = await confirmationResult.confirm(otp);
       const user = userCredential.user;
+      
+      console.log('✅ Phone authentication successful!');
       
       return {
         success: true,
@@ -349,14 +458,32 @@ export const firebaseAuth = {
           phoneNumber: user.phoneNumber,
           displayName: user.displayName,
           photoURL: user.photoURL,
-          provider: 'phone'
-        }
+          email: user.email
+        },
+        message: 'Phone authentication successful!'
       };
     } catch (error) {
-      console.error('Error verifying OTP:', error);
+      console.error('❌ Error verifying OTP:', error);
+      
+      let errorMessage = error.message;
+      
+      switch (error.code) {
+        case 'auth/invalid-verification-code':
+          errorMessage = 'Invalid OTP. Please check and try again.';
+          break;
+        case 'auth/code-expired':
+          errorMessage = 'OTP expired. Please request a new one.';
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = 'Too many failed attempts. Please try again later.';
+          break;
+        default:
+          errorMessage = 'OTP verification failed. Please try again.';
+      }
+      
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
         code: error.code
       };
     }
