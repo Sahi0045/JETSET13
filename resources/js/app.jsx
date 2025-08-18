@@ -436,6 +436,57 @@ const Careers = React.lazy(() =>
     .catch(() => ({ default: () => <div>Loading Careers...</div> }))
 );
 
+// New Footer Pages
+const Resources = React.lazy(() => 
+  import('./Pages/Resources')
+    .catch(() => ({ default: () => <div>Loading Resources...</div> }))
+);
+
+const Destinations = React.lazy(() => 
+  import('./Pages/Destinations')
+    .catch(() => ({ default: () => <div>Loading Destinations...</div> }))
+);
+
+const TravelBlog = React.lazy(() => 
+  import('./Pages/TravelBlog')
+    .catch(() => ({ default: () => <div>Loading Travel Blog...</div> }))
+);
+
+const Support = React.lazy(() => 
+  import('./Pages/Support')
+    .catch(() => ({ default: () => <div>Loading Support...</div> }))
+);
+
+const FAQs = React.lazy(() => 
+  import('./Pages/FAQs')
+    .catch(() => ({ default: () => <div>Loading FAQs...</div> }))
+);
+
+const Company = React.lazy(() => 
+  import('./Pages/Company')
+    .catch(() => ({ default: () => <div>Loading Company...</div> }))
+);
+
+const AboutUs = React.lazy(() => 
+  import('./Pages/AboutUs')
+    .catch(() => ({ default: () => <div>Loading About Us...</div> }))
+);
+
+const ContactUs = React.lazy(() => 
+  import('./Pages/ContactUs')
+    .catch(() => ({ default: () => <div>Loading Contact Us...</div> }))
+);
+
+const PrivacyPolicy = React.lazy(() => 
+  import('./Pages/PrivacyPolicy')
+    .catch(() => ({ default: () => <div>Loading Privacy Policy...</div> }))
+);
+
+const TermsConditions = React.lazy(() => 
+  import('./Pages/TermsConditions')
+    .catch(() => ({ default: () => <div>Loading Terms & Conditions...</div> }))
+);
+
 const HotelBookingSuccess = React.lazy(() => 
   import('./Pages/Common/rentals/HotelBookingSuccess')
     .catch(() => ({ default: () => <div>Loading Hotel Booking Success...</div> }))
@@ -500,11 +551,7 @@ const App = () => {
             <FirebaseProfileDashboard />
           </ProtectedRoute>
         } />
-        <Route path="/phone-login" element={
-          <ProtectedRoute requireAuth={false}>
-            <PhoneLogin />
-          </ProtectedRoute>
-        } />
+
         
         {/* Debug route - remove in production */}
         <Route path="/auth-debug" element={<AuthDebug />} />
@@ -542,16 +589,29 @@ const App = () => {
         <Route path="/terms" element={<Terms />} />
         <Route path="/cookies" element={<Cookies />} />
         <Route path="/careers" element={<Careers />} />
-        <Route path="/about" element={<Navigate to="/" />} /> {/* Placeholder redirect */}
-        <Route path="/contact" element={<Navigate to="/" />} /> {/* Placeholder redirect */}
-        <Route path="/cruise-booking" element={<Navigate to="/cruises" />} /> {/* Redirect to cruises */}
-        <Route path="/blog" element={<Navigate to="/" />} /> {/* Placeholder redirect */}
-        <Route path="/reviews" element={<Navigate to="/" />} /> {/* Placeholder redirect */}
-        <Route path="/covid-updates" element={<Navigate to="/" />} /> {/* Placeholder redirect */}
-        <Route path="/special-offers" element={<Navigate to="/" />} /> {/* Placeholder redirect */}
-        <Route path="/destinations/:destination" element={<Navigate to="/cruises" />} /> {/* Redirect to cruises */}
-        <Route path="/secure-booking" element={<Navigate to="/privacy" />} /> {/* Redirect to privacy */}
-        <Route path="/support" element={<Navigate to="/contact" />} /> {/* Redirect to contact */}
+        
+        {/* New Footer Pages */}
+        <Route path="/resources" element={<Resources />} />
+        <Route path="/destinations" element={<Destinations />} />
+        <Route path="/travel-blog" element={<TravelBlog />} />
+        <Route path="/support" element={<Support />} />
+        <Route path="/faqs" element={<FAQs />} />
+        <Route path="/company" element={<Company />} />
+        <Route path="/about-us" element={<AboutUs />} />
+        <Route path="/contact" element={<ContactUs />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/terms-conditions" element={<TermsConditions />} />
+        
+        {/* Legacy redirects for backward compatibility */}
+        <Route path="/about" element={<Navigate to="/about-us" />} />
+        <Route path="/blog" element={<Navigate to="/travel-blog" />} />
+        <Route path="/faq" element={<Navigate to="/faqs" />} />
+        <Route path="/cruise-booking" element={<Navigate to="/cruises" />} />
+        <Route path="/reviews" element={<Navigate to="/" />} />
+        <Route path="/covid-updates" element={<Navigate to="/" />} />
+        <Route path="/special-offers" element={<Navigate to="/" />} />
+        <Route path="/destinations/:destination" element={<Navigate to="/cruises" />} />
+        <Route path="/secure-booking" element={<Navigate to="/privacy-policy" />} />
         
         <Route path="/404" element={<Error />} />
         <Route path="*" element={<Navigate to="/404" />} />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaGoogle, FaFacebook, FaPhone, FaEye, FaEyeSlash, FaSpinner } from 'react-icons/fa';
+import { FaGoogle, FaFacebook, FaEye, FaEyeSlash, FaSpinner, FaLock, FaEnvelope } from 'react-icons/fa';
 import { useFirebaseAuth } from '../../../contexts/FirebaseAuthContext';
 import './login.css';
 
@@ -171,195 +171,221 @@ export default function FirebaseLogin() {
 
     return (
         <div className="login-container">
-            <div className="login-card">
-                {/* Header Image */}
-                <div 
-                    className="login-image"
-                    style={{
-                        backgroundImage: "url('/images/login/cruise-background.png')"
-                    }}
-                />
+            {/* Back Button - Positioned at top of page */}
+            <button 
+                onClick={() => navigate('/flights')}
+                className="back-button"
+            >
+                ← Back to Flights
+            </button>
+            <div className="login-wrapper">
+                {/* Left Side - Image */}
+                <div className="login-image-section">
+                    <div className="image-overlay">
+                        <h2 className="image-title">Welcome to JetSet Travel</h2>
+                        <p className="image-subtitle">Discover amazing destinations and create unforgettable memories</p>
+                    </div>
+                </div>
                 
-                {/* Login Content */}
-                <div className="login-content">
-                    <h1 className="login-title">Login</h1>
-                    
-                    {/* Success Message */}
-                    {resetMessage && (
-                        <div className="success-message mb-4 p-3 bg-green-100 border border-green-300 text-green-700 rounded">
-                            {resetMessage}
+                {/* Right Side - Login Form */}
+                <div className="login-form-section">
+                    <div className="login-form-container">
+                        <div className="login-header">
+                            <h1 className="login-title">Sign In</h1>
+                            <p className="login-subtitle">Welcome back! Please enter your details</p>
                         </div>
-                    )}
-                    
-                    {/* Forgot Password Modal */}
-                    {showForgotPassword && (
-                        <div className="forgot-password-modal mb-4 p-4 bg-gray-50 border border-gray-200 rounded">
-                            <h3 className="text-lg font-semibold mb-2">Reset Password</h3>
-                            <form onSubmit={handleForgotPassword}>
-                                <div className="form-group">
-                                    <input
-                                        type="email"
-                                        value={resetEmail}
-                                        onChange={(e) => setResetEmail(e.target.value)}
-                                        placeholder="Enter your email address"
-                                        className="form-input"
-                                        required
-                                    />
-                                    {formErrors.resetEmail && (
-                                        <div className="error-message">{formErrors.resetEmail}</div>
-                                    )}
-                                </div>
-                                <div className="flex gap-2 mt-3">
-                                    <button
-                                        type="submit"
-                                        className="flex-1 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors"
-                                        disabled={loading}
-                                    >
-                                        Send Reset Email
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowForgotPassword(false)}
-                                        className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-400 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    )}
-                    
-                    {/* Login Form */}
-                    <form onSubmit={handleSubmit} className="login-form">
-                        {/* General Error Message */}
-                        {(formErrors.general || error) && (
-                            <div className="error-message mb-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded">
-                                {formErrors.general || error}
+                        
+                        {/* Success Message */}
+                        {resetMessage && (
+                            <div className="success-message">
+                                <span className="success-icon">✓</span>
+                                {resetMessage}
                             </div>
                         )}
                         
-                        {/* Email Field */}
-                        <div className="form-group">
-                            <label htmlFor="email">Email</label>
-                            <input
-                                id="email"
-                                name="email"
-                                type="email"
-                                value={formData.email}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder="Enter your email"
-                                required
-                            />
-                            {formErrors.email && (
-                                <div className="error-message">{formErrors.email}</div>
-                            )}
-                        </div>
+                        {/* Forgot Password Modal */}
+                        {showForgotPassword && (
+                            <div className="forgot-password-modal">
+                                <div className="modal-header">
+                                    <h3>Reset Password</h3>
+                                    <button 
+                                        className="close-button"
+                                        onClick={() => setShowForgotPassword(false)}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                                <p className="modal-description">
+                                    Enter your email address and we'll send you a link to reset your password.
+                                </p>
+                                
+                                <form onSubmit={handleForgotPassword}>
+                                    <div className="form-group">
+                                        <label htmlFor="resetEmail">Email Address</label>
+                                        <input
+                                            id="resetEmail"
+                                            type="email"
+                                            value={resetEmail}
+                                            onChange={(e) => setResetEmail(e.target.value)}
+                                            className="form-input"
+                                            placeholder="Enter your email"
+                                            required
+                                        />
+                                        {formErrors.resetEmail && (
+                                            <div className="error-message">{formErrors.resetEmail}</div>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="modal-actions">
+                                        <button
+                                            type="submit"
+                                            className="primary-button"
+                                        >
+                                            Send Reset Link
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowForgotPassword(false)}
+                                            className="secondary-button"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        )}
                         
-                        {/* Password Field */}
-                        <div className="form-group">
-                            <label htmlFor="password">Password</label>
-                            <div className="relative">
-                                <input
-                                    id="password"
-                                    name="password"
-                                    type={showPassword ? "text" : "password"}
-                                    value={formData.password}
-                                    onChange={handleInputChange}
-                                    className="form-input pr-10"
-                                    placeholder="Enter your password"
-                                    required
-                                />
+                        {/* Login Form */}
+                        <form onSubmit={handleSubmit} className="login-form">
+                            {/* General Error Message */}
+                            {(formErrors.general || error) && (
+                                <div className="error-message general-error">
+                                    <span className="error-icon">⚠</span>
+                                    {formErrors.general || error}
+                                </div>
+                            )}
+                            
+                            {/* Email Field */}
+                            <div className="form-group">
+                                <label htmlFor="email">Email</label>
+                                <div className="input-wrapper">
+                                    <FaEnvelope className="input-icon" />
+                                    <input
+                                        id="email"
+                                        name="email"
+                                        type="email"
+                                        value={formData.email}
+                                        onChange={handleInputChange}
+                                        className="form-input"
+                                        placeholder="Enter your email"
+                                        required
+                                    />
+                                </div>
+                                {formErrors.email && (
+                                    <div className="error-message">{formErrors.email}</div>
+                                )}
+                            </div>
+                            
+                            {/* Password Field */}
+                            <div className="form-group">
+                                <label htmlFor="password">Password</label>
+                                <div className="input-wrapper">
+                                    <FaLock className="input-icon" />
+                                    <input
+                                        id="password"
+                                        name="password"
+                                        type={showPassword ? "text" : "password"}
+                                        value={formData.password}
+                                        onChange={handleInputChange}
+                                        className="form-input"
+                                        placeholder="Enter your password"
+                                        required
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="password-toggle"
+                                        aria-label={showPassword ? "Hide password" : "Show password"}
+                                    >
+                                        {showPassword ? <FaEyeSlash /> : <FaEye />}
+                                    </button>
+                                </div>
+                                {formErrors.password && (
+                                    <div className="error-message">{formErrors.password}</div>
+                                )}
+                            </div>
+                            
+                            {/* Remember Me & Forgot Password */}
+                            <div className="form-options">
+                                <label className="checkbox-container">
+                                    <input
+                                        type="checkbox"
+                                        name="remember"
+                                        checked={formData.remember}
+                                        onChange={handleInputChange}
+                                    />
+                                    <span className="checkmark"></span>
+                                    Remember me
+                                </label>
                                 <button
                                     type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                    onClick={() => setShowForgotPassword(true)}
+                                    className="forgot-password-link"
                                 >
-                                    {showPassword ? <FaEyeSlash /> : <FaEye />}
+                                    Forgot password?
                                 </button>
                             </div>
-                            {formErrors.password && (
-                                <div className="error-message">{formErrors.password}</div>
-                            )}
+                            
+                            {/* Login Button */}
+                            <button
+                                type="submit"
+                                disabled={isProcessing || loading}
+                                className="login-button"
+                            >
+                                {isProcessing || loading ? (
+                                    <>
+                                        <FaSpinner className="spinner" />
+                                        Signing in...
+                                    </>
+                                ) : (
+                                    'Sign In'
+                                )}
+                            </button>
+                        </form>
+                        
+                        {/* Divider */}
+                        <div className="divider">
+                            <span>or</span>
                         </div>
                         
-                        {/* Remember Me & Forgot Password */}
-                        <div className="form-options">
-                            <label className="checkbox-label">
-                                <input
-                                    type="checkbox"
-                                    name="remember"
-                                    checked={formData.remember}
-                                    onChange={handleInputChange}
-                                />
-                                <span className="checkmark"></span>
-                                Remember me
-                            </label>
+                        {/* Social Login Buttons */}
+                        <div className="social-login">
                             <button
                                 type="button"
-                                onClick={() => setShowForgotPassword(true)}
-                                className="forgot-password-link"
+                                onClick={handleGoogleLogin}
+                                disabled={isProcessing || loading}
+                                className="social-button google"
                             >
-                                Forgot password?
+                                <FaGoogle className="social-icon" />
+                                Continue with Google
+                            </button>
+                            
+                            <button
+                                type="button"
+                                onClick={handleFacebookLogin}
+                                disabled={isProcessing || loading}
+                                className="social-button facebook"
+                            >
+                                <FaFacebook className="social-icon" />
+                                Continue with Facebook
                             </button>
                         </div>
                         
-                        {/* Login Button */}
-                        <button
-                            type="submit"
-                            disabled={isProcessing || loading}
-                            className="login-button"
-                        >
-                            {isProcessing || loading ? (
-                                <>
-                                    <FaSpinner className="animate-spin mr-2" />
-                                    Signing in...
-                                </>
-                            ) : (
-                                'Login'
-                            )}
-                        </button>
-                    </form>
-                    
-                    {/* Divider */}
-                    <div className="divider">
-                        <span>OR</span>
-                    </div>
-                    
-                    {/* Social Login Buttons */}
-                    <div className="social-login">
-                        <button
-                            type="button"
-                            onClick={handleGoogleLogin}
-                            disabled={isProcessing || loading}
-                            className="social-button google-button"
-                        >
-                            <FaGoogle className="mr-2" />
-                            Continue with Google
-                        </button>
-                        
-                        <button
-                            type="button"
-                            onClick={handleFacebookLogin}
-                            disabled={isProcessing || loading}
-                            className="social-button facebook-button"
-                        >
-                            <FaFacebook className="mr-2" />
-                            Continue with Facebook
-                        </button>
-                        
-                        <Link 
-                            to="/phone-login" 
-                            className="social-button phone-button"
-                        >
-                            <FaPhone className="mr-2" />
-                            Continue with Phone
-                        </Link>
-                    </div>
-                    
-                    {/* Signup Link */}
-                    <div className="signup-link">
-                        Don't have an account? <Link to="/signup">Sign up now</Link>
+                        {/* Signup Link */}
+                        <div className="signup-section">
+                            <p>Don't have an account?</p>
+                            <Link to="/signup" className="signup-link">Sign up</Link>
+                        </div>
                     </div>
                 </div>
             </div>

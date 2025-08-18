@@ -1302,7 +1302,7 @@ export default function LandingPage() {
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Users className="h-8 w-8 text-blue-600" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-1">10,000+</h3>
+              <h3 className="text-2xl font-bold text-gray-800 mb-1">100+</h3>
               <p className="text-gray-600">Happy Guests</p>
             </div>
             
@@ -1421,138 +1421,6 @@ export default function LandingPage() {
                     <p className="text-sm font-semibold text-gray-900">Starting from</p>
                     <p className="text-2xl font-bold text-blue-600">$199<span className="text-sm font-normal text-gray-600">/night</span></p>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Guest Testimonials - Moved here */}
-          <div className="mt-24 animate-on-scroll" id="testimonials-section">
-            <div className="text-center mb-12" id="testimonials-heading">
-              <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold tracking-wider mb-3">WHAT OUR GUESTS SAY</span>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Guest Testimonials</h2>
-              <div className="w-24 h-1 bg-gradient-to-r from-blue-500 to-teal-400 mx-auto"></div>
-              <p className="text-gray-600 mt-4 max-w-2xl mx-auto">Read what our satisfied guests have to say about their experiences</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto" id="testimonials-grid">
-              <div className="bg-white p-8 rounded-xl shadow-lg relative transform transition-transform hover:-translate-y-2 hover:shadow-xl">
-                <div className="absolute -top-5 left-8">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center shadow-lg">
-                    <span className="text-white text-2xl font-serif">"</span>
-                  </div>
-                </div>
-                <p className="text-gray-600 italic mt-6 mb-6 leading-relaxed">
-                  "The stay exceeded our expectations. The staff was incredibly attentive, and the room views were breathtaking. The attention to detail made our anniversary truly special. Definitely coming back!"
-                </p>
-                <div className="flex items-center">
-                  <div className="mr-4">
-                    <img 
-                      src="https://randomuser.me/api/portraits/women/12.jpg" 
-                      alt="Guest" 
-                      className="w-14 h-14 rounded-full object-cover border-2 border-blue-100"
-                    />
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-800">Sarah Johnson</p>
-                    <p className="text-sm text-gray-500">New York, USA</p>
-                    <div className="flex mt-1">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-8 rounded-xl shadow-lg relative transform transition-transform hover:-translate-y-2 hover:shadow-xl">
-                <div className="absolute -top-5 left-8">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center shadow-lg">
-                    <span className="text-white text-2xl font-serif">"</span>
-                  </div>
-                </div>
-                <p className="text-gray-600 italic mt-6 mb-6 leading-relaxed">
-                  "Perfect for our family vacation! The kids loved the activities, and we enjoyed the spa. The amenities were top-notch and worth every penny. The staff went above and beyond to make our stay memorable."
-                </p>
-                <div className="flex items-center">
-                  <div className="mr-4">
-                    <img 
-                      src="https://randomuser.me/api/portraits/men/32.jpg" 
-                      alt="Guest" 
-                      className="w-14 h-14 rounded-full object-cover border-2 border-blue-100"
-                    />
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-800">Michael Torres</p>
-                    <p className="text-sm text-gray-500">San Francisco, USA</p>
-                    <div className="flex mt-1">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-8 rounded-xl shadow-lg relative transform transition-transform hover:-translate-y-2 hover:shadow-xl">
-                <div className="absolute -top-5 left-8">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center shadow-lg">
-                    <span className="text-white text-2xl font-serif">"</span>
-                  </div>
-                </div>
-                <p className="text-gray-600 italic mt-6 mb-6 leading-relaxed">
-                  "The honeymoon suite was magical! From the champagne welcome to the private balcony, every detail was perfect. The concierge helped plan amazing excursions. We'll treasure these memories forever."
-                </p>
-                <div className="flex items-center">
-                  <div className="mr-4">
-                    <img 
-                      src="https://randomuser.me/api/portraits/women/44.jpg" 
-                      alt="Guest" 
-                      className="w-14 h-14 rounded-full object-cover border-2 border-blue-100"
-                    />
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-800">Emily Patel</p>
-                    <p className="text-sm text-gray-500">London, UK</p>
-                    <div className="flex mt-1">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Review Stats */}
-            <div className="flex flex-wrap justify-center items-center gap-8 mt-16 max-w-4xl mx-auto" id="review-stats">
-              <div className="bg-white px-6 py-4 rounded-xl shadow-md flex items-center gap-3">
-                <div className="bg-yellow-100 p-2 rounded-full">
-                  <Star className="h-6 w-6 text-yellow-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-800">4.9/5</p>
-                  <p className="text-sm text-gray-500">Average Rating</p>
-                </div>
-              </div>
-              
-              <div className="bg-white px-6 py-4 rounded-xl shadow-md flex items-center gap-3">
-                <div className="bg-blue-100 p-2 rounded-full">
-                  <Users className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-800">15,000+</p>
-                  <p className="text-sm text-gray-500">Happy Guests</p>
-                </div>
-              </div>
-              
-              <div className="bg-white px-6 py-4 rounded-xl shadow-md flex items-center gap-3">
-                <div className="bg-green-100 p-2 rounded-full">
-                  <Check className="h-6 w-6 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-800">98%</p>
-                  <p className="text-sm text-gray-500">Satisfaction Rate</p>
                 </div>
               </div>
             </div>

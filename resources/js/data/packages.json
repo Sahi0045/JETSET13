@@ -1,8 +1,8 @@
 {
   "stats": {
-    "destinations": "500+",
-    "happyTravelers": "100+",
-    "packages": "1k+",
+    "destinations": "25+",
+    "happyTravelers": "20+",
+    "packages": "50+",
     "support": "24/7"
   },
   "dubai": {
@@ -64,49 +64,24 @@
         "title": "Atlantis Adventure",
         "location": "Dubai",
         "destination": "dubai",
-        "image": "https://images.unsplash.com/photo-1584352604394-c2c6f06e0692?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2069&q=80",
+        "image": "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
         "rating": 4.7,
-        "reviews": 156,
+        "reviews": 87,
         "price": 1899,
         "duration": "6 Days",
-        "discount": 12,
-        "packageType": "Activities Only",
-        "features": ["Water Park", "Aquarium", "Beach Access", "Activities Only"],
+        "discount": 20,
+        "packageType": "Family Package",
+        "features": ["Water Park Access", "Aquarium Tour", "Family Activities", "Family Package"],
         "highlights": [
-          "Aquaventure Access",
-          "Lost Chambers",
+          "Aquaventure Waterpark",
+          "Lost Chambers Aquarium",
           "Dolphin Bay"
         ],
         "included": [
-          "Half Board Meal Plan",
-          "Water Park Tickets",
-          "Marine Activities",
-          "Resort Credit"
-        ]
-      },
-      {
-        "id": 4,
-        "title": "Desert Safari Elite",
-        "location": "Dubai",
-        "destination": "dubai",
-        "image": "https://images.unsplash.com/photo-1451337516015-6b6e9a44a8a3?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1974&q=80",
-        "rating": 4.9,
-        "reviews": 203,
-        "price": 999,
-        "duration": "4 Days",
-        "discount": 20,
-        "packageType": "Cruise Package",
-        "features": ["Dune Bashing", "BBQ Dinner", "Camel Riding", "Cruise Package"],
-        "highlights": [
-          "Desert Adventure",
-          "Bedouin Camp",
-          "Stargazing"
-        ],
-        "included": [
-          "Desert Safari",
-          "BBQ Dinner",
-          "Cultural Shows",
-          "Sandboarding"
+          "Family Suite",
+          "All-Day Dining",
+          "Water Park Passes",
+          "Kids Club Access"
         ]
       }
     ]
