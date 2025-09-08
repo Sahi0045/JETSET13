@@ -15,20 +15,10 @@ const Footer = () => {
           <div className="footer-column">
             <Link to="/" className="footer-logo-link">
               <div className="footer-logo">
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  strokeWidth="2" 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round"
-                  className="logo-icon"
-                >
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <path d="M2 12h20"></path>
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                </svg>
+                <picture>
+                  <source srcSet="/jetset.jpeg" type="image/jpeg" />
+                  <img src="/Logo-jet.svg" alt="JET SETTERS" className="logo-icon" />
+                </picture>
                 <h3 className="column-title">JET SETTERS</h3>
               </div>
             </Link>

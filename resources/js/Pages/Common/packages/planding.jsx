@@ -348,7 +348,7 @@ const TravelPackages = () => {
             <Sparkles className="h-5 w-5 text-yellow-300 mr-2 flex-shrink-0" />
             <p className={`text-white ${isMobileView ? 'text-xs' : 'text-base'} font-medium tracking-wide`}>
               <span className="text-yellow-300 font-bold">SUMMER SPECIAL:</span> 15% OFF!{' '}
-              <span className="font-bold text-yellow-300 whitespace-nowrap">{isMobileView ? '' : 'Call '}8121716969</span>
+              <span className="font-bold text-yellow-300 whitespace-nowrap">{isMobileView ? '' : 'Call '} +1(888) 581-3028</span>
             </p>
           </div>
         </div>

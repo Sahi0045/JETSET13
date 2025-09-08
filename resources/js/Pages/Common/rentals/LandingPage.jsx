@@ -683,7 +683,7 @@ export default function LandingPage() {
           <div className="container mx-auto px-2 flex justify-center items-center">
             <Sparkles className="h-5 w-5 text-yellow-300 mr-2 flex-shrink-0" />
             <p className={`text-white ${isMobileView ? 'text-sm' : 'text-base'} font-medium tracking-wide`}>
-              <span className="text-yellow-300 font-bold">SUMMER SPECIAL:</span> 15% OFF! <span className="font-bold text-yellow-300">{isMobileView ? '' : 'Call '}8121716969</span>
+              <span className="text-yellow-300 font-bold">SUMMER SPECIAL:</span> 15% OFF! <span className="font-bold text-yellow-300">{isMobileView ? '' : 'Call '} +1(888) 581-3028</span>
             </p>
           </div>
         </div>
