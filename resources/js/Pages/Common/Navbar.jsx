@@ -70,10 +70,7 @@ const Navbar = ({ forceScrolled }) => {
       <div className="navbar-left">
         <Link to="/" className="logo-link">
           <div className="logo">
-            <picture>
-              <source srcSet="/jetset.jpeg" type="image/jpeg" />
-              <img src="/Logo-jet.svg" alt="JET SETTERS" />
-            </picture>
+            <img src="images/jetset.jpeg" alt="JET SETTERS" />
           </div>
         </Link>
       </div>

@@ -15,10 +15,7 @@ const Footer = () => {
           <div className="footer-column">
             <Link to="/" className="footer-logo-link">
               <div className="footer-logo">
-                <picture>
-                  <source srcSet="/jetset.jpeg" type="image/jpeg" />
-                  <img src="/Logo-jet.svg" alt="JET SETTERS" className="logo-icon" />
-                </picture>
+                <img src="/images/jetset.jpeg" alt="JET SETTERS" className="logo-icon" />
                 <h3 className="column-title">JET SETTERS</h3>
               </div>
             </Link>
