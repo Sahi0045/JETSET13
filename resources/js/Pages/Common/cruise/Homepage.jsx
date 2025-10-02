@@ -567,11 +567,11 @@ const HomePage = () => {
       
       {/* Special Offer Banner - positioned with absolute for better placement */}
       <div className="relative">
-        <div className={`w-full text-center bg-gradient-to-r from-blue-900/90 via-blue-800/90 to-blue-900/90 py-3 backdrop-blur-sm z-20 border-y border-blue-500/30 ${isMobileView ? 'px-3' : ''}`} style={{position: 'absolute', top: isMobileView ? '60px' : '73px', left: 0, right: 0}}>
+        <div className={`w-full text-center bg-gradient-to-r from-blue-900/90 via-blue-800/90 to-blue-900/90 py-3 backdrop-blur-sm z-20 border-y border-blue-500/30 ${isMobileView ? 'px-3' : ''}`}>
           <div className="container mx-auto px-2 flex justify-center items-center flex-wrap">
             <Sparkles className="h-5 w-5 text-yellow-300 mr-2 flex-shrink-0" />
             <p className={`text-white ${isMobileView ? 'text-xs' : 'text-base'} font-medium tracking-wide`}>
-              <span className="font-bold">Self-Service Portal will be available very soon...</span> Meanwhile please Call <span className="text-yellow-300 font-bold whitespace-nowrap">877-jetset-0 ((877) 538-7380)</span> or Email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a> for all your travel needs. Team Jetsetters!
+              <span className="font-bold">Self-Service Portal will be available very soon...</span> Meanwhile please Call <span className="text-yellow-300 font-bold whitespace-nowrap">((877) 538-7380)</span> or Email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a> for all your travel needs. Team Jetsetters!
             </p>
           </div>
         </div>
