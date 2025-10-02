@@ -571,8 +571,7 @@ const HomePage = () => {
           <div className="container mx-auto px-2 flex justify-center items-center flex-wrap">
             <Sparkles className="h-5 w-5 text-yellow-300 mr-2 flex-shrink-0" />
             <p className={`text-white ${isMobileView ? 'text-xs' : 'text-base'} font-medium tracking-wide`}>
-              <span className="text-yellow-300 font-bold">SUMMER SPECIAL:</span> 15% OFF!{' '}
-              <span className="font-bold text-yellow-300 whitespace-nowrap">{isMobileView ? '' : 'Call '} +1(888) 581-3028</span>
+              <span className="font-bold">Self-Service Portal will be available very soon...</span> Meanwhile please Call <span className="text-yellow-300 font-bold whitespace-nowrap">877-jetset-0 ((877) 538-7380)</span> or Email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a> for all your travel needs. Team Jetsetters!
             </p>
           </div>
         </div>

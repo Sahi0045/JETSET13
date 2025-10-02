@@ -683,7 +683,7 @@ export default function LandingPage() {
           <div className="container mx-auto px-2 flex justify-center items-center">
             <Sparkles className="h-5 w-5 text-yellow-300 mr-2 flex-shrink-0" />
             <p className={`text-white ${isMobileView ? 'text-sm' : 'text-base'} font-medium tracking-wide`}>
-              <span className="text-yellow-300 font-bold">SUMMER SPECIAL:</span> 15% OFF! <span className="font-bold text-yellow-300">{isMobileView ? '' : 'Call '} +1(888) 581-3028</span>
+              <span className="font-bold">Self-Service Portal will be available very soon...</span> Meanwhile please Call <span className="text-yellow-300 font-bold">877-jetset-0 ((877) 538-7380)</span> or Email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>
             </p>
           </div>
         </div>
