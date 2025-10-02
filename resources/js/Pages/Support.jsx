@@ -8,6 +8,11 @@ const Support = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
+  // Safe default for office locations to prevent runtime errors
+  const officeLocations = [
+    // Add real offices here when available
+  ];
+
   const supportCategories = [
     { id: 'all', name: 'All Topics', icon: <FaGlobe /> },
     { id: 'booking', name: 'Booking & Reservations', icon: <FaTicketAlt /> },
@@ -244,39 +249,41 @@ const Support = () => {
           </section>
 
           {/* Office Locations */}
-          <section className="mb-20">
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold text-gray-900 mb-4">Visit Our Offices</h2>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                Drop by our offices for in-person assistance and travel consultations
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {officeLocations.map((office, index) => (
-                <div key={index} className="bg-white rounded-xl shadow-lg p-8 text-center">
-                  <div className="mb-6">
-                    {office.icon}
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">{office.city}</h3>
-                  <p className="text-gray-600 mb-4">
-                    {office.address}<br />
-                    {office.country}
-                  </p>
-                  <div className="text-sm text-gray-500">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <FaClock />
-                      <span>{office.hours}</span>
+          {Array.isArray(officeLocations) && officeLocations.length > 0 && (
+            <section className="mb-20">
+              <div className="text-center mb-12">
+                <h2 className="text-4xl font-bold text-gray-900 mb-4">Visit Our Offices</h2>
+                <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                  Drop by our offices for in-person assistance and travel consultations
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {officeLocations.map((office, index) => (
+                  <div key={index} className="bg-white rounded-xl shadow-lg p-8 text-center">
+                    <div className="mb-6">
+                      {office.icon}
                     </div>
-                    <div className="flex items-center justify-center gap-2">
-                      <FaPhone />
-                      <span>{office.phone}</span>
+                    <h3 className="text-xl font-bold text-gray-900 mb-3">{office.city}</h3>
+                    <p className="text-gray-600 mb-4">
+                      {office.address}<br />
+                      {office.country}
+                    </p>
+                    <div className="text-sm text-gray-500">
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <FaClock />
+                        <span>{office.hours}</span>
+                      </div>
+                      <div className="flex items-center justify-center gap-2">
+                        <FaPhone />
+                        <span>{office.phone}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </section>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Additional Support Options */}
           <section className="bg-gradient-to-r from-blue-600 to-purple-700 rounded-2xl p-12 text-center text-white">
