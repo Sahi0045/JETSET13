@@ -659,6 +659,8 @@ export default function LandingPage() {
     <main className="min-h-screen bg-white font-poppins overflow-x-hidden">
       {/* Navbar */}
       <Navbar />
+      {/* Spacer to account for fixed navbar height */}
+      <div style={{ height: '71px' }} />
       
       {/* Hero Section */}
       <div className="relative h-[650px] md:h-[750px] overflow-hidden">

@@ -564,6 +564,8 @@ const HomePage = () => {
   return (
     <div className="home-page-wrapper" style={styles.homePageWrapper}>
       <Navbar />
+      {/* Spacer to account for fixed navbar height */}
+      <div style={{ height: '71px' }} />
       
       {/* Special Offer Banner - positioned with absolute for better placement */}
       <div className="relative">
