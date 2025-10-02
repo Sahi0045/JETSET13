@@ -679,7 +679,7 @@ export default function LandingPage() {
         )}
 
         {/* Mobile-optimized Special Offer Banner */}
-        <div className={`w-full text-center bg-gradient-to-r from-blue-900/90 via-blue-800/90 to-blue-900/90 py-3 backdrop-blur-sm z-20 border-y border-blue-500/30 ${isMobileView ? 'px-3' : ''}`} style={{ marginTop: '71px' }}>
+        <div className={`absolute top-[73px] w-full text-center bg-gradient-to-r from-blue-900/90 via-blue-800/90 to-blue-900/90 py-3 backdrop-blur-sm z-20 border-y border-blue-500/30 ${isMobileView ? 'px-3' : ''}`}>
           <div className="container mx-auto px-2 flex justify-center items-center">
             <Sparkles className="h-5 w-5 text-yellow-300 mr-2 flex-shrink-0" />
             <p className={`text-white ${isMobileView ? 'text-sm' : 'text-base'} font-medium tracking-wide`}>
