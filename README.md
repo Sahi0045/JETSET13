@@ -181,6 +181,14 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
 ```
 
+## ⚠️ **Firebase Configuration Issue**
+
+If you're seeing "Missing Firebase configuration: apiKey, authDomain, projectId" errors, please follow these steps:
+
+1. Check the [FIREBASE_SETUP_INSTRUCTIONS.md](file:///Users/yashwanthreddy/Desktop/JETSET13/FIREBASE_SETUP_INSTRUCTIONS.md) file for detailed setup instructions
+2. Ensure you have properly configured your Firebase project and added the configuration to your [.env](file:///Users/yashwanthreddy/Desktop/JETSET13/.env) file
+3. The application will now gracefully handle missing configuration and show warnings instead of crashing
+
 ## 📱 **Features in Detail**
 
 ### **User Experience**
@@ -222,6 +230,115 @@ npm run build
 - Set up CDN for static assets
 - Enable HTTPS and security headers
 - Configure domain and DNS settings
+
+## �� **Contributing**
+
+We welcome contributions! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+### **Development Guidelines**
+- Follow React best practices
+- Use TypeScript for new components
+- Maintain responsive design principles
+- Write comprehensive tests
+- Update documentation as needed
+
+## 📊 **Performance & Optimization**
+
+### **Frontend Optimization**
+- **Code Splitting**: Lazy loading for better performance
+- **Image Optimization**: Compressed and responsive images
+- **Bundle Optimization**: Minimized JavaScript bundles
+- **Caching Strategy**: Efficient caching for static assets
+- **Lighthouse Score**: Optimized for Core Web Vitals
+
+### **Backend Performance**
+- **Database Indexing**: Optimized database queries
+- **API Caching**: Redis-based caching layer
+- **Load Balancing**: Distributed server load
+- **CDN Integration**: Global content delivery
+- **Monitoring**: Real-time performance tracking
+
+## 🔒 **Security Features**
+
+### **Data Protection**
+- **Encryption**: End-to-end data encryption
+- **Authentication**: Multi-factor authentication
+- **Authorization**: Role-based access control
+- **Audit Logs**: Comprehensive activity tracking
+- **GDPR Compliance**: Data privacy compliance
+
+### **Payment Security**
+- **PCI Compliance**: Secure payment processing
+- **Tokenization**: Secure payment token handling
+- **Fraud Detection**: Advanced fraud prevention
+- **Secure APIs**: Protected API endpoints
+- **Regular Audits**: Security assessments
+
+## 📈 **Analytics & Monitoring**
+
+### **User Analytics**
+- **Google Analytics**: Comprehensive user tracking
+- **Heatmaps**: User interaction analysis
+- **Conversion Tracking**: Booking funnel analysis
+- **A/B Testing**: Performance optimization
+- **User Feedback**: Customer satisfaction metrics
+
+### **Performance Monitoring**
+- **Error Tracking**: Real-time error monitoring
+- **Performance Metrics**: Core Web Vitals tracking
+- **Uptime Monitoring**: Service availability
+- **Alert System**: Proactive issue detection
+- **Performance Reports**: Regular performance analysis
+
+## 🌟 **Future Roadmap**
+
+### **Phase 1 (Q1 2024)**
+- [x] Core booking functionality
+- [x] User authentication system
+- [x] Responsive design implementation
+- [x] Basic payment integration
+
+### **Phase 2 (Q2 2024)**
+- [ ] Advanced search algorithms
+- [ ] AI-powered recommendations
+- [ ] Multi-language support
+- [ ] Enhanced mobile app
+
+### **Phase 3 (Q3 2024)**
+- [ ] Virtual reality tours
+- [ ] Blockchain integration
+- [ ] Advanced analytics dashboard
+- [ ] Partner API integrations
+
+### **Phase 4 (Q4 2024)**
+- [ ] Machine learning optimization
+- [ ] Global expansion
+- [ ] Advanced loyalty program
+- [ ] Enterprise solutions
+
+## 📞 **Support & Contact**
+
+### **Customer Support**
+- **24/7 Hotline**: +1-800-537-8381
+- **Email**: support@jetsetterss.com
+- **Live Chat**: Available on website
+- **WhatsApp**: +1-800-537-8381
+
+### **Office Locations**
+- **New York**: 123 Travel Plaza, NY 10001
+- **London**: 456 Travel Street, W1A 1AA
+- **Singapore**: 789 Travel Avenue, 018956
+
+### **Business Inquiries**
+- **Partnerships**: partnerships@jetsetterss.com
+- **Media**: press@jetsetterss.com
+- **Careers**: careers@jetsetterss.com
 
 ## 📄 **License**
 

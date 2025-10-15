@@ -21,9 +21,10 @@ export const FirebaseAuthProvider = ({ children }) => {
 
   // Listen to auth state changes
   useEffect(() => {
-    if (!firebaseAuth) {
+    // Check if firebaseAuth is properly initialized
+    if (!firebaseAuth || typeof firebaseAuth.onAuthStateChanged !== 'function') {
+      console.warn('Firebase authentication not properly initialized');
       setLoading(false);
-      setError('Firebase authentication not initialized');
       return;
     }
 
@@ -61,7 +62,11 @@ export const FirebaseAuthProvider = ({ children }) => {
     });
 
     // Cleanup subscription on unmount
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, []);
 
   // Sign up function
@@ -69,6 +74,11 @@ export const FirebaseAuthProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
+      
+      // Check if firebaseAuth is available
+      if (!firebaseAuth || typeof firebaseAuth.signUp !== 'function') {
+        throw new Error('Firebase authentication not available');
+      }
       
       const result = await firebaseAuth.signUp(email, password, {
         firstName,
@@ -83,7 +93,7 @@ export const FirebaseAuthProvider = ({ children }) => {
         return { success: false, error: errorMessage };
       }
     } catch (error) {
-      const errorMessage = 'An unexpected error occurred during signup';
+      const errorMessage = error.message || 'An unexpected error occurred during signup';
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -97,6 +107,11 @@ export const FirebaseAuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
+      // Check if firebaseAuth is available
+      if (!firebaseAuth || typeof firebaseAuth.signIn !== 'function') {
+        throw new Error('Firebase authentication not available');
+      }
+      
       const result = await firebaseAuth.signIn(email, password);
       
       if (result.success) {
@@ -107,7 +122,7 @@ export const FirebaseAuthProvider = ({ children }) => {
         return { success: false, error: errorMessage };
       }
     } catch (error) {
-      const errorMessage = 'An unexpected error occurred during signin';
+      const errorMessage = error.message || 'An unexpected error occurred during signin';
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -121,6 +136,11 @@ export const FirebaseAuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
+      // Check if firebaseAuth is available
+      if (!firebaseAuth || typeof firebaseAuth.signInWithGoogle !== 'function') {
+        throw new Error('Firebase authentication not available');
+      }
+      
       const result = await firebaseAuth.signInWithGoogle();
       
       if (result.success) {
@@ -131,7 +151,7 @@ export const FirebaseAuthProvider = ({ children }) => {
         return { success: false, error: errorMessage };
       }
     } catch (error) {
-      const errorMessage = 'An unexpected error occurred during Google signin';
+      const errorMessage = error.message || 'An unexpected error occurred during Google signin';
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -145,6 +165,11 @@ export const FirebaseAuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
+      // Check if firebaseAuth is available
+      if (!firebaseAuth || typeof firebaseAuth.signInWithFacebook !== 'function') {
+        throw new Error('Firebase authentication not available');
+      }
+      
       const result = await firebaseAuth.signInWithFacebook();
       
       if (result.success) {
@@ -155,7 +180,7 @@ export const FirebaseAuthProvider = ({ children }) => {
         return { success: false, error: errorMessage };
       }
     } catch (error) {
-      const errorMessage = 'An unexpected error occurred during Facebook signin';
+      const errorMessage = error.message || 'An unexpected error occurred during Facebook signin';
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -169,6 +194,11 @@ export const FirebaseAuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
+      // Check if firebaseAuth is available
+      if (!firebaseAuth || typeof firebaseAuth.signOut !== 'function') {
+        throw new Error('Firebase authentication not available');
+      }
+      
       const result = await firebaseAuth.signOut();
       
       if (result.success) {
@@ -178,7 +208,7 @@ export const FirebaseAuthProvider = ({ children }) => {
         return { success: false, error: result.error };
       }
     } catch (error) {
-      const errorMessage = 'An unexpected error occurred during signout';
+      const errorMessage = error.message || 'An unexpected error occurred during signout';
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -191,6 +221,11 @@ export const FirebaseAuthProvider = ({ children }) => {
     try {
       setError(null);
       
+      // Check if firebaseAuth is available
+      if (!firebaseAuth || typeof firebaseAuth.resetPassword !== 'function') {
+        throw new Error('Firebase authentication not available');
+      }
+      
       const result = await firebaseAuth.resetPassword(email);
       
       if (result.success) {
@@ -201,7 +236,7 @@ export const FirebaseAuthProvider = ({ children }) => {
         return { success: false, error: errorMessage };
       }
     } catch (error) {
-      const errorMessage = 'An unexpected error occurred during password reset';
+      const errorMessage = error.message || 'An unexpected error occurred during password reset';
       setError(errorMessage);
       return { success: false, error: errorMessage };
     }
@@ -210,6 +245,10 @@ export const FirebaseAuthProvider = ({ children }) => {
   // Get user token
   const getUserToken = async () => {
     try {
+      // Check if firebaseAuth is available
+      if (!firebaseAuth || typeof firebaseAuth.getUserToken !== 'function') {
+        return null;
+      }
       return await firebaseAuth.getUserToken();
     } catch (error) {
       console.error('Error getting user token:', error);
@@ -219,6 +258,11 @@ export const FirebaseAuthProvider = ({ children }) => {
 
   // Phone Authentication Methods
   const initializeRecaptcha = (containerId) => {
+    // Check if firebaseAuth is available
+    if (!firebaseAuth || typeof firebaseAuth.initializeRecaptcha !== 'function') {
+      console.warn('Firebase authentication not available for phone auth');
+      return null;
+    }
     return firebaseAuth.initializeRecaptcha(containerId);
   };
 
@@ -227,10 +271,15 @@ export const FirebaseAuthProvider = ({ children }) => {
     setError(null);
     
     try {
+      // Check if firebaseAuth is available
+      if (!firebaseAuth || typeof firebaseAuth.sendOTP !== 'function') {
+        throw new Error('Firebase authentication not available for phone auth');
+      }
+      
       const result = await firebaseAuth.sendOTP(phoneNumber);
       return result;
     } catch (error) {
-      const errorMessage = getFirebaseErrorMessage(error);
+      const errorMessage = error.message || 'An unexpected error occurred during OTP sending';
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -243,10 +292,15 @@ export const FirebaseAuthProvider = ({ children }) => {
     setError(null);
     
     try {
+      // Check if firebaseAuth is available
+      if (!firebaseAuth || typeof firebaseAuth.verifyOTP !== 'function') {
+        throw new Error('Firebase authentication not available for phone auth');
+      }
+      
       const result = await firebaseAuth.verifyOTP(verificationId, otp);
       return result;
     } catch (error) {
-      const errorMessage = getFirebaseErrorMessage(error);
+      const errorMessage = error.message || 'An unexpected error occurred during OTP verification';
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -255,6 +309,10 @@ export const FirebaseAuthProvider = ({ children }) => {
   };
 
   const clearRecaptcha = () => {
+    // Check if firebaseAuth is available
+    if (!firebaseAuth || typeof firebaseAuth.clearRecaptcha !== 'function') {
+      return;
+    }
     return firebaseAuth.clearRecaptcha();
   };
 
@@ -313,4 +371,4 @@ export const FirebaseAuthProvider = ({ children }) => {
   );
 };
 
-export default FirebaseAuthContext; 
+export default FirebaseAuthContext;

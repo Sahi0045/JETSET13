@@ -21,76 +21,107 @@ import { getAnalytics } from 'firebase/analytics';
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || ''
 };
 
 // Validate Firebase configuration
 const validateFirebaseConfig = () => {
+  // In development, we might not have all config values
+  // but we should warn the user
   const requiredFields = ['apiKey', 'authDomain', 'projectId'];
   const missingFields = requiredFields.filter(field => !firebaseConfig[field]);
   
   if (missingFields.length > 0) {
-    console.error('Missing Firebase configuration:', missingFields);
-    throw new Error(`Missing Firebase configuration: ${missingFields.join(', ')}`);
+    console.warn('Missing Firebase configuration:', missingFields);
+    // Don't throw error in development, just warn
+    if (import.meta.env.PROD) {
+      throw new Error(`Missing Firebase configuration: ${missingFields.join(', ')}`);
+    }
   }
+  
+  // Check if we have any actual configuration values
+  const hasConfigValues = Object.values(firebaseConfig).some(value => value !== '');
+  return hasConfigValues;
 };
 
 // Initialize Firebase
 let app;
 let auth;
 let analytics;
+let isFirebaseInitialized = false;
 
 try {
   validateFirebaseConfig();
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
+  // Only initialize Firebase if we have at least some config values
+  const hasConfig = validateFirebaseConfig();
   
-  // Initialize Analytics only in production
-  if (import.meta.env.PROD && firebaseConfig.measurementId) {
-    analytics = getAnalytics(app);
-  }
-  
-  // Connect to Auth emulator in development (only if enabled)
-  if (import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
-    try {
-      connectAuthEmulator(auth, `http://${import.meta.env.VITE_FIREBASE_EMULATOR_HOST || 'localhost'}:${import.meta.env.VITE_FIREBASE_EMULATOR_PORT || 9099}`);
-      console.log('🔧 Connected to Firebase Auth emulator');
-    } catch (error) {
-      console.log('⚠️ Firebase emulator connection failed:', error.message);
+  if (hasConfig && firebaseConfig.apiKey && firebaseConfig.projectId) {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    isFirebaseInitialized = true;
+    
+    // Initialize Analytics only in production
+    if (import.meta.env.PROD && firebaseConfig.measurementId) {
+      analytics = getAnalytics(app);
     }
+    
+    // Connect to Auth emulator in development (only if enabled)
+    if (import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
+      try {
+        connectAuthEmulator(auth, `http://${import.meta.env.VITE_FIREBASE_EMULATOR_HOST || 'localhost'}:${import.meta.env.VITE_FIREBASE_EMULATOR_PORT || 9099}`);
+        console.log('🔧 Connected to Firebase Auth emulator');
+      } catch (error) {
+        console.log('⚠️ Firebase emulator connection failed:', error.message);
+      }
+    }
+    
+    console.log('🔥 Firebase initialized successfully');
+    console.log('🔧 Firebase Config:', {
+      projectId: firebaseConfig.projectId,
+      authDomain: firebaseConfig.authDomain,
+      appId: firebaseConfig.appId
+    });
+  } else {
+    console.warn('⚠️ Firebase not initialized - missing required configuration');
+    console.log('💡 To enable Firebase authentication, add your Firebase configuration to the .env file');
   }
-  
-  console.log('🔥 Firebase initialized successfully');
-  console.log('🔧 Firebase Config:', {
-    projectId: firebaseConfig.projectId,
-    authDomain: firebaseConfig.authDomain,
-    appId: firebaseConfig.appId
-  });
 } catch (error) {
   console.error('❌ Firebase initialization failed:', error);
+  isFirebaseInitialized = false;
 }
 
-// Configure providers
-const googleProvider = new GoogleAuthProvider();
-googleProvider.addScope('profile');
-googleProvider.addScope('email');
-googleProvider.setCustomParameters({
-  prompt: 'select_account'
-});
+// Configure providers (only if Firebase is initialized)
+let googleProvider, facebookProvider;
+if (isFirebaseInitialized) {
+  googleProvider = new GoogleAuthProvider();
+  googleProvider.addScope('profile');
+  googleProvider.addScope('email');
+  googleProvider.setCustomParameters({
+    prompt: 'select_account'
+  });
 
-const facebookProvider = new FacebookAuthProvider();
-facebookProvider.addScope('email');
+  facebookProvider = new FacebookAuthProvider();
+  facebookProvider.addScope('email');
+}
 
 // Auth functions
 export const firebaseAuth = {
   // Sign up with email and password
   signUp: async (email, password, userData = {}) => {
+    if (!isFirebaseInitialized) {
+      return {
+        success: false,
+        error: 'Firebase authentication is not available',
+        code: 'auth/not-initialized'
+      };
+    }
+    
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
@@ -125,6 +156,14 @@ export const firebaseAuth = {
 
   // Sign in with email and password
   signIn: async (email, password) => {
+    if (!isFirebaseInitialized) {
+      return {
+        success: false,
+        error: 'Firebase authentication is not available',
+        code: 'auth/not-initialized'
+      };
+    }
+    
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
@@ -151,6 +190,14 @@ export const firebaseAuth = {
 
   // Sign in with Google
   signInWithGoogle: async () => {
+    if (!isFirebaseInitialized || !googleProvider) {
+      return {
+        success: false,
+        error: 'Firebase authentication is not available',
+        code: 'auth/not-initialized'
+      };
+    }
+    
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
@@ -178,6 +225,14 @@ export const firebaseAuth = {
 
   // Sign in with Facebook
   signInWithFacebook: async () => {
+    if (!isFirebaseInitialized || !facebookProvider) {
+      return {
+        success: false,
+        error: 'Firebase authentication is not available',
+        code: 'auth/not-initialized'
+      };
+    }
+    
     try {
       const result = await signInWithPopup(auth, facebookProvider);
       const user = result.user;
@@ -205,6 +260,13 @@ export const firebaseAuth = {
 
   // Sign out
   signOut: async () => {
+    if (!isFirebaseInitialized) {
+      return {
+        success: false,
+        error: 'Firebase authentication is not available'
+      };
+    }
+    
     try {
       await signOut(auth);
       return { success: true };
@@ -219,6 +281,14 @@ export const firebaseAuth = {
 
   // Reset password
   resetPassword: async (email) => {
+    if (!isFirebaseInitialized) {
+      return {
+        success: false,
+        error: 'Firebase authentication is not available',
+        code: 'auth/not-initialized'
+      };
+    }
+    
     try {
       await sendPasswordResetEmail(auth, email);
       return { success: true };
@@ -234,16 +304,30 @@ export const firebaseAuth = {
 
   // Get current user
   getCurrentUser: () => {
+    if (!isFirebaseInitialized) {
+      return null;
+    }
     return auth.currentUser;
   },
 
   // Listen to auth state changes
   onAuthStateChanged: (callback) => {
-    return onAuthStateChanged(auth, callback);
+    // Check if auth is initialized before using it
+    if (isFirebaseInitialized && auth) {
+      return onAuthStateChanged(auth, callback);
+    } else {
+      console.warn('Firebase Auth not initialized - onAuthStateChanged not available');
+      // Return a dummy unsubscribe function
+      return () => {};
+    }
   },
 
   // Get user token
   getUserToken: async () => {
+    if (!isFirebaseInitialized) {
+      return null;
+    }
+    
     const user = auth.currentUser;
     if (user) {
       try {
@@ -260,6 +344,11 @@ export const firebaseAuth = {
   
   // Initialize reCAPTCHA for phone authentication
   initializeRecaptcha: (containerId = 'recaptcha-container') => {
+    if (!isFirebaseInitialized) {
+      console.warn('Firebase authentication is not available for phone auth');
+      return null;
+    }
+    
     try {
       // Clear any existing reCAPTCHA
       if (window.recaptchaVerifier) {
@@ -309,6 +398,14 @@ export const firebaseAuth = {
 
   // Send OTP to phone number (Fixed according to Firebase docs)
   sendOTP: async (phoneNumber) => {
+    if (!isFirebaseInitialized) {
+      return {
+        success: false,
+        error: 'Firebase authentication is not available for phone auth',
+        code: 'auth/not-initialized'
+      };
+    }
+    
     try {
       // Check current domain for debugging
       const currentDomain = window.location.hostname;
@@ -447,6 +544,14 @@ export const firebaseAuth = {
 
   // Verify OTP and complete sign-in (Updated method)
   verifyOTP: async (confirmationResult, otp) => {
+    if (!isFirebaseInitialized) {
+      return {
+        success: false,
+        error: 'Firebase authentication is not available for phone auth',
+        code: 'auth/not-initialized'
+      };
+    }
+    
     try {
       console.log('🔍 Verifying OTP:', otp);
       
@@ -519,10 +624,11 @@ export const getFirebaseErrorMessage = (errorCode) => {
     'auth/operation-not-allowed': 'This sign-in method is not enabled.',
     'auth/invalid-credential': 'The provided credentials are invalid.',
     'auth/account-exists-with-different-credential': 'An account already exists with the same email but different sign-in credentials.',
+    'auth/not-initialized': 'Firebase authentication is not properly configured. Please check your environment variables.',
   };
   
   return errorMessages[errorCode] || 'An unexpected error occurred. Please try again.';
 };
 
-export { auth, analytics };
-export default app; 
+export { auth, analytics, isFirebaseInitialized };
+export default app;
