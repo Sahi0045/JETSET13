@@ -11,16 +11,6 @@ The Firebase configuration environment variables were not properly set in the ap
 ### 1. Created Proper .env File
 We created a proper [.env](file:///Users/yashwanthreddy/Desktop/JETSET13/.env) file in the root directory with the Firebase configuration:
 
-```env
-# Firebase Configuration
-VITE_FIREBASE_API_KEY=AIzaSyC-QckGr23h_vPEF84mEvuDZahR0hrvQd0
-VITE_FIREBASE_AUTH_DOMAIN=itoby-11417.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=itoby-11417
-VITE_FIREBASE_STORAGE_BUCKET=itoby-11417.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=578335427951
-VITE_FIREBASE_APP_ID=1:578335427951:web:d0f6200b51579d4ff0ec9a
-VITE_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
-```
 
 ### 2. Enhanced Firebase Configuration Handling
 We updated the Firebase configuration file ([resources/js/config/firebase.js](file:///Users/yashwanthreddy/Desktop/JETSET13/resources/js/config/firebase.js)) to:
