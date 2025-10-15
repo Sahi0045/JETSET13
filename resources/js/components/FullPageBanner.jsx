@@ -65,16 +65,6 @@ const FullPageBanner = () => {
           maxWidth: 900
         }}
       >
-        <h1 style={{ fontSize: 48, lineHeight: 1.1, fontWeight: 800, textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>Jetsetters</h1>
-        <p style={{ fontSize: 20, marginTop: 12, textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
-          Plan your stress‑free Global Travel — Airline Tickets, Hotels, Cruise Packages
-        </p>
-        <div style={{ marginTop: 16, display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <a href={`mailto:${email}`} style={{ color: '#fff', fontWeight: 700, textDecoration: 'underline' }}>{email}</a>
-          <span style={{ opacity: 0.85 }}>•</span>
-          <a href={`tel:${phone}`} style={{ color: '#fff', fontWeight: 700, textDecoration: 'underline' }}>{phone}</a>
-        </div>
-
         <button
           onClick={() => setVisible(false)}
           style={{

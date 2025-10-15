@@ -1,9 +1,38 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const ContactBanner = () => {
   const bannerUrl = import.meta.env.VITE_CONTACT_BANNER_URL || '/images/jetsetters-banner.jpg';
   const email = 'bookings@jetsetterss.com';
   const phone = '+1-408-899-9705';
+  const [isMinimized, setIsMinimized] = useState(false);
+
+  if (isMinimized) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          right: 16,
+          bottom: 16,
+          zIndex: 9999,
+          width: 60,
+          height: 60,
+          borderRadius: '50%',
+          background: '#0b689c',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+          cursor: 'pointer',
+          border: '3px solid #fff'
+        }}
+        onClick={() => setIsMinimized(false)}
+        aria-label="Expand Jetsetters banner"
+        title="Click to expand contact banner"
+      >
+        <div style={{ color: '#fff', fontSize: 24, fontWeight: 'bold' }}>J</div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -21,6 +50,32 @@ const ContactBanner = () => {
       }}
       aria-label="Contact Jetsetters banner"
     >
+      {/* Minimize button */}
+      <button
+        onClick={() => setIsMinimized(true)}
+        style={{
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          background: 'rgba(255,255,255,0.2)',
+          border: 'none',
+          borderRadius: '50%',
+          width: 24,
+          height: 24,
+          color: '#fff',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 12,
+          zIndex: 10
+        }}
+        aria-label="Minimize banner"
+        title="Minimize"
+      >
+        ×
+      </button>
+
       <a href={`mailto:${email}`} title={`Email ${email}`} style={{ display: 'block' }}>
         <img
           src={bannerUrl}
@@ -31,17 +86,6 @@ const ContactBanner = () => {
           }}
         />
       </a>
-      <div style={{ padding: 12, color: '#fff' }}>
-        <div style={{ fontWeight: 700, lineHeight: 1.2 }}>Plan your stress‑free Global Travel</div>
-        <div style={{ opacity: 0.9, fontSize: 13, marginTop: 4 }}>
-          Airline Tickets • Hotels • Cruise Packages
-        </div>
-        <div style={{ display: 'flex', gap: 12, marginTop: 10, alignItems: 'center' }}>
-          <a href={`mailto:${email}`} style={{ color: '#fff', textDecoration: 'underline', fontWeight: 600 }}>{email}</a>
-          <span style={{ opacity: 0.7 }}>|</span>
-          <a href={`tel:${phone}`} style={{ color: '#fff', textDecoration: 'underline', fontWeight: 600 }}>{phone}</a>
-        </div>
-      </div>
     </div>
   );
 };
