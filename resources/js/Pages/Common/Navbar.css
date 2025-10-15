@@ -8,13 +8,14 @@
   top: 0;
   left: 0;
   right: 0;
-  z-index: 50;
+  z-index: 1000; /* keep above content and banners */
   transition: all 0.3s ease-in-out;
 }
 
 .navbar.transparent {
-  background-color: transparent;
-  box-shadow: none;
+  background-color: rgba(0,0,0,0.25);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 .navbar.scrolled {
@@ -40,8 +41,14 @@
   gap: 8px;
 }
 .logo img {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.95);
+  padding: 3px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  position: relative;
+  z-index: 1001;
 }
 
 .logo span {
@@ -50,9 +57,18 @@
   white-space: nowrap;
 }
 
+/* Ensure content doesn't collide with the top info bar */
+body {
+  padding-top: 71px; /* reserve space for fixed navbar so content doesn't sit under it */
+}
+
 .navbar-center {
   display: flex;
-  gap: 32px;
+  gap: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+  max-width: 60vw;
+  overflow: hidden;
 }
 
 .nav-link {
@@ -103,7 +119,7 @@
 .navbar-right {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
 }
 
 .login-button {

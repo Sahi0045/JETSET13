@@ -1,6 +1,8 @@
 // CSS imports moved to main.jsx entry point
 
 import React from 'react';
+import ContactBanner from './components/ContactBanner';
+import FullPageBanner from './components/FullPageBanner';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // Fallback components
@@ -528,6 +530,7 @@ const ProtectedRoute = React.lazy(() =>
 const App = () => {
   return (
     <React.Suspense fallback={<LoadingComponent />}>
+      <FullPageBanner />
       <Routes>
         <Route path="/" element={<Welcome />} />
         <Route path="/dashboard" element={<Dashboard />} />
@@ -616,6 +619,7 @@ const App = () => {
         <Route path="/404" element={<Error />} />
         <Route path="*" element={<Navigate to="/404" />} />
       </Routes>
+      <ContactBanner />
     </React.Suspense>
   );
 };
