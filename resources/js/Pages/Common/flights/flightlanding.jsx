@@ -366,7 +366,7 @@ function FlightLanding() {
       <Navbar />
       
       {/* Enhanced Hero Section */}
-      <section className="relative h-screen max-h-[800px] overflow-hidden">
+      <section className="relative h-screen max-h-[900px] overflow-hidden">
         {/* Animated background elements */}
         <div className="absolute inset-0 z-0 overflow-hidden">
           <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
@@ -380,13 +380,13 @@ function FlightLanding() {
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-blue-900/50 via-indigo-900/40 to-black/60"></div>
-        <div className="absolute inset-0 flex flex-col justify-center px-8 md:px-16 z-10">
+        <div className="absolute inset-0 flex flex-col justify-center px-6 sm:px-8 md:px-16 z-10">
           <div className="container mx-auto">
-            <div className="max-w-[700px] animate-fade-in-up">
+            <div className="max-w-[900px] xl:max-w-[1100px] animate-fade-in-up">
               {/* Hero/Header Section */}
-              {typeof window !== 'undefined' && window.innerWidth < 768 ? (
-                <div className="mb-6 mt-60">
-                  <p className="text-white text-lg font-semibold italic text-center drop-shadow-md">Travel is the only thing you buy that makes you richer.</p>
+              {typeof window !== 'undefined' && window.innerWidth < 1024 ? (
+                <div className="mb-6 mt-60 md:mt-80">
+                  <p className="text-white text-lg md:text-xl lg:text-2xl font-semibold italic text-center drop-shadow-md">Travel is the only thing you buy that makes you richer.</p>
                 </div>
               ) : (
                 <>
@@ -396,10 +396,10 @@ function FlightLanding() {
                       <span className="font-script">Explore the World</span>
                     </h2>
                   </div>
-                  <h1 className="text-white text-5xl md:text-7xl font-bold mb-6 leading-tight">
+                  <h1 className="text-white text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-4 md:mb-6 leading-tight">
                     Find Your <span className="text-blue-300">Perfect Flight</span> Today
                   </h1>
-                  <p className="text-gray-200 text-lg mb-10 max-w-xl">
+                  <p className="text-gray-200 text-base sm:text-lg md:text-xl mb-6 md:mb-10 max-w-3xl">
                     Discover amazing deals on flights to destinations worldwide. Book with confidence and travel with peace of mind.
                   </p>
                 </>

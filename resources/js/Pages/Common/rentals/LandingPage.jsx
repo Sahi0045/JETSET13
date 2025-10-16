@@ -16,7 +16,6 @@ import {
   Coffee, 
   Wifi, 
   Tv, 
-  Shield, 
   Clock, 
   MapPin,
   Award,
@@ -75,8 +74,9 @@ export default function LandingPage() {
   // Mobile search modal state
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
-  // Mobile view detection
+  // Mobile/tablet view detection
   const [isMobileView, setIsMobileView] = useState(false);
+  const [isTabletView, setIsTabletView] = useState(false);
 
   // Fetch destinations from backend
   useEffect(() => {
@@ -586,15 +586,13 @@ export default function LandingPage() {
     { icon: <Wifi size={20} />, text: "Free High-Speed WiFi" },
     { icon: <Coffee size={20} />, text: "Complimentary Breakfast" },
     { icon: <Tv size={20} />, text: "Smart TV & Entertainment" },
-    { icon: <Shield size={20} />, text: "24/7 Security" },
     { icon: <Clock size={20} />, text: "Flexible Check-in" }
   ];
   
   // Amenities list with icons
   const amenities = [
     { icon: <Wifi size={18} />, text: "Free WiFi" },
-    { icon: <Coffee size={18} />, text: "Breakfast" },
-    { icon: <Shield size={18} />, text: "Security" }
+    { icon: <Coffee size={18} />, text: "Breakfast" }
   ];
 
   const handleCardClick = (destination) => {
@@ -619,10 +617,12 @@ export default function LandingPage() {
     handleSearch();
   };
 
-  // Mobile view detection
+  // Mobile/tablet view detection
   useEffect(() => {
     const handleResize = () => {
-      setIsMobileView(window.innerWidth < 768);
+      const width = window.innerWidth;
+      setIsMobileView(width < 768);
+      setIsTabletView(width >= 768 && width < 1024);
     };
 
     handleResize();
@@ -661,7 +661,7 @@ export default function LandingPage() {
       <Navbar />
       
       {/* Hero Section */}
-      <div className="relative h-[650px] md:h-[750px] overflow-hidden">
+      <div className="relative min-h-[70vh] md:h-screen md:max-h-[900px] overflow-hidden">
         {/* Hero Background with Overlay */}
         <div className="absolute inset-0 bg-gradient-to-r from-blue-900/30 to-black/40 z-10"></div>
         <img
@@ -670,8 +670,8 @@ export default function LandingPage() {
           className="absolute inset-0 w-full h-full object-cover scale-105 animate-slow-zoom"
         />
 
-        {/* Animated Shapes - Hide on mobile */}
-        {!isMobileView && (
+        {/* Animated Shapes - Hide on mobile/tablet */}
+        {!isMobileView && !isTabletView && (
           <>
             <div className="absolute top-1/4 right-1/5 w-32 h-32 rounded-full bg-blue-500/10 animate-float-slow z-10"></div>
             <div className="absolute bottom-1/3 left-1/4 w-24 h-24 rounded-full bg-teal-500/10 animate-float-medium z-10"></div>
@@ -679,23 +679,28 @@ export default function LandingPage() {
         )}
 
         {/* Mobile-optimized Special Offer Banner */}
-        <div className={`absolute top-[73px] w-full text-center bg-gradient-to-r from-blue-900/90 via-blue-800/90 to-blue-900/90 py-3 backdrop-blur-sm z-20 border-y border-blue-500/30 ${isMobileView ? 'px-3' : ''}`}>
-          <div className="container mx-auto px-2 flex justify-center items-center">
-            <Sparkles className="h-5 w-5 text-yellow-300 mr-2 flex-shrink-0" />
-            <p className={`text-white ${isMobileView ? 'text-sm' : 'text-base'} font-medium tracking-wide`}>
-              <span className="font-bold">Self-Service Portal will be available very soon...</span> Meanwhile please Call <span className="text-yellow-300 font-bold">((877) 538-7380)</span> or Email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>
-            </p>
+        <div className={`absolute top-[64px] w-full text-center bg-gradient-to-r from-blue-900/90 via-blue-800/90 to-blue-900/90 py-2 sm:py-3 backdrop-blur-sm z-20 border-y border-blue-500/30 ${isMobileView || isTabletView ? 'px-3' : ''}`}>
+          <div className="container mx-auto px-2 flex flex-col sm:flex-row justify-center items-center gap-1 sm:gap-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-300 flex-shrink-0" />
+              <span className="text-xs sm:text-sm text-white font-medium">Self-Service Portal coming soon...</span>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2">
+              <span className="text-xs sm:text-sm text-white">Call <span className="text-yellow-300 font-bold">(877) 538-7380</span></span>
+              <span className="hidden sm:inline text-white">or</span>
+              <span className="text-xs sm:text-sm text-white">Email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a></span>
+            </div>
           </div>
         </div>
 
-        {/* Mobile Search Button - Fixed at Bottom */}
-        {isMobileView && (
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white shadow-lg z-50 border-t border-gray-100">
+        {/* Mobile/Tablet Search Button - Fixed at Bottom */}
+        {(isMobileView || isTabletView) && (
+          <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-white shadow-lg z-50 border-t border-gray-100">
             <button
               onClick={openMobileSearch}
-              className="w-full bg-gradient-to-r from-blue-500 to-blue-700 text-white py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-transform"
+              className="w-full bg-gradient-to-r from-blue-500 to-blue-700 text-white py-3 sm:py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-transform text-sm sm:text-base"
             >
-              <Search size={20} />
+              <Search size={18} className="sm:w-5 sm:h-5" />
               <span>Search Hotels</span>
             </button>
           </div>
@@ -703,32 +708,32 @@ export default function LandingPage() {
 
         {/* Mobile Hero Content */}
         {isMobileView && (
-          <div className="absolute top-1/4 left-0 w-full px-6 z-20">
+          <div className="absolute top-1/4 left-0 w-full px-4 sm:px-6 z-20">
             <div className="max-w-7xl mx-auto">
               <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                <h1 className="text-3xl font-bold text-white mb-2 tracking-tight leading-tight">Experience Luxury <span className="text-yellow-300">&</span></h1>
-                <h1 className="text-3xl font-bold text-white mb-3 tracking-tight leading-tight">Exceptional Comfort</h1>
-                <p className="text-base text-white mb-6 tracking-wide max-w-xs">Your perfect getaway with premium amenities and service</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 tracking-tight leading-tight">Experience Luxury <span className="text-yellow-300">&</span></h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-white mb-3 tracking-tight leading-tight">Exceptional Comfort</h1>
+                <p className="text-sm sm:text-base text-white mb-6 tracking-wide max-w-xs">Your perfect getaway with premium amenities and service</p>
                 
-                {/* Mobile Quick Stats */}
-                <div className="flex overflow-x-auto pb-4 gap-3 snap-x snap-mandatory hide-scrollbar mt-4">
-                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 flex-shrink-0 w-36 snap-start flex flex-col items-center">
+                {/* Mobile Quick Stats - Better Mobile Layout */}
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 flex flex-col items-center">
                     <div className="bg-blue-500/20 rounded-full p-2 mb-2">
-                      <Award className="h-5 w-5 text-white" />
+                      <Award className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                     </div>
-                    <p className="text-sm text-white font-medium">500+ Properties</p>
+                    <p className="text-xs sm:text-sm text-white font-medium text-center">500+ Properties</p>
                   </div>
-                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 flex-shrink-0 w-36 snap-start flex flex-col items-center">
+                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 flex flex-col items-center">
                     <div className="bg-blue-500/20 rounded-full p-2 mb-2">
-                      <Star className="h-5 w-5 text-white" />
+                      <Star className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                     </div>
-                    <p className="text-sm text-white font-medium">4.9/5 Rating</p>
+                    <p className="text-xs sm:text-sm text-white font-medium text-center">4.9/5 Rating</p>
                   </div>
-                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 flex-shrink-0 w-36 snap-start flex flex-col items-center">
+                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 flex flex-col items-center col-span-2">
                     <div className="bg-blue-500/20 rounded-full p-2 mb-2">
-                      <Users className="h-5 w-5 text-white" />
+                      <Users className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                     </div>
-                    <p className="text-sm text-white font-medium">10,000+ Guests</p>
+                    <p className="text-xs sm:text-sm text-white font-medium text-center">10,000+ Guests</p>
                   </div>
                 </div>
               </div>
@@ -736,18 +741,154 @@ export default function LandingPage() {
           </div>
         )}
 
-        {/* Regular Hero Content - Only show on desktop */}
-        {!isMobileView && (
-          <div className="absolute top-1/4 left-0 w-full px-8 md:px-12 z-20">
+        {/* Tablet Hero Content */}
+        {isTabletView && (
+          <div className="absolute top-1/4 left-0 w-full px-6 sm:px-8 z-20">
+            <div className="max-w-6xl mx-auto">
+              <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-2 tracking-tight leading-tight">Experience Luxury <span className="text-yellow-300">&</span></h1>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4 tracking-tight leading-tight">Exceptional Comfort</h1>
+                <p className="text-base sm:text-lg text-white mb-6 tracking-wide max-w-2xl">— Your Perfect Getaway Awaits with Premium Amenities and World-Class Service</p>
+              </div>
+
+              {/* Tablet Search Form */}
+              <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-4 max-w-5xl mx-auto animate-fade-in-up overflow-visible" style={{ animationDelay: '0.4s' }}>
+                <div className="relative">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start relative z-10">
+                    {/* Destination */}
+                    <div className="flex flex-col space-y-2 p-3 bg-white rounded-xl shadow-sm border border-gray-100 hover:border-blue-200 transition-colors">
+                      <label className="text-sm text-gray-700 font-medium flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-blue-500" />
+                        Destination
+                      </label>
+                      <div className="relative group" ref={destinationRef}>
+                        <input
+                          type="text"
+                          value={searchDestination}
+                          onChange={(e) => handleDestinationInput(e.target.value)}
+                          onFocus={() => {
+                            if (searchDestination.length > 0) {
+                              setShowDestinationSuggestions(true);
+                            }
+                          }}
+                          placeholder="Where do you want to go?"
+                          className="w-full py-2.5 pl-8 pr-10 bg-gray-50/80 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                        />
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                          <Globe className="h-4 w-4 text-blue-500" />
+                        </div>
+                        
+                        {/* Destination Suggestions Dropdown */}
+                        {showDestinationSuggestions && (
+                          <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                            <div className="sticky top-0 bg-white p-2 border-b border-gray-100">
+                              <div className="flex items-center gap-2 text-sm text-gray-500">
+                                <Search className="h-4 w-4" />
+                                <span>Search results</span>
+                              </div>
+                            </div>
+                            <ul className="py-1">
+                              {filteredSuggestions.map((destination, index) => (
+                                <li 
+                                  key={index}
+                                  className="px-4 py-3 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition-colors"
+                                  onClick={() => handleDestinationSelect(destination)}
+                                >
+                                  <div className="p-2 rounded-full bg-blue-50">
+                                    <MapPin className="h-4 w-4 text-blue-500" />
+                                  </div>
+                                  <div>
+                                    <span className="block font-medium text-gray-900">{destination.name}</span>
+                                    <span className="text-sm text-gray-500">{destination.country}</span>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Travel Dates */}
+                    <div className="flex flex-col space-y-2 p-3 bg-white rounded-xl shadow-sm border border-gray-100 hover:border-blue-200 transition-colors">
+                      <label className="text-sm text-gray-700 font-medium flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-blue-500" />
+                        Travel Dates
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="relative">
+                          <input
+                            type="date"
+                            value={selectedStartDate ? selectedStartDate.toISOString().split('T')[0] : ''}
+                            min={new Date().toISOString().split('T')[0]}
+                            onChange={(e) => handleManualDateInput(e.target.value, 'start')}
+                            className="w-full px-3 py-2.5 bg-gray-50/80 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-0"
+                          />
+                        </div>
+                        <div className="relative">
+                          <input
+                            type="date"
+                            value={selectedEndDate ? selectedEndDate.toISOString().split('T')[0] : ''}
+                            min={selectedStartDate ? new Date(selectedStartDate.getTime() + 86400000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
+                            onChange={(e) => handleManualDateInput(e.target.value, 'end')}
+                            className="w-full px-3 py-2.5 bg-gray-50/80 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-0"
+                            disabled={!selectedStartDate}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tablet Search Button */}
+                  <div className="flex justify-center mt-4">
+                    <button 
+                      onClick={handleSearch}
+                      className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-3 px-8 rounded-xl transition-all duration-300 font-medium flex items-center justify-center gap-3 shadow-lg hover:shadow-blue-500/30 relative overflow-hidden group"
+                      disabled={isSearching}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-blue-500 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                      <div className="relative flex items-center gap-2">
+                        {isSearching ? (
+                          <>
+                            <Loader className="animate-spin h-5 w-5" />
+                            <span>Searching...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Search size={20} />
+                            <span>Search Hotels</span>
+                          </>
+                        )}
+                      </div>
+                    </button>
+                  </div>
+                  
+                  {searchError && (
+                    <div className="mt-4 text-center">
+                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm">
+                        <X className="h-4 w-4" />
+                        {searchError}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Desktop Hero Content - Only show on desktop */}
+        {!isMobileView && !isTabletView && (
+          <div className="absolute top-1/4 left-0 w-full px-6 sm:px-8 md:px-12 z-20">
             <div className="max-w-7xl mx-auto">
               <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                <h1 className="text-5xl md:text-6xl font-bold text-white mb-2 tracking-tight leading-tight">Experience Luxury <span className="text-yellow-300">&</span></h1>
-                <h1 className="text-5xl md:text-6xl font-bold text-white mb-6 tracking-tight leading-tight">Exceptional Comfort</h1>
-                <p className="text-xl text-white mb-8 tracking-wide max-w-2xl">— Your Perfect Getaway Awaits with Premium Amenities and World-Class Service</p>
+                <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-2 tracking-tight leading-tight">Experience Luxury <span className="text-yellow-300">&</span></h1>
+                <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-6 tracking-tight leading-tight">Exceptional Comfort</h1>
+                <p className="text-base sm:text-lg md:text-xl text-white mb-6 md:mb-8 tracking-wide max-w-3xl">— Your Perfect Getaway Awaits with Premium Amenities and World-Class Service</p>
               </div>
 
               {/* Search Form */}
-              <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl p-4 md:p-6 max-w-6xl mx-auto animate-fade-in-up overflow-visible" style={{ animationDelay: '0.4s' }}>
+              <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl p-4 md:p-6 max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto animate-fade-in-up overflow-visible" style={{ animationDelay: '0.4s' }}>
                 <div className="relative">
                   {/* Mobile Search Toggle */}
                   <div className="block md:hidden mb-4">
@@ -761,7 +902,7 @@ export default function LandingPage() {
                   </div>
 
                   <div className={`${showMobileSearch ? 'block' : 'hidden'} md:block`}>
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 md:gap-4 items-start relative z-10">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 items-start relative z-10">
                       {/* Destination */}
                       <div className="flex flex-col space-y-2 p-3 md:p-4 bg-white rounded-xl shadow-sm border border-gray-100 hover:border-blue-200 transition-colors">
                         <label className="text-sm text-gray-700 font-medium flex items-center gap-2">
@@ -903,7 +1044,7 @@ export default function LandingPage() {
                     <div className="flex justify-center mt-4 md:mt-6">
                       <button 
                         onClick={handleSearch}
-                        className="w-full md:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-4 px-12 rounded-xl transition-all duration-300 font-medium flex items-center justify-center gap-3 shadow-lg hover:shadow-blue-500/30 relative overflow-hidden group"
+                        className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-3 sm:py-4 px-8 sm:px-12 rounded-xl transition-all duration-300 font-medium flex items-center justify-center gap-3 shadow-lg hover:shadow-blue-500/30 relative overflow-hidden group"
                         disabled={isSearching}
                       >
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-blue-500 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
@@ -1118,27 +1259,6 @@ export default function LandingPage() {
           </div>
         )}
 
-        {/* Trust Badges - Optimized for mobile */}
-        <div className={`absolute bottom-8 left-0 w-full z-20 animate-fade-in-up ${isMobileView ? 'pb-16' : ''}`} style={{ animationDelay: '0.6s' }}>
-          <div className="container mx-auto px-4">
-            <div className={`flex flex-wrap justify-center gap-3 ${isMobileView ? 'gap-2' : 'gap-4 md:gap-8'}`}>
-              <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-lg flex items-center gap-2 shadow-lg">
-                <Shield className={`${isMobileView ? 'h-4 w-4' : 'h-5 w-5'} text-blue-600`} />
-                <span className={`${isMobileView ? 'text-xs' : 'text-sm'} font-medium text-gray-800`}>Secure Booking</span>
-              </div>
-              {!isMobileView && (
-                <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-lg flex items-center gap-2 shadow-lg">
-                  <Check className="h-5 w-5 text-blue-600" />
-                  <span className="text-sm font-medium text-gray-800">Best Price Guarantee</span>
-                </div>
-              )}
-              <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-lg flex items-center gap-2 shadow-lg">
-                <Clock className={`${isMobileView ? 'h-4 w-4' : 'h-5 w-5'} text-blue-600`} />
-                <span className={`${isMobileView ? 'text-xs' : 'text-sm'} font-medium text-gray-800`}>24/7 Support</span>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Mobile CSS utilities */}
@@ -1454,29 +1574,6 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* Trust Badges */}
-      <div className="py-12 bg-white border-t border-gray-100">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-8">
-            <h3 className="text-lg font-bold text-gray-800">Trusted By Travelers Worldwide</h3>
-          </div>
-          
-          <div className="flex justify-center gap-8 mt-8 max-w-xl mx-auto">
-            <div className="flex items-center">
-              <Check className="text-green-500 mr-2" />
-              <span className="text-sm text-gray-600">Secure Booking</span>
-            </div>
-            <div className="flex items-center">
-              <Check className="text-green-500 mr-2" />
-              <span className="text-sm text-gray-600">24/7 Support</span>
-            </div>
-            <div className="flex items-center">
-              <Check className="text-green-500 mr-2" />
-              <span className="text-sm text-gray-600">Best Price Guarantee</span>
-            </div>
-          </div>
-        </div>
-      </div>
       <Footer />
     </main>
   )

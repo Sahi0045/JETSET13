@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaUser, FaEnvelope, FaPhone, FaCalendar, FaSignOutAlt, FaEdit, FaSave, FaTimes } from 'react-icons/fa';
+import { FaUser, FaEnvelope, FaPhone, FaCalendar, FaSignOutAlt, FaEdit, FaSave, FaTimes, FaChevronLeft, FaCamera, FaLock, FaShieldAlt, FaBell } from 'react-icons/fa';
 import { useFirebaseAuth } from '../../../contexts/FirebaseAuthContext';
 import './login.css';
 
@@ -92,97 +92,123 @@ export default function FirebaseProfileDashboard() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 py-8">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-                {/* Back Button */}
-                <div className="mb-4">
-                    <button 
-                        onClick={() => navigate('/flights')}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                        ← Back to Flights
-                    </button>
-                </div>
-                
-                {/* Header */}
-                <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+            {/* Mobile-First Header */}
+            <div className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-10">
+                <div className="px-4 sm:px-6 lg:px-8 py-4">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                            <div className="h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center">
+                        <button 
+                            onClick={() => navigate('/flights')}
+                            className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors text-sm sm:text-base"
+                        >
+                            <FaChevronLeft className="h-4 w-4" />
+                            <span className="hidden sm:inline">Back</span>
+                        </button>
+                        <h1 className="text-lg sm:text-xl font-bold text-gray-900">Profile</h1>
+                        <button
+                            onClick={handleSignOut}
+                            className="flex items-center gap-2 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors text-sm sm:text-base"
+                        >
+                            <FaSignOutAlt className="h-4 w-4" />
+                            <span className="hidden sm:inline">Sign Out</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-4xl mx-auto">
+                {/* Profile Header Card */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 mb-6">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6">
+                        {/* Profile Photo */}
+                        <div className="relative">
+                            <div className="h-20 w-20 sm:h-24 sm:w-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
                                 {user.photoURL ? (
                                     <img 
                                         src={user.photoURL} 
                                         alt="Profile" 
-                                        className="h-16 w-16 rounded-full object-cover"
+                                        className="h-20 w-20 sm:h-24 sm:w-24 rounded-full object-cover"
                                     />
                                 ) : (
-                                    <FaUser className="h-8 w-8 text-white" />
+                                    <FaUser className="h-10 w-10 sm:h-12 sm:w-12 text-white" />
                                 )}
                             </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-gray-900">
-                                    {user.displayName || 'User'}
-                                </h1>
-                                <p className="text-gray-600">{user.email}</p>
-                                <p className="text-sm text-gray-500">
+                            {editMode && (
+                                <button className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-lg transition-colors">
+                                    <FaCamera className="h-3 w-3 sm:h-4 sm:w-4" />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* User Info */}
+                        <div className="flex-1 text-center sm:text-left">
+                            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">
+                                {user.displayName || 'User'}
+                            </h2>
+                            <p className="text-gray-600 mb-2 break-all">{user.email}</p>
+                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-4 text-sm text-gray-500">
+                                <span className="flex items-center gap-1">
+                                    <FaCalendar className="h-3 w-3" />
                                     Member since {formatJoinDate(user)}
-                                </p>
+                                </span>
+                                {user.emailVerified && (
+                                    <span className="flex items-center gap-1 text-green-600">
+                                        <FaShieldAlt className="h-3 w-3" />
+                                        Verified
+                                    </span>
+                                )}
                             </div>
                         </div>
-                        <button
-                            onClick={handleSignOut}
-                            className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                        >
-                            <FaSignOutAlt />
-                            <span>Sign Out</span>
-                        </button>
+
+                        {/* Edit Button */}
+                        <div className="w-full sm:w-auto">
+                            {!editMode ? (
+                                <button
+                                    onClick={() => setEditMode(true)}
+                                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium text-sm sm:text-base shadow-sm"
+                                >
+                                    <FaEdit className="h-4 w-4" />
+                                    <span>Edit Profile</span>
+                                </button>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleSaveProfile}
+                                        disabled={updateLoading}
+                                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50 font-medium text-sm sm:text-base shadow-sm"
+                                    >
+                                        <FaSave className="h-4 w-4" />
+                                        <span>{updateLoading ? 'Saving...' : 'Save'}</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setEditMode(false)}
+                                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-600 text-white rounded-xl hover:bg-gray-700 transition-colors font-medium text-sm sm:text-base shadow-sm"
+                                    >
+                                        <FaTimes className="h-4 w-4" />
+                                        <span>Cancel</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                {/* Profile Information */}
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-semibold text-gray-900">Profile Information</h2>
-                        {!editMode ? (
-                            <button
-                                onClick={() => setEditMode(true)}
-                                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                            >
-                                <FaEdit />
-                                <span>Edit Profile</span>
-                            </button>
-                        ) : (
-                            <div className="flex space-x-2">
-                                <button
-                                    onClick={handleSaveProfile}
-                                    disabled={updateLoading}
-                                    className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                                >
-                                    <FaSave />
-                                    <span>{updateLoading ? 'Saving...' : 'Save'}</span>
-                                </button>
-                                <button
-                                    onClick={() => setEditMode(false)}
-                                    className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                                >
-                                    <FaTimes />
-                                    <span>Cancel</span>
-                                </button>
-                            </div>
-                        )}
+                {/* Error Message */}
+                {error && (
+                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+                        <p className="text-red-800 text-sm">{error}</p>
                     </div>
+                )}
 
-                    {error && (
-                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                            <p className="text-red-800">{error}</p>
-                        </div>
-                    )}
-
-                    <form onSubmit={handleSaveProfile} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Profile Information */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Profile Information</h3>
+                    
+                    <form onSubmit={handleSaveProfile} className="space-y-4 sm:space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    <FaUser className="inline mr-2" />
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <FaUser className="inline mr-2 h-4 w-4" />
                                     Display Name
                                 </label>
                                 {editMode ? (
@@ -191,96 +217,131 @@ export default function FirebaseProfileDashboard() {
                                         name="displayName"
                                         value={formData.displayName}
                                         onChange={handleInputChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-base"
                                         placeholder="Enter your display name"
                                     />
                                 ) : (
-                                    <p className="px-3 py-2 bg-gray-50 rounded-lg">
+                                    <div className="px-4 py-3 bg-gray-50 rounded-xl text-gray-900">
                                         {user.displayName || 'Not set'}
-                                    </p>
+                                    </div>
                                 )}
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    <FaEnvelope className="inline mr-2" />
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <FaEnvelope className="inline mr-2 h-4 w-4" />
                                     Email Address
                                 </label>
-                                <p className="px-3 py-2 bg-gray-50 rounded-lg text-gray-600">
-                                    {user.email}
+                                <div className="px-4 py-3 bg-gray-50 rounded-xl">
+                                    <p className="text-gray-900 break-all">{user.email}</p>
                                     {user.emailVerified && (
-                                        <span className="ml-2 text-green-600 text-sm">✓ Verified</span>
+                                        <span className="inline-flex items-center gap-1 mt-1 text-green-600 text-sm">
+                                            <FaShieldAlt className="h-3 w-3" />
+                                            Verified
+                                        </span>
                                     )}
-                                </p>
+                                </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    <FaPhone className="inline mr-2" />
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <FaPhone className="inline mr-2 h-4 w-4" />
                                     Phone Number
                                 </label>
-                                <p className="px-3 py-2 bg-gray-50 rounded-lg text-gray-600">
+                                <div className="px-4 py-3 bg-gray-50 rounded-xl text-gray-600">
                                     {user.phoneNumber || 'Not provided'}
-                                </p>
+                                </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    <FaCalendar className="inline mr-2" />
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <FaCalendar className="inline mr-2 h-4 w-4" />
                                     Account Created
                                 </label>
-                                <p className="px-3 py-2 bg-gray-50 rounded-lg text-gray-600">
+                                <div className="px-4 py-3 bg-gray-50 rounded-xl text-gray-600">
                                     {formatJoinDate(user)}
-                                </p>
+                                </div>
                             </div>
                         </div>
                     </form>
                 </div>
 
                 {/* Account Settings */}
-                <div className="bg-white rounded-lg shadow-sm p-6 mt-6">
-                    <h2 className="text-xl font-semibold text-gray-900 mb-4">Account Settings</h2>
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Account Settings</h3>
                     
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                            <div>
-                                <h3 className="font-medium text-gray-900">Email Verification</h3>
+                        {/* Email Verification */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                            <div className="mb-3 sm:mb-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <FaEnvelope className="h-4 w-4 text-blue-600" />
+                                    <h4 className="font-medium text-gray-900">Email Verification</h4>
+                                </div>
                                 <p className="text-sm text-gray-600">
-                                    {user.emailVerified ? 'Your email is verified' : 'Please verify your email address'}
+                                    {user.emailVerified ? 'Your email is verified and secure' : 'Please verify your email address for security'}
                                 </p>
                             </div>
                             <div className="flex items-center">
                                 {user.emailVerified ? (
-                                    <span className="text-green-600 font-medium">✓ Verified</span>
+                                    <span className="flex items-center gap-2 text-green-600 font-medium text-sm">
+                                        <FaShieldAlt className="h-4 w-4" />
+                                        Verified
+                                    </span>
                                 ) : (
-                                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
                                         Send Verification
                                     </button>
                                 )}
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                            <div>
-                                <h3 className="font-medium text-gray-900">Two-Factor Authentication</h3>
+                        {/* Two-Factor Authentication */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                            <div className="mb-3 sm:mb-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <FaShieldAlt className="h-4 w-4 text-blue-600" />
+                                    <h4 className="font-medium text-gray-900">Two-Factor Authentication</h4>
+                                </div>
                                 <p className="text-sm text-gray-600">Add an extra layer of security to your account</p>
                             </div>
-                            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
                                 Enable 2FA
                             </button>
                         </div>
 
-                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                            <div>
-                                <h3 className="font-medium text-gray-900">Password</h3>
-                                <p className="text-sm text-gray-600">Change your account password</p>
+                        {/* Password */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                            <div className="mb-3 sm:mb-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <FaLock className="h-4 w-4 text-blue-600" />
+                                    <h4 className="font-medium text-gray-900">Password</h4>
+                                </div>
+                                <p className="text-sm text-gray-600">Change your account password regularly</p>
                             </div>
-                            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
                                 Change Password
+                            </button>
+                        </div>
+
+                        {/* Notifications */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                            <div className="mb-3 sm:mb-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <FaBell className="h-4 w-4 text-blue-600" />
+                                    <h4 className="font-medium text-gray-900">Notifications</h4>
+                                </div>
+                                <p className="text-sm text-gray-600">Manage your email and push notifications</p>
+                            </div>
+                            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                                Manage
                             </button>
                         </div>
                     </div>
                 </div>
+
+                {/* Mobile Bottom Spacing */}
+                <div className="h-6 sm:h-0"></div>
             </div>
         </div>
     );

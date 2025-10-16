@@ -20,7 +20,8 @@ export default function FlightSearchForm({ initialData, onSearch }) {
   // Check if screen is mobile-sized on mount and resize
   useEffect(() => {
     const checkIfMobile = () => {
-      setIsMobileView(window.innerWidth < 768);
+      // Consider mobile for screens smaller than 1024px (includes tablets)
+      setIsMobileView(window.innerWidth < 1024);
     }
     
     // Set initial value
@@ -57,12 +58,54 @@ export default function FlightSearchForm({ initialData, onSearch }) {
   }, [initialData]);
 
   const handleTripTypeChange = (type) => {
-    setFormData({ ...formData, tripType: type })
+    if (type === "roundTrip") {
+      const baseDepart = formData.departDate ? new Date(formData.departDate) : new Date();
+      const suggestedReturn = new Date(baseDepart);
+      suggestedReturn.setDate(baseDepart.getDate() + 3);
+      const suggestedReturnStr = suggestedReturn.toISOString().split('T')[0];
+      setFormData(prev => ({
+        ...prev,
+        tripType: "roundTrip",
+        returnDate: prev.returnDate || suggestedReturnStr
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        tripType: "oneWay",
+        returnDate: ''
+      }));
+    }
   }
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    // Update the field
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      // If departDate changes in roundTrip, enforce returnDate >= departDate + 1
+      if (name === 'departDate' && prev.tripType === 'roundTrip') {
+        const depart = value ? new Date(value) : null;
+        if (depart) {
+          const minReturn = new Date(depart);
+          minReturn.setDate(depart.getDate() + 1);
+          const minReturnStr = minReturn.toISOString().split('T')[0];
+          if (!next.returnDate || new Date(next.returnDate) <= depart) {
+            next.returnDate = minReturnStr;
+          }
+        }
+      }
+      // If returnDate set earlier than departDate, bump it
+      if (name === 'returnDate' && prev.tripType === 'roundTrip' && prev.departDate) {
+        const depart = new Date(prev.departDate);
+        const ret = new Date(value);
+        if (ret <= depart) {
+          const minReturn = new Date(depart);
+          minReturn.setDate(depart.getDate() + 1);
+          next.returnDate = minReturn.toISOString().split('T')[0];
+        }
+      }
+      return next;
+    });
 
     // Hide suggestions for the other field
     if (name === "from") {
@@ -183,43 +226,43 @@ export default function FlightSearchForm({ initialData, onSearch }) {
   };
 
   return isMobileView ? (
-    // Mobile View - Modern Search Bar Style
+    // Mobile/Tablet View - Modern Search Bar Style
     <div className="w-full min-h-screen bg-cover bg-center flex flex-col items-center" style={{ backgroundImage: "url('/path/to/your/background.jpg')" }}>
-      {/* Search Bar Card */}
-      <div className="w-full max-w-md mx-auto mt-4 px-2">
-        <div className="bg-white/95 rounded-2xl shadow-xl p-3 flex flex-col gap-2">
+      {/* Search Bar Card - Responsive for tablets */}
+      <div className="w-full max-w-md md:max-w-lg lg:max-w-xl mx-auto mt-4 px-2 md:px-4">
+        <div className="bg-white/95 rounded-2xl shadow-xl p-3 md:p-4 lg:p-6 flex flex-col gap-2 md:gap-3">
           {/* Title */}
-          <div className="mb-1">
-            <h2 className="text-base font-bold text-blue-700 leading-tight">Find and Book <span className="text-blue-400">Flights</span></h2>
-            <p className="text-gray-500 text-xs">Search across multiple airlines and destinations</p>
+          <div className="mb-1 md:mb-2">
+            <h2 className="text-base md:text-lg lg:text-xl font-bold text-blue-700 leading-tight">Find and Book <span className="text-blue-400">Flights</span></h2>
+            <p className="text-gray-500 text-xs md:text-sm">Search across multiple airlines and destinations</p>
           </div>
           {/* Trip Type Selector */}
-          <div className="flex gap-1 mb-1">
+          <div className="flex gap-1 mb-1 md:mb-2">
             <button
               onClick={() => handleTripTypeChange("oneWay")}
-              className={`flex-1 py-2 text-center text-xs font-medium rounded-full transition-all ${formData.tripType === "oneWay" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}
+              className={`flex-1 py-2 md:py-3 text-center text-xs md:text-sm font-medium rounded-full transition-all ${formData.tripType === "oneWay" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}
             >
               One Way
             </button>
             <button
               onClick={() => handleTripTypeChange("roundTrip")}
-              className={`flex-1 py-2 text-center text-xs font-medium rounded-full transition-all ${formData.tripType === "roundTrip" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}
+              className={`flex-1 py-2 md:py-3 text-center text-xs md:text-sm font-medium rounded-full transition-all ${formData.tripType === "roundTrip" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}
             >
               Round Trip
             </button>
           </div>
           {/* From Field */}
           <div>
-            <label className="text-xs font-medium text-gray-500 mb-0.5 block">From</label>
+            <label className="text-xs md:text-sm font-medium text-gray-500 mb-0.5 md:mb-1 block">From</label>
             <div className="relative">
-              <MapPin className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <MapPin className="absolute left-2 md:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 md:h-5 md:w-5" />
               <input
                 type="text"
                 name="from"
                 value={formData.from || ""}
                 onChange={handleInputChange}
                 onBlur={() => handleInputBlur("from")}
-                className="w-full pl-8 pr-2 py-1.5 text-gray-900 placeholder-gray-400 text-sm font-medium rounded-lg border border-gray-200 focus:outline-none"
+                className="w-full pl-8 md:pl-10 pr-2 md:pr-3 py-1.5 md:py-2.5 text-gray-900 placeholder-gray-400 text-sm md:text-base font-medium rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Enter city or airport"
                 autoComplete="off"
                 inputMode="text"
@@ -250,9 +293,9 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           </div>
           {/* To Field */}
           <div>
-            <label className="text-xs font-medium text-gray-500 mb-0.5 block">To</label>
+            <label className="text-xs md:text-sm font-medium text-gray-500 mb-0.5 md:mb-1 block">To</label>
             <div className="relative">
-              <MapPin className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <MapPin className="absolute left-2 md:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 md:h-5 md:w-5" />
               <input
                 id="to-input-mobile"
                 type="text"
@@ -260,7 +303,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
                 value={formData.to || ""}
                 onChange={handleInputChange}
                 onBlur={() => handleInputBlur("to")}
-                className="w-full pl-8 pr-2 py-1.5 text-gray-900 placeholder-gray-400 text-sm font-medium rounded-lg border border-gray-200 focus:outline-none"
+                className="w-full pl-8 md:pl-10 pr-2 md:pr-3 py-1.5 md:py-2.5 text-gray-900 placeholder-gray-400 text-sm md:text-base font-medium rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Enter city or airport"
                 autoComplete="off"
                 inputMode="text"
@@ -290,74 +333,76 @@ export default function FlightSearchForm({ initialData, onSearch }) {
             )}
           </div>
           {/* Dates */}
-          <div className="flex gap-2">
+          <div className={`${formData.tripType === "roundTrip" ? "grid grid-cols-2" : "grid grid-cols-1"} gap-2 md:gap-3`}>
             <div className="flex-1">
-              <label className="text-xs font-medium text-gray-500 mb-0.5 block">Departure</label>
+              <label className="text-xs md:text-sm font-medium text-gray-500 mb-0.5 md:mb-1 block">Departure</label>
               <div className="relative">
-                <Calendar className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Calendar className="absolute left-2 md:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 md:h-5 md:w-5" />
                 <input
                   id="depart-date-mobile"
                   type="date"
                   name="departDate"
                   value={formData.departDate || ""}
                   onChange={handleInputChange}
-                  className="w-full pl-8 pr-2 py-1.5 text-gray-900 text-xs rounded-lg border border-gray-200 focus:outline-none"
+                  className="w-full pl-8 md:pl-10 pr-2 md:pr-3 py-1.5 md:py-2.5 text-gray-900 text-xs md:text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               {formErrors.departDate && (
-                <p className="text-red-500 text-xs mt-0.5">{formErrors.departDate}</p>
+                <p className="text-red-500 text-xs md:text-sm mt-0.5">{formErrors.departDate}</p>
               )}
             </div>
             {formData.tripType === "roundTrip" && (
               <div className="flex-1">
-                <label className="text-xs font-medium text-gray-500 mb-0.5 block">Return</label>
+                <label className="text-xs md:text-sm font-medium text-gray-500 mb-0.5 md:mb-1 block">Return</label>
                 <div className="relative">
-                  <Calendar className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Calendar className="absolute left-2 md:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 md:h-5 md:w-5" />
                   <input
+                    id="return-date-mobile"
                     type="date"
                     name="returnDate"
                     value={formData.returnDate || ""}
                     onChange={handleInputChange}
-                    className="w-full pl-8 pr-2 py-1.5 text-gray-900 text-xs rounded-lg border border-gray-200 focus:outline-none"
+                    min={formData.departDate ? new Date(new Date(formData.departDate).getTime() + 86400000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
+                    className="w-full pl-8 md:pl-10 pr-2 md:pr-3 py-1.5 md:py-2.5 text-gray-900 text-xs md:text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 {formErrors.returnDate && (
-                  <p className="text-red-500 text-xs mt-0.5">{formErrors.returnDate}</p>
+                  <p className="text-red-500 text-xs md:text-sm mt-0.5">{formErrors.returnDate}</p>
                 )}
               </div>
             )}
           </div>
           {/* Travelers */}
           <div>
-            <label className="text-xs font-medium text-gray-500 mb-0.5 block">Travelers</label>
+            <label className="text-xs md:text-sm font-medium text-gray-500 mb-0.5 md:mb-1 block">Travelers</label>
             <div className="relative">
-              <Users className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Users className="absolute left-2 md:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 md:h-5 md:w-5" />
               <select
                 name="travelers"
                 value={formData.travelers || "1"}
                 onChange={handleInputChange}
-                className="w-full pl-8 pr-2 py-1.5 text-gray-900 text-xs rounded-lg border border-gray-200 appearance-none focus:outline-none"
+                className="w-full pl-8 md:pl-10 pr-2 md:pr-3 py-1.5 md:py-2.5 text-gray-900 text-xs md:text-sm rounded-lg border border-gray-200 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="1">1 Traveler</option>
                 <option value="2">2 Travelers</option>
                 <option value="3">3 Travelers</option>
                 <option value="4">4+ Travelers</option>
               </select>
-              <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <ChevronDown className="absolute right-2 md:right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 md:h-5 md:w-5" />
             </div>
 
           </div>
           {/* Special Fares */}
-          <div className="flex gap-2 mt-1">
-            <button className="flex-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium shadow-sm">Student</button>
-            <button className="flex-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium shadow-sm">Senior Citizen</button>
+          <div className="flex gap-2 mt-1 md:mt-2">
+            <button className="flex-1 px-3 md:px-4 py-1.5 md:py-2 bg-blue-50 text-blue-700 rounded-lg text-xs md:text-sm font-medium shadow-sm hover:bg-blue-100 transition-colors">Student</button>
+            <button className="flex-1 px-3 md:px-4 py-1.5 md:py-2 bg-blue-50 text-blue-700 rounded-lg text-xs md:text-sm font-medium shadow-sm hover:bg-blue-100 transition-colors">Senior Citizen</button>
           </div>
           {/* Search Button */}
           <button
             onClick={handleSearch}
-            className="w-full bg-blue-600 text-white py-3 rounded-xl flex items-center justify-center transition-colors hover:bg-blue-700 active:bg-blue-800 font-semibold text-base shadow-md mt-2"
+            className="w-full bg-blue-600 text-white py-3 md:py-4 rounded-xl flex items-center justify-center transition-colors hover:bg-blue-700 active:bg-blue-800 font-semibold text-base md:text-lg shadow-md mt-2 md:mt-3"
           >
-            <Search className="h-5 w-5 mr-2" />
+            <Search className="h-5 w-5 md:h-6 md:w-6 mr-2" />
             Search Flights
           </button>
         </div>
@@ -393,7 +438,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
       </div>
 
       {/* Main Search Form */}
-      <div className="w-full mx-auto bg-white rounded-xl shadow-md p-6" style={{ width: "1200px" }}>
+      <div className="w-full mx-auto bg-white rounded-xl shadow-md p-6 max-w-5xl lg:max-w-6xl xl:max-w-7xl">
         <div className="flex flex-row items-end justify-between gap-4">
           {/* From */}
           <div className="flex-1">

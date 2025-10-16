@@ -110,6 +110,10 @@ const HeroSection = () => {
       if (showDestinationSuggestions && !event.target.closest('.search-field')) {
         setShowDestinationSuggestions(false);
       }
+      
+      if (showDatePicker && datepickerRef.current && !datepickerRef.current.contains(event.target)) {
+        setShowDatePicker(false);
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -117,7 +121,7 @@ const HeroSection = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [activeField, showDestinationSuggestions]);
+  }, [activeField, showDestinationSuggestions, showDatePicker]);
 
   const handleQuickSelect = (value, field) => {
     setSearchValues({
@@ -398,13 +402,13 @@ const HeroSection = () => {
                   readOnly
                 />
                 
-                {/* Date Picker Popup */}
+                {/* Date Picker Popup - Compact Responsive Design */}
                 {showDatePicker && (
                   <div 
                     ref={datepickerRef}
-                    className="absolute left-0 right-0 top-full bg-white border border-gray-200 rounded-xl shadow-xl z-30 p-4 mt-2 w-full"
+                    className="absolute left-0 right-0 top-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-2 sm:p-3 mt-2 w-full min-w-[260px] sm:min-w-[280px] md:min-w-[300px] max-w-[320px] mx-auto sm:mx-0"
                   >
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex justify-between items-center mb-2 sm:mb-3">
                       <button 
                         onClick={() => {
                           if (displayedMonth === 0) {
@@ -414,12 +418,13 @@ const HeroSection = () => {
                             setDisplayedMonth(displayedMonth - 1);
                           }
                         }}
-                        className="p-1 rounded-full hover:bg-gray-100"
+                        className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 transition-colors touch-manipulation"
                         type="button"
+                        aria-label="Previous month"
                       >
-                        <ChevronDown className="h-5 w-5 text-gray-600 rotate-90" />
+                        <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600 rotate-90" />
                       </button>
-                      <h3 className="font-medium">{availableMonths[displayedMonth]} {displayedYear}</h3>
+                      <h3 className="font-medium text-xs sm:text-sm">{availableMonths[displayedMonth]} {displayedYear}</h3>
                       <button 
                         onClick={() => {
                           if (displayedMonth === 11) {
@@ -429,24 +434,25 @@ const HeroSection = () => {
                             setDisplayedMonth(displayedMonth + 1);
                           }
                         }}
-                        className="p-1 rounded-full hover:bg-gray-100"
+                        className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 transition-colors touch-manipulation"
                         type="button"
+                        aria-label="Next month"
                       >
-                        <ChevronDown className="h-5 w-5 text-gray-600 -rotate-90" />
+                        <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600 -rotate-90" />
                       </button>
                     </div>
                     
-                    <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-500 mb-2">
-                      <div>Su</div>
-                      <div>Mo</div>
-                      <div>Tu</div>
-                      <div>We</div>
-                      <div>Th</div>
-                      <div>Fr</div>
-                      <div>Sa</div>
+                    <div className="grid grid-cols-7 gap-0.5 text-center text-xs font-medium text-gray-500 mb-1.5">
+                      <div className="py-0.5">Su</div>
+                      <div className="py-0.5">Mo</div>
+                      <div className="py-0.5">Tu</div>
+                      <div className="py-0.5">We</div>
+                      <div className="py-0.5">Th</div>
+                      <div className="py-0.5">Fr</div>
+                      <div className="py-0.5">Sa</div>
                     </div>
                     
-                    <div className="grid grid-cols-7 gap-1">
+                    <div className="grid grid-cols-7 gap-0.5">
                       {generateCalendarDays().map((day, index) => {
                         const date = day !== null ? new Date(displayedYear, displayedMonth, day) : null;
                         const isToday = date && new Date().toDateString() === date.toDateString();
@@ -463,9 +469,9 @@ const HeroSection = () => {
                               }
                             }}
                             className={`
-                              h-10 w-full flex items-center justify-center rounded-full text-sm
-                              ${day === null ? 'cursor-default' : isDisabled ? 'text-gray-300 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-100'}
-                              ${isToday ? 'border border-gray-300' : ''}
+                              h-6 w-full sm:h-7 flex items-center justify-center rounded text-xs font-medium touch-manipulation
+                              ${day === null ? 'cursor-default' : isDisabled ? 'text-gray-300 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-100 active:bg-blue-200 transition-colors'}
+                              ${isToday ? 'border border-blue-500 bg-blue-50 text-blue-700' : ''}
                             `}
                           >
                             {day}
@@ -474,10 +480,17 @@ const HeroSection = () => {
                       })}
                     </div>
                     
-                    <div className="mt-4 flex justify-end">
+                    <div className="mt-2 sm:mt-3 flex justify-end gap-1.5">
                       <button 
                         onClick={() => setShowDatePicker(false)}
-                        className="px-4 py-2 bg-[#0061ff] text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                        className="px-2 py-1.5 sm:px-3 sm:py-2 bg-gray-500 text-white rounded text-xs font-medium hover:bg-gray-600 transition-colors touch-manipulation"
+                        type="button"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={() => setShowDatePicker(false)}
+                        className="px-2 py-1.5 sm:px-3 sm:py-2 bg-[#0061ff] text-white rounded text-xs font-medium hover:bg-blue-700 transition-colors touch-manipulation"
                         type="button"
                       >
                         Done
