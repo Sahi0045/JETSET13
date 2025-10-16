@@ -1,28 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 const FullPageBanner = () => {
   const imageUrl = import.meta.env.VITE_CONTACT_BANNER_URL || '/images/jetsetters-banner.jpg';
   const email = 'bookings@jetsetterss.com';
   const phone = '+1-408-899-9705';
-  const durationMs = Number(import.meta.env.VITE_FULL_BANNER_MS || 10000); // default 10s
+  const durationMs = Number(import.meta.env.VITE_FULL_BANNER_MS || 4000); // faster default 4s
 
   const [visible, setVisible] = useState(true);
+  const timerRef = useRef(null);
 
   useEffect(() => {
-    // Prevent scroll while banner visible
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const timer = setTimeout(() => {
+    if (!visible) return;
+    timerRef.current = setTimeout(() => {
       setVisible(false);
-      document.body.style.overflow = originalOverflow || '';
     }, durationMs);
-
     return () => {
-      clearTimeout(timer);
-      document.body.style.overflow = originalOverflow || '';
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [durationMs]);
+  }, [durationMs, visible]);
+
+  const handleSkip = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    // Unmount on next frame to avoid layout thrash
+    requestAnimationFrame(() => setVisible(false));
+  };
 
   if (!visible) return null;
 
@@ -50,6 +51,8 @@ const FullPageBanner = () => {
           objectFit: 'contain',
           objectPosition: 'center'
         }}
+        loading="lazy"
+        decoding="async"
         onError={(e) => {
           // If image fails, keep the solid background and show text fallback
           e.currentTarget.style.display = 'none';
@@ -66,7 +69,7 @@ const FullPageBanner = () => {
         }}
       >
         <button
-          onClick={() => setVisible(false)}
+          onClick={handleSkip}
           style={{
             marginTop: 24,
             background: '#ffffff',
