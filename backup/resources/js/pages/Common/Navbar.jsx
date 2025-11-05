@@ -62,6 +62,9 @@ const Navbar = () => {
         <Link href="/my-trips" className="nav-link" activeClassName="active">
           My Trips
         </Link>
+        <Link href="/request" className="nav-link" activeClassName="active">
+          Request
+        </Link>
       </div>
       <div className="navbar-right">
         {isAuthenticated ? (

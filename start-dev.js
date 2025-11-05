@@ -24,10 +24,12 @@ const runCommand = (command, args, options = {}) => {
   return child;
 };
 
-console.log('🚀 Starting development server on PORT=5004...');
+console.log('🚀 Starting development servers...');
+console.log('📡 Backend API: http://localhost:5004');
+console.log('🌐 Frontend: http://localhost:5173');
 
 // Start backend server with nodemon and fixed port 5004
-const backend = runCommand('nodemon', ['server.js'], {
+const backend = runCommand('nodemon', ['backend/server.js'], {
   env: { ...process.env, NODE_ENV: 'development', PORT: '5004' }
 });
 

@@ -8,6 +8,69 @@ dotenv.config();
 const resend = new Resend('re_4tfvwTmv_9kPKorQAcpZmZcZ4i744cC1Q');
 
 /**
+ * Generic email sending function
+ * @param {Object} options - Email options
+ * @param {string} options.to - Recipient email
+ * @param {string} options.subject - Email subject
+ * @param {string} options.template - Template name (optional)
+ * @param {Object} options.data - Template data (optional)
+ * @param {string} options.html - HTML content (optional, if not using template)
+ * @param {string} options.text - Plain text content (optional)
+ * @returns {Promise} - Email send response
+ */
+export const sendEmail = async ({ to, subject, template, data, html, text }) => {
+  try {
+    // If HTML is not provided, generate a simple HTML email
+    if (!html) {
+      html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
+            .header { background-color: #0066b2; padding: 20px; text-align: center; color: white; }
+            .content { padding: 20px; background-color: #f9f9f9; }
+            .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; background-color: #f1f1f1; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${subject}</h1>
+          </div>
+          <div class="content">
+            ${data ? Object.entries(data).map(([key, value]) => `<p><strong>${key}:</strong> ${value}</p>`).join('') : '<p>Thank you for your inquiry.</p>'}
+          </div>
+          <div class="footer">
+            <p>This is an automated message from JetSetGo.</p>
+            <p>&copy; 2025 JetSetGo. All rights reserved.</p>
+          </div>
+        </body>
+        </html>
+      `;
+    }
+
+    // Generate plain text if not provided
+    if (!text) {
+      text = html.replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
+    }
+
+    const response = await resend.emails.send({
+      from: 'JetSetGo <onboarding@resend.dev>',
+      to: [to],
+      subject,
+      html,
+      text
+    });
+
+    console.log('Email sent successfully:', response);
+    return response;
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw error;
+  }
+};
+
+/**
  * Email service for sending notifications
  */
 const emailService = {

@@ -6,6 +6,10 @@ import hotelRoutes from './routes/hotel.routes.js';
 import flightRoutes from './routes/flight.routes.js';
 import cruiseRoutes from './routes/cruise.routes.js';
 import emailRoutes from './routes/email.routes.js';
+import inquiryRoutes from './routes/inquiry.routes.js';
+import quoteRoutes from './routes/quote.routes.js';
+import featureFlagRoutes from './routes/featureFlag.routes.js';
+import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
 // import 
 // const flightRoutes =re('./routes/flights');
 // Load environment variables
@@ -51,19 +55,8 @@ app.get('/api/test', (req, res) => {
   });
 });
 
-// Add error handling for undefined routes
-app.use((req, res, next) => {
-  if (!req.route) {
-    console.log('404 - Route not found:', req.path);
-    return res.status(404).json({ 
-      success: false,
-      message: `Route ${req.path} not found`,
-      path: req.path,
-      method: req.method
-    });
-  }
-  next();
-});
+// Quote expiration check endpoint (manual trigger)
+app.post('/api/jobs/check-quote-expiration', checkQuoteExpirationHandler);
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -71,6 +64,20 @@ app.use('/api/hotels', hotelRoutes);
 app.use('/api/flights', flightRoutes);
 app.use('/api/cruises', cruiseRoutes);
 app.use('/api/email', emailRoutes);
+app.use('/api/inquiries', inquiryRoutes);
+app.use('/api/quotes', quoteRoutes);
+app.use('/api/feature-flags', featureFlagRoutes);
+
+// 404 handler for undefined routes (must be after all routes)
+app.use((req, res, next) => {
+  console.log('404 - Route not found:', req.method, req.path);
+  res.status(404).json({ 
+    success: false,
+    message: `Route ${req.method} ${req.path} not found`,
+    path: req.path,
+    method: req.method
+  });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {

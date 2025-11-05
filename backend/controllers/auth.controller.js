@@ -242,18 +242,19 @@ export const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id },
+      { id: user.id, role: user.role },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRE }
     );
 
-    console.log('User logged in successfully:', { id: user.id, email: user.email });
+    console.log('User logged in successfully:', { id: user.id, email: user.email, role: user.role });
 
     res.json({
       id: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
+      role: user.role || 'user',
       token
     });
   } catch (error) {

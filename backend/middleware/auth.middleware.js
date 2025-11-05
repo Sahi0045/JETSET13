@@ -20,9 +20,12 @@ export const protect = async (req, res, next) => {
         return res.status(401).json({ message: 'User not found' });
       }
 
-      // Remove password from user object
+      // Remove password from user object and ensure role is included
       const { password, ...userWithoutPassword } = user;
-      req.user = userWithoutPassword;
+      req.user = {
+        ...userWithoutPassword,
+        role: user.role || 'user'
+      };
 
       next();
     } catch (error) {

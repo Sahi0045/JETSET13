@@ -92,6 +92,9 @@ const Navbar = ({ forceScrolled }) => {
         <Link to="/my-trips" className="nav-link">
           My Trips
         </Link>
+        <Link to="/request" className="nav-link">
+          Request
+        </Link>
       </div>
 
       <div className="navbar-right">
@@ -234,6 +237,9 @@ const Navbar = ({ forceScrolled }) => {
           </Link>
           <Link to="/my-trips" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
             My Trips
+          </Link>
+          <Link to="/request" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
+            Request
           </Link>
           
           {/* Add Currency Selector to mobile menu */}

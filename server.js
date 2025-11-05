@@ -15,6 +15,9 @@ import emailRoutes from './backend/routes/email.routes.js';
 import flightRoutes from './backend/routes/flight.routes.js';
 import hotelRoutes from './backend/routes/hotel.routes.js';
 import paymentRoutes from './backend/routes/payment.routes.js';
+import inquiryRoutes from './backend/routes/inquiry.routes.js';
+import quoteRoutes from './backend/routes/quote.routes.js';
+import cruiseRoutes from './backend/routes/cruise.routes.js';
 import supabase from './backend/config/supabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,6 +51,9 @@ app.use('/api/hotels', hotelRoutes);
 app.use('/api/flights', flightRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/inquiries', inquiryRoutes);
+app.use('/api/quotes', quoteRoutes);
+app.use('/api/cruises', cruiseRoutes);
 
 // Test endpoint
 app.get('/api/test', (req, res) => {

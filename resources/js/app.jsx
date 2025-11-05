@@ -489,6 +489,23 @@ const TermsConditions = React.lazy(() =>
     .catch(() => ({ default: () => <div>Loading Terms & Conditions...</div> }))
 );
 
+// Add Request Page import
+const RequestPage = React.lazy(() => 
+  import('./Pages/Request/RequestPage')
+    .catch(() => ({ default: () => <div>Loading Request Page...</div> }))
+);
+
+// Add Admin Panel import
+const AdminPanel = React.lazy(() => 
+  import('./Pages/Admin/AdminPanel')
+    .catch(() => ({ default: () => <div>Loading Admin Panel...</div> }))
+);
+
+const AdminLogin = React.lazy(() => 
+  import('./Pages/Admin/AdminLogin')
+    .catch(() => ({ default: () => <div>Loading Admin Login...</div> }))
+);
+
 const HotelBookingSuccess = React.lazy(() => 
   import('./Pages/Common/rentals/HotelBookingSuccess')
     .catch(() => ({ default: () => <div>Loading Hotel Booking Success...</div> }))
@@ -604,6 +621,15 @@ const App = () => {
         <Route path="/contact" element={<ContactUs />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/terms-conditions" element={<TermsConditions />} />
+        <Route path="/request" element={<RequestPage />} />
+        
+        {/* Admin Routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/*" element={
+          <ProtectedRoute requireAuth={true} requireAdmin={true}>
+            <AdminPanel />
+          </ProtectedRoute>
+        } />
         
         {/* Legacy redirects for backward compatibility */}
         <Route path="/about" element={<Navigate to="/about-us" />} />
