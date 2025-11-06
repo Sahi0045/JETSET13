@@ -165,30 +165,41 @@ const QuoteCreate = () => {
 
   const validateForm = () => {
     const newErrors = {};
+    let focusSection = null;
 
+    // Title validation
     if (!quoteData.title.trim()) {
       newErrors.title = 'Quote title is required';
+      if (!focusSection) focusSection = 'basic';
     }
 
-    if (!quoteData.total_amount || parseFloat(quoteData.total_amount) <= 0) {
-      newErrors.total_amount = 'Valid total amount is required';
-    }
-
+    // Breakdown validation
     if (quoteData.breakdown.length === 0) {
       newErrors.breakdown = 'At least one cost breakdown item is required';
+      if (!focusSection) focusSection = 'breakdown';
+    }
+
+    // Total amount: auto-calc from breakdown if missing/invalid
+    const parsedTotal = parseFloat(quoteData.total_amount);
+    if (!parsedTotal || parsedTotal <= 0) {
+      const computed = quoteData.breakdown.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+      if (computed > 0) {
+        setQuoteData(prev => ({ ...prev, total_amount: computed.toFixed(2) }));
+      } else {
+        newErrors.total_amount = 'Valid total amount is required';
+        if (!focusSection) focusSection = 'basic';
+      }
     }
 
     setErrors(newErrors);
+    if (focusSection) setActiveSection(focusSection);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validateForm()) {
-      setActiveSection('basic');
-      return;
-    }
+    if (!validateForm()) return;
 
     setSubmitting(true);
 
@@ -232,10 +243,7 @@ const QuoteCreate = () => {
   };
 
   const handleSendQuote = async () => {
-    if (!validateForm()) {
-      setActiveSection('basic');
-      return;
-    }
+    if (!validateForm()) return;
 
     setSubmitting(true);
 

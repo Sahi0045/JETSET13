@@ -163,11 +163,21 @@ export const firebaseAuth = {
         code: 'auth/not-initialized'
       };
     }
-    
+
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
+
+      // Get and store the token immediately
+      try {
+        const token = await user.getIdToken();
+        localStorage.setItem('token', token);
+        localStorage.setItem('isAuthenticated', 'true');
+        console.log('🔑 Firebase token stored immediately after email login');
+      } catch (tokenError) {
+        console.error('Error getting token:', tokenError);
+      }
+
       return {
         success: true,
         user: {
@@ -197,11 +207,21 @@ export const firebaseAuth = {
         code: 'auth/not-initialized'
       };
     }
-    
+
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-      
+
+      // Get and store the token immediately
+      try {
+        const token = await user.getIdToken();
+        localStorage.setItem('token', token);
+        localStorage.setItem('isAuthenticated', 'true');
+        console.log('🔑 Firebase token stored immediately after Google login');
+      } catch (tokenError) {
+        console.error('Error getting token:', tokenError);
+      }
+
       return {
         success: true,
         user: {
@@ -232,11 +252,21 @@ export const firebaseAuth = {
         code: 'auth/not-initialized'
       };
     }
-    
+
     try {
       const result = await signInWithPopup(auth, facebookProvider);
       const user = result.user;
-      
+
+      // Get and store the token immediately
+      try {
+        const token = await user.getIdToken();
+        localStorage.setItem('token', token);
+        localStorage.setItem('isAuthenticated', 'true');
+        console.log('🔑 Firebase token stored immediately after Facebook login');
+      } catch (tokenError) {
+        console.error('Error getting token:', tokenError);
+      }
+
       return {
         success: true,
         user: {

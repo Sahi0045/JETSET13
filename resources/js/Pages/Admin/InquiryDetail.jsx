@@ -16,6 +16,7 @@ const InquiryDetail = () => {
     internal_notes: ''
   });
   const [updateSuccess, setUpdateSuccess] = useState(false);
+  const [sendingQuoteId, setSendingQuoteId] = useState(null);
 
   useEffect(() => {
     fetchInquiryDetails();
@@ -113,6 +114,42 @@ const InquiryDetail = () => {
       alert('Error updating inquiry');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleSendQuote = async (quoteId) => {
+    try {
+      setSendingQuoteId(quoteId);
+
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      if (!token) {
+        alert('Authentication required. Please log in again.');
+        return;
+      }
+
+      const response = await fetch(`/api/quotes/${quoteId}/send`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Refresh quotes and inquiry to reflect new statuses
+        await fetchInquiryDetails();
+        alert('Quote sent to customer');
+      } else {
+        alert(result.message || 'Failed to send quote');
+      }
+    } catch (error) {
+      console.error('Error sending quote:', error);
+      alert('Error sending quote');
+    } finally {
+      setSendingQuoteId(null);
     }
   };
 
@@ -656,9 +693,22 @@ const InquiryDetail = () => {
                     <Link to={`/admin/quotes/${quote.id}`} className="quote-action view">
                       View Details
                     </Link>
-                    <button className="quote-action send">
-                      Send to Customer
-                    </button>
+                    {quote.status === 'draft' ? (
+                      <button
+                        className="quote-action send"
+                        onClick={() => handleSendQuote(quote.id)}
+                        disabled={sendingQuoteId === quote.id}
+                      >
+                        {sendingQuoteId === quote.id ? 'Sending...' : 'Send to Customer'}
+                      </button>
+                    ) : (
+                      <button
+                        className="quote-action sent"
+                        disabled
+                      >
+                        Already Sent
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

@@ -120,16 +120,27 @@ export default function TravelDashboard() {
     setIsLoadingRequests(true)
     try {
       console.log('🔍 Loading user inquiries...')
-      
+
+      // Debug: Check all localStorage keys
+      console.log('📦 localStorage contents:', {
+        token: localStorage.getItem('token') ? 'EXISTS' : 'MISSING',
+        adminToken: localStorage.getItem('adminToken') ? 'EXISTS' : 'MISSING',
+        isAuthenticated: localStorage.getItem('isAuthenticated'),
+        user: localStorage.getItem('user') ? 'EXISTS' : 'MISSING'
+      })
+
       // Get authentication token
       const token = localStorage.getItem('token') || localStorage.getItem('adminToken')
-      
+
       if (!token) {
-        console.log('No authentication token found, cannot load requests')
+        console.log('❌ No authentication token found, cannot load requests')
+        console.log('💡 Please log in with Firebase first')
         setRequests([])
         setIsLoadingRequests(false)
         return
       }
+
+      console.log('✅ Token found, making API request...')
 
       const response = await fetch('/api/inquiries/my', {
         method: 'GET',
@@ -154,7 +165,17 @@ export default function TravelDashboard() {
 
       if (result.success) {
         console.log('📋 Total requests loaded:', result.data.length)
-        console.log('Requests:', result.data)
+        console.log('Requests with quotes:', result.data)
+
+        // Debug: Show which inquiries have quotes
+        result.data.forEach(inquiry => {
+          console.log(`Inquiry ${inquiry.id} (${inquiry.status}):`, {
+            hasQuotes: inquiry.quotes && inquiry.quotes.length > 0,
+            quoteCount: inquiry.quotes?.length || 0,
+            quotes: inquiry.quotes?.map(q => ({ id: q.id, status: q.status, amount: q.total_amount }))
+          })
+        })
+
         setRequests(result.data || [])
       } else {
         console.error('Failed to load requests:', result.message)
@@ -242,9 +263,9 @@ export default function TravelDashboard() {
 
     // Filter by status (tab) - similar to bookings but for inquiry status
     if (activeTab === "Upcoming") {
-      // Show pending and processing inquiries
+      // Show pending, processing, and quoted inquiries (so sent quotes appear here)
       filtered = filtered.filter(request => 
-        request.status === 'pending' || request.status === 'processing'
+        request.status === 'pending' || request.status === 'processing' || request.status === 'quoted'
       )
     } else if (activeTab === "Past") {
       // Show completed inquiries (quoted, booked)
@@ -475,17 +496,42 @@ export default function TravelDashboard() {
             </div>
           )}
         </div>
-        
+
+        {/* Show quote information if available */}
+        {request.quotes && request.quotes.length > 0 && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
+            <p className="text-sm font-semibold text-green-800 mb-2">
+              💰 {request.quotes.filter(q => q.status === 'sent' || q.status === 'accepted').length} Quote{request.quotes.filter(q => q.status === 'sent' || q.status === 'accepted').length !== 1 ? 's' : ''} Available
+            </p>
+            {request.quotes
+              .filter(q => q.status === 'sent' || q.status === 'accepted')
+              .map((quote) => (
+                <div key={quote.id} className="text-sm text-gray-700">
+                  <p><strong>Quote #{quote.quote_number}:</strong> ${quote.total_amount} {quote.currency}</p>
+                  {quote.expires_at && (
+                    <p className="text-xs text-gray-600">
+                      Expires: {new Date(quote.expires_at).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              ))}
+          </div>
+        )}
+
         <div className="flex gap-2">
-          <button 
+          <button
             onClick={() => navigate('/request', { state: { inquiryData: request } })}
             className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition"
           >
             View Details
           </button>
-          {request.status === 'quoted' && (
-            <button 
-              className="px-4 py-2 border border-green-300 text-green-700 text-sm rounded-md hover:bg-green-50 transition"
+          {request.quotes && request.quotes.some(q => q.status === 'sent' || q.status === 'accepted') && (
+            <button
+              onClick={() => {
+                const sentQuote = request.quotes.find(q => q.status === 'sent' || q.status === 'accepted')
+                navigate('/quote-detail', { state: { quoteData: sentQuote, inquiryData: request } })
+              }}
+              className="px-4 py-2 border border-green-300 bg-green-50 text-green-700 text-sm rounded-md hover:bg-green-100 transition"
             >
               View Quote
             </button>

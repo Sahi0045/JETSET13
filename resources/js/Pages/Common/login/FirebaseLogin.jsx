@@ -75,16 +75,21 @@ export default function FirebaseLogin() {
     // Handle email/password login
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         if (!validateForm()) return;
 
         setIsProcessing(true);
-        
+
         try {
             const result = await signIn(formData.email, formData.password);
-            
+
             if (result.success) {
                 console.log('Login successful:', result.user);
+
+                // Verify token is stored (now stored immediately in firebase.js)
+                const token = localStorage.getItem('token');
+                console.log('Token stored:', token ? 'Yes' : 'No');
+
                 navigate('/my-trips');
             } else {
                 setFormErrors({ general: result.error });
@@ -100,12 +105,17 @@ export default function FirebaseLogin() {
     // Handle Google login
     const handleGoogleLogin = async () => {
         setIsProcessing(true);
-        
+
         try {
             const result = await signInWithGoogle();
-            
+
             if (result.success) {
                 console.log('Google login successful:', result.user);
+
+                // Verify token is stored (now stored immediately in firebase.js)
+                const token = localStorage.getItem('token');
+                console.log('Token stored:', token ? 'Yes' : 'No');
+
                 navigate('/my-trips');
             } else {
                 setFormErrors({ general: result.error });
@@ -121,12 +131,17 @@ export default function FirebaseLogin() {
     // Handle Facebook login
     const handleFacebookLogin = async () => {
         setIsProcessing(true);
-        
+
         try {
             const result = await signInWithFacebook();
-            
+
             if (result.success) {
                 console.log('Facebook login successful:', result.user);
+
+                // Verify token is stored (now stored immediately in firebase.js)
+                const token = localStorage.getItem('token');
+                console.log('Token stored:', token ? 'Yes' : 'No');
+
                 navigate('/my-trips');
             } else {
                 setFormErrors({ general: result.error });

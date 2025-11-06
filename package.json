@@ -61,6 +61,7 @@
     "firebase": "^11.10.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.487.0",
+    "multer": "^2.0.2",
     "puppeteer": "^24.6.1",
     "react-bootstrap": "^2.10.9",
     "react-datepicker": "^8.3.0",

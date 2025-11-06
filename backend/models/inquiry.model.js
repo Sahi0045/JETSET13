@@ -135,6 +135,50 @@ class Inquiry {
     }
   }
 
+  // Get inquiries for a user by id, and also include legacy records
+  // where user_id is null but customer_email matches the user's email.
+  static async findForUser(userId, email) {
+    try {
+      const selectCols = `
+        *,
+        assigned_admin:users!inquiries_assigned_admin_fkey(id, name, email),
+        quotes(*)
+      `;
+
+      const [byUserId, byEmail] = await Promise.all([
+        supabase
+          .from('inquiries')
+          .select(selectCols)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }),
+        email
+          ? supabase
+              .from('inquiries')
+              .select(selectCols)
+              .ilike('customer_email', email)
+              .order('created_at', { ascending: false })
+          : Promise.resolve({ data: [], error: null })
+      ]);
+
+      if (byUserId.error) {
+        console.error('Supabase error during findForUser(byUserId):', byUserId.error);
+        throw new Error(byUserId.error.message);
+      }
+      if (byEmail.error) {
+        console.error('Supabase error during findForUser(byEmail):', byEmail.error);
+        throw new Error(byEmail.error.message);
+      }
+
+      const map = new Map();
+      (byUserId.data || []).forEach(row => map.set(row.id, row));
+      (byEmail.data || []).forEach(row => map.set(row.id, row));
+      return Array.from(map.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    } catch (error) {
+      console.error('Inquiry findForUser error:', error);
+      throw error;
+    }
+  }
+
   // Update inquiry
   static async update(id, updateData) {
     try {

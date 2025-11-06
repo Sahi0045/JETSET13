@@ -260,28 +260,53 @@ export const sendQuote = async (req, res) => {
 
     const sentQuote = await Quote.sendQuote(req.params.id, req.user.id);
 
-    // Send email to customer
+    // Update the inquiry status to 'quoted' so it appears in my-trips
     try {
-      await sendEmail({
-        to: sentQuote.inquiry.customer_email,
-        subject: `Your Travel Quote - ${sentQuote.quote_number}`,
-        template: 'quote_sent',
-        data: {
-          customerName: sentQuote.inquiry.customer_name,
-          quoteNumber: sentQuote.quote_number,
-          totalAmount: sentQuote.total_amount,
-          currency: sentQuote.currency,
-          expiresAt: sentQuote.expires_at,
-          quoteLink: `${process.env.FRONTEND_URL}/quotes/${sentQuote.id}`
-        }
+      await Inquiry.update(quote.inquiry_id, {
+        status: 'quoted',
+        updated_at: new Date().toISOString()
       });
+      console.log(`Updated inquiry ${quote.inquiry_id} status to 'quoted'`);
+    } catch (updateError) {
+      console.error('Failed to update inquiry status:', updateError);
+      // Don't fail the whole request if inquiry update fails
+    }
+
+    // Fetch full quote with inquiry for emailing
+    let fullQuote = sentQuote;
+    try {
+      fullQuote = await Quote.findById(sentQuote.id);
+    } catch (e) {
+      // fallback to sentQuote
+    }
+
+    // Send email to customer (guard against missing inquiry info)
+    try {
+      const customerEmail = fullQuote?.inquiry?.customer_email;
+      if (customerEmail) {
+        await sendEmail({
+          to: customerEmail,
+          subject: `Your Travel Quote - ${fullQuote.quote_number}`,
+          template: 'quote_sent',
+          data: {
+            customerName: fullQuote?.inquiry?.customer_name,
+            quoteNumber: fullQuote.quote_number,
+            totalAmount: fullQuote.total_amount,
+            currency: fullQuote.currency,
+            expiresAt: fullQuote.expires_at,
+            quoteLink: `${process.env.FRONTEND_URL}/quotes/${fullQuote.id}`
+          }
+        });
+      } else {
+        console.warn('Skipping email: inquiry customer_email not available');
+      }
     } catch (emailError) {
       console.error('Failed to send quote email:', emailError);
     }
 
     res.json({
       success: true,
-      data: sentQuote,
+      data: fullQuote || sentQuote,
       message: 'Quote sent successfully'
     });
   } catch (error) {

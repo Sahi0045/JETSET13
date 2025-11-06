@@ -1672,7 +1672,8 @@
   border-radius: var(--admin-radius-lg);
   box-shadow: var(--admin-shadow-md);
   border: 1px solid var(--admin-border);
-  overflow: hidden;
+  /* Allow inner grids to flow; avoid clipping inputs on smaller widths */
+  overflow: visible;
 }
 
 /* Form Sections */
@@ -1843,10 +1844,24 @@
   align-items: end;
 }
 
+/* Improve wrapping on medium screens to keep all fields visible */
+@media (max-width: 1280px) {
+  .item-input-grid {
+    grid-template-columns: 1fr 1fr 1fr 1fr auto;
+  }
+}
+
 @media (max-width: 1024px) {
   .item-input-grid {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* Prevent input overflow within grid columns */
+.item-input-grid .form-field input,
+.item-input-grid .form-field select,
+.item-input-grid .form-field textarea {
+  min-width: 0;
 }
 
 .add-item-button {

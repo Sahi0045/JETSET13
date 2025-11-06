@@ -129,7 +129,19 @@ export const getAllInquiries = async (req, res) => {
 // @access  Private
 export const getMyInquiries = async (req, res) => {
   try {
-    const inquiries = await Inquiry.findByUserId(req.user.id);
+    const inquiries = await Inquiry.findForUser(req.user.id, req.user.email);
+
+    // Auto-link legacy inquiries (missing user_id) to this user by matching email
+    if (Array.isArray(inquiries) && inquiries.length > 0) {
+      const linkable = inquiries.filter(i => !i.user_id && i.customer_email && req.user.email && i.customer_email.toLowerCase() === req.user.email.toLowerCase());
+      for (const inquiry of linkable) {
+        try {
+          await Inquiry.update(inquiry.id, { user_id: req.user.id, updated_at: new Date().toISOString() });
+        } catch (linkErr) {
+          console.warn('Failed to link legacy inquiry to user:', inquiry.id, linkErr?.message);
+        }
+      }
+    }
 
     res.json({
       success: true,
