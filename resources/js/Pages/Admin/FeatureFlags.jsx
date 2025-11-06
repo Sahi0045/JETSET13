@@ -138,11 +138,21 @@ const FeatureFlags = () => {
 
       const flag = flags.find(f => f.flag_key === flagKey);
       const newEnabledState = !flag.enabled;
+      
+      // Get token from localStorage
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('No authentication token found');
+        setUpdateError('Authentication required. Please log in again.');
+        return;
+      }
 
       const response = await fetch(`/api/feature-flags/${flagKey}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
         credentials: 'include',
         body: JSON.stringify({

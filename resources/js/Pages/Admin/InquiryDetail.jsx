@@ -24,9 +24,22 @@ const InquiryDetail = () => {
   const fetchInquiryDetails = async () => {
     try {
       setLoading(true);
+      
+      // Get token from localStorage
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('No authentication token found');
+        setLoading(false);
+        return;
+      }
 
       // Fetch inquiry details
       const inquiryResponse = await fetch(`/api/inquiries/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         credentials: 'include'
       });
       const inquiryData = await inquiryResponse.json();
@@ -43,6 +56,10 @@ const InquiryDetail = () => {
 
       // Fetch quotes for this inquiry
       const quotesResponse = await fetch(`/api/quotes/inquiry/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         credentials: 'include'
       });
       const quotesData = await quotesResponse.json();
@@ -60,11 +77,22 @@ const InquiryDetail = () => {
   const handleUpdate = async () => {
     try {
       setUpdating(true);
+      
+      // Get token from localStorage
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('No authentication token found');
+        alert('Authentication required. Please log in again.');
+        setUpdating(false);
+        return;
+      }
 
       const response = await fetch(`/api/inquiries/${id}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
         credentials: 'include',
         body: JSON.stringify(updateData)

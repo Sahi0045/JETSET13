@@ -9,12 +9,12 @@ import {
   getInquiryStats,
   assignInquiry
 } from '../controllers/inquiry.controller.js';
-import { protect, admin } from '../middleware/auth.middleware.js';
+import { protect, admin, optionalProtect } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
-// Public routes
-router.post('/', createInquiry);
+// Public routes (with optional authentication)
+router.post('/', optionalProtect, createInquiry);
 
 // Protected routes (authenticated users)
 router.get('/my', protect, getMyInquiries);

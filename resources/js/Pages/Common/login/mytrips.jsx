@@ -120,10 +120,21 @@ export default function TravelDashboard() {
     setIsLoadingRequests(true)
     try {
       console.log('🔍 Loading user inquiries...')
+      
+      // Get authentication token
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken')
+      
+      if (!token) {
+        console.log('No authentication token found, cannot load requests')
+        setRequests([])
+        setIsLoadingRequests(false)
+        return
+      }
 
       const response = await fetch('/api/inquiries/my', {
         method: 'GET',
         headers: {
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },

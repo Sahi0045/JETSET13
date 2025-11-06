@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import './RequestPage.css';
+import Navbar from '../Common/Navbar';
+import Footer from '../Common/Footer';
+import withPageElements from '../Common/PageWrapper';
 
 const RequestPage = () => {
   const [activeTab, setActiveTab] = useState('inquiry');
@@ -147,13 +150,25 @@ const RequestPage = () => {
 
       console.log('Submitting inquiry:', inquiryData);
 
+      // Get authentication token if user is logged in
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
+      const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      
+      // Add authorization header if user is logged in
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        console.log('User is authenticated, associating inquiry with user account');
+      } else {
+        console.log('User not authenticated, creating guest inquiry');
+      }
+
       // Submit to API
       const response = await fetch('/api/inquiries', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers,
         credentials: 'include',
         body: JSON.stringify(inquiryData)
       });
@@ -807,12 +822,14 @@ const RequestPage = () => {
   );
 
   return (
-    <div className="request-page">
-      <div className="request-container">
-        <div className="request-header">
-          <h1>Get Your Personalized Travel Quote</h1>
-          <p>Fill out the form below and our travel experts will create a customized itinerary just for you</p>
-        </div>
+    <>
+      <Navbar />
+      <div className="request-page">
+        <div className="request-container">
+          <div className="request-header">
+            <h1>Get Your Personalized Travel Quote</h1>
+            <p>Fill out the form below and our travel experts will create a customized itinerary just for you</p>
+          </div>
 
         <div className="request-tabs">
           <button
@@ -909,7 +926,9 @@ const RequestPage = () => {
         </div>
       </div>
     </div>
+    <Footer />
+    </>
   );
 };
 
-export default RequestPage;
+export default withPageElements(RequestPage);

@@ -35,10 +35,8 @@ const ProtectedRoute = ({ children, requireAuth = true, requireAdmin = false }) 
         return <Navigate to="/" replace />;
     }
 
-    // If route requires no authentication (like login page) and user is logged in
-    if (!requireAuth && (user || isAdminLoggedIn)) {
-        return <Navigate to="/dashboard" replace />;
-    }
+    // Allow users to access login pages even if logged in
+    // (they might want to switch accounts or logout first)
 
     return children;
 };
