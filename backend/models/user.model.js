@@ -90,7 +90,8 @@ class User {
         return {
           ...data[0],
           firstName: data[0].first_name,
-          lastName: data[0].last_name
+          lastName: data[0].last_name,
+          role: data[0].role || 'user' // Include role field
         };
       }
       
@@ -128,7 +129,8 @@ class User {
         return {
           ...data,
           firstName: data.first_name,
-          lastName: data.last_name
+          lastName: data.last_name,
+          role: data.role || 'user' // Include role field
         };
       }
       return null;
