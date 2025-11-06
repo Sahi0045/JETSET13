@@ -6,41 +6,79 @@ const AdminDashboard = () => {
   const [stats, setStats] = useState({
     totalInquiries: 0,
     pendingInquiries: 0,
+    processingInquiries: 0,
+    quotedInquiries: 0,
+    bookedInquiries: 0,
+    cancelledInquiries: 0,
     activeQuotes: 0,
-    expiredQuotes: 0
+    expiredQuotes: 0,
+    totalRevenue: 0,
+    monthlyRevenue: 0
   });
   const [recentInquiries, setRecentInquiries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState('7d');
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [timeRange]);
 
   const fetchDashboardData = async () => {
     try {
+      setLoading(true);
+
+      // Get token from localStorage
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('No authentication token found');
+        return;
+      }
+
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+
       // Fetch statistics
       const statsResponse = await fetch('/api/inquiries/stats', {
+        headers,
         credentials: 'include'
       });
       const statsData = await statsResponse.json();
 
       if (statsData.success) {
         setStats({
-          totalInquiries: statsData.data.total,
+          totalInquiries: statsData.data.total || 0,
           pendingInquiries: statsData.data.byStatus?.pending || 0,
+          processingInquiries: statsData.data.byStatus?.processing || 0,
+          quotedInquiries: statsData.data.byStatus?.quoted || 0,
+          bookedInquiries: statsData.data.byStatus?.booked || 0,
+          cancelledInquiries: statsData.data.byStatus?.cancelled || 0,
           activeQuotes: statsData.data.byStatus?.quoted || 0,
-          expiredQuotes: 0 // TODO: Implement expired quotes count
+          expiredQuotes: 0, // TODO: Implement expired quotes count
+          totalRevenue: 0, // TODO: Implement revenue tracking
+          monthlyRevenue: 0 // TODO: Implement monthly revenue
         });
       }
 
       // Fetch recent inquiries
       const inquiriesResponse = await fetch('/api/inquiries?limit=5&sort=created_at:desc', {
+        headers,
         credentials: 'include'
       });
       const inquiriesData = await inquiriesResponse.json();
 
       if (inquiriesData.success) {
-        setRecentInquiries(inquiriesData.data.inquiries);
+        setRecentInquiries(inquiriesData.data.inquiries || []);
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -56,6 +94,7 @@ const AdminDashboard = () => {
       case 'quoted': return 'status-quoted';
       case 'booked': return 'status-booked';
       case 'cancelled': return 'status-cancelled';
+      case 'expired': return 'status-expired';
       default: return 'status-default';
     }
   };
@@ -70,117 +109,313 @@ const AdminDashboard = () => {
     }
   };
 
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1) return 'Today';
+    if (diffDays === 2) return 'Yesterday';
+    if (diffDays <= 7) return `${diffDays - 1} days ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const StatCard = ({ icon, title, value, change, changeType, color = 'blue' }) => (
+    <div className={`stat-card stat-card-${color}`}>
+      <div className="stat-header">
+        <div className={`stat-icon icon-${color}`}>
+          {icon}
+        </div>
+        {change && (
+          <div className={`stat-change ${changeType}`}>
+            <span className="change-value">{change > 0 ? '+' : ''}{change}%</span>
+            <span className="change-label">vs last month</span>
+          </div>
+        )}
+      </div>
+      <div className="stat-content">
+        <h3 className="stat-value">{value}</h3>
+        <p className="stat-title">{title}</p>
+      </div>
+    </div>
+  );
+
   if (loading) {
-    return <div className="admin-loading">Loading dashboard...</div>;
+    return (
+      <div className="admin-dashboard">
+        <div className="dashboard-loading">
+          <div className="loading-spinner-large">
+            <div className="spinner-ring"></div>
+            <div className="spinner-ring"></div>
+            <div className="spinner-ring"></div>
+          </div>
+          <h3>Loading Dashboard...</h3>
+          <p>Fetching your latest statistics</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="admin-dashboard">
-      <div className="admin-header">
-        <h1>Admin Dashboard</h1>
-        <p>Welcome back! Here's an overview of your inquiry management system.</p>
-      </div>
-
-      {/* Statistics Cards */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon">📊</div>
-          <div className="stat-content">
-            <h3>{stats.totalInquiries}</h3>
-            <p>Total Inquiries</p>
+      {/* Dashboard Header */}
+      <div className="dashboard-header">
+        <div className="header-content">
+          <div className="header-info">
+            <h1>Dashboard Overview</h1>
+            <p>Welcome back! Here's what's happening with your travel business today.</p>
           </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon">⏳</div>
-          <div className="stat-content">
-            <h3>{stats.pendingInquiries}</h3>
-            <p>Pending Inquiries</p>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon">💰</div>
-          <div className="stat-content">
-            <h3>{stats.activeQuotes}</h3>
-            <p>Active Quotes</p>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon">⏰</div>
-          <div className="stat-content">
-            <h3>{stats.expiredQuotes}</h3>
-            <p>Expired Quotes</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Inquiries */}
-      <div className="recent-inquiries">
-        <div className="section-header">
-          <h2>Recent Inquiries</h2>
-          <Link to="/admin/inquiries" className="view-all-btn">View All</Link>
-        </div>
-
-        <div className="inquiries-list">
-          {recentInquiries.length === 0 ? (
-            <div className="no-inquiries">
-              <p>No inquiries yet. They will appear here when customers submit requests.</p>
+          <div className="header-actions">
+            <div className="time-display">
+              <span className="current-time">
+                {currentTime.toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                })}
+              </span>
+              <span className="current-date">
+                {currentTime.toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </span>
             </div>
-          ) : (
-            recentInquiries.map(inquiry => (
-              <div key={inquiry.id} className="inquiry-card">
-                <div className="inquiry-header">
-                  <div className="inquiry-type">
-                    <span className="type-icon">{getInquiryTypeIcon(inquiry.inquiry_type)}</span>
-                    <span className="type-label">{inquiry.inquiry_type.charAt(0).toUpperCase() + inquiry.inquiry_type.slice(1)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Time Range Selector */}
+      <div className="dashboard-controls">
+        <div className="time-range-selector">
+          <button
+            className={`time-btn ${timeRange === '7d' ? 'active' : ''}`}
+            onClick={() => setTimeRange('7d')}
+          >
+            7 Days
+          </button>
+          <button
+            className={`time-btn ${timeRange === '30d' ? 'active' : ''}`}
+            onClick={() => setTimeRange('30d')}
+          >
+            30 Days
+          </button>
+          <button
+            className={`time-btn ${timeRange === '90d' ? 'active' : ''}`}
+            onClick={() => setTimeRange('90d')}
+          >
+            90 Days
+          </button>
+        </div>
+      </div>
+
+      {/* Statistics Grid */}
+      <div className="stats-grid">
+        <StatCard
+          icon="📊"
+          title="Total Inquiries"
+          value={stats.totalInquiries}
+          change={12}
+          changeType="positive"
+          color="blue"
+        />
+        <StatCard
+          icon="⏳"
+          title="Pending"
+          value={stats.pendingInquiries}
+          change={-5}
+          changeType="negative"
+          color="yellow"
+        />
+        <StatCard
+          icon="⚙️"
+          title="Processing"
+          value={stats.processingInquiries}
+          change={8}
+          changeType="positive"
+          color="purple"
+        />
+        <StatCard
+          icon="💰"
+          title="Quoted"
+          value={stats.quotedInquiries}
+          change={15}
+          changeType="positive"
+          color="green"
+        />
+        <StatCard
+          icon="✅"
+          title="Booked"
+          value={stats.bookedInquiries}
+          change={22}
+          changeType="positive"
+          color="success"
+        />
+        <StatCard
+          icon="💵"
+          title="Revenue"
+          value={formatCurrency(stats.totalRevenue)}
+          change={18}
+          changeType="positive"
+          color="gold"
+        />
+      </div>
+
+      {/* Charts and Analytics Row */}
+      <div className="analytics-row">
+        <div className="analytics-card chart-card">
+          <div className="card-header">
+            <h3>Inquiry Trends</h3>
+            <div className="chart-legend">
+              <span className="legend-item">
+                <span className="legend-dot pending"></span>
+                Pending
+              </span>
+              <span className="legend-item">
+                <span className="legend-dot processing"></span>
+                Processing
+              </span>
+              <span className="legend-item">
+                <span className="legend-dot quoted"></span>
+                Quoted
+              </span>
+            </div>
+          </div>
+          <div className="chart-placeholder">
+            <div className="chart-icon">📈</div>
+            <p>Interactive chart will be displayed here</p>
+            <small>Showing data for last {timeRange}</small>
+          </div>
+        </div>
+
+        <div className="analytics-card conversion-card">
+          <div className="card-header">
+            <h3>Conversion Funnel</h3>
+          </div>
+          <div className="conversion-funnel">
+            <div className="funnel-step">
+              <div className="step-label">Inquiries</div>
+              <div className="step-value">{stats.totalInquiries}</div>
+              <div className="step-bar" style={{ width: '100%' }}></div>
+            </div>
+            <div className="funnel-step">
+              <div className="step-label">Quoted</div>
+              <div className="step-value">{stats.quotedInquiries}</div>
+              <div className="step-bar" style={{
+                width: `${stats.totalInquiries > 0 ? (stats.quotedInquiries / stats.totalInquiries) * 100 : 0}%`
+              }}></div>
+            </div>
+            <div className="funnel-step">
+              <div className="step-label">Booked</div>
+              <div className="step-value">{stats.bookedInquiries}</div>
+              <div className="step-bar" style={{
+                width: `${stats.totalInquiries > 0 ? (stats.bookedInquiries / stats.totalInquiries) * 100 : 0}%`
+              }}></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Row */}
+      <div className="bottom-row">
+        {/* Recent Inquiries */}
+        <div className="recent-activity-card">
+          <div className="card-header">
+            <h3>Recent Inquiries</h3>
+            <Link to="/admin/inquiries" className="view-all-link">
+              View All →
+            </Link>
+          </div>
+
+          <div className="activity-list">
+            {recentInquiries.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">📭</div>
+                <h4>No Recent Inquiries</h4>
+                <p>New customer inquiries will appear here</p>
+              </div>
+            ) : (
+              recentInquiries.map(inquiry => (
+                <div key={inquiry.id} className="activity-item">
+                  <div className="activity-icon">
+                    {getInquiryTypeIcon(inquiry.inquiry_type)}
                   </div>
-                  <span className={`status-badge ${getStatusColor(inquiry.status)}`}>
-                    {inquiry.status}
-                  </span>
-                </div>
-
-                <div className="inquiry-content">
-                  <h4>{inquiry.customer_name}</h4>
-                  <p className="inquiry-email">{inquiry.customer_email}</p>
-                  <p className="inquiry-date">
-                    {new Date(inquiry.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-
-                <div className="inquiry-actions">
-                  <Link to={`/admin/inquiries/${inquiry.id}`} className="action-btn view-btn">
-                    View Details
+                  <div className="activity-content">
+                    <div className="activity-title">
+                      <span className="customer-name">{inquiry.customer_name}</span>
+                      <span className={`activity-status ${getStatusColor(inquiry.status)}`}>
+                        {inquiry.status}
+                      </span>
+                    </div>
+                    <div className="activity-meta">
+                      <span className="inquiry-type">{inquiry.inquiry_type}</span>
+                      <span className="activity-time">{formatDate(inquiry.created_at)}</span>
+                    </div>
+                  </div>
+                  <Link to={`/admin/inquiries/${inquiry.id}`} className="activity-action">
+                    View
                   </Link>
                 </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Quick Actions */}
-      <div className="quick-actions">
-        <h2>Quick Actions</h2>
-        <div className="actions-grid">
-          <Link to="/admin/inquiries" className="action-card">
-            <div className="action-icon">📋</div>
-            <h3>Manage Inquiries</h3>
-            <p>View and respond to customer inquiries</p>
-          </Link>
+        {/* Quick Actions */}
+        <div className="quick-actions-card">
+          <div className="card-header">
+            <h3>Quick Actions</h3>
+          </div>
 
-          <Link to="/admin/quotes" className="action-card">
-            <div className="action-icon">💰</div>
-            <h3>Create Quotes</h3>
-            <p>Generate and send quotes to customers</p>
-          </Link>
+          <div className="actions-grid">
+            <Link to="/admin/inquiries" className="action-card">
+              <div className="action-icon">📋</div>
+              <div className="action-content">
+                <h4>Manage Inquiries</h4>
+                <p>View and respond to customer inquiries</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </Link>
 
-          <Link to="/admin/reports" className="action-card">
-            <div className="action-icon">📈</div>
-            <h3>View Reports</h3>
-            <p>Analyze inquiry and quote statistics</p>
-          </Link>
+            <Link to="/admin/feature-flags" className="action-card">
+              <div className="action-icon">⚙️</div>
+              <div className="action-content">
+                <h4>Feature Flags</h4>
+                <p>Control system features and settings</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </Link>
+
+            <Link to="/admin/quotes" className="action-card">
+              <div className="action-icon">💰</div>
+              <div className="action-content">
+                <h4>Create Quotes</h4>
+                <p>Generate and send quotes to customers</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </Link>
+
+            <Link to="/admin/reports" className="action-card">
+              <div className="action-icon">📊</div>
+              <div className="action-content">
+                <h4>Analytics</h4>
+                <p>View detailed reports and insights</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </Link>
+          </div>
         </div>
       </div>
     </div>

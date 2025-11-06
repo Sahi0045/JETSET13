@@ -4,17 +4,57 @@ import './AdminPanel.css';
 const FeatureFlags = () => {
   const [flags, setFlags] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+  const [updating, setUpdating] = useState(null);
+  const [updateSuccess, setUpdateSuccess] = useState(null);
+  const [updateError, setUpdateError] = useState(null);
 
-  // Available inquiry types
+  // Enhanced inquiry types with more detailed information
   const inquiryTypes = [
-    { key: 'enable_flight_inquiries', label: '✈️ Flight Inquiries', description: 'Allow users to submit flight booking inquiries' },
-    { key: 'enable_hotel_inquiries', label: '🏨 Hotel Inquiries', description: 'Allow users to submit hotel booking inquiries' },
-    { key: 'enable_cruise_inquiries', label: '🚢 Cruise Inquiries', description: 'Allow users to submit cruise vacation inquiries' },
-    { key: 'enable_package_inquiries', label: '🎒 Package Inquiries', description: 'Allow users to submit vacation package inquiries' },
-    { key: 'enable_general_inquiries', label: '💬 General Inquiries', description: 'Allow users to submit general travel inquiries' }
+    {
+      key: 'enable_flight_inquiries',
+      label: '✈️ Flight Inquiries',
+      description: 'Allow users to submit flight booking inquiries and search for flights',
+      icon: '✈️',
+      category: 'Transportation',
+      impact: 'High',
+      users: 'Business travelers, vacationers'
+    },
+    {
+      key: 'enable_hotel_inquiries',
+      label: '🏨 Hotel Inquiries',
+      description: 'Allow users to submit hotel booking inquiries with destination preferences',
+      icon: '🏨',
+      category: 'Accommodation',
+      impact: 'High',
+      users: 'All travelers'
+    },
+    {
+      key: 'enable_cruise_inquiries',
+      label: '🚢 Cruise Inquiries',
+      description: 'Allow users to submit cruise vacation inquiries with itinerary details',
+      icon: '🚢',
+      category: 'Vacation',
+      impact: 'Medium',
+      users: 'Luxury travelers, families'
+    },
+    {
+      key: 'enable_package_inquiries',
+      label: '🎒 Vacation Packages',
+      description: 'Allow users to submit comprehensive vacation package inquiries',
+      icon: '🎒',
+      category: 'Packages',
+      impact: 'Medium',
+      users: 'First-time travelers, groups'
+    },
+    {
+      key: 'enable_general_inquiries',
+      label: '💬 General Inquiries',
+      description: 'Allow users to submit general travel questions and consultations',
+      icon: '💬',
+      category: 'Support',
+      impact: 'Low',
+      users: 'All users'
+    }
   ];
 
   useEffect(() => {
@@ -24,10 +64,21 @@ const FeatureFlags = () => {
   const fetchFeatureFlags = async () => {
     try {
       setLoading(true);
+      
+      // Get token from localStorage
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('No authentication token found');
+        return;
+      }
+
       const response = await fetch('/api/feature-flags', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
       });
 
       if (!response.ok) {
@@ -35,7 +86,7 @@ const FeatureFlags = () => {
       }
 
       const data = await response.json();
-      
+
       // Initialize flags with defaults if they don't exist
       const flagsMap = {};
       data.data?.forEach(flag => {
@@ -49,7 +100,14 @@ const FeatureFlags = () => {
             flag_key: type.key,
             flag_name: type.label,
             enabled: true,
-            description: type.description
+            description: type.description,
+            ...type
+          };
+        } else {
+          // Merge with enhanced data
+          flagsMap[type.key] = {
+            ...flagsMap[type.key],
+            ...type
           };
         }
       });
@@ -57,14 +115,15 @@ const FeatureFlags = () => {
       setFlags(Object.values(flagsMap));
     } catch (err) {
       console.error('Error fetching feature flags:', err);
-      setError('Failed to load feature flags');
-      
+      setUpdateError('Failed to load feature flags. Using defaults.');
+
       // Initialize with defaults on error
       setFlags(inquiryTypes.map(type => ({
         flag_key: type.key,
         flag_name: type.label,
         enabled: true,
-        description: type.description
+        description: type.description,
+        ...type
       })));
     } finally {
       setLoading(false);
@@ -73,9 +132,10 @@ const FeatureFlags = () => {
 
   const toggleFlag = async (flagKey) => {
     try {
-      setSaving(true);
-      setError(null);
-      
+      setUpdating(flagKey);
+      setUpdateError(null);
+      setUpdateSuccess(null);
+
       const flag = flags.find(f => f.flag_key === flagKey);
       const newEnabledState = !flag.enabled;
 
@@ -83,8 +143,8 @@ const FeatureFlags = () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
+        credentials: 'include',
         body: JSON.stringify({
           enabled: newEnabledState
         })
@@ -95,90 +155,241 @@ const FeatureFlags = () => {
       }
 
       // Update local state
-      setFlags(flags.map(f => 
-        f.flag_key === flagKey 
+      setFlags(flags.map(f =>
+        f.flag_key === flagKey
           ? { ...f, enabled: newEnabledState }
           : f
       ));
 
-      setSuccess(`${flag.flag_name} ${newEnabledState ? 'enabled' : 'disabled'} successfully!`);
-      setTimeout(() => setSuccess(null), 3000);
+      setUpdateSuccess(`${flag.flag_name} ${newEnabledState ? 'enabled' : 'disabled'} successfully!`);
+      setTimeout(() => setUpdateSuccess(null), 4000);
 
     } catch (err) {
       console.error('Error toggling feature flag:', err);
-      setError('Failed to update feature flag. Using local state only.');
-      
+      setUpdateError('Failed to update feature flag. Changes may not persist.');
+
       // Still update local state even if API fails
-      setFlags(flags.map(f => 
-        f.flag_key === flagKey 
+      setFlags(flags.map(f =>
+        f.flag_key === flagKey
           ? { ...f, enabled: !f.enabled }
           : f
       ));
+
+      setTimeout(() => setUpdateError(null), 4000);
     } finally {
-      setSaving(false);
+      setUpdating(null);
+    }
+  };
+
+  const getImpactColor = (impact) => {
+    switch (impact) {
+      case 'High': return 'impact-high';
+      case 'Medium': return 'impact-medium';
+      case 'Low': return 'impact-low';
+      default: return 'impact-low';
     }
   };
 
   if (loading) {
     return (
-      <div className="admin-content">
-        <div className="loading-spinner">Loading feature flags...</div>
+      <div className="feature-flags">
+        <div className="page-loading">
+          <div className="loading-spinner-large">
+            <div className="spinner-ring"></div>
+            <div className="spinner-ring"></div>
+            <div className="spinner-ring"></div>
+          </div>
+          <h3>Loading Feature Flags...</h3>
+          <p>Fetching system configuration</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="admin-content">
-      <div className="admin-header">
-        <h2>Feature Flags</h2>
-        <p>Control which inquiry types are available to users</p>
+    <div className="feature-flags">
+      {/* Page Header */}
+      <div className="page-header">
+        <div className="header-content">
+          <h1>System Configuration</h1>
+          <p>Control which features are available to your users and manage system settings</p>
+        </div>
+        <div className="header-actions">
+          <div className="stats-summary">
+            <span className="stats-item">
+              <strong>{flags.filter(f => f.enabled).length}</strong> of <strong>{flags.length}</strong> enabled
+            </span>
+          </div>
+        </div>
       </div>
 
-      {error && (
-        <div className="alert alert-error">
-          {error}
+      {/* Success/Error Messages */}
+      {updateSuccess && (
+        <div className="success-banner">
+          <div className="success-icon">✅</div>
+          <span>{updateSuccess}</span>
         </div>
       )}
 
-      {success && (
-        <div className="alert alert-success">
-          {success}
+      {updateError && (
+        <div className="error-banner">
+          <div className="error-icon">⚠️</div>
+          <span>{updateError}</span>
         </div>
       )}
 
-      <div className="feature-flags-container">
-        {flags.map(flag => (
-          <div key={flag.flag_key} className="feature-flag-card">
-            <div className="flag-info">
-              <h3>{flag.flag_name}</h3>
-              <p>{flag.description}</p>
+      {/* Feature Overview */}
+      <div className="feature-overview">
+        <div className="overview-card">
+          <div className="overview-header">
+            <div className="overview-icon">🎛️</div>
+            <h3>Inquiry Types Control</h3>
+          </div>
+          <div className="overview-content">
+            <p>Manage which types of travel inquiries users can submit through your platform. Disabled types won't appear on the request form.</p>
+            <div className="overview-stats">
+              <div className="stat-item">
+                <span className="stat-label">Active Features:</span>
+                <span className="stat-value">{flags.filter(f => f.enabled).length}</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-label">Disabled Features:</span>
+                <span className="stat-value">{flags.filter(f => !f.enabled).length}</span>
+              </div>
             </div>
-            <div className="flag-toggle">
-              <label className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={flag.enabled}
-                  onChange={() => toggleFlag(flag.flag_key)}
-                  disabled={saving}
-                />
-                <span className="toggle-slider"></span>
-              </label>
-              <span className={`flag-status ${flag.enabled ? 'enabled' : 'disabled'}`}>
-                {flag.enabled ? 'Enabled' : 'Disabled'}
-              </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Feature Flags Grid */}
+      <div className="feature-flags-grid">
+        {flags.map(flag => (
+          <div key={flag.flag_key} className={`feature-flag-card ${flag.enabled ? 'enabled' : 'disabled'}`}>
+            <div className="card-header">
+              <div className="feature-icon">
+                {flag.icon}
+              </div>
+              <div className="feature-status">
+                <span className={`status-indicator ${flag.enabled ? 'active' : 'inactive'}`}>
+                  {flag.enabled ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+            </div>
+
+            <div className="card-content">
+              <div className="feature-info">
+                <h4 className="feature-title">{flag.flag_name.replace(flag.icon, '').trim()}</h4>
+                <p className="feature-description">{flag.description}</p>
+
+                <div className="feature-meta">
+                  <div className="meta-item">
+                    <span className="meta-label">Category:</span>
+                    <span className="meta-value">{flag.category}</span>
+                  </div>
+                  <div className="meta-item">
+                    <span className="meta-label">Impact:</span>
+                    <span className={`meta-value impact ${getImpactColor(flag.impact)}`}>
+                      {flag.impact}
+                    </span>
+                  </div>
+                  <div className="meta-item">
+                    <span className="meta-label">Target Users:</span>
+                    <span className="meta-value">{flag.users}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="feature-controls">
+                <div className="toggle-section">
+                  <label className="modern-toggle">
+                    <input
+                      type="checkbox"
+                      checked={flag.enabled}
+                      onChange={() => toggleFlag(flag.flag_key)}
+                      disabled={updating === flag.flag_key}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+
+                  {updating === flag.flag_key && (
+                    <div className="updating-indicator">
+                      <div className="spinner small"></div>
+                      <span>Updating...</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="feature-actions">
+                  <button
+                    className={`action-btn ${flag.enabled ? 'disable' : 'enable'}`}
+                    onClick={() => toggleFlag(flag.flag_key)}
+                    disabled={updating === flag.flag_key}
+                  >
+                    {flag.enabled ? 'Disable' : 'Enable'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="feature-flags-info">
-        <h3>ℹ️ About Feature Flags</h3>
-        <ul>
-          <li>Disabled inquiry types will not appear on the request page</li>
-          <li>Changes take effect immediately for all users</li>
-          <li>Use this to temporarily disable inquiry types during maintenance</li>
-          <li>All inquiry types are enabled by default</li>
-        </ul>
+      {/* Information Section */}
+      <div className="information-section">
+        <div className="info-card">
+          <div className="info-header">
+            <div className="info-icon">ℹ️</div>
+            <h3>How Feature Flags Work</h3>
+          </div>
+          <div className="info-content">
+            <div className="info-points">
+              <div className="info-point">
+                <div className="point-icon">⚡</div>
+                <div className="point-content">
+                  <h5>Real-time Updates</h5>
+                  <p>Changes take effect immediately for all users visiting your site</p>
+                </div>
+              </div>
+              <div className="info-point">
+                <div className="point-icon">🔧</div>
+                <div className="point-content">
+                  <h5>Maintenance Mode</h5>
+                  <p>Disable inquiry types during system maintenance or updates</p>
+                </div>
+              </div>
+              <div className="info-point">
+                <div className="point-icon">📊</div>
+                <div className="point-content">
+                  <h5>Business Control</h5>
+                  <p>Focus on specific services based on your business strategy</p>
+                </div>
+              </div>
+              <div className="info-point">
+                <div className="point-icon">🔄</div>
+                <div className="point-content">
+                  <h5>Flexible Configuration</h5>
+                  <p>Easily enable/disable features as your business evolves</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="info-card">
+          <div className="info-header">
+            <div className="info-icon">🚨</div>
+            <h3>Important Notes</h3>
+          </div>
+          <div className="info-content">
+            <ul className="important-notes">
+              <li>Existing inquiries remain accessible even if their type is disabled</li>
+              <li>Disabled inquiry types are hidden from the user request form</li>
+              <li>All inquiry types are enabled by default for new installations</li>
+              <li>Changes are permanent and affect all users immediately</li>
+              <li>Consider user experience when disabling popular inquiry types</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -12,6 +12,8 @@ export default function TravelDashboard() {
   const [showLoginPopup, setShowLoginPopup] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [bookings, setBookings] = useState([])
+  const [requests, setRequests] = useState([])
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false)
 
   useEffect(() => {
     // Check if user is authenticated
@@ -30,9 +32,17 @@ export default function TravelDashboard() {
     // Load bookings from localStorage
     loadBookings()
 
+    // Load user requests if authenticated
+    if (authStatus === 'true') {
+      loadRequests()
+    }
+
     // Reload bookings when the window regains focus (user comes back from booking)
     const handleFocus = () => {
       loadBookings()
+      if (authStatus === 'true') {
+        loadRequests()
+      }
     }
     window.addEventListener('focus', handleFocus)
     
@@ -40,6 +50,25 @@ export default function TravelDashboard() {
       window.removeEventListener('focus', handleFocus)
     }
   }, [navigate])
+
+  // Polling effect for real-time request updates
+  useEffect(() => {
+    let pollingInterval
+
+    if (isAuthenticated && activeSidebarItem === "Requests") {
+      // Start polling every 30 seconds
+      pollingInterval = setInterval(() => {
+        console.log('🔄 Polling for request updates...')
+        loadRequests()
+      }, 30000) // 30 seconds
+    }
+
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval)
+      }
+    }
+  }, [isAuthenticated, activeSidebarItem])
 
   const loadBookings = () => {
     const allBookings = []
@@ -87,6 +116,47 @@ export default function TravelDashboard() {
     setBookings(allBookings)
   }
 
+  const loadRequests = async () => {
+    setIsLoadingRequests(true)
+    try {
+      console.log('🔍 Loading user inquiries...')
+
+      const response = await fetch('/api/inquiries/my', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.log('User not authenticated, skipping requests load')
+          setRequests([])
+          return
+        }
+        throw new Error(`Failed to fetch requests: ${response.status}`)
+      }
+
+      const result = await response.json()
+
+      if (result.success) {
+        console.log('📋 Total requests loaded:', result.data.length)
+        console.log('Requests:', result.data)
+        setRequests(result.data || [])
+      } else {
+        console.error('Failed to load requests:', result.message)
+        setRequests([])
+      }
+    } catch (error) {
+      console.error('Error loading requests:', error)
+      setRequests([])
+    } finally {
+      setIsLoadingRequests(false)
+    }
+  }
+
   const handleTabChange = (tab) => {
     setActiveTab(tab)
   }
@@ -118,7 +188,7 @@ export default function TravelDashboard() {
     })
 
     // Filter by booking type (sidebar)
-    if (activeSidebarItem !== "All Bookings") {
+    if (activeSidebarItem !== "All Bookings" && activeSidebarItem !== "Requests") {
       const typeMap = {
         "Flights": "flight",
         "Cruise": "cruise", 
@@ -151,6 +221,36 @@ export default function TravelDashboard() {
   }
 
   const filteredBookings = getFilteredBookings()
+
+  const getFilteredRequests = () => {
+    let filtered = requests
+    console.log('🔍 Filtering requests...', { 
+      totalRequests: requests.length, 
+      activeTab
+    })
+
+    // Filter by status (tab) - similar to bookings but for inquiry status
+    if (activeTab === "Upcoming") {
+      // Show pending and processing inquiries
+      filtered = filtered.filter(request => 
+        request.status === 'pending' || request.status === 'processing'
+      )
+    } else if (activeTab === "Past") {
+      // Show completed inquiries (quoted, booked)
+      filtered = filtered.filter(request => 
+        request.status === 'quoted' || request.status === 'booked'
+      )
+    } else if (activeTab === "Cancelled") {
+      filtered = filtered.filter(request => request.status === 'cancelled')
+    } else if (activeTab === "Failed") {
+      filtered = filtered.filter(request => request.status === 'expired')
+    }
+
+    console.log(`Final filtered requests for ${activeTab}:`, filtered.length)
+    return filtered
+  }
+
+  const filteredRequests = getFilteredRequests()
 
   const renderBookingCard = (booking) => {
     const isFlightBooking = booking.type === 'flight'
@@ -210,6 +310,173 @@ export default function TravelDashboard() {
               className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50 transition"
             >
               Manage Booking
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const renderRequestCard = (request) => {
+    const getStatusColor = (status) => {
+      switch (status) {
+        case 'pending': return 'bg-yellow-100 text-yellow-800'
+        case 'processing': return 'bg-blue-100 text-blue-800'
+        case 'quoted': return 'bg-green-100 text-green-800'
+        case 'booked': return 'bg-purple-100 text-purple-800'
+        case 'cancelled': return 'bg-red-100 text-red-800'
+        case 'expired': return 'bg-gray-100 text-gray-800'
+        default: return 'bg-gray-100 text-gray-800'
+      }
+    }
+
+    const getStatusText = (status) => {
+      switch (status) {
+        case 'pending': return 'Pending Review'
+        case 'processing': return 'Processing'
+        case 'quoted': return 'Quote Sent'
+        case 'booked': return 'Booked'
+        case 'cancelled': return 'Cancelled'
+        case 'expired': return 'Expired'
+        default: return status
+      }
+    }
+
+    const getInquiryTypeIcon = (type) => {
+      switch (type) {
+        case 'flight': return '✈️'
+        case 'hotel': return '🏨'
+        case 'cruise': return '🚢'
+        case 'package': return '🎒'
+        case 'general': return '💬'
+        default: return '📝'
+      }
+    }
+
+    const getInquiryTypeName = (type) => {
+      switch (type) {
+        case 'flight': return 'Flight'
+        case 'hotel': return 'Hotel'
+        case 'cruise': return 'Cruise'
+        case 'package': return 'Package'
+        case 'general': return 'General'
+        default: return 'Inquiry'
+      }
+    }
+
+    return (
+      <div key={request.id} 
+           className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <span className="text-xl">{getInquiryTypeIcon(request.inquiry_type)}</span>
+              {getInquiryTypeName(request.inquiry_type)} Inquiry
+            </h3>
+            <p className="text-sm text-gray-500">ID: {request.id.slice(-8)}</p>
+          </div>
+          <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(request.status)}`}>
+            {getStatusText(request.status)}
+          </span>
+        </div>
+        
+        {/* Progress bar for status tracking */}
+        <div className="mb-4">
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span>Submitted</span>
+            <span>{request.status === 'booked' ? 'Completed' : 'In Progress'}</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className={`h-2 rounded-full transition-all duration-500 ${
+                request.status === 'pending' ? 'bg-yellow-400 w-1/4' :
+                request.status === 'processing' ? 'bg-blue-400 w-1/2' :
+                request.status === 'quoted' ? 'bg-green-400 w-3/4' :
+                request.status === 'booked' ? 'bg-purple-400 w-full' :
+                'bg-gray-400 w-full'
+              }`}
+            ></div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <p className="text-sm text-gray-500">Submitted</p>
+            <p className="font-medium">
+              {new Date(request.created_at).toLocaleDateString()}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Last Updated</p>
+            <p className="font-medium">
+              {new Date(request.updated_at).toLocaleDateString()}
+            </p>
+          </div>
+          {request.expires_at && (
+            <div>
+              <p className="text-sm text-gray-500">Expires</p>
+              <p className="font-medium">
+                {new Date(request.expires_at).toLocaleDateString()}
+              </p>
+            </div>
+          )}
+          <div>
+            <p className="text-sm text-gray-500">Priority</p>
+            <p className="font-medium capitalize">{request.priority || 'Normal'}</p>
+          </div>
+        </div>
+        
+        {/* Inquiry details based on type */}
+        <div className="mb-4">
+          <p className="text-sm text-gray-500 mb-2">Details:</p>
+          {request.inquiry_type === 'flight' && (
+            <div className="text-sm text-gray-700">
+              <p><strong>Route:</strong> {request.flight_origin} → {request.flight_destination}</p>
+              {request.flight_departure_date && <p><strong>Departure:</strong> {new Date(request.flight_departure_date).toLocaleDateString()}</p>}
+              {request.flight_passengers && <p><strong>Passengers:</strong> {request.flight_passengers}</p>}
+            </div>
+          )}
+          {request.inquiry_type === 'hotel' && (
+            <div className="text-sm text-gray-700">
+              <p><strong>Destination:</strong> {request.hotel_destination}</p>
+              {request.hotel_checkin_date && <p><strong>Check-in:</strong> {new Date(request.hotel_checkin_date).toLocaleDateString()}</p>}
+              {request.hotel_rooms && <p><strong>Rooms:</strong> {request.hotel_rooms}</p>}
+            </div>
+          )}
+          {request.inquiry_type === 'cruise' && (
+            <div className="text-sm text-gray-700">
+              <p><strong>Destination:</strong> {request.cruise_destination}</p>
+              {request.cruise_departure_date && <p><strong>Departure:</strong> {new Date(request.cruise_departure_date).toLocaleDateString()}</p>}
+              {request.cruise_passengers && <p><strong>Passengers:</strong> {request.cruise_passengers}</p>}
+            </div>
+          )}
+          {request.inquiry_type === 'package' && (
+            <div className="text-sm text-gray-700">
+              <p><strong>Destination:</strong> {request.package_destination}</p>
+              {request.package_start_date && <p><strong>Start:</strong> {new Date(request.package_start_date).toLocaleDateString()}</p>}
+              {request.package_travelers && <p><strong>Travelers:</strong> {request.package_travelers}</p>}
+            </div>
+          )}
+          {request.inquiry_type === 'general' && (
+            <div className="text-sm text-gray-700">
+              <p><strong>Subject:</strong> {request.inquiry_subject}</p>
+              <p className="truncate"><strong>Message:</strong> {request.inquiry_message}</p>
+            </div>
+          )}
+        </div>
+        
+        <div className="flex gap-2">
+          <button 
+            onClick={() => navigate('/request', { state: { inquiryData: request } })}
+            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition"
+          >
+            View Details
+          </button>
+          {request.status === 'quoted' && (
+            <button 
+              className="px-4 py-2 border border-green-300 text-green-700 text-sm rounded-md hover:bg-green-50 transition"
+            >
+              View Quote
             </button>
           )}
         </div>
@@ -316,7 +583,7 @@ export default function TravelDashboard() {
               </div>
 
               <nav className="space-y-1">
-                {["All Bookings", "Flights", "Cruise", "Packages"].map((item) => (
+                {["All Bookings", "Flights", "Cruise", "Packages", "Requests"].map((item) => (
                   <button
                     key={item}
                     onClick={() => handleSidebarItemChange(item)}
@@ -343,7 +610,93 @@ export default function TravelDashboard() {
 
           {/* Enhanced main content */}
           <div className="flex-1 bg-white rounded-lg shadow-sm">
-            {filteredBookings.length > 0 ? (
+            {activeSidebarItem === "Requests" ? (
+              // Requests section
+              isAuthenticated ? (
+                isLoadingRequests ? (
+                  <div className="flex items-center justify-center p-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-2 text-gray-600">Loading requests...</span>
+                  </div>
+                ) : filteredRequests.length > 0 ? (
+                  <div className="p-6">
+                    <div className="mb-6 flex justify-between items-center">
+                      <div>
+                        <h2 className="text-xl font-semibold text-gray-900">
+                          {activeTab} Requests
+                        </h2>
+                        <p className="text-gray-600">
+                          {filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''} found
+                        </p>
+                      </div>
+                      <button
+                        onClick={loadRequests}
+                        className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition"
+                        title="Refresh requests"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      {filteredRequests.map(renderRequestCard)}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-6 sm:p-8 md:p-10">
+                    <div className="w-48 h-48 sm:w-64 sm:h-64 flex items-center justify-center">
+                      <img
+                        src="/images/empty-trips.svg" 
+                        alt="No requests illustration"
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          e.target.onerror = null
+                          e.target.src = "https://via.placeholder.com/300?text=No+Requests"
+                        }}
+                      />
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-semibold mt-6 text-center">
+                      No {activeTab} Requests
+                    </h2>
+                    <p className="text-gray-500 mt-3 text-center max-w-md">
+                      You don't have any {activeTab.toLowerCase()} travel requests.
+                      {activeTab === "Upcoming" && " When you submit an inquiry, it will appear here."}
+                    </p>
+                    <div className="mt-8">
+                      <button 
+                        onClick={() => navigate('/request')} 
+                        className="px-8 py-3 bg-[#0ea5e9] text-white rounded-md hover:bg-[#0284c7] transition shadow-sm"
+                      >
+                        Submit New Request
+                      </button>
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div className="flex flex-col items-center justify-center p-6 sm:p-8 md:p-10">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  <h2 className="text-xl sm:text-2xl font-semibold mt-6 text-center">
+                    Login Required
+                  </h2>
+                  <p className="text-gray-500 mt-3 text-center max-w-md">
+                    Please log in to view your travel requests and track their status.
+                  </p>
+                  <div className="mt-8">
+                    <button 
+                      onClick={handleLoginClick} 
+                      className="px-8 py-3 bg-[#0ea5e9] text-white rounded-md hover:bg-[#0284c7] transition shadow-sm"
+                    >
+                      Log In
+                    </button>
+                  </div>
+                </div>
+              )
+            ) : (
+              // Bookings section (existing logic)
+              filteredBookings.length > 0 ? (
               <div className="p-6">
                 <div className="mb-6 flex justify-between items-center">
                   <div>
@@ -412,6 +765,7 @@ export default function TravelDashboard() {
                 )}
               </div>
             </div>
+            )
             )}
           </div>
         </div>

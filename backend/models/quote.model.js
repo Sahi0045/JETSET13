@@ -192,7 +192,25 @@ class Quote {
         admin_id: adminId
       };
 
-      return await this.update(id, updateData);
+      const updatedQuote = await this.update(id, updateData);
+
+      // Update inquiry status to 'quoted'
+      if (updatedQuote && updatedQuote.inquiry_id) {
+        try {
+          await supabase
+            .from('inquiries')
+            .update({ 
+              status: 'quoted',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', updatedQuote.inquiry_id);
+          console.log(`✅ Updated inquiry ${updatedQuote.inquiry_id} status to 'quoted'`);
+        } catch (inquiryError) {
+          console.error('Failed to update inquiry status:', inquiryError);
+        }
+      }
+
+      return updatedQuote;
     } catch (error) {
       console.error('Quote send error:', error);
       throw error;
@@ -207,7 +225,25 @@ class Quote {
         accepted_at: new Date().toISOString()
       };
 
-      return await this.update(id, updateData);
+      const updatedQuote = await this.update(id, updateData);
+
+      // Update inquiry status to 'booked'
+      if (updatedQuote && updatedQuote.inquiry_id) {
+        try {
+          await supabase
+            .from('inquiries')
+            .update({ 
+              status: 'booked',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', updatedQuote.inquiry_id);
+          console.log(`✅ Updated inquiry ${updatedQuote.inquiry_id} status to 'booked'`);
+        } catch (inquiryError) {
+          console.error('Failed to update inquiry status:', inquiryError);
+        }
+      }
+
+      return updatedQuote;
     } catch (error) {
       console.error('Quote accept error:', error);
       throw error;
