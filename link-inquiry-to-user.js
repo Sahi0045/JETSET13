@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const TARGET_EMAIL = 'shubhamkush012@gmail.com';
-const TARGET_USER_ID = 'e5c37bbc-c9ce-4ae6-bef2-da5dd60e3cfa';
+const TARGET_EMAIL = 'sahi0045@hotmail.com';
+const TARGET_USER_ID = '2c48de58-d24e-48a0-98fc-371167d9afc7';
 
 async function linkInquiry() {
   console.log('\n🔗 Linking Inquiry to User Account\n');

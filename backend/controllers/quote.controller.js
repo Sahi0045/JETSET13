@@ -1,6 +1,7 @@
 import Quote from '../models/quote.model.js';
 import Inquiry from '../models/inquiry.model.js';
 import { sendEmail } from '../services/emailService.js';
+import supabase from '../config/supabase.js';
 
 // @desc    Create a new quote
 // @route   POST /api/quotes
@@ -260,15 +261,40 @@ export const sendQuote = async (req, res) => {
 
     const sentQuote = await Quote.sendQuote(req.params.id, req.user.id);
 
+    // 🔗 AUTOMATICALLY LINK INQUIRY TO ADMIN (the person sending the quote)
+    // This ensures quotes immediately appear in the admin's "My Trips" section
+    try {
+      console.log(`🔗 Auto-linking inquiry ${quote.inquiry_id} to admin account...`);
+
+      const { data: updatedInquiry, error: linkError } = await supabase
+        .from('inquiries')
+        .update({
+          user_id: req.user.id,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', quote.inquiry_id)
+        .select()
+        .single();
+
+      if (linkError) {
+        console.error('❌ Failed to link inquiry to admin:', linkError);
+      } else {
+        console.log(`✅ Successfully linked inquiry ${quote.inquiry_id} to admin ${req.user.email}`);
+      }
+    } catch (linkError) {
+      console.error('❌ Error during auto-linking:', linkError);
+      // Don't fail the whole request if linking fails
+    }
+
     // Update the inquiry status to 'quoted' so it appears in my-trips
     try {
       await Inquiry.update(quote.inquiry_id, {
         status: 'quoted',
         updated_at: new Date().toISOString()
       });
-      console.log(`Updated inquiry ${quote.inquiry_id} status to 'quoted'`);
+      console.log(`✅ Updated inquiry ${quote.inquiry_id} status to 'quoted'`);
     } catch (updateError) {
-      console.error('Failed to update inquiry status:', updateError);
+      console.error('❌ Failed to update inquiry status:', updateError);
       // Don't fail the whole request if inquiry update fails
     }
 
