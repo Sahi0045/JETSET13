@@ -79,29 +79,46 @@ const AdminDashboard = () => {
         headers,
         credentials: 'include'
       });
-      const inquiriesData = await inquiriesResponse.json();
-
-      if (inquiriesData.success && inquiriesData.data) {
-        // Handle different response structures
-        let inquiries = [];
-        if (Array.isArray(inquiriesData.data)) {
-          // Direct array response
-          inquiries = inquiriesData.data;
-        } else if (inquiriesData.data.inquiries && Array.isArray(inquiriesData.data.inquiries)) {
-          // Nested inquiries array
-          inquiries = inquiriesData.data.inquiries;
-        } else if (inquiriesData.data.data && Array.isArray(inquiriesData.data.data)) {
-          // Double nested
-          inquiries = inquiriesData.data.data;
-        }
-        // Ensure it's always an array
-        setRecentInquiries(Array.isArray(inquiries) ? inquiries : []);
-      } else {
-        // If request failed or no data, set empty array
+      
+      if (!inquiriesResponse.ok) {
+        console.warn('Failed to fetch inquiries:', inquiriesResponse.status, inquiriesResponse.statusText);
         setRecentInquiries([]);
+        return;
       }
+      
+      const inquiriesData = await inquiriesResponse.json();
+      console.log('Inquiries API response:', inquiriesData);
+
+      // Handle different response structures
+      let inquiries = [];
+      
+      if (inquiriesData && inquiriesData.success) {
+        if (Array.isArray(inquiriesData.data)) {
+          // Direct array response: { success: true, data: [...] }
+          inquiries = inquiriesData.data;
+        } else if (inquiriesData.data && Array.isArray(inquiriesData.data.inquiries)) {
+          // Nested inquiries array: { success: true, data: { inquiries: [...] } }
+          inquiries = inquiriesData.data.inquiries;
+        } else if (inquiriesData.data && inquiriesData.data.data && Array.isArray(inquiriesData.data.data)) {
+          // Double nested: { success: true, data: { data: [...] } }
+          inquiries = inquiriesData.data.data;
+        } else if (inquiriesData.inquiries && Array.isArray(inquiriesData.inquiries)) {
+          // Alternative structure: { success: true, inquiries: [...] }
+          inquiries = inquiriesData.inquiries;
+        }
+      }
+      
+      // Final safety check - ensure it's always an array
+      if (!Array.isArray(inquiries)) {
+        console.warn('Inquiries is not an array, received:', typeof inquiries, inquiries);
+        inquiries = [];
+      }
+      
+      setRecentInquiries(inquiries);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      // Ensure arrays are set to empty on error
+      setRecentInquiries([]);
     } finally {
       setLoading(false);
     }
@@ -360,14 +377,21 @@ const AdminDashboard = () => {
           </div>
 
           <div className="activity-list">
-            {!Array.isArray(recentInquiries) || recentInquiries.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">📭</div>
-                <h4>No Recent Inquiries</h4>
-                <p>New customer inquiries will appear here</p>
-              </div>
-            ) : (
-              recentInquiries.map(inquiry => (
+            {(() => {
+              // Defensive check - ensure recentInquiries is always an array
+              const safeInquiries = Array.isArray(recentInquiries) ? recentInquiries : [];
+              
+              if (safeInquiries.length === 0) {
+                return (
+                  <div className="empty-state">
+                    <div className="empty-icon">📭</div>
+                    <h4>No Recent Inquiries</h4>
+                    <p>New customer inquiries will appear here</p>
+                  </div>
+                );
+              }
+              
+              return safeInquiries.map(inquiry => (
                 <div key={inquiry.id} className="activity-item">
                   <div className="activity-icon">
                     {getInquiryTypeIcon(inquiry.inquiry_type)}
@@ -388,8 +412,8 @@ const AdminDashboard = () => {
                     View
                   </Link>
                 </div>
-              ))
-            )}
+              ));
+            })()}
           </div>
         </div>
 
