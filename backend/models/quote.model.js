@@ -181,32 +181,49 @@ class Quote {
   // Send quote (mark as sent and set expiration)
   static async sendQuote(id, adminId) {
     try {
-      const validityDays = 30; // Default validity period
+      // First, get the quote to check validity_days
+      const existingQuote = await this.findById(id);
+      if (!existingQuote) {
+        throw new Error('Quote not found');
+      }
+
+      // Use existing validity_days or default to 30
+      const validityDays = existingQuote.validity_days || 30;
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + validityDays);
 
+      // Don't update admin_id - it should already be set
       const updateData = {
         status: 'sent',
         sent_at: new Date().toISOString(),
-        expires_at: expiresAt.toISOString(),
-        admin_id: adminId
+        expires_at: expiresAt.toISOString()
       };
 
+      console.log('Sending quote with update data:', updateData);
       const updatedQuote = await this.update(id, updateData);
 
       // Update inquiry status to 'quoted'
       if (updatedQuote && updatedQuote.inquiry_id) {
         try {
-          await supabase
+          const { data: inquiryData, error: inquiryError } = await supabase
             .from('inquiries')
             .update({ 
               status: 'quoted',
               updated_at: new Date().toISOString()
             })
-            .eq('id', updatedQuote.inquiry_id);
-          console.log(`✅ Updated inquiry ${updatedQuote.inquiry_id} status to 'quoted'`);
+            .eq('id', updatedQuote.inquiry_id)
+            .select()
+            .single();
+
+          if (inquiryError) {
+            console.error('Failed to update inquiry status:', inquiryError);
+            // Don't throw - quote was sent successfully, inquiry update is secondary
+          } else {
+            console.log(`✅ Updated inquiry ${updatedQuote.inquiry_id} status to 'quoted'`);
+          }
         } catch (inquiryError) {
-          console.error('Failed to update inquiry status:', inquiryError);
+          console.error('Exception updating inquiry status:', inquiryError);
+          // Don't throw - quote was sent successfully
         }
       }
 

@@ -217,7 +217,24 @@ export default async function handler(req, res) {
 
       try {
         console.log('Sending quote:', query.id, 'by admin:', req.user.id);
+        console.log('Query params:', JSON.stringify(query));
+        
+        if (!query.id) {
+          return res.status(400).json({
+            success: false,
+            message: 'Quote ID is required',
+            query: query
+          });
+        }
+
         const sentQuote = await Quote.sendQuote(query.id, req.user.id);
+
+        if (!sentQuote) {
+          return res.status(404).json({
+            success: false,
+            message: 'Quote not found after sending'
+          });
+        }
 
         return res.status(200).json({
           success: true,
@@ -226,11 +243,19 @@ export default async function handler(req, res) {
         });
       } catch (sendError) {
         console.error('Error sending quote:', sendError);
+        console.error('Error stack:', sendError.stack);
+        console.error('Error details:', {
+          message: sendError.message,
+          name: sendError.name,
+          query: query,
+          adminId: req.user?.id
+        });
+        
         return res.status(500).json({
           success: false,
           message: 'Failed to send quote',
-          error: sendError.message,
-          details: sendError.toString()
+          error: sendError.message || 'Unknown error',
+          details: process.env.NODE_ENV === 'development' ? sendError.stack : sendError.toString()
         });
       }
     }
