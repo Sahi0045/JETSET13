@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './login.css'; // Reuse the login CSS
 import { authAPI } from '../../../api'; // Import the authAPI for making API calls
+import supabase from '../../../lib/supabase'; // Import Supabase client
+import { FaGoogle } from 'react-icons/fa';
 
 export default function Signup() {
     const navigate = useNavigate();
@@ -17,6 +19,71 @@ export default function Signup() {
 
     const [errors, setErrors] = useState({});
     const [processing, setProcessing] = useState(false);
+
+    // Check for existing Supabase session on mount
+    useEffect(() => {
+        const checkSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                // User is already logged in, redirect
+                localStorage.setItem('isAuthenticated', 'true');
+                localStorage.setItem('user', JSON.stringify({
+                    id: session.user.id,
+                    email: session.user.email,
+                    firstName: session.user.user_metadata?.full_name?.split(' ')[0] || '',
+                    lastName: session.user.user_metadata?.full_name?.split(' ')[1] || ''
+                }));
+                navigate('/my-trips');
+            }
+        };
+        
+        checkSession();
+
+        // Listen for auth state changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN' && session) {
+                localStorage.setItem('isAuthenticated', 'true');
+                localStorage.setItem('user', JSON.stringify({
+                    id: session.user.id,
+                    email: session.user.email,
+                    firstName: session.user.user_metadata?.full_name?.split(' ')[0] || '',
+                    lastName: session.user.user_metadata?.full_name?.split(' ')[1] || ''
+                }));
+                navigate('/my-trips');
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, [navigate]);
+
+    // Handle Google Sign-In with Supabase
+    const handleGoogleSignIn = async () => {
+        try {
+            setProcessing(true);
+            setErrors({});
+            
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/signup`,
+                    queryParams: {
+                        access_type: 'offline',
+                        prompt: 'consent',
+                    },
+                },
+            });
+
+            if (error) throw error;
+            
+            // OAuth redirect will happen automatically
+        } catch (error) {
+            console.error('Google signup error:', error);
+            setProcessing(false);
+            setErrors({ 
+                signup: error.message || 'Failed to sign up with Google. Please try again.' 
+            });
+        }
+    };
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -238,29 +305,14 @@ export default function Signup() {
                             
                             <div className="login-divider">or continue with</div>
                             <div className="social-login">
-                                <button type="button" className="social-button">
-                                    <img
-                                        src="/images/login/google-logo.svg"
-                                        alt="Google"
-                                        width="24"
-                                        height="24"
-                                    />
-                                </button>
-                                <button type="button" className="social-button">
-                                    <img
-                                        src="/images/login/facebook-logo.svg"
-                                        alt="Facebook"
-                                        width="24"
-                                        height="24"
-                                    />
-                                </button>
-                                <button type="button" className="social-button">
-                                    <img
-                                        src="/images/login/email-icon.svg"
-                                        alt="Email"
-                                        width="24"
-                                        height="24"
-                                    />
+                                <button 
+                                    type="button" 
+                                    className="social-button" 
+                                    onClick={handleGoogleSignIn}
+                                    disabled={processing}
+                                    title="Sign up with Google"
+                                >
+                                    <FaGoogle size={24} color="#DB4437" />
                                 </button>
                             </div>
                             

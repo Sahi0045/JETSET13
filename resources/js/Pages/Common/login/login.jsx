@@ -2,14 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './login.css';
 import { authAPI } from '../../../api'; // Import the authAPI for making API calls
-import { 
-  loadGoogleScript, 
-  initializeGoogleSignIn, 
-  renderGoogleButton, 
-  promptGoogleSignIn, 
-  cleanupGoogleAuth,
-  verifyGoogleToken
-} from '../../../utils/googleAuth';
+import supabase from '../../../lib/supabase'; // Import Supabase client
+import { FaGoogle } from 'react-icons/fa';
 
 export default function Login() {
     const navigate = useNavigate();
@@ -23,115 +17,69 @@ export default function Login() {
     const [errors, setErrors] = useState({});
     const [processing, setProcessing] = useState(false);
 
-    // Initialize Google API client
+    // Check for existing Supabase session on mount
     useEffect(() => {
-        // Load the Google API script and initialize
-        const initializeGoogle = async () => {
-            try {
-                console.log('Starting Google auth initialization');
-                await loadGoogleScript();
-                initializeGoogleSignIn(handleGoogleResponse);
-                renderGoogleButton("google-signin-button");
-                console.log('Google auth initialization complete');
-            } catch (error) {
-                console.error('Failed to initialize Google Sign-In:', error);
-                setErrors(prev => ({ 
-                    ...prev, 
-                    login: 'Google Sign-In initialization failed. Please try again later.' 
+        const checkSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                // User is already logged in, store their info and redirect
+                localStorage.setItem('isAuthenticated', 'true');
+                localStorage.setItem('user', JSON.stringify({
+                    id: session.user.id,
+                    email: session.user.email,
+                    firstName: session.user.user_metadata?.full_name?.split(' ')[0] || '',
+                    lastName: session.user.user_metadata?.full_name?.split(' ')[1] || ''
                 }));
+                navigate('/my-trips');
             }
         };
         
-        initializeGoogle();
+        checkSession();
 
-        // Clean up on unmount
-        return () => {
-            cleanupGoogleAuth();
-        };
-    }, []);
-
-    // Handle Google Sign-In response
-    const handleGoogleResponse = async (response) => {
-        try {
-            console.log('Google sign-in response received', response);
-            setProcessing(true);
-            setErrors({}); // Clear any previous errors
-            
-            if (!response || !response.credential) {
-                throw new Error('Invalid Google response: Missing credential');
-            }
-            
-            // Verify token format
-            const isValidToken = await verifyGoogleToken(response.credential);
-            if (!isValidToken) {
-                throw new Error('Invalid token format received from Google');
-            }
-            
-            // Get current URL to ensure we're using the right domain
-            const apiDomain = window.location.origin;
-            console.log('Using API domain:', apiDomain);
-            
-            // Send the ID token to your backend
-            console.log('Sending token to backend');
-            const authResponse = await authAPI.googleLogin({
-                token: response.credential
-            });
-            
-            console.log('Backend authentication successful', authResponse);
-            
-            // Store token from your backend
-            if (authResponse && authResponse.data && authResponse.data.token) {
-                localStorage.setItem('token', authResponse.data.token);
+        // Listen for auth state changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN' && session) {
                 localStorage.setItem('isAuthenticated', 'true');
                 localStorage.setItem('user', JSON.stringify({
-                    id: authResponse.data.id,
-                    email: authResponse.data.email,
-                    firstName: authResponse.data.firstName,
-                    lastName: authResponse.data.lastName
+                    id: session.user.id,
+                    email: session.user.email,
+                    firstName: session.user.user_metadata?.full_name?.split(' ')[0] || '',
+                    lastName: session.user.user_metadata?.full_name?.split(' ')[1] || ''
                 }));
-                
-                setProcessing(false);
                 navigate('/my-trips');
-            } else {
-                throw new Error('Invalid response from server: Missing token');
             }
-        } catch (error) {
-            console.error('Google login error details:', error);
-            setProcessing(false);
-            
-            // Display a more specific error message
-            if (error.response) {
-                // The request was made and the server responded with a status code
-                console.error('Server error response:', error.response.data);
-                let errorMessage = 'Authentication failed';
-                
-                if (error.response.status === 401) {
-                    errorMessage = 'Google authentication failed: Invalid token or server configuration';
-                } else if (error.response.data && error.response.data.message) {
-                    errorMessage = error.response.data.message;
-                }
-                
-                setErrors({ login: errorMessage });
-            } else if (error.request) {
-                // The request was made but no response was received
-                console.error('No response received:', error.request);
-                setErrors({ 
-                    login: 'Server not responding. Please try again later.' 
-                });
-            } else {
-                // Something happened in setting up the request
-                console.error('Request error:', error.message);
-                setErrors({ 
-                    login: `Error: ${error.message}` 
-                });
-            }
-        }
-    };
+        });
 
-    // Trigger Google Sign-In
-    const handleGoogleSignIn = () => {
-        setErrors({}); // Clear previous errors
-        promptGoogleSignIn();
+        return () => subscription.unsubscribe();
+    }, [navigate]);
+
+    // Handle Google Sign-In with Supabase
+    const handleGoogleSignIn = async () => {
+        try {
+            setProcessing(true);
+            setErrors({});
+            
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/login`,
+                    queryParams: {
+                        access_type: 'offline',
+                        prompt: 'consent',
+                    },
+                },
+            });
+
+            if (error) throw error;
+            
+            // OAuth redirect will happen automatically
+        } catch (error) {
+            console.error('Google login error:', error);
+            setProcessing(false);
+            setErrors({ 
+                login: error.message || 'Failed to sign in with Google. Please try again.' 
+            });
+        }
     };
 
     const handleChange = (e) => {
@@ -252,34 +200,16 @@ export default function Login() {
                             
                             <div className="login-divider">or continue with</div>
                             <div className="social-login">
-                                <button type="button" className="social-button" onClick={handleGoogleSignIn}>
-                                    <img
-                                        src="/images/login/google-logo.svg"
-                                        alt="Google"
-                                        width="24"
-                                        height="24"
-                                    />
-                                </button>
-                                <button type="button" className="social-button">
-                                    <img
-                                        src="/images/login/facebook-logo.svg"
-                                        alt="Facebook"
-                                        width="24"
-                                        height="24"
-                                    />
-                                </button>
-                                <button type="button" className="social-button">
-                                    <img
-                                        src="/images/login/email-icon.svg"
-                                        alt="Email"
-                                        width="24"
-                                        height="24"
-                                    />
+                                <button 
+                                    type="button" 
+                                    className="social-button" 
+                                    onClick={handleGoogleSignIn}
+                                    disabled={processing}
+                                    title="Sign in with Google"
+                                >
+                                    <FaGoogle size={24} color="#DB4437" />
                                 </button>
                             </div>
-                            
-                            {/* Standard Google Sign-In button as backup */}
-                            <div id="google-signin-button" className="mt-4"></div>
                             <div className="signup-link">
                                 Don't have an account? <Link to="/signup" className="text-link">Sign Up</Link>
                             </div>

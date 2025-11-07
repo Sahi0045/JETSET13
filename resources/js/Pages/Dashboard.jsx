@@ -1,18 +1,23 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { useFirebaseAuth } from '../contexts/FirebaseAuthContext';
 import withPageElements from './Common/PageWrapper';
 
 const Dashboard = () => {
-    const { user, isAuthenticated, loading } = useFirebaseAuth();
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         document.title = 'Dashboard - JetSetters';
+        
+        // Check authentication from localStorage
+        const authStatus = localStorage.getItem('isAuthenticated') === 'true';
+        setIsAuthenticated(authStatus);
+        setLoading(false);
     }, []);
 
-    // If user is authenticated, redirect to Firebase profile
+    // If user is authenticated, redirect to profile
     if (!loading && isAuthenticated) {
-        return <Navigate to="/firebase-profile" replace />;
+        return <Navigate to="/profiledashboard" replace />;
     }
 
     // If still loading, show loading state

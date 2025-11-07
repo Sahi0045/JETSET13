@@ -134,7 +134,7 @@ export default function TravelDashboard() {
 
       if (!token) {
         console.log('❌ No authentication token found, cannot load requests')
-        console.log('💡 Please log in with Firebase first')
+        console.log('💡 Please log in first')
         setRequests([])
         setIsLoadingRequests(false)
         return

@@ -511,31 +511,30 @@ const HotelBookingSuccess = React.lazy(() =>
     .catch(() => ({ default: () => <div>Loading Hotel Booking Success...</div> }))
 );
 
-// Firebase Auth Components
-const FirebaseLogin = React.lazy(() => 
-  import('./Pages/Common/login/FirebaseLogin')
-    .catch(() => ({ default: () => <div>Loading Firebase Login...</div> }))
+// Supabase Auth Components
+const SupabaseLogin = React.lazy(() => 
+  import('./Pages/Common/login/SupabaseLogin')
+    .catch(() => ({ default: () => <div>Loading Supabase Login...</div> }))
 );
 
-const FirebaseSignup = React.lazy(() => 
-  import('./Pages/Common/login/FirebaseSignup')
-    .catch(() => ({ default: () => <div>Loading Firebase Signup...</div> }))
+const SupabaseSignup = React.lazy(() => 
+  import('./Pages/Common/login/SupabaseSignup')
+    .catch(() => ({ default: () => <div>Loading Supabase Signup...</div> }))
 );
 
-const FirebaseProfileDashboard = React.lazy(() => 
-  import('./Pages/Common/login/FirebaseProfileDashboard')
-    .catch(() => ({ default: () => <div>Loading Firebase Profile Dashboard...</div> }))
+const SupabaseProfileDashboard = React.lazy(() => 
+  import('./Pages/Common/login/SupabaseProfileDashboard')
+    .catch(() => ({ default: () => <div>Loading Supabase Profile...</div> }))
 );
 
-const PhoneLogin = React.lazy(() => 
-  import('./Pages/Common/login/PhoneLogin')
-    .catch(() => ({ default: () => <div>Loading Phone Login...</div> }))
-);
-
-// Import AuthDebug
-const AuthDebug = React.lazy(() => 
-  import('./Pages/AuthDebug')
+const SupabaseAuthDebug = React.lazy(() => 
+  import('./Pages/SupabaseAuthDebug')
     .catch(() => ({ default: () => <div>Loading Auth Debug...</div> }))
+);
+
+const SupabaseAuthStatus = React.lazy(() => 
+  import('./Components/SupabaseAuthStatus')
+    .catch(() => ({ default: () => <div>Loading Auth Status...</div> }))
 );
 
 // Import ProtectedRoute
@@ -551,30 +550,16 @@ const App = () => {
       <Routes>
         <Route path="/" element={<Welcome />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/login" element={<Navigate to="/firebase-login" replace />} />
-        <Route path="/signup" element={<Navigate to="/firebase-signup" replace />} />
-        <Route path="/profiledashboard" element={<Navigate to="/firebase-profile" replace />} />
-        
-        {/* Firebase Auth Routes */}
-        <Route path="/firebase-login" element={
-          <ProtectedRoute requireAuth={false}>
-            <FirebaseLogin />
-          </ProtectedRoute>
-        } />
-        <Route path="/firebase-signup" element={
-          <ProtectedRoute requireAuth={false}>
-            <FirebaseSignup />
-          </ProtectedRoute>
-        } />
-        <Route path="/firebase-profile" element={
-          <ProtectedRoute requireAuth={true}>
-            <FirebaseProfileDashboard />
-          </ProtectedRoute>
-        } />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/profiledashboard" element={<ProfileDashboard />} />
 
-        
-        {/* Debug route - remove in production */}
-        <Route path="/auth-debug" element={<AuthDebug />} />
+        {/* Supabase Auth Routes */}
+        <Route path="/supabase-login" element={<SupabaseLogin />} />
+        <Route path="/supabase-signup" element={<SupabaseSignup />} />
+        <Route path="/supabase-profile" element={<SupabaseProfileDashboard />} />
+        <Route path="/supabase-auth-debug" element={<SupabaseAuthDebug />} />
+        <Route path="/supabase-auth-status" element={<SupabaseAuthStatus />} />
         
         <Route path="/my-trips" element={<MyTripsPage />} />
         <Route path="/manage-booking/:bookingId" element={<ManageBooking />} />

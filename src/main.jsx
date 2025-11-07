@@ -8,11 +8,9 @@ import '../resources/css/app.css';
 import '../resources/css/fonts.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-// Import Firebase Auth Provider
-import { FirebaseAuthProvider } from '../resources/js/contexts/FirebaseAuthContext';
-
 // Import App component
 import App from '../resources/js/app.jsx';
+import { SupabaseAuthProvider } from '../resources/js/contexts/SupabaseAuthContext.jsx';
 
 // Initialize the app when DOM is loaded
 const container = document.getElementById('app');
@@ -22,9 +20,9 @@ if (container) {
     <React.StrictMode>
       <BrowserRouter>
         <HelmetProvider>
-          <FirebaseAuthProvider>
+          <SupabaseAuthProvider>
             <App />
-          </FirebaseAuthProvider>
+          </SupabaseAuthProvider>
         </HelmetProvider>
       </BrowserRouter>
     </React.StrictMode>

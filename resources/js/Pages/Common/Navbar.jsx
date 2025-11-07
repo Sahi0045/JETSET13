@@ -2,15 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import './Navbar.css';
 import CurrencySelector from '../../Components/CurrencySelector';
-import { useFirebaseAuth } from '../../contexts/FirebaseAuthContext';
 
 const Navbar = ({ forceScrolled }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(forceScrolled || false);
-  
-  // Use Firebase authentication
-  const { user, isAuthenticated, signOut, loading } = useFirebaseAuth();
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Check authentication from localStorage
+  useEffect(() => {
+    const authStatus = localStorage.getItem('isAuthenticated') === 'true';
+    const userData = localStorage.getItem('user');
+    
+    setIsAuthenticated(authStatus);
+    if (userData) {
+      try {
+        setUser(JSON.parse(userData));
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     
@@ -47,18 +62,22 @@ const Navbar = ({ forceScrolled }) => {
   };
 
   const handleLogin = () => {
-    window.location.href = '/firebase-login';
+    window.location.href = '/login';
   };
 
   const handleProfile = () => {
-    window.location.href = '/firebase-profile';
+    window.location.href = '/profiledashboard';
     setIsDropdownOpen(false);
   };
 
   const handleLogout = async () => {
     try {
-      await signOut();
+      localStorage.removeItem('isAuthenticated');
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
       setIsDropdownOpen(false);
+      setIsAuthenticated(false);
+      setUser(null);
       window.location.href = '/';
     } catch (error) {
       console.error('Logout error:', error);
@@ -115,14 +134,7 @@ const Navbar = ({ forceScrolled }) => {
               className="profile-button" 
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             >
-              {user?.photoURL ? (
-                <img 
-                  src={user.photoURL} 
-                  alt="Profile" 
-                  className="profile-avatar"
-                />
-              ) : (
-                <div className="profile-icon">
+              <div className="profile-icon">
                   <svg 
                     xmlns="http://www.w3.org/2000/svg" 
                     viewBox="0 0 24 24" 
@@ -136,15 +148,14 @@ const Navbar = ({ forceScrolled }) => {
                     <circle cx="12" cy="7" r="4"></circle>
                   </svg>
                 </div>
-              )}
               <span className="profile-name">
-                {user?.displayName || user?.email?.split('@')[0] || 'User'}
+                {user?.firstName || user?.email?.split('@')[0] || 'User'}
               </span>
             </button>
             {isDropdownOpen && (
               <div className="profile-dropdown">
                 <div className="profile-info">
-                  <p className="profile-info-name">{user?.displayName || 'User'}</p>
+                  <p className="profile-info-name">{user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.firstName || 'User'}</p>
                   <p className="profile-info-email">{user?.email}</p>
                 </div>
                 <div className="profile-divider"></div>

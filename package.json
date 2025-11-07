@@ -24,6 +24,10 @@
     "test:production-api": "node test-production-api.js",
     "test:local-hotel-api": "node test-local-hotel-api.js",
     "test:arc-pay-flight": "node test-arc-pay-flight.js",
+    "test:supabase-auth": "node test-supabase-auth.js",
+    "test:supabase-config": "node test-supabase-config.js",
+    "test:supabase-integration": "node test-supabase-integration.js",
+    "test:supabase": "npm run test:supabase-config && npm run test:supabase-auth && npm run test:supabase-integration",
     "build:prod": "NODE_ENV=production vite build"
   },
   "devDependencies": {
