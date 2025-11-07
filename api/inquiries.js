@@ -1,9 +1,7 @@
 import Inquiry from '../backend/models/inquiry.model.js';
-import { connectDB } from '../backend/config/database.js';
 import { optionalProtect } from '../backend/middleware/auth.middleware.js';
 
-// Connect to database
-connectDB();
+// Note: Supabase connection is handled in the model itself, no need to connectDB()
 
 // Wrapper to convert Express middleware to Vercel handler
 const runMiddleware = (req, res, fn) => {
@@ -80,8 +78,7 @@ export default async function handler(req, res) {
           });
         }
 
-        const inquiries = await Inquiry.find({ user_id: req.user.id })
-          .sort({ created_at: -1 });
+        const inquiries = await Inquiry.findByUserId(req.user.id);
 
         return res.status(200).json({
           success: true,
@@ -98,22 +95,11 @@ export default async function handler(req, res) {
           });
         }
 
-        const total = await Inquiry.countDocuments();
-        const byStatus = await Inquiry.aggregate([
-          { $group: { _id: '$status', count: { $sum: 1 } } }
-        ]);
-
-        const statusCounts = {};
-        byStatus.forEach(item => {
-          statusCounts[item._id] = item.count;
-        });
+        const stats = await Inquiry.getStats();
 
         return res.status(200).json({
           success: true,
-          data: {
-            total,
-            byStatus: statusCounts
-          }
+          data: stats
         });
       }
 
@@ -127,12 +113,17 @@ export default async function handler(req, res) {
 
       const limit = parseInt(query.limit) || 50;
       const sort = query.sort || 'created_at:desc';
-      const [sortField, sortOrder] = sort.split(':');
-      const sortObj = { [sortField]: sortOrder === 'desc' ? -1 : 1 };
 
-      const inquiries = await Inquiry.find()
-        .sort(sortObj)
-        .limit(limit);
+      const filters = {};
+      if (query.status) filters.status = query.status;
+      if (query.inquiry_type) filters.inquiry_type = query.inquiry_type;
+
+      const options = {
+        orderBy: sort,
+        limit: limit
+      };
+
+      const { inquiries } = await Inquiry.findAll(filters, options);
 
       return res.status(200).json({
         success: true,
@@ -148,10 +139,15 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Inquiry API error:', error);
+    console.error('Error stack:', error.stack);
     return res.status(500).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: error.message || 'Server error',
+      error: {
+        message: error.message,
+        code: error.code,
+        details: error.details || error.hint || 'An unexpected error occurred'
+      }
     });
   }
 }
