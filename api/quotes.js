@@ -215,13 +215,24 @@ export default async function handler(req, res) {
         });
       }
 
-      const sentQuote = await Quote.sendQuote(query.id, req.user.id);
+      try {
+        console.log('Sending quote:', query.id, 'by admin:', req.user.id);
+        const sentQuote = await Quote.sendQuote(query.id, req.user.id);
 
-      return res.status(200).json({
-        success: true,
-        message: 'Quote sent successfully',
-        data: sentQuote
-      });
+        return res.status(200).json({
+          success: true,
+          message: 'Quote sent successfully',
+          data: sentQuote
+        });
+      } catch (sendError) {
+        console.error('Error sending quote:', sendError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to send quote',
+          error: sendError.message,
+          details: sendError.toString()
+        });
+      }
     }
 
     // DELETE /api/quotes?id=xxx - Delete a quote (admin only)
