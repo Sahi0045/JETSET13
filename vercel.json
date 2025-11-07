@@ -1,0 +1,47 @@
+{
+  "version": 2,
+  "routes": [
+    {
+      "src": "/api/inquiries",
+      "dest": "/api/inquiries"
+    },
+    {
+      "src": "/api/hotels/destinations",
+      "dest": "/api/hotels?endpoint=destinations"
+    },
+    {
+      "src": "/api/hotels/search",
+      "dest": "/api/hotels?endpoint=search"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/assets/(.*)",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      },
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "/(.*)\\.(js|css|json|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      },
+      "dest": "/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "build": {
+    "env": {
+      "VITE_APP_NAME": "JetSet Travel - Real PNR System",
+      "VITE_API_URL": "/api",
+      "VITE_SECURE": "true",
+      "VITE_USE_FIREBASE_EMULATOR": "false"
+    }
+  }
+}
