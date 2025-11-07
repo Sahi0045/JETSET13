@@ -164,21 +164,47 @@ export default function TravelDashboard() {
       const result = await response.json()
 
       if (result.success) {
-        console.log('📋 Total requests loaded:', result.data.length)
-        console.log('Requests with quotes:', result.data)
+        const inquiries = result.data || []
+        console.log('📋 Total requests loaded:', inquiries.length)
+        
+        if (inquiries.length === 0) {
+          console.warn('⚠️ No inquiries found. Possible reasons:')
+          console.warn('   1. No inquiries created yet')
+          console.warn('   2. Inquiries not linked to your account')
+          console.warn('   3. Email mismatch (check if customer_email matches your login email)')
+        } else {
+          console.log('✅ Inquiries found:', inquiries.map(i => ({
+            id: i.id?.slice(-8),
+            type: i.inquiry_type,
+            status: i.status,
+            email: i.customer_email,
+            hasUserId: !!i.user_id,
+            quoteCount: i.quotes?.length || 0
+          })))
+        }
 
         // Debug: Show which inquiries have quotes
-        result.data.forEach(inquiry => {
-          console.log(`Inquiry ${inquiry.id} (${inquiry.status}):`, {
-            hasQuotes: inquiry.quotes && inquiry.quotes.length > 0,
-            quoteCount: inquiry.quotes?.length || 0,
-            quotes: inquiry.quotes?.map(q => ({ id: q.id, status: q.status, amount: q.total_amount }))
-          })
+        inquiries.forEach(inquiry => {
+          if (inquiry.quotes && inquiry.quotes.length > 0) {
+            console.log(`📄 Inquiry ${inquiry.id?.slice(-8)} (${inquiry.status}):`, {
+              hasQuotes: true,
+              quoteCount: inquiry.quotes.length,
+              quotes: inquiry.quotes.map(q => ({ 
+                id: q.id?.slice(-8), 
+                status: q.status, 
+                amount: q.total_amount,
+                number: q.quote_number
+              }))
+            })
+          }
         })
 
-        setRequests(result.data || [])
+        setRequests(inquiries)
       } else {
-        console.error('Failed to load requests:', result.message)
+        console.error('❌ Failed to load requests:', result.message)
+        if (result.error) {
+          console.error('   Error details:', result.error)
+        }
         setRequests([])
       }
     } catch (error) {

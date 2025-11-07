@@ -1,4 +1,6 @@
 import Inquiry from '../models/inquiry.model.js';
+import User from '../models/user.model.js';
+import supabase from '../config/supabase.js';
 // import Quote from '../models/quote.model.js';
 import { sendEmail } from '../services/emailService.js';
 
@@ -8,10 +10,29 @@ import { sendEmail } from '../services/emailService.js';
 export const createInquiry = async (req, res) => {
   try {
     console.log('Received inquiry request:', req.body);
+    console.log('User from auth:', req.user ? { id: req.user.id, email: req.user.email } : 'Not authenticated');
+
+    let userId = req.user?.id || null;
+    
+    // If user_id is not set but user is authenticated, try to find user by email
+    if (!userId && req.user?.email && req.body.customer_email) {
+      try {
+        const emailMatch = req.user.email.toLowerCase() === req.body.customer_email.toLowerCase();
+        if (emailMatch) {
+          const user = await User.findByEmail(req.user.email);
+          if (user) {
+            userId = user.id;
+            console.log(`✅ Auto-linked inquiry to user by email: ${user.email}`);
+          }
+        }
+      } catch (emailLookupError) {
+        console.log('Could not auto-link by email:', emailLookupError.message);
+      }
+    }
 
     const inquiryData = {
       ...req.body,
-      user_id: req.user?.id || null, // Optional user association
+      user_id: userId, // User association (from token or email match)
       status: 'pending',
       priority: 'normal'
     };
@@ -129,19 +150,38 @@ export const getAllInquiries = async (req, res) => {
 // @access  Private
 export const getMyInquiries = async (req, res) => {
   try {
-    const inquiries = await Inquiry.findForUser(req.user.id, req.user.email);
+    // First, proactively find and link ALL unlinked inquiries matching user's email
+    if (req.user.email) {
+      try {
+        // Find all inquiries with matching email but no user_id
+        const { data: unlinkedInquiries, error: unlinkedError } = await supabase
+          .from('inquiries')
+          .select('id, customer_email')
+          .ilike('customer_email', req.user.email)
+          .is('user_id', null);
 
-    // Auto-link legacy inquiries (missing user_id) to this user by matching email
-    if (Array.isArray(inquiries) && inquiries.length > 0) {
-      const linkable = inquiries.filter(i => !i.user_id && i.customer_email && req.user.email && i.customer_email.toLowerCase() === req.user.email.toLowerCase());
-      for (const inquiry of linkable) {
-        try {
-          await Inquiry.update(inquiry.id, { user_id: req.user.id, updated_at: new Date().toISOString() });
-        } catch (linkErr) {
-          console.warn('Failed to link legacy inquiry to user:', inquiry.id, linkErr?.message);
+        if (!unlinkedError && unlinkedInquiries && unlinkedInquiries.length > 0) {
+          console.log(`🔗 Auto-linking ${unlinkedInquiries.length} unlinked inquiry(ies) to user ${req.user.id}`);
+          
+          for (const inquiry of unlinkedInquiries) {
+            try {
+              await Inquiry.update(inquiry.id, { 
+                user_id: req.user.id, 
+                updated_at: new Date().toISOString() 
+              });
+              console.log(`✅ Linked inquiry ${inquiry.id.slice(-8)} to user`);
+            } catch (linkErr) {
+              console.warn(`⚠️ Failed to link inquiry ${inquiry.id.slice(-8)}:`, linkErr?.message);
+            }
+          }
         }
+      } catch (linkCheckError) {
+        console.warn('Error checking for unlinked inquiries:', linkCheckError.message);
       }
     }
+
+    // Now fetch all inquiries (including newly linked ones)
+    const inquiries = await Inquiry.findForUser(req.user.id, req.user.email);
 
     res.json({
       success: true,
