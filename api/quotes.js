@@ -103,13 +103,53 @@ export default async function handler(req, res) {
       }
 
       const quoteData = req.body;
-      const quote = await Quote.create(quoteData);
+      
+      // Prepare quote data with required fields
+      const preparedData = {
+        ...quoteData,
+        admin_id: req.user.id, // Set admin_id from authenticated user
+        quote_number: quoteData.quote_number || Quote.generateQuoteNumber(), // Auto-generate if missing
+        status: quoteData.status || 'draft', // Default to draft
+        // Handle breakdown - convert string to JSON if needed
+        breakdown: typeof quoteData.breakdown === 'string' 
+          ? JSON.parse(quoteData.breakdown) 
+          : (quoteData.breakdown || []),
+        // Ensure total_amount is a number
+        total_amount: parseFloat(quoteData.total_amount) || 0,
+        // Set validity_days default
+        validity_days: quoteData.validity_days || 30
+      };
 
-      return res.status(201).json({
-        success: true,
-        message: 'Quote created successfully',
-        data: quote
+      // Remove fields that shouldn't be set by client
+      delete preparedData.id;
+      delete preparedData.created_at;
+      delete preparedData.updated_at;
+      delete preparedData.sent_at;
+      delete preparedData.accepted_at;
+      delete preparedData.paid_at;
+
+      console.log('Creating quote with prepared data:', {
+        ...preparedData,
+        breakdown: Array.isArray(preparedData.breakdown) ? `${preparedData.breakdown.length} items` : 'invalid'
       });
+
+      try {
+        const quote = await Quote.create(preparedData);
+
+        return res.status(201).json({
+          success: true,
+          message: 'Quote created successfully',
+          data: quote
+        });
+      } catch (createError) {
+        console.error('Quote creation failed:', createError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to create quote',
+          error: createError.message,
+          details: process.env.NODE_ENV === 'development' ? createError.stack : undefined
+        });
+      }
     }
 
     // PUT /api/quotes?id=xxx - Update a quote (admin only)
@@ -135,6 +175,24 @@ export default async function handler(req, res) {
         success: true,
         message: 'Quote updated successfully',
         data: quote
+      });
+    }
+
+    // PUT /api/quotes?id=xxx&action=send - Send a quote (admin only)
+    if (method === 'PUT' && query.id && query.action === 'send') {
+      if (!req.user || !['admin', 'staff'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Admin access required'
+        });
+      }
+
+      const sentQuote = await Quote.sendQuote(query.id, req.user.id);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Quote sent successfully',
+        data: sentQuote
       });
     }
 

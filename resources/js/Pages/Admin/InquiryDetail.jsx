@@ -168,7 +168,7 @@ const InquiryDetail = () => {
         return;
       }
 
-      const response = await fetch(`/api/quotes/${quoteId}/send`, {
+      const response = await fetch(`/api/quotes?id=${quoteId}&action=send`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -176,6 +176,22 @@ const InquiryDetail = () => {
         },
         credentials: 'include'
       });
+
+      if (!response.ok) {
+        let errorMessage = `Failed to send quote (${response.status})`;
+        try {
+          const errorText = await response.text();
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } catch {
+            errorMessage = errorText.substring(0, 100);
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+        throw new Error(errorMessage);
+      }
 
       const result = await response.json();
 

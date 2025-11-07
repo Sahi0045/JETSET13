@@ -246,9 +246,28 @@ const QuoteCreate = () => {
         body: JSON.stringify({
           ...quoteData,
           inquiry_id: inquiryId,
-          breakdown: JSON.stringify(quoteData.breakdown)
+          breakdown: quoteData.breakdown, // Send as array, API will handle JSONB conversion
+          total_amount: parseFloat(quoteData.total_amount) || 0
         })
       });
+
+      if (!response.ok) {
+        let errorMessage = `Failed to create quote (${response.status})`;
+        try {
+          const errorText = await response.text();
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorData.error || errorMessage;
+            console.error('Quote creation error:', errorData);
+          } catch {
+            errorMessage = errorText.substring(0, 100);
+            console.error('Non-JSON error response:', errorText.substring(0, 200));
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+        throw new Error(errorMessage);
+      }
 
       const result = await response.json();
 
@@ -256,11 +275,12 @@ const QuoteCreate = () => {
         alert('Quote created successfully!');
         navigate(`/admin/inquiries/${inquiryId}`);
       } else {
-        alert('Failed to create quote: ' + result.message);
+        console.error('Quote creation failed:', result);
+        alert('Failed to create quote: ' + (result.message || result.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error creating quote:', error);
-      alert('Error creating quote');
+      alert('Error creating quote: ' + error.message);
     } finally {
       setSubmitting(false);
     }
@@ -291,18 +311,38 @@ const QuoteCreate = () => {
         body: JSON.stringify({
           ...quoteData,
           inquiry_id: inquiryId,
-          breakdown: JSON.stringify(quoteData.breakdown)
+          breakdown: quoteData.breakdown, // Send as array, API will handle JSONB conversion
+          total_amount: parseFloat(quoteData.total_amount) || 0
         })
       });
+
+      if (!createResponse.ok) {
+        let errorMessage = `Failed to create quote (${createResponse.status})`;
+        try {
+          const errorText = await createResponse.text();
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorData.error || errorMessage;
+            console.error('Quote creation error:', errorData);
+          } catch {
+            errorMessage = errorText.substring(0, 100);
+            console.error('Non-JSON error response:', errorText.substring(0, 200));
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+        throw new Error(errorMessage);
+      }
 
       const createResult = await createResponse.json();
 
       if (!createResult.success) {
-        throw new Error(createResult.message);
+        console.error('Quote creation failed:', createResult);
+        throw new Error(createResult.message || createResult.error || 'Failed to create quote');
       }
 
-      // Send quote
-      const sendResponse = await fetch(`/api/quotes/${createResult.data.id}/send`, {
+      // Send quote (using query parameter format for Vercel)
+      const sendResponse = await fetch(`/api/quotes?id=${createResult.data.id}&action=send`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -310,6 +350,22 @@ const QuoteCreate = () => {
         },
         credentials: 'include'
       });
+
+      if (!sendResponse.ok) {
+        let errorMessage = `Failed to send quote (${sendResponse.status})`;
+        try {
+          const errorText = await sendResponse.text();
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } catch {
+            errorMessage = errorText.substring(0, 100);
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+        throw new Error(errorMessage);
+      }
 
       const sendResult = await sendResponse.json();
 
