@@ -58,11 +58,22 @@ const InquiryList = () => {
       const data = await response.json();
 
       if (data.success) {
-        setInquiries(data.data || []);
-        setPagination(data.pagination || { total: 0, pages: 0, currentPage: 1 });
+        // Handle different response structures
+        let inquiriesArray = [];
+        if (Array.isArray(data.data)) {
+          inquiriesArray = data.data;
+        } else if (data.data && Array.isArray(data.data.inquiries)) {
+          inquiriesArray = data.data.inquiries;
+        } else if (Array.isArray(data.inquiries)) {
+          inquiriesArray = data.inquiries;
+        }
+        
+        setInquiries(inquiriesArray);
+        setPagination(data.pagination || { total: inquiriesArray.length, pages: 1, currentPage: 1 });
       }
     } catch (error) {
       console.error('Error fetching inquiries:', error);
+      setInquiries([]); // Ensure inquiries is always an array
     } finally {
       setLoading(false);
     }
@@ -314,7 +325,7 @@ const InquiryList = () => {
       {/* Results Summary */}
       <div className="results-summary">
         <div className="summary-text">
-          Showing <strong>{inquiries.length}</strong> of <strong>{pagination.total}</strong> inquiries
+          Showing <strong>{Array.isArray(inquiries) ? inquiries.length : 0}</strong> of <strong>{pagination.total}</strong> inquiries
           {searchTerm && ` matching "${searchTerm}"`}
         </div>
         <div className="summary-actions">
@@ -353,7 +364,7 @@ const InquiryList = () => {
               </tr>
             </thead>
             <tbody>
-              {inquiries.length === 0 ? (
+              {!Array.isArray(inquiries) || inquiries.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="empty-state">
                     <div className="empty-content">
