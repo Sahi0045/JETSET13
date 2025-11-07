@@ -104,9 +104,13 @@ export default async function handler(req, res) {
 
       const quoteData = req.body;
       
+      // Extract and map 'notes' to 'admin_notes' BEFORE spreading
+      const { notes, ...restQuoteData } = quoteData;
+      const adminNotes = notes || quoteData.admin_notes || null;
+      
       // Prepare quote data with required fields
       const preparedData = {
-        ...quoteData,
+        ...restQuoteData, // Spread without 'notes'
         admin_id: req.user.id, // Set admin_id from authenticated user
         quote_number: quoteData.quote_number || Quote.generateQuoteNumber(), // Auto-generate if missing
         status: quoteData.status || 'draft', // Default to draft
@@ -117,7 +121,9 @@ export default async function handler(req, res) {
         // Ensure total_amount is a number
         total_amount: parseFloat(quoteData.total_amount) || 0,
         // Set validity_days default
-        validity_days: quoteData.validity_days || 30
+        validity_days: quoteData.validity_days || 30,
+        // Map 'notes' to 'admin_notes' (database column name)
+        admin_notes: adminNotes
       };
 
       // Remove fields that shouldn't be set by client
@@ -127,6 +133,22 @@ export default async function handler(req, res) {
       delete preparedData.sent_at;
       delete preparedData.accepted_at;
       delete preparedData.paid_at;
+      delete preparedData.expires_at; // Should be set by sendQuote, not on creation
+      
+      // Only keep valid database columns
+      const validColumns = [
+        'inquiry_id', 'admin_id', 'quote_number', 'title', 'description',
+        'total_amount', 'currency', 'breakdown', 'terms_conditions',
+        'validity_days', 'status', 'payment_link', 'payment_status', 'admin_notes'
+      ];
+      
+      // Filter out any fields that aren't valid columns (safety check)
+      Object.keys(preparedData).forEach(key => {
+        if (!validColumns.includes(key)) {
+          console.warn(`⚠️ Removing invalid field from quote data: ${key}`);
+          delete preparedData[key];
+        }
+      });
 
       console.log('Creating quote with prepared data:', {
         ...preparedData,
@@ -161,7 +183,13 @@ export default async function handler(req, res) {
         });
       }
 
-      const updateData = req.body;
+      const updateData = { ...req.body };
+      // Map 'notes' to 'admin_notes' if present
+      if (updateData.notes !== undefined) {
+        updateData.admin_notes = updateData.notes;
+        delete updateData.notes;
+      }
+      
       const quote = await Quote.update(query.id, updateData);
 
       if (!quote) {
