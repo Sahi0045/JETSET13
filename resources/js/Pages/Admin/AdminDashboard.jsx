@@ -56,7 +56,7 @@ const AdminDashboard = () => {
       });
       const statsData = await statsResponse.json();
 
-      if (statsData.success) {
+      if (statsData.success && statsData.data) {
         setStats({
           totalInquiries: statsData.data.total || 0,
           pendingInquiries: statsData.data.byStatus?.pending || 0,
@@ -69,6 +69,9 @@ const AdminDashboard = () => {
           totalRevenue: 0, // TODO: Implement revenue tracking
           monthlyRevenue: 0 // TODO: Implement monthly revenue
         });
+      } else {
+        // If stats request failed, keep default values (all zeros)
+        console.warn('Failed to fetch stats or invalid response:', statsData);
       }
 
       // Fetch recent inquiries
@@ -78,10 +81,24 @@ const AdminDashboard = () => {
       });
       const inquiriesData = await inquiriesResponse.json();
 
-      if (inquiriesData.success) {
-        const inquiries = inquiriesData.data?.inquiries || inquiriesData.data || [];
+      if (inquiriesData.success && inquiriesData.data) {
+        // Handle different response structures
+        let inquiries = [];
+        if (Array.isArray(inquiriesData.data)) {
+          // Direct array response
+          inquiries = inquiriesData.data;
+        } else if (inquiriesData.data.inquiries && Array.isArray(inquiriesData.data.inquiries)) {
+          // Nested inquiries array
+          inquiries = inquiriesData.data.inquiries;
+        } else if (inquiriesData.data.data && Array.isArray(inquiriesData.data.data)) {
+          // Double nested
+          inquiries = inquiriesData.data.data;
+        }
         // Ensure it's always an array
         setRecentInquiries(Array.isArray(inquiries) ? inquiries : []);
+      } else {
+        // If request failed or no data, set empty array
+        setRecentInquiries([]);
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -343,7 +360,7 @@ const AdminDashboard = () => {
           </div>
 
           <div className="activity-list">
-            {recentInquiries.length === 0 ? (
+            {!Array.isArray(recentInquiries) || recentInquiries.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">📭</div>
                 <h4>No Recent Inquiries</h4>
