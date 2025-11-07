@@ -117,7 +117,7 @@ export default async function handler(req, res) {
 
         return res.status(200).json({
           success: true,
-          data: { inquiries }
+          data: inquiries // Return array directly for consistency
         });
       }
 

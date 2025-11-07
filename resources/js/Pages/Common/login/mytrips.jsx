@@ -144,7 +144,8 @@ export default function TravelDashboard() {
 
       console.log('✅ Token found, making API request...')
 
-      const response = await fetch(getApiUrl('inquiries/my'), {
+      // Use query parameter format for Vercel serverless functions
+      const response = await fetch(getApiUrl('inquiries?endpoint=my'), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -166,7 +167,15 @@ export default function TravelDashboard() {
       const result = await response.json()
 
       if (result.success) {
-        const inquiries = result.data || []
+        // Handle both response formats: { data: [...] } or { data: { inquiries: [...] } }
+        let inquiries = [];
+        if (Array.isArray(result.data)) {
+          inquiries = result.data;
+        } else if (result.data && Array.isArray(result.data.inquiries)) {
+          inquiries = result.data.inquiries;
+        } else if (result.data && result.data.inquiries) {
+          inquiries = Array.isArray(result.data.inquiries) ? result.data.inquiries : [];
+        }
         console.log('📋 Total requests loaded:', inquiries.length)
         
         if (inquiries.length === 0) {

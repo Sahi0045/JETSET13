@@ -15,6 +15,10 @@
       "destination": "/api/inquiries?id=:id"
     },
     {
+      "source": "/api/inquiries/my",
+      "destination": "/api/inquiries?endpoint=my"
+    },
+    {
       "source": "/((?!api|assets).*)",
       "destination": "/index.html"
     }
