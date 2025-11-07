@@ -31,8 +31,10 @@ export default function SupabaseLogin() {
             setProcessing(true);
             setErrors({});
             
+            // Store intended destination for after auth
+            sessionStorage.setItem('auth_redirect', '/my-trips');
+            
             const { error } = await signInWithOAuth('google', {
-                redirectTo: `${window.location.origin}/my-trips`,
                 queryParams: {
                     access_type: 'offline',
                     prompt: 'consent',

@@ -147,10 +147,21 @@ export const SupabaseAuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
+      // Determine the correct redirect URL based on environment
+      const isDevelopment = window.location.hostname === 'localhost' || 
+                           window.location.hostname === '127.0.0.1';
+      
+      const baseUrl = isDevelopment 
+        ? window.location.origin 
+        : 'https://www.jetsetterss.com';
+      
+      const redirectUrl = options.redirectTo || `${baseUrl}/auth/callback`;
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
           ...options
         }
       });

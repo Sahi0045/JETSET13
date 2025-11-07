@@ -18,6 +18,7 @@ import paymentRoutes from './backend/routes/payment.routes.js';
 import inquiryRoutes from './backend/routes/inquiry.routes.js';
 import quoteRoutes from './backend/routes/quote.routes.js';
 import cruiseRoutes from './backend/routes/cruise.routes.js';
+import supabaseAuthRoutes from './backend/routes/supabaseAuth.js';
 import supabase from './backend/config/supabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -54,6 +55,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/inquiries', inquiryRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/cruises', cruiseRoutes);
+app.use('/api/supabase', supabaseAuthRoutes);
 
 // Test endpoint
 app.get('/api/test', (req, res) => {

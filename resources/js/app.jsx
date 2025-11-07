@@ -537,6 +537,11 @@ const SupabaseAuthStatus = React.lazy(() =>
     .catch(() => ({ default: () => <div>Loading Auth Status...</div> }))
 );
 
+const AuthCallback = React.lazy(() => 
+  import('./Pages/AuthCallback')
+    .catch(() => ({ default: () => <div>Processing authentication...</div> }))
+);
+
 // Import ProtectedRoute
 const ProtectedRoute = React.lazy(() => 
   import('./components/ProtectedRoute')
@@ -560,6 +565,7 @@ const App = () => {
         <Route path="/supabase-profile" element={<SupabaseProfileDashboard />} />
         <Route path="/supabase-auth-debug" element={<SupabaseAuthDebug />} />
         <Route path="/supabase-auth-status" element={<SupabaseAuthStatus />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
         
         <Route path="/my-trips" element={<MyTripsPage />} />
         <Route path="/manage-booking/:bookingId" element={<ManageBooking />} />
