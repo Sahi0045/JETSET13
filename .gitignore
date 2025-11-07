@@ -59,4 +59,3 @@ dist/
 *.sw?
 .DS_Store
 Thumbs.db
-vercel.json

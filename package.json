@@ -19,6 +19,7 @@
     "supabase:check": "node -e \"const { exec } = require('child_process'); exec('node setup-supabase-tables.js', (error, stdout, stderr) => { console.log(stdout); if (error) { console.error('Error checking Supabase tables:', error); } });\"",
     "deploy": "npm run build && npm run start",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "test:inquiry-api": "node test-inquiry-api.js",
     "test:hotel-api": "node test-hotel-api.js",
     "test:direct-amadeus": "node test-direct-amadeus.js",
     "test:production-api": "node test-production-api.js",
