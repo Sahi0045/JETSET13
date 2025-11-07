@@ -90,7 +90,22 @@ export default function FirebaseLogin() {
                 const token = localStorage.getItem('token');
                 console.log('Token stored:', token ? 'Yes' : 'No');
 
-                navigate('/my-trips');
+                // Determine if the user is an admin
+                const isAdmin = result.user?.email === 'sahi0045@hotmail.com';
+                if (isAdmin) {
+                    const token = localStorage.getItem('token');
+                    localStorage.setItem('adminToken', token);
+                    localStorage.setItem('adminUser', JSON.stringify({
+                      id: result.user.uid,
+                      email: result.user.email,
+                      firstName: result.user.firstName,
+                      lastName: result.user.lastName,
+                      role: 'admin'
+                    }));
+                    navigate('/admin');
+                } else {
+                    navigate('/my-trips');
+                }
             } else {
                 setFormErrors({ general: result.error });
             }
@@ -116,7 +131,22 @@ export default function FirebaseLogin() {
                 const token = localStorage.getItem('token');
                 console.log('Token stored:', token ? 'Yes' : 'No');
 
-                navigate('/my-trips');
+                // Determine if the user is an admin
+                const isAdmin = result.user?.email === 'sahi0045@hotmail.com';
+                if (isAdmin) {
+                    const token = localStorage.getItem('token');
+                    localStorage.setItem('adminToken', token);
+                    localStorage.setItem('adminUser', JSON.stringify({
+                      id: result.user.uid,
+                      email: result.user.email,
+                      firstName: result.user.firstName,
+                      lastName: result.user.lastName,
+                      role: 'admin'
+                    }));
+                    navigate('/admin');
+                } else {
+                    navigate('/my-trips');
+                }
             } else {
                 setFormErrors({ general: result.error });
             }
@@ -142,7 +172,22 @@ export default function FirebaseLogin() {
                 const token = localStorage.getItem('token');
                 console.log('Token stored:', token ? 'Yes' : 'No');
 
-                navigate('/my-trips');
+                // Determine if the user is an admin
+                const isAdmin = result.user?.email === 'sahi0045@hotmail.com';
+                if (isAdmin) {
+                    const token = localStorage.getItem('token');
+                    localStorage.setItem('adminToken', token);
+                    localStorage.setItem('adminUser', JSON.stringify({
+                      id: result.user.uid,
+                      email: result.user.email,
+                      firstName: result.user.firstName,
+                      lastName: result.user.lastName,
+                      role: 'admin'
+                    }));
+                    navigate('/admin');
+                } else {
+                    navigate('/my-trips');
+                }
             } else {
                 setFormErrors({ general: result.error });
             }
