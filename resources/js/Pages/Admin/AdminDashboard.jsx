@@ -79,7 +79,9 @@ const AdminDashboard = () => {
       const inquiriesData = await inquiriesResponse.json();
 
       if (inquiriesData.success) {
-        setRecentInquiries(inquiriesData.data.inquiries || []);
+        const inquiries = inquiriesData.data?.inquiries || inquiriesData.data || [];
+        // Ensure it's always an array
+        setRecentInquiries(Array.isArray(inquiries) ? inquiries : []);
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
