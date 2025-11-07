@@ -47,6 +47,8 @@
         
         "JWT_SECRET": "e4f8a2b5c9d3f7e1a0b5c8d2e6f3a9b7d1e0f5a2c4b8e3d7f9a1c5b0e2d4f8",
         "JWT_EXPIRE": "30d",
+        "SUPABASE_JWT_SECRET": "UcSOKuDSJea4THuNiQYK5UWrBkBhUCfvb6D5_qjl6GaHoF-KoQY4vdWWCYr0QQ5OhI8t0qAqnr1YBTI7wxGRfA",
+        "MONGODB_URI": "mongodb+srv://yashwanth:yashwanth@cluster0.hgzpq.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
         
         "ARC_PAY_API_URL": "https://api.arcpay.travel/api/rest/version/100/merchant/TESTARC05511704",
         "ARC_PAY_MERCHANT_ID": "TESTARC05511704",
