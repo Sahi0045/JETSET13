@@ -1,22 +1,10 @@
 {
-  "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "framework": null,
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/((?!api).*)",
+      "destination": "/index.html"
     }
   ],
   "headers": [
@@ -33,7 +21,6 @@
       "source": "/(.*)",
       "headers": [
         {
-          
           "key": "Cache-Control",
           "value": "public, max-age=0, must-revalidate"
         }
@@ -48,10 +35,5 @@
         }
       ]
     }
-  ],
-  "env": {
-    "SUPABASE_URL": "@supabase_url",
-    "SUPABASE_ANON_KEY": "@supabase_anon_key",
-    "SUPABASE_JWT_SECRET": "@supabase_jwt_secret"
-  }
+  ]
 }
