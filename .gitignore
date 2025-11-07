@@ -29,7 +29,7 @@ package-lock.json
 /.zed
 
 # Vercel
-.vercel
+
 .npm
 .node_repl_history
 
