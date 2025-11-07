@@ -9,8 +9,12 @@ import { sendEmail } from '../services/emailService.js';
 // @access  Public
 export const createInquiry = async (req, res) => {
   try {
-    console.log('Received inquiry request:', req.body);
-    console.log('User from auth:', req.user ? { id: req.user.id, email: req.user.email } : 'Not authenticated');
+    console.log('📥 Received inquiry request:', {
+      inquiry_type: req.body.inquiry_type,
+      customer_email: req.body.customer_email,
+      customer_name: req.body.customer_name
+    });
+    console.log('👤 User from auth:', req.user ? { id: req.user.id, email: req.user.email, role: req.user.role } : 'Not authenticated');
 
     let userId = req.user?.id || null;
     
@@ -26,7 +30,7 @@ export const createInquiry = async (req, res) => {
           }
         }
       } catch (emailLookupError) {
-        console.log('Could not auto-link by email:', emailLookupError.message);
+        console.log('⚠️ Could not auto-link by email:', emailLookupError.message);
       }
     }
 
@@ -44,8 +48,10 @@ export const createInquiry = async (req, res) => {
     delete inquiryData.created_at;
     delete inquiryData.updated_at;
 
+    console.log('💾 Saving inquiry to database...');
     // Save inquiry to database
     const inquiry = await Inquiry.create(inquiryData);
+    console.log('✅ Inquiry created successfully:', { id: inquiry.id, inquiry_type: inquiry.inquiry_type });
 
     // Send confirmation email to customer (optional)
     try {
@@ -87,11 +93,28 @@ export const createInquiry = async (req, res) => {
       message: 'Your inquiry has been submitted successfully! Our travel experts will get back to you within 24 hours.'
     });
   } catch (error) {
-    console.error('Create inquiry error:', error);
+    console.error('❌ Create inquiry error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    
+    // Provide more detailed error message in development
+    const errorMessage = process.env.NODE_ENV === 'development' 
+      ? error.message 
+      : 'Failed to create inquiry. Please try again or contact support.';
+    
     res.status(500).json({
       success: false,
       message: 'Failed to create inquiry',
-      error: error.message
+      error: errorMessage,
+      ...(process.env.NODE_ENV === 'development' && { 
+        details: error.details,
+        code: error.code 
+      })
     });
   }
 };

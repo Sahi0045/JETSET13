@@ -1,13 +1,14 @@
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
+import crypto from 'crypto';
 import User from '../models/user.model.js';
+import supabase from '../config/supabase.js';
 
 // Simple in-memory cache for Google/Firebase JWKS certificates
 let googleCertsCache = { certs: null, fetchedAt: 0 };
 let firebaseCertsCache = { certs: null, fetchedAt: 0 };
 const GOOGLE_CERTS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
 const FIREBASE_CERTS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
-const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET; // Supabase JWT secret from dashboard
 const CERTS_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 async function getGoogleCerts() {
@@ -110,6 +111,93 @@ async function verifyRS256Token(token, header) {
   throw new Error(`No matching certificate found for kid: ${header.kid} (tried both Google OAuth and Firebase endpoints)`);
 }
 
+async function verifySupabaseToken(token) {
+  const supabaseSecret = process.env.SUPABASE_JWT_SECRET;
+
+  // Try JWT verification first if secret is available
+  if (supabaseSecret) {
+    try {
+      const decoded = jwt.verify(token, supabaseSecret, { algorithms: ['HS256'] });
+      console.log('✅ Successfully verified Supabase token (JWT) for user:', decoded?.email || decoded?.sub);
+      return decoded;
+    } catch (err) {
+      console.log('⚠️ Supabase JWT verification failed, trying Supabase API...', err.message);
+      // Fall through to API verification
+    }
+  } else {
+    console.warn('⚠️ SUPABASE_JWT_SECRET not set, using Supabase API for verification');
+  }
+
+  // Fallback: Verify using Supabase API
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      console.log('❌ Supabase API token verification failed:', error?.message || 'No user returned');
+      return null;
+    }
+
+    // Convert Supabase user to JWT-like decoded format
+    const decoded = {
+      sub: user.id,
+      email: user.email,
+      user_id: user.id,
+      id: user.id,
+      user_metadata: user.user_metadata,
+      iss: 'supabase',
+      aud: 'authenticated'
+    };
+
+    console.log('✅ Successfully verified Supabase token (API) for user:', user.email);
+    return decoded;
+  } catch (apiErr) {
+    console.log('❌ Supabase API verification error:', apiErr.message);
+    return null;
+  }
+}
+
+async function autoProvisionSupabaseUser(decodedToken) {
+  if (!decodedToken?.email) {
+    return null;
+  }
+
+  const isSupabaseIssuer = typeof decodedToken.iss === 'string' && decodedToken.iss.includes('supabase.co/auth/v1');
+
+  if (!isSupabaseIssuer) {
+    return null;
+  }
+
+  try {
+    console.log('Auto-provisioning Supabase user for email:', decodedToken.email);
+
+    const firstName = decodedToken.user_metadata?.first_name || decodedToken.given_name || decodedToken.name?.split(' ')[0] || 'Guest';
+    const lastName = decodedToken.user_metadata?.last_name || decodedToken.family_name || decodedToken.name?.split(' ')?.slice(1)?.join(' ') || '';
+
+    const randomPassword = crypto.randomBytes(32).toString('hex');
+
+    const newUser = await User.create({
+      firstName,
+      lastName,
+      email: decodedToken.email,
+      password: randomPassword,
+      googleId: decodedToken.sub,
+      isGoogleAccount: true
+    });
+
+    return newUser;
+  } catch (err) {
+    console.warn('Failed to auto-provision Supabase user:', err.message);
+
+    try {
+      const existingUser = await User.findByEmail(decodedToken.email);
+      return existingUser;
+    } catch (lookupErr) {
+      console.warn('Follow-up lookup failed after provisioning attempt:', lookupErr.message);
+      return null;
+    }
+  }
+}
+
 // Protect routes
 export const protect = async (req, res, next) => {
   let token;
@@ -136,35 +224,26 @@ export const protect = async (req, res, next) => {
         console.log('🔐 Could not decode token:', decodeErr.message);
       }
 
-      // Try HS256 first (custom app tokens)
+      // Try HS256 first
       let decoded;
       try {
         decoded = jwt.verify(token, process.env.JWT_SECRET || 'jetset-app-secret-key');
-        console.log('✅ Verified HS256 token (custom app)');
       } catch (hsErr) {
-        // Try Supabase HS256 token
-        if (SUPABASE_JWT_SECRET) {
-          try {
-            decoded = jwt.verify(token, SUPABASE_JWT_SECRET);
-            console.log('✅ Verified Supabase HS256 token');
-          } catch (supabaseErr) {
-            // Continue to RS256 check
-          }
-        }
-        
-        // If HS verification fails, try RS256 (e.g., Google/Firebase token)
+        decoded = await verifySupabaseToken(token);
+
         if (!decoded) {
+          // If HS verification fails, try RS256 (e.g., Google/Firebase token)
           try {
             const header = jwt.decode(token, { complete: true })?.header || {};
             if (header.alg && header.alg.startsWith('RS')) {
               decoded = await verifyRS256Token(token, header);
-              console.log('✅ Successfully verified RS256 token for user:', decoded.email || decoded.user_id);
+              console.log('Successfully verified RS256 token for user:', decoded.email || decoded.user_id);
             } else {
               throw hsErr;
             }
           } catch (rsErr) {
             console.error('RS256 verification error:', rsErr.message);
-          
+            
             // Development fallback: If it's a Firebase token with valid structure but cert verification failed,
             // allow it through (cert rotation or network issues). Remove this in production!
             if (process.env.NODE_ENV !== 'production') {
@@ -211,12 +290,22 @@ export const protect = async (req, res, next) => {
         }
       }
       
+      if (!user && decoded) {
+        try {
+          user = await autoProvisionSupabaseUser(decoded);
+        } catch (provisionError) {
+          console.warn('Auth middleware: Auto-provisioning failed:', provisionError.message);
+          // Continue to check if user exists - provisioning failure shouldn't block auth
+        }
+      }
+
       if (!user) {
         console.error('User not found for token:', { 
           id: decoded?.id, 
           user_id: decoded?.user_id,
           sub: decoded?.sub,
-          email: decoded?.email 
+          email: decoded?.email,
+          iss: decoded?.iss
         });
         return res.status(401).json({ 
           success: false,
@@ -273,22 +362,13 @@ export const optionalProtect = async (req, res, next) => {
       // Get token from header
       token = req.headers.authorization.split(' ')[1];
 
-      // Verify token (HS256 first, then Supabase, fallback to RS256 via Google/Firebase certs)
+      // Verify token (HS256 first, fallback to RS256 via Google/Firebase certs)
       let decoded = null;
       try {
         decoded = jwt.verify(token, process.env.JWT_SECRET || 'jetset-app-secret-key');
       } catch (hsErr) {
-        // Try Supabase HS256 token
-        if (SUPABASE_JWT_SECRET && !decoded) {
-          try {
-            decoded = jwt.verify(token, SUPABASE_JWT_SECRET);
-            console.log('Optional auth: Verified Supabase token');
-          } catch (supabaseErr) {
-            // Continue to RS256
-          }
-        }
-        
-        // Try RS256 if still not decoded
+        decoded = await verifySupabaseToken(token);
+
         if (!decoded) {
           try {
             const header = jwt.decode(token, { complete: true })?.header || {};
@@ -324,6 +404,15 @@ export const optionalProtect = async (req, res, next) => {
         }
       }
       
+      if (!user && decoded) {
+        try {
+          user = await autoProvisionSupabaseUser(decoded);
+        } catch (provisionError) {
+          console.warn('Optional auth: Auto-provisioning failed, continuing as guest:', provisionError.message);
+          // Continue as guest - don't fail the request
+        }
+      }
+
       if (user) {
         // Remove password from user object and ensure role is included
         const { password, ...userWithoutPassword } = user;
@@ -332,9 +421,12 @@ export const optionalProtect = async (req, res, next) => {
           role: user.role || 'user'
         };
         console.log('Optional auth: User authenticated:', req.user.email);
+      } else if (decoded) {
+        console.log('Optional auth: User not found or could not be provisioned, continuing as guest');
       }
     } catch (error) {
-      console.log('Optional auth: Token verification failed, continuing as guest');
+      console.log('Optional auth: Token verification failed, continuing as guest:', error.message);
+      // Don't log stack trace for optional auth failures to reduce noise
     }
   }
 

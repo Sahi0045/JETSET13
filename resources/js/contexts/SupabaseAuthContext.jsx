@@ -32,18 +32,38 @@ export const SupabaseAuthProvider = ({ children }) => {
         } else {
           setSession(session);
           setUser(session?.user ?? null);
-          
+
           // Sync with localStorage
           if (session?.user) {
-            localStorage.setItem('isAuthenticated', 'true');
-            localStorage.setItem('user', JSON.stringify({
+            const role = session.user.user_metadata?.role || 'user';
+            const serializedUser = {
               id: session.user.id,
               email: session.user.email,
               firstName: session.user.user_metadata?.first_name || session.user.user_metadata?.full_name?.split(' ')[0] || '',
               lastName: session.user.user_metadata?.last_name || session.user.user_metadata?.full_name?.split(' ')[1] || '',
               photoURL: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
-              role: session.user.user_metadata?.role || 'user'
-            }));
+              role
+            };
+
+            localStorage.setItem('isAuthenticated', 'true');
+            localStorage.setItem('user', JSON.stringify(serializedUser));
+
+            if (session.access_token) {
+              localStorage.setItem('token', session.access_token);
+              localStorage.setItem('supabase_token', session.access_token);
+
+              if (role === 'admin') {
+                localStorage.setItem('adminToken', session.access_token);
+              } else {
+                localStorage.removeItem('adminToken');
+              }
+            }
+          } else {
+            localStorage.removeItem('isAuthenticated');
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('supabase_token');
           }
         }
       } catch (error) {
@@ -66,23 +86,34 @@ export const SupabaseAuthProvider = ({ children }) => {
 
       // Sync with localStorage
       if (session?.user) {
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('user', JSON.stringify({
+        const role = session.user.user_metadata?.role || 'user';
+        const serializedUser = {
           id: session.user.id,
           email: session.user.email,
           firstName: session.user.user_metadata?.first_name || session.user.user_metadata?.full_name?.split(' ')[0] || '',
           lastName: session.user.user_metadata?.last_name || session.user.user_metadata?.full_name?.split(' ')[1] || '',
           photoURL: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
-          role: session.user.user_metadata?.role || 'user'
-        }));
-        
-        // Store Supabase access token
+          role
+        };
+
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('user', JSON.stringify(serializedUser));
+
         if (session.access_token) {
+          localStorage.setItem('token', session.access_token);
           localStorage.setItem('supabase_token', session.access_token);
+
+          if (role === 'admin') {
+            localStorage.setItem('adminToken', session.access_token);
+          } else {
+            localStorage.removeItem('adminToken');
+          }
         }
       } else {
         localStorage.removeItem('isAuthenticated');
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        localStorage.removeItem('adminToken');
         localStorage.removeItem('supabase_token');
       }
     });
@@ -192,6 +223,7 @@ export const SupabaseAuthProvider = ({ children }) => {
       localStorage.removeItem('isAuthenticated');
       localStorage.removeItem('user');
       localStorage.removeItem('token');
+      localStorage.removeItem('adminToken');
       localStorage.removeItem('supabase_token');
 
       setUser(null);

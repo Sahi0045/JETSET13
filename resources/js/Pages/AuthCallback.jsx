@@ -51,6 +51,7 @@ const AuthCallback = () => {
             console.log('Session established from hash:', data.session);
             
             // Store in localStorage
+            const role = data.session.user.user_metadata?.role || 'user';
             localStorage.setItem('isAuthenticated', 'true');
             localStorage.setItem('user', JSON.stringify({
               id: data.session.user.id,
@@ -58,9 +59,19 @@ const AuthCallback = () => {
               firstName: data.session.user.user_metadata?.first_name || data.session.user.user_metadata?.full_name?.split(' ')[0] || data.session.user.user_metadata?.name || '',
               lastName: data.session.user.user_metadata?.last_name || data.session.user.user_metadata?.full_name?.split(' ')[1] || '',
               photoURL: data.session.user.user_metadata?.avatar_url || data.session.user.user_metadata?.picture,
-              role: data.session.user.user_metadata?.role || 'user'
+              role
             }));
-            localStorage.setItem('supabase_token', data.session.access_token);
+
+            if (data.session.access_token) {
+              localStorage.setItem('token', data.session.access_token);
+              localStorage.setItem('supabase_token', data.session.access_token);
+
+              if (role === 'admin') {
+                localStorage.setItem('adminToken', data.session.access_token);
+              } else {
+                localStorage.removeItem('adminToken');
+              }
+            }
 
             // Redirect to intended destination
             const intendedPath = sessionStorage.getItem('auth_redirect') || '/my-trips';
@@ -93,6 +104,7 @@ const AuthCallback = () => {
             console.log('Session established from code:', data.session);
             
             // Store in localStorage
+            const role = data.session.user.user_metadata?.role || 'user';
             localStorage.setItem('isAuthenticated', 'true');
             localStorage.setItem('user', JSON.stringify({
               id: data.session.user.id,
@@ -100,9 +112,19 @@ const AuthCallback = () => {
               firstName: data.session.user.user_metadata?.first_name || data.session.user.user_metadata?.full_name?.split(' ')[0] || data.session.user.user_metadata?.name || '',
               lastName: data.session.user.user_metadata?.last_name || data.session.user.user_metadata?.full_name?.split(' ')[1] || '',
               photoURL: data.session.user.user_metadata?.avatar_url || data.session.user.user_metadata?.picture,
-              role: data.session.user.user_metadata?.role || 'user'
+              role
             }));
-            localStorage.setItem('supabase_token', data.session.access_token);
+
+            if (data.session.access_token) {
+              localStorage.setItem('token', data.session.access_token);
+              localStorage.setItem('supabase_token', data.session.access_token);
+
+              if (role === 'admin') {
+                localStorage.setItem('adminToken', data.session.access_token);
+              } else {
+                localStorage.removeItem('adminToken');
+              }
+            }
 
             // Redirect to intended destination or my-trips
             const intendedPath = sessionStorage.getItem('auth_redirect') || '/my-trips';

@@ -27,7 +27,7 @@ const InquiryDetail = () => {
       setLoading(true);
       
       // Get token from localStorage
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
       
       if (!token) {
         console.error('No authentication token found');
@@ -80,7 +80,7 @@ const InquiryDetail = () => {
       setUpdating(true);
       
       // Get token from localStorage
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
       
       if (!token) {
         console.error('No authentication token found');
@@ -121,7 +121,7 @@ const InquiryDetail = () => {
     try {
       setSendingQuoteId(quoteId);
 
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
       if (!token) {
         alert('Authentication required. Please log in again.');
         return;

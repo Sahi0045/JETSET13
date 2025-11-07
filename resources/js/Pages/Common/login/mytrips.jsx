@@ -126,12 +126,13 @@ export default function TravelDashboard() {
       console.log('📦 localStorage contents:', {
         token: localStorage.getItem('token') ? 'EXISTS' : 'MISSING',
         adminToken: localStorage.getItem('adminToken') ? 'EXISTS' : 'MISSING',
+        supabaseToken: localStorage.getItem('supabase_token') ? 'EXISTS' : 'MISSING',
         isAuthenticated: localStorage.getItem('isAuthenticated'),
         user: localStorage.getItem('user') ? 'EXISTS' : 'MISSING'
       })
 
       // Get authentication token
-      const token = localStorage.getItem('token') || localStorage.getItem('adminToken')
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token')
 
       if (!token) {
         console.log('❌ No authentication token found, cannot load requests')
