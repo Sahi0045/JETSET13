@@ -7,6 +7,7 @@ let googleCertsCache = { certs: null, fetchedAt: 0 };
 let firebaseCertsCache = { certs: null, fetchedAt: 0 };
 const GOOGLE_CERTS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
 const FIREBASE_CERTS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
+const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET; // Supabase JWT secret from dashboard
 const CERTS_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 async function getGoogleCerts() {
@@ -135,42 +136,55 @@ export const protect = async (req, res, next) => {
         console.log('🔐 Could not decode token:', decodeErr.message);
       }
 
-      // Try HS256 first
+      // Try HS256 first (custom app tokens)
       let decoded;
       try {
         decoded = jwt.verify(token, process.env.JWT_SECRET || 'jetset-app-secret-key');
+        console.log('✅ Verified HS256 token (custom app)');
       } catch (hsErr) {
-        // If HS verification fails, try RS256 (e.g., Google/Firebase token)
-        try {
-          const header = jwt.decode(token, { complete: true })?.header || {};
-          if (header.alg && header.alg.startsWith('RS')) {
-            decoded = await verifyRS256Token(token, header);
-            console.log('Successfully verified RS256 token for user:', decoded.email || decoded.user_id);
-          } else {
-            throw hsErr;
+        // Try Supabase HS256 token
+        if (SUPABASE_JWT_SECRET) {
+          try {
+            decoded = jwt.verify(token, SUPABASE_JWT_SECRET);
+            console.log('✅ Verified Supabase HS256 token');
+          } catch (supabaseErr) {
+            // Continue to RS256 check
           }
-        } catch (rsErr) {
-          console.error('RS256 verification error:', rsErr.message);
+        }
+        
+        // If HS verification fails, try RS256 (e.g., Google/Firebase token)
+        if (!decoded) {
+          try {
+            const header = jwt.decode(token, { complete: true })?.header || {};
+            if (header.alg && header.alg.startsWith('RS')) {
+              decoded = await verifyRS256Token(token, header);
+              console.log('✅ Successfully verified RS256 token for user:', decoded.email || decoded.user_id);
+            } else {
+              throw hsErr;
+            }
+          } catch (rsErr) {
+            console.error('RS256 verification error:', rsErr.message);
           
-          // Development fallback: If it's a Firebase token with valid structure but cert verification failed,
-          // allow it through (cert rotation or network issues). Remove this in production!
-          if (process.env.NODE_ENV !== 'production') {
-            try {
-              const header = jwt.decode(token, { complete: true })?.header || {};
-              const payload = jwt.decode(token, { complete: false });
-              
-              if (header.alg === 'RS256' && payload?.iss?.includes('securetoken.google.com') && payload?.email) {
-                console.warn('⚠️ DEVELOPMENT MODE: Allowing Firebase token through without cert verification');
-                console.warn('⚠️ Token has valid structure but cert verification failed:', rsErr.message);
-                decoded = payload; // Use decoded payload as-is
-              } else {
+            // Development fallback: If it's a Firebase token with valid structure but cert verification failed,
+            // allow it through (cert rotation or network issues). Remove this in production!
+            if (process.env.NODE_ENV !== 'production') {
+              try {
+                const header = jwt.decode(token, { complete: true })?.header || {};
+                const payload = jwt.decode(token, { complete: false });
+                
+                if (header.alg === 'RS256' && payload?.iss?.includes('securetoken.google.com') && payload?.email) {
+                  console.warn('⚠️ DEVELOPMENT MODE: Allowing Firebase token through without cert verification');
+                  console.warn('⚠️ Token has valid structure but cert verification failed:', rsErr.message);
+                  decoded = payload; // Use decoded payload as-is
+                } else {
+                  throw rsErr;
+                }
+              } catch (fallbackErr) {
                 throw rsErr;
               }
-            } catch (fallbackErr) {
+            } else {
               throw rsErr;
             }
-          } else {
-            throw rsErr;
           }
         }
       }
@@ -259,21 +273,34 @@ export const optionalProtect = async (req, res, next) => {
       // Get token from header
       token = req.headers.authorization.split(' ')[1];
 
-      // Verify token (HS256 first, fallback to RS256 via Google/Firebase certs)
+      // Verify token (HS256 first, then Supabase, fallback to RS256 via Google/Firebase certs)
       let decoded = null;
       try {
         decoded = jwt.verify(token, process.env.JWT_SECRET || 'jetset-app-secret-key');
       } catch (hsErr) {
-        try {
-          const header = jwt.decode(token, { complete: true })?.header || {};
-          if (header.alg && header.alg.startsWith('RS')) {
-            decoded = await verifyRS256Token(token, header);
-          } else {
-            throw hsErr;
+        // Try Supabase HS256 token
+        if (SUPABASE_JWT_SECRET && !decoded) {
+          try {
+            decoded = jwt.verify(token, SUPABASE_JWT_SECRET);
+            console.log('Optional auth: Verified Supabase token');
+          } catch (supabaseErr) {
+            // Continue to RS256
           }
-        } catch (rsErr) {
-          // Silently fail for optional protect
-          console.log('Optional auth: RS256 verification failed:', rsErr.message);
+        }
+        
+        // Try RS256 if still not decoded
+        if (!decoded) {
+          try {
+            const header = jwt.decode(token, { complete: true })?.header || {};
+            if (header.alg && header.alg.startsWith('RS')) {
+              decoded = await verifyRS256Token(token, header);
+            } else {
+              throw hsErr;
+            }
+          } catch (rsErr) {
+            // Silently fail for optional protect
+            console.log('Optional auth: RS256 verification failed:', rsErr.message);
+          }
         }
       }
 

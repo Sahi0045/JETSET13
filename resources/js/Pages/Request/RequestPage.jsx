@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './RequestPage.css';
 import Navbar from '../Common/Navbar';
 import Footer from '../Common/Footer';
 import withPageElements from '../Common/PageWrapper';
+import supabase from '../../lib/supabase';
 
 const RequestPage = () => {
   const [activeTab, setActiveTab] = useState('inquiry');
   const [selectedInquiryType, setSelectedInquiryType] = useState('general');
+  const [currentUser, setCurrentUser] = useState(null);
   const [formData, setFormData] = useState({
     // Common fields
     customer_name: '',
@@ -54,6 +56,24 @@ const RequestPage = () => {
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Check for Supabase authentication on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (session?.user) {
+          console.log('✅ Supabase user detected:', session.user.email);
+          setCurrentUser(session.user);
+        } else {
+          console.log('ℹ️ No Supabase session found');
+        }
+      } catch (err) {
+        console.error('Error checking Supabase auth:', err);
+      }
+    };
+    checkAuth();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -150,8 +170,26 @@ const RequestPage = () => {
 
       console.log('Submitting inquiry:', inquiryData);
 
-      // Get authentication token if user is logged in
-      const token = localStorage.getItem('token') || localStorage.getItem('adminToken');
+      // Get authentication token from multiple sources
+      let token = localStorage.getItem('token') || localStorage.getItem('adminToken');
+      
+      // Check for Supabase token
+      if (!token && currentUser) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          token = session.access_token;
+          console.log('✅ Using Supabase access token for authentication');
+        }
+      }
+      
+      // Also check localStorage for supabase token
+      if (!token) {
+        token = localStorage.getItem('supabase_token');
+        if (token) {
+          console.log('✅ Using stored Supabase token');
+        }
+      }
+      
       const headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -160,9 +198,11 @@ const RequestPage = () => {
       // Add authorization header if user is logged in
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
-        console.log('User is authenticated, associating inquiry with user account');
+        console.log('✅ User is authenticated, associating inquiry with user account');
+        console.log('   Token type:', token.startsWith('eyJ') ? 'JWT' : 'Other');
+        console.log('   User email:', currentUser?.email || localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')).email : 'Unknown');
       } else {
-        console.log('User not authenticated, creating guest inquiry');
+        console.log('⚠️ User not authenticated, creating guest inquiry');
       }
 
       // Submit to API
