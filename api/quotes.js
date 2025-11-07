@@ -197,39 +197,8 @@ export default async function handler(req, res) {
       }
     }
 
-    // PUT /api/quotes?id=xxx - Update a quote (admin only)
-    if (method === 'PUT' && query.id) {
-      if (!req.user || !['admin', 'staff'].includes(req.user.role)) {
-        return res.status(403).json({
-          success: false,
-          message: 'Admin access required'
-        });
-      }
-
-      const updateData = { ...req.body };
-      // Map 'notes' to 'admin_notes' if present
-      if (updateData.notes !== undefined) {
-        updateData.admin_notes = updateData.notes;
-        delete updateData.notes;
-      }
-      
-      const quote = await Quote.update(query.id, updateData);
-
-      if (!quote) {
-        return res.status(404).json({
-          success: false,
-          message: 'Quote not found'
-        });
-      }
-
-      return res.status(200).json({
-        success: true,
-        message: 'Quote updated successfully',
-        data: quote
-      });
-    }
-
     // PUT /api/quotes?id=xxx&action=send - Send a quote (admin only)
+    // IMPORTANT: Check this BEFORE the generic PUT route
     if (method === 'PUT' && query.id && query.action === 'send') {
       console.log('PUT /api/quotes (send) - User check:', {
         hasUser: !!req.user,
@@ -304,6 +273,39 @@ export default async function handler(req, res) {
           details: process.env.NODE_ENV === 'development' ? sendError.stack : sendError.toString()
         });
       }
+    }
+
+    // PUT /api/quotes?id=xxx - Update a quote (admin only)
+    // This handles general updates (not send action)
+    if (method === 'PUT' && query.id && !query.action) {
+      if (!req.user || !['admin', 'staff'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Admin access required'
+        });
+      }
+
+      const updateData = { ...req.body };
+      // Map 'notes' to 'admin_notes' if present
+      if (updateData.notes !== undefined) {
+        updateData.admin_notes = updateData.notes;
+        delete updateData.notes;
+      }
+      
+      const quote = await Quote.update(query.id, updateData);
+
+      if (!quote) {
+        return res.status(404).json({
+          success: false,
+          message: 'Quote not found'
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Quote updated successfully',
+        data: quote
+      });
     }
 
     // DELETE /api/quotes?id=xxx - Delete a quote (admin only)
