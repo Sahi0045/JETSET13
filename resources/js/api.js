@@ -1,9 +1,14 @@
 import axios from 'axios';
+import API_CONFIG from './config/api.config';
 
-// API URL based on environment
-const API_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_PROD_API_URL || '/api';
+// API URL based on environment (automatically detects localhost vs production)
+const API_URL = API_CONFIG.API_URL;
 
-console.log('Using API URL:', API_URL);
+console.log('🔗 API Configuration:', {
+  environment: API_CONFIG.IS_DEVELOPMENT ? 'Development' : 'Production',
+  apiUrl: API_URL,
+  hostname: window.location.hostname
+});
 
 const api = axios.create({
   baseURL: API_URL,

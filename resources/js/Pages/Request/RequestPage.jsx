@@ -4,6 +4,7 @@ import Navbar from '../Common/Navbar';
 import Footer from '../Common/Footer';
 import withPageElements from '../Common/PageWrapper';
 import supabase from '../../lib/supabase';
+import API_CONFIG from '../../config/api.config';
 
 const RequestPage = () => {
   const [activeTab, setActiveTab] = useState('inquiry');
@@ -206,7 +207,10 @@ const RequestPage = () => {
       }
 
       // Submit to API
-      const response = await fetch('/api/inquiries', {
+      const apiUrl = `${API_CONFIG.API_URL}/inquiries`;
+      console.log('📤 Submitting to:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers,
         credentials: 'include',

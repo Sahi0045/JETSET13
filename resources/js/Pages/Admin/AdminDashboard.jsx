@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import './AdminPanel.css';
+import { getApiUrl } from '../../utils/apiHelper';
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState({
@@ -49,7 +50,7 @@ const AdminDashboard = () => {
       };
 
       // Fetch statistics
-      const statsResponse = await fetch('/api/inquiries/stats', {
+      const statsResponse = await fetch(getApiUrl('inquiries/stats'), {
         headers,
         credentials: 'include'
       });
@@ -71,7 +72,7 @@ const AdminDashboard = () => {
       }
 
       // Fetch recent inquiries
-      const inquiriesResponse = await fetch('/api/inquiries?limit=5&sort=created_at:desc', {
+      const inquiriesResponse = await fetch(getApiUrl('inquiries?limit=5&sort=created_at:desc'), {
         headers,
         credentials: 'include'
       });

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { getApiUrl } from '../../../utils/apiHelper'
 
 export default function TravelDashboard() {
   const navigate = useNavigate()
@@ -142,7 +143,7 @@ export default function TravelDashboard() {
 
       console.log('✅ Token found, making API request...')
 
-      const response = await fetch('/api/inquiries/my', {
+      const response = await fetch(getApiUrl('inquiries/my'), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,

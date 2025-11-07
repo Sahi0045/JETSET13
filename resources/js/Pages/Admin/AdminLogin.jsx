@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './AdminLogin.css';
+import { getApiUrl } from '../../utils/apiHelper';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -33,7 +34,7 @@ const AdminLogin = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(getApiUrl('auth/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
