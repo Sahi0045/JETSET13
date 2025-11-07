@@ -47,13 +47,37 @@ const QuoteCreate = () => {
         return;
       }
 
-      const response = await fetch(`/api/inquiries/${inquiryId}`, {
+      const response = await fetch(`/api/inquiries?id=${inquiryId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         credentials: 'include'
       });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.warn('Inquiry not found:', inquiryId);
+          alert('Inquiry not found. Redirecting to inquiries list.');
+          navigate('/admin/inquiries');
+          return;
+        }
+        // Try to parse error response as JSON, fallback to text
+        let errorMessage = `Failed to fetch inquiry (${response.status})`;
+        try {
+          const errorText = await response.text();
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } catch {
+            errorMessage = errorText.substring(0, 100);
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+        throw new Error(errorMessage);
+      }
+
       const result = await response.json();
 
       if (result.success) {

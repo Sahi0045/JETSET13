@@ -11,6 +11,10 @@
       "destination": "/api/auth"
     },
     {
+      "source": "/api/inquiries/:id",
+      "destination": "/api/inquiries?id=:id"
+    },
+    {
       "source": "/((?!api|assets).*)",
       "destination": "/index.html"
     }
