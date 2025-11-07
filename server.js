@@ -75,6 +75,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// 404 handler for API routes (must be before static file serving)
+app.use('/api/*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `API route ${req.method} ${req.path} not found`,
+    path: req.path,
+    method: req.method
+  });
+});
+
 // Serve static files from the React app in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'dist')));

@@ -35,7 +35,7 @@ const InquiryDetail = () => {
         return;
       }
 
-      // Fetch inquiry details
+      // Fetch inquiry details (Vercel uses query parameters, not path params)
       const inquiryResponse = await fetch(`/api/inquiries?id=${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -43,6 +43,31 @@ const InquiryDetail = () => {
         },
         credentials: 'include'
       });
+
+      if (!inquiryResponse.ok) {
+        if (inquiryResponse.status === 404) {
+          console.warn('Inquiry not found:', id);
+          setInquiry(null);
+          setLoading(false);
+          return;
+        }
+        // Try to parse error response as JSON, fallback to text
+        let errorMessage = `Failed to fetch inquiry (${inquiryResponse.status})`;
+        try {
+          const errorText = await inquiryResponse.text();
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } catch {
+            // If not JSON, use the text
+            errorMessage = errorText.substring(0, 100);
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+        throw new Error(errorMessage);
+      }
+
       const inquiryData = await inquiryResponse.json();
 
       if (inquiryData.success) {
@@ -98,6 +123,22 @@ const InquiryDetail = () => {
         credentials: 'include',
         body: JSON.stringify(updateData)
       });
+
+      if (!response.ok) {
+        let errorMessage = `Failed to update inquiry (${response.status})`;
+        try {
+          const errorText = await response.text();
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } catch {
+            errorMessage = errorText.substring(0, 100);
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+        throw new Error(errorMessage);
+      }
 
       const result = await response.json();
 
