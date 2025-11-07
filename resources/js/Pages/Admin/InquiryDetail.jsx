@@ -36,7 +36,7 @@ const InquiryDetail = () => {
       }
 
       // Fetch inquiry details
-      const inquiryResponse = await fetch(`/api/inquiries/${id}`, {
+      const inquiryResponse = await fetch(`/api/inquiries?id=${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -56,7 +56,7 @@ const InquiryDetail = () => {
       }
 
       // Fetch quotes for this inquiry
-      const quotesResponse = await fetch(`/api/quotes/inquiry/${id}`, {
+      const quotesResponse = await fetch(`/api/quotes?inquiryId=${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -89,7 +89,7 @@ const InquiryDetail = () => {
         return;
       }
 
-      const response = await fetch(`/api/inquiries/${id}`, {
+      const response = await fetch(`/api/inquiries?id=${id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

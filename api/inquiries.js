@@ -69,6 +69,41 @@ export default async function handler(req, res) {
       // Run auth middleware
       await runMiddleware(req, res, optionalProtect);
 
+      // Check if getting a specific inquiry by ID
+      if (query.id) {
+        if (!req.user) {
+          return res.status(401).json({
+            success: false,
+            message: 'Authentication required'
+          });
+        }
+
+        const inquiry = await Inquiry.findById(query.id);
+
+        if (!inquiry) {
+          return res.status(404).json({
+            success: false,
+            message: 'Inquiry not found'
+          });
+        }
+
+        // Check if user is admin or the owner of the inquiry
+        const isAdmin = ['admin', 'staff'].includes(req.user.role);
+        const isOwner = inquiry.user_id === req.user.id;
+
+        if (!isAdmin && !isOwner) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied'
+          });
+        }
+
+        return res.status(200).json({
+          success: true,
+          data: inquiry
+        });
+      }
+
       // Check if getting specific user's inquiries
       if (query.endpoint === 'my') {
         if (!req.user) {
@@ -122,6 +157,69 @@ export default async function handler(req, res) {
       return res.status(200).json({
         success: true,
         data: { inquiries: result.inquiries || result }
+      });
+    }
+
+    // PUT/PATCH /api/inquiries?id=xxx - Update inquiry
+    if (method === 'PUT' || method === 'PATCH') {
+      await runMiddleware(req, res, optionalProtect);
+
+      if (!query.id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Inquiry ID is required'
+        });
+      }
+
+      // Only admin can update inquiries
+      if (!req.user || !['admin', 'staff'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Admin access required'
+        });
+      }
+
+      const updateData = req.body;
+      const inquiry = await Inquiry.update(query.id, updateData);
+
+      if (!inquiry) {
+        return res.status(404).json({
+          success: false,
+          message: 'Inquiry not found'
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Inquiry updated successfully',
+        data: inquiry
+      });
+    }
+
+    // DELETE /api/inquiries?id=xxx - Delete inquiry
+    if (method === 'DELETE') {
+      await runMiddleware(req, res, optionalProtect);
+
+      if (!query.id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Inquiry ID is required'
+        });
+      }
+
+      // Only admin can delete inquiries
+      if (!req.user || !['admin', 'staff'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Admin access required'
+        });
+      }
+
+      await Inquiry.delete(query.id);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Inquiry deleted successfully'
       });
     }
 

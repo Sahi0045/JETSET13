@@ -1,5 +1,5 @@
-import Inquiry from '../../backend/models/inquiry.model.js';
-import { optionalProtect } from '../../backend/middleware/auth.middleware.js';
+import Quote from '../backend/models/quote.model.js';
+import { optionalProtect } from '../backend/middleware/auth.middleware.js';
 
 // Wrapper to convert Express middleware to Vercel handler
 const runMiddleware = (req, res, fn) => {
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST,PUT,DELETE');
   res.setHeader(
     'Access-Control-Allow-Headers',
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
@@ -30,15 +30,13 @@ export default async function handler(req, res) {
   }
 
   const { method, query } = req;
-  const { id } = query;
 
   try {
     // Run auth middleware
     await runMiddleware(req, res, optionalProtect);
 
-    // GET /api/inquiries/[id] - Get inquiry by ID
-    if (method === 'GET') {
-      // Check if user has permission (admin or owner)
+    // GET /api/quotes?inquiryId=xxx - Get quotes for a specific inquiry
+    if (method === 'GET' && query.inquiryId) {
       if (!req.user) {
         return res.status(401).json({
           success: false,
@@ -46,35 +44,76 @@ export default async function handler(req, res) {
         });
       }
 
-      const inquiry = await Inquiry.findById(id);
+      const quotes = await Quote.findByInquiryId(query.inquiryId);
 
-      if (!inquiry) {
-        return res.status(404).json({
+      return res.status(200).json({
+        success: true,
+        data: quotes || []
+      });
+    }
+
+    // GET /api/quotes?id=xxx - Get a specific quote by ID
+    if (method === 'GET' && query.id) {
+      if (!req.user) {
+        return res.status(401).json({
           success: false,
-          message: 'Inquiry not found'
+          message: 'Authentication required'
         });
       }
 
-      // Check if user is admin or the owner of the inquiry
-      const isAdmin = ['admin', 'staff'].includes(req.user.role);
-      const isOwner = inquiry.user_id === req.user.id;
+      const quote = await Quote.findById(query.id);
 
-      if (!isAdmin && !isOwner) {
-        return res.status(403).json({
+      if (!quote) {
+        return res.status(404).json({
           success: false,
-          message: 'Access denied'
+          message: 'Quote not found'
         });
       }
 
       return res.status(200).json({
         success: true,
-        data: inquiry
+        data: quote
       });
     }
 
-    // PATCH/PUT /api/inquiries/[id] - Update inquiry
-    if (method === 'PATCH' || method === 'PUT') {
-      // Only admin can update inquiries
+    // GET /api/quotes - Get all quotes (admin only)
+    if (method === 'GET') {
+      if (!req.user || !['admin', 'staff'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Admin access required'
+        });
+      }
+
+      const quotes = await Quote.findAll();
+
+      return res.status(200).json({
+        success: true,
+        data: quotes || []
+      });
+    }
+
+    // POST /api/quotes - Create a new quote (admin only)
+    if (method === 'POST') {
+      if (!req.user || !['admin', 'staff'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Admin access required'
+        });
+      }
+
+      const quoteData = req.body;
+      const quote = await Quote.create(quoteData);
+
+      return res.status(201).json({
+        success: true,
+        message: 'Quote created successfully',
+        data: quote
+      });
+    }
+
+    // PUT /api/quotes?id=xxx - Update a quote (admin only)
+    if (method === 'PUT' && query.id) {
       if (!req.user || !['admin', 'staff'].includes(req.user.role)) {
         return res.status(403).json({
           success: false,
@@ -83,25 +122,24 @@ export default async function handler(req, res) {
       }
 
       const updateData = req.body;
-      const inquiry = await Inquiry.update(id, updateData);
+      const quote = await Quote.update(query.id, updateData);
 
-      if (!inquiry) {
+      if (!quote) {
         return res.status(404).json({
           success: false,
-          message: 'Inquiry not found'
+          message: 'Quote not found'
         });
       }
 
       return res.status(200).json({
         success: true,
-        message: 'Inquiry updated successfully',
-        data: inquiry
+        message: 'Quote updated successfully',
+        data: quote
       });
     }
 
-    // DELETE /api/inquiries/[id] - Delete inquiry
-    if (method === 'DELETE') {
-      // Only admin can delete inquiries
+    // DELETE /api/quotes?id=xxx - Delete a quote (admin only)
+    if (method === 'DELETE' && query.id) {
       if (!req.user || !['admin', 'staff'].includes(req.user.role)) {
         return res.status(403).json({
           success: false,
@@ -109,11 +147,11 @@ export default async function handler(req, res) {
         });
       }
 
-      await Inquiry.delete(id);
+      await Quote.delete(query.id);
 
       return res.status(200).json({
         success: true,
-        message: 'Inquiry deleted successfully'
+        message: 'Quote deleted successfully'
       });
     }
 
@@ -124,7 +162,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Inquiry API error:', error);
+    console.error('Quote API error:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error',
@@ -132,3 +170,5 @@ export default async function handler(req, res) {
     });
   }
 }
+
+
