@@ -8,7 +8,7 @@
     "client": "vite",
     "dev": "node start-dev.js",
     "dev:legacy": "concurrently \"npm run server\" \"npm run client\" \"npm run supabase:check\"",
-    "build": "vite build && rsync -av --exclude='index.html' public/ dist/",
+    "build": "vite build && node copy-public-assets.js",
     "prod": "node start-prod.js",
     "prod:vercel": "vercel deploy --prod",
     "prod:setup": "node -e \"const fs = require('fs'); if(!fs.existsSync('.env.production')) { fs.copyFileSync('.env', '.env.production'); console.log('Created .env.production'); }\" && npm run build",
