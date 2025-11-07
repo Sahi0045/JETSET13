@@ -33,17 +33,19 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Route based on URL path
+  // Route based on URL path and query parameters
   const path = req.url.split('?')[0];
+  const urlParams = new URLSearchParams(req.url.split('?')[1] || '');
+  const endpoint = urlParams.get('endpoint');
 
-  if (path.includes('/login') || req.body?.action === 'login') {
+  if (path.includes('/login') || req.body?.action === 'login' || endpoint === 'login') {
     return handleLogin(req, res);
-  } else if (path.includes('/register') || req.body?.action === 'register') {
+  } else if (path.includes('/register') || req.body?.action === 'register' || endpoint === 'register') {
     return handleRegister(req, res);
   } else {
     return res.status(404).json({
       success: false,
-      message: 'Endpoint not found'
+      message: 'Endpoint not found. Use /api/auth/login or /api/auth/register'
     });
   }
 }

@@ -3,6 +3,14 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/api/auth/login",
+      "destination": "/api/auth"
+    },
+    {
+      "source": "/api/auth/register",
+      "destination": "/api/auth"
+    },
+    {
       "source": "/((?!api|assets).*)",
       "destination": "/index.html"
     }
