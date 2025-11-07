@@ -95,10 +95,33 @@ export default async function handler(req, res) {
 
     // POST /api/quotes - Create a new quote (admin only)
     if (method === 'POST') {
-      if (!req.user || !['admin', 'staff'].includes(req.user.role)) {
+      console.log('POST /api/quotes - User check:', {
+        hasUser: !!req.user,
+        userId: req.user?.id,
+        userEmail: req.user?.email,
+        userRole: req.user?.role,
+        userObject: req.user ? { id: req.user.id, email: req.user.email, role: req.user.role } : null
+      });
+
+      if (!req.user) {
+        console.error('POST /api/quotes - No user found in request');
         return res.status(403).json({
           success: false,
-          message: 'Admin access required'
+          message: 'Admin access required',
+          error: 'User not authenticated'
+        });
+      }
+
+      if (!['admin', 'staff'].includes(req.user.role)) {
+        console.error('POST /api/quotes - User role insufficient:', {
+          userRole: req.user.role,
+          userId: req.user.id,
+          userEmail: req.user.email
+        });
+        return res.status(403).json({
+          success: false,
+          message: 'Admin access required',
+          error: `User role '${req.user.role}' is not authorized. Required: admin or staff`
         });
       }
 
@@ -208,10 +231,33 @@ export default async function handler(req, res) {
 
     // PUT /api/quotes?id=xxx&action=send - Send a quote (admin only)
     if (method === 'PUT' && query.id && query.action === 'send') {
-      if (!req.user || !['admin', 'staff'].includes(req.user.role)) {
+      console.log('PUT /api/quotes (send) - User check:', {
+        hasUser: !!req.user,
+        userId: req.user?.id,
+        userEmail: req.user?.email,
+        userRole: req.user?.role,
+        quoteId: query.id
+      });
+
+      if (!req.user) {
+        console.error('PUT /api/quotes (send) - No user found in request');
         return res.status(403).json({
           success: false,
-          message: 'Admin access required'
+          message: 'Admin access required',
+          error: 'User not authenticated'
+        });
+      }
+
+      if (!['admin', 'staff'].includes(req.user.role)) {
+        console.error('PUT /api/quotes (send) - User role insufficient:', {
+          userRole: req.user.role,
+          userId: req.user.id,
+          userEmail: req.user.email
+        });
+        return res.status(403).json({
+          success: false,
+          message: 'Admin access required',
+          error: `User role '${req.user.role}' is not authorized. Required: admin or staff`
         });
       }
 

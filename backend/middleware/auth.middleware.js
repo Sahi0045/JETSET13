@@ -318,10 +318,21 @@ export const protect = async (req, res, next) => {
 
       // Remove password from user object and ensure role is included
       const { password, ...userWithoutPassword } = user;
+      
+      // Check if Supabase token has role in user_metadata (takes precedence)
+      const supabaseRole = decoded?.user_metadata?.role;
+      const finalRole = supabaseRole || user.role || 'user';
+      
       req.user = {
         ...userWithoutPassword,
-        role: user.role || 'user'
+        role: finalRole
       };
+      
+      console.log('Auth middleware: Setting req.user with role:', {
+        dbRole: user.role,
+        supabaseRole: supabaseRole,
+        finalRole: finalRole
+      });
 
       next();
     } catch (error) {
@@ -416,13 +427,28 @@ export const optionalProtect = async (req, res, next) => {
       if (user) {
         // Remove password from user object and ensure role is included
         const { password, ...userWithoutPassword } = user;
+        
+        // Check if Supabase token has role in user_metadata (takes precedence)
+        const supabaseRole = decoded?.user_metadata?.role;
+        const finalRole = supabaseRole || user.role || 'user';
+        
         req.user = {
           ...userWithoutPassword,
-          role: user.role || 'user'
+          role: finalRole
         };
-        console.log('Optional auth: User authenticated:', req.user.email);
+        console.log('Optional auth: User authenticated:', {
+          email: req.user.email,
+          id: req.user.id,
+          role: req.user.role,
+          dbRole: user.role,
+          supabaseRole: supabaseRole,
+          finalRole: finalRole
+        });
       } else if (decoded) {
-        console.log('Optional auth: User not found or could not be provisioned, continuing as guest');
+        console.log('Optional auth: User not found or could not be provisioned, continuing as guest', {
+          decodedEmail: decoded.email,
+          decodedId: decoded.id || decoded.sub
+        });
       }
     } catch (error) {
       console.log('Optional auth: Token verification failed, continuing as guest:', error.message);
