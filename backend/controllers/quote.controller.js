@@ -1,6 +1,6 @@
 import Quote from '../models/quote.model.js';
 import Inquiry from '../models/inquiry.model.js';
-import { sendEmail } from '../services/emailService.js';
+import { sendEmail, generateQuoteSentTemplate } from '../services/emailService.js';
 import supabase from '../config/supabase.js';
 
 // @desc    Create a new quote
@@ -306,28 +306,31 @@ export const sendQuote = async (req, res) => {
       // fallback to sentQuote
     }
 
-    // Send email to customer (guard against missing inquiry info)
+    // Send professional email to customer with quote details
     try {
       const customerEmail = fullQuote?.inquiry?.customer_email;
       if (customerEmail) {
+        const quoteEmailHtml = generateQuoteSentTemplate({
+          customerName: fullQuote?.inquiry?.customer_name || 'Valued Customer',
+          quoteNumber: fullQuote.quote_number,
+          totalAmount: fullQuote.total_amount,
+          currency: fullQuote.currency,
+          expiresAt: fullQuote.expires_at,
+          quoteLink: `${process.env.FRONTEND_URL || 'https://jetset-app.com'}/my-trips`,
+          breakdown: fullQuote.breakdown || []
+        });
+
         await sendEmail({
           to: customerEmail,
-          subject: `Your Travel Quote - ${fullQuote.quote_number}`,
-          template: 'quote_sent',
-          data: {
-            customerName: fullQuote?.inquiry?.customer_name,
-            quoteNumber: fullQuote.quote_number,
-            totalAmount: fullQuote.total_amount,
-            currency: fullQuote.currency,
-            expiresAt: fullQuote.expires_at,
-            quoteLink: `${process.env.FRONTEND_URL}/quotes/${fullQuote.id}`
-          }
+          subject: `🎉 Your Travel Quote is Ready - ${fullQuote.quote_number}`,
+          html: quoteEmailHtml
         });
+        console.log('✅ Quote email sent to customer:', customerEmail);
       } else {
-        console.warn('Skipping email: inquiry customer_email not available');
+        console.warn('⚠️ Skipping email: inquiry customer_email not available');
       }
     } catch (emailError) {
-      console.error('Failed to send quote email:', emailError);
+      console.error('❌ Failed to send quote email:', emailError);
     }
 
     res.json({

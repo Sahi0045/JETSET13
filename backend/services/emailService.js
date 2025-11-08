@@ -4,8 +4,8 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-// Initialize Resend with API key directly since .env is not accessible
-const resend = new Resend('re_4tfvwTmv_9kPKorQAcpZmZcZ4i744cC1Q');
+// Initialize Resend with API key from environment variable
+const resend = new Resend(process.env.RESEND_API_KEY || 're_4tfvwTmv_9kPKorQAcpZmZcZ4i744cC1Q');
 
 /**
  * Generic email sending function
@@ -367,6 +367,561 @@ function stripHtml(html) {
   return html.replace(/<[^>]*>?/gm, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Generate professional inquiry received email template for customers
+ * @param {Object} data - Inquiry data
+ * @returns {string} - HTML email content
+ */
+export function generateInquiryReceivedTemplate(data) {
+  const { customerName, inquiryType, inquiryId, customerEmail } = data;
+  
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { 
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+          line-height: 1.6; 
+          color: #333; 
+          max-width: 600px; 
+          margin: 0 auto; 
+          background-color: #f4f4f4;
+        }
+        .container { 
+          background-color: white; 
+          margin: 20px auto; 
+          border-radius: 10px; 
+          overflow: hidden; 
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header { 
+          background: linear-gradient(135deg, #0066b2 0%, #004d8a 100%); 
+          padding: 30px 20px; 
+          text-align: center; 
+          color: white; 
+        }
+        .header h1 { 
+          margin: 0; 
+          font-size: 28px; 
+          font-weight: 600;
+        }
+        .header p { 
+          margin: 10px 0 0; 
+          font-size: 14px; 
+          opacity: 0.9;
+        }
+        .content { 
+          padding: 30px 25px; 
+        }
+        .content p { 
+          margin: 15px 0; 
+          font-size: 15px;
+        }
+        .info-box { 
+          background-color: #f8f9fa; 
+          padding: 20px; 
+          margin: 20px 0; 
+          border-radius: 8px; 
+          border-left: 4px solid #0066b2;
+        }
+        .info-box h3 { 
+          margin: 0 0 15px; 
+          color: #0066b2; 
+          font-size: 18px;
+        }
+        .info-row { 
+          display: flex; 
+          padding: 8px 0; 
+          border-bottom: 1px solid #e0e0e0;
+        }
+        .info-row:last-child { 
+          border-bottom: none;
+        }
+        .info-label { 
+          font-weight: 600; 
+          min-width: 140px; 
+          color: #555;
+        }
+        .info-value { 
+          color: #333;
+        }
+        .cta-button { 
+          display: inline-block; 
+          background-color: #0066b2; 
+          color: white !important; 
+          padding: 14px 30px; 
+          text-decoration: none; 
+          border-radius: 6px; 
+          margin: 20px 0; 
+          font-weight: 600;
+          transition: background-color 0.3s;
+        }
+        .cta-button:hover { 
+          background-color: #004d8a;
+        }
+        .highlight { 
+          background-color: #fff3cd; 
+          padding: 15px; 
+          border-left: 4px solid #ffc107; 
+          margin: 20px 0; 
+          border-radius: 4px;
+        }
+        .footer { 
+          background-color: #f8f9fa; 
+          padding: 25px; 
+          text-align: center; 
+          font-size: 13px; 
+          color: #666; 
+          border-top: 1px solid #e0e0e0;
+        }
+        .footer p { 
+          margin: 8px 0;
+        }
+        .contact-info { 
+          margin: 15px 0;
+        }
+        .contact-info a { 
+          color: #0066b2; 
+          text-decoration: none;
+        }
+        @media only screen and (max-width: 600px) {
+          .info-row { 
+            flex-direction: column;
+          }
+          .info-label { 
+            margin-bottom: 5px;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>✈️ Inquiry Received!</h1>
+          <p>Thank you for choosing JetSet</p>
+        </div>
+        
+        <div class="content">
+          <p>Dear ${customerName},</p>
+          
+          <p>We have successfully received your travel inquiry and our expert team is reviewing your request. We're excited to help you plan your perfect journey!</p>
+          
+          <div class="info-box">
+            <h3>📋 Your Inquiry Details</h3>
+            <div class="info-row">
+              <div class="info-label">Inquiry Type:</div>
+              <div class="info-value">${inquiryType.charAt(0).toUpperCase() + inquiryType.slice(1)}</div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">Inquiry ID:</div>
+              <div class="info-value">#${inquiryId}</div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">Email:</div>
+              <div class="info-value">${customerEmail}</div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">Status:</div>
+              <div class="info-value">Pending Review</div>
+            </div>
+          </div>
+          
+          <div class="highlight">
+            <strong>⏰ What happens next?</strong>
+            <p style="margin: 10px 0 0;">Our travel experts will review your inquiry and send you a personalized quote within <strong>24 hours</strong>. You'll receive an email notification as soon as your quote is ready.</p>
+          </div>
+          
+          <p>In the meantime, feel free to explore more travel options on our website or contact us if you have any questions.</p>
+          
+          <div style="text-align: center;">
+            <a href="${process.env.FRONTEND_URL || 'https://jetset-app.com'}/my-trips" class="cta-button">
+              View My Trips
+            </a>
+          </div>
+          
+          <div class="contact-info">
+            <p><strong>Need immediate assistance?</strong></p>
+            <p>📧 Email: <a href="mailto:support@jetset.com">support@jetset.com</a></p>
+            <p>📞 Phone: +1 (555) 123-4567</p>
+            <p>💬 Live Chat: Available on our website</p>
+          </div>
+        </div>
+        
+        <div class="footer">
+          <p><strong>JetSet Travel Agency</strong></p>
+          <p>Your trusted partner for unforgettable journeys</p>
+          <p style="margin-top: 15px; color: #999;">This is an automated confirmation. Please do not reply to this email.</p>
+          <p>&copy; 2025 JetSet. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Generate professional inquiry notification email template for admins
+ * @param {Object} data - Inquiry data
+ * @returns {string} - HTML email content
+ */
+export function generateAdminInquiryNotificationTemplate(data) {
+  const { customerName, customerEmail, inquiryType, inquiryId, travelDetails } = data;
+  
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { 
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+          line-height: 1.6; 
+          color: #333; 
+          max-width: 600px; 
+          margin: 0 auto; 
+          background-color: #f4f4f4;
+        }
+        .container { 
+          background-color: white; 
+          margin: 20px auto; 
+          border-radius: 10px; 
+          overflow: hidden; 
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header { 
+          background: linear-gradient(135deg, #dc3545 0%, #a52834 100%); 
+          padding: 30px 20px; 
+          text-align: center; 
+          color: white; 
+        }
+        .header h1 { 
+          margin: 0; 
+          font-size: 26px; 
+          font-weight: 600;
+        }
+        .badge { 
+          display: inline-block; 
+          background-color: #ffc107; 
+          color: #000; 
+          padding: 5px 15px; 
+          border-radius: 20px; 
+          font-size: 12px; 
+          font-weight: 600; 
+          margin-top: 10px;
+        }
+        .content { 
+          padding: 30px 25px; 
+        }
+        .alert { 
+          background-color: #fff3cd; 
+          border-left: 4px solid #ffc107; 
+          padding: 15px; 
+          margin: 20px 0; 
+          border-radius: 4px;
+        }
+        .customer-info { 
+          background-color: #e7f3ff; 
+          padding: 20px; 
+          margin: 20px 0; 
+          border-radius: 8px; 
+          border-left: 4px solid #0066b2;
+        }
+        .customer-info h3 { 
+          margin: 0 0 15px; 
+          color: #0066b2; 
+          font-size: 18px;
+        }
+        .info-row { 
+          padding: 8px 0; 
+          border-bottom: 1px solid #d0e7ff;
+        }
+        .info-row:last-child { 
+          border-bottom: none;
+        }
+        .info-label { 
+          font-weight: 600; 
+          color: #0066b2; 
+          display: inline-block; 
+          min-width: 140px;
+        }
+        .cta-button { 
+          display: inline-block; 
+          background-color: #dc3545; 
+          color: white !important; 
+          padding: 14px 30px; 
+          text-decoration: none; 
+          border-radius: 6px; 
+          margin: 20px 0; 
+          font-weight: 600;
+          text-align: center;
+        }
+        .footer { 
+          background-color: #f8f9fa; 
+          padding: 25px; 
+          text-align: center; 
+          font-size: 13px; 
+          color: #666; 
+          border-top: 1px solid #e0e0e0;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🔔 New Travel Inquiry</h1>
+          <span class="badge">ACTION REQUIRED</span>
+        </div>
+        
+        <div class="content">
+          <div class="alert">
+            <strong>⚠️ New inquiry received!</strong> A customer is waiting for your response.
+          </div>
+          
+          <p>A new travel inquiry has been submitted and requires your attention.</p>
+          
+          <div class="customer-info">
+            <h3>👤 Customer Information</h3>
+            <div class="info-row">
+              <span class="info-label">Name:</span>
+              <span>${customerName}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Email:</span>
+              <span>${customerEmail}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Inquiry Type:</span>
+              <span>${inquiryType.charAt(0).toUpperCase() + inquiryType.slice(1)}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Inquiry ID:</span>
+              <span>#${inquiryId}</span>
+            </div>
+            ${travelDetails ? `
+            <div class="info-row">
+              <span class="info-label">Details:</span>
+              <span>${travelDetails}</span>
+            </div>
+            ` : ''}
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${process.env.FRONTEND_URL || 'https://jetset-app.com'}/admin/inquiries/${inquiryId}" class="cta-button">
+              View Inquiry & Create Quote
+            </a>
+          </div>
+          
+          <p style="color: #666; font-size: 14px;"><strong>Response Time:</strong> Please respond within 24 hours to maintain customer satisfaction.</p>
+        </div>
+        
+        <div class="footer">
+          <p><strong>JetSet Admin Panel</strong></p>
+          <p>&copy; 2025 JetSet. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Generate professional quote sent email template for customers
+ * @param {Object} data - Quote data
+ * @returns {string} - HTML email content
+ */
+export function generateQuoteSentTemplate(data) {
+  const { customerName, quoteNumber, totalAmount, currency, expiresAt, quoteLink, breakdown } = data;
+  
+  const expiryDate = new Date(expiresAt).toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+  
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { 
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+          line-height: 1.6; 
+          color: #333; 
+          max-width: 600px; 
+          margin: 0 auto; 
+          background-color: #f4f4f4;
+        }
+        .container { 
+          background-color: white; 
+          margin: 20px auto; 
+          border-radius: 10px; 
+          overflow: hidden; 
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header { 
+          background: linear-gradient(135deg, #28a745 0%, #20873a 100%); 
+          padding: 30px 20px; 
+          text-align: center; 
+          color: white; 
+        }
+        .header h1 { 
+          margin: 0; 
+          font-size: 28px; 
+          font-weight: 600;
+        }
+        .header p { 
+          margin: 10px 0 0; 
+          font-size: 14px; 
+          opacity: 0.9;
+        }
+        .content { 
+          padding: 30px 25px; 
+        }
+        .quote-summary { 
+          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); 
+          padding: 25px; 
+          margin: 25px 0; 
+          border-radius: 10px; 
+          text-align: center; 
+          border: 2px solid #28a745;
+        }
+        .quote-number { 
+          font-size: 14px; 
+          color: #666; 
+          margin-bottom: 10px;
+        }
+        .total-amount { 
+          font-size: 42px; 
+          font-weight: 700; 
+          color: #28a745; 
+          margin: 15px 0;
+        }
+        .currency { 
+          font-size: 24px; 
+          vertical-align: super;
+        }
+        .expiry-notice { 
+          background-color: #fff3cd; 
+          border-left: 4px solid #ffc107; 
+          padding: 15px; 
+          margin: 20px 0; 
+          border-radius: 4px;
+        }
+        .breakdown { 
+          margin: 20px 0;
+        }
+        .breakdown-item { 
+          display: flex; 
+          justify-content: space-between; 
+          padding: 12px 15px; 
+          background-color: #f8f9fa; 
+          margin: 8px 0; 
+          border-radius: 6px;
+        }
+        .cta-button { 
+          display: inline-block; 
+          background-color: #28a745; 
+          color: white !important; 
+          padding: 16px 40px; 
+          text-decoration: none; 
+          border-radius: 8px; 
+          margin: 25px 0; 
+          font-weight: 600; 
+          font-size: 16px;
+          box-shadow: 0 4px 6px rgba(40, 167, 69, 0.3);
+        }
+        .footer { 
+          background-color: #f8f9fa; 
+          padding: 25px; 
+          text-align: center; 
+          font-size: 13px; 
+          color: #666; 
+          border-top: 1px solid #e0e0e0;
+        }
+        .contact-info { 
+          margin: 20px 0; 
+          padding: 15px; 
+          background-color: #f8f9fa; 
+          border-radius: 8px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🎉 Your Travel Quote is Ready!</h1>
+          <p>We've prepared a personalized quote just for you</p>
+        </div>
+        
+        <div class="content">
+          <p>Dear ${customerName},</p>
+          
+          <p>Great news! Our travel experts have prepared your personalized quote. We've carefully selected the best options for your journey.</p>
+          
+          <div class="quote-summary">
+            <div class="quote-number">Quote Number: <strong>${quoteNumber}</strong></div>
+            <div class="total-amount">
+              <span class="currency">${currency}</span> ${totalAmount.toLocaleString()}
+            </div>
+            <p style="margin: 10px 0 0; color: #666;">Total Estimated Cost</p>
+          </div>
+          
+          ${breakdown && breakdown.length > 0 ? `
+          <div class="breakdown">
+            <h3 style="color: #28a745; margin-bottom: 15px;">💰 Cost Breakdown</h3>
+            ${breakdown.map(item => `
+              <div class="breakdown-item">
+                <span>${item.description || item.name}</span>
+                <strong>${currency} ${(item.amount || item.price || 0).toLocaleString()}</strong>
+              </div>
+            `).join('')}
+          </div>
+          ` : ''}
+          
+          <div class="expiry-notice">
+            <strong>⏰ Important:</strong> This quote is valid until <strong>${expiryDate}</strong>. 
+            Book before this date to secure these prices and availability!
+          </div>
+          
+          <div style="text-align: center;">
+            <a href="${quoteLink}" class="cta-button">
+              View Full Quote & Book Now
+            </a>
+          </div>
+          
+          <div class="contact-info">
+            <p><strong>Have questions about your quote?</strong></p>
+            <p>Our travel experts are here to help!</p>
+            <p>📧 Email: support@jetset.com | 📞 Phone: +1 (555) 123-4567</p>
+          </div>
+          
+          <p style="color: #666; font-size: 14px; margin-top: 20px;">
+            <strong>Next Steps:</strong><br>
+            1. Review your quote details<br>
+            2. Contact us if you have any questions<br>
+            3. Book your trip before the quote expires
+          </p>
+        </div>
+        
+        <div class="footer">
+          <p><strong>JetSet Travel Agency</strong></p>
+          <p>Creating unforgettable travel experiences since 2020</p>
+          <p style="margin-top: 15px; color: #999;">This quote was generated based on your inquiry. Prices subject to availability.</p>
+          <p>&copy; 2025 JetSet. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
 }
 
 export default emailService;

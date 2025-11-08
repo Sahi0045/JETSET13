@@ -2,7 +2,7 @@ import Inquiry from '../models/inquiry.model.js';
 import User from '../models/user.model.js';
 import supabase from '../config/supabase.js';
 // import Quote from '../models/quote.model.js';
-import { sendEmail } from '../services/emailService.js';
+import { sendEmail, generateInquiryReceivedTemplate, generateAdminInquiryNotificationTemplate } from '../services/emailService.js';
 
 // @desc    Create a new inquiry
 // @route   POST /api/inquiries
@@ -53,38 +53,47 @@ export const createInquiry = async (req, res) => {
     const inquiry = await Inquiry.create(inquiryData);
     console.log('✅ Inquiry created successfully:', { id: inquiry.id, inquiry_type: inquiry.inquiry_type });
 
-    // Send confirmation email to customer (optional)
+    // Send confirmation email to customer with professional template
     try {
+      const customerEmailHtml = generateInquiryReceivedTemplate({
+        customerName: inquiry.customer_name,
+        inquiryType: inquiry.inquiry_type,
+        inquiryId: inquiry.id,
+        customerEmail: inquiry.customer_email
+      });
+
       await sendEmail({
         to: inquiry.customer_email,
-        subject: 'Inquiry Received - JET SETTERS',
-        template: 'inquiry_received',
-        data: {
-          customerName: inquiry.customer_name,
-          inquiryType: inquiry.inquiry_type,
-          inquiryId: inquiry.id
-        }
+        subject: '✈️ Inquiry Received - JetSet Travel',
+        html: customerEmailHtml
       });
+      console.log('✅ Confirmation email sent to customer:', inquiry.customer_email);
     } catch (emailError) {
-      console.error('Failed to send inquiry confirmation email:', emailError);
+      console.error('❌ Failed to send inquiry confirmation email:', emailError);
       // Don't fail the request if email fails
     }
 
-    // Send notification email to admins (optional)
+    // Send notification email to admins with professional template
     try {
-      await sendEmail({
-        to: process.env.ADMIN_EMAIL || 'admin@jetsetters.com',
-        subject: 'New Travel Inquiry Received',
-        template: 'admin_inquiry_notification',
-        data: {
-          customerName: inquiry.customer_name,
-          customerEmail: inquiry.customer_email,
-          inquiryType: inquiry.inquiry_type,
-          inquiryId: inquiry.id
-        }
+      const adminEmail = process.env.ADMIN_EMAIL || 'jetsetters721@gmail.com';
+      
+      const adminEmailHtml = generateAdminInquiryNotificationTemplate({
+        customerName: inquiry.customer_name,
+        customerEmail: inquiry.customer_email,
+        inquiryType: inquiry.inquiry_type,
+        inquiryId: inquiry.id,
+        travelDetails: inquiry.travel_details || inquiry.message || 'No additional details provided'
       });
+
+      await sendEmail({
+        to: adminEmail,
+        subject: '🔔 New Travel Inquiry - Action Required',
+        html: adminEmailHtml
+      });
+      console.log('✅ Admin notification email sent to:', adminEmail);
     } catch (emailError) {
-      console.error('Failed to send admin notification email:', emailError);
+      console.error('❌ Failed to send admin notification email:', emailError);
+      // Don't fail the request if email fails
     }
 
     res.status(201).json({
