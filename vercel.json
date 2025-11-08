@@ -1,6 +1,11 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "env": {
+    "RESEND_API_KEY": "@resend_api_key",
+    "ADMIN_EMAIL": "@admin_email",
+    "FRONTEND_URL": "@frontend_url"
+  },
   "rewrites": [
     {
       "source": "/api/auth/login",
