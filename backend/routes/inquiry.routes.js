@@ -21,11 +21,18 @@ router.post('/', optionalProtect, createInquiry);
 router.get('/my', protect, getMyInquiries);
 
 // Handle query parameter endpoint=my (for Vercel compatibility)
-// This must come before the admin route to catch the query parameter
+// Also handle query parameter id=... for inquiry details
+// This must come before the admin route to catch the query parameters
 router.get('/', protect, (req, res, next) => {
   // If query parameter endpoint=my, handle as getMyInquiries
   if (req.query.endpoint === 'my') {
     return getMyInquiries(req, res);
+  }
+  // If query parameter id is present, handle as getInquiryById
+  if (req.query.id) {
+    // Temporarily set params.id for the controller
+    req.params.id = req.query.id;
+    return getInquiryById(req, res);
   }
   // Otherwise, continue to admin route
   next();
