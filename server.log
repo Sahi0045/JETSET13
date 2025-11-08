@@ -222,3 +222,145 @@ Auth middleware: Setting req.user with role: { dbRole: 'user', supabaseRole: und
   willAllow: true
 }
 ✅ Access granted (Express) - inquiry matches user
+🔐 Auth middleware: Token received, length: 1026
+🔐 Token header: { alg: 'HS256', kid: '+YnBVNWr2R0HdF2o', typ: 'JWT' }
+🔐 Token payload preview: {
+  email: 'shubhamkush012@gmail.com',
+  user_id: undefined,
+  sub: 'd8f9f54f-1837-4f60-9a25-f37de2fa699b',
+  iss: 'https://qqmagqwumjipdqvxbiqu.supabase.co/auth/v1'
+}
+✅ Successfully verified Supabase token (JWT) for user: shubhamkush012@gmail.com
+Finding user by id/user_id/sub: d8f9f54f-1837-4f60-9a25-f37de2fa699b
+Finding user by id: d8f9f54f-1837-4f60-9a25-f37de2fa699b
+Supabase error during findById: {
+  code: 'PGRST116',
+  details: 'The result contains 0 rows',
+  hint: null,
+  message: 'JSON object requested, multiple (or no) rows returned'
+}
+Error in User.findById: {
+  code: 'PGRST116',
+  details: 'The result contains 0 rows',
+  hint: null,
+  message: 'JSON object requested, multiple (or no) rows returned'
+}
+User.findById failed, trying email lookup: JSON object requested, multiple (or no) rows returned
+Finding user by email: shubhamkush012@gmail.com
+Finding user by email: shubhamkush012@gmail.com
+Found user: {
+  id: 'e5c37bbc-c9ce-4ae6-bef2-da5dd60e3cfa',
+  name: 'shubham kushwaha',
+  email: 'shubhamkush012@gmail.com',
+  password: '$2a$10$Q8DsCQHSnkiSfdnX1Ofh0uAA9l287Nevooh19UK0eLRjUJ8lC2/6m',
+  created_at: '2025-06-11T03:50:59.121111+00:00',
+  updated_at: '2025-06-11T03:50:59.121111+00:00',
+  first_name: 'shubham',
+  last_name: 'kushwaha',
+  role: 'user'
+}
+✅ Found user: {
+  id: 'e5c37bbc-c9ce-4ae6-bef2-da5dd60e3cfa',
+  email: 'shubhamkush012@gmail.com',
+  role: 'user'
+}
+Auth middleware: Setting req.user with role: { dbRole: 'user', supabaseRole: undefined, finalRole: 'user' }
+🔐 Auth middleware: Token received, length: 1026
+🔐 Token header: { alg: 'HS256', kid: '+YnBVNWr2R0HdF2o', typ: 'JWT' }
+🔐 Token payload preview: {
+  email: 'shubhamkush012@gmail.com',
+  user_id: undefined,
+  sub: 'd8f9f54f-1837-4f60-9a25-f37de2fa699b',
+  iss: 'https://qqmagqwumjipdqvxbiqu.supabase.co/auth/v1'
+}
+✅ Successfully verified Supabase token (JWT) for user: shubhamkush012@gmail.com
+Finding user by id/user_id/sub: d8f9f54f-1837-4f60-9a25-f37de2fa699b
+Finding user by id: d8f9f54f-1837-4f60-9a25-f37de2fa699b
+Supabase error during findById: {
+  code: 'PGRST116',
+  details: 'The result contains 0 rows',
+  hint: null,
+  message: 'JSON object requested, multiple (or no) rows returned'
+}
+Error in User.findById: {
+  code: 'PGRST116',
+  details: 'The result contains 0 rows',
+  hint: null,
+  message: 'JSON object requested, multiple (or no) rows returned'
+}
+User.findById failed, trying email lookup: JSON object requested, multiple (or no) rows returned
+Finding user by email: shubhamkush012@gmail.com
+Finding user by email: shubhamkush012@gmail.com
+Found user: {
+  id: 'e5c37bbc-c9ce-4ae6-bef2-da5dd60e3cfa',
+  name: 'shubham kushwaha',
+  email: 'shubhamkush012@gmail.com',
+  password: '$2a$10$Q8DsCQHSnkiSfdnX1Ofh0uAA9l287Nevooh19UK0eLRjUJ8lC2/6m',
+  created_at: '2025-06-11T03:50:59.121111+00:00',
+  updated_at: '2025-06-11T03:50:59.121111+00:00',
+  first_name: 'shubham',
+  last_name: 'kushwaha',
+  role: 'user'
+}
+✅ Found user: {
+  id: 'e5c37bbc-c9ce-4ae6-bef2-da5dd60e3cfa',
+  email: 'shubhamkush012@gmail.com',
+  role: 'user'
+}
+Auth middleware: Setting req.user with role: { dbRole: 'user', supabaseRole: undefined, finalRole: 'user' }
+🔍 Access check (Express): {
+  inquiryId: '740ed530',
+  userId: 'e5c37bbc-c9ce-4ae6-bef2-da5dd60e3cfa',
+  userEmail: 'shubhamkush012@gmail.com',
+  normalizedUserEmail: 'shubhamkush012@gmail.com',
+  inquiryUserId: 'e5c37bbc-c9ce-4ae6-bef2-da5dd60e3cfa',
+  inquiryEmail: 'shubhamkush012@gmail.com',
+  normalizedInquiryEmail: 'shubhamkush012@gmail.com',
+  matchesByUserId: true,
+  matchesByEmail: true,
+  willAllow: true
+}
+✅ Access granted (Express) - inquiry matches user
+🔐 Auth middleware: Token received, length: 1026
+🔐 Token header: { alg: 'HS256', kid: '+YnBVNWr2R0HdF2o', typ: 'JWT' }
+🔐 Token payload preview: {
+  email: 'shubhamkush012@gmail.com',
+  user_id: undefined,
+  sub: 'd8f9f54f-1837-4f60-9a25-f37de2fa699b',
+  iss: 'https://qqmagqwumjipdqvxbiqu.supabase.co/auth/v1'
+}
+✅ Successfully verified Supabase token (JWT) for user: shubhamkush012@gmail.com
+Finding user by id/user_id/sub: d8f9f54f-1837-4f60-9a25-f37de2fa699b
+Finding user by id: d8f9f54f-1837-4f60-9a25-f37de2fa699b
+Supabase error during findById: {
+  code: 'PGRST116',
+  details: 'The result contains 0 rows',
+  hint: null,
+  message: 'JSON object requested, multiple (or no) rows returned'
+}
+Error in User.findById: {
+  code: 'PGRST116',
+  details: 'The result contains 0 rows',
+  hint: null,
+  message: 'JSON object requested, multiple (or no) rows returned'
+}
+User.findById failed, trying email lookup: JSON object requested, multiple (or no) rows returned
+Finding user by email: shubhamkush012@gmail.com
+Finding user by email: shubhamkush012@gmail.com
+Found user: {
+  id: 'e5c37bbc-c9ce-4ae6-bef2-da5dd60e3cfa',
+  name: 'shubham kushwaha',
+  email: 'shubhamkush012@gmail.com',
+  password: '$2a$10$Q8DsCQHSnkiSfdnX1Ofh0uAA9l287Nevooh19UK0eLRjUJ8lC2/6m',
+  created_at: '2025-06-11T03:50:59.121111+00:00',
+  updated_at: '2025-06-11T03:50:59.121111+00:00',
+  first_name: 'shubham',
+  last_name: 'kushwaha',
+  role: 'user'
+}
+✅ Found user: {
+  id: 'e5c37bbc-c9ce-4ae6-bef2-da5dd60e3cfa',
+  email: 'shubhamkush012@gmail.com',
+  role: 'user'
+}
+Auth middleware: Setting req.user with role: { dbRole: 'user', supabaseRole: undefined, finalRole: 'user' }

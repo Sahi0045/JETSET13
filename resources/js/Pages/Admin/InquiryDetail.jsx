@@ -6,6 +6,7 @@ const InquiryDetail = () => {
   const { id } = useParams();
   const [inquiry, setInquiry] = useState(null);
   const [quotes, setQuotes] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [showUpdateForm, setShowUpdateForm] = useState(false);
@@ -92,6 +93,31 @@ const InquiryDetail = () => {
 
       if (quotesData.success) {
         setQuotes(quotesData.data);
+        
+        // Fetch payments for each quote
+        const quoteIds = quotesData.data.map(q => q.id);
+        if (quoteIds.length > 0) {
+          try {
+            const paymentsPromises = quoteIds.map(quoteId =>
+              fetch(`/api/payments?action=get-payment-details&quoteId=${quoteId}`, {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+              }).then(res => res.json())
+            );
+            
+            const paymentsResults = await Promise.all(paymentsPromises);
+            const allPayments = paymentsResults
+              .filter(result => result.success && result.payment)
+              .map(result => result.payment);
+            
+            setPayments(allPayments);
+          } catch (paymentError) {
+            console.error('Error fetching payments:', paymentError);
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching inquiry details:', error);
@@ -744,7 +770,59 @@ const InquiryDetail = () => {
                         <span className="meta-value">{formatDate(quote.expires_at)}</span>
                       </div>
                     )}
+                    <div className="meta-row">
+                      <span className="meta-label">Payment Status:</span>
+                      <span className={`meta-value payment-status ${quote.payment_status || 'unpaid'}`}>
+                        {quote.payment_status === 'paid' ? '✓ Paid' : quote.payment_status === 'failed' ? '✗ Failed' : '○ Unpaid'}
+                      </span>
+                    </div>
+                    {quote.paid_at && (
+                      <div className="meta-row">
+                        <span className="meta-label">Paid At:</span>
+                        <span className="meta-value">{formatDateTime(quote.paid_at)}</span>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Payment Details */}
+                  {payments.find(p => p.quote_id === quote.id) && (
+                    <div className="payment-details">
+                      <div className="payment-header">💳 Payment Information</div>
+                      {(() => {
+                        const payment = payments.find(p => p.quote_id === quote.id);
+                        return (
+                          <div className="payment-info">
+                            <div className="payment-row">
+                              <span className="payment-label">Transaction ID:</span>
+                              <span className="payment-value">{payment.arc_transaction_id || payment.id}</span>
+                            </div>
+                            <div className="payment-row">
+                              <span className="payment-label">Amount:</span>
+                              <span className="payment-value">${parseFloat(payment.amount).toFixed(2)} {payment.currency}</span>
+                            </div>
+                            {payment.payment_method && (
+                              <div className="payment-row">
+                                <span className="payment-label">Method:</span>
+                                <span className="payment-value capitalize">{payment.payment_method}</span>
+                              </div>
+                            )}
+                            <div className="payment-row">
+                              <span className="payment-label">Status:</span>
+                              <span className={`payment-value status-${payment.payment_status}`}>
+                                {payment.payment_status}
+                              </span>
+                            </div>
+                            {payment.completed_at && (
+                              <div className="payment-row">
+                                <span className="payment-label">Completed:</span>
+                                <span className="payment-value">{formatDateTime(payment.completed_at)}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
 
                   <div className="quote-actions">
                     <Link to={`/admin/quotes/${quote.id}`} className="quote-action view">

@@ -282,6 +282,67 @@ $$ LANGUAGE plpgsql;
 -- Create sequence for quote numbers
 CREATE SEQUENCE IF NOT EXISTS quote_number_seq START 1;
 
+-- Payments Table (for ARC Pay Gateway integration)
+CREATE TABLE IF NOT EXISTS payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    quote_id UUID NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+    inquiry_id UUID NOT NULL REFERENCES inquiries(id) ON DELETE CASCADE,
+    
+    -- ARC Pay Gateway fields
+    arc_transaction_id TEXT,
+    arc_order_id TEXT,
+    arc_session_id TEXT,
+    success_indicator TEXT,
+    
+    -- Payment details
+    amount DECIMAL(10,2) NOT NULL,
+    currency TEXT DEFAULT 'USD',
+    payment_status TEXT DEFAULT 'pending' CHECK (payment_status IN ('pending', 'processing', 'completed', 'failed', 'refunded')),
+    payment_method TEXT,
+    
+    -- Customer information
+    customer_email TEXT,
+    customer_name TEXT,
+    
+    -- URLs
+    return_url TEXT,
+    cancel_url TEXT,
+    
+    -- Additional data
+    metadata JSONB DEFAULT '{}',
+    
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    completed_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Create indexes for payments
+CREATE INDEX IF NOT EXISTS idx_payments_quote_id ON payments(quote_id);
+CREATE INDEX IF NOT EXISTS idx_payments_inquiry_id ON payments(inquiry_id);
+CREATE INDEX IF NOT EXISTS idx_payments_arc_session_id ON payments(arc_session_id);
+CREATE INDEX IF NOT EXISTS idx_payments_arc_transaction_id ON payments(arc_transaction_id);
+CREATE INDEX IF NOT EXISTS idx_payments_payment_status ON payments(payment_status);
+CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at);
+
+-- Enable RLS for payments
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for payments
+CREATE POLICY "Users can view payments for their inquiries"
+    ON payments FOR SELECT
+    USING (EXISTS (SELECT 1 FROM inquiries WHERE id = payments.inquiry_id AND (user_id = auth.uid() OR EXISTS (SELECT 1 FROM admin_users WHERE id = auth.uid()))));
+
+CREATE POLICY "Admins can manage all payments"
+    ON payments FOR ALL
+    USING (EXISTS (SELECT 1 FROM admin_users WHERE id = auth.uid()));
+
+-- Create trigger for payments updated_at
+CREATE TRIGGER update_payments_updated_at
+    BEFORE UPDATE ON payments
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Create function to automatically set quote expiration
 CREATE OR REPLACE FUNCTION set_quote_expiration()
 RETURNS TRIGGER AS $$

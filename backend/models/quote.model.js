@@ -328,6 +328,74 @@ class Quote {
       throw error;
     }
   }
+
+  // Update payment status
+  static async updatePaymentStatus(quoteId, paymentData) {
+    try {
+      const { payment_status, paid_at } = paymentData;
+
+      const updateData = {
+        payment_status,
+        updated_at: new Date().toISOString()
+      };
+
+      if (paid_at) {
+        updateData.paid_at = paid_at;
+      }
+
+      // If payment is completed, update quote status to 'paid'
+      if (payment_status === 'paid') {
+        updateData.status = 'paid';
+      }
+
+      console.log('Updating quote payment status:', quoteId, updateData);
+
+      const { data, error } = await supabase
+        .from('quotes')
+        .update(updateData)
+        .eq('id', quoteId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase error during quote payment status update:', error);
+        throw new Error(error.message);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Quote payment status update error:', error);
+      throw error;
+    }
+  }
+
+  // Get quote by payment link
+  static async getQuoteByPaymentLink(paymentLink) {
+    try {
+      const { data, error } = await supabase
+        .from('quotes')
+        .select(`
+          *,
+          inquiry:inquiries(*),
+          admin:users!quotes_admin_id_fkey(id, name, email)
+        `)
+        .eq('payment_link', paymentLink)
+        .single();
+
+      if (error) {
+        console.error('Supabase error during quote fetch by payment link:', error);
+        if (error.code === 'PGRST116') {
+          return null; // Not found
+        }
+        throw new Error(error.message);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Quote getQuoteByPaymentLink error:', error);
+      throw error;
+    }
+  }
 }
 
 export default Quote;

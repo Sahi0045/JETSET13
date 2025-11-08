@@ -3,6 +3,23 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from './Navbar';
 import Footer from './Footer';
 
+// Load ARC Pay Checkout.js SDK
+const loadCheckoutScript = () => {
+  return new Promise((resolve, reject) => {
+    if (window.Checkout) {
+      resolve();
+      return;
+    }
+    
+    const script = document.createElement('script');
+    script.src = 'https://api.arcpay.travel/static/checkout/checkout.min.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Checkout.js'));
+    document.body.appendChild(script);
+  });
+};
+
 const InquiryDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -10,9 +27,15 @@ const InquiryDetail = () => {
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [checkoutReady, setCheckoutReady] = useState(false);
 
   useEffect(() => {
     fetchInquiryDetails();
+    // Load Checkout.js SDK
+    loadCheckoutScript()
+      .then(() => setCheckoutReady(true))
+      .catch(err => console.error('Failed to load Checkout.js:', err));
   }, [id]);
 
   const fetchInquiryDetails = async () => {
@@ -86,12 +109,82 @@ const InquiryDetail = () => {
     }
   };
 
+  const handlePayNow = async (quote) => {
+    if (!checkoutReady) {
+      alert('Payment system is loading. Please try again in a moment.');
+      return;
+    }
+
+    setPaymentLoading(true);
+
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token');
+      
+      // 1. Initiate payment session
+      const response = await fetch('/api/payments?action=initiate-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          quote_id: quote.id,
+          return_url: `${window.location.origin}/payment/callback`,
+          cancel_url: `${window.location.origin}/inquiry/${inquiry.id}`
+        })
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to initiate payment');
+      }
+
+      const { sessionId, merchantId } = data;
+
+      // 2. Configure and show ARC Pay hosted checkout
+      window.Checkout.configure({
+        merchant: merchantId,
+        session: {
+          id: sessionId
+        },
+        interaction: {
+          merchant: {
+            name: 'JetSet Travel',
+            address: {
+              line1: '123 Travel Street',
+              city: 'New York',
+              stateProvince: 'NY',
+              postalCode: '10001',
+              country: 'USA'
+            }
+          },
+          displayControl: {
+            billingAddress: 'OPTIONAL',
+            customerEmail: 'OPTIONAL'
+          }
+        }
+      });
+
+      // 3. Redirect to hosted payment page
+      window.Checkout.showPaymentPage();
+
+    } catch (error) {
+      console.error('Payment initiation failed:', error);
+      alert(`Failed to initiate payment: ${error.message}`);
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
       case 'processing': return 'bg-blue-100 text-blue-800';
       case 'quoted': return 'bg-green-100 text-green-800';
       case 'booked': return 'bg-purple-100 text-purple-800';
+      case 'paid': return 'bg-green-100 text-green-800';
       case 'cancelled': return 'bg-red-100 text-red-800';
       case 'expired': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
@@ -358,7 +451,7 @@ const InquiryDetail = () => {
                     </p>
                   )}
 
-                  <div className="mt-4">
+                  <div className="mt-4 flex gap-3 flex-wrap">
                     <Link
                       to="/quote-detail"
                       state={{ quoteData: quote, inquiryData: inquiry }}
@@ -366,6 +459,34 @@ const InquiryDetail = () => {
                     >
                       View Full Quote Details
                     </Link>
+
+                    {/* Pay Now Button - Show only if quote is sent/accepted and unpaid */}
+                    {quote.payment_status === 'unpaid' && (quote.status === 'sent' || quote.status === 'accepted') && (
+                      <button
+                        onClick={() => handlePayNow(quote)}
+                        disabled={paymentLoading || !checkoutReady}
+                        className="px-6 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
+                      >
+                        {paymentLoading ? (
+                          <span className="flex items-center gap-2">
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Processing...
+                          </span>
+                        ) : (
+                          `💳 Pay Now - $${parseFloat(quote.total_amount).toFixed(2)} ${quote.currency || 'USD'}`
+                        )}
+                      </button>
+                    )}
+
+                    {/* Payment Status Badge */}
+                    {quote.payment_status === 'paid' && (
+                      <span className="inline-flex items-center px-4 py-2 bg-green-100 text-green-800 text-sm rounded-md font-semibold">
+                        ✓ Paid
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}

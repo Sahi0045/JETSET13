@@ -507,6 +507,22 @@ const QuoteDetail = React.lazy(() =>
     .catch(() => ({ default: () => <div>Loading Quote Details...</div> }))
 );
 
+// Payment Pages
+const PaymentCallback = React.lazy(() => 
+  import('./Pages/Common/PaymentCallback')
+    .catch(() => ({ default: () => <div>Verifying Payment...</div> }))
+);
+
+const PaymentSuccess = React.lazy(() => 
+  import('./Pages/Common/PaymentSuccess')
+    .catch(() => ({ default: () => <div>Loading Payment Success...</div> }))
+);
+
+const PaymentFailed = React.lazy(() => 
+  import('./Pages/Common/PaymentFailed')
+    .catch(() => ({ default: () => <div>Loading Payment Failed...</div> }))
+);
+
 // Add Admin Panel import
 const AdminPanel = React.lazy(() => 
   import('./Pages/Admin/AdminPanel')
@@ -627,6 +643,11 @@ const App = () => {
         <Route path="/request" element={<RequestPage />} />
         <Route path="/inquiry/:id" element={<InquiryDetail />} />
         <Route path="/quote-detail" element={<QuoteDetail />} />
+        
+        {/* Payment Routes */}
+        <Route path="/payment/callback" element={<PaymentCallback />} />
+        <Route path="/payment/success" element={<PaymentSuccess />} />
+        <Route path="/payment/failed" element={<PaymentFailed />} />
         
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
