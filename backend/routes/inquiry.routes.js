@@ -17,11 +17,22 @@ const router = express.Router();
 router.post('/', optionalProtect, createInquiry);
 
 // Protected routes (authenticated users)
+// Handle both /my (path) and ?endpoint=my (query) for compatibility
 router.get('/my', protect, getMyInquiries);
+
+// Handle query parameter endpoint=my (for Vercel compatibility)
+// This must come before the admin route to catch the query parameter
+router.get('/', protect, (req, res, next) => {
+  // If query parameter endpoint=my, handle as getMyInquiries
+  if (req.query.endpoint === 'my') {
+    return getMyInquiries(req, res);
+  }
+  // Otherwise, continue to admin route
+  next();
+}, admin, getAllInquiries);
 
 // Admin only routes
 router.get('/stats', protect, admin, getInquiryStats);
-router.get('/', protect, admin, getAllInquiries);
 router.get('/:id', protect, getInquiryById);
 router.put('/:id', protect, admin, updateInquiry);
 router.put('/:id/assign', protect, admin, assignInquiry);

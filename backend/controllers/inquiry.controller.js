@@ -234,12 +234,75 @@ export const getInquiryById = async (req, res) => {
       });
     }
 
-    // Check if user owns this inquiry or is admin
-    if (inquiry.user_id !== req.user.id && req.user.role !== 'admin') {
+    // SIMPLE RULE: If inquiry appears in user's list, they can view it
+    // Check if user is admin - always allow
+    const isAdmin = req.user.role === 'admin' || req.user.role === 'staff';
+    
+    if (isAdmin) {
+      console.log('✅ Admin access granted (Express)');
+      // Return inquiry immediately for admin
+      return res.json({
+        success: true,
+        data: inquiry
+      });
+    }
+    
+    // For regular users: use SAME logic as findForUser
+    // findForUser returns inquiries where: user_id matches OR customer_email matches (ilike)
+    const userEmail = req.user.email || req.user.user_email || (req.user.user_metadata && req.user.user_metadata.email);
+    
+    // Normalize emails for comparison (trim, lowercase, remove any whitespace)
+    const normalizeEmail = (email) => {
+      if (!email) return '';
+      return String(email).trim().toLowerCase().replace(/\s+/g, '');
+    };
+    
+    const normalizedUserEmail = normalizeEmail(userEmail);
+    const normalizedInquiryEmail = normalizeEmail(inquiry.customer_email);
+    
+    const matchesByUserId = inquiry.user_id && req.user.id && String(inquiry.user_id) === String(req.user.id);
+    const matchesByEmail = normalizedInquiryEmail && normalizedUserEmail && normalizedInquiryEmail === normalizedUserEmail;
+    
+    console.log('🔍 Access check (Express):', {
+      inquiryId: req.params.id?.slice(-8),
+      userId: req.user.id,
+      userEmail: userEmail,
+      normalizedUserEmail: normalizedUserEmail,
+      inquiryUserId: inquiry.user_id,
+      inquiryEmail: inquiry.customer_email,
+      normalizedInquiryEmail: normalizedInquiryEmail,
+      matchesByUserId,
+      matchesByEmail,
+      willAllow: matchesByUserId || matchesByEmail
+    });
+
+    if (!matchesByUserId && !matchesByEmail) {
+      console.error('❌ Access denied (Express) - inquiry not owned by user', {
+        reason: 'Neither user_id nor email match',
+        userEmail: userEmail,
+        inquiryEmail: inquiry.customer_email,
+        userId: req.user.id,
+        inquiryUserId: inquiry.user_id
+      });
       return res.status(403).json({
         success: false,
         message: 'Not authorized to access this inquiry'
       });
+    }
+    
+    console.log('✅ Access granted (Express) - inquiry matches user');
+    
+    // Auto-link inquiry if it matches by email but doesn't have user_id
+    if (!inquiry.user_id && matchesByEmail) {
+      try {
+        await Inquiry.update(req.params.id, { 
+          user_id: req.user.id,
+          updated_at: new Date().toISOString()
+        });
+        console.log(`✅ Auto-linked inquiry ${req.params.id.slice(-8)} to user ${req.user.id}`);
+      } catch (linkErr) {
+        console.warn(`⚠️ Failed to auto-link inquiry:`, linkErr.message);
+      }
     }
 
     res.json({
@@ -248,10 +311,11 @@ export const getInquiryById = async (req, res) => {
     });
   } catch (error) {
     console.error('Get inquiry by ID error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch inquiry',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
 };

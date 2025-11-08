@@ -495,6 +495,18 @@ const RequestPage = React.lazy(() =>
     .catch(() => ({ default: () => <div>Loading Request Page...</div> }))
 );
 
+// Add Inquiry Detail Page import
+const InquiryDetail = React.lazy(() => 
+  import('./Pages/Common/InquiryDetail')
+    .catch(() => ({ default: () => <div>Loading Inquiry Details...</div> }))
+);
+
+// Add Quote Detail Page import
+const QuoteDetail = React.lazy(() => 
+  import('./Pages/Common/QuoteDetail')
+    .catch(() => ({ default: () => <div>Loading Quote Details...</div> }))
+);
+
 // Add Admin Panel import
 const AdminPanel = React.lazy(() => 
   import('./Pages/Admin/AdminPanel')
@@ -613,6 +625,8 @@ const App = () => {
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/terms-conditions" element={<TermsConditions />} />
         <Route path="/request" element={<RequestPage />} />
+        <Route path="/inquiry/:id" element={<InquiryDetail />} />
+        <Route path="/quote-detail" element={<QuoteDetail />} />
         
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
