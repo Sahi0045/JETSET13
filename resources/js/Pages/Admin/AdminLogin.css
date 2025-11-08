@@ -677,3 +677,258 @@
     font-size: 15px;
   }
 }
+
+/* Enhanced Mobile Responsiveness - Additional Rules */
+@media (max-width: 480px) {
+  .system-status-bar {
+    padding: 0 12px;
+    height: 32px;
+  }
+
+  .status-indicator,
+  .current-time {
+    font-size: 11px;
+  }
+
+  .admin-login-wrapper {
+    margin-top: 32px;
+  }
+
+  .login-branding {
+    padding: 20px 16px;
+    min-height: 250px;
+  }
+
+  .branding-content {
+    max-width: none;
+  }
+
+  .branding-content h1 {
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
+
+  .branding-content p {
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  .brand-features {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .feature-item {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .feature-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+
+  .feature-item span {
+    font-size: 12px;
+  }
+
+  .login-form-panel {
+    padding: 20px 16px;
+  }
+
+  .form-header {
+    margin-bottom: 24px;
+  }
+
+  .form-header h2 {
+    font-size: 20px;
+  }
+
+  .form-header p {
+    font-size: 14px;
+  }
+
+  .admin-login-form {
+    gap: 20px;
+  }
+
+  .input-with-icon input {
+    padding: 12px 12px 12px 44px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  .input-with-icon svg {
+    left: 14px;
+    width: 18px;
+    height: 18px;
+  }
+
+  .form-options {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .login-btn {
+    padding: 16px 20px;
+    font-size: 16px;
+    width: 100%;
+  }
+
+  .form-footer {
+    margin-top: 24px;
+    gap: 16px;
+  }
+
+  .security-notice {
+    font-size: 12px;
+  }
+
+  .back-to-site {
+    font-size: 13px;
+  }
+}
+
+/* Enhanced Touch Interactions */
+@media (hover: none) and (pointer: coarse) {
+  .login-btn {
+    min-height: 48px; /* Minimum touch target */
+  }
+
+  .input-with-icon input {
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .feature-item {
+    min-height: 48px;
+  }
+
+  .remember-me {
+    min-height: 24px;
+    padding: 8px 0;
+  }
+}
+
+/* Modern Focus States */
+.input-with-icon input:focus,
+.login-btn:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Enhanced Animations */
+.login-branding {
+  animation: brandingSlideIn 0.8s ease-out;
+}
+
+.login-form-panel {
+  animation: formSlideIn 0.8s ease-out 0.2s both;
+}
+
+@keyframes brandingSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes formSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Improved Error States */
+.error-alert {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+/* Better Loading States */
+.login-btn:disabled {
+  position: relative;
+  overflow: hidden;
+}
+
+.login-btn:disabled::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Enhanced Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .login-branding,
+  .login-form-panel,
+  .brand-logo,
+  .error-alert,
+  .login-btn:disabled::after,
+  .shape {
+    animation: none;
+  }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .login-branding {
+    background: var(--primary-color);
+  }
+
+  .feature-item {
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid var(--primary-color);
+  }
+
+  .input-with-icon input {
+    border-width: 3px;
+  }
+
+  .login-btn {
+    border: 2px solid var(--primary-color);
+  }
+}
+
+/* Print Styles */
+@media print {
+  .admin-login-container {
+    background: white;
+  }
+
+  .system-status-bar,
+  .login-branding,
+  .background-elements {
+    display: none;
+  }
+
+  .login-form-panel {
+    padding: 0;
+    box-shadow: none;
+  }
+}

@@ -1069,6 +1069,389 @@
   }
 }
 
+/* Enhanced Mobile Responsiveness - Additional Rules */
+@media (max-width: 380px) {
+  .request-page {
+    padding: 1rem 0.5rem;
+  }
+
+  .request-container {
+    max-width: 100%;
+    border-radius: var(--radius-lg);
+  }
+
+  .request-header {
+    padding: 2.5rem 1.5rem;
+  }
+
+  .request-header h1 {
+    font-size: 2.5rem;
+  }
+
+  .request-header p {
+    font-size: 1rem;
+  }
+
+  .request-tabs {
+    padding: 0.5rem;
+    gap: 0.25rem;
+  }
+
+  .tab-btn {
+    padding: 0.875rem 1rem;
+    font-size: 0.875rem;
+    min-width: 100px;
+  }
+
+  .request-content {
+    padding: 1.5rem 1rem;
+  }
+
+  .form-section {
+    padding: 1.25rem;
+  }
+
+  .form-section h3 {
+    font-size: 1.25rem;
+  }
+
+  .form-row {
+    gap: 1rem;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    padding: 0.875rem 1rem;
+    font-size: 15px;
+  }
+
+  .inquiry-type-selector {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .inquiry-type-card {
+    padding: 1rem;
+  }
+
+  .card-content h4 {
+    font-size: 1rem;
+  }
+
+  .card-content p {
+    font-size: 0.875rem;
+  }
+
+  .checkbox-group {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .checkbox-label {
+    padding: 0.625rem 0.875rem;
+  }
+
+  .checkbox-text {
+    font-size: 0.875rem;
+  }
+
+  .submit-btn,
+  .clear-btn {
+    padding: 0.875rem 1.5rem;
+    font-size: 0.9375rem;
+    min-width: 120px;
+  }
+
+  .tab-content {
+    padding: 2.5rem 1.5rem;
+  }
+
+  .tab-content h3 {
+    font-size: 1.25rem;
+  }
+
+  .tab-content p {
+    font-size: 0.9375rem;
+  }
+}
+
+/* Enhanced Touch Interactions for Mobile */
+@media (hover: none) and (pointer: coarse) {
+  .tab-btn {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .inquiry-type-card {
+    min-height: 48px;
+  }
+
+  .submit-btn,
+  .clear-btn {
+    min-height: 48px;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    min-height: 48px;
+  }
+
+  .checkbox-label {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* Enhanced Focus States */
+.tab-btn:focus,
+.inquiry-type-card:focus,
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus,
+.submit-btn:focus,
+.clear-btn:focus {
+  outline: 2px solid var(--primary-blue);
+  outline-offset: 2px;
+}
+
+/* Improved Animations */
+.form-section {
+  animation: fadeInUp 0.6s ease-out;
+  animation-fill-mode: both;
+}
+
+.form-section:nth-child(1) { animation-delay: 0.1s; }
+.form-section:nth-child(2) { animation-delay: 0.2s; }
+.form-section:nth-child(3) { animation-delay: 0.3s; }
+.form-section:nth-child(4) { animation-delay: 0.4s; }
+.form-section:nth-child(5) { animation-delay: 0.5s; }
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced Loading Animation */
+.submit-btn:disabled {
+  position: relative;
+  overflow: hidden;
+}
+
+.submit-btn:disabled::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Better Error Handling */
+.error-message {
+  animation: slideInFromTop 0.3s ease-out;
+}
+
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced Background Performance */
+@media (prefers-reduced-motion: reduce) {
+  .request-page::before {
+    animation: none;
+  }
+
+  .background-zoom {
+    animation: none;
+  }
+
+  .floating-shapes .shape {
+    animation: none;
+  }
+
+  .form-section {
+    animation: none;
+  }
+
+  .submit-btn:disabled::after {
+    animation: none;
+  }
+}
+
+/* High Contrast Support */
+@media (prefers-contrast: high) {
+  .request-container {
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid var(--primary-blue);
+  }
+
+  .inquiry-type-card {
+    border: 2px solid var(--border-color);
+  }
+
+  .inquiry-type-card.selected {
+    border-color: var(--primary-blue);
+    border-width: 3px;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    border-width: 2px;
+  }
+
+  .submit-btn {
+    border: 2px solid var(--primary-blue);
+  }
+}
+
+/* Better Print Styles */
+@media print {
+  .request-page {
+    background: white;
+  }
+
+  .request-page::before,
+  .request-page::after {
+    display: none;
+  }
+
+  .request-container {
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+
+  .request-header {
+    background: #f8fafc;
+    color: black;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .tab-btn,
+  .submit-btn,
+  .clear-btn {
+    display: none;
+  }
+
+  .form-section {
+    break-inside: avoid;
+  }
+}
+
+/* Enhanced Form Validation */
+.form-group.error input,
+.form-group.error select,
+.form-group.error textarea {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+/* Improved Checkbox Styling */
+.checkbox-label {
+  transition: all 0.2s ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label:hover {
+  background: rgba(14, 165, 233, 0.05);
+}
+
+.checkbox-label input[type="checkbox"]:checked + .checkbox-text {
+  font-weight: 600;
+  color: var(--primary-blue);
+}
+
+/* Better Date Input Styling */
+.form-group input[type="date"] {
+  cursor: pointer;
+}
+
+.form-group input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(0.5);
+  opacity: 0.8;
+}
+
+.form-group input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* Enhanced Inquiry Type Cards */
+.inquiry-type-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.inquiry-type-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(14, 165, 233, 0.15);
+}
+
+.inquiry-type-card.selected {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(14, 165, 233, 0.2);
+}
+
+/* Better Mobile Keyboard */
+@media screen and (max-width: 768px) {
+  .form-group input[type="email"],
+  .form-group input[type="tel"],
+  .form-group input[type="text"] {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
+/* Enhanced Visual Feedback */
+.submit-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.clear-btn:active {
+  transform: scale(0.98);
+}
+
+/* Better Loading States */
+.tab-content {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Loading animation for submit button */
 .submit-btn:disabled {
   position: relative;

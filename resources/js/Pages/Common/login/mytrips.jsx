@@ -326,59 +326,97 @@ export default function TravelDashboard() {
     
     return (
       <div key={booking.orderId || booking.bookingReference} 
-           className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">
-              {isFlightBooking ? 'Flight Booking' : 'Cruise Booking'}
-            </h3>
-            <p className="text-sm text-gray-500">
-              {booking.orderId || booking.bookingReference}
-            </p>
+           className="group bg-white border border-gray-200 rounded-xl p-6 hover:shadow-xl hover:border-blue-300 transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
+        {/* Gradient accent bar */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+        
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg font-semibold ${isFlightBooking ? 'bg-gradient-to-br from-blue-500 to-blue-600' : 'bg-gradient-to-br from-purple-500 to-purple-600'}
+              `}>
+                {isFlightBooking ? '✈️' : '🚢'}
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
+                  {isFlightBooking ? 'Flight Booking' : 'Cruise Booking'}
+                </h3>
+                <p className="text-sm text-gray-500 font-medium">
+                  #{booking.orderId || booking.bookingReference}
+                </p>
+              </div>
+            </div>
           </div>
-          <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-            booking.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
-            booking.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
-            'bg-blue-100 text-blue-800'
-          }`}>
-            {booking.status || 'Confirmed'}
-          </span>
+          
+          <div className="flex flex-col items-start sm:items-end gap-2">
+            <span className={`inline-flex items-center px-4 py-2 text-xs font-bold rounded-full shadow-sm ${booking.status === 'CONFIRMED' ? 'bg-gradient-to-r from-green-500 to-green-600 text-white' :
+              booking.status === 'CANCELLED' ? 'bg-gradient-to-r from-red-500 to-red-600 text-white' :
+              'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+            }`}>
+              <span className="w-2 h-2 bg-white bg-opacity-50 rounded-full mr-2"></span>
+              {booking.status || 'Confirmed'}
+            </span>
+            
+            {/* Mobile-friendly status indicator */}
+            <div className="sm:hidden text-xs text-gray-500 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0 1 1 0 002 0zM8 9a1 1 0 000 2h2a1 1 0 100 0H8z" clipRule="evenodd" />
+              </svg>
+              Tap for details
+            </div>
+          </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <p className="text-sm text-gray-500">PNR Number</p>
-            <p className="font-medium">{booking.pnr || 'N/A'}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">PNR Number</p>
+            <p className="text-base font-bold text-gray-900">{booking.pnr || 'N/A'}</p>
           </div>
-          <div>
-            <p className="text-sm text-gray-500">Transaction ID</p>
-            <p className="font-medium">{booking.transactionId || 'N/A'}</p>
+          <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Transaction ID</p>
+            <p className="text-base font-bold text-gray-900">{booking.transactionId || 'N/A'}</p>
           </div>
-          <div>
-            <p className="text-sm text-gray-500">Amount</p>
-            <p className="font-medium">${booking.amount || 'N/A'}</p>
+          <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Amount</p>
+            <p className="text-lg font-bold text-green-600">${booking.amount || 'N/A'}</p>
           </div>
-          <div>
-            <p className="text-sm text-gray-500">Booking Date</p>
-            <p className="font-medium">
-              {new Date(booking.bookingDate || booking.orderCreatedAt).toLocaleDateString()}
+          <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Booking Date</p>
+            <p className="text-sm font-semibold text-gray-900">
+              {new Date(booking.bookingDate || booking.orderCreatedAt).toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                year: 'numeric'
+              })}
             </p>
           </div>
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
           <button 
             onClick={() => navigate('/booking-confirmation', { state: { bookingData: booking } })}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition"
+            className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
           >
-            View Details
+            <span className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              View Details
+            </span>
           </button>
           {isFlightBooking && (
             <button 
               onClick={() => navigate('/manage-booking', { state: { bookingData: booking } })}
-              className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50 transition"
+              className="flex-1 sm:flex-none px-6 py-3 border-2 border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
             >
-              Manage Booking
+              <span className="flex items-center justify-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Manage Booking
+              </span>
             </button>
           )}
         </div>
@@ -435,118 +473,169 @@ export default function TravelDashboard() {
 
     return (
       <div key={request.id} 
-           className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <span className="text-xl">{getInquiryTypeIcon(request.inquiry_type)}</span>
-              {getInquiryTypeName(request.inquiry_type)} Inquiry
-            </h3>
-            <p className="text-sm text-gray-500">ID: {request.id.slice(-8)}</p>
+           className="group bg-white border border-gray-200 rounded-xl p-6 hover:shadow-xl hover:border-blue-300 transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
+        {/* Gradient accent bar */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+        
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center text-2xl shadow-sm">
+                {getInquiryTypeIcon(request.inquiry_type)}
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-700 transition-colors flex items-center gap-2">
+                  {getInquiryTypeName(request.inquiry_type)} Inquiry
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full font-medium">
+                    #{request.id.slice(-8)}
+                  </span>
+                </h3>
+                <p className="text-sm text-gray-500 font-medium mt-1">
+                  Submitted {new Date(request.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </p>
+              </div>
+            </div>
           </div>
-          <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(request.status)}`}>
-            {getStatusText(request.status)}
-          </span>
+          
+          <div className="flex flex-col items-start sm:items-end gap-2">
+            <span className={`inline-flex items-center px-4 py-2 text-xs font-bold rounded-full shadow-sm ${getStatusColor(request.status)}
+            `}>
+              <span className="w-2 h-2 bg-current bg-opacity-30 rounded-full mr-2"></span>
+              {getStatusText(request.status)}
+            </span>
+            
+            {/* Mobile-friendly status indicator */}
+            <div className="sm:hidden text-xs text-gray-500 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0 1 1 0 002 0zM8 9a1 1 0 000 2h2a1 1 0 100 0H8z" clipRule="evenodd" />
+              </svg>
+              Tap for details
+            </div>
+          </div>
         </div>
         
-        {/* Progress bar for status tracking */}
-        <div className="mb-4">
-          <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span>Submitted</span>
-            <span>{request.status === 'booked' ? 'Completed' : 'In Progress'}</span>
+        {/* Enhanced Progress bar */}
+        <div className="mb-6 p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-100">
+          <div className="flex justify-between text-sm font-medium text-gray-700 mb-2">
+            <span>Progress</span>
+            <span className="capitalize">{request.status === 'booked' ? 'Completed' : 'In Progress'}</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-gray-200 rounded-full h-3 shadow-inner overflow-hidden">
             <div 
-              className={`h-2 rounded-full transition-all duration-500 ${
-                request.status === 'pending' ? 'bg-yellow-400 w-1/4' :
-                request.status === 'processing' ? 'bg-blue-400 w-1/2' :
-                request.status === 'quoted' ? 'bg-green-400 w-3/4' :
-                request.status === 'booked' ? 'bg-purple-400 w-full' :
-                'bg-gray-400 w-full'
+              className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${
+                request.status === 'pending' ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 w-1/4' :
+                request.status === 'processing' ? 'bg-gradient-to-r from-blue-400 to-blue-500 w-1/2' :
+                request.status === 'quoted' ? 'bg-gradient-to-r from-green-400 to-green-500 w-3/4' :
+                request.status === 'booked' ? 'bg-gradient-to-r from-purple-400 to-purple-500 w-full' :
+                'bg-gradient-to-r from-gray-400 to-gray-500 w-full'
               }`}
             ></div>
           </div>
+          <div className="flex justify-between text-xs text-gray-500 mt-2">
+            <span>Submitted</span>
+            <span>Quoted</span>
+            <span>Booked</span>
+          </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <p className="text-sm text-gray-500">Submitted</p>
-            <p className="font-medium">
-              {new Date(request.created_at).toLocaleDateString()}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Last Updated</p>
+            <p className="text-sm font-semibold text-gray-900">
+              {new Date(request.updated_at).toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                year: 'numeric'
+              })}
             </p>
           </div>
-          <div>
-            <p className="text-sm text-gray-500">Last Updated</p>
-            <p className="font-medium">
-              {new Date(request.updated_at).toLocaleDateString()}
-            </p>
+          <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Priority</p>
+            <p className="text-sm font-semibold text-gray-900 capitalize">{request.priority || 'Normal'}</p>
           </div>
           {request.expires_at && (
-            <div>
-              <p className="text-sm text-gray-500">Expires</p>
-              <p className="font-medium">
-                {new Date(request.expires_at).toLocaleDateString()}
+            <div className="bg-amber-50 rounded-lg p-4 border border-amber-200 hover:bg-amber-100 transition-colors sm:col-span-2">
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Expires</p>
+              <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0 1 1 0 002 0zM8 9a1 1 0 000 2h2a1 1 0 100 0H8z" clipRule="evenodd" />
+                </svg>
+                {new Date(request.expires_at).toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric',
+                  year: 'numeric'
+                })}
               </p>
             </div>
           )}
-          <div>
-            <p className="text-sm text-gray-500">Priority</p>
-            <p className="font-medium capitalize">{request.priority || 'Normal'}</p>
-          </div>
         </div>
         
-        {/* Inquiry details based on type */}
-        <div className="mb-4">
-          <p className="text-sm text-gray-500 mb-2">Details:</p>
+        {/* Inquiry details */}
+        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+          <p className="text-sm font-semibold text-blue-800 mb-3 flex items-center gap-2">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+            Inquiry Details
+          </p>
           {request.inquiry_type === 'flight' && (
-            <div className="text-sm text-gray-700">
-              <p><strong>Route:</strong> {request.flight_origin} → {request.flight_destination}</p>
-              {request.flight_departure_date && <p><strong>Departure:</strong> {new Date(request.flight_departure_date).toLocaleDateString()}</p>}
-              {request.flight_passengers && <p><strong>Passengers:</strong> {request.flight_passengers}</p>}
+            <div className="text-sm text-gray-700 space-y-1">
+              <p><strong className="text-blue-700">Route:</strong> {request.flight_origin} → {request.flight_destination}</p>
+              {request.flight_departure_date && <p><strong className="text-blue-700">Departure:</strong> {new Date(request.flight_departure_date).toLocaleDateString()}</p>}
+              {request.flight_passengers && <p><strong className="text-blue-700">Passengers:</strong> {request.flight_passengers}</p>}
             </div>
           )}
           {request.inquiry_type === 'hotel' && (
-            <div className="text-sm text-gray-700">
-              <p><strong>Destination:</strong> {request.hotel_destination}</p>
-              {request.hotel_checkin_date && <p><strong>Check-in:</strong> {new Date(request.hotel_checkin_date).toLocaleDateString()}</p>}
-              {request.hotel_rooms && <p><strong>Rooms:</strong> {request.hotel_rooms}</p>}
+            <div className="text-sm text-gray-700 space-y-1">
+              <p><strong className="text-blue-700">Destination:</strong> {request.hotel_destination}</p>
+              {request.hotel_checkin_date && <p><strong className="text-blue-700">Check-in:</strong> {new Date(request.hotel_checkin_date).toLocaleDateString()}</p>}
+              {request.hotel_rooms && <p><strong className="text-blue-700">Rooms:</strong> {request.hotel_rooms}</p>}
             </div>
           )}
           {request.inquiry_type === 'cruise' && (
-            <div className="text-sm text-gray-700">
-              <p><strong>Destination:</strong> {request.cruise_destination}</p>
-              {request.cruise_departure_date && <p><strong>Departure:</strong> {new Date(request.cruise_departure_date).toLocaleDateString()}</p>}
-              {request.cruise_passengers && <p><strong>Passengers:</strong> {request.cruise_passengers}</p>}
+            <div className="text-sm text-gray-700 space-y-1">
+              <p><strong className="text-blue-700">Destination:</strong> {request.cruise_destination}</p>
+              {request.cruise_departure_date && <p><strong className="text-blue-700">Departure:</strong> {new Date(request.cruise_departure_date).toLocaleDateString()}</p>}
+              {request.cruise_passengers && <p><strong className="text-blue-700">Passengers:</strong> {request.cruise_passengers}</p>}
             </div>
           )}
           {request.inquiry_type === 'package' && (
-            <div className="text-sm text-gray-700">
-              <p><strong>Destination:</strong> {request.package_destination}</p>
-              {request.package_start_date && <p><strong>Start:</strong> {new Date(request.package_start_date).toLocaleDateString()}</p>}
-              {request.package_travelers && <p><strong>Travelers:</strong> {request.package_travelers}</p>}
+            <div className="text-sm text-gray-700 space-y-1">
+              <p><strong className="text-blue-700">Destination:</strong> {request.package_destination}</p>
+              {request.package_start_date && <p><strong className="text-blue-700">Start:</strong> {new Date(request.package_start_date).toLocaleDateString()}</p>}
+              {request.package_travelers && <p><strong className="text-blue-700">Travelers:</strong> {request.package_travelers}</p>}
             </div>
           )}
           {request.inquiry_type === 'general' && (
-            <div className="text-sm text-gray-700">
-              <p><strong>Subject:</strong> {request.inquiry_subject}</p>
-              <p className="truncate"><strong>Message:</strong> {request.inquiry_message}</p>
+            <div className="text-sm text-gray-700 space-y-1">
+              {request.inquiry_subject && <p><strong className="text-blue-700">Subject:</strong> {request.inquiry_subject}</p>}
+              {request.inquiry_message && <p className="truncate"><strong className="text-blue-700">Message:</strong> {request.inquiry_message}</p>}
             </div>
           )}
         </div>
 
         {/* Show quote information if available */}
         {request.quotes && request.quotes.length > 0 && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
-            <p className="text-sm font-semibold text-green-800 mb-2">
-              💰 {request.quotes.filter(q => q.status === 'sent' || q.status === 'accepted').length} Quote{request.quotes.filter(q => q.status === 'sent' || q.status === 'accepted').length !== 1 ? 's' : ''} Available
+          <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg shadow-sm">
+            <p className="text-sm font-bold text-green-800 mb-3 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
+              </svg>
+              {request.quotes.filter(q => q.status === 'sent' || q.status === 'accepted').length} Quote{request.quotes.filter(q => q.status === 'sent' || q.status === 'accepted').length !== 1 ? 's' : ''} Available
             </p>
             {request.quotes
               .filter(q => q.status === 'sent' || q.status === 'accepted')
               .map((quote) => (
-                <div key={quote.id} className="text-sm text-gray-700">
-                  <p><strong>Quote #{quote.quote_number}:</strong> ${quote.total_amount} {quote.currency}</p>
+                <div key={quote.id} className="bg-white bg-opacity-50 rounded-md p-3 mb-2 border border-green-200">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="text-sm font-semibold text-gray-900">Quote #{quote.quote_number}</p>
+                    <p className="text-lg font-bold text-green-600">${quote.total_amount} {quote.currency}</p>
+                  </div>
                   {quote.expires_at && (
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-gray-600 flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0 1 1 0 002 0zM8 9a1 1 0 000 2h2a1 1 0 100 0H8z" clipRule="evenodd" />
+                      </svg>
                       Expires: {new Date(quote.expires_at).toLocaleDateString()}
                     </p>
                   )}
@@ -555,12 +644,18 @@ export default function TravelDashboard() {
           </div>
         )}
 
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
           <button
             onClick={() => navigate(`/inquiry/${request.id}`)}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition"
+            className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
           >
-            View Details
+            <span className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              View Details
+            </span>
           </button>
           {request.quotes && request.quotes.some(q => q.status === 'sent' || q.status === 'accepted') && (
             <button
@@ -568,9 +663,14 @@ export default function TravelDashboard() {
                 const sentQuote = request.quotes.find(q => q.status === 'sent' || q.status === 'accepted')
                 navigate('/quote-detail', { state: { quoteData: sentQuote, inquiryData: request } })
               }}
-              className="px-4 py-2 border border-green-300 bg-green-50 text-green-700 text-sm rounded-md hover:bg-green-100 transition"
+              className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-semibold rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
             >
-              View Quote
+              <span className="flex items-center justify-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                View Quote
+              </span>
             </button>
           )}
         </div>
@@ -578,65 +678,87 @@ export default function TravelDashboard() {
     )
   }
 
-  // Allow rendering for both authenticated and guest users
   return (
-    <div className="min-h-screen bg-[#f0f7fc]">
-      {/* Enhanced Header */}
-      <header className="sticky top-0 z-10 bg-white shadow-sm">
-        <div className="container mx-auto px-4 sm:px-6 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      {/* Enhanced Header with Modern Design */}
+      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm shadow-lg border-b border-gray-200/50">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center gap-4">
+            <div className="flex items-center space-x-4 flex-1 min-w-0">
               <button 
                 onClick={() => navigate('/')}
-                className="flex items-center text-[#006d92] hover:text-[#005a7a] transition"
+                className="flex items-center text-blue-600 hover:text-blue-700 transition-all duration-200 p-2 rounded-lg hover:bg-blue-50 group"
+                aria-label="Back to Home"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:-translate-x-1 transition-transform duration-200">
                   <path d="M19 12H5M12 19l-7-7 7-7"/>
                 </svg>
-                <span className="ml-2 font-medium hidden sm:inline">Back to Home</span>
+                <span className="ml-2 font-semibold hidden sm:inline text-gray-700 group-hover:text-blue-700">Back to Home</span>
               </button>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-800">My Trips</h1>
+              <div className="flex items-center gap-3 min-w-0 flex-1 sm:flex-initial">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">My Trips</h1>
+              </div>
             </div>
             
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3 flex-shrink-0">
               {isGuest && (
                 <button
                   onClick={handleLoginClick}
-                  className="px-4 py-1.5 rounded-md bg-[#0ea5e9] text-white hover:bg-[#0284c7] transition text-sm sm:text-base"
+                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 text-sm sm:text-base"
                 >
-                  Log In
+                  <span className="flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                    </svg>
+                    Log In
+                  </span>
                 </button>
               )}
               <button
                 onClick={toggleMobileMenu}
-                className="md:hidden p-2 rounded-md hover:bg-gray-100"
+                className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                aria-label="Toggle menu"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
             </div>
           </div>
           {isGuest && (
-            <p className="text-gray-600 mt-1 text-sm">You're viewing as a guest user</p>
+            <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
+              <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <p className="text-sm text-amber-800 font-medium">You're viewing as a guest user</p>
+            </div>
           )}
         </div>
       </header>
 
-      {/* Enhanced Filter tabs - Horizontal scroll on mobile */}
-      <div className="sticky top-[73px] z-10 bg-white shadow-sm mb-4">
-        <div className="container mx-auto px-4 sm:px-6 py-3">
-          <div className="flex overflow-x-auto hide-scrollbar gap-2">
+      {/* Enhanced Filter tabs with Modern Design */}
+      <div className="sticky top-[73px] z-10 bg-white/90 backdrop-blur-sm shadow-sm mb-6 border-b border-gray-200/50">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2">
             {["Upcoming", "Cancelled", "Past", "Failed"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => handleTabChange(tab)}
-                className={`px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition-all ${
+                className={`px-6 py-3 rounded-xl text-sm font-semibold whitespace-nowrap transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5 active:translate-y-0 flex-shrink-0 min-w-[120px] justify-center flex items-center gap-2 ${
                   activeTab === tab 
-                    ? "bg-[#0ea5e9] text-white shadow-sm" 
-                    : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg" 
+                    : "bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-300 hover:bg-blue-50"
                 }`}
               >
+                {tab === "Upcoming" && <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                {tab === "Cancelled" && <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
+                {tab === "Past" && <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                {tab === "Failed" && <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>}
                 {tab}
               </button>
             ))}
@@ -644,50 +766,58 @@ export default function TravelDashboard() {
         </div>
       </div>
 
-      <div className="container mx-auto">
-        <div className="flex flex-col md:flex-row px-4 sm:px-6 gap-4 md:gap-6">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
           {/* Enhanced Sidebar with mobile support */}
           <div className={`
-            fixed md:relative inset-0 z-20 bg-white md:bg-transparent
-            transition-transform duration-300 ease-in-out
-            ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+            fixed lg:relative inset-0 z-20 bg-white/95 lg:bg-transparent backdrop-blur-sm lg:backdrop-blur-none
+            transition-all duration-300 ease-in-out border-r border-gray-200/50 lg:border-r-0
+            ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+            lg:shadow-none shadow-xl
           `}>
-            <div className="w-64 bg-white rounded-lg p-4 shadow-sm h-full md:h-auto">
-              <div className="flex items-center justify-between mb-6 pl-4">
-                <div className="flex items-center gap-2">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                  <span className="text-lg font-semibold">My Trips</span>
+            <div className="w-full lg:w-80 bg-white rounded-xl lg:rounded-lg p-6 shadow-sm h-full lg:h-auto border border-gray-200/50 lg:border-0">
+              <div className="flex items-center justify-between mb-8 pl-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-sm">
+                    <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                  <span className="text-xl font-bold text-gray-900">My Trips</span>
                 </div>
                 <button 
                   onClick={toggleMobileMenu}
-                  className="md:hidden p-2 hover:bg-gray-100 rounded-md"
+                  className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                  aria-label="Close menu"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
 
-              <nav className="space-y-1">
-                {["All Bookings", "Flights", "Cruise", "Packages", "Requests"].map((item) => (
+              <nav className="space-y-2">
+                {[
+                  { key: "All Bookings", icon: "📋", desc: "View all trips" },
+                  { key: "Flights", icon: "✈️", desc: "Flight bookings" },
+                  { key: "Cruise", icon: "🚢", desc: "Cruise bookings" },
+                  { key: "Packages", icon: "🎒", desc: "Travel packages" },
+                  { key: "Requests", icon: "💬", desc: "Travel requests" }
+                ].map((item) => (
                   <button
-                    key={item}
-                    onClick={() => handleSidebarItemChange(item)}
-                    className={`w-full text-left px-4 py-2.5 rounded-md transition-colors
-                      ${activeSidebarItem === item 
-                        ? "bg-[#d9e9f1] text-[#006d92] font-medium" 
-                        : "hover:bg-gray-50"
-                      }`}
+                    key={item.key}
+                    onClick={() => handleSidebarItemChange(item.key)}
+                    className={`w-full text-left p-4 rounded-xl transition-all duration-200 group hover:shadow-md ${
+                      activeSidebarItem === item.key 
+                        ? "bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 border-2 border-blue-200 shadow-md" 
+                        : "hover:bg-gray-50 border-2 border-transparent"
+                    }`}
                   >
-                    {item}
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xl group-hover:scale-110 transition-transform duration-200">{item.icon}</span>
+                      <span className={`font-semibold ${activeSidebarItem === item.key ? 'text-blue-700' : 'text-gray-900'}`}>{item.key}</span>
+                    </div>
+                    <p className={`text-sm ${activeSidebarItem === item.key ? 'text-blue-600' : 'text-gray-500'}`}>{item.desc}</p>
                   </button>
                 ))}
               </nav>
@@ -697,13 +827,13 @@ export default function TravelDashboard() {
           {/* Overlay for mobile menu */}
           {isMobileMenuOpen && (
             <div 
-              className="fixed inset-0 bg-black bg-opacity-50 z-10 md:hidden"
+              className="fixed inset-0 bg-black/50 z-10 lg:hidden backdrop-blur-sm"
               onClick={toggleMobileMenu}
             />
           )}
 
           {/* Enhanced main content */}
-          <div className="flex-1 bg-white rounded-lg shadow-sm">
+          <div className="flex-1 bg-white rounded-xl shadow-lg border border-gray-200/50 overflow-hidden">
             {activeSidebarItem === "Requests" ? (
               // Requests section
               isAuthenticated ? (
@@ -712,32 +842,33 @@ export default function TravelDashboard() {
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     <span className="ml-2 text-gray-600">Loading requests...</span>
                   </div>
-                ) : filteredRequests.length > 0 ? (
-                  <div className="p-6">
-                    <div className="mb-6 flex justify-between items-center">
-                      <div>
-                        <h2 className="text-xl font-semibold text-gray-900">
-                          {activeTab} Requests
-                        </h2>
-                        <p className="text-gray-600">
-                          {filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''} found
-                        </p>
-                      </div>
-                      <button
-                        onClick={loadRequests}
-                        className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition"
-                        title="Refresh requests"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                      </button>
-                    </div>
-                    <div className="space-y-4">
-                      {filteredRequests.map(renderRequestCard)}
-                    </div>
+            ) : filteredRequests.length > 0 ? (
+              <div className="p-6 lg:p-8">
+                <div className="mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                  <div>
+                    <h2 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">{activeTab} Requests</h2>
+                    <p className="text-gray-600 flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      {filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''} found
+                    </p>
                   </div>
-                ) : (
+                  <button
+                    onClick={loadRequests}
+                    className="p-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md group"
+                    title="Refresh requests"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 group-hover:rotate-180 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="grid gap-6">
+                  {filteredRequests.map(renderRequestCard)}
+                </div>
+              </div>
+            ) : (
                   <div className="flex flex-col items-center justify-center p-6 sm:p-8 md:p-10">
                     <div className="w-48 h-48 sm:w-64 sm:h-64 flex items-center justify-center">
                       <img
