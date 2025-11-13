@@ -33,7 +33,7 @@ export default defineConfig(({ mode }) => {
             react()
         ],
         root: '.',
-        base: './',
+        base: '/',
         resolve: {
             alias: {
                 '@': path.resolve(__dirname, './resources/js'),
