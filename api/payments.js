@@ -227,12 +227,16 @@ async function handlePaymentInitiation(req, res) {
     console.log('🔄 Calling ARC Pay API...');
     console.log('Base URL:', arcBaseUrl);
     console.log('Merchant ID:', arcMerchantId);
+    console.log('API Password:', arcApiPassword ? '***' + arcApiPassword.slice(-4) : 'Missing');
 
     // ARC Pay uses HTTP Basic Auth with merchant.MERCHANT_ID:password format
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
-    const sessionUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/session`;
+    // Ensure base URL doesn't have trailing slash
+    const cleanBaseUrl = arcBaseUrl.replace(/\/$/, '');
+    const sessionUrl = `${cleanBaseUrl}/merchant/${arcMerchantId}/session`;
     console.log('Session URL:', sessionUrl);
+    console.log('Auth Header:', authHeader.substring(0, 20) + '...');
 
     // Ensure return and cancel URLs are properly formatted
     const finalReturnUrl = return_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/payment/callback?quote_id=${quote.id}`;
