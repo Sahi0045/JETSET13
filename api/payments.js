@@ -291,22 +291,41 @@ async function handlePaymentInitiation(req, res) {
 
     const responseText = await arcResponse.text();
     console.log('ARC Pay response status:', arcResponse.status);
-    console.log('ARC Pay response:', responseText);
+    console.log('ARC Pay response headers:', Object.fromEntries(arcResponse.headers.entries()));
+    console.log('ARC Pay response text:', responseText);
 
     if (!arcResponse.ok) {
       let errorDetails;
       try {
         errorDetails = JSON.parse(responseText);
       } catch {
-        errorDetails = { message: responseText };
+        errorDetails = { message: responseText, rawResponse: responseText };
       }
       
-      console.error('ARC Pay API error:', errorDetails);
+      console.error('❌ ARC Pay API error:');
+      console.error('   Status:', arcResponse.status);
+      console.error('   Error details:', JSON.stringify(errorDetails, null, 2));
+      console.error('   Request URL:', sessionUrl);
+      console.error('   Request body:', JSON.stringify(requestBody, null, 2));
+      
+      // Return more detailed error information
+      const errorMessage = errorDetails.error?.explanation || 
+                          errorDetails.error?.message || 
+                          errorDetails.message || 
+                          errorDetails.explanation ||
+                          'Unknown error from ARC Pay';
+      
+      const errorField = errorDetails.error?.field || errorDetails.field;
+      const errorCause = errorDetails.error?.cause || errorDetails.cause;
+      
       return res.status(500).json({
         success: false,
         error: 'Failed to create payment session with ARC Pay',
-        details: errorDetails.message || errorDetails.error || 'Unknown error',
-        status: arcResponse.status
+        details: errorMessage,
+        field: errorField,
+        cause: errorCause,
+        status: arcResponse.status,
+        arcPayError: errorDetails
       });
     }
 
