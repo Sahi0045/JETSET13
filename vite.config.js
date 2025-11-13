@@ -33,7 +33,7 @@ export default defineConfig(({ mode }) => {
             react()
         ],
         root: '.',
-        base: '',
+        base: './',
         resolve: {
             alias: {
                 '@': path.resolve(__dirname, './resources/js'),
@@ -46,11 +46,15 @@ export default defineConfig(({ mode }) => {
             outDir: 'dist',
             emptyOutDir: true,
             manifest: true,
+            assetsDir: 'assets',
             rollupOptions: {
                 input: {
                     main: path.resolve(__dirname, 'index.html')
                 },
                 output: {
+                    entryFileNames: 'assets/[name]-[hash].js',
+                    chunkFileNames: 'assets/[name]-[hash].js',
+                    assetFileNames: 'assets/[name]-[hash].[ext]',
                     manualChunks(id) {
                         if (id.includes('node_modules')) {
                             return 'vendor';
