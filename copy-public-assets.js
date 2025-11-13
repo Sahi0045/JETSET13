@@ -31,6 +31,12 @@ try {
       const srcPath = join(src, entry.name);
       const destPath = join(dest, entry.name);
       
+      // Skip index.html - Vite builds this from root index.html
+      if (entry.name === 'index.html') {
+        console.log('ℹ️  Skipping public/index.html (using built index.html instead)');
+        continue;
+      }
+      
       if (entry.isDirectory()) {
         if (!existsSync(destPath)) {
           mkdirSync(destPath, { recursive: true });
