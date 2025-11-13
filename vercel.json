@@ -19,7 +19,7 @@
       "destination": "/api/inquiries?endpoint=my"
     },
     {
-      "source": "/((?!api|assets).*)",
+      "source": "/((?!api|assets|src|.*\\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|ttf|eot)).*)",
       "destination": "/index.html"
     }
   ],
