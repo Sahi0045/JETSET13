@@ -85,43 +85,14 @@ app.use('/api/*', (req, res) => {
   });
 });
 
-// Middleware to set proper MIME types for assets
-app.use((req, res, next) => {
-  if (req.path.endsWith('.js')) {
-    res.type('application/javascript');
-  } else if (req.path.endsWith('.css')) {
-    res.type('text/css');
-  } else if (req.path.endsWith('.wasm')) {
-    res.type('application/wasm');
-  }
-  next();
-});
+// Serve static files from the React app in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, 'dist')));
 
-// Serve static files from dist (works in both dev and production)
-const distPath = path.join(__dirname, 'dist');
-app.use(express.static(distPath, {
-  // Cache settings for static assets
-  maxAge: process.env.NODE_ENV === 'production' ? '1y' : '0',
-  etag: false
-}));
-
-// Serve index.html for SPA routing (catch-all)
-app.get('*', (req, res) => {
-  // Don't serve index.html for API requests
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({
-      success: false,
-      message: `API route ${req.method} ${req.path} not found`
-    });
-  }
-
-  res.sendFile(path.join(distPath, 'index.html'), (err) => {
-    if (err) {
-      console.error('Error serving index.html:', err);
-      res.status(500).send('Internal Server Error');
-    }
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
   });
-});
+}
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
