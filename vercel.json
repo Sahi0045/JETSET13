@@ -19,8 +19,15 @@
       "destination": "/api/inquiries?endpoint=my"
     },
     {
-      "source": "/((?!api|assets|src|.*\\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|ttf|eot)).*)",
-      "destination": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": "text/html"
+        }
+      ]
     }
   ],
   "headers": [
