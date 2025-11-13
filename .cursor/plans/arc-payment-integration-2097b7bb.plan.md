@@ -3,9 +3,10 @@
 
 ## Overview
 
-Integrate ARC Pay Gateway's Hosted Checkout solution ([https://api.arcpay.travel/api/documentation/integrationGuidelines/index.html](https://api.arcpay.travel/api/documentation/integrationGuidelines/index.html)) to enable secure payment processing for flight quotes. 
+Integrate ARC Pay Gateway's Hosted Checkout solution ([https://api.arcpay.travel/api/documentation/integrationGuidelines/index.html](https://api.arcpay.travel/api/documentation/integrationGuidelines/index.html)) to enable secure payment processing for flight quotes.
 
 **Integration Flow:**
+
 1. User clicks "Pay Now" on quote
 2. Backend initiates Hosted Checkout session via REST-JSON API
 3. User redirected to ARC-hosted payment page (PCI-compliant)
@@ -14,6 +15,7 @@ Integrate ARC Pay Gateway's Hosted Checkout solution ([https://api.arcpay.travel
 6. Backend verifies transaction and updates quote/inquiry status to 'paid'
 
 **Key Benefits:**
+
 - PCI-DSS compliant (no card data touches our servers)
 - Supports all major card schemes
 - Hosted payment page handles 3DS authentication
@@ -75,6 +77,7 @@ CREATE TABLE IF NOT EXISTS payments (
 case 'initiate-payment':
   return handlePaymentInitiation(req, res);
 ```
+
 
 **Implementation:**
 
@@ -141,6 +144,7 @@ async function handlePaymentInitiation(req, res) {
 ```
 
 **API Endpoint:**
+
 - **URL:** `https://api.arcpay.travel/api/rest/version/100/merchant/{merchantId}/session`
 - **Method:** POST
 - **Auth:** Basic HTTP Authentication (`merchant.<merchantId>:<apiPassword>`)
@@ -157,11 +161,11 @@ async function handlePaymentInitiation(req, res) {
 - Update quote status to 'paid' and set `paid_at`
 - Update inquiry status to 'paid'
 - Send confirmation email
-
 ```javascript
 case 'payment-callback':
   return handlePaymentCallback(req, res);
 ```
+
 
 **Implementation:**
 
@@ -232,10 +236,10 @@ async function handlePaymentCallback(req, res) {
 ```
 
 **API Endpoint for Verification:**
+
 - **URL:** `https://api.arcpay.travel/api/rest/version/100/merchant/{merchantId}/order/{orderId}/transaction/{transactionId}`
 - **Method:** GET
 - **Auth:** Basic HTTP Authentication
-
 
 ### 4. Backend Model - Quote Payment Methods
 
@@ -284,7 +288,6 @@ static async updatePaymentStatus(quoteId, paymentData) {
 - Add "Pay Now" button to quote display section
 - Only show if quote status is 'sent' or 'accepted' and payment_status is 'unpaid'
 - On click: initiate session → configure Checkout.js → redirect to hosted page
-
 ```jsx
 // Add to component head/useEffect
 useEffect(() => {
@@ -366,10 +369,11 @@ const handlePayNow = async (quoteId) => {
 )}
 ```
 
+
 **Checkout.js SDK Reference:**
+
 - **SDK URL:** `https://api.arcpay.travel/static/checkout/checkout.min.js`
 - **Documentation:** [Hosted Checkout Integration](https://api.arcpay.travel/api/documentation/integrationGuidelines/hostedCheckout/implementingTheHostedPaymentPage.html)
-
 
 ### 7. Frontend - Payment Callback Page
 
@@ -379,7 +383,6 @@ const handlePayNow = async (quoteId) => {
 - Parse query parameters (`resultIndicator`, `sessionId`)
 - Call backend callback API for verification
 - Backend handles verification and redirects to success/failure page
-
 ```jsx
 import { useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -416,6 +419,7 @@ export default function PaymentCallback() {
   );
 }
 ```
+
 
 ### 8. Frontend - Payment Success/Failed Pages
 
@@ -455,18 +459,20 @@ ARC_PAY_BASE_URL=https://api.arcpay.travel/api/rest/version/100
 # Production credentials require approval from ARC
 ```
 
+
 **Obtaining Test Credentials:**
+
 1. Contact ARC at: [https://www2.arccorp.com/support/arc-pay/](https://www2.arccorp.com/support/arc-pay/)
 2. Request test merchant account for Gateway API
 3. Receive merchant ID and API password
 4. Use test card numbers provided by ARC for testing
 
 **Authentication Method:**
+
 - **Type:** Basic HTTP Authentication
 - **Username:** `merchant.<merchantId>`
 - **Password:** Your API password
 - **Header:** `Authorization: Basic <base64(merchant.merchantId:apiPassword)>`
-
 
 ### 11. Admin Panel Updates
 
@@ -524,11 +530,13 @@ User sees confirmation + booking details
 ## API Endpoints Summary
 
 ### Internal API Endpoints
+
 - `POST /api/payments?action=initiate-payment` - Create ARC payment session
 - `GET /api/payments?action=payment-callback` - Handle ARC redirect and verify payment
 - `GET /api/payments?action=get-payment-details&paymentId=X` - Get payment details for display
 
 ### ARC Pay Gateway API Endpoints
+
 - `POST https://api.arcpay.travel/api/rest/version/100/merchant/{merchantId}/session`
   - **Purpose:** Initiate Hosted Checkout session
   - **Auth:** Basic HTTP Auth
@@ -540,6 +548,7 @@ User sees confirmation + booking details
   - **Returns:** Transaction status, payment details, card info
 
 ### Frontend Routes
+
 - `/payment/callback` - ARC redirect landing page (verifying)
 - `/payment/success?paymentId=X` - Payment success confirmation
 - `/payment/failed?error=X` - Payment failure page
@@ -566,6 +575,7 @@ When payment is successful:
 ## Technical Notes
 
 ### Security Considerations
+
 - **PCI Compliance:** Card data never touches our servers (handled by ARC)
 - **Verification:** Always verify `resultIndicator` matches `successIndicator` to prevent tampering
 - **HTTPS Required:** All callbacks must use HTTPS in production
@@ -573,6 +583,7 @@ When payment is successful:
 - **Session Expiry:** ARC sessions expire automatically (typical: 30 minutes)
 
 ### Error Handling
+
 - Handle network failures when calling ARC API
 - Implement retry logic for transient failures
 - Log all API requests/responses for debugging
@@ -580,6 +591,7 @@ When payment is successful:
 - Provide support contact for payment issues
 
 ### Testing Strategy
+
 1. Use ARC test credentials for development
 2. Test with ARC-provided test card numbers
 3. Test success, failure, and cancellation flows
@@ -588,6 +600,7 @@ When payment is successful:
 6. Verify webhook/callback handling
 
 ### Production Checklist
+
 - [ ] Obtain production merchant credentials from ARC
 - [ ] Update environment variables with production keys
 - [ ] Ensure return URLs use HTTPS
@@ -597,11 +610,13 @@ When payment is successful:
 - [ ] Test with small transaction first
 
 ### API Version
+
 - Current integration uses API version **100**
 - Monitor ARC changelog for updates: [https://api.arcpay.travel/api/documentation/apiDocumentation/rest-json/version/100/changelog.html](https://api.arcpay.travel/api/documentation/apiDocumentation/rest-json/version/100/changelog.html)
 - Non-breaking changes are supported from version 100+
 
 ### Existing Code Reuse
+
 - Existing payment routes in `backend/routes/payment.routes.js` may have ARC Pay configuration
 - Review and integrate existing auth configuration if applicable
 - Replace mock payment functionality in `api/payments.js` with real ARC Pay integration

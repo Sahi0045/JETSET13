@@ -1,10 +1,21 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+// Initialize Supabase client with proper error handling
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Supabase configuration missing!');
+  console.error('SUPABASE_URL:', supabaseUrl ? 'Set' : 'Missing');
+  console.error('SUPABASE_KEY:', supabaseKey ? 'Set' : 'Missing');
+}
+
+const supabase = createClient(supabaseUrl || 'https://qqmagqwumjipdqvxbiqu.supabase.co', supabaseKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxbWFncXd1bWppcGRxdnhiaXF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwMDEwMTIsImV4cCI6MjA2MDU3NzAxMn0.Ho8DYLWpX_vQ6syrI2zkU3G5pnNTdnYpgtpyjjGYlDA', {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false
+  }
+});
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -17,6 +28,18 @@ export default async function handler(req, res) {
     res.status(200).end();
     return;
   }
+
+  // Log all incoming requests for debugging
+  console.log('='.repeat(60));
+  console.log('📥 Payment API Request:', new Date().toISOString());
+  console.log('Method:', req.method);
+  console.log('Query:', JSON.stringify(req.query));
+  console.log('Body:', JSON.stringify(req.body));
+  console.log('Headers:', JSON.stringify({
+    'content-type': req.headers['content-type'],
+    'authorization': req.headers['authorization'] ? 'Bearer ***' : 'None'
+  }));
+  console.log('='.repeat(60));
 
   try {
     const { action } = req.query;
@@ -42,18 +65,35 @@ export default async function handler(req, res) {
         return handlePaymentRefund(req, res);
       case 'test':
         return handleTest(req, res);
+      case 'health':
+        return handleHealthCheck(req, res);
+      case 'debug':
+        return handleDebug(req, res);
       default:
         return res.status(400).json({
           success: false,
-          error: 'Invalid action. Supported actions: initiate-payment, payment-callback, get-payment-details, gateway-status, session-create, order-create, payment-process, payment-verify, payment-refund, test'
+          error: 'Invalid action. Supported actions: initiate-payment, payment-callback, get-payment-details, gateway-status, session-create, order-create, payment-process, payment-verify, payment-refund, test, health, debug'
         });
     }
   } catch (error) {
-    console.error('Payment API error:', error);
+    console.error('='.repeat(60));
+    console.error('❌ Payment API top-level error:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Request details:', {
+      method: req.method,
+      query: req.query,
+      body: req.body
+    });
+    console.error('='.repeat(60));
+    
     res.status(500).json({
       success: false,
       error: 'Internal server error',
-      details: error.message
+      details: error.message,
+      type: error.name || 'Error',
+      timestamp: new Date().toISOString()
     });
   }
 }
@@ -69,6 +109,16 @@ async function handlePaymentInitiation(req, res) {
   }
 
   try {
+    // Validate Supabase client
+    if (!supabase) {
+      console.error('❌ Supabase client not initialized');
+      return res.status(500).json({
+        success: false,
+        error: 'Database connection failed',
+        details: 'Supabase client not initialized'
+      });
+    }
+
     const { quote_id, return_url, cancel_url } = req.body;
 
     if (!quote_id) {
@@ -78,21 +128,59 @@ async function handlePaymentInitiation(req, res) {
       });
     }
 
+    console.log('🔍 Fetching quote:', quote_id);
+    console.log('📋 Request body:', JSON.stringify({ quote_id, return_url, cancel_url }, null, 2));
+
     // 1. Fetch quote details from database
     const { data: quote, error: quoteError } = await supabase
       .from('quotes')
-      .select('*, inquiry:inquiries(*)')
+      .select('*')
       .eq('id', quote_id)
       .single();
 
-    if (quoteError || !quote) {
-      return res.status(404).json({
+    if (quoteError) {
+      console.error('❌ Quote fetch error:', quoteError);
+      console.error('Error code:', quoteError.code);
+      console.error('Error message:', quoteError.message);
+      console.error('Error details:', quoteError.details);
+      return res.status(500).json({
         success: false,
-        error: 'Quote not found'
+        error: 'Database error while fetching quote',
+        details: quoteError.message || 'Unknown database error',
+        code: quoteError.code
       });
     }
 
-    // 2. Create payment record
+    if (!quote) {
+      console.error('❌ Quote not found for ID:', quote_id);
+      return res.status(404).json({
+        success: false,
+        error: 'Quote not found',
+        details: `No quote found with ID: ${quote_id}`
+      });
+    }
+
+    console.log('✅ Quote found:', quote.id, 'Inquiry ID:', quote.inquiry_id);
+
+    // 2. Fetch inquiry details separately
+    const { data: inquiry, error: inquiryError } = await supabase
+      .from('inquiries')
+      .select('customer_email, customer_name, customer_phone')
+      .eq('id', quote.inquiry_id)
+      .single();
+
+    if (inquiryError) {
+      console.error('Inquiry fetch error:', inquiryError);
+    }
+
+    const customerEmail = inquiry?.customer_email || quote.customer_email || null;
+    const customerName = inquiry?.customer_name || quote.customer_name || 'Customer';
+
+    console.log('💳 Creating payment record...');
+    console.log('   Customer Email:', customerEmail);
+    console.log('   Customer Name:', customerName);
+
+    // 3. Create payment record
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .insert([{
@@ -101,10 +189,10 @@ async function handlePaymentInitiation(req, res) {
         amount: quote.total_amount,
         currency: quote.currency || 'USD',
         payment_status: 'pending',
-        customer_email: quote.inquiry?.customer_email,
-        customer_name: quote.inquiry?.customer_name,
-        return_url,
-        cancel_url
+        customer_email: customerEmail,
+        customer_name: customerName,
+        return_url: return_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/payment/callback`,
+        cancel_url: cancel_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/inquiry/${quote.inquiry_id}`
       }])
       .select()
       .single();
@@ -113,83 +201,186 @@ async function handlePaymentInitiation(req, res) {
       console.error('Payment creation error:', paymentError);
       return res.status(500).json({
         success: false,
-        error: 'Failed to create payment record'
+        error: 'Failed to create payment record',
+        details: paymentError.message,
+        code: paymentError.code
       });
     }
 
-    // 3. Call ARC Pay API to create hosted checkout session
-    const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID;
-    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD;
-    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+    console.log('✅ Payment record created:', payment.id);
+
+    // 4. Call ARC Pay API to create hosted checkout session
+    const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/100';
 
     if (!arcMerchantId || !arcApiPassword) {
       console.error('ARC Pay credentials not configured');
+      console.error('Merchant ID:', arcMerchantId ? 'Set' : 'Missing');
+      console.error('API Password:', arcApiPassword ? 'Set' : 'Missing');
       return res.status(500).json({
         success: false,
         error: 'Payment gateway not configured. Please contact support.'
       });
     }
 
+    console.log('🔄 Calling ARC Pay API...');
+    console.log('Base URL:', arcBaseUrl);
+    console.log('Merchant ID:', arcMerchantId);
+
+    // ARC Pay uses HTTP Basic Auth with merchant.MERCHANT_ID:password format
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
-    const arcResponse = await fetch(`${arcBaseUrl}/merchant/${arcMerchantId}/session`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader
-      },
-      body: JSON.stringify({
-        apiOperation: 'INITIATE_CHECKOUT',
-        interaction: {
-          operation: 'PURCHASE',
-          returnUrl: return_url,
-          cancelUrl: cancel_url
-        },
-        order: {
-          id: payment.id,
-          amount: parseFloat(quote.total_amount),
-          currency: quote.currency || 'USD',
-          description: `Flight booking - ${quote.title || quote.quote_number}`
-        }
-      })
-    });
+    const sessionUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/session`;
+    console.log('Session URL:', sessionUrl);
 
-    if (!arcResponse.ok) {
-      const errorText = await arcResponse.text();
-      console.error('ARC Pay API error:', errorText);
+    // Ensure return and cancel URLs are properly formatted
+    const finalReturnUrl = return_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/payment/callback?quote_id=${quote.id}`;
+    const finalCancelUrl = cancel_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/inquiry/${quote.inquiry_id}?payment=cancelled`;
+
+    const requestBody = {
+      apiOperation: 'INITIATE_CHECKOUT',
+      interaction: {
+        operation: 'PURCHASE',
+        returnUrl: finalReturnUrl,
+        cancelUrl: finalCancelUrl
+      },
+      order: {
+        id: payment.id,
+        amount: parseFloat(quote.total_amount).toFixed(2),
+        currency: quote.currency || 'USD',
+        description: `Quote ${quote.quote_number || quote.id.slice(-8)} - ${quote.title || 'Travel Booking'}`
+      }
+    };
+
+    console.log('Request body:', JSON.stringify(requestBody, null, 2));
+
+    let arcResponse;
+    try {
+      arcResponse = await fetch(sessionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+    } catch (fetchError) {
+      console.error('Network error calling ARC Pay:', fetchError);
       return res.status(500).json({
         success: false,
-        error: 'Failed to create payment session with ARC Pay'
+        error: 'Failed to connect to payment gateway',
+        details: fetchError.message
       });
     }
 
-    const session = await arcResponse.json();
+    const responseText = await arcResponse.text();
+    console.log('ARC Pay response status:', arcResponse.status);
+    console.log('ARC Pay response:', responseText);
 
-    // 4. Store session ID in payment record
-    await supabase
+    if (!arcResponse.ok) {
+      let errorDetails;
+      try {
+        errorDetails = JSON.parse(responseText);
+      } catch {
+        errorDetails = { message: responseText };
+      }
+      
+      console.error('ARC Pay API error:', errorDetails);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to create payment session with ARC Pay',
+        details: errorDetails.message || errorDetails.error || 'Unknown error',
+        status: arcResponse.status
+      });
+    }
+
+    let session;
+    try {
+      session = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse ARC Pay response:', parseError);
+      console.error('Response text:', responseText);
+      return res.status(500).json({
+        success: false,
+        error: 'Invalid response from payment gateway',
+        details: 'Failed to parse JSON response'
+      });
+    }
+
+    // Handle different response formats from ARC Pay
+    const sessionId = session.session?.id || session.sessionId || session.id;
+    const successIndicator = session.successIndicator || session.success_indicator;
+
+    if (!sessionId) {
+      console.error('❌ ARC Pay response missing session ID');
+      console.error('Full response:', JSON.stringify(session, null, 2));
+      return res.status(500).json({
+        success: false,
+        error: 'Invalid response from payment gateway',
+        details: 'Session ID not found in response',
+        response: session
+      });
+    }
+
+    console.log('✅ ARC Pay session created:', sessionId);
+    console.log('   Success Indicator:', successIndicator);
+
+    // 5. Store session ID in payment record
+    const { error: updateError } = await supabase
       .from('payments')
       .update({
-        arc_session_id: session.session?.id,
-        success_indicator: session.successIndicator,
-        arc_order_id: payment.id
+        arc_session_id: sessionId,
+        success_indicator: successIndicator,
+        arc_order_id: payment.id,
+        updated_at: new Date().toISOString()
       })
       .eq('id', payment.id);
 
-    // 5. Return session details for Checkout.js integration
+    if (updateError) {
+      console.error('Failed to update payment with session ID:', updateError);
+      // Don't fail the request if update fails, but log it
+    } else {
+      console.log('✅ Payment record updated with session ID');
+    }
+
+    // 6. Return session details for Checkout.js integration
     return res.status(200).json({
       success: true,
-      sessionId: session.session?.id,
-      successIndicator: session.successIndicator,
+      sessionId: sessionId,
+      successIndicator: successIndicator,
       merchantId: arcMerchantId,
-      paymentId: payment.id
+      paymentId: payment.id,
+      checkoutUrl: session.redirectUrl || session.checkoutUrl || null
     });
 
   } catch (error) {
-    console.error('Payment initiation error:', error);
+    console.error('❌ Payment initiation error:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    // Provide more specific error messages
+    let errorMessage = 'Payment initiation failed';
+    let errorDetails = error.message || 'Unknown error';
+    
+    if (error.message?.includes('fetch')) {
+      errorMessage = 'Network error connecting to payment gateway';
+      errorDetails = 'Failed to reach ARC Pay API. Please try again.';
+    } else if (error.message?.includes('JSON')) {
+      errorMessage = 'Invalid response from payment gateway';
+      errorDetails = 'Payment gateway returned invalid data. Please try again.';
+    } else if (error.message?.includes('Supabase') || error.message?.includes('database')) {
+      errorMessage = 'Database error';
+      errorDetails = 'Failed to access database. Please try again.';
+    }
+    
     return res.status(500).json({
       success: false,
-      error: 'Payment initiation failed',
-      details: error.message
+      error: errorMessage,
+      details: errorDetails,
+      type: error.name || 'Error'
     });
   }
 }
@@ -226,10 +417,11 @@ async function handlePaymentCallback(req, res) {
     }
 
     // 3. Retrieve transaction details from ARC Pay
-    const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID;
-    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD;
+    const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
     const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
 
+    // ARC Pay uses merchant.MERCHANT_ID:password format for authentication
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
     const txnResponse = await fetch(
@@ -671,4 +863,94 @@ async function handleTest(req, res) {
     testResults,
     message: 'ARC Pay integration test completed successfully'
   });
+}
+
+// Health check endpoint
+async function handleHealthCheck(req, res) {
+  try {
+    // Test Supabase connection
+    const { data, error } = await supabase
+      .from('quotes')
+      .select('id')
+      .limit(1);
+    
+    const supabaseStatus = error ? 'error' : 'ok';
+    
+    res.json({
+      success: true,
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        supabase: {
+          status: supabaseStatus,
+          error: error?.message || null
+        },
+        arcPay: {
+          merchantId: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704',
+          configured: !!(process.env.ARC_PAY_MERCHANT_ID && process.env.ARC_PAY_API_PASSWORD)
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      status: 'unhealthy',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+}
+
+// Debug endpoint - detailed environment info
+async function handleDebug(req, res) {
+  const envVars = {
+    SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'Not set',
+    SUPABASE_KEY: (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY) ? 'Set (hidden)' : 'Not set',
+    ARC_PAY_MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704 (fallback)',
+    ARC_PAY_API_PASSWORD: process.env.ARC_PAY_API_PASSWORD ? 'Set (hidden)' : '4d41a81750f1ee3f6aa4adf0dfd6310c (fallback)',
+    ARC_PAY_BASE_URL: process.env.ARC_PAY_BASE_URL || process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/100 (fallback)',
+    NODE_ENV: process.env.NODE_ENV || 'Not set',
+    FRONTEND_URL: process.env.FRONTEND_URL || 'Not set'
+  };
+
+  try {
+    // Test Supabase query
+    const { data: quoteTest, error: quoteError } = await supabase
+      .from('quotes')
+      .select('id, quote_number, total_amount')
+      .limit(1);
+
+    const { data: paymentTest, error: paymentError } = await supabase
+      .from('payments')
+      .select('id')
+      .limit(1);
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      environment: envVars,
+      supabase: {
+        client: supabase ? 'Initialized' : 'Not initialized',
+        quotesTable: quoteError ? `Error: ${quoteError.message}` : `OK (${quoteTest?.length || 0} records found)`,
+        paymentsTable: paymentError ? `Error: ${paymentError.message}` : `OK (${paymentTest?.length || 0} records found)`
+      },
+      request: {
+        method: req.method,
+        url: req.url,
+        headers: {
+          'content-type': req.headers['content-type'],
+          'user-agent': req.headers['user-agent'],
+          'authorization': req.headers['authorization'] ? 'Present (hidden)' : 'Not present'
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack,
+      environment: envVars,
+      timestamp: new Date().toISOString()
+    });
+  }
 } 

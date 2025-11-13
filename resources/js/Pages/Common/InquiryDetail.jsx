@@ -3,10 +3,11 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from './Navbar';
 import Footer from './Footer';
 
-// Load ARC Pay Checkout.js SDK
+// Load ARC Pay Checkout.js SDK with retry logic
 const loadCheckoutScript = () => {
   return new Promise((resolve, reject) => {
     if (window.Checkout) {
+      console.log('✅ Checkout.js already loaded');
       resolve();
       return;
     }
@@ -14,8 +15,34 @@ const loadCheckoutScript = () => {
     const script = document.createElement('script');
     script.src = 'https://api.arcpay.travel/static/checkout/checkout.min.js';
     script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Checkout.js'));
+    script.crossOrigin = 'anonymous';
+    
+    let timeoutId;
+    const timeout = setTimeout(() => {
+      if (!window.Checkout) {
+        document.body.removeChild(script);
+        reject(new Error('Checkout.js loading timeout'));
+      }
+    }, 15000); // 15 second timeout
+    
+    script.onload = () => {
+      clearTimeout(timeout);
+      if (window.Checkout) {
+        console.log('✅ Checkout.js loaded successfully');
+        resolve();
+      } else {
+        reject(new Error('Checkout.js loaded but not available'));
+      }
+    };
+    
+    script.onerror = () => {
+      clearTimeout(timeout);
+      if (script.parentNode) {
+        document.body.removeChild(script);
+      }
+      reject(new Error('Failed to load Checkout.js from ARC Pay'));
+    };
+    
     document.body.appendChild(script);
   });
 };
@@ -32,10 +59,31 @@ const InquiryDetail = () => {
 
   useEffect(() => {
     fetchInquiryDetails();
-    // Load Checkout.js SDK
-    loadCheckoutScript()
-      .then(() => setCheckoutReady(true))
-      .catch(err => console.error('Failed to load Checkout.js:', err));
+    
+    // Load Checkout.js SDK with retry logic
+    const loadSDK = async () => {
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          await loadCheckoutScript();
+          setCheckoutReady(true);
+          console.log('✅ Payment system ready');
+          return;
+        } catch (error) {
+          retries--;
+          console.warn(`Checkout.js load failed, ${retries} retries remaining:`, error);
+          if (retries === 0) {
+            console.error('❌ Failed to load Checkout.js after all retries');
+            setError('Payment system unavailable. Please refresh the page.');
+          } else {
+            // Wait 2 seconds before retry
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+      }
+    };
+    
+    loadSDK();
   }, [id]);
 
   const fetchInquiryDetails = async () => {
@@ -110,8 +158,30 @@ const InquiryDetail = () => {
   };
 
   const handlePayNow = async (quote) => {
+    // Validate prerequisites
     if (!checkoutReady) {
-      alert('Payment system is loading. Please try again in a moment.');
+      alert('Payment system is loading. Please wait a moment and try again.');
+      return;
+    }
+
+    if (!window.Checkout) {
+      alert('Payment system not ready. Please refresh the page and try again.');
+      return;
+    }
+
+    if (!quote || !quote.id) {
+      alert('Invalid quote information. Please refresh the page.');
+      return;
+    }
+
+    if (!inquiry || !inquiry.id) {
+      alert('Invalid inquiry information. Please refresh the page.');
+      return;
+    }
+
+    // Validate quote amount
+    if (!quote.total_amount || parseFloat(quote.total_amount) <= 0) {
+      alert('Invalid payment amount. Please contact support.');
       return;
     }
 
@@ -120,7 +190,17 @@ const InquiryDetail = () => {
     try {
       const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token');
       
-      // 1. Initiate payment session
+      if (!token) {
+        alert('Please log in to proceed with payment.');
+        navigate('/login');
+        return;
+      }
+
+      console.log('💳 Initiating payment for quote:', quote.id);
+      console.log('   Amount:', quote.total_amount, quote.currency);
+      console.log('   Quote Number:', quote.quote_number);
+      
+      // 1. Initiate payment session with ARC Pay
       const response = await fetch('/api/payments?action=initiate-payment', {
         method: 'POST',
         headers: {
@@ -130,51 +210,124 @@ const InquiryDetail = () => {
         credentials: 'include',
         body: JSON.stringify({
           quote_id: quote.id,
-          return_url: `${window.location.origin}/payment/callback`,
-          cancel_url: `${window.location.origin}/inquiry/${inquiry.id}`
+          return_url: `${window.location.origin}/payment/callback?quote_id=${quote.id}&inquiry_id=${inquiry.id}`,
+          cancel_url: `${window.location.origin}/inquiry/${inquiry.id}?payment=cancelled`
         })
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ 
+          error: `Network error (${response.status})`,
+          details: 'Unable to connect to payment server'
+        }));
+        
+        console.error('Payment API error:', {
+          status: response.status,
+          error: errorData
+        });
+        
+        throw new Error(errorData.error || errorData.details || `Server error: ${response.status}`);
+      }
 
       const data = await response.json();
 
       if (!data.success) {
-        throw new Error(data.error || 'Failed to initiate payment');
+        console.error('Payment initiation failed:', data);
+        throw new Error(data.error || data.details || 'Failed to initiate payment');
       }
 
-      const { sessionId, merchantId } = data;
+      const { sessionId, merchantId, successIndicator, paymentId } = data;
 
-      // 2. Configure and show ARC Pay hosted checkout
-      window.Checkout.configure({
-        merchant: merchantId,
-        session: {
-          id: sessionId
-        },
-        interaction: {
-          merchant: {
-            name: 'JetSet Travel',
-            address: {
-              line1: '123 Travel Street',
-              city: 'New York',
-              stateProvince: 'NY',
-              postalCode: '10001',
-              country: 'USA'
-            }
+      if (!sessionId || !merchantId) {
+        console.error('Invalid payment response:', data);
+        throw new Error('Invalid response from payment server. Please try again.');
+      }
+
+      console.log('✅ Payment session created successfully');
+      console.log('   Session ID:', sessionId);
+      console.log('   Merchant ID:', merchantId);
+      console.log('   Payment ID:', paymentId);
+
+      // 2. Configure ARC Pay hosted checkout
+      try {
+        const checkoutConfig = {
+          merchant: merchantId,
+          session: {
+            id: sessionId
           },
-          displayControl: {
-            billingAddress: 'OPTIONAL',
-            customerEmail: 'OPTIONAL'
+          interaction: {
+            merchant: {
+              name: 'JetSet Travel',
+              address: {
+                line1: '123 Travel Street',
+                city: 'New York',
+                stateProvince: 'NY',
+                postalCode: '10001',
+                country: 'USA'
+              }
+            },
+            displayControl: {
+              billingAddress: 'OPTIONAL',
+              customerEmail: 'OPTIONAL'
+            }
           }
-        }
-      });
+        };
 
-      // 3. Redirect to hosted payment page
-      window.Checkout.showPaymentPage();
+        console.log('⚙️ Configuring Checkout.js...');
+        window.Checkout.configure(checkoutConfig);
+
+        console.log('✅ Checkout configured successfully');
+        console.log('🔄 Redirecting to ARC Pay payment page...');
+
+        // Small delay to ensure configuration is complete
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        // 3. Redirect to hosted payment page
+        if (typeof window.Checkout.showPaymentPage === 'function') {
+          window.Checkout.showPaymentPage();
+        } else {
+          throw new Error('Checkout.showPaymentPage is not available');
+        }
+        
+        // Note: User will be redirected, so we don't reset loading state here
+        // The loading state will persist until redirect completes
+        
+      } catch (checkoutError) {
+        console.error('Checkout configuration error:', checkoutError);
+        console.error('Checkout object:', window.Checkout);
+        throw new Error('Failed to configure payment page. Please refresh and try again.');
+      }
 
     } catch (error) {
       console.error('Payment initiation failed:', error);
-      alert(`Failed to initiate payment: ${error.message}`);
-    } finally {
+      
+      // Reset loading state on error
       setPaymentLoading(false);
+      
+      // Show user-friendly error message
+      let errorMessage = 'An unexpected error occurred. Please try again.';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error instanceof TypeError && error.message.includes('fetch')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (error.message.includes('401') || error.message.includes('403')) {
+        errorMessage = 'Authentication required. Please log in and try again.';
+      } else if (error.message.includes('500')) {
+        errorMessage = 'Payment server error. Please try again in a moment or contact support.';
+      }
+      
+      alert(`Payment Error: ${errorMessage}`);
+      
+      // Log detailed error for debugging
+      console.error('Full error details:', {
+        message: error.message,
+        stack: error.stack,
+        quoteId: quote?.id,
+        inquiryId: inquiry?.id,
+        quoteAmount: quote?.total_amount,
+        quoteCurrency: quote?.currency
+      });
     }
   };
 
@@ -460,23 +613,49 @@ const InquiryDetail = () => {
                       View Full Quote Details
                     </Link>
 
-                    {/* Pay Now Button - Show only if quote is sent/accepted and unpaid */}
+                    {/* Pay Now Button - Perfect Implementation */}
                     {quote.payment_status === 'unpaid' && (quote.status === 'sent' || quote.status === 'accepted') && (
                       <button
                         onClick={() => handlePayNow(quote)}
-                        disabled={paymentLoading || !checkoutReady}
+                        disabled={paymentLoading || !checkoutReady || loading}
                         className="px-6 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
+                        title={
+                          !checkoutReady 
+                            ? 'Payment system is loading...' 
+                            : paymentLoading 
+                            ? 'Processing payment...' 
+                            : `Click to pay $${parseFloat(quote.total_amount || 0).toFixed(2)} ${quote.currency || 'USD'}`
+                        }
+                        aria-label={`Pay ${parseFloat(quote.total_amount || 0).toFixed(2)} ${quote.currency || 'USD'}`}
+                        aria-busy={paymentLoading}
+                        type="button"
                       >
                         {paymentLoading ? (
                           <span className="flex items-center gap-2">
-                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            <svg 
+                              className="animate-spin h-4 w-4" 
+                              viewBox="0 0 24 24" 
+                              fill="none"
+                              aria-hidden="true"
+                            >
+                              <circle 
+                                className="opacity-25" 
+                                cx="12" 
+                                cy="12" 
+                                r="10" 
+                                stroke="currentColor" 
+                                strokeWidth="4"
+                              ></circle>
+                              <path 
+                                className="opacity-75" 
+                                fill="currentColor" 
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                              ></path>
                             </svg>
-                            Processing...
+                            <span>Processing...</span>
                           </span>
                         ) : (
-                          `💳 Pay Now - $${parseFloat(quote.total_amount).toFixed(2)} ${quote.currency || 'USD'}`
+                          <span>💳 Pay Now - ${parseFloat(quote.total_amount || 0).toFixed(2)} {quote.currency || 'USD'}</span>
                         )}
                       </button>
                     )}

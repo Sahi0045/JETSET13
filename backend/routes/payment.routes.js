@@ -8,25 +8,32 @@ const router = express.Router();
 
 // ARC Pay configuration from environment variables
 const ARC_PAY_CONFIG = {
-    API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/77/merchant/TESTARC05511704',
+    API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/100/merchant/TESTARC05511704',
     MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704',
-    API_USERNAME: process.env.ARC_PAY_API_USERNAME || 'Administrator',
-    API_PASSWORD: process.env.ARC_PAY_API_PASSWORD || 'Jetsetters@2025',
+    API_USERNAME: process.env.ARC_PAY_API_USERNAME || 'TESTARC05511704',
+    API_PASSWORD: process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c',
+    BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100',
+    PORTAL_URL: process.env.ARC_PAY_PORTAL_URL || 'https://api.arcpay.travel/ma/',
     CHECK_GATEWAY_URL: 'https://api.arcpay.travel/api/rest/version/100/information',
     REAL_TIME_MODE: process.env.ARC_PAY_REAL_TIME === 'true' || true,
-    PRODUCTION_READY_MODE: true // Enable production-ready processing for launch
+    PRODUCTION_READY_MODE: true, // Enable production-ready processing for launch
+    INTEGRATION_PASSWORD_1: process.env.ARC_PAY_INTEGRATION_PASSWORD_1 || '4d41a81750f1ee3f6aa4adf0dfd6310c',
+    INTEGRATION_PASSWORD_2: process.env.ARC_PAY_INTEGRATION_PASSWORD_2 || '03762006ad1c7c3337af5fbdbe922d2e',
+    REPORTING_PASSWORD_1: process.env.ARC_PAY_REPORTING_PASSWORD_1,
+    REPORTING_PASSWORD_2: process.env.ARC_PAY_REPORTING_PASSWORD_2
 };
 
 // Helper function to get auth config for ARC Pay API
+// ARC Pay uses merchant.MERCHANT_ID:password format for Basic Auth
 const getArcPayAuthConfig = () => {
+    const authString = `merchant.${ARC_PAY_CONFIG.MERCHANT_ID}:${ARC_PAY_CONFIG.API_PASSWORD}`;
+    const authHeader = 'Basic ' + Buffer.from(authString).toString('base64');
+    
     return {
-        auth: {
-            username: ARC_PAY_CONFIG.API_USERNAME,
-            password: ARC_PAY_CONFIG.API_PASSWORD
-        },
         headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Authorization': authHeader
         },
         timeout: 30000
     };

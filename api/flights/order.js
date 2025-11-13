@@ -3,22 +3,25 @@ import axios from 'axios';
 
 // ARC Pay configuration
 const ARC_PAY_CONFIG = {
-    API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/77/merchant/TESTARC05511704',
+    API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/100/merchant/TESTARC05511704',
     MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704',
-    API_USERNAME: process.env.ARC_PAY_API_USERNAME || 'Administrator',
-    API_PASSWORD: process.env.ARC_PAY_API_PASSWORD || 'Jetsetters@2025'
+    API_USERNAME: process.env.ARC_PAY_API_USERNAME || 'TESTARC05511704',
+    API_PASSWORD: process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c',
+    BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100',
+    PORTAL_URL: process.env.ARC_PAY_PORTAL_URL || 'https://api.arcpay.travel/ma/'
 };
 
 // Helper function to get auth config for ARC Pay API
+// ARC Pay uses merchant.MERCHANT_ID:password format for Basic Auth
 const getArcPayAuthConfig = () => {
+    const authString = `merchant.${ARC_PAY_CONFIG.MERCHANT_ID}:${ARC_PAY_CONFIG.API_PASSWORD}`;
+    const authHeader = 'Basic ' + Buffer.from(authString).toString('base64');
+    
     return {
-        auth: {
-            username: ARC_PAY_CONFIG.API_USERNAME,
-            password: ARC_PAY_CONFIG.API_PASSWORD
-        },
         headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Authorization': authHeader
         },
         timeout: 30000
     };
