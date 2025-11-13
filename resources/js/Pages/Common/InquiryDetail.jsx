@@ -3,8 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from './Navbar';
 import Footer from './Footer';
 
-// Load ARC Pay Checkout.js SDK with retry logic and better error handling
-const loadCheckoutScript = () => {
+// Check if ARC Pay Checkout.js SDK is loaded
+const waitForCheckoutScript = () => {
   return new Promise((resolve, reject) => {
     if (window.Checkout) {
       console.log('✅ Checkout.js already loaded');
@@ -12,36 +12,35 @@ const loadCheckoutScript = () => {
       return;
     }
     
-    // Check if script is already being loaded
+    // Check if script is already in the DOM (from HTML head)
     const existingScript = document.querySelector('script[src*="checkout.min.js"]');
     if (existingScript) {
-      console.log('⏳ Checkout.js script already in DOM, waiting...');
+      console.log('⏳ Checkout.js script found in DOM, waiting for it to load...');
       // Wait for it to load
+      let attempts = 0;
+      const maxAttempts = 60; // 30 seconds total (500ms * 60)
       const checkInterval = setInterval(() => {
+        attempts++;
         if (window.Checkout) {
           clearInterval(checkInterval);
           console.log('✅ Checkout.js loaded from existing script');
           resolve();
-        }
-      }, 100);
-      
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        if (!window.Checkout) {
+        } else if (attempts >= maxAttempts) {
+          clearInterval(checkInterval);
           reject(new Error('Checkout.js loading timeout (existing script)'));
         }
-      }, 30000);
+      }, 500);
       return;
     }
     
+    // Script not found, try to load it dynamically as fallback
+    console.log('📥 Checkout.js not found, loading dynamically...');
     const script = document.createElement('script');
     script.src = 'https://api.arcpay.travel/static/checkout/checkout.min.js';
     script.async = true;
     script.defer = true;
-    script.crossOrigin = 'anonymous';
     script.id = 'arc-pay-checkout-script';
     
-    let timeoutId;
     const timeout = setTimeout(() => {
       if (!window.Checkout) {
         console.error('⏱️ Checkout.js loading timeout after 30 seconds');
@@ -50,18 +49,16 @@ const loadCheckoutScript = () => {
         }
         reject(new Error('Checkout.js loading timeout'));
       }
-    }, 30000); // 30 second timeout (increased from 15)
+    }, 30000);
     
     script.onload = () => {
       clearTimeout(timeout);
-      // Give it a moment to initialize
       setTimeout(() => {
         if (window.Checkout) {
           console.log('✅ Checkout.js loaded successfully');
           resolve();
         } else {
           console.warn('⚠️ Script loaded but Checkout not available yet, waiting...');
-          // Wait a bit more
           let retries = 10;
           const checkInterval = setInterval(() => {
             if (window.Checkout) {
@@ -87,7 +84,6 @@ const loadCheckoutScript = () => {
     };
     
     document.head.appendChild(script);
-    console.log('📥 Loading Checkout.js from:', script.src);
   });
 };
 
@@ -104,12 +100,12 @@ const InquiryDetail = () => {
   useEffect(() => {
     fetchInquiryDetails();
     
-    // Load Checkout.js SDK with retry logic and continuous monitoring
+    // Wait for Checkout.js SDK to load (from HTML head or dynamically)
     const loadSDK = async () => {
-      let retries = 5; // Increased retries
+      let retries = 3;
       while (retries > 0) {
         try {
-          await loadCheckoutScript();
+          await waitForCheckoutScript();
           setCheckoutReady(true);
           console.log('✅ Payment system ready');
           return;
@@ -118,7 +114,6 @@ const InquiryDetail = () => {
           console.warn(`⚠️ Checkout.js load failed, ${retries} retries remaining:`, error.message);
           if (retries === 0) {
             console.error('❌ Failed to load Checkout.js after all retries');
-            // Don't set error immediately - allow manual retry
             // Set a monitor to check if it loads later
             const monitorInterval = setInterval(() => {
               if (window.Checkout) {
@@ -136,8 +131,8 @@ const InquiryDetail = () => {
               }
             }, 60000);
           } else {
-            // Wait 3 seconds before retry (increased from 2)
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            // Wait 2 seconds before retry
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
       }
@@ -234,10 +229,10 @@ const InquiryDetail = () => {
   const handlePayNow = async (quote) => {
     // Validate prerequisites - but allow manual retry
     if (!window.Checkout) {
-      // Try to reload the script one more time
-      console.log('🔄 Checkout.js not available, attempting to reload...');
+      // Try to wait for the script one more time
+      console.log('🔄 Checkout.js not available, waiting for it to load...');
       try {
-        await loadCheckoutScript();
+        await waitForCheckoutScript();
         setCheckoutReady(true);
         console.log('✅ Checkout.js loaded on demand');
       } catch (error) {
