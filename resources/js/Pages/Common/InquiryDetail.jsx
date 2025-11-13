@@ -327,44 +327,32 @@ const InquiryDetail = () => {
       console.log('   Payment ID:', paymentId);
 
       // 2. Configure ARC Pay hosted checkout
+      // Note: From version 67+, only session object is allowed in configure()
+      // All other fields (merchant, interaction) must be in INITIATE_CHECKOUT API call
       try {
         const checkoutConfig = {
-          merchant: merchantId,
           session: {
             id: sessionId
-          },
-          interaction: {
-            merchant: {
-              name: 'JetSet Travel',
-              address: {
-                line1: '123 Travel Street',
-                city: 'New York',
-                stateProvince: 'NY',
-                postalCode: '10001',
-                country: 'USA'
-              }
-            },
-            displayControl: {
-              billingAddress: 'OPTIONAL',
-              customerEmail: 'OPTIONAL'
-            }
           }
         };
 
-        console.log('⚙️ Configuring Checkout.js...');
+        console.log('⚙️ Configuring Checkout.js with session:', sessionId);
         window.Checkout.configure(checkoutConfig);
 
         console.log('✅ Checkout configured successfully');
         console.log('🔄 Redirecting to ARC Pay payment page...');
 
         // Small delay to ensure configuration is complete
-        await new Promise(resolve => setTimeout(resolve, 150));
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         // 3. Redirect to hosted payment page
         if (typeof window.Checkout.showPaymentPage === 'function') {
           window.Checkout.showPaymentPage();
+        } else if (typeof window.Checkout.show === 'function') {
+          // Fallback to show() method if showPaymentPage() doesn't exist
+          window.Checkout.show();
         } else {
-          throw new Error('Checkout.showPaymentPage is not available');
+          throw new Error('Checkout.showPaymentPage or Checkout.show is not available');
         }
         
         // Note: User will be redirected, so we don't reset loading state here
