@@ -243,7 +243,21 @@ async function handlePaymentInitiation(req, res) {
       interaction: {
         operation: 'PURCHASE',
         returnUrl: finalReturnUrl,
-        cancelUrl: finalCancelUrl
+        cancelUrl: finalCancelUrl,
+        merchant: {
+          name: 'JetSet Travel',
+          address: {
+            line1: '123 Travel Street',
+            city: 'New York',
+            stateProvince: 'NY',
+            postalCode: '10001',
+            country: 'USA'
+          }
+        },
+        displayControl: {
+          billingAddress: 'OPTIONAL',
+          customerEmail: 'OPTIONAL'
+        }
       },
       order: {
         id: payment.id,
