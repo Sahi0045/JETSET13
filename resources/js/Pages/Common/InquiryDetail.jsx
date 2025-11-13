@@ -700,13 +700,13 @@ const InquiryDetail = () => {
                     {quote.payment_status === 'unpaid' && (quote.status === 'sent' || quote.status === 'accepted') && (
                       <button
                         onClick={() => handlePayNow(quote)}
-                        disabled={paymentLoading || !checkoutReady || loading}
+                        disabled={paymentLoading || loading}
                         className="px-6 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
                         title={
-                          !checkoutReady 
-                            ? 'Payment system is loading...' 
-                            : paymentLoading 
+                          paymentLoading 
                             ? 'Processing payment...' 
+                            : !checkoutReady && !window.Checkout
+                            ? 'Payment system loading... (Click to retry)' 
                             : `Click to pay $${parseFloat(quote.total_amount || 0).toFixed(2)} ${quote.currency || 'USD'}`
                         }
                         aria-label={`Pay ${parseFloat(quote.total_amount || 0).toFixed(2)} ${quote.currency || 'USD'}`}
