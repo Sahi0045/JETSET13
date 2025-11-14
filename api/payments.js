@@ -439,8 +439,12 @@ async function handlePaymentInitiation(req, res) {
         success: false,
         error: errorMessage,
         details: errorDetails,
-      type: error.name || 'Error'
-    });
+        errorType: error.name || 'Error',
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      console.error('⚠️ Response already sent, cannot send error response');
+    }
   }
 }
 
