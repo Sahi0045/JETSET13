@@ -256,6 +256,9 @@ async function handlePaymentInitiation(req, res) {
         operation: 'PURCHASE',
         returnUrl: finalReturnUrl,
         cancelUrl: finalCancelUrl,
+        merchant: {
+          name: 'JetSet Travel'
+        },
         displayControl: {
           billingAddress: 'OPTIONAL',
           customerEmail: 'OPTIONAL'
