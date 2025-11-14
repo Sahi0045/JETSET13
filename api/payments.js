@@ -115,7 +115,9 @@ async function handlePaymentInitiation(req, res) {
 
   try {
     console.log('🚀 handlePaymentInitiation called');
+    console.log('Request method:', req.method);
     console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Request query:', JSON.stringify(req.query, null, 2));
 
     // Validate Supabase client
     if (!supabase) {
@@ -129,6 +131,15 @@ async function handlePaymentInitiation(req, res) {
 
     console.log('✅ Supabase client initialized');
     const { quote_id, return_url, cancel_url } = req.body;
+    
+    if (!quote_id) {
+      console.error('❌ Missing quote_id in request body');
+      return res.status(400).json({
+        success: false,
+        error: 'quote_id is required',
+        details: 'quote_id parameter is missing from request body'
+      });
+    }
 
     if (!quote_id) {
       return res.status(400).json({
@@ -402,19 +413,26 @@ async function handlePaymentInitiation(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Payment initiation error:', error);
+    console.error('='.repeat(60));
+    console.error('❌ Payment initiation error in handlePaymentInitiation:');
     console.error('Error name:', error.name);
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
+    console.error('Error type:', typeof error);
+    console.error('Error keys:', Object.keys(error));
+    if (error.cause) {
+      console.error('Error cause:', error.cause);
+    }
+    console.error('='.repeat(60));
     
     // Provide more specific error messages
     let errorMessage = 'Payment initiation failed';
     let errorDetails = error.message || 'Unknown error';
     
-    if (error.message?.includes('fetch')) {
+    if (error.message?.includes('fetch') || error.message?.includes('network')) {
       errorMessage = 'Network error connecting to payment gateway';
       errorDetails = 'Failed to reach ARC Pay API. Please try again.';
-    } else if (error.message?.includes('JSON')) {
+    } else if (error.message?.includes('JSON') || error.message?.includes('parse')) {
       errorMessage = 'Invalid response from payment gateway';
       errorDetails = 'Payment gateway returned invalid data. Please try again.';
     } else if (error.message?.includes('Supabase') || error.message?.includes('database')) {
@@ -422,10 +440,12 @@ async function handlePaymentInitiation(req, res) {
       errorDetails = 'Failed to access database. Please try again.';
     }
     
-    return res.status(500).json({
-      success: false,
-      error: errorMessage,
-      details: errorDetails,
+    // Ensure we always return a response
+    if (!res.headersSent) {
+      return res.status(500).json({
+        success: false,
+        error: errorMessage,
+        details: errorDetails,
       type: error.name || 'Error'
     });
   }
