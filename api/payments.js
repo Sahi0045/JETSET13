@@ -1,10 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Configure Vercel serverless function to use Node.js runtime
-export const config = {
-  runtime: 'nodejs'
-};
-
 // Initialize Supabase client with proper error handling
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
