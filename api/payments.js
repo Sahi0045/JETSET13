@@ -141,13 +141,6 @@ async function handlePaymentInitiation(req, res) {
       });
     }
 
-    if (!quote_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'quote_id is required'
-      });
-    }
-
     console.log('🔍 Fetching quote:', quote_id);
     console.log('📋 Request body:', JSON.stringify({ quote_id, return_url, cancel_url }, null, 2));
 
