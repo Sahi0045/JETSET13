@@ -1,5 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Configure Vercel serverless function to use Node.js runtime
+export const config = {
+  runtime: 'nodejs'
+};
+
 // Initialize Supabase client with proper error handling
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
@@ -109,6 +114,9 @@ async function handlePaymentInitiation(req, res) {
   }
 
   try {
+    console.log('🚀 handlePaymentInitiation called');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+
     // Validate Supabase client
     if (!supabase) {
       console.error('❌ Supabase client not initialized');
@@ -119,6 +127,7 @@ async function handlePaymentInitiation(req, res) {
       });
     }
 
+    console.log('✅ Supabase client initialized');
     const { quote_id, return_url, cancel_url } = req.body;
 
     if (!quote_id) {
