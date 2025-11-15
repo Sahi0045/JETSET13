@@ -169,23 +169,49 @@ const InquiryDetail = () => {
       console.log('   Merchant ID:', merchantId);
       console.log('   Payment ID:', paymentId);
 
-      // 2. ALWAYS use direct checkout URL - NEVER use SDK to avoid Cloudflare blocking
-      // The SDK's updateSessionUrl call is blocked by Cloudflare, so we bypass it completely
-      let checkoutUrl = data.checkoutUrl;
+      // 2. Create and submit POST form to ARC Pay payment page
+      // ARC Pay requires POST method (not GET redirect) to /api/page/version/<V>/pay
+      const paymentPageUrl = data.paymentPageUrl || data.checkoutUrl;
       
-      // If backend didn't provide checkoutUrl, construct it manually
-      if (!checkoutUrl) {
-        checkoutUrl = `https://api.arcpay.travel/checkout/api/checkout/${sessionId}`;
-        console.warn('⚠️ No checkoutUrl from backend, constructed manually:', checkoutUrl);
+      if (!paymentPageUrl) {
+        throw new Error('Payment page URL not provided by server');
       }
       
-      console.log('✅ Using direct checkout URL (bypassing SDK):', checkoutUrl);
-      console.log('🔄 Redirecting to ARC Pay payment page...');
+      console.log('✅ Payment page URL:', paymentPageUrl);
+      console.log('   Session ID:', sessionId);
+      console.log('🔄 Creating payment form and submitting...');
       
-      // IMMEDIATE redirect - do NOT configure or use SDK at all
-      // This completely avoids the SDK's internal updateSessionUrl call
-      window.location.href = checkoutUrl;
-      return; // Exit immediately - user will be redirected
+      // Create a hidden form and POST it to ARC Pay
+      // ARC Pay hosted payment page expects POST with form fields
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = paymentPageUrl;
+      form.style.display = 'none';
+      form.acceptCharset = 'UTF-8';
+      
+      // Add session ID - try different field name formats
+      const sessionInput = document.createElement('input');
+      sessionInput.type = 'hidden';
+      sessionInput.name = 'session.id'; // ARC Pay typically uses dot notation
+      sessionInput.value = sessionId;
+      form.appendChild(sessionInput);
+      
+      // Add merchant ID if available (some payment gateways require this)
+      if (merchantId) {
+        const merchantInput = document.createElement('input');
+        merchantInput.type = 'hidden';
+        merchantInput.name = 'merchant';
+        merchantInput.value = merchantId;
+        form.appendChild(merchantInput);
+      }
+      
+      // Add form to body and submit
+      document.body.appendChild(form);
+      console.log('📤 Submitting payment form to ARC Pay...');
+      form.submit();
+      
+      // Note: User will be redirected, so we don't reset loading state
+      return; // Exit immediately - form submission will redirect
 
     } catch (error) {
       console.error('Payment initiation failed:', error);
