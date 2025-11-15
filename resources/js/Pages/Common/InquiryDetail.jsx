@@ -3,90 +3,6 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from './Navbar';
 import Footer from './Footer';
 
-// Check if ARC Pay Checkout.js SDK is loaded
-const waitForCheckoutScript = () => {
-  return new Promise((resolve, reject) => {
-    if (window.Checkout) {
-      console.log('✅ Checkout.js already loaded');
-      resolve();
-      return;
-    }
-    
-    // Check if script is already in the DOM (from HTML head)
-    const existingScript = document.querySelector('script[src*="checkout.min.js"]');
-    if (existingScript) {
-      console.log('⏳ Checkout.js script found in DOM, waiting for it to load...');
-      // Wait for it to load
-      let attempts = 0;
-      const maxAttempts = 60; // 30 seconds total (500ms * 60)
-      const checkInterval = setInterval(() => {
-        attempts++;
-        if (window.Checkout) {
-          clearInterval(checkInterval);
-          console.log('✅ Checkout.js loaded from existing script');
-          resolve();
-        } else if (attempts >= maxAttempts) {
-          clearInterval(checkInterval);
-          reject(new Error('Checkout.js loading timeout (existing script)'));
-        }
-      }, 500);
-      return;
-    }
-    
-    // Script not found, try to load it dynamically as fallback
-    console.log('📥 Checkout.js not found, loading dynamically...');
-    const script = document.createElement('script');
-    script.src = 'https://api.arcpay.travel/static/checkout/checkout.min.js';
-    script.async = true;
-    script.defer = true;
-    script.id = 'arc-pay-checkout-script';
-    
-    const timeout = setTimeout(() => {
-      if (!window.Checkout) {
-        console.error('⏱️ Checkout.js loading timeout after 30 seconds');
-        if (script.parentNode) {
-          script.parentNode.removeChild(script);
-        }
-        reject(new Error('Checkout.js loading timeout'));
-      }
-    }, 30000);
-    
-    script.onload = () => {
-      clearTimeout(timeout);
-      setTimeout(() => {
-        if (window.Checkout) {
-          console.log('✅ Checkout.js loaded successfully');
-          resolve();
-        } else {
-          console.warn('⚠️ Script loaded but Checkout not available yet, waiting...');
-          let retries = 10;
-          const checkInterval = setInterval(() => {
-            if (window.Checkout) {
-              clearInterval(checkInterval);
-              console.log('✅ Checkout.js available after wait');
-              resolve();
-            } else if (retries-- === 0) {
-              clearInterval(checkInterval);
-              reject(new Error('Checkout.js loaded but not available'));
-            }
-          }, 500);
-        }
-      }, 1000);
-    };
-    
-    script.onerror = (error) => {
-      clearTimeout(timeout);
-      console.error('❌ Failed to load Checkout.js:', error);
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-      reject(new Error('Failed to load Checkout.js from ARC Pay. Please check your internet connection.'));
-    };
-    
-    document.head.appendChild(script);
-  });
-};
-
 const InquiryDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -95,64 +11,10 @@ const InquiryDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
-  const [checkoutReady, setCheckoutReady] = useState(false);
 
   useEffect(() => {
     fetchInquiryDetails();
-    
-    // Wait for Checkout.js SDK to load (from HTML head or dynamically)
-    const loadSDK = async () => {
-      let retries = 3;
-      while (retries > 0) {
-        try {
-          await waitForCheckoutScript();
-          setCheckoutReady(true);
-          console.log('✅ Payment system ready');
-          return;
-        } catch (error) {
-          retries--;
-          console.warn(`⚠️ Checkout.js load failed, ${retries} retries remaining:`, error.message);
-          if (retries === 0) {
-            console.error('❌ Failed to load Checkout.js after all retries');
-            // Set a monitor to check if it loads later
-            const monitorInterval = setInterval(() => {
-              if (window.Checkout) {
-                console.log('✅ Checkout.js loaded later, enabling payment');
-                setCheckoutReady(true);
-                clearInterval(monitorInterval);
-              }
-            }, 2000);
-            
-            // Stop monitoring after 60 seconds
-            setTimeout(() => {
-              clearInterval(monitorInterval);
-              if (!checkoutReady) {
-                console.warn('⚠️ Checkout.js still not loaded after monitoring period');
-              }
-            }, 60000);
-          } else {
-            // Wait 2 seconds before retry
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        }
-      }
-    };
-    
-    loadSDK();
-    
-    // Also set up a continuous check in case SDK loads later
-    const continuousCheck = setInterval(() => {
-      if (window.Checkout && !checkoutReady) {
-        console.log('✅ Checkout.js detected, enabling payment');
-        setCheckoutReady(true);
-        clearInterval(continuousCheck);
-      }
-    }, 1000);
-    
-    // Cleanup after 2 minutes
-    setTimeout(() => {
-      clearInterval(continuousCheck);
-    }, 120000);
+    // Note: SDK loading removed - we use direct checkout URL redirect instead
   }, [id]);
 
   const fetchInquiryDetails = async () => {
@@ -227,26 +89,7 @@ const InquiryDetail = () => {
   };
 
   const handlePayNow = async (quote) => {
-    // Validate prerequisites - but allow manual retry
-    if (!window.Checkout) {
-      // Try to wait for the script one more time
-      console.log('🔄 Checkout.js not available, waiting for it to load...');
-      try {
-        await waitForCheckoutScript();
-        setCheckoutReady(true);
-        console.log('✅ Checkout.js loaded on demand');
-      } catch (error) {
-        console.error('❌ Failed to load Checkout.js on demand:', error);
-        alert('Payment system is not available. Please check your internet connection and refresh the page.\n\nError: ' + error.message);
-        return;
-      }
-    }
-
-    if (!window.Checkout) {
-      alert('Payment system not ready. Please refresh the page and try again.');
-      return;
-    }
-
+    // Validate prerequisites
     if (!quote || !quote.id) {
       alert('Invalid quote information. Please refresh the page.');
       return;
@@ -326,59 +169,23 @@ const InquiryDetail = () => {
       console.log('   Merchant ID:', merchantId);
       console.log('   Payment ID:', paymentId);
 
-      // 2. Use direct checkout URL from backend (avoids Cloudflare blocking SDK calls)
-      // This is the preferred method as it bypasses the SDK's updateSessionUrl call
-      if (data.checkoutUrl) {
-        console.log('✅ Using direct checkout URL from backend');
-        console.log('   URL:', data.checkoutUrl);
-        console.log('🔄 Redirecting to ARC Pay payment page...');
-        
-        // Direct redirect - this avoids the SDK's internal updateSessionUrl call
-        // that was being blocked by Cloudflare
-        window.location.href = data.checkoutUrl;
-        return; // Exit early, user will be redirected
-      }
-
-      // 3. Fallback: If no checkout URL, try SDK method (may still trigger Cloudflare block)
-      console.warn('⚠️ No checkout URL from backend, falling back to SDK method');
-      console.warn('   This may trigger Cloudflare protection - consider updating backend');
+      // 2. ALWAYS use direct checkout URL - NEVER use SDK to avoid Cloudflare blocking
+      // The SDK's updateSessionUrl call is blocked by Cloudflare, so we bypass it completely
+      let checkoutUrl = data.checkoutUrl;
       
-      try {
-        const checkoutConfig = {
-          session: {
-            id: sessionId
-          }
-        };
-
-        console.log('⚙️ Configuring Checkout.js with session:', sessionId);
-        window.Checkout.configure(checkoutConfig);
-
-        console.log('✅ Checkout configured successfully');
-        console.log('🔄 Attempting SDK redirect (may be blocked by Cloudflare)...');
-
-        // Small delay to ensure configuration is complete
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        // Try SDK redirect (may fail due to Cloudflare)
-        if (typeof window.Checkout.showPaymentPage === 'function') {
-          window.Checkout.showPaymentPage();
-        } else if (typeof window.Checkout.show === 'function') {
-          window.Checkout.show();
-        } else {
-          // Last resort: construct checkout URL manually
-          const directCheckoutUrl = `https://api.arcpay.travel/checkout/api/checkout/${sessionId}`;
-          console.log('🔄 SDK methods not available, using direct URL:', directCheckoutUrl);
-          window.location.href = directCheckoutUrl;
-        }
-        
-      } catch (checkoutError) {
-        console.error('Checkout SDK error:', checkoutError);
-        
-        // Last resort: direct redirect
-        const directCheckoutUrl = `https://api.arcpay.travel/checkout/api/checkout/${sessionId}`;
-        console.log('🔄 SDK failed, using direct checkout URL:', directCheckoutUrl);
-        window.location.href = directCheckoutUrl;
+      // If backend didn't provide checkoutUrl, construct it manually
+      if (!checkoutUrl) {
+        checkoutUrl = `https://api.arcpay.travel/checkout/api/checkout/${sessionId}`;
+        console.warn('⚠️ No checkoutUrl from backend, constructed manually:', checkoutUrl);
       }
+      
+      console.log('✅ Using direct checkout URL (bypassing SDK):', checkoutUrl);
+      console.log('🔄 Redirecting to ARC Pay payment page...');
+      
+      // IMMEDIATE redirect - do NOT configure or use SDK at all
+      // This completely avoids the SDK's internal updateSessionUrl call
+      window.location.href = checkoutUrl;
+      return; // Exit immediately - user will be redirected
 
     } catch (error) {
       console.error('Payment initiation failed:', error);
@@ -704,8 +511,6 @@ const InquiryDetail = () => {
                         title={
                           paymentLoading 
                             ? 'Processing payment...' 
-                            : !checkoutReady && !window.Checkout
-                            ? 'Payment system loading... (Click to retry)' 
                             : `Click to pay $${parseFloat(quote.total_amount || 0).toFixed(2)} ${quote.currency || 'USD'}`
                         }
                         aria-label={`Pay ${parseFloat(quote.total_amount || 0).toFixed(2)} ${quote.currency || 'USD'}`}
