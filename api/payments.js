@@ -383,14 +383,26 @@ async function handlePaymentInitiation(req, res) {
       console.log('✅ Payment record updated with session ID');
     }
 
-    // 6. Return session details for Checkout.js integration
+    // 6. Construct checkout URL (prefer from response, fallback to manual construction)
+    let checkoutUrl = session.redirectUrl || session.checkoutUrl || session.url;
+    
+    // If no checkout URL in response, construct it manually
+    if (!checkoutUrl) {
+      // ARC Pay checkout URL format: https://api.arcpay.travel/checkout/api/checkout/{sessionId}
+      checkoutUrl = `https://api.arcpay.travel/checkout/api/checkout/${sessionId}`;
+      console.log('⚠️ No checkout URL in response, constructed manually:', checkoutUrl);
+    } else {
+      console.log('✅ Checkout URL from ARC Pay response:', checkoutUrl);
+    }
+
+    // 7. Return session details for Checkout.js integration
     return res.status(200).json({
       success: true,
       sessionId: sessionId,
       successIndicator: successIndicator,
       merchantId: arcMerchantId,
       paymentId: payment.id,
-      checkoutUrl: session.redirectUrl || session.checkoutUrl || null
+      checkoutUrl: checkoutUrl
     });
 
   } catch (error) {

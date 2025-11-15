@@ -326,9 +326,23 @@ const InquiryDetail = () => {
       console.log('   Merchant ID:', merchantId);
       console.log('   Payment ID:', paymentId);
 
-      // 2. Configure ARC Pay hosted checkout
-      // Note: From version 67+, only session object is allowed in configure()
-      // All other fields (merchant, interaction) must be in INITIATE_CHECKOUT API call
+      // 2. Use direct checkout URL from backend (avoids Cloudflare blocking SDK calls)
+      // This is the preferred method as it bypasses the SDK's updateSessionUrl call
+      if (data.checkoutUrl) {
+        console.log('✅ Using direct checkout URL from backend');
+        console.log('   URL:', data.checkoutUrl);
+        console.log('🔄 Redirecting to ARC Pay payment page...');
+        
+        // Direct redirect - this avoids the SDK's internal updateSessionUrl call
+        // that was being blocked by Cloudflare
+        window.location.href = data.checkoutUrl;
+        return; // Exit early, user will be redirected
+      }
+
+      // 3. Fallback: If no checkout URL, try SDK method (may still trigger Cloudflare block)
+      console.warn('⚠️ No checkout URL from backend, falling back to SDK method');
+      console.warn('   This may trigger Cloudflare protection - consider updating backend');
+      
       try {
         const checkoutConfig = {
           session: {
@@ -340,28 +354,30 @@ const InquiryDetail = () => {
         window.Checkout.configure(checkoutConfig);
 
         console.log('✅ Checkout configured successfully');
-        console.log('🔄 Redirecting to ARC Pay payment page...');
+        console.log('🔄 Attempting SDK redirect (may be blocked by Cloudflare)...');
 
         // Small delay to ensure configuration is complete
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 500));
 
-        // 3. Redirect to hosted payment page
+        // Try SDK redirect (may fail due to Cloudflare)
         if (typeof window.Checkout.showPaymentPage === 'function') {
           window.Checkout.showPaymentPage();
         } else if (typeof window.Checkout.show === 'function') {
-          // Fallback to show() method if showPaymentPage() doesn't exist
           window.Checkout.show();
         } else {
-          throw new Error('Checkout.showPaymentPage or Checkout.show is not available');
+          // Last resort: construct checkout URL manually
+          const directCheckoutUrl = `https://api.arcpay.travel/checkout/api/checkout/${sessionId}`;
+          console.log('🔄 SDK methods not available, using direct URL:', directCheckoutUrl);
+          window.location.href = directCheckoutUrl;
         }
         
-        // Note: User will be redirected, so we don't reset loading state here
-        // The loading state will persist until redirect completes
-        
       } catch (checkoutError) {
-        console.error('Checkout configuration error:', checkoutError);
-        console.error('Checkout object:', window.Checkout);
-        throw new Error('Failed to configure payment page. Please refresh and try again.');
+        console.error('Checkout SDK error:', checkoutError);
+        
+        // Last resort: direct redirect
+        const directCheckoutUrl = `https://api.arcpay.travel/checkout/api/checkout/${sessionId}`;
+        console.log('🔄 SDK failed, using direct checkout URL:', directCheckoutUrl);
+        window.location.href = directCheckoutUrl;
       }
 
     } catch (error) {
