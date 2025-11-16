@@ -7,6 +7,7 @@ const InquiryDetail = () => {
   const [inquiry, setInquiry] = useState(null);
   const [quotes, setQuotes] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [bookingInfos, setBookingInfos] = useState({}); // Store booking info by quote ID
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [showUpdateForm, setShowUpdateForm] = useState(false);
@@ -94,9 +95,41 @@ const InquiryDetail = () => {
       if (quotesData.success) {
         setQuotes(quotesData.data);
         
-        // Fetch payments for each quote
+        // Fetch booking info for each quote
         const quoteIds = quotesData.data.map(q => q.id);
         if (quoteIds.length > 0) {
+          // Fetch booking info for all quotes
+          const bookingInfoPromises = quoteIds.map(async (quoteId) => {
+            try {
+              const bookingResponse = await fetch(`/api/quotes?id=${quoteId}&endpoint=booking-info`, {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+              });
+              if (bookingResponse.ok) {
+                const bookingData = await bookingResponse.json();
+                if (bookingData.success) {
+                  return { quoteId, bookingInfo: bookingData.data };
+                }
+              }
+            } catch (error) {
+              console.error(`Error fetching booking info for quote ${quoteId}:`, error);
+            }
+            return { quoteId, bookingInfo: null };
+          });
+
+          const bookingInfoResults = await Promise.all(bookingInfoPromises);
+          const bookingInfoMap = {};
+          bookingInfoResults.forEach(({ quoteId, bookingInfo }) => {
+            if (bookingInfo) {
+              bookingInfoMap[quoteId] = bookingInfo;
+            }
+          });
+          setBookingInfos(bookingInfoMap);
+
+          // Fetch payments for each quote
           try {
             const paymentsPromises = quoteIds.map(quoteId =>
               fetch(`/api/payments?action=get-payment-details&quoteId=${quoteId}`, {
@@ -783,6 +816,89 @@ const InquiryDetail = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Booking Information */}
+                  {bookingInfos[quote.id] && (
+                    <div className="payment-details" style={{ marginTop: '15px', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd' }}>
+                      <div className="payment-header" style={{ backgroundColor: '#0ea5e9', color: 'white' }}>
+                        📋 Booking Information
+                        <span style={{ float: 'right', fontSize: '12px', fontWeight: 'normal' }}>
+                          Status: {bookingInfos[quote.id].status}
+                        </span>
+                      </div>
+                      {(() => {
+                        const bookingInfo = bookingInfos[quote.id];
+                        return (
+                          <div className="payment-info">
+                            <div className="payment-row">
+                              <span className="payment-label">Full Name:</span>
+                              <span className="payment-value">{bookingInfo.full_name}</span>
+                            </div>
+                            <div className="payment-row">
+                              <span className="payment-label">Email:</span>
+                              <span className="payment-value">{bookingInfo.email}</span>
+                            </div>
+                            <div className="payment-row">
+                              <span className="payment-label">Phone:</span>
+                              <span className="payment-value">{bookingInfo.phone}</span>
+                            </div>
+                            {bookingInfo.date_of_birth && (
+                              <div className="payment-row">
+                                <span className="payment-label">Date of Birth:</span>
+                                <span className="payment-value">{formatDate(bookingInfo.date_of_birth)}</span>
+                              </div>
+                            )}
+                            {bookingInfo.nationality && (
+                              <div className="payment-row">
+                                <span className="payment-label">Nationality:</span>
+                                <span className="payment-value">{bookingInfo.nationality}</span>
+                              </div>
+                            )}
+                            {bookingInfo.passport_number && (
+                              <>
+                                <div className="payment-row">
+                                  <span className="payment-label">Passport Number:</span>
+                                  <span className="payment-value">{bookingInfo.passport_number}</span>
+                                </div>
+                                {bookingInfo.passport_expiry_date && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Passport Expiry:</span>
+                                    <span className="payment-value">{formatDate(bookingInfo.passport_expiry_date)}</span>
+                                  </div>
+                                )}
+                                {bookingInfo.passport_issuing_country && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Issuing Country:</span>
+                                    <span className="payment-value">{bookingInfo.passport_issuing_country}</span>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                            {bookingInfo.emergency_contact_name && (
+                              <>
+                                <div className="payment-row">
+                                  <span className="payment-label">Emergency Contact:</span>
+                                  <span className="payment-value">{bookingInfo.emergency_contact_name}</span>
+                                </div>
+                                {bookingInfo.emergency_contact_phone && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Emergency Phone:</span>
+                                    <span className="payment-value">{bookingInfo.emergency_contact_phone}</span>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                            {bookingInfo.submitted_at && (
+                              <div className="payment-row">
+                                <span className="payment-label">Submitted:</span>
+                                <span className="payment-value">{formatDateTime(bookingInfo.submitted_at)}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
 
                   {/* Payment Details */}
                   {payments.find(p => p.quote_id === quote.id) && (

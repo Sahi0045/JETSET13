@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from './Navbar';
 import Footer from './Footer';
+import BookingInfoForm from './BookingInfoForm';
 
 const InquiryDetail = () => {
   const { id } = useParams();
@@ -11,6 +12,8 @@ const InquiryDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [selectedQuoteForBooking, setSelectedQuoteForBooking] = useState(null);
 
   useEffect(() => {
     fetchInquiryDetails();
@@ -104,6 +107,33 @@ const InquiryDetail = () => {
     if (!quote.total_amount || parseFloat(quote.total_amount) <= 0) {
       alert('Invalid payment amount. Please contact support.');
       return;
+    }
+
+    // Check if booking info is required and completed
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token');
+      const bookingInfoResponse = await fetch(`/api/quotes?id=${quote.id}&endpoint=booking-info`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (bookingInfoResponse.ok) {
+        const bookingData = await bookingInfoResponse.json();
+        if (bookingData.success && bookingData.data.status !== 'completed') {
+          alert('Please complete your booking information before proceeding to payment. Click "Fill Booking Information" to continue.');
+          return;
+        }
+      } else if (bookingInfoResponse.status === 404) {
+        // Booking info doesn't exist - require it
+        alert('Please complete your booking information before proceeding to payment. This includes personal details and travel documents.');
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking booking info:', error);
+      // Continue with payment if check fails (don't block user)
     }
 
     setPaymentLoading(true);
@@ -528,6 +558,19 @@ const InquiryDetail = () => {
                       View Full Quote Details
                     </Link>
 
+                    {/* Fill Booking Information Button */}
+                    {quote.payment_status === 'unpaid' && (quote.status === 'sent' || quote.status === 'accepted') && (
+                      <button
+                        onClick={() => {
+                          setSelectedQuoteForBooking(quote);
+                          setShowBookingForm(true);
+                        }}
+                        className="px-4 py-2 bg-yellow-600 text-white text-sm rounded-md hover:bg-yellow-700 font-semibold"
+                      >
+                        📝 Fill Booking Information
+                      </button>
+                    )}
+
                     {/* Pay Now Button - Perfect Implementation */}
                     {quote.payment_status === 'unpaid' && (quote.status === 'sent' || quote.status === 'accepted') && (
                       <button
@@ -590,6 +633,22 @@ const InquiryDetail = () => {
           <div className="bg-white rounded-lg shadow-sm p-6 text-center">
             <p className="text-gray-600">No quotes have been sent yet. Our team is working on your inquiry.</p>
           </div>
+        )}
+
+        {/* Booking Info Form Modal */}
+        {showBookingForm && selectedQuoteForBooking && (
+          <BookingInfoForm
+            quoteId={selectedQuoteForBooking.id}
+            inquiryType={inquiry?.inquiry_type}
+            onComplete={() => {
+              setShowBookingForm(false);
+              setSelectedQuoteForBooking(null);
+            }}
+            onClose={() => {
+              setShowBookingForm(false);
+              setSelectedQuoteForBooking(null);
+            }}
+          />
         )}
       </div>
       <Footer />
