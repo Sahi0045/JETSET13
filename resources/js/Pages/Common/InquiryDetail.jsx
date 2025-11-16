@@ -124,31 +124,27 @@ const InquiryDetail = () => {
         const bookingData = await bookingInfoResponse.json();
         console.log('🔍 Booking info check result:', bookingData);
         if (bookingData.success && bookingData.data) {
-          // Get the booking_info status (not quote status)
-          // bookingData.data should be the booking_info object
+          // Get the booking_info object
           const bookingInfo = bookingData.data;
+
+          // Verify this is actually a booking_info object, not a quote object
+          // Quote objects have: quote_number, admin_id, title
+          // Booking info objects have: full_name, email, phone
+          const isQuoteObject = bookingInfo.quote_number || bookingInfo.admin_id || bookingInfo.title;
+          const isBookingInfoObject = bookingInfo.full_name !== undefined || bookingInfo.email !== undefined;
+
+          if (isQuoteObject && !isBookingInfoObject) {
+            console.error('⚠️ ERROR: API returned quote object instead of booking_info object');
+            console.error('Received object:', bookingInfo);
+            alert('Please complete your booking information before proceeding to payment.');
+            return;
+          }
+
           const status = bookingInfo.status; // This is the booking_info status field
           console.log('📋 Booking info status:', status, 'Full booking info:', bookingInfo);
-          
+
           // Valid booking_info statuses are: 'incomplete', 'completed', 'verified'
-          // If status is 'sent', that's a quote status, not booking_info status - something is wrong
-          if (status === 'sent' || status === 'draft' || status === 'accepted') {
-            console.error('⚠️ Invalid booking_info status detected:', status, '- This appears to be a quote status, not booking_info status');
-            console.error('Full booking info object:', bookingInfo);
-            // This shouldn't happen, but if it does, check if all required fields are present
-            const hasAllFields = bookingInfo.full_name && bookingInfo.email && bookingInfo.phone;
-            const hasTerms = bookingInfo.terms_accepted && bookingInfo.privacy_policy_accepted;
-            const hasPassport = !inquiry?.inquiry_type || inquiry.inquiry_type !== 'flight' || 
-                               (bookingInfo.passport_number && bookingInfo.passport_expiry_date);
-            
-            if (hasAllFields && hasTerms && hasPassport) {
-              console.log('✅ All fields present, allowing payment despite status issue');
-              // Proceed with payment - status might be incorrectly set but data is complete
-            } else {
-              alert('Please complete your booking information before proceeding to payment. Make sure all required fields are filled and terms are accepted.');
-              return;
-            }
-          } else if (status !== 'completed') {
+          if (status !== 'completed' && status !== 'verified') {
             const missingFields = [];
             if (!bookingInfo.full_name || !bookingInfo.email || !bookingInfo.phone) {
               missingFields.push('personal information');

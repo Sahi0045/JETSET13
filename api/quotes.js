@@ -37,6 +37,69 @@ export default async function handler(req, res) {
     // Run auth middleware
     await runMiddleware(req, res, optionalProtect);
 
+    // GET /api/quotes?id=xxx&endpoint=booking-info - Get booking info
+    // IMPORTANT: This must be BEFORE the generic GET /api/quotes?id=xxx route
+    if (method === 'GET' && query.id && query.endpoint === 'booking-info') {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required'
+        });
+      }
+
+      try {
+        const quote = await Quote.findById(query.id);
+        if (!quote) {
+          return res.status(404).json({
+            success: false,
+            message: 'Quote not found'
+          });
+        }
+
+        // Check if user has access to this quote (inquiry owner or admin)
+        const inquiry = await Inquiry.findById(quote.inquiry_id);
+        if (!inquiry) {
+          return res.status(404).json({
+            success: false,
+            message: 'Associated inquiry not found'
+          });
+        }
+
+        const isInquiryOwner = inquiry.user_id && String(inquiry.user_id) === String(req.user.id);
+        const isAdmin = req.user.role === 'admin';
+        const isEmailMatch = inquiry.customer_email && req.user.email &&
+                            inquiry.customer_email.toLowerCase() === req.user.email.toLowerCase();
+
+        if (!isInquiryOwner && !isAdmin && !isEmailMatch) {
+          return res.status(403).json({
+            success: false,
+            message: 'Not authorized to access this booking information'
+          });
+        }
+
+        const bookingInfo = await BookingInfo.findByQuoteId(query.id);
+
+        if (!bookingInfo) {
+          return res.status(404).json({
+            success: false,
+            message: 'Booking information not found'
+          });
+        }
+
+        return res.status(200).json({
+          success: true,
+          data: bookingInfo
+        });
+      } catch (error) {
+        console.error('Error fetching booking info:', error);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to fetch booking information',
+          error: error.message
+        });
+      }
+    }
+
     // GET /api/quotes?inquiryId=xxx - Get quotes for a specific inquiry
     if (method === 'GET' && query.inquiryId) {
       if (!req.user) {
@@ -55,7 +118,8 @@ export default async function handler(req, res) {
     }
 
     // GET /api/quotes?id=xxx - Get a specific quote by ID
-    if (method === 'GET' && query.id) {
+    // Note: endpoint-specific routes (like booking-info) must be checked BEFORE this
+    if (method === 'GET' && query.id && !query.endpoint) {
       if (!req.user) {
         return res.status(401).json({
           success: false,
@@ -503,68 +567,6 @@ export default async function handler(req, res) {
         success: true,
         message: 'Quote deleted successfully'
       });
-    }
-
-    // GET /api/quotes?id=xxx&endpoint=booking-info - Get booking info
-    if (method === 'GET' && query.id && query.endpoint === 'booking-info') {
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          message: 'Authentication required'
-        });
-      }
-
-      try {
-        const quote = await Quote.findById(query.id);
-        if (!quote) {
-          return res.status(404).json({
-            success: false,
-            message: 'Quote not found'
-          });
-        }
-
-        // Check if user has access to this quote (inquiry owner or admin)
-        const inquiry = await Inquiry.findById(quote.inquiry_id);
-        if (!inquiry) {
-          return res.status(404).json({
-            success: false,
-            message: 'Associated inquiry not found'
-          });
-        }
-
-        const isInquiryOwner = inquiry.user_id && String(inquiry.user_id) === String(req.user.id);
-        const isAdmin = req.user.role === 'admin';
-        const isEmailMatch = inquiry.customer_email && req.user.email &&
-                            inquiry.customer_email.toLowerCase() === req.user.email.toLowerCase();
-
-        if (!isInquiryOwner && !isAdmin && !isEmailMatch) {
-          return res.status(403).json({
-            success: false,
-            message: 'Not authorized to access this booking information'
-          });
-        }
-
-        const bookingInfo = await BookingInfo.findByQuoteId(query.id);
-
-        if (!bookingInfo) {
-          return res.status(404).json({
-            success: false,
-            message: 'Booking information not found'
-          });
-        }
-
-        return res.status(200).json({
-          success: true,
-          data: bookingInfo
-        });
-      } catch (error) {
-        console.error('Error fetching booking info:', error);
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to fetch booking information',
-          error: error.message
-        });
-      }
     }
 
     // Method not allowed
