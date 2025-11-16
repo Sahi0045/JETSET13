@@ -568,8 +568,11 @@ const InquiryDetail = () => {
             <h1>Inquiry Details</h1>
             <div className="inquiry-badges">
               <span className="inquiry-id">#{inquiry.id}</span>
-              <span className={`status-badge large ${getStatusColor(inquiry.status)}`}>
-                {inquiry.status}
+              <span className={`status-badge large ${getStatusColor(
+                // Only show "booked" if at least one quote is paid
+                quotes.some(q => q.payment_status === 'paid') ? 'booked' : inquiry.status
+              )}`}>
+                {quotes.some(q => q.payment_status === 'paid') ? 'booked' : inquiry.status}
               </span>
               <div className="inquiry-type-badge">
                 <span className="type-icon">{getInquiryTypeIcon(inquiry.inquiry_type)}</span>
@@ -789,8 +792,8 @@ const InquiryDetail = () => {
                   <div className="quote-header">
                     <div className="quote-title">
                       <h5>{quote.quote_number}</h5>
-                      <span className={`quote-status ${getStatusColor(quote.status)}`}>
-                        {quote.status}
+                      <span className={`quote-status ${getStatusColor(quote.payment_status === 'paid' ? 'booked' : quote.status)}`}>
+                        {quote.payment_status === 'paid' ? 'booked' : quote.status}
                       </span>
                     </div>
                     <div className="quote-amount">
