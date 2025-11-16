@@ -123,19 +123,40 @@ const InquiryDetail = () => {
       if (bookingInfoResponse.ok) {
         const bookingData = await bookingInfoResponse.json();
         console.log('🔍 Booking info check result:', bookingData);
-        if (bookingData.success) {
-          // Check if status is completed
-          const status = bookingData.data?.status || bookingData.status;
-          console.log('📋 Booking info status:', status);
-          if (status !== 'completed') {
+        if (bookingData.success && bookingData.data) {
+          // Get the booking_info status (not quote status)
+          // bookingData.data should be the booking_info object
+          const bookingInfo = bookingData.data;
+          const status = bookingInfo.status; // This is the booking_info status field
+          console.log('📋 Booking info status:', status, 'Full booking info:', bookingInfo);
+          
+          // Valid booking_info statuses are: 'incomplete', 'completed', 'verified'
+          // If status is 'sent', that's a quote status, not booking_info status - something is wrong
+          if (status === 'sent' || status === 'draft' || status === 'accepted') {
+            console.error('⚠️ Invalid booking_info status detected:', status, '- This appears to be a quote status, not booking_info status');
+            console.error('Full booking info object:', bookingInfo);
+            // This shouldn't happen, but if it does, check if all required fields are present
+            const hasAllFields = bookingInfo.full_name && bookingInfo.email && bookingInfo.phone;
+            const hasTerms = bookingInfo.terms_accepted && bookingInfo.privacy_policy_accepted;
+            const hasPassport = !inquiry?.inquiry_type || inquiry.inquiry_type !== 'flight' || 
+                               (bookingInfo.passport_number && bookingInfo.passport_expiry_date);
+            
+            if (hasAllFields && hasTerms && hasPassport) {
+              console.log('✅ All fields present, allowing payment despite status issue');
+              // Proceed with payment - status might be incorrectly set but data is complete
+            } else {
+              alert('Please complete your booking information before proceeding to payment. Make sure all required fields are filled and terms are accepted.');
+              return;
+            }
+          } else if (status !== 'completed') {
             const missingFields = [];
-            if (!bookingData.data?.full_name || !bookingData.data?.email || !bookingData.data?.phone) {
+            if (!bookingInfo.full_name || !bookingInfo.email || !bookingInfo.phone) {
               missingFields.push('personal information');
             }
-            if (!bookingData.data?.terms_accepted || !bookingData.data?.privacy_policy_accepted) {
+            if (!bookingInfo.terms_accepted || !bookingInfo.privacy_policy_accepted) {
               missingFields.push('terms acceptance');
             }
-            if (inquiry?.inquiry_type === 'flight' && (!bookingData.data?.passport_number || !bookingData.data?.passport_expiry_date)) {
+            if (inquiry?.inquiry_type === 'flight' && (!bookingInfo.passport_number || !bookingInfo.passport_expiry_date)) {
               missingFields.push('passport information');
             }
             const message = missingFields.length > 0 
