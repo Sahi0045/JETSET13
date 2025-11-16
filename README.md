@@ -358,6 +358,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 *Making extraordinary travel experiences accessible to everyone*
 
+---
+*Last updated: 2025-01-17 - Vercel deployment trigger*
+
 
 
 
