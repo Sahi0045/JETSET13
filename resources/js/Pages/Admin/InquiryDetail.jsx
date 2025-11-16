@@ -827,58 +827,69 @@ const InquiryDetail = () => {
                     )}
                   </div>
 
-                  {/* Booking Information */}
-                  {bookingInfos[quote.id] && (
-                    <div className="payment-details" style={{ marginTop: '15px', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd' }}>
-                      <div className="payment-header" style={{ backgroundColor: '#0ea5e9', color: 'white' }}>
-                        📋 Booking Information
+                  {/* Booking Information - Always show section */}
+                  <div className="payment-details" style={{ marginTop: '15px', backgroundColor: bookingInfos[quote.id] ? '#f0f9ff' : '#fff7ed', border: `1px solid ${bookingInfos[quote.id] ? '#bae6fd' : '#fed7aa'}` }}>
+                    <div className="payment-header" style={{ backgroundColor: bookingInfos[quote.id] ? '#0ea5e9' : '#f59e0b', color: 'white' }}>
+                      👤 User Booking Information
+                      {bookingInfos[quote.id] && (
                         <span style={{ float: 'right', fontSize: '12px', fontWeight: 'normal' }}>
                           Status: {bookingInfos[quote.id].status}
                         </span>
-                      </div>
-                      {(() => {
+                      )}
+                    </div>
+                    {bookingInfos[quote.id] ? (
+                      (() => {
                         const bookingInfo = bookingInfos[quote.id];
                         return (
                           <div className="payment-info">
-                            <div className="payment-row">
-                              <span className="payment-label">Full Name:</span>
-                              <span className="payment-value">{bookingInfo.full_name}</span>
-                            </div>
-                            <div className="payment-row">
-                              <span className="payment-label">Email:</span>
-                              <span className="payment-value">{bookingInfo.email}</span>
-                            </div>
-                            <div className="payment-row">
-                              <span className="payment-label">Phone:</span>
-                              <span className="payment-value">{bookingInfo.phone}</span>
-                            </div>
-                            {bookingInfo.date_of_birth && (
+                            {/* Personal Information Section */}
+                            <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '2px solid #e2e8f0' }}>
+                              <h4 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600' }}>📝 Personal Details</h4>
                               <div className="payment-row">
-                                <span className="payment-label">Date of Birth:</span>
-                                <span className="payment-value">{formatDate(bookingInfo.date_of_birth)}</span>
+                                <span className="payment-label">Full Name:</span>
+                                <span className="payment-value" style={{ fontWeight: '500' }}>{bookingInfo.full_name}</span>
                               </div>
-                            )}
-                            {bookingInfo.nationality && (
                               <div className="payment-row">
-                                <span className="payment-label">Nationality:</span>
-                                <span className="payment-value">{bookingInfo.nationality}</span>
+                                <span className="payment-label">Email:</span>
+                                <span className="payment-value">{bookingInfo.email}</span>
                               </div>
-                            )}
-                            {bookingInfo.passport_number && (
-                              <>
+                              <div className="payment-row">
+                                <span className="payment-label">Phone:</span>
+                                <span className="payment-value">{bookingInfo.phone}</span>
+                              </div>
+                              {bookingInfo.date_of_birth && (
                                 <div className="payment-row">
-                                  <span className="payment-label">Passport Number:</span>
-                                  <span className="payment-value">{bookingInfo.passport_number}</span>
+                                  <span className="payment-label">Date of Birth:</span>
+                                  <span className="payment-value">{formatDate(bookingInfo.date_of_birth)}</span>
                                 </div>
+                              )}
+                              {bookingInfo.nationality && (
+                                <div className="payment-row">
+                                  <span className="payment-label">Nationality:</span>
+                                  <span className="payment-value">{bookingInfo.nationality}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Passport Information Section */}
+                            {(bookingInfo.passport_number || bookingInfo.passport_expiry_date || bookingInfo.passport_issue_date || bookingInfo.passport_issuing_country) && (
+                              <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '2px solid #e2e8f0' }}>
+                                <h4 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600' }}>🛂 Passport Information</h4>
+                                {bookingInfo.passport_number && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Passport Number:</span>
+                                    <span className="payment-value" style={{ fontFamily: 'monospace', fontWeight: '500' }}>{bookingInfo.passport_number}</span>
+                                  </div>
+                                )}
                                 {bookingInfo.passport_issue_date && (
                                   <div className="payment-row">
-                                    <span className="payment-label">Passport Issue Date:</span>
+                                    <span className="payment-label">Issue Date:</span>
                                     <span className="payment-value">{formatDate(bookingInfo.passport_issue_date)}</span>
                                   </div>
                                 )}
                                 {bookingInfo.passport_expiry_date && (
                                   <div className="payment-row">
-                                    <span className="payment-label">Passport Expiry:</span>
+                                    <span className="payment-label">Expiry Date:</span>
                                     <span className="payment-value">{formatDate(bookingInfo.passport_expiry_date)}</span>
                                   </div>
                                 )}
@@ -888,17 +899,22 @@ const InquiryDetail = () => {
                                     <span className="payment-value">{bookingInfo.passport_issuing_country}</span>
                                   </div>
                                 )}
-                              </>
+                              </div>
                             )}
-                            {bookingInfo.emergency_contact_name && (
-                              <>
-                                <div className="payment-row">
-                                  <span className="payment-label">Emergency Contact:</span>
-                                  <span className="payment-value">{bookingInfo.emergency_contact_name}</span>
-                                </div>
+
+                            {/* Emergency Contact Section */}
+                            {(bookingInfo.emergency_contact_name || bookingInfo.emergency_contact_phone || bookingInfo.emergency_contact_relationship) && (
+                              <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '2px solid #e2e8f0' }}>
+                                <h4 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600' }}>🚨 Emergency Contact</h4>
+                                {bookingInfo.emergency_contact_name && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Name:</span>
+                                    <span className="payment-value">{bookingInfo.emergency_contact_name}</span>
+                                  </div>
+                                )}
                                 {bookingInfo.emergency_contact_phone && (
                                   <div className="payment-row">
-                                    <span className="payment-label">Emergency Phone:</span>
+                                    <span className="payment-label">Phone:</span>
                                     <span className="payment-value">{bookingInfo.emergency_contact_phone}</span>
                                   </div>
                                 )}
@@ -908,39 +924,74 @@ const InquiryDetail = () => {
                                     <span className="payment-value">{bookingInfo.emergency_contact_relationship}</span>
                                   </div>
                                 )}
-                              </>
+                              </div>
                             )}
+
+                            {/* Additional Booking Details */}
                             {bookingInfo.booking_details && Object.keys(bookingInfo.booking_details).length > 0 && (
-                              <div className="payment-row">
-                                <span className="payment-label">Additional Details:</span>
-                                <span className="payment-value" style={{ whiteSpace: 'pre-wrap' }}>
-                                  {JSON.stringify(bookingInfo.booking_details, null, 2)}
-                                </span>
+                              <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '2px solid #e2e8f0' }}>
+                                <h4 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600' }}>📋 Additional Booking Details</h4>
+                                <div className="payment-row">
+                                  <span className="payment-label">Details:</span>
+                                  <span className="payment-value" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '13px', backgroundColor: '#f8fafc', padding: '10px', borderRadius: '4px', display: 'block', marginTop: '5px' }}>
+                                    {JSON.stringify(bookingInfo.booking_details, null, 2)}
+                                  </span>
+                                </div>
                               </div>
                             )}
-                            {bookingInfo.terms_accepted && (
-                              <div className="payment-row">
-                                <span className="payment-label">Terms Accepted:</span>
-                                <span className="payment-value">✅ Yes {bookingInfo.terms_accepted_at ? `(${formatDateTime(bookingInfo.terms_accepted_at)})` : ''}</span>
-                              </div>
-                            )}
-                            {bookingInfo.privacy_policy_accepted && (
-                              <div className="payment-row">
-                                <span className="payment-label">Privacy Policy Accepted:</span>
-                                <span className="payment-value">✅ Yes {bookingInfo.privacy_policy_accepted_at ? `(${formatDateTime(bookingInfo.privacy_policy_accepted_at)})` : ''}</span>
-                              </div>
-                            )}
-                            {bookingInfo.submitted_at && (
-                              <div className="payment-row">
-                                <span className="payment-label">Submitted:</span>
-                                <span className="payment-value">{formatDateTime(bookingInfo.submitted_at)}</span>
+
+                            {/* Terms and Privacy Section */}
+                            <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '2px solid #e2e8f0' }}>
+                              <h4 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600' }}>✅ Terms & Privacy</h4>
+                              {bookingInfo.terms_accepted && (
+                                <div className="payment-row">
+                                  <span className="payment-label">Terms Accepted:</span>
+                                  <span className="payment-value">✅ Yes {bookingInfo.terms_accepted_at ? `(${formatDateTime(bookingInfo.terms_accepted_at)})` : ''}</span>
+                                </div>
+                              )}
+                              {bookingInfo.privacy_policy_accepted && (
+                                <div className="payment-row">
+                                  <span className="payment-label">Privacy Policy Accepted:</span>
+                                  <span className="payment-value">✅ Yes {bookingInfo.privacy_policy_accepted_at ? `(${formatDateTime(bookingInfo.privacy_policy_accepted_at)})` : ''}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Timestamps */}
+                            {(bookingInfo.submitted_at || bookingInfo.verified_at || bookingInfo.created_at) && (
+                              <div style={{ marginBottom: '10px' }}>
+                                <h4 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600' }}>⏰ Timestamps</h4>
+                                {bookingInfo.submitted_at && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Submitted:</span>
+                                    <span className="payment-value">{formatDateTime(bookingInfo.submitted_at)}</span>
+                                  </div>
+                                )}
+                                {bookingInfo.verified_at && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Verified:</span>
+                                    <span className="payment-value">{formatDateTime(bookingInfo.verified_at)}</span>
+                                  </div>
+                                )}
+                                {bookingInfo.created_at && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Created:</span>
+                                    <span className="payment-value">{formatDateTime(bookingInfo.created_at)}</span>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
                         );
-                      })()}
-                    </div>
-                  )}
+                      })()
+                    ) : (
+                      <div className="payment-info" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
+                        <p style={{ margin: 0, fontSize: '14px' }}>
+                          ⚠️ No booking information submitted yet. User needs to complete the booking form before payment.
+                        </p>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Payment Details */}
                   {payments.find(p => p.quote_id === quote.id) && (
