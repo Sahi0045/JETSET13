@@ -22,6 +22,13 @@ const InquiryDetail = () => {
 
   useEffect(() => {
     fetchInquiryDetails();
+    
+    // Auto-refresh every 30 seconds to get latest payment status
+    const refreshInterval = setInterval(() => {
+      fetchInquiryDetails();
+    }, 30000); // Refresh every 30 seconds
+    
+    return () => clearInterval(refreshInterval);
   }, [id]);
 
   const fetchInquiryDetails = async () => {
