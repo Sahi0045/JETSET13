@@ -122,14 +122,42 @@ const InquiryDetail = () => {
 
       if (bookingInfoResponse.ok) {
         const bookingData = await bookingInfoResponse.json();
-        if (bookingData.success && bookingData.data.status !== 'completed') {
-          alert('Please complete your booking information before proceeding to payment. Click "Fill Booking Information" to continue.');
-          return;
+        console.log('🔍 Booking info check result:', bookingData);
+        if (bookingData.success) {
+          // Check if status is completed
+          const status = bookingData.data?.status || bookingData.status;
+          console.log('📋 Booking info status:', status);
+          if (status !== 'completed') {
+            const missingFields = [];
+            if (!bookingData.data?.full_name || !bookingData.data?.email || !bookingData.data?.phone) {
+              missingFields.push('personal information');
+            }
+            if (!bookingData.data?.terms_accepted || !bookingData.data?.privacy_policy_accepted) {
+              missingFields.push('terms acceptance');
+            }
+            if (inquiry?.inquiry_type === 'flight' && (!bookingData.data?.passport_number || !bookingData.data?.passport_expiry_date)) {
+              missingFields.push('passport information');
+            }
+            const message = missingFields.length > 0 
+              ? `Please complete your booking information: ${missingFields.join(', ')}. Click "Fill Booking Information" to continue.`
+              : 'Please complete your booking information before proceeding to payment. Make sure all required fields are filled and terms are accepted. Click "Fill Booking Information" to continue.';
+            alert(message);
+            return;
+          }
+          // Status is completed, proceed with payment
+          console.log('✅ Booking info is complete, proceeding to payment');
+        } else {
+          // API returned success: false
+          console.warn('Booking info check returned success: false', bookingData);
         }
       } else if (bookingInfoResponse.status === 404) {
         // Booking info doesn't exist - require it
         alert('Please complete your booking information before proceeding to payment. This includes personal details and travel documents.');
         return;
+      } else {
+        // Other error status
+        console.error('Booking info check failed with status:', bookingInfoResponse.status);
+        // Don't block payment on API errors - let user proceed
       }
     } catch (error) {
       console.error('Error checking booking info:', error);
@@ -640,9 +668,15 @@ const InquiryDetail = () => {
           <BookingInfoForm
             quoteId={selectedQuoteForBooking.id}
             inquiryType={inquiry?.inquiry_type}
-            onComplete={() => {
+            onComplete={(bookingInfo) => {
               setShowBookingForm(false);
               setSelectedQuoteForBooking(null);
+              // Refresh inquiry data to get updated booking info status
+              if (bookingInfo && bookingInfo.status === 'completed') {
+                console.log('✅ Booking info completed, you can now proceed to payment');
+                // Optionally show a success message
+                // The payment button will now work on next click
+              }
             }}
             onClose={() => {
               setShowBookingForm(false);

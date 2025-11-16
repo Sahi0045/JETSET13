@@ -220,11 +220,25 @@ export default async function handler(req, res) {
 
         // Determine status based on terms acceptance and completeness
         const isFlightBooking = inquiry.inquiry_type === 'flight';
-        const isComplete = bookingData.terms_accepted && bookingData.privacy_policy_accepted &&
-                          bookingData.full_name && bookingData.email && bookingData.phone &&
-                          (!isFlightBooking || (bookingData.passport_number && bookingData.passport_expiry_date));
+        const hasRequiredFields = bookingData.full_name && bookingData.email && bookingData.phone;
+        const hasTermsAccepted = bookingData.terms_accepted && bookingData.privacy_policy_accepted;
+        const hasPassportInfo = bookingData.passport_number && bookingData.passport_expiry_date;
+        
+        // For flights, passport info is required; for others, it's optional
+        const isComplete = hasRequiredFields && hasTermsAccepted && 
+                          (!isFlightBooking || hasPassportInfo);
 
         bookingInfoData.status = isComplete ? 'completed' : 'incomplete';
+        
+        // Log status determination for debugging
+        console.log('📋 Booking info status determination:', {
+          isFlightBooking,
+          hasRequiredFields,
+          hasTermsAccepted,
+          hasPassportInfo,
+          status: bookingInfoData.status,
+          quoteId: query.id
+        });
 
         // Check if booking info already exists
         let existingBookingInfo = await BookingInfo.findByQuoteId(query.id);
@@ -238,10 +252,16 @@ export default async function handler(req, res) {
           result = await BookingInfo.create(bookingInfoData);
         }
 
+        // Ensure we return the latest status
+        if (result && result.status !== bookingInfoData.status) {
+          console.warn('⚠️ Status mismatch - result status:', result.status, 'expected:', bookingInfoData.status);
+        }
+
         return res.status(200).json({
           success: true,
           data: result,
-          message: existingBookingInfo ? 'Booking information updated successfully' : 'Booking information created successfully'
+          message: existingBookingInfo ? 'Booking information updated successfully' : 'Booking information created successfully',
+          status: result?.status || bookingInfoData.status
         });
       } catch (error) {
         console.error('Error saving booking info:', error);

@@ -860,6 +860,12 @@ const InquiryDetail = () => {
                                   <span className="payment-label">Passport Number:</span>
                                   <span className="payment-value">{bookingInfo.passport_number}</span>
                                 </div>
+                                {bookingInfo.passport_issue_date && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Passport Issue Date:</span>
+                                    <span className="payment-value">{formatDate(bookingInfo.passport_issue_date)}</span>
+                                  </div>
+                                )}
                                 {bookingInfo.passport_expiry_date && (
                                   <div className="payment-row">
                                     <span className="payment-label">Passport Expiry:</span>
@@ -886,7 +892,33 @@ const InquiryDetail = () => {
                                     <span className="payment-value">{bookingInfo.emergency_contact_phone}</span>
                                   </div>
                                 )}
+                                {bookingInfo.emergency_contact_relationship && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Relationship:</span>
+                                    <span className="payment-value">{bookingInfo.emergency_contact_relationship}</span>
+                                  </div>
+                                )}
                               </>
+                            )}
+                            {bookingInfo.booking_details && Object.keys(bookingInfo.booking_details).length > 0 && (
+                              <div className="payment-row">
+                                <span className="payment-label">Additional Details:</span>
+                                <span className="payment-value" style={{ whiteSpace: 'pre-wrap' }}>
+                                  {JSON.stringify(bookingInfo.booking_details, null, 2)}
+                                </span>
+                              </div>
+                            )}
+                            {bookingInfo.terms_accepted && (
+                              <div className="payment-row">
+                                <span className="payment-label">Terms Accepted:</span>
+                                <span className="payment-value">✅ Yes {bookingInfo.terms_accepted_at ? `(${formatDateTime(bookingInfo.terms_accepted_at)})` : ''}</span>
+                              </div>
+                            )}
+                            {bookingInfo.privacy_policy_accepted && (
+                              <div className="payment-row">
+                                <span className="payment-label">Privacy Policy Accepted:</span>
+                                <span className="payment-value">✅ Yes {bookingInfo.privacy_policy_accepted_at ? `(${formatDateTime(bookingInfo.privacy_policy_accepted_at)})` : ''}</span>
+                              </div>
                             )}
                             {bookingInfo.submitted_at && (
                               <div className="payment-row">

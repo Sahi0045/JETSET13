@@ -31,6 +31,13 @@ class BookingInfo {
         throw new Error(error.message);
       }
 
+      console.log('✅ Booking info created successfully:', {
+        id: data.id,
+        status: data.status,
+        expectedStatus: cleanedData.status,
+        quoteId: data.quote_id
+      });
+
       return data;
     } catch (error) {
       console.error('Booking info creation error:', error);
@@ -119,6 +126,13 @@ class BookingInfo {
         console.error('Supabase error during booking info update:', error);
         throw new Error(error.message);
       }
+
+      console.log('✅ Booking info updated successfully:', {
+        id: data.id,
+        status: data.status,
+        expectedStatus: cleanedUpdateData.status,
+        quoteId: data.quote_id
+      });
 
       // Update quote status if booking info is completed
       if (data && data.status === 'completed') {
