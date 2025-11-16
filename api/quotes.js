@@ -95,6 +95,147 @@ export default async function handler(req, res) {
       });
     }
 
+    // POST /api/quotes?id=xxx&endpoint=booking-info - Save booking info (MUST BE BEFORE GENERAL POST)
+    if (method === 'POST' && query.id && query.endpoint === 'booking-info') {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required'
+        });
+      }
+
+      try {
+        const quote = await Quote.findById(query.id);
+        if (!quote) {
+          return res.status(404).json({
+            success: false,
+            message: 'Quote not found'
+          });
+        }
+
+        // Check authorization - user must own the inquiry
+        const inquiry = await Inquiry.findById(quote.inquiry_id);
+        if (!inquiry) {
+          return res.status(404).json({
+            success: false,
+            message: 'Associated inquiry not found'
+          });
+        }
+
+        // Allow inquiry owner OR admin OR email match (for legacy inquiries)
+        const isInquiryOwner = inquiry.user_id && String(inquiry.user_id) === String(req.user.id);
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'staff';
+        const isEmailMatch = inquiry.customer_email && req.user.email &&
+                            inquiry.customer_email.toLowerCase() === req.user.email.toLowerCase();
+
+        if (!isInquiryOwner && !isAdmin && !isEmailMatch) {
+          return res.status(403).json({
+            success: false,
+            message: 'Not authorized to submit booking information for this quote'
+          });
+        }
+
+        // Allow booking info for 'sent' or 'accepted' quotes
+        if (quote.status !== 'accepted' && quote.status !== 'sent') {
+          return res.status(400).json({
+            success: false,
+            message: 'Booking information can only be submitted for active or accepted quotes'
+          });
+        }
+
+        const bookingData = req.body;
+
+        // Validate required fields
+        if (!bookingData.full_name || !bookingData.email || !bookingData.phone) {
+          return res.status(400).json({
+            success: false,
+            message: 'Full name, email, and phone are required'
+          });
+        }
+
+        // Whitelist of valid booking_info fields
+        const validBookingInfoFields = [
+          'full_name',
+          'email',
+          'phone',
+          'date_of_birth',
+          'nationality',
+          'passport_number',
+          'passport_expiry_date',
+          'passport_issue_date',
+          'passport_issuing_country',
+          'emergency_contact_name',
+          'emergency_contact_phone',
+          'emergency_contact_relationship',
+          'booking_details',
+          'terms_accepted',
+          'privacy_policy_accepted'
+        ];
+
+        // Filter bookingData to only include valid fields
+        const filteredBookingData = {};
+        for (const field of validBookingInfoFields) {
+          if (bookingData[field] !== undefined) {
+            filteredBookingData[field] = bookingData[field];
+          }
+        }
+
+        // Prepare booking info data
+        const bookingInfoData = {
+          quote_id: query.id,
+          inquiry_id: quote.inquiry_id,
+          user_id: req.user.id,
+          ...filteredBookingData
+        };
+
+        // Remove any fields that shouldn't be set by client
+        delete bookingInfoData.id;
+        delete bookingInfoData.created_at;
+        delete bookingInfoData.updated_at;
+        delete bookingInfoData.submitted_at;
+        delete bookingInfoData.verified_at;
+        delete bookingInfoData.verified_by;
+        delete bookingInfoData.verification_notes;
+        delete bookingInfoData.terms_accepted_at;
+        delete bookingInfoData.privacy_policy_accepted_at;
+        delete bookingInfoData.status; // Will be set below
+        delete bookingInfoData.accepted_at; // Not a valid field for booking_info
+
+        // Determine status based on terms acceptance and completeness
+        const isFlightBooking = inquiry.inquiry_type === 'flight';
+        const isComplete = bookingData.terms_accepted && bookingData.privacy_policy_accepted &&
+                          bookingData.full_name && bookingData.email && bookingData.phone &&
+                          (!isFlightBooking || (bookingData.passport_number && bookingData.passport_expiry_date));
+
+        bookingInfoData.status = isComplete ? 'completed' : 'incomplete';
+
+        // Check if booking info already exists
+        let existingBookingInfo = await BookingInfo.findByQuoteId(query.id);
+        let result;
+
+        if (existingBookingInfo) {
+          // Update existing
+          result = await BookingInfo.update(existingBookingInfo.id, bookingInfoData);
+        } else {
+          // Create new
+          result = await BookingInfo.create(bookingInfoData);
+        }
+
+        return res.status(200).json({
+          success: true,
+          data: result,
+          message: existingBookingInfo ? 'Booking information updated successfully' : 'Booking information created successfully'
+        });
+      } catch (error) {
+        console.error('Error saving booking info:', error);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to save booking information',
+          error: error.message
+        });
+      }
+    }
+
     // POST /api/quotes - Create a new quote (admin only)
     if (method === 'POST') {
       console.log('POST /api/quotes - User check:', {
@@ -325,147 +466,6 @@ export default async function handler(req, res) {
         success: true,
         message: 'Quote deleted successfully'
       });
-    }
-
-    // POST /api/quotes?id=xxx&endpoint=booking-info - Save booking info
-    if (method === 'POST' && query.id && query.endpoint === 'booking-info') {
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          message: 'Authentication required'
-        });
-      }
-
-      try {
-        const quote = await Quote.findById(query.id);
-        if (!quote) {
-          return res.status(404).json({
-            success: false,
-            message: 'Quote not found'
-          });
-        }
-
-        // Check authorization - user must own the inquiry
-        const inquiry = await Inquiry.findById(quote.inquiry_id);
-        if (!inquiry) {
-          return res.status(404).json({
-            success: false,
-            message: 'Associated inquiry not found'
-          });
-        }
-
-        // Allow inquiry owner OR admin OR email match (for legacy inquiries)
-        const isInquiryOwner = inquiry.user_id && String(inquiry.user_id) === String(req.user.id);
-        const isAdmin = req.user.role === 'admin';
-        const isEmailMatch = inquiry.customer_email && req.user.email &&
-                            inquiry.customer_email.toLowerCase() === req.user.email.toLowerCase();
-
-        if (!isInquiryOwner && !isAdmin && !isEmailMatch) {
-          return res.status(403).json({
-            success: false,
-            message: 'Not authorized to submit booking information for this quote'
-          });
-        }
-
-        // Allow booking info for 'sent' or 'accepted' quotes
-        if (quote.status !== 'accepted' && quote.status !== 'sent') {
-          return res.status(400).json({
-            success: false,
-            message: 'Booking information can only be submitted for active or accepted quotes'
-          });
-        }
-
-        const bookingData = req.body;
-
-        // Validate required fields
-        if (!bookingData.full_name || !bookingData.email || !bookingData.phone) {
-          return res.status(400).json({
-            success: false,
-            message: 'Full name, email, and phone are required'
-          });
-        }
-
-        // Whitelist of valid booking_info fields
-        const validBookingInfoFields = [
-          'full_name',
-          'email',
-          'phone',
-          'date_of_birth',
-          'nationality',
-          'passport_number',
-          'passport_expiry_date',
-          'passport_issue_date',
-          'passport_issuing_country',
-          'emergency_contact_name',
-          'emergency_contact_phone',
-          'emergency_contact_relationship',
-          'booking_details',
-          'terms_accepted',
-          'privacy_policy_accepted'
-        ];
-
-        // Filter bookingData to only include valid fields
-        const filteredBookingData = {};
-        for (const field of validBookingInfoFields) {
-          if (bookingData[field] !== undefined) {
-            filteredBookingData[field] = bookingData[field];
-          }
-        }
-
-        // Prepare booking info data
-        const bookingInfoData = {
-          quote_id: query.id,
-          inquiry_id: quote.inquiry_id,
-          user_id: req.user.id,
-          ...filteredBookingData
-        };
-
-        // Remove any fields that shouldn't be set by client
-        delete bookingInfoData.id;
-        delete bookingInfoData.created_at;
-        delete bookingInfoData.updated_at;
-        delete bookingInfoData.submitted_at;
-        delete bookingInfoData.verified_at;
-        delete bookingInfoData.verified_by;
-        delete bookingInfoData.verification_notes;
-        delete bookingInfoData.terms_accepted_at;
-        delete bookingInfoData.privacy_policy_accepted_at;
-        delete bookingInfoData.status; // Will be set below
-        delete bookingInfoData.accepted_at; // Not a valid field for booking_info
-
-        // Determine status based on terms acceptance and completeness
-        const isFlightBooking = inquiry.inquiry_type === 'flight';
-        const isComplete = bookingData.terms_accepted && bookingData.privacy_policy_accepted &&
-                          bookingData.full_name && bookingData.email && bookingData.phone &&
-                          (!isFlightBooking || (bookingData.passport_number && bookingData.passport_expiry_date));
-
-        bookingInfoData.status = isComplete ? 'completed' : 'incomplete';
-
-        // Check if booking info already exists
-        let existingBookingInfo = await BookingInfo.findByQuoteId(query.id);
-        let result;
-
-        if (existingBookingInfo) {
-          // Update existing
-          result = await BookingInfo.update(existingBookingInfo.id, bookingInfoData);
-        } else {
-          // Create new
-          result = await BookingInfo.create(bookingInfoData);
-        }
-
-        return res.status(200).json({
-          success: true,
-          data: result,
-          message: existingBookingInfo ? 'Booking information updated successfully' : 'Booking information created successfully'
-        });
-      } catch (error) {
-        console.error('Error saving booking info:', error);
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to save booking information',
-          error: error.message
-        });
-      }
     }
 
     // GET /api/quotes?id=xxx&endpoint=booking-info - Get booking info
