@@ -1,14 +1,28 @@
 import supabase from '../config/supabase.js';
 
 class BookingInfo {
+  // Helper to clean date fields (convert empty strings to null)
+  static cleanDateFields(data) {
+    const dateFields = ['date_of_birth', 'passport_expiry_date', 'passport_issue_date'];
+    const cleaned = { ...data };
+    dateFields.forEach(field => {
+      if (cleaned[field] === '' || cleaned[field] === undefined) {
+        cleaned[field] = null;
+      }
+    });
+    return cleaned;
+  }
+
   // Create new booking information
   static async create(bookingData) {
     try {
-      console.log('Creating booking info with data:', bookingData);
+      // Clean date fields before inserting
+      const cleanedData = this.cleanDateFields(bookingData);
+      console.log('Creating booking info with data:', cleanedData);
 
       const { data, error } = await supabase
         .from('booking_info')
-        .insert([bookingData])
+        .insert([cleanedData])
         .select()
         .single();
 
@@ -75,26 +89,28 @@ class BookingInfo {
   // Update booking information
   static async update(id, updateData) {
     try {
-      console.log('Updating booking info:', id, updateData);
+      // Clean date fields before updating
+      const cleanedUpdateData = this.cleanDateFields(updateData);
+      console.log('Updating booking info:', id, cleanedUpdateData);
 
       // Set terms acceptance timestamps if terms are being accepted
-      if (updateData.terms_accepted && !updateData.terms_accepted_at) {
-        updateData.terms_accepted_at = new Date().toISOString();
+      if (cleanedUpdateData.terms_accepted && !cleanedUpdateData.terms_accepted_at) {
+        cleanedUpdateData.terms_accepted_at = new Date().toISOString();
       }
-      if (updateData.privacy_policy_accepted && !updateData.privacy_policy_accepted_at) {
-        updateData.privacy_policy_accepted_at = new Date().toISOString();
+      if (cleanedUpdateData.privacy_policy_accepted && !cleanedUpdateData.privacy_policy_accepted_at) {
+        cleanedUpdateData.privacy_policy_accepted_at = new Date().toISOString();
       }
 
       // Set submitted timestamp if status is being changed to completed
-      if (updateData.status === 'completed' && !updateData.submitted_at) {
-        updateData.submitted_at = new Date().toISOString();
+      if (cleanedUpdateData.status === 'completed' && !cleanedUpdateData.submitted_at) {
+        cleanedUpdateData.submitted_at = new Date().toISOString();
       }
 
-      updateData.updated_at = new Date().toISOString();
+      cleanedUpdateData.updated_at = new Date().toISOString();
 
       const { data, error } = await supabase
         .from('booking_info')
-        .update(updateData)
+        .update(cleanedUpdateData)
         .eq('id', id)
         .select()
         .single();

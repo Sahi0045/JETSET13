@@ -176,7 +176,16 @@ export default async function handler(req, res) {
         const filteredBookingData = {};
         for (const field of validBookingInfoFields) {
           if (bookingData[field] !== undefined) {
-            filteredBookingData[field] = bookingData[field];
+            // Convert empty strings to null for date fields
+            const dateFields = ['date_of_birth', 'passport_expiry_date', 'passport_issue_date'];
+            if (dateFields.includes(field) && bookingData[field] === '') {
+              filteredBookingData[field] = null;
+            } else if (bookingData[field] === '') {
+              // For non-date fields, keep empty strings as is (or convert to null if preferred)
+              filteredBookingData[field] = bookingData[field];
+            } else {
+              filteredBookingData[field] = bookingData[field];
+            }
           }
         }
 
@@ -200,6 +209,14 @@ export default async function handler(req, res) {
         delete bookingInfoData.privacy_policy_accepted_at;
         delete bookingInfoData.status; // Will be set below
         delete bookingInfoData.accepted_at; // Not a valid field for booking_info
+
+        // Clean up date fields: convert empty strings to null and remove null/undefined values for optional dates
+        const dateFields = ['date_of_birth', 'passport_expiry_date', 'passport_issue_date'];
+        dateFields.forEach(field => {
+          if (bookingInfoData[field] === '' || bookingInfoData[field] === undefined) {
+            bookingInfoData[field] = null;
+          }
+        });
 
         // Determine status based on terms acceptance and completeness
         const isFlightBooking = inquiry.inquiry_type === 'flight';
