@@ -871,7 +871,50 @@ const InquiryDetail = () => {
                               )}
                             </div>
 
-                            {/* Passport Information Section */}
+                            {/* Government ID Information Section */}
+                            {(bookingInfo.govt_id_type || bookingInfo.govt_id_number) && (
+                              <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '2px solid #e2e8f0' }}>
+                                <h4 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600' }}>🪪 Government ID Information</h4>
+                                {bookingInfo.govt_id_type && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">ID Type:</span>
+                                    <span className="payment-value capitalize">{bookingInfo.govt_id_type.replace('_', ' ')}</span>
+                                  </div>
+                                )}
+                                {bookingInfo.govt_id_number && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">ID Number:</span>
+                                    <span className="payment-value" style={{ fontFamily: 'monospace', fontWeight: '500' }}>{bookingInfo.govt_id_number}</span>
+                                  </div>
+                                )}
+                                {bookingInfo.govt_id_issue_date && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Issue Date:</span>
+                                    <span className="payment-value">{formatDate(bookingInfo.govt_id_issue_date)}</span>
+                                  </div>
+                                )}
+                                {bookingInfo.govt_id_expiry_date && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Expiry Date:</span>
+                                    <span className="payment-value">{formatDate(bookingInfo.govt_id_expiry_date)}</span>
+                                  </div>
+                                )}
+                                {bookingInfo.govt_id_issuing_authority && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Issuing Authority:</span>
+                                    <span className="payment-value">{bookingInfo.govt_id_issuing_authority}</span>
+                                  </div>
+                                )}
+                                {bookingInfo.govt_id_issuing_country && (
+                                  <div className="payment-row">
+                                    <span className="payment-label">Issuing Country:</span>
+                                    <span className="payment-value">{bookingInfo.govt_id_issuing_country}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Passport Information Section (Only for flights) */}
                             {(bookingInfo.passport_number || bookingInfo.passport_expiry_date || bookingInfo.passport_issue_date || bookingInfo.passport_issuing_country) && (
                               <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '2px solid #e2e8f0' }}>
                                 <h4 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600' }}>🛂 Passport Information</h4>

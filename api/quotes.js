@@ -228,6 +228,12 @@ export default async function handler(req, res) {
           'passport_expiry_date',
           'passport_issue_date',
           'passport_issuing_country',
+          'govt_id_type',
+          'govt_id_number',
+          'govt_id_issue_date',
+          'govt_id_expiry_date',
+          'govt_id_issuing_authority',
+          'govt_id_issuing_country',
           'emergency_contact_name',
           'emergency_contact_phone',
           'emergency_contact_relationship',
@@ -241,7 +247,7 @@ export default async function handler(req, res) {
         for (const field of validBookingInfoFields) {
           if (bookingData[field] !== undefined) {
             // Convert empty strings to null for date fields
-            const dateFields = ['date_of_birth', 'passport_expiry_date', 'passport_issue_date'];
+            const dateFields = ['date_of_birth', 'passport_expiry_date', 'passport_issue_date', 'govt_id_issue_date', 'govt_id_expiry_date'];
             if (dateFields.includes(field) && bookingData[field] === '') {
               filteredBookingData[field] = null;
             } else if (bookingData[field] === '') {
@@ -275,7 +281,7 @@ export default async function handler(req, res) {
         delete bookingInfoData.accepted_at; // Not a valid field for booking_info
 
         // Clean up date fields: convert empty strings to null and remove null/undefined values for optional dates
-        const dateFields = ['date_of_birth', 'passport_expiry_date', 'passport_issue_date'];
+        const dateFields = ['date_of_birth', 'passport_expiry_date', 'passport_issue_date', 'govt_id_issue_date', 'govt_id_expiry_date'];
         dateFields.forEach(field => {
           if (bookingInfoData[field] === '' || bookingInfoData[field] === undefined) {
             bookingInfoData[field] = null;
@@ -286,10 +292,11 @@ export default async function handler(req, res) {
         const isFlightBooking = inquiry.inquiry_type === 'flight';
         const hasRequiredFields = bookingData.full_name && bookingData.email && bookingData.phone;
         const hasTermsAccepted = bookingData.terms_accepted && bookingData.privacy_policy_accepted;
+        const hasGovtIdInfo = bookingData.govt_id_type && bookingData.govt_id_number;
         const hasPassportInfo = bookingData.passport_number && bookingData.passport_expiry_date;
         
-        // For flights, passport info is required; for others, it's optional
-        const isComplete = hasRequiredFields && hasTermsAccepted && 
+        // Government ID is required for all bookings; passport is required only for flights
+        const isComplete = hasRequiredFields && hasTermsAccepted && hasGovtIdInfo &&
                           (!isFlightBooking || hasPassportInfo);
 
         bookingInfoData.status = isComplete ? 'completed' : 'incomplete';

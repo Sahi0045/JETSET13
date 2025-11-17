@@ -72,25 +72,25 @@ export default async function handler(req, res) {
       // Check if getting a specific inquiry by ID
       if (query.id) {
         try {
-          if (!req.user) {
-            return res.status(401).json({
-              success: false,
-              message: 'Authentication required'
-            });
-          }
+        if (!req.user) {
+          return res.status(401).json({
+            success: false,
+            message: 'Authentication required'
+          });
+        }
 
-          const inquiry = await Inquiry.findById(query.id);
+        const inquiry = await Inquiry.findById(query.id);
 
-          if (!inquiry) {
-            return res.status(404).json({
-              success: false,
-              message: 'Inquiry not found'
-            });
-          }
+        if (!inquiry) {
+          return res.status(404).json({
+            success: false,
+            message: 'Inquiry not found'
+          });
+        }
 
           // SIMPLE RULE: If inquiry appears in user's list, they can view it
           // Check if user is admin - always allow
-          const isAdmin = ['admin', 'staff'].includes(req.user.role);
+        const isAdmin = ['admin', 'staff'].includes(req.user.role);
           
           if (isAdmin) {
             console.log('✅ Admin access granted');
@@ -138,11 +138,11 @@ export default async function handler(req, res) {
               userId: req.user.id,
               inquiryUserId: inquiry.user_id
             });
-            return res.status(403).json({
-              success: false,
-              message: 'Access denied'
-            });
-          }
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied'
+          });
+        }
           
           console.log('✅ Access granted - inquiry matches user');
           
@@ -159,10 +159,10 @@ export default async function handler(req, res) {
             }
           }
 
-          return res.status(200).json({
-            success: true,
-            data: inquiry
-          });
+        return res.status(200).json({
+          success: true,
+          data: inquiry
+        });
         } catch (error) {
           console.error('❌ Error fetching inquiry by ID:', error.message);
           console.error('Error stack:', error.stack);

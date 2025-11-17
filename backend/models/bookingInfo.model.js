@@ -3,7 +3,13 @@ import supabase from '../config/supabase.js';
 class BookingInfo {
   // Helper to clean date fields (convert empty strings to null)
   static cleanDateFields(data) {
-    const dateFields = ['date_of_birth', 'passport_expiry_date', 'passport_issue_date'];
+    const dateFields = [
+      'date_of_birth', 
+      'passport_expiry_date', 
+      'passport_issue_date',
+      'govt_id_issue_date',
+      'govt_id_expiry_date'
+    ];
     const cleaned = { ...data };
     dateFields.forEach(field => {
       if (cleaned[field] === '' || cleaned[field] === undefined) {

@@ -64,7 +64,7 @@ const AuthCallback = () => {
 
             if (data.session.access_token) {
               localStorage.setItem('token', data.session.access_token);
-              localStorage.setItem('supabase_token', data.session.access_token);
+            localStorage.setItem('supabase_token', data.session.access_token);
 
               if (role === 'admin') {
                 localStorage.setItem('adminToken', data.session.access_token);
@@ -117,7 +117,7 @@ const AuthCallback = () => {
 
             if (data.session.access_token) {
               localStorage.setItem('token', data.session.access_token);
-              localStorage.setItem('supabase_token', data.session.access_token);
+            localStorage.setItem('supabase_token', data.session.access_token);
 
               if (role === 'admin') {
                 localStorage.setItem('adminToken', data.session.access_token);

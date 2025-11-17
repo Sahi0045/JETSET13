@@ -13,6 +13,12 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
     'passport_expiry_date',
     'passport_issue_date',
     'passport_issuing_country',
+    'govt_id_type',
+    'govt_id_number',
+    'govt_id_issue_date',
+    'govt_id_expiry_date',
+    'govt_id_issuing_authority',
+    'govt_id_issuing_country',
     'emergency_contact_name',
     'emergency_contact_phone',
     'emergency_contact_relationship',
@@ -31,6 +37,12 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
     passport_expiry_date: '',
     passport_issue_date: '',
     passport_issuing_country: '',
+    govt_id_type: '',
+    govt_id_number: '',
+    govt_id_issue_date: '',
+    govt_id_expiry_date: '',
+    govt_id_issuing_authority: '',
+    govt_id_issuing_country: '',
     emergency_contact_name: '',
     emergency_contact_phone: '',
     emergency_contact_relationship: '',
@@ -149,8 +161,9 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
 
   const isFlightBooking = inquiryType === 'flight';
   const isFormValid = formData.full_name && formData.email && formData.phone;
+  const isGovtIdRequired = !formData.govt_id_type || !formData.govt_id_number;
   const isPassportRequired = isFlightBooking && (!formData.passport_number || !formData.passport_expiry_date);
-  const canSubmit = isFormValid && (!isFlightBooking || !isPassportRequired);
+  const canSubmit = isFormValid && !isGovtIdRequired && (!isFlightBooking || !isPassportRequired);
 
   if (showSecurityMessage) {
     return (
@@ -276,7 +289,98 @@ const BookingInfoForm = ({ quoteId, inquiryType, onComplete, onClose }) => {
             </div>
           </div>
 
-          {/* Passport Information (Required for flights) */}
+          {/* Government ID Information (Required for all bookings) */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Government ID Information <span className="text-red-500">*</span>
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ID Type <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="govt_id_type"
+                  value={formData.govt_id_type}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select ID Type</option>
+                  <option value="drivers_license">Driver's License</option>
+                  <option value="national_id">National ID</option>
+                  <option value="passport">Passport</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ID Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="govt_id_number"
+                  value={formData.govt_id_number}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter government ID number"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Issue Date
+                </label>
+                <input
+                  type="date"
+                  name="govt_id_issue_date"
+                  value={formData.govt_id_issue_date}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Expiry Date
+                </label>
+                <input
+                  type="date"
+                  name="govt_id_expiry_date"
+                  value={formData.govt_id_expiry_date}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Issuing Authority
+                </label>
+                <input
+                  type="text"
+                  name="govt_id_issuing_authority"
+                  value={formData.govt_id_issuing_authority}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., DMV, Passport Office"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Issuing Country
+                </label>
+                <input
+                  type="text"
+                  name="govt_id_issuing_country"
+                  value={formData.govt_id_issuing_country}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter issuing country"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Passport Information (Required only for flights) */}
           {isFlightBooking && (
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
