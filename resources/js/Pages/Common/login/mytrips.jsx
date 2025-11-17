@@ -71,12 +71,12 @@ export default function TravelDashboard() {
     }
   }, [isAuthenticated, activeSidebarItem])
 
-  const loadBookings = () => {
+  const loadBookings = async () => {
     const allBookings = []
     
     console.log('🔍 Loading bookings from localStorage...')
     
-    // Load flight bookings
+    // Load flight bookings from localStorage
     const flightBooking = localStorage.getItem('completedFlightBooking')
     console.log('Flight booking raw data:', flightBooking)
     
@@ -94,7 +94,7 @@ export default function TravelDashboard() {
       }
     }
 
-    // Load cruise bookings
+    // Load cruise bookings from localStorage
     const cruiseBooking = localStorage.getItem('completedBooking')
     console.log('Cruise booking raw data:', cruiseBooking)
     
@@ -110,6 +110,117 @@ export default function TravelDashboard() {
       } catch (error) {
         console.error('Error parsing cruise booking:', error)
       }
+    }
+
+    // Load paid bookings from database (quotes with payment_status='paid')
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token')
+      
+      if (token) {
+        console.log('🔍 Loading paid bookings from database...')
+        
+        // Fetch user's inquiries
+        const inquiriesResponse = await fetch(getApiUrl('inquiries?endpoint=my'), {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        })
+
+        if (inquiriesResponse.ok) {
+          const inquiriesResult = await inquiriesResponse.json()
+          
+          if (inquiriesResult.success) {
+            const inquiries = Array.isArray(inquiriesResult.data) 
+              ? inquiriesResult.data 
+              : (inquiriesResult.data?.inquiries || [])
+            
+            console.log('📋 Found inquiries:', inquiries.length)
+            
+            // For each inquiry, check for paid quotes
+            for (const inquiry of inquiries) {
+              // Fetch quotes for this inquiry
+              const quotesResponse = await fetch(getApiUrl(`quotes?inquiryId=${inquiry.id}`), {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+              })
+
+              if (quotesResponse.ok) {
+                const quotesResult = await quotesResponse.json()
+                
+                if (quotesResult.success) {
+                  const quotes = Array.isArray(quotesResult.data) ? quotesResult.data : []
+                  
+                  // Filter for paid quotes
+                  const paidQuotes = quotes.filter(q => q.payment_status === 'paid')
+                  
+                  console.log(`📄 Inquiry ${inquiry.id?.slice(-8)}: ${paidQuotes.length} paid quote(s)`)
+                  
+                  // Convert paid quotes to booking format
+                  paidQuotes.forEach(quote => {
+                    // Map inquiry type to booking type
+                    const typeMap = {
+                      'flight': 'flight',
+                      'cruise': 'cruise',
+                      'hotel': 'hotel',
+                      'package': 'package',
+                      'general': 'package'
+                    }
+                    
+                    const bookingType = typeMap[inquiry.inquiry_type] || 'package'
+                    
+                    // Create booking object
+                    const booking = {
+                      orderId: quote.quote_number || quote.id,
+                      bookingReference: quote.quote_number || quote.id,
+                      type: bookingType,
+                      status: 'CONFIRMED',
+                      bookingDate: quote.paid_at || quote.created_at || new Date().toISOString(),
+                      amount: parseFloat(quote.total_amount || 0),
+                      currency: quote.currency || 'USD',
+                      title: quote.title || `${inquiry.inquiry_type} Booking`,
+                      description: quote.description || '',
+                      inquiryId: inquiry.id,
+                      quoteId: quote.id,
+                      inquiryType: inquiry.inquiry_type,
+                      customerName: inquiry.customer_name,
+                      customerEmail: inquiry.customer_email,
+                      // Travel details from inquiry
+                      travelDetails: inquiry.travel_details || {},
+                      // Flight specific
+                      origin: inquiry.flight_origin,
+                      destination: inquiry.flight_destination,
+                      departureDate: inquiry.flight_departure_date,
+                      returnDate: inquiry.flight_return_date,
+                      // Hotel specific
+                      hotelDestination: inquiry.hotel_destination,
+                      checkinDate: inquiry.hotel_checkin_date,
+                      checkoutDate: inquiry.hotel_checkout_date,
+                      // Cruise specific
+                      cruiseDestination: inquiry.cruise_destination,
+                      cruiseDepartureDate: inquiry.cruise_departure_date,
+                      cruiseDuration: inquiry.cruise_duration
+                    }
+                    
+                    allBookings.push(booking)
+                    console.log(`✅ Added paid booking: ${booking.orderId} (${bookingType})`)
+                  })
+                }
+              }
+            }
+          }
+        }
+      } else {
+        console.log('⚠️ No authentication token, skipping database bookings')
+      }
+    } catch (error) {
+      console.error('Error loading paid bookings from database:', error)
     }
 
     console.log('📋 Total bookings loaded:', allBookings.length)
@@ -260,12 +371,15 @@ export default function TravelDashboard() {
     if (activeSidebarItem !== "All Bookings" && activeSidebarItem !== "Requests") {
       const typeMap = {
         "Flights": "flight",
-        "Cruise": "cruise", 
+        "Cruise": "cruise",
+        "Hotels": "hotel",
         "Packages": "package"
       }
       const targetType = typeMap[activeSidebarItem]
-      filtered = filtered.filter(booking => booking.type === targetType)
-      console.log(`Filtered by type "${targetType}":`, filtered.length)
+      if (targetType) {
+        filtered = filtered.filter(booking => booking.type === targetType)
+        console.log(`Filtered by type "${targetType}":`, filtered.length)
+      }
     }
 
     // Filter by status (tab) - FIXED: Show bookings based on status, not travel date
@@ -323,9 +437,33 @@ export default function TravelDashboard() {
 
   const renderBookingCard = (booking) => {
     const isFlightBooking = booking.type === 'flight'
+    const isCruiseBooking = booking.type === 'cruise'
+    const isHotelBooking = booking.type === 'hotel'
+    const isPackageBooking = booking.type === 'package'
+    
+    // Determine icon and title based on booking type
+    const getBookingIcon = () => {
+      if (isFlightBooking) return '✈️'
+      if (isCruiseBooking) return '🚢'
+      if (isHotelBooking) return '🏨'
+      if (isPackageBooking) return '🎒'
+      return '📦'
+    }
+    
+    const getBookingTitle = () => {
+      if (booking.title) return booking.title
+      if (isFlightBooking) return 'Flight Booking'
+      if (isCruiseBooking) return 'Cruise Booking'
+      if (isHotelBooking) return 'Hotel Booking'
+      if (isPackageBooking) return 'Package Booking'
+      return 'Travel Booking'
+    }
+    
+    // Check if this is a database booking (has quoteId or inquiryId)
+    const isDatabaseBooking = !!(booking.quoteId || booking.inquiryId)
     
     return (
-      <div key={booking.orderId || booking.bookingReference} 
+      <div key={booking.orderId || booking.bookingReference || booking.quoteId} 
            className="group bg-white border border-gray-200 rounded-xl p-6 hover:shadow-xl hover:border-blue-300 transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
         {/* Gradient accent bar */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600"></div>
@@ -333,28 +471,33 @@ export default function TravelDashboard() {
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg font-semibold ${isFlightBooking ? 'bg-gradient-to-br from-blue-500 to-blue-600' : 'bg-gradient-to-br from-purple-500 to-purple-600'}
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg font-semibold ${isFlightBooking ? 'bg-gradient-to-br from-blue-500 to-blue-600' : isCruiseBooking ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-green-500 to-green-600'}
               `}>
-                {isFlightBooking ? '✈️' : '🚢'}
+                {getBookingIcon()}
               </div>
               <div>
                 <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
-                  {isFlightBooking ? 'Flight Booking' : 'Cruise Booking'}
+                  {getBookingTitle()}
                 </h3>
                 <p className="text-sm text-gray-500 font-medium">
-                  #{booking.orderId || booking.bookingReference}
+                  #{booking.orderId || booking.bookingReference || booking.quoteId || 'N/A'}
                 </p>
+                {booking.quoteId && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Quote: {booking.orderId || booking.bookingReference}
+                  </p>
+                )}
               </div>
             </div>
           </div>
           
           <div className="flex flex-col items-start sm:items-end gap-2">
-            <span className={`inline-flex items-center px-4 py-2 text-xs font-bold rounded-full shadow-sm ${booking.status === 'CONFIRMED' ? 'bg-gradient-to-r from-green-500 to-green-600 text-white' :
+            <span className={`inline-flex items-center px-4 py-2 text-xs font-bold rounded-full shadow-sm ${booking.status === 'CONFIRMED' || booking.status === 'paid' ? 'bg-gradient-to-r from-green-500 to-green-600 text-white' :
               booking.status === 'CANCELLED' ? 'bg-gradient-to-r from-red-500 to-red-600 text-white' :
               'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
             }`}>
               <span className="w-2 h-2 bg-white bg-opacity-50 rounded-full mr-2"></span>
-              {booking.status || 'Confirmed'}
+              {booking.status === 'paid' ? 'Paid' : (booking.status || 'Confirmed')}
             </span>
             
             {/* Mobile-friendly status indicator */}
@@ -367,23 +510,61 @@ export default function TravelDashboard() {
           </div>
         </div>
         
+        {/* Show travel details for database bookings */}
+        {(booking.origin || booking.destination || booking.departureDate || booking.hotelDestination || booking.cruiseDestination) && (
+          <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+            {isFlightBooking && booking.origin && booking.destination && (
+              <p className="text-sm text-gray-700">
+                <span className="font-semibold">Route:</span> {booking.origin} → {booking.destination}
+                {booking.departureDate && (
+                  <span className="ml-3">
+                    <span className="font-semibold">Departure:</span> {new Date(booking.departureDate).toLocaleDateString()}
+                  </span>
+                )}
+              </p>
+            )}
+            {isHotelBooking && booking.hotelDestination && (
+              <p className="text-sm text-gray-700">
+                <span className="font-semibold">Destination:</span> {booking.hotelDestination}
+                {booking.checkinDate && (
+                  <span className="ml-3">
+                    <span className="font-semibold">Check-in:</span> {new Date(booking.checkinDate).toLocaleDateString()}
+                  </span>
+                )}
+              </p>
+            )}
+            {isCruiseBooking && booking.cruiseDestination && (
+              <p className="text-sm text-gray-700">
+                <span className="font-semibold">Destination:</span> {booking.cruiseDestination}
+                {booking.cruiseDepartureDate && (
+                  <span className="ml-3">
+                    <span className="font-semibold">Departure:</span> {new Date(booking.cruiseDepartureDate).toLocaleDateString()}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+        )}
+        
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">PNR Number</p>
-            <p className="text-base font-bold text-gray-900">{booking.pnr || 'N/A'}</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Reference</p>
+            <p className="text-base font-bold text-gray-900">{booking.orderId || booking.bookingReference || booking.quoteId || 'N/A'}</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Transaction ID</p>
-            <p className="text-base font-bold text-gray-900">{booking.transactionId || 'N/A'}</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{isDatabaseBooking ? 'Quote Number' : 'Transaction ID'}</p>
+            <p className="text-base font-bold text-gray-900">{isDatabaseBooking ? (booking.orderId || booking.bookingReference) : (booking.transactionId || 'N/A')}</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Amount</p>
-            <p className="text-lg font-bold text-green-600">${booking.amount || 'N/A'}</p>
+            <p className="text-lg font-bold text-green-600">
+              {booking.currency || 'USD'} {booking.amount ? parseFloat(booking.amount).toFixed(2) : 'N/A'}
+            </p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Booking Date</p>
             <p className="text-sm font-semibold text-gray-900">
-              {new Date(booking.bookingDate || booking.orderCreatedAt).toLocaleDateString('en-US', { 
+              {new Date(booking.bookingDate || booking.orderCreatedAt || booking.paid_at || new Date()).toLocaleDateString('en-US', { 
                 month: 'short', 
                 day: 'numeric',
                 year: 'numeric'
@@ -392,20 +573,77 @@ export default function TravelDashboard() {
           </div>
         </div>
         
+        {booking.description && (
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Description</p>
+            <p className="text-sm text-gray-700">{booking.description}</p>
+          </div>
+        )}
+        
         <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
-          <button 
-            onClick={() => navigate('/booking-confirmation', { state: { bookingData: booking } })}
-            className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
-          >
-            <span className="flex items-center justify-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              View Details
-            </span>
-          </button>
-          {isFlightBooking && (
+          {isDatabaseBooking && booking.quoteId ? (
+            <button 
+              onClick={async () => {
+                try {
+                  const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token')
+                  
+                  // Fetch quote and inquiry data
+                  const [quoteResponse, inquiryResponse] = await Promise.all([
+                    fetch(getApiUrl(`quotes?id=${booking.quoteId}`), {
+                      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                      credentials: 'include'
+                    }),
+                    fetch(getApiUrl(`inquiries?id=${booking.inquiryId}`), {
+                      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                      credentials: 'include'
+                    })
+                  ])
+                  
+                  const quoteData = await quoteResponse.json()
+                  const inquiryData = await inquiryResponse.json()
+                  
+                  if (quoteData.success && inquiryData.success) {
+                    navigate('/quote-detail', { 
+                      state: { 
+                        quoteData: quoteData.data, 
+                        inquiryData: inquiryData.data 
+                      } 
+                    })
+                  } else {
+                    // Fallback: navigate to inquiry detail
+                    navigate(`/inquiry/${booking.inquiryId}`)
+                  }
+                } catch (error) {
+                  console.error('Error loading quote details:', error)
+                  // Fallback: navigate to inquiry detail
+                  navigate(`/inquiry/${booking.inquiryId}`)
+                }
+              }}
+              className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+            >
+              <span className="flex items-center justify-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                View Booking Details
+              </span>
+            </button>
+          ) : (
+            <button 
+              onClick={() => navigate('/booking-confirmation', { state: { bookingData: booking } })}
+              className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+            >
+              <span className="flex items-center justify-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                View Details
+              </span>
+            </button>
+          )}
+          {isFlightBooking && !isDatabaseBooking && (
             <button 
               onClick={() => navigate('/manage-booking', { state: { bookingData: booking } })}
               className="flex-1 sm:flex-none px-6 py-3 border-2 border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
@@ -801,6 +1039,7 @@ export default function TravelDashboard() {
                   { key: "All Bookings", icon: "📋", desc: "View all trips" },
                   { key: "Flights", icon: "✈️", desc: "Flight bookings" },
                   { key: "Cruise", icon: "🚢", desc: "Cruise bookings" },
+                  { key: "Hotels", icon: "🏨", desc: "Hotel bookings" },
                   { key: "Packages", icon: "🎒", desc: "Travel packages" },
                   { key: "Requests", icon: "💬", desc: "Travel requests" }
                 ].map((item) => (
