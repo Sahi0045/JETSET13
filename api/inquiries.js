@@ -251,21 +251,85 @@ export default async function handler(req, res) {
         });
       }
 
-      const updateData = req.body;
-      const inquiry = await Inquiry.update(query.id, updateData);
+      // Whitelist of allowed fields for update
+      const allowedFields = [
+        'status',
+        'priority',
+        'assigned_admin',
+        'internal_notes',
+        'last_contacted_at'
+      ];
 
-      if (!inquiry) {
-        return res.status(404).json({
+      // Valid values for status and priority
+      const validStatuses = ['pending', 'processing', 'quoted', 'booked', 'cancelled', 'expired'];
+      const validPriorities = ['low', 'normal', 'high', 'urgent'];
+
+      // Filter and clean update data
+      const updateData = {};
+      const rawData = req.body;
+
+      allowedFields.forEach(field => {
+        if (rawData[field] !== undefined) {
+          // Validate status
+          if (field === 'status' && rawData[field] && !validStatuses.includes(rawData[field])) {
+            console.warn(`Invalid status value: ${rawData[field]}, skipping`);
+            return;
+          }
+
+          // Validate priority
+          if (field === 'priority' && rawData[field] && !validPriorities.includes(rawData[field])) {
+            console.warn(`Invalid priority value: ${rawData[field]}, skipping`);
+            return;
+          }
+
+          // Convert empty strings to null for optional fields
+          if (rawData[field] === '' && (field === 'assigned_admin' || field === 'priority')) {
+            updateData[field] = null;
+          } else if (rawData[field] === '' && field === 'internal_notes') {
+            updateData[field] = null;
+          } else if (rawData[field] === '' && field === 'status') {
+            // Status should not be empty, skip if empty
+            return;
+          } else {
+            updateData[field] = rawData[field];
+          }
+        }
+      });
+
+      // Add updated_at timestamp
+      updateData.updated_at = new Date().toISOString();
+
+      // Validate that at least one field is being updated
+      if (Object.keys(updateData).length === 1 && updateData.updated_at) {
+        return res.status(400).json({
           success: false,
-          message: 'Inquiry not found'
+          message: 'No valid fields to update'
         });
       }
 
-      return res.status(200).json({
-        success: true,
-        message: 'Inquiry updated successfully',
-        data: inquiry
-      });
+      try {
+        const inquiry = await Inquiry.update(query.id, updateData);
+
+        if (!inquiry) {
+          return res.status(404).json({
+            success: false,
+            message: 'Inquiry not found'
+          });
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Inquiry updated successfully',
+          data: inquiry
+        });
+      } catch (updateError) {
+        console.error('Error updating inquiry:', updateError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to update inquiry',
+          error: process.env.NODE_ENV === 'development' ? updateError.message : 'Internal server error'
+        });
+      }
     }
 
     // DELETE /api/inquiries?id=xxx - Delete inquiry

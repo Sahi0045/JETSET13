@@ -184,16 +184,49 @@ class Inquiry {
     try {
       console.log('Updating inquiry:', id, updateData);
 
+      // Remove any undefined or null values that shouldn't be sent
+      const cleanedData = {};
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] !== undefined) {
+          cleanedData[key] = updateData[key];
+        }
+      });
+
+      // Ensure we have at least one field to update (besides updated_at)
+      const fieldsToUpdate = Object.keys(cleanedData).filter(k => k !== 'updated_at');
+      if (fieldsToUpdate.length === 0) {
+        throw new Error('No fields to update');
+      }
+
       const { data, error } = await supabase
         .from('inquiries')
-        .update(updateData)
+        .update(cleanedData)
         .eq('id', id)
         .select()
         .single();
 
       if (error) {
         console.error('Supabase error during inquiry update:', error);
-        throw new Error(error.message);
+        console.error('Error code:', error.code);
+        console.error('Error details:', error.details);
+        console.error('Error hint:', error.hint);
+        
+        // Provide more specific error messages
+        if (error.code === '23505') {
+          throw new Error('Duplicate entry: This value already exists');
+        } else if (error.code === '23503') {
+          throw new Error('Foreign key constraint violation: Referenced record does not exist');
+        } else if (error.code === '23514') {
+          throw new Error('Check constraint violation: Invalid value for field');
+        } else if (error.code === 'PGRST116') {
+          throw new Error('Inquiry not found');
+        } else {
+          throw new Error(error.message || 'Failed to update inquiry');
+        }
+      }
+
+      if (!data) {
+        throw new Error('Inquiry not found');
       }
 
       return data;
