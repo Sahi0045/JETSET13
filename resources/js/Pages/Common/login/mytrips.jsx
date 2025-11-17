@@ -157,10 +157,59 @@ export default function TravelDashboard() {
                 if (quotesResult.success) {
                   const quotes = Array.isArray(quotesResult.data) ? quotesResult.data : []
                   
-                  // Filter for paid quotes
-                  const paidQuotes = quotes.filter(q => q.payment_status === 'paid')
+                  console.log(`📄 Inquiry ${inquiry.id?.slice(-8)}: Found ${quotes.length} quote(s)`)
+                  quotes.forEach(q => {
+                    console.log(`  Quote ${q.id?.slice(-8)}: payment_status=${q.payment_status}, status=${q.status}, amount=${q.total_amount}`)
+                  })
                   
-                  console.log(`📄 Inquiry ${inquiry.id?.slice(-8)}: ${paidQuotes.length} paid quote(s)`)
+                  // Check payment status for each quote
+                  const quotesWithPaymentStatus = await Promise.all(
+                    quotes.map(async (quote) => {
+                      try {
+                        // Check if there's a completed payment for this quote
+                        const paymentResponse = await fetch(getApiUrl(`payments?action=get-payment-details&quoteId=${quote.id}`), {
+                          headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                          },
+                          credentials: 'include'
+                        })
+                        
+                        if (paymentResponse.ok) {
+                          const paymentData = await paymentResponse.json()
+                          if (paymentData.success && paymentData.payment) {
+                            const payment = paymentData.payment
+                            const isPaymentCompleted = payment.payment_status === 'completed' || payment.payment_status === 'paid'
+                            console.log(`  Quote ${quote.id?.slice(-8)}: Payment status=${payment.payment_status}, isCompleted=${isPaymentCompleted}`)
+                            return { ...quote, hasCompletedPayment: isPaymentCompleted, payment }
+                          }
+                        }
+                      } catch (error) {
+                        console.error(`Error checking payment for quote ${quote.id}:`, error)
+                      }
+                      return { ...quote, hasCompletedPayment: false }
+                    })
+                  )
+                  
+                  // Filter for paid/booked quotes - check multiple conditions
+                  // Show bookings if:
+                  // 1. Quote payment_status is 'paid'
+                  // 2. Quote status is 'paid'
+                  // 3. Has a completed payment record
+                  // 4. Inquiry status is 'booked' or 'paid' (even without payment - admin can mark as booked)
+                  const paidQuotes = quotesWithPaymentStatus.filter(q => {
+                    const isPaid = q.payment_status === 'paid' || q.status === 'paid'
+                    const isBooked = inquiry.status === 'booked' || inquiry.status === 'paid'
+                    const hasPayment = q.hasCompletedPayment
+                    
+                    // Consider it a booking if any of these conditions are true
+                    const isPaidQuote = isPaid || hasPayment || isBooked
+                    
+                    console.log(`  Quote ${q.id?.slice(-8)}: payment_status=${q.payment_status}, quote_status=${q.status}, inquiry_status=${inquiry.status}, isPaid=${isPaid}, isBooked=${isBooked}, hasPayment=${hasPayment}, final=${isPaidQuote}`)
+                    return isPaidQuote
+                  })
+                  
+                  console.log(`📄 Inquiry ${inquiry.id?.slice(-8)}: ${paidQuotes.length} paid quote(s) after filtering`)
                   
                   // Convert paid quotes to booking format
                   paidQuotes.forEach(quote => {
