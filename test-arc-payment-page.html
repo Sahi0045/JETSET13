@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARC Pay Test Transaction</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .info-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .test-cards {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .test-cards table {
+            width: 100%;
+            margin-top: 10px;
+        }
+        .test-cards th, .test-cards td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .details {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .details strong {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 ARC Pay Test Transaction</h1>
+        
+        <div class="info-box">
+            <h3>✅ Payment Session Created Successfully!</h3>
+            <p>Your payment session has been created with ARC Pay. Click the button below to proceed to the payment page.</p>
+        </div>
+
+        <div class="details">
+            <h3>📋 Payment Details:</h3>
+            <p><strong>Payment ID:</strong> 0edd829a-99fc-4ff8-b14c-ba9fd46e8b29</p>
+            <p><strong>Session ID:</strong> SESSION0002007121781L5459183H79</p>
+            <p><strong>Quote ID:</strong> b905e4f3-ddb9-4965-b54d-580740dd3cb9</p>
+            <p><strong>Amount:</strong> $1,000.00 USD</p>
+            <p><strong>Merchant ID:</strong> TESTARC05511704</p>
+        </div>
+
+        <div class="test-cards">
+            <h3>💳 Test Card Numbers:</h3>
+            <p>Use these test cards on the ARC Pay payment page:</p>
+            <table>
+                <tr>
+                    <th>Card Type</th>
+                    <th>Card Number</th>
+                    <th>CVV</th>
+                    <th>Expiry</th>
+                </tr>
+                <tr>
+                    <td><strong>Visa</strong></td>
+                    <td>4111111111111111</td>
+                    <td>123</td>
+                    <td>12/25</td>
+                </tr>
+                <tr>
+                    <td><strong>Mastercard</strong></td>
+                    <td>5555555555554444</td>
+                    <td>123</td>
+                    <td>12/25</td>
+                </tr>
+                <tr>
+                    <td><strong>American Express</strong></td>
+                    <td>378282246310005</td>
+                    <td>1234</td>
+                    <td>12/25</td>
+                </tr>
+            </table>
+        </div>
+
+        <form id="paymentForm" method="POST" action="https://api.arcpay.travel/api/page/version/100/pay" accept-charset="UTF-8">
+            <input type="hidden" name="session.id" value="SESSION0002007121781L5459183H79">
+            <input type="hidden" name="merchant" value="TESTARC05511704">
+            <button type="submit">🚀 Proceed to ARC Pay Payment Page</button>
+        </form>
+
+        <div style="margin-top: 30px; padding: 15px; background: #f0f0f0; border-radius: 5px;">
+            <h3>📝 Instructions:</h3>
+            <ol>
+                <li>Click the button above to go to ARC Pay's hosted payment page</li>
+                <li>Enter one of the test card numbers from the table above</li>
+                <li>Use any future expiry date (e.g., 12/25)</li>
+                <li>Use the CVV shown for each card type</li>
+                <li>Complete the payment (no real money will be charged)</li>
+                <li>You will be redirected back after payment completion</li>
+            </ol>
+        </div>
+
+        <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 5px;">
+            <h3>🔍 Check Payment Status:</h3>
+            <p>After completing the payment, check the status using:</p>
+            <code style="background: white; padding: 5px; display: block; margin-top: 10px;">
+                curl "https://www.jetsetterss.com/api/payments?action=get-payment-details&paymentId=0edd829a-99fc-4ff8-b14c-ba9fd46e8b29"
+            </code>
+        </div>
+    </div>
+</body>
+</html>
+
+
+
+
+

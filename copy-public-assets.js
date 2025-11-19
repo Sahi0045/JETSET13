@@ -26,23 +26,23 @@ try {
   // Copy files recursively
   function copyRecursive(src, dest) {
     const entries = readdirSync(src, { withFileTypes: true });
-    
-    for (const entry of entries) {
+
+  for (const entry of entries) {
       const srcPath = join(src, entry.name);
       const destPath = join(dest, entry.name);
-      
+
       // Skip index.html - Vite builds this from root index.html
       if (entry.name === 'index.html') {
         console.log('ℹ️  Skipping public/index.html (using built index.html instead)');
-        continue;
-      }
-      
-      if (entry.isDirectory()) {
+      continue;
+    }
+
+    if (entry.isDirectory()) {
         if (!existsSync(destPath)) {
           mkdirSync(destPath, { recursive: true });
         }
         copyRecursive(srcPath, destPath);
-      } else {
+    } else {
         copyFileSync(srcPath, destPath);
       }
     }
