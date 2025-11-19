@@ -118,9 +118,9 @@ export default function PaymentSuccess() {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
           <h3 className="font-semibold text-blue-900 mb-2">What's Next?</h3>
           <ul className="space-y-2 text-blue-800">
-            <li className="flex items-start">
+              <li className="flex items-start">
               <span className="mr-2">✓</span>
-              <span>A confirmation email has been sent to {payment?.customer_email}</span>
+              <span>A confirmation email has been sent to {payment?.customer_email || 'your email address'}</span>
             </li>
             <li className="flex items-start">
               <span className="mr-2">✓</span>

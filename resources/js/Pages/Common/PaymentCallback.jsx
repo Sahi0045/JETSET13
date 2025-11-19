@@ -7,16 +7,25 @@ export default function PaymentCallback() {
   
   useEffect(() => {
     const verifyPayment = async () => {
-      const resultIndicator = searchParams.get('resultIndicator');
-      const sessionId = searchParams.get('sessionId');
-      
-      if (!resultIndicator || !sessionId) {
-        navigate('/payment/failed?error=missing_params');
-        return;
+      try {
+        const resultIndicator = searchParams.get('resultIndicator');
+        const sessionId = searchParams.get('sessionId');
+        
+        console.log('Payment callback received:', { resultIndicator, sessionId });
+        
+        if (!resultIndicator || !sessionId) {
+          console.error('Missing payment parameters:', { resultIndicator, sessionId });
+          navigate('/payment/failed?error=missing_params');
+          return;
+        }
+        
+        // Backend will verify and redirect
+        console.log('Redirecting to backend for payment verification...');
+        window.location.href = `/api/payments?action=payment-callback&resultIndicator=${resultIndicator}&sessionId=${sessionId}`;
+      } catch (error) {
+        console.error('Payment callback error:', error);
+        navigate('/payment/failed?error=processing_error');
       }
-      
-      // Backend will verify and redirect
-      window.location.href = `/api/payments?action=payment-callback&resultIndicator=${resultIndicator}&sessionId=${sessionId}`;
     };
     
     verifyPayment();
