@@ -126,7 +126,7 @@ async function handlePaymentInitiation(req, res) {
 
     console.log('✅ Supabase client initialized');
     const { quote_id, return_url, cancel_url } = req.body;
-    
+
     if (!quote_id) {
       console.error('❌ Missing quote_id in request body');
       return res.status(400).json({
@@ -251,9 +251,9 @@ async function handlePaymentInitiation(req, res) {
     const finalCancelUrl = cancel_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/inquiry/${quote.inquiry_id}?payment=cancelled`;
 
     const requestBody = {
-      apiOperation: 'INITIATE_CHECKOUT',
-      interaction: {
-        operation: 'PURCHASE',
+        apiOperation: 'INITIATE_CHECKOUT',
+        interaction: {
+          operation: 'PURCHASE',
         returnUrl: finalReturnUrl,
         cancelUrl: finalCancelUrl,
         merchant: {
@@ -263,11 +263,11 @@ async function handlePaymentInitiation(req, res) {
           billingAddress: 'OPTIONAL',
           customerEmail: 'OPTIONAL'
         }
-      },
-      order: {
-        id: payment.id,
+        },
+        order: {
+          id: payment.id,
         amount: parseFloat(quote.total_amount).toFixed(2),
-        currency: quote.currency || 'USD',
+          currency: quote.currency || 'USD',
         description: `Quote ${quote.quote_number || quote.id.slice(-8)} - ${quote.title || 'Travel Booking'}`
       }
     };
@@ -433,8 +433,8 @@ async function handlePaymentInitiation(req, res) {
     
     // Ensure we always return a response
     if (!res.headersSent) {
-      return res.status(500).json({
-        success: false,
+    return res.status(500).json({
+      success: false,
         error: errorMessage,
         details: errorDetails,
         errorType: error.name || 'Error',
