@@ -370,12 +370,12 @@ const InquiryDetail = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f0f7fc]">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex-1 bg-white rounded-lg shadow-sm p-8 text-center">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex-1 bg-white rounded-xl shadow-lg border border-gray-200/50 p-8 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading inquiry details...</p>
+            <p className="mt-4 text-gray-600 font-medium">Loading inquiry details...</p>
           </div>
         </div>
         <Footer />
@@ -385,15 +385,15 @@ const InquiryDetail = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#f0f7fc]">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="bg-white rounded-lg shadow-sm p-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-8">
             <div className="text-center">
-              <p className="text-red-600 mb-4">{error}</p>
+              <p className="text-red-600 mb-4 font-semibold">{error}</p>
               <button
                 onClick={() => navigate('/my-trips')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
               >
                 Back to My Trips
               </button>
@@ -407,14 +407,14 @@ const InquiryDetail = () => {
 
   if (!inquiry) {
     return (
-      <div className="min-h-screen bg-[#f0f7fc]">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-            <p className="text-gray-600 mb-4">Inquiry not found</p>
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-8 text-center">
+            <p className="text-gray-600 mb-4 font-semibold">Inquiry not found</p>
             <button
               onClick={() => navigate('/my-trips')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
             >
               Back to My Trips
             </button>
@@ -428,153 +428,296 @@ const InquiryDetail = () => {
   const sentQuotes = quotes.filter(q => q.status === 'sent' || q.status === 'accepted');
 
   return (
-    <div className="min-h-screen bg-[#f0f7fc]">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <Navbar />
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
           <button
             onClick={() => navigate('/my-trips')}
-            className="text-blue-600 hover:text-blue-800 flex items-center gap-2"
+            className="text-blue-600 hover:text-blue-800 flex items-center gap-2 font-semibold transition-colors duration-200 p-2 rounded-lg hover:bg-blue-50 group"
           >
-            ← Back to My Trips
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:-translate-x-1 transition-transform duration-200">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            Back to My Trips
           </button>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <span className="text-3xl">{getInquiryTypeIcon(inquiry.inquiry_type)}</span>
-                {getInquiryTypeName(inquiry.inquiry_type)} Inquiry
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">ID: {inquiry.id?.slice(-8)}</p>
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6 lg:p-8 mb-6 relative overflow-hidden">
+          {/* Gradient accent bar */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+          
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-8 pt-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center text-2xl shadow-sm">
+                  {getInquiryTypeIcon(inquiry.inquiry_type)}
+                </div>
+                <div>
+                  <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
+                    {getInquiryTypeName(inquiry.inquiry_type)} Inquiry
+                  </h1>
+                  <p className="text-sm text-gray-500 mt-1">ID: {inquiry.id?.slice(-8)}</p>
+                </div>
+              </div>
             </div>
-            <span className={`px-4 py-2 text-sm font-medium rounded-full ${getStatusColor(inquiry.status)}`}>
+            <span className={`inline-flex items-center px-4 py-2 text-xs font-bold rounded-full shadow-sm ${getStatusColor(inquiry.status)}`}>
+              <span className="w-2 h-2 bg-current bg-opacity-30 rounded-full mr-2"></span>
               {getStatusText(inquiry.status)}
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <p className="text-sm text-gray-500">Submitted</p>
-              <p className="font-medium">{new Date(inquiry.created_at).toLocaleString()}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors border border-gray-200">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Submitted</p>
+              <p className="font-bold text-gray-900">{new Date(inquiry.created_at).toLocaleDateString()}</p>
+              <p className="text-xs text-gray-500 mt-1">{new Date(inquiry.created_at).toLocaleTimeString()}</p>
             </div>
-            <div>
-              <p className="text-sm text-gray-500">Last Updated</p>
-              <p className="font-medium">{new Date(inquiry.updated_at).toLocaleString()}</p>
+            <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors border border-gray-200">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Last Updated</p>
+              <p className="font-bold text-gray-900">{new Date(inquiry.updated_at).toLocaleDateString()}</p>
+              <p className="text-xs text-gray-500 mt-1">{new Date(inquiry.updated_at).toLocaleTimeString()}</p>
             </div>
             {inquiry.expires_at && (
-              <div>
-                <p className="text-sm text-gray-500">Expires</p>
-                <p className="font-medium">{new Date(inquiry.expires_at).toLocaleString()}</p>
+              <div className="bg-amber-50 rounded-lg p-4 hover:bg-amber-100 transition-colors border border-amber-200">
+                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Expires</p>
+                <p className="font-bold text-amber-800">{new Date(inquiry.expires_at).toLocaleDateString()}</p>
+                <p className="text-xs text-amber-600 mt-1">{new Date(inquiry.expires_at).toLocaleTimeString()}</p>
               </div>
             )}
-            <div>
-              <p className="text-sm text-gray-500">Priority</p>
-              <p className="font-medium capitalize">{inquiry.priority || 'Normal'}</p>
+            <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors border border-gray-200">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Priority</p>
+              <p className="font-bold text-gray-900 capitalize">{inquiry.priority || 'Normal'}</p>
             </div>
           </div>
 
-          <div className="border-t pt-6">
-            <h2 className="text-lg font-semibold mb-4">Inquiry Details</h2>
+          <div className="border-t border-gray-200 pt-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Inquiry Details
+            </h2>
             
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-5 border border-blue-100">
             {inquiry.inquiry_type === 'flight' && (
-              <div className="space-y-2">
-                <p><strong>Route:</strong> {inquiry.flight_origin} → {inquiry.flight_destination}</p>
-                {inquiry.flight_departure_date && <p><strong>Departure:</strong> {new Date(inquiry.flight_departure_date).toLocaleDateString()}</p>}
-                {inquiry.flight_return_date && <p><strong>Return:</strong> {new Date(inquiry.flight_return_date).toLocaleDateString()}</p>}
-                {inquiry.flight_passengers && <p><strong>Passengers:</strong> {inquiry.flight_passengers}</p>}
-                {inquiry.flight_class && <p><strong>Class:</strong> {inquiry.flight_class}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Route</p>
+                  <p className="text-sm font-bold text-gray-900">{inquiry.flight_origin} → {inquiry.flight_destination}</p>
+                </div>
+                {inquiry.flight_departure_date && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Departure</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.flight_departure_date).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {inquiry.flight_return_date && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Return</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.flight_return_date).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {inquiry.flight_passengers && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Passengers</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.flight_passengers}</p>
+                  </div>
+                )}
+                {inquiry.flight_class && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Class</p>
+                    <p className="text-sm font-bold text-gray-900 capitalize">{inquiry.flight_class}</p>
+                  </div>
+                )}
               </div>
             )}
 
             {inquiry.inquiry_type === 'hotel' && (
-              <div className="space-y-2">
-                <p><strong>Destination:</strong> {inquiry.hotel_destination}</p>
-                {inquiry.hotel_checkin_date && <p><strong>Check-in:</strong> {new Date(inquiry.hotel_checkin_date).toLocaleDateString()}</p>}
-                {inquiry.hotel_checkout_date && <p><strong>Check-out:</strong> {new Date(inquiry.hotel_checkout_date).toLocaleDateString()}</p>}
-                {inquiry.hotel_rooms && <p><strong>Rooms:</strong> {inquiry.hotel_rooms}</p>}
-                {inquiry.hotel_guests && <p><strong>Guests:</strong> {inquiry.hotel_guests}</p>}
-                {inquiry.hotel_room_type && <p><strong>Room Type:</strong> {inquiry.hotel_room_type}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Destination</p>
+                  <p className="text-sm font-bold text-gray-900">{inquiry.hotel_destination}</p>
+                </div>
+                {inquiry.hotel_checkin_date && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Check-in</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.hotel_checkin_date).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {inquiry.hotel_checkout_date && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Check-out</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.hotel_checkout_date).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {inquiry.hotel_rooms && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Rooms</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.hotel_rooms}</p>
+                  </div>
+                )}
+                {inquiry.hotel_guests && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Guests</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.hotel_guests}</p>
+                  </div>
+                )}
+                {inquiry.hotel_room_type && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Room Type</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.hotel_room_type}</p>
+                  </div>
+                )}
               </div>
             )}
 
             {inquiry.inquiry_type === 'cruise' && (
-              <div className="space-y-2">
-                <p><strong>Destination:</strong> {inquiry.cruise_destination}</p>
-                {inquiry.cruise_departure_date && <p><strong>Departure:</strong> {new Date(inquiry.cruise_departure_date).toLocaleDateString()}</p>}
-                {inquiry.cruise_duration && <p><strong>Duration:</strong> {inquiry.cruise_duration} days</p>}
-                {inquiry.cruise_passengers && <p><strong>Passengers:</strong> {inquiry.cruise_passengers}</p>}
-                {inquiry.cruise_cabin_type && <p><strong>Cabin Type:</strong> {inquiry.cruise_cabin_type}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Destination</p>
+                  <p className="text-sm font-bold text-gray-900">{inquiry.cruise_destination}</p>
+                </div>
+                {inquiry.cruise_departure_date && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Departure</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.cruise_departure_date).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {inquiry.cruise_duration && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Duration</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.cruise_duration} days</p>
+                  </div>
+                )}
+                {inquiry.cruise_passengers && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Passengers</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.cruise_passengers}</p>
+                  </div>
+                )}
+                {inquiry.cruise_cabin_type && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Cabin Type</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.cruise_cabin_type}</p>
+                  </div>
+                )}
               </div>
             )}
 
             {inquiry.inquiry_type === 'package' && (
-              <div className="space-y-2">
-                <p><strong>Destination:</strong> {inquiry.package_destination}</p>
-                {inquiry.package_start_date && <p><strong>Start Date:</strong> {new Date(inquiry.package_start_date).toLocaleDateString()}</p>}
-                {inquiry.package_end_date && <p><strong>End Date:</strong> {new Date(inquiry.package_end_date).toLocaleDateString()}</p>}
-                {inquiry.package_travelers && <p><strong>Travelers:</strong> {inquiry.package_travelers}</p>}
-                {inquiry.package_budget_range && <p><strong>Budget:</strong> {inquiry.package_budget_range}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Destination</p>
+                  <p className="text-sm font-bold text-gray-900">{inquiry.package_destination}</p>
+                </div>
+                {inquiry.package_start_date && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Start Date</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.package_start_date).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {inquiry.package_end_date && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">End Date</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.package_end_date).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {inquiry.package_travelers && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Travelers</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.package_travelers}</p>
+                  </div>
+                )}
+                {inquiry.package_budget_range && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Budget</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.package_budget_range}</p>
+                  </div>
+                )}
                 {inquiry.package_interests && inquiry.package_interests.length > 0 && (
-                  <p><strong>Interests:</strong> {Array.isArray(inquiry.package_interests) ? inquiry.package_interests.join(', ') : inquiry.package_interests}</p>
+                  <div className="sm:col-span-2">
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Interests</p>
+                    <p className="text-sm font-bold text-gray-900">{Array.isArray(inquiry.package_interests) ? inquiry.package_interests.join(', ') : inquiry.package_interests}</p>
+                  </div>
                 )}
               </div>
             )}
 
             {inquiry.inquiry_type === 'general' && (
-              <div className="space-y-2">
-                {inquiry.inquiry_subject && <p><strong>Subject:</strong> {inquiry.inquiry_subject}</p>}
+              <div className="space-y-4">
+                {inquiry.inquiry_subject && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Subject</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.inquiry_subject}</p>
+                  </div>
+                )}
                 {inquiry.inquiry_message && (
                   <div>
-                    <strong>Message:</strong>
-                    <p className="mt-1 text-gray-700 whitespace-pre-wrap">{inquiry.inquiry_message}</p>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Message</p>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{inquiry.inquiry_message}</p>
                   </div>
                 )}
               </div>
             )}
 
             {inquiry.special_requirements && (
-              <div className="mt-4">
-                <strong>Special Requirements:</strong>
-                <p className="mt-1 text-gray-700">{inquiry.special_requirements}</p>
+              <div className="mt-4 pt-4 border-t border-blue-200">
+                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Special Requirements</p>
+                <p className="text-sm text-gray-700">{inquiry.special_requirements}</p>
               </div>
             )}
 
             {inquiry.budget_range && (
-              <div className="mt-4">
-                <strong>Budget Range:</strong> {inquiry.budget_range}
+              <div className="mt-4 pt-4 border-t border-blue-200">
+                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Budget Range</p>
+                <p className="text-sm font-bold text-gray-900">{inquiry.budget_range}</p>
               </div>
             )}
+            </div>
           </div>
         </div>
 
         {sentQuotes.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-semibold mb-4">Quotes</h2>
-            <div className="space-y-4">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6 lg:p-8 relative overflow-hidden">
+            {/* Gradient accent bar */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 to-emerald-600"></div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 pt-4 flex items-center gap-2">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Quotes
+            </h2>
+            <div className="space-y-6">
               {sentQuotes.map((quote) => (
-                <div key={quote.id} className="border border-green-200 rounded-lg p-4 bg-green-50">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h3 className="font-semibold text-green-800">Quote #{quote.quote_number}</h3>
-                      <p className="text-sm text-gray-600">Status: {quote.status}</p>
+                <div key={quote.id} className="border-2 border-green-200 rounded-xl p-6 bg-gradient-to-r from-green-50 to-emerald-50 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white text-lg font-bold shadow-sm">
+                          💰
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-green-800">Quote #{quote.quote_number}</h3>
+                          <p className="text-sm text-gray-600 capitalize">Status: {quote.status}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-green-700">
+                    <div className="text-left sm:text-right">
+                      <p className="text-3xl font-bold text-green-700">
                         ${quote.total_amount} {quote.currency || 'USD'}
                       </p>
                     </div>
                   </div>
                   
                   {quote.breakdown && Array.isArray(quote.breakdown) && quote.breakdown.length > 0 && (
-                    <div className="mt-3 mb-3">
-                      <p className="text-sm font-semibold text-gray-700 mb-2">Breakdown:</p>
-                      <ul className="space-y-1">
+                    <div className="mt-4 mb-4 p-4 bg-white rounded-lg border border-green-200">
+                      <p className="text-sm font-bold text-gray-700 mb-3">Breakdown:</p>
+                      <ul className="space-y-2">
                         {quote.breakdown.map((item, idx) => (
-                          <li key={idx} className="text-sm text-gray-600 flex justify-between">
-                            <span>{item.description || item.item || 'Item'}</span>
-                            <span>${item.amount || item.price || 0}</span>
+                          <li key={idx} className="text-sm text-gray-700 flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
+                            <span className="font-medium">{item.description || item.item || 'Item'}</span>
+                            <span className="font-bold text-green-700">${item.amount || item.price || 0}</span>
                           </li>
                         ))}
                       </ul>
@@ -582,23 +725,26 @@ const InquiryDetail = () => {
                   )}
 
                   {quote.admin_notes && (
-                    <div className="mt-3 p-3 bg-white rounded border border-green-200">
-                      <p className="text-sm font-semibold text-gray-700 mb-1">Notes:</p>
-                      <p className="text-sm text-gray-600">{quote.admin_notes}</p>
+                    <div className="mt-4 p-4 bg-white rounded-lg border-l-4 border-green-500">
+                      <p className="text-sm font-bold text-gray-700 mb-2">Notes from our team:</p>
+                      <p className="text-sm text-gray-600 leading-relaxed">{quote.admin_notes}</p>
                     </div>
                   )}
 
                   {quote.expires_at && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      Expires: {new Date(quote.expires_at).toLocaleString()}
-                    </p>
+                    <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Expires</p>
+                      <p className="text-sm font-bold text-amber-800">
+                        {new Date(quote.expires_at).toLocaleDateString()} at {new Date(quote.expires_at).toLocaleTimeString()}
+                      </p>
+                    </div>
                   )}
 
-                  <div className="mt-4 flex gap-3 flex-wrap">
+                  <div className="mt-6 flex flex-col sm:flex-row gap-3 flex-wrap pt-4 border-t border-green-200">
                     <Link
                       to="/quote-detail"
                       state={{ quoteData: quote, inquiryData: inquiry }}
-                      className="inline-block px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
+                      className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-semibold rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
                     >
                       View Full Quote Details
                     </Link>
@@ -610,18 +756,18 @@ const InquiryDetail = () => {
                           setSelectedQuoteForBooking(quote);
                           setShowBookingForm(true);
                         }}
-                        className="px-4 py-2 bg-yellow-600 text-white text-sm rounded-md hover:bg-yellow-700 font-semibold"
+                        className="px-6 py-3 bg-gradient-to-r from-yellow-600 to-yellow-700 text-white text-sm font-semibold rounded-lg hover:from-yellow-700 hover:to-yellow-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
                       >
                         📝 Fill Booking Information
                       </button>
                     )}
 
-                    {/* Pay Now Button - Perfect Implementation */}
+                    {/* Pay Now Button */}
                     {quote.payment_status === 'unpaid' && (quote.status === 'sent' || quote.status === 'accepted') && (
                       <button
                         onClick={() => handlePayNow(quote)}
                         disabled={paymentLoading || loading}
-                        className="px-6 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
+                        className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:transform-none"
                         title={
                           paymentLoading 
                             ? 'Processing payment...' 
@@ -663,7 +809,7 @@ const InquiryDetail = () => {
 
                     {/* Payment Status Badge */}
                     {quote.payment_status === 'paid' && (
-                      <span className="inline-flex items-center px-4 py-2 bg-green-100 text-green-800 text-sm rounded-md font-semibold">
+                      <span className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm rounded-lg font-semibold shadow-md">
                         ✓ Paid
                       </span>
                     )}
@@ -675,8 +821,14 @@ const InquiryDetail = () => {
         )}
 
         {quotes.length === 0 && inquiry.status !== 'quoted' && (
-          <div className="bg-white rounded-lg shadow-sm p-6 text-center">
-            <p className="text-gray-600">No quotes have been sent yet. Our team is working on your inquiry.</p>
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-8 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <p className="text-gray-700 font-semibold">No quotes have been sent yet.</p>
+            <p className="text-gray-500 text-sm mt-2">Our team is working on your inquiry.</p>
           </div>
         )}
 

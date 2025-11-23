@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete ARC Pay 3DS Authentication</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .session-info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #007bff;
+        }
+        .card-info {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #ffc107;
+        }
+        .instructions {
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #28a745;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .form-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .warning {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #dc3545;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Complete ARC Pay 3DS Authentication</h1>
+        
+        <div class="warning">
+            <strong>⚠️ IMPORTANT:</strong> This is for certification testing. Complete the 3DS challenge to finish the transaction.
+        </div>
+
+        <div class="session-info">
+            <h3>📋 Session Information</h3>
+            <div class="form-group">
+                <label for="sessionId">Session ID (from test script):</label>
+                <input type="text" id="sessionId" placeholder="SESSION0002027219280N0626583I08" value="SESSION0002027219280N0626583I08">
+            </div>
+        </div>
+
+        <div class="card-info">
+            <h3>💳 Test Card Details</h3>
+            <p><strong>Card Number:</strong> <code>5123456789012346</code> (Mastercard with 3DS)</p>
+            <p><strong>Expiry Date:</strong> <code>12/2025</code></p>
+            <p><strong>CVV:</strong> <code>123</code></p>
+            <p><strong>Cardholder Name:</strong> Any name (e.g., "Test User")</p>
+        </div>
+
+        <div class="instructions">
+            <h3>📝 Step-by-Step Instructions</h3>
+            <ol>
+                <li>Enter or verify the Session ID above</li>
+                <li>Click "Proceed to ARC Pay Payment Page" button</li>
+                <li>You'll be redirected to ARC Pay's secure payment page</li>
+                <li>Enter the test card details shown above</li>
+                <li><strong>When 3DS challenge appears:</strong>
+                    <ul>
+                        <li>Enter OTP: <code>123456</code> (or any 6 digits in test environment)</li>
+                        <li>Click "Submit" or "Authenticate"</li>
+                        <li><strong>DO NOT close the popup/iframe</strong></li>
+                    </ul>
+                </li>
+                <li>Wait for redirect back to your return URL</li>
+                <li>Check ARC Pay dashboard - status should be "Authentication Successful"</li>
+            </ol>
+        </div>
+
+        <form id="paymentForm" method="POST" action="https://api.arcpay.travel/api/page/version/100/pay?charset=UTF-8" target="_blank">
+            <input type="hidden" name="session.id" id="sessionIdInput">
+            <button type="submit">🚀 Proceed to ARC Pay Payment Page</button>
+        </form>
+
+        <div class="warning" style="margin-top: 30px;">
+            <strong>💡 Tips:</strong>
+            <ul>
+                <li>Make sure popup blockers are disabled</li>
+                <li>Allow iframes from <code>na.gateway.mastercard.com</code> (for 3DS)</li>
+                <li>If 3DS doesn't appear, try a different browser or incognito mode</li>
+                <li>After completion, verify in ARC Pay dashboard that status is "Completed"</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Auto-fill session ID when form is submitted
+        document.getElementById('paymentForm').addEventListener('submit', function(e) {
+            const sessionId = document.getElementById('sessionId').value.trim();
+            if (!sessionId) {
+                e.preventDefault();
+                alert('Please enter a Session ID');
+                return false;
+            }
+            document.getElementById('sessionIdInput').value = sessionId;
+            console.log('Submitting to ARC Pay with session:', sessionId);
+        });
+
+        // Allow user to update session ID from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionIdParam = urlParams.get('sessionId');
+        if (sessionIdParam) {
+            document.getElementById('sessionId').value = sessionIdParam;
+        }
+    </script>
+</body>
+</html>
+
+
