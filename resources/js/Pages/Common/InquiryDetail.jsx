@@ -449,45 +449,68 @@ const InquiryDetail = () => {
           
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-8 pt-4">
             <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center text-2xl shadow-sm">
+              <div className="flex items-center gap-4 mb-2">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white shadow-lg transform transition-transform hover:scale-105 text-2xl">
                   {getInquiryTypeIcon(inquiry.inquiry_type)}
                 </div>
                 <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
+                  <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 tracking-tight">
                     {getInquiryTypeName(inquiry.inquiry_type)} Inquiry
                   </h1>
-                  <p className="text-sm text-gray-500 mt-1">ID: {inquiry.id?.slice(-8)}</p>
+                  <p className="text-sm text-gray-500 mt-1 font-medium flex items-center gap-2">
+                    <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-mono">#{inquiry.id?.slice(-8)}</span>
+                  </p>
                 </div>
               </div>
             </div>
-            <span className={`inline-flex items-center px-4 py-2 text-xs font-bold rounded-full shadow-sm ${getStatusColor(inquiry.status)}`}>
-              <span className="w-2 h-2 bg-current bg-opacity-30 rounded-full mr-2"></span>
+            <span className={`inline-flex items-center px-4 py-1.5 text-sm font-bold rounded-full shadow-sm border ${getStatusColor(inquiry.status)} border-opacity-20`}>
+              <span className="w-2 h-2 bg-current bg-opacity-50 rounded-full mr-2"></span>
               {getStatusText(inquiry.status)}
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors border border-gray-200">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Submitted</p>
-              <p className="font-bold text-gray-900">{new Date(inquiry.created_at).toLocaleDateString()}</p>
-              <p className="text-xs text-gray-500 mt-1">{new Date(inquiry.created_at).toLocaleTimeString()}</p>
+            <div className="bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-md transition-all duration-200 border border-gray-100 group">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-blue-100 rounded-lg text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                </div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Submitted</p>
+              </div>
+              <p className="font-bold text-gray-900 text-lg">{new Date(inquiry.created_at).toLocaleDateString()}</p>
+              <p className="text-xs text-gray-400 font-medium">{new Date(inquiry.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
             </div>
-            <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors border border-gray-200">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Last Updated</p>
-              <p className="font-bold text-gray-900">{new Date(inquiry.updated_at).toLocaleDateString()}</p>
-              <p className="text-xs text-gray-500 mt-1">{new Date(inquiry.updated_at).toLocaleTimeString()}</p>
+            <div className="bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-md transition-all duration-200 border border-gray-100 group">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-purple-100 rounded-lg text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                </div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Updated</p>
+              </div>
+              <p className="font-bold text-gray-900 text-lg">{new Date(inquiry.updated_at).toLocaleDateString()}</p>
+              <p className="text-xs text-gray-400 font-medium">{new Date(inquiry.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
             </div>
             {inquiry.expires_at && (
-              <div className="bg-amber-50 rounded-lg p-4 hover:bg-amber-100 transition-colors border border-amber-200">
-                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Expires</p>
-                <p className="font-bold text-amber-800">{new Date(inquiry.expires_at).toLocaleDateString()}</p>
-                <p className="text-xs text-amber-600 mt-1">{new Date(inquiry.expires_at).toLocaleTimeString()}</p>
+              <div className="bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-md transition-all duration-200 border border-gray-100 group">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-amber-100 rounded-lg text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Expires</p>
+                </div>
+                <p className="font-bold text-gray-900 text-lg">{new Date(inquiry.expires_at).toLocaleDateString()}</p>
+                <p className="text-xs text-gray-400 font-medium">{new Date(inquiry.expires_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
               </div>
             )}
-            <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors border border-gray-200">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Priority</p>
-              <p className="font-bold text-gray-900 capitalize">{inquiry.priority || 'Normal'}</p>
+            <div className="bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-md transition-all duration-200 border border-gray-100 group">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                </div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Priority</p>
+              </div>
+              <p className="font-bold text-gray-900 text-lg capitalize">{inquiry.priority || 'Normal'}</p>
+              <p className="text-xs text-gray-400 font-medium">Handling level</p>
             </div>
           </div>
 
@@ -693,19 +716,21 @@ const InquiryDetail = () => {
                 <div key={quote.id} className="border-2 border-green-200 rounded-xl p-6 bg-gradient-to-r from-green-50 to-emerald-50 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white text-lg font-bold shadow-sm">
-                          💰
+                      <div className="flex items-center gap-4 mb-2">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white shadow-md transform transition-transform group-hover:scale-110">
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
                         </div>
                         <div>
-                          <h3 className="text-lg font-bold text-green-800">Quote #{quote.quote_number}</h3>
-                          <p className="text-sm text-gray-600 capitalize">Status: {quote.status}</p>
+                          <h3 className="text-lg font-bold text-green-900">Quote #{quote.quote_number}</h3>
+                          <p className="text-sm text-green-700 font-medium bg-green-100 px-2 py-0.5 rounded-md inline-block mt-1 capitalize">Status: {quote.status}</p>
                         </div>
                       </div>
                     </div>
                     <div className="text-left sm:text-right">
-                      <p className="text-3xl font-bold text-green-700">
-                        ${quote.total_amount} {quote.currency || 'USD'}
+                      <p className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-emerald-700">
+                        ${parseFloat(quote.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-lg text-gray-500 font-normal">{quote.currency || 'USD'}</span>
                       </p>
                     </div>
                   </div>

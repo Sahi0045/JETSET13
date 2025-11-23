@@ -92,30 +92,43 @@ const QuoteDetail = () => {
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600"></div>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-8 pt-4">
             <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold shadow-sm">
-                  💰
+              <div className="flex items-center gap-4 mb-2">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white shadow-lg transform transition-transform hover:scale-105">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
                 </div>
                 <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Quote #{quoteData.quote_number}</h1>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {inquiryData && `For ${inquiryData.inquiry_type} inquiry`}
+                  <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 tracking-tight">Quote #{quoteData.quote_number}</h1>
+                  <p className="text-sm text-gray-500 mt-1 font-medium flex items-center gap-2">
+                    {inquiryData && (
+                      <>
+                        <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs uppercase tracking-wide">{inquiryData.inquiry_type}</span>
+                        <span>Inquiry Ref: #{inquiryData.id?.slice(-8)}</span>
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-start sm:items-end gap-2">
-              <p className="text-3xl lg:text-4xl font-bold text-green-600">
-                ${quoteData.total_amount} {quoteData.currency || 'USD'}
-              </p>
-              <span className={`inline-flex items-center px-4 py-2 text-xs font-bold rounded-full shadow-sm ${
+            <div className="flex flex-col items-start sm:items-end gap-3">
+              <div className="text-right">
+                <p className="text-sm text-gray-500 font-medium mb-1 uppercase tracking-wider">Total Amount</p>
+                <p className="text-3xl lg:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-purple-700">
+                  ${parseFloat(quoteData.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-lg text-gray-400 font-normal">{quoteData.currency || 'USD'}</span>
+                </p>
+              </div>
+              <span className={`inline-flex items-center px-4 py-1.5 text-sm font-bold rounded-full shadow-sm border ${
                 quoteData.status === 'sent' || quoteData.status === 'accepted' 
-                  ? 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+                  ? 'bg-green-50 text-green-700 border-green-200'
                   : quoteData.status === 'paid'
-                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
-                  : 'bg-gradient-to-r from-gray-400 to-gray-500 text-white'
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : 'bg-gray-100 text-gray-700 border-gray-200'
               }`}>
-                <span className="w-2 h-2 bg-white bg-opacity-50 rounded-full mr-2"></span>
+                <span className={`w-2 h-2 rounded-full mr-2 ${
+                  quoteData.status === 'sent' || quoteData.status === 'accepted' ? 'bg-green-500' :
+                  quoteData.status === 'paid' ? 'bg-blue-500' : 'bg-gray-500'
+                }`}></span>
                 {quoteData.status?.charAt(0).toUpperCase() + quoteData.status?.slice(1) || 'Pending'}
               </span>
             </div>
@@ -174,30 +187,51 @@ const QuoteDetail = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {quoteData.created_at && (
-              <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors border border-gray-200">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Quote Created</p>
-                <p className="font-bold text-gray-900">{new Date(quoteData.created_at).toLocaleDateString()}</p>
-                <p className="text-xs text-gray-500 mt-1">{new Date(quoteData.created_at).toLocaleTimeString()}</p>
+              <div className="bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-md transition-all duration-200 border border-gray-100 group">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-blue-100 rounded-lg text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                  </div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Created</p>
+                </div>
+                <p className="font-bold text-gray-900 text-lg">{new Date(quoteData.created_at).toLocaleDateString()}</p>
+                <p className="text-xs text-gray-400 font-medium">{new Date(quoteData.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
               </div>
             )}
             {quoteData.sent_at && (
-              <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors border border-gray-200">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Quote Sent</p>
-                <p className="font-bold text-gray-900">{new Date(quoteData.sent_at).toLocaleDateString()}</p>
-                <p className="text-xs text-gray-500 mt-1">{new Date(quoteData.sent_at).toLocaleTimeString()}</p>
+              <div className="bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-md transition-all duration-200 border border-gray-100 group">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-green-100 rounded-lg text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                  </div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sent</p>
+                </div>
+                <p className="font-bold text-gray-900 text-lg">{new Date(quoteData.sent_at).toLocaleDateString()}</p>
+                <p className="text-xs text-gray-400 font-medium">{new Date(quoteData.sent_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
               </div>
             )}
             {quoteData.expires_at && (
-              <div className="bg-amber-50 rounded-lg p-4 hover:bg-amber-100 transition-colors border border-amber-200">
-                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Expires</p>
-                <p className="font-bold text-amber-800">{new Date(quoteData.expires_at).toLocaleDateString()}</p>
-                <p className="text-xs text-amber-600 mt-1">{new Date(quoteData.expires_at).toLocaleTimeString()}</p>
+              <div className="bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-md transition-all duration-200 border border-gray-100 group">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-amber-100 rounded-lg text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Expires</p>
+                </div>
+                <p className="font-bold text-gray-900 text-lg">{new Date(quoteData.expires_at).toLocaleDateString()}</p>
+                <p className="text-xs text-gray-400 font-medium">{new Date(quoteData.expires_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
               </div>
             )}
             {quoteData.validity_days && (
-              <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors border border-gray-200">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Valid for</p>
-                <p className="font-bold text-gray-900">{quoteData.validity_days} days</p>
+              <div className="bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-md transition-all duration-200 border border-gray-100 group">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-purple-100 rounded-lg text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Validity</p>
+                </div>
+                <p className="font-bold text-gray-900 text-lg">{quoteData.validity_days} Days</p>
+                <p className="text-xs text-gray-400 font-medium">Standard period</p>
               </div>
             )}
           </div>
