@@ -679,15 +679,38 @@ async function handlePaymentCallback(req, res) {
       // 3. Order status is AUTHENTICATED (authentication done, but payment not processed)
       // 4. No PAY transaction exists yet
       // 5. Order not yet captured
-      const shouldCallPay = (
-        (authenticationStatus === 'AUTHENTICATION_SUCCESSFUL' || 
-         authenticationStatus === 'AUTHENTICATION_ATTEMPTED' ||
-         orderStatus === 'AUTHENTICATED') &&
-        (transactionStatus === 'Y' || transactionStatus === 'A' || !transactionStatus) &&
-        (authenticationToken || orderStatus === 'AUTHENTICATED') &&
+      
+      // CRITICAL: If order status is AUTHENTICATED, we MUST call PAY
+      // This is the key indicator that authentication completed but payment hasn't been processed
+      const isAuthenticatedButNotPaid = (
+        orderStatus === 'AUTHENTICATED' &&
         !hasPayTransaction &&
-        !orderCaptured
+        !orderCaptured &&
+        (transaction.order?.totalCapturedAmount === 0 || !transaction.order?.totalCapturedAmount)
       );
+      
+      const shouldCallPay = (
+        isAuthenticatedButNotPaid || (
+          (authenticationStatus === 'AUTHENTICATION_SUCCESSFUL' || 
+           authenticationStatus === 'AUTHENTICATION_ATTEMPTED' ||
+           orderStatus === 'AUTHENTICATED') &&
+          (transactionStatus === 'Y' || transactionStatus === 'A' || !transactionStatus) &&
+          (authenticationToken || orderStatus === 'AUTHENTICATED') &&
+          !hasPayTransaction &&
+          !orderCaptured
+        )
+      );
+      
+      console.log('🔍 PAY Decision Check:', {
+        orderStatus,
+        authenticationStatus,
+        transactionStatus,
+        hasPayTransaction,
+        orderCaptured,
+        isAuthenticatedButNotPaid,
+        shouldCallPay,
+        totalCapturedAmount: transaction.order?.totalCapturedAmount || transaction.totalCapturedAmount
+      });
       
       if (shouldCallPay) {
         
@@ -791,19 +814,42 @@ async function handlePaymentCallback(req, res) {
         
         if (authTransactionId) {
           console.log(`   ✅ Using Authentication Transaction ID: ${authTransactionId}`);
-          console.log(`   ✅ Authentication Transaction ID: ${authTransactionId}`);
           
-          try {
-            // Generate a unique transaction ID for the PAY operation
-            // Format: pay-{timestamp}-{paymentId}
-            const payTransactionId = `pay-${Date.now()}-${payment.id.slice(-8)}`;
-            console.log(`   Using PAY transaction ID: ${payTransactionId}`);
-            
-            // Call PAY with the authentication transaction ID
-            const payUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${payTransactionId}`;
-            console.log(`   PAY URL: ${payUrl}`);
-            
-            const payRequestBody = {
+          // Check if we already attempted PAY for this payment (prevent duplicate calls)
+          const paymentMetadata = payment.metadata || {};
+          const lastPayAttempt = paymentMetadata.lastPayAttempt;
+          const now = Date.now();
+          
+          // Only proceed if we haven't attempted PAY in the last 5 seconds (prevents duplicate calls)
+          if (lastPayAttempt && (now - lastPayAttempt) < 5000) {
+            console.log('⚠️ PAY already attempted recently, skipping to prevent duplicate');
+            // Continue with existing transaction data
+          } else {
+            try {
+              // Update payment record to track PAY attempt
+              await supabase
+                .from('payments')
+                .update({
+                  metadata: {
+                    ...paymentMetadata,
+                    lastPayAttempt: now,
+                    payAttemptInProgress: true,
+                    authTransactionId: authTransactionId
+                  }
+                })
+                .eq('id', payment.id);
+              
+              // Generate a unique transaction ID for the PAY operation
+              // Format: pay-{timestamp}-{paymentId}
+              const payTransactionId = `pay-${Date.now()}-${payment.id.slice(-8)}`;
+              console.log(`   🚀 Calling PAY API...`);
+              console.log(`   Using PAY transaction ID: ${payTransactionId}`);
+              
+              // Call PAY with the authentication transaction ID
+              const payUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${payTransactionId}`;
+              console.log(`   PAY URL: ${payUrl}`);
+              
+              const payRequestBody = {
               apiOperation: 'PAY',
               authentication: {
                 transactionId: authTransactionId
@@ -820,78 +866,123 @@ async function handlePaymentCallback(req, res) {
               }
             };
             
-            console.log('   PAY Request Body:', JSON.stringify(payRequestBody, null, 2));
-            
-            const payResponse = await fetch(payUrl, {
-              method: 'PUT',
-              headers: {
-                'Authorization': authHeader,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              },
-              body: JSON.stringify(payRequestBody)
-            });
-            
-            const payResponseText = await payResponse.text();
-            console.log(`   PAY Response Status: ${payResponse.status}`);
-            console.log(`   PAY Response: ${payResponseText.substring(0, 500)}`);
-            
-            if (payResponse.ok) {
-              let payData;
-              try {
-                payData = JSON.parse(payResponseText);
-              } catch (parseError) {
-                console.error('❌ Failed to parse PAY response:', parseError);
-                console.error('   Response text:', payResponseText);
-                // Continue with original transaction data
-              }
+              console.log('   PAY Request Body:', JSON.stringify(payRequestBody, null, 2));
               
-              if (payData) {
-                console.log('✅ PAY request successful:', payData.result);
-                console.log('   Gateway Code:', payData.response?.gatewayCode);
-                console.log('   Order Status:', payData.order?.status);
-                
-                // Update transaction data with PAY response
-                transaction = payData;
-                transactionResult = payData.result || payData.transaction?.[0]?.result;
-                gatewayCode = payData.response?.gatewayCode || payData.transaction?.[0]?.response?.gatewayCode;
-                
-                // Re-extract authentication status from PAY response
-                const payAuth = payData.authentication || payData.transaction?.[0]?.authentication || {};
-                const payThreeDS2 = payAuth.threeDS2 || payAuth['3ds2'] || {};
-                transactionStatus = payThreeDS2.transactionStatus || transactionStatus;
-                authenticationStatus = payData.authenticationStatus || payData.order?.authenticationStatus || payAuth.status || authenticationStatus;
-                eci = payThreeDS2.eci || eci;
-                
-                console.log('📊 PAY response analysis:', {
-                  result: transactionResult,
-                  gatewayCode,
-                  transactionStatus,
-                  authenticationStatus,
-                  eci,
-                  orderStatus: payData.order?.status,
-                  orderId: payData.order?.id
-                });
-              }
-            } else {
-              console.error('❌ PAY request failed:', payResponse.status);
-              console.error('   Response:', payResponseText);
+              const payResponse = await fetch(payUrl, {
+                method: 'PUT',
+                headers: {
+                  'Authorization': authHeader,
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json'
+                },
+                body: JSON.stringify(payRequestBody)
+              });
               
-              // Try to parse error response
-              try {
-                const errorData = JSON.parse(payResponseText);
-                console.error('   Error details:', JSON.stringify(errorData, null, 2));
-              } catch (e) {
-                // Not JSON, already logged as text
-              }
+              const payResponseText = await payResponse.text();
+              console.log(`   PAY Response Status: ${payResponse.status}`);
+              console.log(`   PAY Response: ${payResponseText.substring(0, 500)}`);
               
-              // Continue with original transaction data - don't fail the callback
-              // The transaction might still be processing
+              // Clean up payAttemptInProgress flag
+              await supabase
+                .from('payments')
+                .update({
+                  metadata: {
+                    ...paymentMetadata,
+                    lastPayAttempt: now,
+                    payAttemptInProgress: false,
+                    payResponseStatus: payResponse.status,
+                    payResponseReceived: true
+                  }
+                })
+                .eq('id', payment.id);
+              
+              if (payResponse.ok) {
+                let payData;
+                try {
+                  payData = JSON.parse(payResponseText);
+                } catch (parseError) {
+                  console.error('❌ Failed to parse PAY response:', parseError);
+                  console.error('   Response text:', payResponseText);
+                  // Continue with original transaction data
+                }
+                
+                if (payData) {
+                  console.log('✅ PAY request successful:', payData.result);
+                  console.log('   Gateway Code:', payData.response?.gatewayCode);
+                  console.log('   Order Status:', payData.order?.status);
+                  console.log('   Total Captured:', payData.order?.totalCapturedAmount);
+                  
+                  // Update transaction data with PAY response
+                  transaction = payData;
+                  transactionResult = payData.result || payData.transaction?.[0]?.result;
+                  gatewayCode = payData.response?.gatewayCode || payData.transaction?.[0]?.response?.gatewayCode;
+                  
+                  // Re-extract authentication status from PAY response
+                  const payAuth = payData.authentication || payData.transaction?.[0]?.authentication || {};
+                  const payThreeDS2 = payAuth.threeDS2 || payAuth['3ds2'] || {};
+                  transactionStatus = payThreeDS2.transactionStatus || transactionStatus;
+                  authenticationStatus = payData.authenticationStatus || payData.order?.authenticationStatus || payAuth.status || authenticationStatus;
+                  eci = payThreeDS2.eci || eci;
+                  
+                  // Update order status from PAY response
+                  orderStatus = payData.order?.status || payData.status || orderStatus;
+                  
+                  console.log('📊 PAY response analysis:', {
+                    result: transactionResult,
+                    gatewayCode,
+                    transactionStatus,
+                    authenticationStatus,
+                    eci,
+                    orderStatus: payData.order?.status,
+                    orderId: payData.order?.id,
+                    totalCapturedAmount: payData.order?.totalCapturedAmount
+                  });
+                }
+              } else {
+                console.error('❌ PAY request failed:', payResponse.status);
+                console.error('   Response:', payResponseText);
+                
+                // Try to parse error response
+                try {
+                  const errorData = JSON.parse(payResponseText);
+                  console.error('   Error details:', JSON.stringify(errorData, null, 2));
+                  
+                  // Update payment with error details
+                  await supabase
+                    .from('payments')
+                    .update({
+                      metadata: {
+                        ...paymentMetadata,
+                        payError: errorData,
+                        payAttemptInProgress: false
+                      }
+                    })
+                    .eq('id', payment.id);
+                } catch (e) {
+                  // Not JSON, already logged as text
+                }
+                
+                // Continue with original transaction data - don't fail the callback
+                // The transaction might still be processing
+              }
+            } catch (payError) {
+              console.error('❌ Error calling PAY:', payError.message);
+              console.error('   Stack:', payError.stack);
+              
+              // Clean up payAttemptInProgress flag on error
+              await supabase
+                .from('payments')
+                .update({
+                  metadata: {
+                    ...paymentMetadata,
+                    payAttemptInProgress: false,
+                    payError: payError.message
+                  }
+                })
+                .eq('id', payment.id);
+              
+              // Continue with original transaction data
             }
-          } catch (payError) {
-            console.error('❌ Error calling PAY:', payError.message);
-            console.error('   Stack:', payError.stack);
-            // Continue with original transaction data
           }
         } else {
           console.warn('⚠️ Authentication transaction ID not found - cannot call PAY');
