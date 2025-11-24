@@ -8,6 +8,14 @@ export default function PaymentFailed() {
   const reason = searchParams.get('reason');
 
   const getErrorMessage = () => {
+    // Check for 3DS-specific reasons first
+    if (reason === '3ds_pending') {
+      return '3D Secure Authentication Required';
+    }
+    if (reason === '3ds_authentication_failed') {
+      return '3D Secure Authentication Failed';
+    }
+    
     switch (error) {
       case 'missing_params':
         return 'Invalid payment callback. Missing required parameters.';
@@ -28,6 +36,14 @@ export default function PaymentFailed() {
   };
 
   const getErrorDetails = () => {
+    // Check for 3DS-specific reasons first
+    if (reason === '3ds_pending') {
+      return 'Please complete the 3D Secure authentication challenge. Go back to the payment page and enter the OTP code sent by your bank.';
+    }
+    if (reason === '3ds_authentication_failed') {
+      return 'The 3D Secure authentication was not completed successfully. This could be due to an incorrect OTP code or your bank declining the authentication. Please try again with a different payment method or contact your bank.';
+    }
+    
     switch (error) {
       case 'missing_params':
       case 'invalid_session':

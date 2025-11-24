@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARC Pay 3DS Payment Test Page</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: #5a67d8;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .status-box {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
+
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left: 4px solid #17a2b8;
+        }
+
+        .log-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+        }
+
+        .log-success {
+            color: #4ec9b0;
+        }
+
+        .log-error {
+            color: #f48771;
+        }
+
+        .log-info {
+            color: #569cd6;
+        }
+
+        .log-warning {
+            color: #dcdcaa;
+        }
+
+        .test-cards {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .test-cards h3 {
+            margin-bottom: 10px;
+            color: #004085;
+        }
+
+        .test-card {
+            background: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid #b3d7ff;
+        }
+
+        .test-card strong {
+            color: #004085;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 ARC Pay 3DS Payment Test Page</h1>
+        <p class="subtitle">Test and practice 3D Secure authentication with ARC Pay Gateway</p>
+
+        <!-- Step 1: Create Payment Session -->
+        <div class="section" id="step1">
+            <h2>Step 1: Create Payment Session</h2>
+            <div class="form-group">
+                <label for="quoteId">Quote ID (or use test ID):</label>
+                <input type="text" id="quoteId" placeholder="Enter quote ID or leave empty for test" value="">
+            </div>
+            <div class="form-group">
+                <label for="amount">Amount (USD):</label>
+                <input type="number" id="amount" placeholder="100.00" value="11.00" step="0.01" min="0.01">
+            </div>
+            <div class="form-group">
+                <label for="customerEmail">Customer Email:</label>
+                <input type="email" id="customerEmail" placeholder="test@example.com" value="test@jetsetterss.com">
+            </div>
+            <div class="form-group">
+                <label for="customerName">Customer Name:</label>
+                <input type="text" id="customerName" placeholder="John Doe" value="Test User">
+            </div>
+            <button onclick="createPaymentSession()" id="btnCreateSession">
+                🚀 Create Payment Session
+            </button>
+            <div id="sessionStatus"></div>
+        </div>
+
+        <!-- Step 2: Payment Details -->
+        <div class="section hidden" id="step2">
+            <h2>Step 2: Payment Information</h2>
+            <div id="paymentInfo"></div>
+            <button onclick="proceedToPayment()" id="btnProceed" class="btn-success">
+                💳 Proceed to ARC Pay Payment Page
+            </button>
+        </div>
+
+        <!-- Step 3: Test Cards -->
+        <div class="section">
+            <h2>📋 Test Cards for 3DS</h2>
+            <div class="test-cards">
+                <h3>Mastercard (with 3DS):</h3>
+                <div class="test-card">
+                    <strong>Card Number:</strong> 5123456789012346<br>
+                    <strong>Expiry:</strong> 12/2025<br>
+                    <strong>CVV:</strong> 123<br>
+                    <strong>3DS OTP:</strong> Any 6 digits (e.g., 123456)
+                </div>
+                <div class="test-card">
+                    <strong>Card Number:</strong> 5111111111111118<br>
+                    <strong>Expiry:</strong> 12/2025<br>
+                    <strong>CVV:</strong> 123<br>
+                    <strong>3DS OTP:</strong> Any 6 digits
+                </div>
+                <h3 style="margin-top: 15px;">Visa (with 3DS):</h3>
+                <div class="test-card">
+                    <strong>Card Number:</strong> 4111111111111111<br>
+                    <strong>Expiry:</strong> 12/2025<br>
+                    <strong>CVV:</strong> 123<br>
+                    <strong>3DS OTP:</strong> Any 6 digits
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Payment Status -->
+        <div class="section hidden" id="step3">
+            <h2>Step 3: Payment Status</h2>
+            <div id="paymentStatus"></div>
+            <button onclick="checkPaymentStatus()" id="btnCheckStatus" class="btn-secondary">
+                🔍 Check Payment Status
+            </button>
+            <button onclick="resetTest()" class="btn-danger" style="margin-top: 10px;">
+                🔄 Reset Test
+            </button>
+        </div>
+
+        <!-- Logs -->
+        <div class="section">
+            <h2>📝 Activity Log</h2>
+            <div class="log-box" id="logBox">
+                <div class="log-entry log-info">Ready to start testing...</div>
+            </div>
+            <button onclick="clearLogs()" class="btn-secondary" style="margin-top: 10px;">
+                🗑️ Clear Logs
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let currentPayment = null;
+        let checkInterval = null;
+
+        function log(message, type = 'info') {
+            const logBox = document.getElementById('logBox');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logBox.appendChild(entry);
+            logBox.scrollTop = logBox.scrollHeight;
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        function clearLogs() {
+            document.getElementById('logBox').innerHTML = '<div class="log-entry log-info">Logs cleared...</div>';
+        }
+
+        async function createPaymentSession() {
+            const btn = document.getElementById('btnCreateSession');
+            const statusDiv = document.getElementById('sessionStatus');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>Creating session...';
+            statusDiv.innerHTML = '';
+            
+            log('Creating payment session...', 'info');
+
+            try {
+                const quoteId = document.getElementById('quoteId').value.trim();
+                const amount = document.getElementById('amount').value;
+                const customerEmail = document.getElementById('customerEmail').value;
+                const customerName = document.getElementById('customerName').value;
+
+                // If no quote ID, create a test payment
+                const payload = {
+                    quote_id: quoteId || `test-${Date.now()}`,
+                    return_url: `${window.location.origin}/payment/callback`,
+                    cancel_url: `${window.location.origin}/test-3ds-payment.html`
+                };
+
+                log(`Sending request to: /api/payments?action=initiate-payment`, 'info');
+                log(`Payload: ${JSON.stringify(payload, null, 2)}`, 'info');
+
+                const response = await fetch('/api/payments?action=initiate-payment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                log(`Response status: ${response.status}`, response.ok ? 'success' : 'error');
+                log(`Response data: ${JSON.stringify(data, null, 2)}`, response.ok ? 'success' : 'error');
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || data.details || 'Failed to create payment session');
+                }
+
+                currentPayment = {
+                    sessionId: data.sessionId,
+                    successIndicator: data.successIndicator,
+                    paymentId: data.paymentId,
+                    paymentPageUrl: data.paymentPageUrl || data.checkoutUrl,
+                    quoteId: payload.quote_id
+                };
+
+                log(`✅ Payment session created!`, 'success');
+                log(`Session ID: ${currentPayment.sessionId}`, 'info');
+                log(`Payment ID: ${currentPayment.paymentId}`, 'info');
+
+                statusDiv.innerHTML = `
+                    <div class="status-box status-success">
+                        ✅ Payment session created successfully!<br>
+                        <strong>Session ID:</strong> ${currentPayment.sessionId}<br>
+                        <strong>Payment ID:</strong> ${currentPayment.paymentId}
+                    </div>
+                `;
+
+                // Show step 2
+                document.getElementById('step2').classList.remove('hidden');
+                document.getElementById('paymentInfo').innerHTML = `
+                    <div class="status-box status-info">
+                        <strong>Payment Details:</strong><br>
+                        Amount: $${amount} USD<br>
+                        Customer: ${customerName} (${customerEmail})<br>
+                        Session ID: ${currentPayment.sessionId}
+                    </div>
+                `;
+
+                btn.disabled = false;
+                btn.innerHTML = '✅ Session Created - Ready for Payment';
+
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                statusDiv.innerHTML = `
+                    <div class="status-box status-error">
+                        ❌ Failed to create payment session<br>
+                        <strong>Error:</strong> ${error.message}
+                    </div>
+                `;
+                btn.disabled = false;
+                btn.innerHTML = '🚀 Create Payment Session';
+            }
+        }
+
+        function proceedToPayment() {
+            if (!currentPayment || !currentPayment.paymentPageUrl) {
+                log('❌ No payment session available', 'error');
+                return;
+            }
+
+            log('Redirecting to ARC Pay payment page...', 'info');
+            log(`Payment Page URL: ${currentPayment.paymentPageUrl}`, 'info');
+            log(`Session ID: ${currentPayment.sessionId}`, 'info');
+
+            // Create a form to POST to ARC Pay
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = currentPayment.paymentPageUrl;
+            form.target = '_blank';
+
+            const sessionInput = document.createElement('input');
+            sessionInput.type = 'hidden';
+            sessionInput.name = 'session.id';
+            sessionInput.value = currentPayment.sessionId;
+
+            form.appendChild(sessionInput);
+            document.body.appendChild(form);
+            form.submit();
+
+            // Show step 3
+            document.getElementById('step3').classList.remove('hidden');
+            document.getElementById('paymentStatus').innerHTML = `
+                <div class="status-box status-pending">
+                    ⏳ Waiting for payment completion...<br>
+                    Complete the payment on the ARC Pay page, then return here and click "Check Payment Status"
+                </div>
+            `;
+
+            // Start checking status automatically
+            if (checkInterval) clearInterval(checkInterval);
+            checkInterval = setInterval(checkPaymentStatus, 5000);
+        }
+
+        async function checkPaymentStatus() {
+            if (!currentPayment || !currentPayment.paymentId) {
+                log('❌ No payment ID available', 'error');
+                return;
+            }
+
+            log(`Checking payment status for: ${currentPayment.paymentId}`, 'info');
+
+            try {
+                const response = await fetch(`/api/payments?action=get-payment-details&paymentId=${currentPayment.paymentId}`);
+                const data = await response.json();
+
+                log(`Payment status response: ${JSON.stringify(data, null, 2)}`, 'info');
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to get payment details');
+                }
+
+                const payment = data.payment;
+                const status = payment.payment_status;
+                const statusDiv = document.getElementById('paymentStatus');
+
+                log(`Current payment status: ${status}`, 'info');
+
+                if (status === 'completed') {
+                    statusDiv.innerHTML = `
+                        <div class="status-box status-success">
+                            ✅ Payment Completed Successfully!<br>
+                            <strong>Transaction ID:</strong> ${payment.arc_transaction_id || payment.id}<br>
+                            <strong>Amount:</strong> $${payment.amount} ${payment.currency}<br>
+                            <strong>Completed At:</strong> ${new Date(payment.completed_at).toLocaleString()}
+                        </div>
+                    `;
+                    if (checkInterval) clearInterval(checkInterval);
+                    log('✅ Payment completed!', 'success');
+                } else if (status === 'pending_3ds') {
+                    statusDiv.innerHTML = `
+                        <div class="status-box status-pending">
+                            ⏳ 3D Secure Authentication Pending<br>
+                            Please complete the 3DS challenge on the ARC Pay page.<br>
+                            Status will update automatically...
+                        </div>
+                    `;
+                    log('⏳ 3DS authentication pending...', 'warning');
+                } else if (status === 'failed') {
+                    statusDiv.innerHTML = `
+                        <div class="status-box status-error">
+                            ❌ Payment Failed<br>
+                            <strong>Reason:</strong> ${payment.metadata?.failureReason || payment.metadata?.error?.cause || 'Unknown error'}
+                        </div>
+                    `;
+                    if (checkInterval) clearInterval(checkInterval);
+                    log('❌ Payment failed', 'error');
+                } else {
+                    statusDiv.innerHTML = `
+                        <div class="status-box status-info">
+                            📊 Payment Status: ${status}<br>
+                            Checking again in 5 seconds...
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                log(`❌ Error checking status: ${error.message}`, 'error');
+                document.getElementById('paymentStatus').innerHTML = `
+                    <div class="status-box status-error">
+                        ❌ Error checking payment status<br>
+                        <strong>Error:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        function resetTest() {
+            if (checkInterval) clearInterval(checkInterval);
+            currentPayment = null;
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('step3').classList.add('hidden');
+            document.getElementById('sessionStatus').innerHTML = '';
+            document.getElementById('paymentStatus').innerHTML = '';
+            document.getElementById('btnCreateSession').innerHTML = '🚀 Create Payment Session';
+            document.getElementById('btnCreateSession').disabled = false;
+            log('Test reset. Ready to start again.', 'info');
+        }
+
+        // Check if we're returning from payment callback
+        const urlParams = new URLSearchParams(window.location.search);
+        const paymentId = urlParams.get('paymentId');
+        const status = urlParams.get('status');
+
+        if (paymentId) {
+            log(`Detected payment callback with paymentId: ${paymentId}`, 'info');
+            currentPayment = { paymentId };
+            document.getElementById('step3').classList.remove('hidden');
+            checkPaymentStatus();
+        }
+
+        // Auto-fill test data
+        log('Test page loaded. Ready to test 3DS payments.', 'success');
+    </script>
+</body>
+</html>

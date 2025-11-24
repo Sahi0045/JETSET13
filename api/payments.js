@@ -477,7 +477,7 @@ async function handlePaymentCallback(req, res) {
       return res.redirect('/payment/failed?error=invalid_indicator');
     }
 
-    // 3. Retrieve transaction details from ARC Pay
+    // 3. Retrieve order and transaction details from ARC Pay
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
     const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
     const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
@@ -485,35 +485,176 @@ async function handlePaymentCallback(req, res) {
     // ARC Pay uses merchant.MERCHANT_ID:password format for authentication
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
-    const txnResponse = await fetch(
-      `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/1`,
-      {
-        method: 'GET',
-        headers: {
-          'Authorization': authHeader
+    // First, get the order status (ARC Pay best practice)
+    let orderData = null;
+    try {
+      const orderResponse = await fetch(
+        `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': authHeader,
+            'Accept': 'application/json'
+          }
         }
-      }
-    );
+      );
 
-    if (!txnResponse.ok) {
-      console.error('Failed to retrieve transaction from ARC Pay');
-      return res.redirect('/payment/failed?error=verification_failed');
+      if (orderResponse.ok) {
+        orderData = await orderResponse.json();
+        console.log('📋 Order data retrieved:', JSON.stringify(orderData, null, 2));
+      } else {
+        console.warn('⚠️ Could not retrieve order data, status:', orderResponse.status);
+      }
+    } catch (orderError) {
+      console.warn('⚠️ Error retrieving order data:', orderError.message);
     }
 
-    const transaction = await txnResponse.json();
+    // Then get transaction details
+    let transaction = null;
+    try {
+      const txnResponse = await fetch(
+        `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/1`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': authHeader,
+            'Accept': 'application/json'
+          }
+        }
+      );
 
-    // 4. Check transaction result
-    if (transaction.result === 'SUCCESS') {
+      if (!txnResponse.ok) {
+        const errorText = await txnResponse.text();
+        console.error('❌ Failed to retrieve transaction from ARC Pay:', txnResponse.status, errorText);
+        
+        // If we have order data, use it instead
+        if (orderData) {
+          console.log('📋 Using order data as fallback');
+          transaction = orderData;
+        } else {
+          return res.redirect('/payment/failed?error=verification_failed');
+        }
+      } else {
+        transaction = await txnResponse.json();
+      }
+    } catch (txnError) {
+      console.error('❌ Error retrieving transaction:', txnError.message);
+      
+      // If we have order data, use it as fallback
+      if (orderData) {
+        console.log('📋 Using order data as fallback due to transaction error');
+        transaction = orderData;
+      } else {
+        return res.redirect('/payment/failed?error=verification_failed');
+      }
+    }
+
+    // Merge order data with transaction data if available
+    if (orderData && transaction) {
+      transaction = {
+        ...transaction,
+        ...orderData,
+        // Prefer transaction fields over order fields
+        result: transaction.result || orderData.result,
+        status: transaction.status || orderData.status,
+        authentication: transaction.authentication || orderData.authentication
+      };
+    }
+
+    console.log('🔍 Transaction response:', JSON.stringify(transaction, null, 2));
+
+    // 4. Check transaction result and 3DS authentication status
+    // ARC Pay returns different fields based on transaction state
+    const transactionResult = transaction.result;
+    const orderStatus = transaction.status;
+    const authenticationResult = transaction.authentication?.result || transaction.threeDSecure?.result;
+    const authenticationStatus = transaction.authenticationStatus || transaction.authentication?.status;
+    const gatewayCode = transaction.response?.gatewayCode || transaction.response?.code;
+    const avsResponse = transaction.response?.avsResponse;
+
+    console.log('📊 Transaction analysis:', {
+      result: transactionResult,
+      status: orderStatus,
+      authenticationResult,
+      authenticationStatus,
+      gatewayCode,
+      avsResponse
+    });
+
+    // Check if 3DS authentication is required and still pending
+    if (orderStatus === 'AUTHENTICATION_INITIATED' || 
+        orderStatus === 'AUTHENTICATION_PENDING' ||
+        authenticationStatus === 'AUTHENTICATION_INITIATED' ||
+        authenticationStatus === 'AUTHENTICATION_PENDING') {
+      
+      console.log('⏳ 3DS authentication still pending');
+      
+      await supabase
+        .from('payments')
+        .update({
+          payment_status: 'pending_3ds',
+          metadata: {
+            transaction: transaction,
+            authenticationStatus,
+            message: '3D Secure authentication in progress'
+          }
+        })
+        .eq('id', payment.id);
+
+      // Redirect to failed page with specific message about 3DS
+      return res.redirect(`/payment/failed?reason=3ds_pending&paymentId=${payment.id}&message=Please complete the 3D Secure authentication challenge`);
+    }
+
+    // Check if 3DS authentication failed
+    if (authenticationResult === 'FAILURE' || 
+        authenticationResult === 'UNAVAILABLE' ||
+        (transactionResult === 'FAILURE' && authenticationStatus === 'AUTHENTICATION_FAILED')) {
+      
+      console.log('❌ 3DS authentication failed');
+      
+      await supabase
+        .from('payments')
+        .update({
+          payment_status: 'failed',
+          metadata: {
+            transaction: transaction,
+            authenticationResult,
+            failureReason: '3D Secure authentication failed'
+          }
+        })
+        .eq('id', payment.id);
+
+      return res.redirect(`/payment/failed?reason=3ds_authentication_failed&paymentId=${payment.id}`);
+    }
+
+    // Check if transaction is successful
+    // ARC Pay considers it successful if:
+    // 1. result === 'SUCCESS' AND
+    // 2. authentication.result === 'SUCCESS' (if 3DS was required) OR no authentication required
+    // 3. gatewayCode is APPROVED or SUCCESS
+    const isSuccess = (
+      transactionResult === 'SUCCESS' &&
+      (authenticationResult === 'SUCCESS' || authenticationResult === undefined || authenticationResult === null) &&
+      (gatewayCode === 'APPROVED' || gatewayCode === 'SUCCESS' || !gatewayCode || gatewayCode === undefined)
+    );
+
+    if (isSuccess) {
+      console.log('✅ Payment successful');
+      
       // Update payment status
       await supabase
         .from('payments')
         .update({
           payment_status: 'completed',
           completed_at: new Date().toISOString(),
-          arc_transaction_id: transaction.transaction?.id,
-          payment_method: transaction.sourceOfFunds?.provided?.card?.brand,
+          arc_transaction_id: transaction.transaction?.id || transaction.id,
+          payment_method: transaction.sourceOfFunds?.provided?.card?.brand || 
+                         transaction.card?.brand ||
+                         transaction.paymentMethod,
           metadata: {
-            transaction: transaction
+            transaction: transaction,
+            authenticationResult,
+            gatewayCode
           }
         })
         .eq('id', payment.id);
@@ -538,18 +679,30 @@ async function handlePaymentCallback(req, res) {
 
       return res.redirect(`/payment/success?paymentId=${payment.id}`);
     } else {
-      // Payment failed
+      // Payment failed or declined
+      console.log('❌ Payment failed or declined');
+      
+      const failureReason = transaction.error?.cause || 
+                           transaction.error?.explanation ||
+                           transaction.response?.gatewayCode ||
+                           transaction.response?.reason ||
+                           'payment_declined';
+
       await supabase
         .from('payments')
         .update({
           payment_status: 'failed',
           metadata: {
-            error: transaction.error
+            transaction: transaction,
+            error: transaction.error,
+            authenticationResult,
+            gatewayCode,
+            failureReason
           }
         })
         .eq('id', payment.id);
 
-      return res.redirect(`/payment/failed?reason=${transaction.error?.cause || 'payment_declined'}`);
+      return res.redirect(`/payment/failed?reason=${encodeURIComponent(failureReason)}&paymentId=${payment.id}`);
     }
 
   } catch (error) {
