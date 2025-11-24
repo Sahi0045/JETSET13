@@ -271,6 +271,11 @@ async function handlePaymentInitiation(req, res) {
         },
         timeout: 900
       },
+      authentication: {
+        acceptVersions: '3DS1,3DS2',
+        channel: 'PAYER_BROWSER',
+        purpose: 'PAYMENT_TRANSACTION'
+      },
       order: {
         id: payment.id,
         amount: parseFloat(quote.total_amount).toFixed(2),
