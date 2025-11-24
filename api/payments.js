@@ -654,6 +654,160 @@ async function handlePaymentCallback(req, res) {
         return res.redirect(`/payment/callback?resultIndicator=${resultIndicator}&sessionId=${sessionId}&status=checking`);
       }
       
+      // Check if 3DS authentication is successful but PAY hasn't been processed yet
+      // This can happen with Hosted Checkout when authentication completes but PAY needs to be triggered
+      if (authenticationStatus === 'AUTHENTICATION_SUCCESSFUL' && 
+          (transactionStatus === 'Y' || transactionStatus === 'A') &&
+          authenticationToken) {
+        
+        console.log('✅ 3DS Authentication successful but payment still pending - calling PAY');
+        console.log(`   Authentication Token: ${authenticationToken.substring(0, 20)}...`);
+        
+        // Get authentication transaction ID from multiple possible locations
+        // ARC Pay stores this in different places depending on the response structure
+        let authTransactionId = transaction.authentication?.transactionId || 
+                                  transactionAuth.transactionId ||
+                                  latestTransaction?.authentication?.transactionId ||
+                                  transaction.transactionId ||
+                                  latestTransaction?.transactionId ||
+                                  orderData?.authentication?.transactionId ||
+                                  orderData?.transactionId;
+        
+        // If not found, search through transaction array for authentication transaction
+        if (!authTransactionId && transactionArray.length > 0) {
+          for (const txn of transactionArray) {
+            if (txn.authentication?.transactionId) {
+              authTransactionId = txn.authentication.transactionId;
+              break;
+            }
+            if (txn.transactionId && txn.authentication) {
+              authTransactionId = txn.transactionId;
+              break;
+            }
+          }
+        }
+        
+        // Also check orderData transaction array if available
+        if (!authTransactionId && orderData?.transaction) {
+          const orderTxnArray = Array.isArray(orderData.transaction) ? orderData.transaction : [orderData.transaction];
+          for (const txn of orderTxnArray) {
+            if (txn.authentication?.transactionId) {
+              authTransactionId = txn.authentication.transactionId;
+              break;
+            }
+            if (txn.transactionId && txn.authentication) {
+              authTransactionId = txn.transactionId;
+              break;
+            }
+          }
+        }
+        
+        if (authTransactionId) {
+          console.log(`   Authentication Transaction ID: ${authTransactionId}`);
+          
+          try {
+            // Determine which transaction index to use
+            // For Hosted Checkout: transaction 1 is usually the authentication transaction
+            // We can either update transaction 1 or create a new transaction
+            // Try transaction 1 first (most common for Hosted Checkout)
+            let transactionIndex = 1;
+            
+            // Check if transaction 1 already exists and has a result
+            if (transactionArray.length > 0) {
+              const firstTxn = transactionArray[0];
+              // If transaction 1 already has PAY result, we might need transaction 2
+              if (firstTxn.result === 'SUCCESS' || firstTxn.result === 'FAILURE') {
+                transactionIndex = transactionArray.length + 1;
+                console.log(`   Transaction 1 already has result ${firstTxn.result}, using transaction ${transactionIndex}`);
+              }
+            }
+            
+            console.log(`   Calling PAY on transaction ${transactionIndex}`);
+            
+            // Call PAY with the authentication transaction ID
+            const payResponse = await fetch(
+              `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${transactionIndex}`,
+              {
+                method: 'PUT',
+                headers: {
+                  'Authorization': authHeader,
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                  apiOperation: 'PAY',
+                  authentication: {
+                    transactionId: authTransactionId
+                  },
+                  order: {
+                    amount: parseFloat(payment.amount).toFixed(2),
+                    currency: payment.currency || 'USD'
+                  },
+                  sourceOfFunds: {
+                    type: 'CARD'
+                  },
+                  transaction: {
+                    reference: `PAY-${payment.id}`
+                  }
+                })
+              }
+            );
+            
+            if (payResponse.ok) {
+              const payData = await payResponse.json();
+              console.log('✅ PAY request successful:', payData.result);
+              
+              // Update transaction data with PAY response
+              transaction = payData;
+              transactionResult = payData.result || payData.transaction?.[0]?.result;
+              gatewayCode = payData.response?.gatewayCode || payData.transaction?.[0]?.response?.gatewayCode;
+              
+              // Re-extract authentication status from PAY response
+              const payAuth = payData.authentication || payData.transaction?.[0]?.authentication || {};
+              const payThreeDS2 = payAuth.threeDS2 || payAuth['3ds2'] || {};
+              transactionStatus = payThreeDS2.transactionStatus || transactionStatus;
+              authenticationStatus = payData.authenticationStatus || payAuth.status || authenticationStatus;
+              eci = payThreeDS2.eci || eci;
+              
+              console.log('📊 PAY response analysis:', {
+                result: transactionResult,
+                gatewayCode,
+                transactionStatus,
+                authenticationStatus,
+                eci
+              });
+            } else {
+              const errorText = await payResponse.text();
+              console.error('❌ PAY request failed:', payResponse.status, errorText);
+              // Continue with original transaction data
+            }
+          } catch (payError) {
+            console.error('❌ Error calling PAY:', payError.message);
+            // Continue with original transaction data
+          }
+        } else {
+          console.warn('⚠️ Authentication transaction ID not found - cannot call PAY');
+          console.log('   Transaction data structure:', {
+            hasTransactionAuth: !!transaction.authentication,
+            hasTransactionAuthTransactionId: !!transaction.authentication?.transactionId,
+            hasTransactionAuthId: !!transactionAuth.transactionId,
+            hasLatestTxnAuth: !!latestTransaction?.authentication?.transactionId,
+            hasOrderDataAuth: !!orderData?.authentication?.transactionId,
+            transactionArrayLength: transactionArray.length,
+            orderDataHasTransaction: !!orderData?.transaction
+          });
+          console.log('   Full transaction structure:', JSON.stringify({
+            authentication: transaction.authentication || transactionAuth,
+            transactionArray: transactionArray.map(t => ({
+              id: t.id,
+              transactionId: t.transactionId,
+              hasAuth: !!t.authentication,
+              authTransactionId: t.authentication?.transactionId
+            }))
+          }, null, 2));
+        }
+      }
+      
       // If PENDING but not 3DS related, wait a moment and retry once
       console.log('⏳ Transaction pending - will retry status check');
       await supabase
