@@ -577,24 +577,32 @@ async function handlePaymentCallback(req, res) {
 
     console.log('🔍 Transaction response:', JSON.stringify(transaction, null, 2));
 
-    // 4. Check transaction result and 3DS authentication status
-    // ARC Pay 3DS2 authentication fields according to official documentation
-    const transactionResult = transaction.result;
-    const orderStatus = transaction.status;
+    // 4. Extract transaction data from transaction array (ARC Pay structure)
+    // ARC Pay returns transaction data in transaction[0] array
+    const transactionArray = transaction.transaction || [];
+    const latestTransaction = transactionArray.length > 0 ? transactionArray[transactionArray.length - 1] : null;
     
-    // 3DS2 authentication fields
-    const authentication = transaction.authentication || {};
-    const threeDS2 = authentication.threeDS2 || authentication['3ds2'] || {};
-    const transactionStatus = threeDS2.transactionStatus || authentication.transactionStatus;
-    const statusReasonCode = threeDS2.statusReasonCode || authentication.statusReasonCode;
-    const eci = threeDS2.eci || authentication.eci || transaction.eci;
-    const authenticationToken = threeDS2.authenticationToken || authentication.authenticationToken;
+    // Get transaction-level data (most recent transaction)
+    let transactionResult = latestTransaction?.result || transaction.result;
+    let transactionGatewayCode = latestTransaction?.response?.gatewayCode || transaction.response?.gatewayCode;
+    const transactionAuth = latestTransaction?.authentication || transaction.authentication || {};
+    
+    // Order-level status
+    const orderStatus = transaction.status;
+    let orderAuthStatus = transaction.authenticationStatus || latestTransaction?.order?.authenticationStatus;
+    
+    // 3DS2 authentication fields - check transaction first, then order
+    const threeDS2 = transactionAuth.threeDS2 || transactionAuth['3ds2'] || transaction.authentication?.threeDS2 || transaction.authentication?.['3ds2'] || {};
+    let transactionStatus = threeDS2.transactionStatus || transactionAuth.transactionStatus;
+    const statusReasonCode = threeDS2.statusReasonCode || transactionAuth.statusReasonCode;
+    let eci = threeDS2.eci || transactionAuth.eci || transaction.eci;
+    const authenticationToken = threeDS2.authenticationToken || transactionAuth.authenticationToken;
     
     // Legacy 3DS fields
-    const authenticationResult = authentication.result || transaction.threeDSecure?.result;
-    const authenticationStatus = transaction.authenticationStatus || authentication.status;
-    const gatewayCode = transaction.response?.gatewayCode || transaction.response?.code;
-    const avsResponse = transaction.response?.avsResponse;
+    const authenticationResult = transactionAuth.result || transaction.authentication?.result || transaction.threeDSecure?.result;
+    let authenticationStatus = orderAuthStatus || transaction.authenticationStatus || transactionAuth.status || latestTransaction?.authenticationStatus;
+    let gatewayCode = transactionGatewayCode || transaction.response?.gatewayCode || transaction.response?.code;
+    const avsResponse = transaction.response?.avsResponse || latestTransaction?.response?.avsResponse;
 
     console.log('📊 Transaction analysis:', {
       result: transactionResult,
@@ -605,14 +613,109 @@ async function handlePaymentCallback(req, res) {
       authenticationStatus, // AUTHENTICATION_SUCCESSFUL, AUTHENTICATION_PENDING, etc.
       authenticationResult, // Legacy field
       gatewayCode,
-      hasAuthenticationToken: !!authenticationToken
+      hasAuthenticationToken: !!authenticationToken,
+      transactionCount: transactionArray.length
     });
 
     // Handle 3DS2 transaction status according to ARC Pay documentation
     // Y = Frictionless (successful), C = Challenge, A = Authentication Attempted,
     // N = Not Authenticated, R = Rejected, U = Unavailable
     
-    // Check if 3DS authentication is still pending (Challenge flow)
+    // CRITICAL: Never mark PENDING transactions as successful
+    // If transaction result is PENDING, it means the transaction is still being processed
+    if (transactionResult === 'PENDING' || gatewayCode === 'PENDING') {
+      console.log('⏳ Transaction is still pending - waiting for final status');
+      
+      // Check if 3DS challenge is still in progress
+      if (transactionStatus === 'C' || 
+          authenticationStatus === 'AUTHENTICATION_PENDING' ||
+          orderStatus === 'AUTHENTICATION_INITIATED' ||
+          orderStatus === 'AUTHENTICATION_PENDING') {
+        
+        console.log('⏳ 3DS authentication challenge still pending');
+        
+        await supabase
+          .from('payments')
+          .update({
+            payment_status: 'pending_3ds',
+            metadata: {
+              transaction: transaction,
+              transactionResult,
+              gatewayCode,
+              transactionStatus,
+              authenticationStatus,
+              message: '3D Secure challenge in progress - waiting for completion',
+              lastChecked: new Date().toISOString()
+            }
+          })
+          .eq('id', payment.id);
+
+        // Redirect to a page that will poll for status updates
+        return res.redirect(`/payment/callback?resultIndicator=${resultIndicator}&sessionId=${sessionId}&status=checking`);
+      }
+      
+      // If PENDING but not 3DS related, wait a moment and retry once
+      console.log('⏳ Transaction pending - will retry status check');
+      await supabase
+        .from('payments')
+        .update({
+          payment_status: 'pending',
+          metadata: {
+            transaction: transaction,
+            transactionResult,
+            gatewayCode,
+            message: 'Transaction pending - status will be updated shortly',
+            lastChecked: new Date().toISOString()
+          }
+        })
+        .eq('id', payment.id);
+
+      // Wait 2 seconds and retry checking the order status
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      try {
+        const retryResponse = await fetch(
+          `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': authHeader,
+              'Accept': 'application/json'
+            }
+          }
+        );
+        
+        if (retryResponse.ok) {
+          const retryData = await retryResponse.json();
+          console.log('🔄 Retry check result:', retryData.result, retryData.status);
+          
+          // If still pending after retry, redirect to status check page
+          if (retryData.result === 'PENDING' || retryData.status === 'AUTHENTICATION_PENDING') {
+            return res.redirect(`/payment/callback?resultIndicator=${resultIndicator}&sessionId=${sessionId}&status=checking`);
+          }
+          
+          // Update transaction with retry data
+          transaction = retryData;
+          // Re-extract values from retry data
+          const retryTransactionArray = retryData.transaction || [];
+          const retryLatestTransaction = retryTransactionArray.length > 0 ? retryTransactionArray[retryTransactionArray.length - 1] : null;
+          if (retryLatestTransaction) {
+            transactionResult = retryLatestTransaction.result || retryData.result;
+            gatewayCode = retryLatestTransaction.response?.gatewayCode || retryData.response?.gatewayCode;
+            authenticationStatus = retryData.authenticationStatus || retryLatestTransaction.order?.authenticationStatus;
+            const retryAuth = retryLatestTransaction.authentication || retryData.authentication || {};
+            const retryThreeDS2 = retryAuth.threeDS2 || retryAuth['3ds2'] || {};
+            transactionStatus = retryThreeDS2.transactionStatus;
+            eci = retryThreeDS2.eci;
+          }
+        }
+      } catch (retryError) {
+        console.error('⚠️ Retry check failed:', retryError.message);
+        // Continue with original transaction data
+      }
+    }
+    
+    // Check if 3DS authentication is still pending (Challenge flow) - after retry check
     if (transactionStatus === 'C' || 
         orderStatus === 'AUTHENTICATION_INITIATED' || 
         orderStatus === 'AUTHENTICATION_PENDING' ||
@@ -705,12 +808,16 @@ async function handlePaymentCallback(req, res) {
       eci === '06' // Authentication Attempted (treated as success)
     );
 
+    // CRITICAL: Never mark PENDING transactions as successful
+    // Only mark as successful if result is explicitly SUCCESS and all checks pass
     const isSuccess = (
-      transactionResult === 'SUCCESS' &&
+      transactionResult === 'SUCCESS' && // Must be SUCCESS, not PENDING
+      transactionResult !== 'PENDING' && // Explicit check to prevent PENDING from being marked successful
+      gatewayCode !== 'PENDING' && // Gateway code must not be PENDING
       is3DSSuccess &&
       isAuthSuccess &&
       isValidECI &&
-      (gatewayCode === 'APPROVED' || gatewayCode === 'SUCCESS' || !gatewayCode || gatewayCode === undefined)
+      (gatewayCode === 'APPROVED' || gatewayCode === 'SUCCESS' || (!gatewayCode && transactionResult === 'SUCCESS'))
     );
 
     if (isSuccess) {
@@ -764,12 +871,39 @@ async function handlePaymentCallback(req, res) {
 
       return res.redirect(`/payment/success?paymentId=${payment.id}`);
     } else {
+      // Payment failed, declined, or still processing
+      // Check if it's still PENDING (should have been handled earlier, but double-check)
+      if (transactionResult === 'PENDING' || gatewayCode === 'PENDING') {
+        console.log('⏳ Payment still pending - not marking as failed');
+        
+        await supabase
+          .from('payments')
+          .update({
+            payment_status: 'pending',
+            metadata: {
+              transaction: transaction,
+              transactionResult,
+              gatewayCode,
+              authenticationStatus,
+              message: 'Transaction pending - please check status again shortly',
+              lastChecked: new Date().toISOString()
+            }
+          })
+          .eq('id', payment.id);
+
+        return res.redirect(`/payment/callback?resultIndicator=${resultIndicator}&sessionId=${sessionId}&status=checking`);
+      }
+      
       // Payment failed or declined
       console.log('❌ Payment failed or declined');
+      console.log(`   Result: ${transactionResult}`);
+      console.log(`   Gateway Code: ${gatewayCode}`);
+      console.log(`   Authentication Status: ${authenticationStatus}`);
       
       const failureReason = transaction.error?.cause || 
                            transaction.error?.explanation ||
-                           transaction.response?.gatewayCode ||
+                           latestTransaction?.response?.gatewayCode ||
+                           gatewayCode ||
                            transaction.response?.reason ||
                            'payment_declined';
 
@@ -779,10 +913,14 @@ async function handlePaymentCallback(req, res) {
           payment_status: 'failed',
           metadata: {
             transaction: transaction,
-            error: transaction.error,
-            authenticationResult,
+            transactionResult,
             gatewayCode,
-            failureReason
+            authenticationStatus,
+            transactionStatus,
+            error: transaction.error || latestTransaction?.error,
+            authenticationResult,
+            failureReason,
+            timestamp: new Date().toISOString()
           }
         })
         .eq('id', payment.id);
