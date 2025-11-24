@@ -259,7 +259,7 @@ async function handlePaymentInitiation(req, res) {
     const requestBody = {
         apiOperation: 'INITIATE_CHECKOUT',
         interaction: {
-          operation: 'PURCHASE',
+          operation: 'PURCHASE', // PURCHASE means pay immediately after 3DS
         returnUrl: finalReturnUrl,
         cancelUrl: finalCancelUrl,
         merchant: {
@@ -268,13 +268,19 @@ async function handlePaymentInitiation(req, res) {
         displayControl: {
           billingAddress: 'OPTIONAL',
           customerEmail: 'OPTIONAL'
-        }
+        },
+        timeout: 900 // 15 minutes
         },
         order: {
           id: payment.id,
         amount: parseFloat(quote.total_amount).toFixed(2),
           currency: quote.currency || 'USD',
         description: `Quote ${quote.quote_number || quote.id.slice(-8)} - ${quote.title || 'Travel Booking'}`
+      },
+      authentication: {
+        acceptVersions: '3DS1,3DS2',
+        channel: 'PAYER_BROWSER',
+        purpose: 'PAYMENT_TRANSACTION'
       }
     };
 
