@@ -63,6 +63,12 @@ export default async function handler(req, res) {
         return handlePaymentVerify(req, res);
       case 'payment-refund':
         return handlePaymentRefund(req, res);
+      case 'payment-void':
+        return handlePaymentVoid(req, res);
+      case 'payment-capture':
+        return handlePaymentCapture(req, res);
+      case 'payment-retrieve':
+        return handlePaymentRetrieve(req, res);
       case 'test':
         return handleTest(req, res);
       case 'health':
@@ -72,7 +78,7 @@ export default async function handler(req, res) {
       default:
         return res.status(400).json({
           success: false,
-          error: 'Invalid action. Supported actions: initiate-payment, payment-callback, get-payment-details, gateway-status, session-create, order-create, payment-process, payment-verify, payment-refund, test, health, debug'
+          error: 'Invalid action. Supported actions: initiate-payment, payment-callback, get-payment-details, gateway-status, session-create, order-create, payment-process, payment-verify, payment-refund, payment-void, payment-capture, payment-retrieve, test, health, debug'
         });
     }
   } catch (error) {
@@ -1560,59 +1566,152 @@ async function handlePaymentVerify(req, res) {
   });
 }
 
-// Payment Refund
+// REFUND Operation - Refund a captured transaction
 async function handlePaymentRefund(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const {
-    orderId,
-    transactionId,
-    amount,
-    reason = 'Customer request'
-  } = req.body;
+  try {
+    console.log('💸 Handling REFUND operation');
 
-  // Validate required fields
-  if (!orderId || !transactionId || !amount) {
-    return res.status(400).json({
+    const {
+      paymentId,
+      orderId,
+      amount,
+      reason = 'Customer request',
+      transactionId
+    } = req.body;
+
+    if (!paymentId && !orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Either paymentId or orderId is required'
+      });
+    }
+
+    // Get payment record
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('id', paymentId || orderId)
+      .single();
+
+    if (paymentError || !payment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Payment not found'
+      });
+    }
+
+    // Check if payment can be refunded (must be completed)
+    if (payment.payment_status !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment must be completed before refunding',
+        currentStatus: payment.payment_status
+      });
+    }
+
+    const refundAmount = amount ? parseFloat(amount) : parseFloat(payment.amount);
+    if (isNaN(refundAmount) || refundAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid refund amount'
+      });
+    }
+
+    // Call ARC Pay REFUND API
+    const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+
+    const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
+
+    const refundTransactionId = transactionId || `refund-${Date.now()}`;
+    const refundUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${refundTransactionId}`;
+
+    console.log('🔄 Calling ARC Pay REFUND API:', refundUrl);
+    console.log('Refund Amount:', refundAmount);
+
+    const refundResponse = await fetch(refundUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': authHeader,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        apiOperation: 'REFUND',
+        transaction: {
+          amount: parseFloat(refundAmount).toFixed(2),
+          currency: payment.currency || 'USD',
+          reference: reason
+        }
+      })
+    });
+
+    const refundResponseText = await refundResponse.text();
+    console.log('REFUND Response Status:', refundResponse.status);
+    console.log('REFUND Response:', refundResponseText);
+
+    if (!refundResponse.ok) {
+      let errorData;
+      try {
+        errorData = JSON.parse(refundResponseText);
+      } catch (e) {
+        errorData = { message: refundResponseText };
+      }
+
+      return res.status(refundResponse.status).json({
+        success: false,
+        error: 'REFUND operation failed',
+        details: errorData
+      });
+    }
+
+    const refundData = JSON.parse(refundResponseText);
+
+    // Update payment record
+    const currentRefunds = payment.metadata?.refunds || [];
+    await supabase
+      .from('payments')
+      .update({
+        payment_status: 'refunded',
+        metadata: {
+          ...payment.metadata,
+          refunds: [...currentRefunds, {
+            transactionId: refundTransactionId,
+            amount: refundAmount,
+            reason,
+            refundedAt: new Date().toISOString(),
+            refundData
+          }],
+          totalRefunded: currentRefunds.reduce((sum, r) => sum + r.amount, 0) + refundAmount,
+          lastRefundedAt: new Date().toISOString()
+        }
+      })
+      .eq('id', payment.id);
+
+    console.log('✅ REFUND operation successful');
+
+    return res.status(200).json({
+      success: true,
+      refundData,
+      refundTransactionId,
+      refundAmount,
+      paymentId: payment.id,
+      message: 'Payment refunded successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ REFUND operation error:', error);
+    return res.status(500).json({
       success: false,
-      error: 'Missing required fields: orderId, transactionId, amount'
+      error: 'Failed to refund payment',
+      details: error.message
     });
   }
-
-  const refundAmount = parseFloat(amount);
-  if (isNaN(refundAmount) || refundAmount <= 0) {
-    return res.status(400).json({
-      success: false,
-      error: 'Invalid refund amount'
-    });
-  }
-
-  const refundReference = `ref_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  // Simulate processing delay
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  const refundData = {
-    refundReference,
-    orderId,
-    transactionId,
-    amount: refundAmount,
-    currency: 'USD',
-    reason,
-    status: 'COMPLETED',
-    processedAt: new Date().toISOString(),
-    estimatedSettlement: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days
-    merchantId: 'TESTARC05511704'
-  };
-
-  res.status(200).json({
-    success: true,
-    refundData,
-    refundReference,
-    message: 'Refund processed successfully'
-  });
 }
 
 // Integration Test
@@ -1677,6 +1776,379 @@ async function handleTest(req, res) {
     testResults,
     message: 'ARC Pay integration test completed successfully'
   });
+}
+
+// ============================================
+// ARC PAY STANDARD OPERATIONS
+// ============================================
+
+// VOID Operation - Cancel an authorized transaction
+async function handlePaymentVoid(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    console.log('🚫 Handling VOID operation');
+
+    const { paymentId, orderId, transactionId } = req.body;
+
+    if (!paymentId && !orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Either paymentId or orderId is required'
+      });
+    }
+
+    // Get payment record
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('id', paymentId || orderId)
+      .single();
+
+    if (paymentError || !payment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Payment not found'
+      });
+    }
+
+    // Check if payment can be voided (must be authorized but not captured)
+    if (payment.payment_status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot void a completed payment. Use refund instead.'
+      });
+    }
+
+    if (payment.payment_status === 'failed' || payment.payment_status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment is already failed or cancelled'
+      });
+    }
+
+    // Call ARC Pay VOID API
+    const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+
+    const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
+
+    const voidTransactionId = transactionId || `void-${Date.now()}`;
+    const voidUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${voidTransactionId}`;
+
+    console.log('🔄 Calling ARC Pay VOID API:', voidUrl);
+
+    const voidResponse = await fetch(voidUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': authHeader,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        apiOperation: 'VOID',
+        transaction: {
+          targetTransactionId: payment.arc_transaction_id
+        }
+      })
+    });
+
+    const voidResponseText = await voidResponse.text();
+    console.log('VOID Response Status:', voidResponse.status);
+    console.log('VOID Response:', voidResponseText);
+
+    if (!voidResponse.ok) {
+      let errorData;
+      try {
+        errorData = JSON.parse(voidResponseText);
+      } catch (e) {
+        errorData = { message: voidResponseText };
+      }
+
+      return res.status(voidResponse.status).json({
+        success: false,
+        error: 'VOID operation failed',
+        details: errorData
+      });
+    }
+
+    const voidData = JSON.parse(voidResponseText);
+
+    // Update payment record
+    await supabase
+      .from('payments')
+      .update({
+        payment_status: 'cancelled',
+        metadata: {
+          ...payment.metadata,
+          voidTransaction: voidData,
+          voidedAt: new Date().toISOString()
+        }
+      })
+      .eq('id', payment.id);
+
+    console.log('✅ VOID operation successful');
+
+    return res.status(200).json({
+      success: true,
+      voidData,
+      paymentId: payment.id,
+      message: 'Payment voided successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ VOID operation error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to void payment',
+      details: error.message
+    });
+  }
+}
+
+// CAPTURE Operation - Capture an authorized transaction
+async function handlePaymentCapture(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    console.log('💰 Handling CAPTURE operation');
+
+    const { paymentId, orderId, amount, transactionId } = req.body;
+
+    if (!paymentId && !orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Either paymentId or orderId is required'
+      });
+    }
+
+    // Get payment record
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('id', paymentId || orderId)
+      .single();
+
+    if (paymentError || !payment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Payment not found'
+      });
+    }
+
+    // Call ARC Pay CAPTURE API
+    const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+
+    const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
+
+    const captureTransactionId = transactionId || `capture-${Date.now()}`;
+    const captureUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${captureTransactionId}`;
+
+    console.log('🔄 Calling ARC Pay CAPTURE API:', captureUrl);
+
+    const captureAmount = amount || payment.amount;
+
+    const captureResponse = await fetch(captureUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': authHeader,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        apiOperation: 'CAPTURE',
+        transaction: {
+          amount: parseFloat(captureAmount).toFixed(2),
+          currency: payment.currency || 'USD'
+        }
+      })
+    });
+
+    const captureResponseText = await captureResponse.text();
+    console.log('CAPTURE Response Status:', captureResponse.status);
+    console.log('CAPTURE Response:', captureResponseText);
+
+    if (!captureResponse.ok) {
+      let errorData;
+      try {
+        errorData = JSON.parse(captureResponseText);
+      } catch (e) {
+        errorData = { message: captureResponseText };
+      }
+
+      return res.status(captureResponse.status).json({
+        success: false,
+        error: 'CAPTURE operation failed',
+        details: errorData
+      });
+    }
+
+    const captureData = JSON.parse(captureResponseText);
+
+    // Update payment record
+    await supabase
+      .from('payments')
+      .update({
+        payment_status: 'completed',
+        completed_at: new Date().toISOString(),
+        metadata: {
+          ...payment.metadata,
+          captureTransaction: captureData,
+          capturedAt: new Date().toISOString(),
+          capturedAmount: captureAmount
+        }
+      })
+      .eq('id', payment.id);
+
+    // Update quote status
+    await supabase
+      .from('quotes')
+      .update({
+        payment_status: 'paid',
+        paid_at: new Date().toISOString(),
+        status: 'paid'
+      })
+      .eq('id', payment.quote_id);
+
+    console.log('✅ CAPTURE operation successful');
+
+    return res.status(200).json({
+      success: true,
+      captureData,
+      paymentId: payment.id,
+      message: 'Payment captured successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ CAPTURE operation error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to capture payment',
+      details: error.message
+    });
+  }
+}
+
+// RETRIEVE Operation - Get transaction/order status from ARC Pay
+async function handlePaymentRetrieve(req, res) {
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    console.log('🔍 Handling RETRIEVE operation');
+
+    const { paymentId, orderId } = req.method === 'GET' ? req.query : req.body;
+
+    if (!paymentId && !orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Either paymentId or orderId is required'
+      });
+    }
+
+    // Get payment record
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('id', paymentId || orderId)
+      .single();
+
+    if (paymentError || !payment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Payment not found'
+      });
+    }
+
+    // Call ARC Pay RETRIEVE API
+    const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+
+    const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
+
+    const retrieveUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}`;
+
+    console.log('🔄 Calling ARC Pay RETRIEVE API:', retrieveUrl);
+
+    const retrieveResponse = await fetch(retrieveUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': authHeader,
+        'Accept': 'application/json'
+      }
+    });
+
+    const retrieveResponseText = await retrieveResponse.text();
+    console.log('RETRIEVE Response Status:', retrieveResponse.status);
+
+    if (!retrieveResponse.ok) {
+      let errorData;
+      try {
+        errorData = JSON.parse(retrieveResponseText);
+      } catch (e) {
+        errorData = { message: retrieveResponseText };
+      }
+
+      return res.status(retrieveResponse.status).json({
+        success: false,
+        error: 'RETRIEVE operation failed',
+        details: errorData
+      });
+    }
+
+    const orderData = JSON.parse(retrieveResponseText);
+
+    console.log('✅ RETRIEVE operation successful');
+    console.log('Order Status:', orderData.status);
+    console.log('Result:', orderData.result);
+
+    // Optionally update local payment record with latest status
+    const statusMapping = {
+      'CAPTURED': 'completed',
+      'AUTHENTICATED': 'pending',
+      'AUTHORIZED': 'authorized',
+      'FAILED': 'failed',
+      'CANCELLED': 'cancelled'
+    };
+
+    const localStatus = statusMapping[orderData.status] || payment.payment_status;
+
+    await supabase
+      .from('payments')
+      .update({
+        metadata: {
+          ...payment.metadata,
+          lastRetrieved: new Date().toISOString(),
+          latestOrderData: orderData
+        }
+      })
+      .eq('id', payment.id);
+
+    return res.status(200).json({
+      success: true,
+      orderData,
+      paymentId: payment.id,
+      localPaymentStatus: localStatus,
+      message: 'Order status retrieved successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ RETRIEVE operation error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve payment status',
+      details: error.message
+    });
+  }
 }
 
 // Health check endpoint
