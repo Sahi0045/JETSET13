@@ -271,11 +271,6 @@ async function handlePaymentInitiation(req, res) {
         },
         timeout: 900
       },
-      authentication: {
-        acceptVersions: '3DS1,3DS2',
-        channel: 'PAYER_BROWSER',
-        purpose: 'PAYMENT_TRANSACTION'
-      },
       order: {
         id: payment.id,
         amount: parseFloat(quote.total_amount).toFixed(2),
@@ -397,8 +392,19 @@ async function handlePaymentInitiation(req, res) {
 
     // 6. Construct payment page URL (ARC Pay requires POST to /api/page/version/<V>/pay)
     // ARC Pay hosted payment page requires POST method with form data
+    // IMPORTANT: Use the same domain as the API base URL (na.gateway.mastercard.com)
     const apiVersion = process.env.ARC_PAY_API_VERSION || '100';
-    const paymentPageUrl = `https://api.arcpay.travel/api/page/version/${apiVersion}/pay?charset=UTF-8`;
+    
+    // Extract domain from arcBaseUrl (e.g., https://na.gateway.mastercard.com from https://na.gateway.mastercard.com/api/rest/version/100)
+    let gatewayDomain = 'https://na.gateway.mastercard.com'; // Default fallback
+    try {
+      const url = new URL(arcBaseUrl);
+      gatewayDomain = `${url.protocol}//${url.hostname}`;
+    } catch (e) {
+      console.warn('Could not parse arcBaseUrl, using default domain');
+    }
+    
+    const paymentPageUrl = `${gatewayDomain}/api/page/version/${apiVersion}/pay?charset=UTF-8`;
     
     console.log('✅ Payment page URL:', paymentPageUrl);
     console.log('   Session ID:', sessionId);
