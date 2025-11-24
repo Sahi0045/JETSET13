@@ -658,42 +658,87 @@ async function handlePaymentCallback(req, res) {
       // This can happen with Hosted Checkout when authentication completes but PAY needs to be triggered
       // First, check if PAY was already processed automatically by ARC Pay
       const hasPayTransaction = transactionArray.some(txn => 
+        txn.transaction?.type === 'PAYMENT' ||
         txn.type === 'PAYMENT' || 
         txn.apiOperation === 'PAY' ||
-        (txn.result === 'SUCCESS' && txn.response?.gatewayCode === 'APPROVED')
+        (txn.result === 'SUCCESS' && txn.response?.gatewayCode === 'APPROVED' && txn.transaction?.type === 'PAYMENT')
       );
       
-      if (authenticationStatus === 'AUTHENTICATION_SUCCESSFUL' && 
-          (transactionStatus === 'Y' || transactionStatus === 'A') &&
-          authenticationToken &&
-          !hasPayTransaction) {
+      // Check if order has been captured/paid (indicates PAY was processed)
+      const orderCaptured = transaction.order?.status === 'CAPTURED' || 
+                           transaction.order?.status === 'PAID' ||
+                           transaction.status === 'CAPTURED' ||
+                           transaction.status === 'PAID' ||
+                           (transaction.order?.totalCapturedAmount > 0) ||
+                           (transaction.totalCapturedAmount > 0);
+      
+      // Determine if we should call PAY
+      // Conditions:
+      // 1. Authentication is successful (AUTHENTICATION_SUCCESSFUL or AUTHENTICATION_ATTEMPTED)
+      // 2. Transaction status is Y (Frictionless) or A (Attempted) - both are valid
+      // 3. Order status is AUTHENTICATED (authentication done, but payment not processed)
+      // 4. No PAY transaction exists yet
+      // 5. Order not yet captured
+      const shouldCallPay = (
+        (authenticationStatus === 'AUTHENTICATION_SUCCESSFUL' || 
+         authenticationStatus === 'AUTHENTICATION_ATTEMPTED' ||
+         orderStatus === 'AUTHENTICATED') &&
+        (transactionStatus === 'Y' || transactionStatus === 'A' || !transactionStatus) &&
+        (authenticationToken || orderStatus === 'AUTHENTICATED') &&
+        !hasPayTransaction &&
+        !orderCaptured
+      );
+      
+      if (shouldCallPay) {
         
         console.log('✅ 3DS Authentication successful but PAY not yet processed - calling PAY');
-        console.log(`   Authentication Token: ${authenticationToken.substring(0, 20)}...`);
-        console.log(`   Transaction Status: ${transactionStatus}`);
+        console.log(`   Order Status: ${orderStatus}`);
+        console.log(`   Transaction Status: ${transactionStatus || 'N/A'}`);
         console.log(`   Authentication Status: ${authenticationStatus}`);
+        console.log(`   Has PAY Transaction: ${hasPayTransaction}`);
+        console.log(`   Order Captured: ${orderCaptured}`);
+        console.log(`   Authentication Token: ${authenticationToken ? authenticationToken.substring(0, 20) + '...' : 'N/A'}`);
+        console.log(`   Transaction Array Length: ${transactionArray.length}`);
         
         // Get authentication transaction ID from multiple possible locations
         // ARC Pay stores this in different places depending on the response structure
+        // Check for nested 3ds structure: authentication.3ds.transactionId
         let authTransactionId = transaction.authentication?.transactionId || 
+                                  transaction.authentication?.['3ds']?.transactionId ||
+                                  transaction.authentication?.threeDS2?.transactionId ||
                                   transactionAuth.transactionId ||
+                                  transactionAuth?.['3ds']?.transactionId ||
                                   latestTransaction?.authentication?.transactionId ||
+                                  latestTransaction?.authentication?.['3ds']?.transactionId ||
                                   transaction.transactionId ||
                                   latestTransaction?.transactionId ||
                                   orderData?.authentication?.transactionId ||
+                                  orderData?.authentication?.['3ds']?.transactionId ||
                                   orderData?.transactionId;
         
         // If not found, search through transaction array for authentication transaction
+        // Check both direct transactionId and nested 3ds.transactionId
+        // Use the LATEST authentication transaction (last in array) for PAY
         if (!authTransactionId && transactionArray.length > 0) {
-          for (const txn of transactionArray) {
-            if (txn.authentication?.transactionId) {
-              authTransactionId = txn.authentication.transactionId;
-              console.log(`   Found auth transaction ID in transaction array: ${authTransactionId}`);
+          // Search from end to beginning to get the most recent authentication
+          for (let i = transactionArray.length - 1; i >= 0; i--) {
+            const txn = transactionArray[i];
+            
+            // Only process AUTHENTICATION type transactions
+            if (txn.transaction?.type !== 'AUTHENTICATION' && txn.type !== 'AUTHENTICATION') {
+              continue;
+            }
+            
+            // Check for authentication.3ds.transactionId (most common structure)
+            if (txn.authentication?.['3ds']?.transactionId) {
+              authTransactionId = txn.authentication['3ds'].transactionId;
+              console.log(`   Found latest auth transaction ID in 3ds structure (transaction ${i}): ${authTransactionId}`);
               break;
             }
-            if (txn.transactionId && txn.authentication) {
-              authTransactionId = txn.transactionId;
-              console.log(`   Found transaction ID with auth: ${authTransactionId}`);
+            // Check for authentication.transactionId (legacy structure)
+            if (txn.authentication?.transactionId) {
+              authTransactionId = txn.authentication.transactionId;
+              console.log(`   Found latest auth transaction ID in transaction array (transaction ${i}): ${authTransactionId}`);
               break;
             }
           }
@@ -703,20 +748,49 @@ async function handlePaymentCallback(req, res) {
         if (!authTransactionId && orderData?.transaction) {
           const orderTxnArray = Array.isArray(orderData.transaction) ? orderData.transaction : [orderData.transaction];
           for (const txn of orderTxnArray) {
+            // Check for 3ds structure first
+            if (txn.authentication?.['3ds']?.transactionId) {
+              authTransactionId = txn.authentication['3ds'].transactionId;
+              console.log(`   Found auth transaction ID in order data (3ds): ${authTransactionId}`);
+              break;
+            }
             if (txn.authentication?.transactionId) {
               authTransactionId = txn.authentication.transactionId;
               console.log(`   Found auth transaction ID in order data: ${authTransactionId}`);
               break;
             }
             if (txn.transactionId && txn.authentication) {
-              authTransactionId = txn.transactionId;
-              console.log(`   Found transaction ID in order data: ${authTransactionId}`);
-              break;
+              if (txn.authentication['3ds']?.transactionId) {
+                authTransactionId = txn.authentication['3ds'].transactionId;
+                console.log(`   Found auth transaction ID in order data transaction: ${authTransactionId}`);
+                break;
+              }
             }
           }
         }
         
+        // Also check the order-level authentication.3ds.transactionId (fallback)
+        // But prefer the latest from transaction array
+        if (!authTransactionId) {
+          // Check order-level 3ds structure
+          if (transaction.authentication?.['3ds']?.transactionId) {
+            authTransactionId = transaction.authentication['3ds'].transactionId;
+            console.log(`   Found auth transaction ID at order level (3ds): ${authTransactionId}`);
+          }
+          // Check order-level direct transactionId
+          else if (transaction.authentication?.transactionId) {
+            authTransactionId = transaction.authentication.transactionId;
+            console.log(`   Found auth transaction ID at order level: ${authTransactionId}`);
+          }
+          // Check orderData authentication
+          else if (orderData?.authentication?.['3ds']?.transactionId) {
+            authTransactionId = orderData.authentication['3ds'].transactionId;
+            console.log(`   Found auth transaction ID in orderData (3ds): ${authTransactionId}`);
+          }
+        }
+        
         if (authTransactionId) {
+          console.log(`   ✅ Using Authentication Transaction ID: ${authTransactionId}`);
           console.log(`   ✅ Authentication Transaction ID: ${authTransactionId}`);
           
           try {
@@ -821,22 +895,46 @@ async function handlePaymentCallback(req, res) {
           }
         } else {
           console.warn('⚠️ Authentication transaction ID not found - cannot call PAY');
+          console.log('   Order Status:', orderStatus);
+          console.log('   Authentication Status:', authenticationStatus);
+          console.log('   Transaction Status:', transactionStatus);
           console.log('   Transaction data structure:', {
             hasTransactionAuth: !!transaction.authentication,
             hasTransactionAuthTransactionId: !!transaction.authentication?.transactionId,
+            hasTransactionAuth3dsTransactionId: !!transaction.authentication?.['3ds']?.transactionId,
             hasTransactionAuthId: !!transactionAuth.transactionId,
             hasLatestTxnAuth: !!latestTransaction?.authentication?.transactionId,
+            hasLatestTxnAuth3ds: !!latestTransaction?.authentication?.['3ds']?.transactionId,
             hasOrderDataAuth: !!orderData?.authentication?.transactionId,
+            hasOrderDataAuth3ds: !!orderData?.authentication?.['3ds']?.transactionId,
             transactionArrayLength: transactionArray.length,
-            orderDataHasTransaction: !!orderData?.transaction,
-            transactionArray: transactionArray.map(t => ({
-              id: t.id,
-              transactionId: t.transactionId,
-              type: t.type,
-              hasAuth: !!t.authentication,
-              authTransactionId: t.authentication?.transactionId
-            }))
+            orderDataHasTransaction: !!orderData?.transaction
           });
+          
+          // Log detailed transaction array structure
+          if (transactionArray.length > 0) {
+            console.log('   Transaction Array Details:');
+            transactionArray.forEach((txn, idx) => {
+              console.log(`     Transaction ${idx}:`, {
+                type: txn.transaction?.type || txn.type,
+                hasAuth: !!txn.authentication,
+                auth3dsTransactionId: txn.authentication?.['3ds']?.transactionId,
+                authTransactionId: txn.authentication?.transactionId,
+                transactionId: txn.transactionId
+              });
+            });
+          }
+          
+          // Log order-level authentication structure
+          if (transaction.authentication) {
+            console.log('   Order-level authentication structure:', {
+              has3ds: !!transaction.authentication['3ds'],
+              has3dsTransactionId: !!transaction.authentication['3ds']?.transactionId,
+              '3dsTransactionId': transaction.authentication['3ds']?.transactionId,
+              hasDirectTransactionId: !!transaction.authentication.transactionId,
+              directTransactionId: transaction.authentication.transactionId
+            });
+          }
         }
       } else if (hasPayTransaction) {
         console.log('✅ PAY transaction already exists - ARC Pay processed it automatically');
