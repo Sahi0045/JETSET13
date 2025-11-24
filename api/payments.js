@@ -447,6 +447,20 @@ async function handlePaymentInitiation(req, res) {
 }
 
 // Payment Callback - Handle ARC Pay redirect
+// 
+// ARC Pay 3DS2 Authentication Status Handling:
+// - transactionStatus: Y (Frictionless), C (Challenge), A (Authentication Attempted), 
+//                      N (Not Authenticated), R (Rejected), U (Unavailable)
+// - authenticationStatus: AUTHENTICATION_SUCCESSFUL, AUTHENTICATION_PENDING, 
+//                        AUTHENTICATION_FAILED, AUTHENTICATION_UNAVAILABLE
+// 
+// Official ARC Pay Test Cards for 3DS Testing:
+// Mastercard Challenge: 5123450000000008, 2223000000000007
+// Mastercard Frictionless: 5123456789012346
+// Visa Challenge: 4440000009900010
+// Visa Frictionless: 4440000042200014
+// Use expiry "01/39" for successful transactions
+//
 async function handlePaymentCallback(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -564,30 +578,48 @@ async function handlePaymentCallback(req, res) {
     console.log('🔍 Transaction response:', JSON.stringify(transaction, null, 2));
 
     // 4. Check transaction result and 3DS authentication status
-    // ARC Pay returns different fields based on transaction state
+    // ARC Pay 3DS2 authentication fields according to official documentation
     const transactionResult = transaction.result;
     const orderStatus = transaction.status;
-    const authenticationResult = transaction.authentication?.result || transaction.threeDSecure?.result;
-    const authenticationStatus = transaction.authenticationStatus || transaction.authentication?.status;
+    
+    // 3DS2 authentication fields
+    const authentication = transaction.authentication || {};
+    const threeDS2 = authentication.threeDS2 || authentication['3ds2'] || {};
+    const transactionStatus = threeDS2.transactionStatus || authentication.transactionStatus;
+    const statusReasonCode = threeDS2.statusReasonCode || authentication.statusReasonCode;
+    const eci = threeDS2.eci || authentication.eci || transaction.eci;
+    const authenticationToken = threeDS2.authenticationToken || authentication.authenticationToken;
+    
+    // Legacy 3DS fields
+    const authenticationResult = authentication.result || transaction.threeDSecure?.result;
+    const authenticationStatus = transaction.authenticationStatus || authentication.status;
     const gatewayCode = transaction.response?.gatewayCode || transaction.response?.code;
     const avsResponse = transaction.response?.avsResponse;
 
     console.log('📊 Transaction analysis:', {
       result: transactionResult,
       status: orderStatus,
-      authenticationResult,
-      authenticationStatus,
+      transactionStatus, // Y, C, A, N, R, U (from 3DS2)
+      statusReasonCode,
+      eci,
+      authenticationStatus, // AUTHENTICATION_SUCCESSFUL, AUTHENTICATION_PENDING, etc.
+      authenticationResult, // Legacy field
       gatewayCode,
-      avsResponse
+      hasAuthenticationToken: !!authenticationToken
     });
 
-    // Check if 3DS authentication is required and still pending
-    if (orderStatus === 'AUTHENTICATION_INITIATED' || 
+    // Handle 3DS2 transaction status according to ARC Pay documentation
+    // Y = Frictionless (successful), C = Challenge, A = Authentication Attempted,
+    // N = Not Authenticated, R = Rejected, U = Unavailable
+    
+    // Check if 3DS authentication is still pending (Challenge flow)
+    if (transactionStatus === 'C' || 
+        orderStatus === 'AUTHENTICATION_INITIATED' || 
         orderStatus === 'AUTHENTICATION_PENDING' ||
         authenticationStatus === 'AUTHENTICATION_INITIATED' ||
         authenticationStatus === 'AUTHENTICATION_PENDING') {
       
-      console.log('⏳ 3DS authentication still pending');
+      console.log('⏳ 3DS authentication challenge pending');
       
       await supabase
         .from('payments')
@@ -595,22 +627,34 @@ async function handlePaymentCallback(req, res) {
           payment_status: 'pending_3ds',
           metadata: {
             transaction: transaction,
+            transactionStatus,
             authenticationStatus,
-            message: '3D Secure authentication in progress'
+            message: '3D Secure challenge in progress'
           }
         })
         .eq('id', payment.id);
 
-      // Redirect to failed page with specific message about 3DS
       return res.redirect(`/payment/failed?reason=3ds_pending&paymentId=${payment.id}&message=Please complete the 3D Secure authentication challenge`);
     }
 
-    // Check if 3DS authentication failed
-    if (authenticationResult === 'FAILURE' || 
+    // Check if 3DS authentication was not authenticated, rejected, or unavailable
+    if (transactionStatus === 'N' || 
+        transactionStatus === 'R' ||
+        transactionStatus === 'U' ||
+        authenticationResult === 'FAILURE' || 
         authenticationResult === 'UNAVAILABLE' ||
+        authenticationStatus === 'AUTHENTICATION_FAILED' ||
+        authenticationStatus === 'AUTHENTICATION_UNAVAILABLE' ||
         (transactionResult === 'FAILURE' && authenticationStatus === 'AUTHENTICATION_FAILED')) {
       
-      console.log('❌ 3DS authentication failed');
+      console.log('❌ 3DS authentication failed, rejected, or unavailable');
+      
+      const failureReason = transactionStatus === 'N' ? '3DS Not Authenticated' :
+                           transactionStatus === 'R' ? '3DS Authentication Rejected' :
+                           transactionStatus === 'U' ? '3DS Authentication Unavailable' :
+                           statusReasonCode ? `3DS Error Code: ${statusReasonCode}` :
+                           authenticationStatus === 'AUTHENTICATION_UNAVAILABLE' ? '3DS Authentication Unavailable' :
+                           '3D Secure authentication failed';
       
       await supabase
         .from('payments')
@@ -618,8 +662,13 @@ async function handlePaymentCallback(req, res) {
           payment_status: 'failed',
           metadata: {
             transaction: transaction,
+            transactionStatus,
+            statusReasonCode,
+            eci,
             authenticationResult,
-            failureReason: '3D Secure authentication failed'
+            authenticationStatus,
+            failureReason,
+            timestamp: new Date().toISOString()
           }
         })
         .eq('id', payment.id);
@@ -630,16 +679,45 @@ async function handlePaymentCallback(req, res) {
     // Check if transaction is successful
     // ARC Pay considers it successful if:
     // 1. result === 'SUCCESS' AND
-    // 2. authentication.result === 'SUCCESS' (if 3DS was required) OR no authentication required
-    // 3. gatewayCode is APPROVED or SUCCESS
+    // 2. 3DS2 transactionStatus === 'Y' (Frictionless) OR 'A' (Authentication Attempted) OR no 3DS required
+    // 3. authenticationStatus === 'AUTHENTICATION_SUCCESSFUL' (if 3DS was required)
+    // 4. gatewayCode is APPROVED or SUCCESS
+    // 5. ECI code indicates successful authentication (05, 02 for successful 3DS, or no ECI if no 3DS)
+    
+    const is3DSSuccess = (
+      transactionStatus === 'Y' || // Frictionless - successful
+      transactionStatus === 'A' || // Authentication Attempted - treated as success per ARC Pay docs
+      !transactionStatus || // No 3DS required for this card
+      transactionStatus === undefined // No 3DS data present
+    );
+
+    const isAuthSuccess = (
+      authenticationStatus === 'AUTHENTICATION_SUCCESSFUL' ||
+      authenticationStatus === undefined || // No authentication status (no 3DS)
+      !authenticationStatus // No authentication required
+    );
+
+    // ECI codes: 05/02 = successful 3DS, 07/00 = failed 3DS, undefined = no 3DS
+    const isValidECI = (
+      !eci || // No ECI (no 3DS)
+      eci === '05' || // Successful 3DS (Visa)
+      eci === '02' || // Successful 3DS (Mastercard)
+      eci === '06' // Authentication Attempted (treated as success)
+    );
+
     const isSuccess = (
       transactionResult === 'SUCCESS' &&
-      (authenticationResult === 'SUCCESS' || authenticationResult === undefined || authenticationResult === null) &&
+      is3DSSuccess &&
+      isAuthSuccess &&
+      isValidECI &&
       (gatewayCode === 'APPROVED' || gatewayCode === 'SUCCESS' || !gatewayCode || gatewayCode === undefined)
     );
 
     if (isSuccess) {
       console.log('✅ Payment successful');
+      console.log(`   3DS Status: ${transactionStatus || 'No 3DS'}`);
+      console.log(`   ECI: ${eci || 'N/A'}`);
+      console.log(`   Gateway Code: ${gatewayCode || 'N/A'}`);
       
       // Update payment status
       await supabase
@@ -653,7 +731,14 @@ async function handlePaymentCallback(req, res) {
                          transaction.paymentMethod,
           metadata: {
             transaction: transaction,
+            threeDS2: {
+              transactionStatus,
+              statusReasonCode,
+              eci,
+              hasAuthenticationToken: !!authenticationToken
+            },
             authenticationResult,
+            authenticationStatus,
             gatewayCode
           }
         })
