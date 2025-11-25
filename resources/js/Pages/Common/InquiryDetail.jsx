@@ -227,12 +227,23 @@ const InquiryDetail = () => {
 
       const data = await response.json();
 
+      console.log('📦 Full payment API response:', data);
+
       if (!data.success) {
         console.error('Payment initiation failed:', data);
         throw new Error(data.error || data.details || 'Failed to initiate payment');
       }
 
       const { sessionId, merchantId, successIndicator, paymentId, paymentPageUrl, checkoutUrl } = data;
+
+      console.log('🔍 Extracted values:', {
+        sessionId,
+        merchantId,
+        successIndicator,
+        paymentId,
+        paymentPageUrl,
+        checkoutUrl
+      });
 
       // Validate critical fields
       if (!sessionId) {
