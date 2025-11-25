@@ -296,12 +296,14 @@ const InquiryDetail = () => {
       // Create POST form for Hosted Checkout
       // ARC Pay Hosted Session requires:
       // 1. POST to /api/page/version/100/pay
-      // 2. session.id field (required)
-      // 3. gatewayReturnURL field (optional but recommended)
+      // 2. session.id field (REQUIRED)
+      // 3. merchant field (REQUIRED) - Merchant ID
+      // 4. gatewayReturnURL field (optional but recommended)
       const form = document.createElement('form');
       form.method = 'POST';
       form.action = finalPaymentUrl;
       form.style.display = 'none';
+      form.enctype = 'application/x-www-form-urlencoded';
 
       // REQUIRED: Add session.id field - ARC Pay uses this to identify the session
       const sessionIdInput = document.createElement('input');
@@ -309,6 +311,18 @@ const InquiryDetail = () => {
       sessionIdInput.name = 'session.id';
       sessionIdInput.value = sessionId;
       form.appendChild(sessionIdInput);
+
+      // REQUIRED: Add merchant field - ARC Pay requires merchant ID in the form
+      if (merchantId) {
+        const merchantInput = document.createElement('input');
+        merchantInput.type = 'hidden';
+        merchantInput.name = 'merchant';
+        merchantInput.value = merchantId;
+        form.appendChild(merchantInput);
+        console.log('   Merchant ID:', merchantId);
+      } else {
+        console.warn('⚠️ Merchant ID not provided in response');
+      }
 
       // OPTIONAL: Add gatewayReturnURL field - where to redirect after payment
       // Must point to API endpoint, not frontend route
