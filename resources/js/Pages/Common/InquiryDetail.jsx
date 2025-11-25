@@ -232,36 +232,37 @@ const InquiryDetail = () => {
         throw new Error(data.error || data.details || 'Failed to initiate payment');
       }
 
-      const { sessionId, merchantId, successIndicator, paymentId } = data;
+      const { sessionId, merchantId, successIndicator, paymentId, paymentPageUrl, checkoutUrl } = data;
 
-      if (!sessionId || !merchantId) {
-        console.error('Invalid payment response:', data);
-        throw new Error('Invalid response from payment server. Please try again.');
+      // Validate critical fields
+      if (!sessionId) {
+        console.error('Missing sessionId in payment response:', data);
+        throw new Error('Payment session ID not provided by server. Please try again.');
+      }
+
+      const finalPaymentUrl = paymentPageUrl || checkoutUrl;
+      if (!finalPaymentUrl) {
+        console.error('Missing payment URL in payment response:', data);
+        throw new Error('Payment page URL not provided by server. Please try again.');
       }
 
       console.log('✅ Payment session created successfully');
       console.log('   Session ID:', sessionId);
-      console.log('   Merchant ID:', merchantId);
+      console.log('   Merchant ID:', merchantId || 'N/A');
       console.log('   Payment ID:', paymentId);
+      console.log('   Payment URL:', finalPaymentUrl);
+      console.log('   Success Indicator:', successIndicator);
 
       // 2. Create and submit POST form to ARC Pay payment page
       // ARC Pay requires POST method (not GET redirect) to /api/page/version/<V>/pay
-      const paymentPageUrl = data.paymentPageUrl || data.checkoutUrl;
-      
-      if (!paymentPageUrl) {
-        throw new Error('Payment page URL not provided by server');
-      }
-      
-      console.log('✅ Payment page URL:', paymentPageUrl);
-      console.log('   Session ID:', sessionId);
       console.log('🔄 Creating payment form and submitting...');
-      
+
       // Create a hidden form and POST it to ARC Pay
       // ARC Pay Hosted Checkout "Checkout mode: Website" requires POST with session.id
       // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U#1af06424-32a2-4340-9c58-ea933c53a59e
       const form = document.createElement('form');
       form.method = 'POST';
-      form.action = paymentPageUrl;
+      form.action = finalPaymentUrl;
       form.style.display = 'none';
       form.acceptCharset = 'UTF-8';
       
