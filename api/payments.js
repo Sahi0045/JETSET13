@@ -260,7 +260,13 @@ async function handlePaymentInitiation(req, res) {
     // authentication parameters (acceptVersions, channel, purpose). These parameters
     // are only used in INITIATE_AUTHENTICATION and AUTHENTICATE_PAYER operations.
     // Including authentication.purpose will result in: "Unexpected parameter 'authentication.purpose'"
-    // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U
+    // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U#ae595aa5-e080-4961-ae0b-80d8611d8921
+    // 
+    // Official documentation structure:
+    // - apiOperation: "INITIATE_CHECKOUT"
+    // - order: { id, currency, description, amount }
+    // - interaction: { operation, returnUrl }
+    // - customer: { email, mobilePhone } (optional but recommended)
     const requestBody = {
       apiOperation: 'INITIATE_CHECKOUT',
       interaction: {
@@ -283,10 +289,29 @@ async function handlePaymentInitiation(req, res) {
         currency: quote.currency || 'USD',
         description: `Quote ${quote.quote_number || quote.id.slice(-8)} - ${quote.title || 'Travel Booking'}`
       }
-      // NOTE: Do NOT include authentication block here - it's not supported in INITIATE_CHECKOUT
-      // NOTE: airline.ticket.issue.travelAgentCode and travelAgentName are required for airline transactions
-      // but may be optional for other transaction types (hotels, packages, etc.)
     };
+
+    // Add customer object if email is available (per ARC Pay documentation example)
+    // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U#ae595aa5-e080-4961-ae0b-80d8611d8921
+    if (customerEmail) {
+      requestBody.customer = {
+        email: customerEmail
+      };
+      
+      // Add mobile phone if available from inquiry
+      const customerPhone = inquiry?.customer_phone || quote.customer_phone;
+      if (customerPhone) {
+        // Remove any non-digit characters for phone number
+        const cleanPhone = customerPhone.replace(/\D/g, '');
+        if (cleanPhone) {
+          requestBody.customer.mobilePhone = cleanPhone;
+        }
+      }
+    }
+    
+    // NOTE: Do NOT include authentication block here - it's not supported in INITIATE_CHECKOUT
+    // NOTE: airline.ticket.issue.travelAgentCode and travelAgentName are required for airline transactions
+    // but may be optional for other transaction types (hotels, packages, etc.)
 
     // Final verification: Ensure no authentication block exists
     if (requestBody.authentication) {
@@ -520,12 +545,22 @@ async function handlePaymentInitiation(req, res) {
 // Use expiry "01/39" for successful transactions
 //
 async function handlePaymentCallback(req, res) {
-  if (req.method !== 'GET') {
+  // Accept both GET and POST - ARC Pay gateway sends POST with form data
+  if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { resultIndicator, sessionId } = req.query;
+    // ARC Pay sends data via POST body for form submission, or GET query params
+    const resultIndicator = req.body?.resultIndicator || req.query?.resultIndicator;
+    const sessionId = req.body?.sessionId || req.query?.sessionId;
+
+    console.log('📥 Payment callback received:');
+    console.log('   Method:', req.method);
+    console.log('   Body:', req.body);
+    console.log('   Query:', req.query);
+    console.log('   Result Indicator:', resultIndicator);
+    console.log('   Session ID:', sessionId);
 
     if (!resultIndicator || !sessionId) {
       return res.redirect('/payment/failed?error=missing_params');
