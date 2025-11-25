@@ -1036,22 +1036,24 @@ async function handlePaymentCallback(req, res) {
               const payUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${payTransactionId}`;
               console.log(`   PAY URL: ${payUrl}`);
               
+              // Build PAY request body according to ARC Pay documentation
+              // Required fields: apiOperation, authentication.transactionId, session.id
+              // Optional: transaction.reference
               const payRequestBody = {
-              apiOperation: 'PAY',
-              authentication: {
-                transactionId: authTransactionId
-              },
-              order: {
-                amount: parseFloat(payment.amount).toFixed(2),
-                currency: payment.currency || 'USD'
-              },
-              sourceOfFunds: {
-                type: 'CARD'
-              },
-              transaction: {
-                reference: `PAY-${payment.id}`
-              }
-            };
+                apiOperation: 'PAY',
+                authentication: {
+                  transactionId: authTransactionId
+                },
+                session: {
+                  id: payment.arc_session_id || sessionId || ''
+                },
+                transaction: {
+                  reference: `PAY-${payment.id}`
+                }
+              };
+              
+              // Note: order.amount and sourceOfFunds are NOT needed for PAY after 3DS
+              // The amount and card details are already captured in the INITIATE_CHECKOUT session
             
               console.log('   PAY Request Body:', JSON.stringify(payRequestBody, null, 2));
               
