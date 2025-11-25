@@ -278,11 +278,14 @@ async function handlePaymentInitiation(req, res) {
       },
       order: {
         id: payment.id,
+        reference: payment.id, // Required: Unique order reference per ARC Pay docs
         amount: parseFloat(quote.total_amount).toFixed(2),
         currency: quote.currency || 'USD',
         description: `Quote ${quote.quote_number || quote.id.slice(-8)} - ${quote.title || 'Travel Booking'}`
       }
       // NOTE: Do NOT include authentication block here - it's not supported in INITIATE_CHECKOUT
+      // NOTE: airline.ticket.issue.travelAgentCode and travelAgentName are required for airline transactions
+      // but may be optional for other transaction types (hotels, packages, etc.)
     };
 
     // Final verification: Ensure no authentication block exists
