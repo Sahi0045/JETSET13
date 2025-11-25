@@ -257,21 +257,22 @@ const InquiryDetail = () => {
       console.log('🔄 Creating payment form and submitting...');
       
       // Create a hidden form and POST it to ARC Pay
-      // ARC Pay hosted payment page expects POST with form fields
+      // ARC Pay Hosted Checkout "Checkout mode: Website" requires POST with session.id
+      // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U#1af06424-32a2-4340-9c58-ea933c53a59e
       const form = document.createElement('form');
       form.method = 'POST';
       form.action = paymentPageUrl;
       form.style.display = 'none';
       form.acceptCharset = 'UTF-8';
       
-      // Add session ID - try different field name formats
+      // ARC Pay Hosted Checkout requires session.id field (dot notation)
       const sessionInput = document.createElement('input');
       sessionInput.type = 'hidden';
-      sessionInput.name = 'session.id'; // ARC Pay typically uses dot notation
+      sessionInput.name = 'session.id';
       sessionInput.value = sessionId;
       form.appendChild(sessionInput);
       
-      // Add merchant ID if available (some payment gateways require this)
+      // Optional: Add merchant ID (may be required by some configurations)
       if (merchantId) {
         const merchantInput = document.createElement('input');
         merchantInput.type = 'hidden';

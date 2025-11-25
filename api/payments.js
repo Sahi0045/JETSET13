@@ -282,18 +282,10 @@ async function handlePaymentInitiation(req, res) {
         amount: parseFloat(quote.total_amount).toFixed(2),
         currency: quote.currency || 'USD',
         description: `Quote ${quote.quote_number || quote.id.slice(-8)} - ${quote.title || 'Travel Booking'}`
-      },
-      // Required per ARC Pay API v70 documentation: airline.ticket.issue.travelAgentCode and travelAgentName
-      // must be submitted with each transaction
-      airline: {
-        ticket: {
-          issue: {
-            travelAgentCode: process.env.ARC_TRAVEL_AGENT_CODE || process.env.TRAVEL_AGENT_CODE || 'JETSET001',
-            travelAgentName: process.env.ARC_TRAVEL_AGENT_NAME || process.env.TRAVEL_AGENT_NAME || 'JetSet Travel'
-          }
-        }
       }
       // NOTE: Do NOT include authentication block here - it's not supported in INITIATE_CHECKOUT
+      // NOTE: airline.ticket.issue.travelAgentCode and travelAgentName are required for airline transactions
+      // but may be optional for other transaction types (hotels, packages, etc.)
     };
 
     // Final verification: Ensure no authentication block exists
@@ -432,9 +424,10 @@ async function handlePaymentInitiation(req, res) {
       console.log('✅ Payment record updated with session ID');
     }
 
-    // 6. Construct payment page URL (ARC Pay requires POST to /api/page/version/<V>/pay)
-    // ARC Pay hosted payment page requires POST method with form data
-    // IMPORTANT: Use the same domain as the API base URL (na.gateway.mastercard.com)
+    // 6. Construct payment page URL for Hosted Checkout "Checkout mode: Website"
+    // ARC Pay Hosted Checkout requires POST to /api/page/version/<V>/pay with session.id
+    // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U#1af06424-32a2-4340-9c58-ea933c53a59e
+    // IMPORTANT: Use the same domain as the API base URL (e.g., na.gateway.mastercard.com or api.arcpay.travel)
     const apiVersion = process.env.ARC_PAY_API_VERSION || '100';
     
     // Extract domain from arcBaseUrl (e.g., https://na.gateway.mastercard.com from https://na.gateway.mastercard.com/api/rest/version/100)
@@ -446,6 +439,8 @@ async function handlePaymentInitiation(req, res) {
       console.warn('Could not parse arcBaseUrl, using default domain');
     }
     
+    // Hosted Checkout payment page URL format: {domain}/api/page/version/{version}/pay?charset=UTF-8
+    // Frontend will POST form with session.id field to this URL
     const paymentPageUrl = `${gatewayDomain}/api/page/version/${apiVersion}/pay?charset=UTF-8`;
     
     console.log('✅ Payment page URL:', paymentPageUrl);
