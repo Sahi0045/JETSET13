@@ -221,17 +221,24 @@ const InquiryDetail = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ 
-          error: `Network error (${response.status})`,
-          details: 'Unable to connect to payment server'
-        }));
+        let errorData = { error: `Server error (${response.status})` };
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError);
+          errorData = { 
+            error: `Network error (${response.status})`,
+            details: 'Unable to connect to payment server'
+          };
+        }
         
         console.error('Payment API error:', {
           status: response.status,
           error: errorData
         });
         
-        throw new Error(errorData.error || errorData.details || `Server error: ${response.status}`);
+        const errorMsg = errorData?.error || errorData?.details || errorData?.message || `Server error: ${response.status}`;
+        throw new Error(errorMsg);
       }
 
       const data = await response.json();
@@ -240,7 +247,8 @@ const InquiryDetail = () => {
 
       if (!data.success) {
         console.error('Payment initiation failed:', data);
-        throw new Error(data.error || data.details || 'Failed to initiate payment');
+        const errorMsg = data?.error || data?.details || data?.message || 'Failed to initiate payment';
+        throw new Error(errorMsg);
       }
 
       const { sessionId, merchantId, successIndicator, paymentId, paymentPageUrl, checkoutUrl } = data;
@@ -348,14 +356,21 @@ const InquiryDetail = () => {
       // Show user-friendly error message
       let errorMessage = 'An unexpected error occurred. Please try again.';
       
-      if (error.message) {
-        errorMessage = error.message;
-      } else if (error instanceof TypeError && error.message.includes('fetch')) {
+      // Safely extract error message
+      const errMsg = error?.message || '';
+      
+      if (errMsg && errMsg !== 'undefined') {
+        if (errMsg.includes('401') || errMsg.includes('403')) {
+          errorMessage = 'Authentication required. Please log in and try again.';
+        } else if (errMsg.includes('500')) {
+          errorMessage = 'Payment server error. Please try again in a moment or contact support.';
+        } else if (errMsg.includes('fetch') || errMsg.includes('network') || errMsg.includes('Network')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else {
+          errorMessage = errMsg;
+        }
+      } else if (error instanceof TypeError) {
         errorMessage = 'Network error. Please check your internet connection and try again.';
-      } else if (error.message.includes('401') || error.message.includes('403')) {
-        errorMessage = 'Authentication required. Please log in and try again.';
-      } else if (error.message.includes('500')) {
-        errorMessage = 'Payment server error. Please try again in a moment or contact support.';
       }
       
       alert(`Payment Error: ${errorMessage}`);
