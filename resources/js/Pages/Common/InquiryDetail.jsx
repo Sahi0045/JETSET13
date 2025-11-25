@@ -298,7 +298,8 @@ const InquiryDetail = () => {
       // 1. POST to /api/page/version/100/pay
       // 2. session.id field (REQUIRED)
       // 3. merchant field (REQUIRED) - Merchant ID
-      // 4. gatewayReturnURL field (optional but recommended)
+      // NOTE: gatewayReturnURL is NOT accepted as a form parameter - it causes "Unexpected parameter" error
+      // The return URL is configured in INITIATE_CHECKOUT via interaction.returnUrl
       const form = document.createElement('form');
       form.method = 'POST';
       form.action = finalPaymentUrl;
@@ -324,19 +325,15 @@ const InquiryDetail = () => {
         console.warn('⚠️ Merchant ID not provided in response');
       }
 
-      // OPTIONAL: Add gatewayReturnURL field - where to redirect after payment
-      // Must point to API endpoint, not frontend route
-      const returnUrlInput = document.createElement('input');
-      returnUrlInput.type = 'hidden';
-      returnUrlInput.name = 'gatewayReturnURL';
-      returnUrlInput.value = `${window.location.origin}/api/payments?action=payment-callback&quote_id=${quote.id}&inquiry_id=${inquiry.id}`;
-      form.appendChild(returnUrlInput);
+      // NOTE: Do NOT include gatewayReturnURL - it causes "Unexpected parameter" error
+      // The return URL is already configured in INITIATE_CHECKOUT via interaction.returnUrl
 
       // Add form to body and submit
       document.body.appendChild(form);
       console.log('📤 Submitting POST form to:', finalPaymentUrl);
       console.log('   Session ID:', sessionId);
-      console.log('   Return URL:', returnUrlInput.value);
+      console.log('   Merchant ID:', merchantId || 'N/A');
+      console.log('   Return URL configured in INITIATE_CHECKOUT');
       form.submit();
 
       // Note: User will be redirected, so we don't reset loading state
