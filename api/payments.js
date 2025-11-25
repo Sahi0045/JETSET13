@@ -427,18 +427,16 @@ async function handlePaymentInitiation(req, res) {
     // 6. Construct payment page URL for Hosted Checkout "Checkout mode: Website"
     // ARC Pay Hosted Checkout requires POST to /api/page/version/<V>/pay with session.id
     // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U#1af06424-32a2-4340-9c58-ea933c53a59e
-    // IMPORTANT: Use the same domain as the API base URL (e.g., na.gateway.mastercard.com or api.arcpay.travel)
+    // IMPORTANT: Use the ACTUAL gateway domain (na.gateway.mastercard.com), NOT api.arcpay.travel
     const apiVersion = process.env.ARC_PAY_API_VERSION || '100';
-    
-    // Extract domain from arcBaseUrl (e.g., https://na.gateway.mastercard.com from https://na.gateway.mastercard.com/api/rest/version/100)
-    let gatewayDomain = 'https://na.gateway.mastercard.com'; // Default fallback
-    try {
-      const url = new URL(arcBaseUrl);
-      gatewayDomain = `${url.protocol}//${url.hostname}`;
-    } catch (e) {
-      console.warn('Could not parse arcBaseUrl, using default domain');
-    }
-    
+
+    // CRITICAL: Payment page MUST use na.gateway.mastercard.com domain
+    // Even if API calls use api.arcpay.travel, the payment page is hosted on the gateway domain
+    const gatewayDomain = 'https://na.gateway.mastercard.com';
+
+    console.log('🔧 Using gateway domain for payment page:', gatewayDomain);
+    console.log('   API base URL was:', arcBaseUrl);
+
     // Hosted Checkout payment page URL format: {domain}/api/page/version/{version}/pay?charset=UTF-8
     // Frontend will POST form with session.id field to this URL
     const paymentPageUrl = `${gatewayDomain}/api/page/version/${apiVersion}/pay?charset=UTF-8`;
