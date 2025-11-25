@@ -8,23 +8,54 @@ export default function PaymentCallback() {
   useEffect(() => {
     const verifyPayment = async () => {
       try {
-        const resultIndicator = searchParams.get('resultIndicator');
-        const sessionId = searchParams.get('sessionId');
+        // ARC Pay may send parameters with different names
+        // Try multiple possible parameter formats
+        const resultIndicator = searchParams.get('resultIndicator') || 
+                               searchParams.get('result') ||
+                               searchParams.get('resultIndicator');
+        const sessionId = searchParams.get('sessionId') || 
+                         searchParams.get('session.id') ||
+                         searchParams.get('session_id');
+        const quoteId = searchParams.get('quote_id');
+        const inquiryId = searchParams.get('inquiry_id');
         
-        console.log('Payment callback received:', { resultIndicator, sessionId });
+        console.log('Payment callback received:', { 
+          resultIndicator: resultIndicator || 'undefined',
+          sessionId: sessionId || 'undefined',
+          quoteId: quoteId || 'undefined',
+          inquiryId: inquiryId || 'undefined',
+          allParams: Object.fromEntries(searchParams.entries())
+        });
         
-        if (!resultIndicator || !sessionId) {
-          console.error('Missing payment parameters:', { resultIndicator, sessionId });
-          navigate('/payment/failed?error=missing_params');
+        // Build backend URL with available parameters
+        const params = new URLSearchParams();
+        if (resultIndicator) params.append('resultIndicator', resultIndicator);
+        if (sessionId) params.append('sessionId', sessionId);
+        if (quoteId) params.append('quote_id', quoteId);
+        if (inquiryId) params.append('inquiry_id', inquiryId);
+        
+        // If we have at least sessionId or quoteId, proceed
+        if (!sessionId && !quoteId) {
+          console.error('Missing required payment parameters:', { resultIndicator, sessionId, quoteId });
+          const redirectUrl = inquiryId 
+            ? `/inquiry/${inquiryId}?payment=failed&error=missing_params`
+            : '/payment/failed?error=missing_params';
+          navigate(redirectUrl);
           return;
         }
         
         // Backend will verify and redirect
         console.log('Redirecting to backend for payment verification...');
-        window.location.href = `/api/payments?action=payment-callback&resultIndicator=${resultIndicator}&sessionId=${sessionId}`;
+        const backendUrl = `/api/payments?action=payment-callback&${params.toString()}`;
+        console.log('Backend URL:', backendUrl);
+        window.location.href = backendUrl;
       } catch (error) {
         console.error('Payment callback error:', error);
-        navigate('/payment/failed?error=processing_error');
+        const inquiryId = searchParams.get('inquiry_id');
+        const redirectUrl = inquiryId 
+          ? `/inquiry/${inquiryId}?payment=failed&error=processing_error`
+          : '/payment/failed?error=processing_error';
+        navigate(redirectUrl);
       }
     };
     

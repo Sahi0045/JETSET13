@@ -253,9 +253,15 @@ async function handlePaymentInitiation(req, res) {
     console.log('Auth Header:', authHeader.substring(0, 20) + '...');
 
     // Ensure return and cancel URLs are properly formatted
-    // Return URL must point to API endpoint for payment callback processing
-    const finalReturnUrl = return_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/api/payments?action=payment-callback&quote_id=${quote.id}`;
-    const finalCancelUrl = cancel_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/inquiry/${quote.inquiry_id}?payment=cancelled`;
+    // Return URL must point to FRONTEND route - ARC Pay redirects to frontend with resultIndicator and sessionId
+    // Frontend then calls backend API for verification
+    // Format: /payment/callback?quote_id={quoteId}&inquiry_id={inquiryId}
+    const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
+    const finalReturnUrl = return_url || `${frontendBaseUrl}/payment/callback?quote_id=${quote.id}&inquiry_id=${quote.inquiry_id}`;
+    const finalCancelUrl = cancel_url || `${frontendBaseUrl}/inquiry/${quote.inquiry_id}?payment=cancelled`;
+    
+    console.log('🔗 Return URL:', finalReturnUrl);
+    console.log('🔗 Cancel URL:', finalCancelUrl);
 
     // IMPORTANT: Per ARC Pay API v70/v100 documentation, INITIATE_CHECKOUT does NOT accept
     // authentication parameters (acceptVersions, channel, purpose). These parameters
@@ -1289,7 +1295,16 @@ async function handlePaymentCallback(req, res) {
         })
         .eq('id', payment.id);
 
-      return res.redirect(`/payment/failed?reason=3ds_pending&paymentId=${payment.id}&message=Please complete the 3D Secure authentication challenge`);
+      // Ensure payment.id exists before using in redirect
+      if (payment?.id) {
+        return res.redirect(`/payment/failed?reason=3ds_pending&paymentId=${payment.id}&message=Please complete the 3D Secure authentication challenge`);
+      } else {
+        const inquiryId = payment?.inquiry_id || payment?.quote?.inquiry_id;
+        if (inquiryId) {
+          return res.redirect(`/inquiry/${inquiryId}?payment=failed&reason=3ds_pending`);
+        }
+        return res.redirect('/payment/failed?reason=3ds_pending');
+      }
     }
 
     // Check if 3DS authentication was not authenticated, rejected, or unavailable
@@ -1328,7 +1343,16 @@ async function handlePaymentCallback(req, res) {
         })
         .eq('id', payment.id);
 
-      return res.redirect(`/payment/failed?reason=3ds_authentication_failed&paymentId=${payment.id}`);
+      // Ensure payment.id exists before using in redirect
+      if (payment?.id) {
+        return res.redirect(`/payment/failed?reason=3ds_authentication_failed&paymentId=${payment.id}`);
+      } else {
+        const inquiryId = payment?.inquiry_id || payment?.quote?.inquiry_id;
+        if (inquiryId) {
+          return res.redirect(`/inquiry/${inquiryId}?payment=failed&reason=3ds_authentication_failed`);
+        }
+        return res.redirect('/payment/failed?reason=3ds_authentication_failed');
+      }
     }
 
     // Check if transaction is successful
@@ -1487,7 +1511,16 @@ async function handlePaymentCallback(req, res) {
         })
         .eq('id', payment.id);
 
-      return res.redirect(`/payment/failed?reason=${encodeURIComponent(failureReason)}&paymentId=${payment.id}`);
+      // Ensure payment.id exists before using in redirect
+      if (payment?.id) {
+        return res.redirect(`/payment/failed?reason=${encodeURIComponent(failureReason)}&paymentId=${payment.id}`);
+      } else {
+        const inquiryId = payment?.inquiry_id || payment?.quote?.inquiry_id;
+        if (inquiryId) {
+          return res.redirect(`/inquiry/${inquiryId}?payment=failed&reason=${encodeURIComponent(failureReason)}`);
+        }
+        return res.redirect(`/payment/failed?reason=${encodeURIComponent(failureReason)}`);
+      }
     }
 
   } catch (error) {
