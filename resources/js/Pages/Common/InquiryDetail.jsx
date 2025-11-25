@@ -295,10 +295,11 @@ const InquiryDetail = () => {
       form.style.display = 'none';
 
       // REQUIRED: Add gatewayReturnURL field - where to redirect after payment
+      // Must point to API endpoint, not frontend route
       const returnUrlInput = document.createElement('input');
       returnUrlInput.type = 'hidden';
       returnUrlInput.name = 'gatewayReturnURL';
-      returnUrlInput.value = `${window.location.origin}/payment/callback?quote_id=${quote.id}&inquiry_id=${inquiry.id}`;
+      returnUrlInput.value = `${window.location.origin}/api/payments?action=payment-callback&quote_id=${quote.id}&inquiry_id=${inquiry.id}`;
       form.appendChild(returnUrlInput);
 
       // Add form to body and submit

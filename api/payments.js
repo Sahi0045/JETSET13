@@ -253,7 +253,8 @@ async function handlePaymentInitiation(req, res) {
     console.log('Auth Header:', authHeader.substring(0, 20) + '...');
 
     // Ensure return and cancel URLs are properly formatted
-    const finalReturnUrl = return_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/payment/callback?quote_id=${quote.id}`;
+    // Return URL must point to API endpoint for payment callback processing
+    const finalReturnUrl = return_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/api/payments?action=payment-callback&quote_id=${quote.id}`;
     const finalCancelUrl = cancel_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/inquiry/${quote.inquiry_id}?payment=cancelled`;
 
     // IMPORTANT: Per ARC Pay API v70/v100 documentation, INITIATE_CHECKOUT does NOT accept
