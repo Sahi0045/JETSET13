@@ -587,7 +587,9 @@ async function handlePaymentCallback(req, res) {
       console.error('   Full query:', JSON.stringify(req.query, null, 2));
 
       // Try to get inquiryId from payment record if we have quoteId
-      if (quoteId) {
+      let inquiryId = req.body?.inquiry_id || req.query?.inquiry_id;
+      
+      if (quoteId && !inquiryId) {
         const { data: paymentByQuote } = await supabase
           .from('payments')
           .select('inquiry_id')
@@ -597,20 +599,15 @@ async function handlePaymentCallback(req, res) {
           .single();
         
         if (paymentByQuote?.inquiry_id) {
-          return res.redirect(`/inquiry/${paymentByQuote.inquiry_id}?payment=failed&error=missing_params`);
+          inquiryId = paymentByQuote.inquiry_id;
         }
       }
 
-      // Redirect to inquiry page with error instead of non-existent payment/failed page
-      const inquiryId = req.body?.inquiry_id || req.query?.inquiry_id;
+      // Always redirect instead of returning JSON - prevents "undefined" in body
       if (inquiryId) {
         return res.redirect(`/inquiry/${inquiryId}?payment=failed&error=missing_params`);
       }
-      return res.status(400).json({
-        error: 'Missing payment parameters',
-        details: 'sessionId or quoteId is required',
-        received: { body: req.body, query: req.query }
-      });
+      return res.redirect('/payment/failed?error=missing_params');
     }
 
     // 1. Retrieve payment by session ID or quote ID
@@ -832,7 +829,16 @@ async function handlePaymentCallback(req, res) {
           .eq('id', payment.id);
 
         // Redirect to a page that will poll for status updates
-        return res.redirect(`/payment/callback?resultIndicator=${resultIndicator}&sessionId=${sessionId}&status=checking`);
+        // Ensure both values exist before using in redirect URL
+        if (resultIndicator && sessionId) {
+          return res.redirect(`/payment/callback?resultIndicator=${resultIndicator}&sessionId=${sessionId}&status=checking`);
+        } else {
+          const inquiryId = payment?.inquiry_id || payment?.quote?.inquiry_id;
+          if (inquiryId) {
+            return res.redirect(`/inquiry/${inquiryId}?payment=pending&status=checking`);
+          }
+          return res.redirect('/payment/failed?error=processing_error');
+        }
       }
       
       // Check if 3DS authentication is successful but PAY hasn't been processed yet
@@ -1249,7 +1255,16 @@ async function handlePaymentCallback(req, res) {
           
           // If still pending after retry, redirect to status check page
           if (retryData.result === 'PENDING' || retryData.status === 'AUTHENTICATION_PENDING') {
-            return res.redirect(`/payment/callback?resultIndicator=${resultIndicator}&sessionId=${sessionId}&status=checking`);
+            // Ensure both values exist before using in redirect URL
+            if (resultIndicator && sessionId) {
+              return res.redirect(`/payment/callback?resultIndicator=${resultIndicator}&sessionId=${sessionId}&status=checking`);
+            } else {
+              const inquiryId = payment?.inquiry_id || payment?.quote?.inquiry_id;
+              if (inquiryId) {
+                return res.redirect(`/inquiry/${inquiryId}?payment=pending&status=checking`);
+              }
+              return res.redirect('/payment/failed?error=processing_error');
+            }
           }
           
           // Update transaction with retry data
@@ -1477,7 +1492,16 @@ async function handlePaymentCallback(req, res) {
           })
           .eq('id', payment.id);
 
-        return res.redirect(`/payment/callback?resultIndicator=${resultIndicator}&sessionId=${sessionId}&status=checking`);
+        // Ensure both values exist before using in redirect URL
+        if (resultIndicator && sessionId) {
+          return res.redirect(`/payment/callback?resultIndicator=${resultIndicator}&sessionId=${sessionId}&status=checking`);
+        } else {
+          const inquiryId = payment?.inquiry_id || payment?.quote?.inquiry_id;
+          if (inquiryId) {
+            return res.redirect(`/inquiry/${inquiryId}?payment=pending&status=checking`);
+          }
+          return res.redirect('/payment/failed?error=processing_error');
+        }
       }
       
       // Payment failed or declined
