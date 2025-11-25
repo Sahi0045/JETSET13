@@ -273,55 +273,22 @@ const InquiryDetail = () => {
       console.log('   Payment URL:', finalPaymentUrl);
       console.log('   Success Indicator:', successIndicator);
 
-      // 2. Create and submit POST form to ARC Pay payment page
-      // ARC Pay requires POST method (not GET redirect) to /api/page/version/<V>/pay
-      console.log('🔄 Creating payment form and submitting...');
-      console.log('   Form action URL:', finalPaymentUrl);
-      console.log('   Session ID for form:', sessionId);
+      // 2. Redirect to ARC Pay payment page
+      // The paymentPageUrl already contains the sessionId in the path
+      // Format: https://api.arcpay.travel/form/{sessionId}?charset=UTF-8
+      console.log('🔄 Redirecting to ARC Pay payment page...');
+      console.log('   Payment URL:', finalPaymentUrl);
 
-      // Double-check finalPaymentUrl is valid before creating form
+      // Double-check finalPaymentUrl is valid before redirect
       if (!finalPaymentUrl || finalPaymentUrl === 'undefined' || finalPaymentUrl === 'null') {
         console.error('❌ Invalid payment URL:', finalPaymentUrl);
         console.error('   Full API response was:', data);
         throw new Error('Payment URL is invalid. Please contact support.');
       }
 
-      // Create a hidden form and POST it to ARC Pay
-      // ARC Pay Hosted Checkout "Checkout mode: Website" requires POST with session.id
-      // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U#1af06424-32a2-4340-9c58-ea933c53a59e
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = finalPaymentUrl;
-      form.style.display = 'none';
-      form.acceptCharset = 'UTF-8';
-      
-      // ARC Pay Hosted Checkout requires session.id field (dot notation)
-      const sessionInput = document.createElement('input');
-      sessionInput.type = 'hidden';
-      sessionInput.name = 'session.id';
-      sessionInput.value = sessionId;
-      form.appendChild(sessionInput);
-      
-      // Optional: Add merchant ID (may be required by some configurations)
-      if (merchantId) {
-        const merchantInput = document.createElement('input');
-        merchantInput.type = 'hidden';
-        merchantInput.name = 'merchant';
-        merchantInput.value = merchantId;
-        form.appendChild(merchantInput);
-      }
-      
-      // Add form to body and submit
-      document.body.appendChild(form);
-      console.log('📤 Submitting payment form to ARC Pay...');
-      console.log('   Form method:', form.method);
-      console.log('   Form action:', form.action);
-      console.log('   Form fields:', Array.from(form.elements).map(e => ({ name: e.name, value: e.value })));
-
-      // Submit the form - this will redirect the page
-      form.submit();
-
-      console.log('✅ Form submitted - page should redirect to ARC Pay');
+      // Direct redirect to payment page - sessionId is already in the URL
+      console.log('✅ Redirecting to:', finalPaymentUrl);
+      window.location.href = finalPaymentUrl;
       
       // Note: User will be redirected, so we don't reset loading state
       return; // Exit immediately - form submission will redirect

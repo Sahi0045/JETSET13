@@ -424,13 +424,12 @@ async function handlePaymentInitiation(req, res) {
       console.log('✅ Payment record updated with session ID');
     }
 
-    // 6. Construct payment page URL for Hosted Checkout "Checkout mode: Website"
-    // ARC Pay Hosted Checkout requires POST to /form/version/<V>/pay with session.id
-    // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U#1af06424-32a2-4340-9c58-ea933c53a59e
-    const apiVersion = process.env.ARC_PAY_API_VERSION || '100';
+    // 6. Construct payment page URL for Hosted Checkout
+    // CORRECT FORMAT: https://api.arcpay.travel/form/{sessionId}?charset=UTF-8
+    // The sessionId is embedded in the URL path, NOT sent as a form field
+    // Reference: ARC Pay Hosted Payment Form documentation
 
     // Extract base domain from arcBaseUrl to use for payment page
-    // Payment page uses /form/version/{version}/pay endpoint (NOT /api/page)
     let gatewayDomain;
     try {
       const url = new URL(arcBaseUrl);
@@ -443,9 +442,9 @@ async function handlePaymentInitiation(req, res) {
     console.log('🔧 Using gateway domain for payment page:', gatewayDomain);
     console.log('   API base URL:', arcBaseUrl);
 
-    // ARC Pay payment page URL format: {domain}/form/version/{version}/pay
-    // Frontend will POST form with session.id field to this URL
-    const paymentPageUrl = `${gatewayDomain}/form/version/${apiVersion}/pay`;
+    // ARC Pay payment page URL format: {domain}/form/{sessionId}?charset=UTF-8
+    // The sessionId is part of the URL path, not a POST parameter
+    const paymentPageUrl = `${gatewayDomain}/form/${sessionId}?charset=UTF-8`;
     
     console.log('✅ Payment page URL:', paymentPageUrl);
     console.log('   Session ID:', sessionId);
