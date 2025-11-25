@@ -287,16 +287,24 @@ const InquiryDetail = () => {
         throw new Error('Payment URL is invalid. Please contact support.');
       }
 
-      // Create empty POST form (no fields needed - sessionId is in URL)
-      // ARC Pay requires POST method but all data is in the URL path
+      // Create POST form with required gatewayReturnURL field
+      // ARC Pay requires POST with gatewayReturnURL to know where to redirect after payment
       const form = document.createElement('form');
       form.method = 'POST';
       form.action = finalPaymentUrl;
       form.style.display = 'none';
 
+      // REQUIRED: Add gatewayReturnURL field - where to redirect after payment
+      const returnUrlInput = document.createElement('input');
+      returnUrlInput.type = 'hidden';
+      returnUrlInput.name = 'gatewayReturnURL';
+      returnUrlInput.value = `${window.location.origin}/payment/callback?quote_id=${quote.id}&inquiry_id=${inquiry.id}`;
+      form.appendChild(returnUrlInput);
+
       // Add form to body and submit
       document.body.appendChild(form);
       console.log('📤 Submitting POST form to:', finalPaymentUrl);
+      console.log('   Return URL:', returnUrlInput.value);
       form.submit();
 
       // Note: User will be redirected, so we don't reset loading state
