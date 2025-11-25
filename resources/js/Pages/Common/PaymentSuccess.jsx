@@ -63,7 +63,7 @@ export default function PaymentSuccess() {
               <div className="flex justify-between items-center pb-4 border-b">
                 <span className="text-gray-600">Transaction ID</span>
                 <span className="font-mono text-sm font-semibold text-gray-900">
-                  {payment.arc_transaction_id || payment.id}
+                  {payment.arc_transaction_id || payment.id || 'N/A'}
                 </span>
               </div>
 
@@ -71,7 +71,7 @@ export default function PaymentSuccess() {
               <div className="flex justify-between items-center pb-4 border-b">
                 <span className="text-gray-600">Amount Paid</span>
                 <span className="text-2xl font-bold text-green-600">
-                  ${parseFloat(payment.amount).toFixed(2)} {payment.currency}
+                  ${payment.amount ? parseFloat(payment.amount).toFixed(2) : '0.00'} {payment.currency || 'USD'}
                 </span>
               </div>
 
@@ -99,13 +99,13 @@ export default function PaymentSuccess() {
                   <div className="flex justify-between items-center pb-4 border-b">
                     <span className="text-gray-600">Quote Number</span>
                     <span className="font-semibold text-gray-900">
-                      {payment.quote.quote_number}
+                      {payment.quote.quote_number || 'N/A'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">Booking</span>
                     <span className="font-semibold text-gray-900">
-                      {payment.quote.title}
+                      {payment.quote.title || 'N/A'}
                     </span>
                   </div>
                 </>

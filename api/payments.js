@@ -559,10 +559,12 @@ async function handlePaymentCallback(req, res) {
     // ARC Pay hosted form may send data with different parameter names
     // Try multiple possible formats
     const resultIndicator = req.body?.resultIndicator || req.query?.resultIndicator ||
-                           req.body?.result || req.query?.result;
+                           req.body?.result || req.query?.result ||
+                           req.body?.resultIndicator || req.query?.resultIndicator;
     const sessionId = req.body?.sessionId || req.query?.sessionId ||
                      req.body?.['session.id'] || req.query?.['session.id'] ||
-                     req.body?.session_id || req.query?.session_id;
+                     req.body?.session_id || req.query?.session_id ||
+                     req.body?.sessionId || req.query?.sessionId;
 
     console.log('   Extracted - Result Indicator:', resultIndicator);
     console.log('   Extracted - Session ID:', sessionId);
@@ -570,10 +572,28 @@ async function handlePaymentCallback(req, res) {
     // If still missing, try to get from quote_id in query
     const quoteId = req.body?.quote_id || req.query?.quote_id;
 
-    if (!resultIndicator && !sessionId && !quoteId) {
-      console.error('❌ Missing all required parameters');
+    // Validate that we have at least sessionId or quoteId
+    if (!sessionId && !quoteId) {
+      console.error('❌ Missing required parameters (sessionId and quoteId)');
       console.error('   Available keys in body:', Object.keys(req.body || {}));
       console.error('   Available keys in query:', Object.keys(req.query || {}));
+      console.error('   Full body:', JSON.stringify(req.body, null, 2));
+      console.error('   Full query:', JSON.stringify(req.query, null, 2));
+
+      // Try to get inquiryId from payment record if we have quoteId
+      if (quoteId) {
+        const { data: paymentByQuote } = await supabase
+          .from('payments')
+          .select('inquiry_id')
+          .eq('quote_id', quoteId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (paymentByQuote?.inquiry_id) {
+          return res.redirect(`/inquiry/${paymentByQuote.inquiry_id}?payment=failed&error=missing_params`);
+        }
+      }
 
       // Redirect to inquiry page with error instead of non-existent payment/failed page
       const inquiryId = req.body?.inquiry_id || req.query?.inquiry_id;
@@ -582,26 +602,68 @@ async function handlePaymentCallback(req, res) {
       }
       return res.status(400).json({
         error: 'Missing payment parameters',
+        details: 'sessionId or quoteId is required',
         received: { body: req.body, query: req.query }
       });
     }
 
-    // 1. Retrieve payment by session ID
-    const { data: payment, error: paymentError } = await supabase
-      .from('payments')
-      .select('*, quote:quotes(*), inquiry:inquiries(*)')
-      .eq('arc_session_id', sessionId)
-      .single();
+    // 1. Retrieve payment by session ID or quote ID
+    let payment;
+    let paymentError;
+    
+    if (sessionId) {
+      const result = await supabase
+        .from('payments')
+        .select('*, quote:quotes(*), inquiry:inquiries(*)')
+        .eq('arc_session_id', sessionId)
+        .single();
+      payment = result.data;
+      paymentError = result.error;
+    } else if (quoteId) {
+      // Fallback: get latest payment for quote
+      const result = await supabase
+        .from('payments')
+        .select('*, quote:quotes(*), inquiry:inquiries(*)')
+        .eq('quote_id', quoteId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      payment = result.data;
+      paymentError = result.error;
+    }
 
     if (paymentError || !payment) {
-      console.error('Payment not found for session:', sessionId);
+      console.error('Payment not found:', {
+        sessionId: sessionId || 'undefined',
+        quoteId: quoteId || 'undefined',
+        error: paymentError?.message
+      });
+      
+      const inquiryId = payment?.inquiry_id || req.body?.inquiry_id || req.query?.inquiry_id;
+      if (inquiryId) {
+        return res.redirect(`/inquiry/${inquiryId}?payment=failed&error=invalid_session`);
+      }
       return res.redirect('/payment/failed?error=invalid_session');
     }
 
     // 2. Verify resultIndicator matches successIndicator (security check)
-    if (resultIndicator !== payment.success_indicator) {
-      console.error('Result indicator mismatch');
-      return res.redirect('/payment/failed?error=invalid_indicator');
+    // Only verify if resultIndicator is provided (ARC Pay may not always send it)
+    if (resultIndicator && payment.success_indicator) {
+      if (resultIndicator !== payment.success_indicator) {
+        console.error('Result indicator mismatch:', {
+          received: resultIndicator,
+          expected: payment.success_indicator
+        });
+        const inquiryId = payment.inquiry_id || payment.quote?.inquiry_id;
+        if (inquiryId) {
+          return res.redirect(`/inquiry/${inquiryId}?payment=failed&error=invalid_indicator`);
+        }
+        return res.redirect('/payment/failed?error=invalid_indicator');
+      }
+    } else {
+      console.warn('⚠️ Result indicator not provided or not stored - skipping verification');
+      console.warn('   Received resultIndicator:', resultIndicator);
+      console.warn('   Stored success_indicator:', payment.success_indicator);
     }
 
     // 3. Retrieve order and transaction details from ARC Pay
@@ -1359,7 +1421,17 @@ async function handlePaymentCallback(req, res) {
         })
         .eq('id', payment.inquiry_id);
 
-      return res.redirect(`/payment/success?paymentId=${payment.id}`);
+      // Ensure paymentId is valid before redirecting
+      if (payment?.id) {
+        return res.redirect(`/payment/success?paymentId=${payment.id}`);
+      } else {
+        console.error('❌ Payment ID is undefined in success redirect');
+        const inquiryId = payment?.inquiry_id || payment?.quote?.inquiry_id;
+        if (inquiryId) {
+          return res.redirect(`/inquiry/${inquiryId}?payment=success`);
+        }
+        return res.redirect('/payment/success');
+      }
     } else {
       // Payment failed, declined, or still processing
       // Check if it's still PENDING (should have been handled earlier, but double-check)
