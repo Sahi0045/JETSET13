@@ -285,10 +285,24 @@ async function handlePaymentInitiation(req, res) {
       // NOTE: Do NOT include authentication block here - it's not supported in INITIATE_CHECKOUT
     };
 
+    // Final verification: Ensure no authentication block exists
+    if (requestBody.authentication) {
+      console.error('❌ ERROR: authentication block found in requestBody! Removing it...');
+      delete requestBody.authentication;
+    }
+    
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
+    console.log('✅ Verified: No authentication block in request');
 
     let arcResponse;
     try {
+      const requestBodyString = JSON.stringify(requestBody);
+      // Double-check the string doesn't contain authentication
+      if (requestBodyString.includes('"authentication"') || requestBodyString.includes("'authentication'")) {
+        console.error('❌ CRITICAL: authentication found in JSON string!');
+        console.error('Request body string:', requestBodyString);
+      }
+      
       arcResponse = await fetch(sessionUrl, {
         method: 'POST',
         headers: {
@@ -296,7 +310,7 @@ async function handlePaymentInitiation(req, res) {
           'Authorization': authHeader,
           'Accept': 'application/json'
         },
-        body: JSON.stringify(requestBody)
+        body: requestBodyString
       });
     } catch (fetchError) {
       console.error('Network error calling ARC Pay:', fetchError);
