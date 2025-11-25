@@ -450,27 +450,25 @@ async function handlePaymentInitiation(req, res) {
       console.log('✅ Payment record updated with session ID');
     }
 
-    // 6. Construct payment page URL for Hosted Checkout
-    // CORRECT FORMAT: https://api.arcpay.travel/form/{sessionId}?charset=UTF-8
-    // The sessionId is embedded in the URL path, NOT sent as a form field
-    // Reference: ARC Pay Hosted Payment Form documentation
+    // 6. Construct payment page URL for Hosted Checkout "Website" mode
+    // CORRECT FORMAT: https://na.gateway.mastercard.com/api/page/version/100/pay?charset=UTF-8
+    // The session.id is sent as a form field (session.id), NOT in the URL path
+    // Reference: ARC Pay Hosted Session documentation
+    // https://documenter.getpostman.com/view/9012210/2s935sp37U#b0c0a4bf-de46-4f40-803b-7eac662e1091
 
-    // Extract base domain from arcBaseUrl to use for payment page
-    let gatewayDomain;
-    try {
-      const url = new URL(arcBaseUrl);
-      gatewayDomain = `${url.protocol}//${url.hostname}`;
-    } catch (e) {
-      // Fallback to api.arcpay.travel for test environment
-      gatewayDomain = 'https://api.arcpay.travel';
-    }
+    const apiVersion = process.env.ARC_PAY_API_VERSION || '100';
+    
+    // CRITICAL: Payment page MUST use na.gateway.mastercard.com domain
+    // Even if API calls use api.arcpay.travel, the payment page is hosted on the gateway domain
+    const gatewayDomain = 'https://na.gateway.mastercard.com';
 
     console.log('🔧 Using gateway domain for payment page:', gatewayDomain);
-    console.log('   API base URL:', arcBaseUrl);
+    console.log('   API base URL was:', arcBaseUrl);
+    console.log('   API Version:', apiVersion);
 
-    // ARC Pay payment page URL format: {domain}/form/{sessionId}?charset=UTF-8
-    // The sessionId is part of the URL path, not a POST parameter
-    const paymentPageUrl = `${gatewayDomain}/form/${sessionId}?charset=UTF-8`;
+    // Hosted Checkout payment page URL format: {domain}/api/page/version/{version}/pay?charset=UTF-8
+    // Frontend will POST form with session.id field to this URL
+    const paymentPageUrl = `${gatewayDomain}/api/page/version/${apiVersion}/pay?charset=UTF-8`;
     
     console.log('✅ Payment page URL:', paymentPageUrl);
     console.log('   Session ID:', sessionId);
@@ -552,19 +550,40 @@ async function handlePaymentCallback(req, res) {
   }
 
   try {
-    // ARC Pay sends data via POST body for form submission, or GET query params
-    const resultIndicator = req.body?.resultIndicator || req.query?.resultIndicator;
-    const sessionId = req.body?.sessionId || req.query?.sessionId;
-
     console.log('📥 Payment callback received:');
     console.log('   Method:', req.method);
-    console.log('   Body:', req.body);
-    console.log('   Query:', req.query);
-    console.log('   Result Indicator:', resultIndicator);
-    console.log('   Session ID:', sessionId);
+    console.log('   Body:', JSON.stringify(req.body, null, 2));
+    console.log('   Query:', JSON.stringify(req.query, null, 2));
+    console.log('   Headers:', JSON.stringify(req.headers, null, 2));
 
-    if (!resultIndicator || !sessionId) {
-      return res.redirect('/payment/failed?error=missing_params');
+    // ARC Pay hosted form may send data with different parameter names
+    // Try multiple possible formats
+    const resultIndicator = req.body?.resultIndicator || req.query?.resultIndicator ||
+                           req.body?.result || req.query?.result;
+    const sessionId = req.body?.sessionId || req.query?.sessionId ||
+                     req.body?.['session.id'] || req.query?.['session.id'] ||
+                     req.body?.session_id || req.query?.session_id;
+
+    console.log('   Extracted - Result Indicator:', resultIndicator);
+    console.log('   Extracted - Session ID:', sessionId);
+
+    // If still missing, try to get from quote_id in query
+    const quoteId = req.body?.quote_id || req.query?.quote_id;
+
+    if (!resultIndicator && !sessionId && !quoteId) {
+      console.error('❌ Missing all required parameters');
+      console.error('   Available keys in body:', Object.keys(req.body || {}));
+      console.error('   Available keys in query:', Object.keys(req.query || {}));
+
+      // Redirect to inquiry page with error instead of non-existent payment/failed page
+      const inquiryId = req.body?.inquiry_id || req.query?.inquiry_id;
+      if (inquiryId) {
+        return res.redirect(`/inquiry/${inquiryId}?payment=failed&error=missing_params`);
+      }
+      return res.status(400).json({
+        error: 'Missing payment parameters',
+        received: { body: req.body, query: req.query }
+      });
     }
 
     // 1. Retrieve payment by session ID

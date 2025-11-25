@@ -273,12 +273,12 @@ const InquiryDetail = () => {
       console.log('   Payment URL:', finalPaymentUrl);
       console.log('   Success Indicator:', successIndicator);
 
-      // 2. POST to ARC Pay payment page
-      // The paymentPageUrl already contains the sessionId in the path
-      // Format: https://api.arcpay.travel/form/{sessionId}?charset=UTF-8
-      // IMPORTANT: Must use POST method (not GET), but NO form fields needed
+      // 2. POST to ARC Pay payment page (Hosted Checkout "Website" mode)
+      // Format: https://na.gateway.mastercard.com/api/page/version/100/pay?charset=UTF-8
+      // IMPORTANT: Must POST with session.id field (NOT in URL path)
       console.log('🔄 Creating POST form to ARC Pay payment page...');
       console.log('   Payment URL:', finalPaymentUrl);
+      console.log('   Session ID:', sessionId);
 
       // Double-check finalPaymentUrl is valid before creating form
       if (!finalPaymentUrl || finalPaymentUrl === 'undefined' || finalPaymentUrl === 'null') {
@@ -287,14 +287,30 @@ const InquiryDetail = () => {
         throw new Error('Payment URL is invalid. Please contact support.');
       }
 
-      // Create POST form with required gatewayReturnURL field
-      // ARC Pay requires POST with gatewayReturnURL to know where to redirect after payment
+      // Validate sessionId
+      if (!sessionId || sessionId === 'undefined' || sessionId === 'null') {
+        console.error('❌ Invalid session ID:', sessionId);
+        throw new Error('Payment session ID is invalid. Please try again.');
+      }
+
+      // Create POST form for Hosted Checkout
+      // ARC Pay Hosted Session requires:
+      // 1. POST to /api/page/version/100/pay
+      // 2. session.id field (required)
+      // 3. gatewayReturnURL field (optional but recommended)
       const form = document.createElement('form');
       form.method = 'POST';
       form.action = finalPaymentUrl;
       form.style.display = 'none';
 
-      // REQUIRED: Add gatewayReturnURL field - where to redirect after payment
+      // REQUIRED: Add session.id field - ARC Pay uses this to identify the session
+      const sessionIdInput = document.createElement('input');
+      sessionIdInput.type = 'hidden';
+      sessionIdInput.name = 'session.id';
+      sessionIdInput.value = sessionId;
+      form.appendChild(sessionIdInput);
+
+      // OPTIONAL: Add gatewayReturnURL field - where to redirect after payment
       // Must point to API endpoint, not frontend route
       const returnUrlInput = document.createElement('input');
       returnUrlInput.type = 'hidden';
@@ -305,6 +321,7 @@ const InquiryDetail = () => {
       // Add form to body and submit
       document.body.appendChild(form);
       console.log('📤 Submitting POST form to:', finalPaymentUrl);
+      console.log('   Session ID:', sessionId);
       console.log('   Return URL:', returnUrlInput.value);
       form.submit();
 
