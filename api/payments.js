@@ -256,6 +256,11 @@ async function handlePaymentInitiation(req, res) {
     const finalReturnUrl = return_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/payment/callback?quote_id=${quote.id}`;
     const finalCancelUrl = cancel_url || `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/inquiry/${quote.inquiry_id}?payment=cancelled`;
 
+    // IMPORTANT: Per ARC Pay API v70/v100 documentation, INITIATE_CHECKOUT does NOT accept
+    // authentication parameters (acceptVersions, channel, purpose). These parameters
+    // are only used in INITIATE_AUTHENTICATION and AUTHENTICATE_PAYER operations.
+    // Including authentication.purpose will result in: "Unexpected parameter 'authentication.purpose'"
+    // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U
     const requestBody = {
       apiOperation: 'INITIATE_CHECKOUT',
       interaction: {
@@ -277,6 +282,7 @@ async function handlePaymentInitiation(req, res) {
         currency: quote.currency || 'USD',
         description: `Quote ${quote.quote_number || quote.id.slice(-8)} - ${quote.title || 'Travel Booking'}`
       }
+      // NOTE: Do NOT include authentication block here - it's not supported in INITIATE_CHECKOUT
     };
 
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
@@ -314,21 +320,27 @@ async function handlePaymentInitiation(req, res) {
         errorDetails = { message: responseText, rawResponse: responseText };
       }
       
-      console.error('❌ ARC Pay API error:');
-      console.error('   Status:', arcResponse.status);
-      console.error('   Error details:', JSON.stringify(errorDetails, null, 2));
+      console.error('='.repeat(80));
+      console.error('❌ ARC Pay API ERROR:');
+      console.error('   HTTP Status:', arcResponse.status, arcResponse.statusText);
+      console.error('   Full Error Object:', JSON.stringify(errorDetails, null, 2));
+      console.error('   Raw Response:', responseText.substring(0, 1000));
       console.error('   Request URL:', sessionUrl);
-      console.error('   Request body:', JSON.stringify(requestBody, null, 2));
+      console.error('   Request Body:', JSON.stringify(requestBody, null, 2));
+      console.error('='.repeat(80));
       
       // Return more detailed error information
       const errorMessage = errorDetails.error?.explanation || 
                           errorDetails.error?.message || 
                           errorDetails.message || 
                           errorDetails.explanation ||
+                          errorDetails.result ||
+                          errorDetails.reason ||
                           'Unknown error from ARC Pay';
       
       const errorField = errorDetails.error?.field || errorDetails.field;
       const errorCause = errorDetails.error?.cause || errorDetails.cause;
+      const errorCode = errorDetails.error?.code || errorDetails.code;
       
       return res.status(500).json({
         success: false,
@@ -336,8 +348,13 @@ async function handlePaymentInitiation(req, res) {
         details: errorMessage,
         field: errorField,
         cause: errorCause,
-        status: arcResponse.status,
-        arcPayError: errorDetails
+        code: errorCode,
+        httpStatus: arcResponse.status,
+        httpStatusText: arcResponse.statusText,
+        arcPayError: errorDetails,
+        rawResponse: responseText.substring(0, 1000),
+        requestUrl: sessionUrl,
+        requestBody: requestBody
       });
     }
 
