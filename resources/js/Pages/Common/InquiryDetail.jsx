@@ -92,19 +92,28 @@ const InquiryDetail = () => {
   };
 
   const handlePayNow = async (quote) => {
+    console.log('💳 handlePayNow called with quote:', quote);
+    console.log('   Quote ID:', quote?.id);
+    console.log('   Total Amount:', quote?.total_amount);
+    console.log('   Currency:', quote?.currency);
+    console.log('   Inquiry:', inquiry);
+
     // Validate prerequisites
     if (!quote || !quote.id) {
+      console.error('❌ Invalid quote:', quote);
       alert('Invalid quote information. Please refresh the page.');
       return;
     }
 
     if (!inquiry || !inquiry.id) {
+      console.error('❌ Invalid inquiry:', inquiry);
       alert('Invalid inquiry information. Please refresh the page.');
       return;
     }
 
     // Validate quote amount
     if (!quote.total_amount || parseFloat(quote.total_amount) <= 0) {
+      console.error('❌ Invalid amount:', quote.total_amount);
       alert('Invalid payment amount. Please contact support.');
       return;
     }
@@ -267,6 +276,15 @@ const InquiryDetail = () => {
       // 2. Create and submit POST form to ARC Pay payment page
       // ARC Pay requires POST method (not GET redirect) to /api/page/version/<V>/pay
       console.log('🔄 Creating payment form and submitting...');
+      console.log('   Form action URL:', finalPaymentUrl);
+      console.log('   Session ID for form:', sessionId);
+
+      // Double-check finalPaymentUrl is valid before creating form
+      if (!finalPaymentUrl || finalPaymentUrl === 'undefined' || finalPaymentUrl === 'null') {
+        console.error('❌ Invalid payment URL:', finalPaymentUrl);
+        console.error('   Full API response was:', data);
+        throw new Error('Payment URL is invalid. Please contact support.');
+      }
 
       // Create a hidden form and POST it to ARC Pay
       // ARC Pay Hosted Checkout "Checkout mode: Website" requires POST with session.id
@@ -296,7 +314,14 @@ const InquiryDetail = () => {
       // Add form to body and submit
       document.body.appendChild(form);
       console.log('📤 Submitting payment form to ARC Pay...');
+      console.log('   Form method:', form.method);
+      console.log('   Form action:', form.action);
+      console.log('   Form fields:', Array.from(form.elements).map(e => ({ name: e.name, value: e.value })));
+
+      // Submit the form - this will redirect the page
       form.submit();
+
+      console.log('✅ Form submitted - page should redirect to ARC Pay');
       
       // Note: User will be redirected, so we don't reset loading state
       return; // Exit immediately - form submission will redirect
