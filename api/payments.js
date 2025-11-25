@@ -1503,25 +1503,45 @@ async function handleGetPaymentDetails(req, res) {
   }
 
   try {
-    const { paymentId } = req.query;
+    const { paymentId, quoteId } = req.query;
 
-    if (!paymentId) {
+    if (!paymentId && !quoteId) {
       return res.status(400).json({
         success: false,
-        error: 'paymentId is required'
+        error: 'paymentId or quoteId is required'
       });
     }
 
-    const { data: payment, error } = await supabase
-      .from('payments')
-      .select('*, quote:quotes(*), inquiry:inquiries(*)')
-      .eq('id', paymentId)
-      .single();
+    let payment;
+    let error;
+
+    if (paymentId) {
+      // Get payment by payment ID
+      const result = await supabase
+        .from('payments')
+        .select('*, quote:quotes(*), inquiry:inquiries(*)')
+        .eq('id', paymentId)
+        .single();
+      payment = result.data;
+      error = result.error;
+    } else if (quoteId) {
+      // Get latest payment by quote ID
+      const result = await supabase
+        .from('payments')
+        .select('*, quote:quotes(*), inquiry:inquiries(*)')
+        .eq('quote_id', quoteId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      payment = result.data;
+      error = result.error;
+    }
 
     if (error || !payment) {
       return res.status(404).json({
         success: false,
-        error: 'Payment not found'
+        error: 'Payment not found',
+        details: error?.message || 'No payment found for the provided ID'
       });
     }
 
@@ -1534,7 +1554,8 @@ async function handleGetPaymentDetails(req, res) {
     console.error('Get payment details error:', error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to retrieve payment details'
+      error: 'Failed to retrieve payment details',
+      details: error.message
     });
   }
 }
