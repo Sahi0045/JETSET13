@@ -273,23 +273,32 @@ const InquiryDetail = () => {
       console.log('   Payment URL:', finalPaymentUrl);
       console.log('   Success Indicator:', successIndicator);
 
-      // 2. Redirect to ARC Pay payment page
+      // 2. POST to ARC Pay payment page
       // The paymentPageUrl already contains the sessionId in the path
       // Format: https://api.arcpay.travel/form/{sessionId}?charset=UTF-8
-      console.log('🔄 Redirecting to ARC Pay payment page...');
+      // IMPORTANT: Must use POST method (not GET), but NO form fields needed
+      console.log('🔄 Creating POST form to ARC Pay payment page...');
       console.log('   Payment URL:', finalPaymentUrl);
 
-      // Double-check finalPaymentUrl is valid before redirect
+      // Double-check finalPaymentUrl is valid before creating form
       if (!finalPaymentUrl || finalPaymentUrl === 'undefined' || finalPaymentUrl === 'null') {
         console.error('❌ Invalid payment URL:', finalPaymentUrl);
         console.error('   Full API response was:', data);
         throw new Error('Payment URL is invalid. Please contact support.');
       }
 
-      // Direct redirect to payment page - sessionId is already in the URL
-      console.log('✅ Redirecting to:', finalPaymentUrl);
-      window.location.href = finalPaymentUrl;
-      
+      // Create empty POST form (no fields needed - sessionId is in URL)
+      // ARC Pay requires POST method but all data is in the URL path
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = finalPaymentUrl;
+      form.style.display = 'none';
+
+      // Add form to body and submit
+      document.body.appendChild(form);
+      console.log('📤 Submitting POST form to:', finalPaymentUrl);
+      form.submit();
+
       // Note: User will be redirected, so we don't reset loading state
       return; // Exit immediately - form submission will redirect
 
