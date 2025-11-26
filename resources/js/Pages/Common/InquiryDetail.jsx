@@ -223,9 +223,19 @@ const InquiryDetail = () => {
       if (!response.ok) {
         let errorData = { error: `Server error (${response.status})` };
         try {
-          errorData = await response.json();
+          const responseText = await response.text();
+          console.log('❌ Raw error response text:', responseText);
+          try {
+            errorData = JSON.parse(responseText);
+          } catch (jsonErr) {
+            console.error('Response is not JSON:', responseText);
+            errorData = { 
+              error: `Server error (${response.status})`,
+              details: responseText || 'Unable to connect to payment server'
+            };
+          }
         } catch (parseError) {
-          console.error('Failed to parse error response:', parseError);
+          console.error('Failed to read error response:', parseError);
           errorData = { 
             error: `Network error (${response.status})`,
             details: 'Unable to connect to payment server'
@@ -237,17 +247,40 @@ const InquiryDetail = () => {
           error: errorData
         });
         
-        const errorMsg = errorData?.error || errorData?.details || errorData?.message || `Server error: ${response.status}`;
+        // Build error message with fallbacks
+        let errorMsg = 'Payment failed';
+        if (errorData) {
+          if (typeof errorData === 'string') {
+            errorMsg = errorData;
+          } else {
+            errorMsg = errorData.error || errorData.details || errorData.message || `Server error: ${response.status}`;
+          }
+        }
         throw new Error(errorMsg);
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        const responseText = await response.text();
+        console.log('📦 Raw success response text:', responseText);
+        data = JSON.parse(responseText);
+      } catch (parseErr) {
+        console.error('Failed to parse success response:', parseErr);
+        throw new Error('Invalid response from payment server');
+      }
 
       console.log('📦 Full payment API response:', data);
 
       if (!data.success) {
         console.error('Payment initiation failed:', data);
-        const errorMsg = data?.error || data?.details || data?.message || 'Failed to initiate payment';
+        let errorMsg = 'Failed to initiate payment';
+        if (data) {
+          if (typeof data === 'string') {
+            errorMsg = data;
+          } else {
+            errorMsg = data.error || data.details || data.message || 'Failed to initiate payment';
+          }
+        }
         throw new Error(errorMsg);
       }
 
