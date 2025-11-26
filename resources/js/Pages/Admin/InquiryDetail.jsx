@@ -29,6 +29,14 @@ const InquiryDetail = () => {
   const [refundError, setRefundError] = useState(null);
   const [refundSuccess, setRefundSuccess] = useState(false);
   
+  // Void state
+  const [showVoidModal, setShowVoidModal] = useState(false);
+  const [voidingPayment, setVoidingPayment] = useState(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voidProcessing, setVoidProcessing] = useState(false);
+  const [voidError, setVoidError] = useState(null);
+  const [voidSuccess, setVoidSuccess] = useState(false);
+  
   // Check Status state
   const [checkingStatusId, setCheckingStatusId] = useState(null);
   const [statusDetails, setStatusDetails] = useState({});
@@ -359,6 +367,64 @@ const InquiryDetail = () => {
       setRefundError('Error processing refund. Please try again.');
     } finally {
       setRefundProcessing(false);
+    }
+  };
+
+  // Open void modal for a payment
+  const openVoidModal = (payment) => {
+    setVoidingPayment(payment);
+    setVoidReason('');
+    setVoidError(null);
+    setVoidSuccess(false);
+    setShowVoidModal(true);
+  };
+
+  // Handle void submission
+  const handleVoid = async () => {
+    if (!voidingPayment) return;
+
+    try {
+      setVoidProcessing(true);
+      setVoidError(null);
+
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      if (!token) {
+        setVoidError('Authentication required. Please log in again.');
+        return;
+      }
+
+      const response = await fetch('/api/payments?action=payment-void', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          paymentId: voidingPayment.id,
+          reason: voidReason || 'Admin initiated void'
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setVoidSuccess(true);
+        // Refresh data after 2 seconds and close modal
+        setTimeout(async () => {
+          setShowVoidModal(false);
+          setVoidingPayment(null);
+          setVoidSuccess(false);
+          await fetchInquiryDetails();
+        }, 2000);
+      } else {
+        setVoidError(result.error || result.message || 'Failed to void payment. It may have already settled.');
+      }
+    } catch (error) {
+      console.error('Error voiding payment:', error);
+      setVoidError('Error voiding payment. Please try again.');
+    } finally {
+      setVoidProcessing(false);
     }
   };
 
@@ -1224,6 +1290,29 @@ const InquiryDetail = () => {
                                 >
                                   💸 Issue Refund
                                 </button>
+                                
+                                {/* Void Button - Same day cancellation */}
+                                <button
+                                  onClick={() => openVoidModal(payment)}
+                                  style={{
+                                    backgroundColor: '#f59e0b',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '10px 20px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontWeight: '500',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    fontSize: '14px',
+                                    width: '100%',
+                                    justifyContent: 'center',
+                                    marginTop: '8px'
+                                  }}
+                                >
+                                  🚫 Void (Same Day)
+                                </button>
                               </div>
                             )}
                             
@@ -1240,6 +1329,23 @@ const InquiryDetail = () => {
                                   fontWeight: '500'
                                 }}>
                                   ✅ This payment has been refunded
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Show voided status */}
+                            {payment.payment_status === 'voided' && (
+                              <div className="payment-row" style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #e2e8f0' }}>
+                                <div style={{
+                                  backgroundColor: '#fef3c7',
+                                  color: '#d97706',
+                                  padding: '10px 15px',
+                                  borderRadius: '6px',
+                                  width: '100%',
+                                  textAlign: 'center',
+                                  fontWeight: '500'
+                                }}>
+                                  🚫 This payment has been voided
                                 </div>
                               </div>
                             )}
@@ -1744,6 +1850,207 @@ const InquiryDetail = () => {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Void Modal */}
+      {showVoidModal && voidingPayment && (
+        <div className="modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="void-modal" style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '30px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <div className="modal-header" style={{ marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '20px', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                🚫 Void Payment
+              </h3>
+              <button 
+                onClick={() => setShowVoidModal(false)}
+                style={{
+                  position: 'absolute',
+                  top: '15px',
+                  right: '15px',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#64748b'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {voidSuccess ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '30px 0'
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '15px' }}>✅</div>
+                <h4 style={{ color: '#16a34a', marginBottom: '10px' }}>Payment Voided!</h4>
+                <p style={{ color: '#64748b' }}>The payment has been cancelled successfully.</p>
+              </div>
+            ) : (
+              <>
+                <div className="modal-body">
+                  {/* Payment Info */}
+                  <div style={{
+                    backgroundColor: '#fef3c7',
+                    padding: '15px',
+                    borderRadius: '8px',
+                    marginBottom: '20px',
+                    border: '1px solid #fcd34d'
+                  }}>
+                    <div style={{ fontSize: '14px', color: '#92400e', marginBottom: '5px' }}>Payment to Void</div>
+                    <div style={{ fontSize: '24px', fontWeight: '600', color: '#1e293b' }}>
+                      ${parseFloat(voidingPayment.amount).toFixed(2)} {voidingPayment.currency}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '5px' }}>
+                      Transaction ID: {voidingPayment.arc_transaction_id || voidingPayment.id}
+                    </div>
+                  </div>
+
+                  {/* Info Box */}
+                  <div style={{
+                    backgroundColor: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    marginBottom: '20px',
+                    fontSize: '13px',
+                    color: '#1e40af'
+                  }}>
+                    ℹ️ <strong>What is Void?</strong>
+                    <ul style={{ margin: '8px 0 0 20px', padding: 0 }}>
+                      <li>Cancels the transaction <strong>before</strong> it settles</li>
+                      <li>Only works on <strong>same day</strong> transactions</li>
+                      <li>No transaction fees charged</li>
+                      <li>Customer never sees the charge</li>
+                    </ul>
+                  </div>
+
+                  {/* Void Reason */}
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
+                      Reason for Void (Optional)
+                    </label>
+                    <textarea
+                      value={voidReason}
+                      onChange={(e) => setVoidReason(e.target.value)}
+                      placeholder="Enter reason for voiding..."
+                      rows="3"
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        resize: 'vertical',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+
+                  {/* Error Message */}
+                  {voidError && (
+                    <div style={{
+                      backgroundColor: '#fef2f2',
+                      color: '#dc2626',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      marginBottom: '15px',
+                      fontSize: '14px'
+                    }}>
+                      ❌ {voidError}
+                    </div>
+                  )}
+
+                  {/* Warning */}
+                  <div style={{
+                    backgroundColor: '#fffbeb',
+                    border: '1px solid #fcd34d',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    marginBottom: '20px',
+                    fontSize: '13px',
+                    color: '#92400e'
+                  }}>
+                    ⚠️ <strong>Note:</strong> If the payment has already settled (usually after midnight), use <strong>Refund</strong> instead of Void.
+                  </div>
+                </div>
+
+                {/* Modal Actions */}
+                <div className="modal-actions" style={{
+                  display: 'flex',
+                  gap: '12px',
+                  justifyContent: 'flex-end'
+                }}>
+                  <button
+                    onClick={() => setShowVoidModal(false)}
+                    disabled={voidProcessing}
+                    style={{
+                      padding: '12px 24px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      backgroundColor: 'white',
+                      color: '#374151',
+                      fontWeight: '500',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleVoid}
+                    disabled={voidProcessing}
+                    style={{
+                      padding: '12px 24px',
+                      border: 'none',
+                      borderRadius: '8px',
+                      backgroundColor: voidProcessing ? '#fbbf24' : '#f59e0b',
+                      color: 'white',
+                      fontWeight: '500',
+                      cursor: voidProcessing ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    {voidProcessing ? (
+                      <>
+                        <div className="spinner" style={{
+                          width: '16px',
+                          height: '16px',
+                          border: '2px solid #fde68a',
+                          borderTopColor: 'white',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }}></div>
+                        Processing...
+                      </>
+                    ) : (
+                      <>🚫 Void Payment</>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
