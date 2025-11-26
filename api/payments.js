@@ -1433,9 +1433,12 @@ async function handlePaymentCallback(req, res) {
       console.log(`   3DS Status: ${transactionStatus || 'No 3DS'}`);
       console.log(`   ECI: ${eci || 'N/A'}`);
       console.log(`   Gateway Code: ${gatewayCode || 'N/A'}`);
+      console.log(`   Payment ID: ${payment.id}`);
+      console.log(`   Quote ID: ${payment.quote_id}`);
+      console.log(`   Inquiry ID: ${payment.inquiry_id}`);
       
       // Update payment status
-      await supabase
+      const { error: paymentUpdateError } = await supabase
         .from('payments')
         .update({
           payment_status: 'completed',
@@ -1459,8 +1462,14 @@ async function handlePaymentCallback(req, res) {
         })
         .eq('id', payment.id);
 
+      if (paymentUpdateError) {
+        console.error('❌ Failed to update payment status:', paymentUpdateError);
+      } else {
+        console.log('✅ Payment status updated to completed');
+      }
+
       // Update quote status
-      await supabase
+      const { error: quoteUpdateError } = await supabase
         .from('quotes')
         .update({
           payment_status: 'paid',
@@ -1469,13 +1478,25 @@ async function handlePaymentCallback(req, res) {
         })
         .eq('id', payment.quote_id);
 
-      // Update inquiry status
-      await supabase
+      if (quoteUpdateError) {
+        console.error('❌ Failed to update quote status:', quoteUpdateError);
+      } else {
+        console.log('✅ Quote status updated to paid');
+      }
+
+      // Update inquiry status to 'booked' (not just 'paid')
+      const { error: inquiryUpdateError } = await supabase
         .from('inquiries')
         .update({
-          status: 'paid'
+          status: 'booked'
         })
         .eq('id', payment.inquiry_id);
+
+      if (inquiryUpdateError) {
+        console.error('❌ Failed to update inquiry status:', inquiryUpdateError);
+      } else {
+        console.log('✅ Inquiry status updated to booked');
+      }
 
       // Ensure paymentId is valid before redirecting
       if (payment?.id) {
