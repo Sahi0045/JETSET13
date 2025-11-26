@@ -456,30 +456,27 @@ async function handlePaymentInitiation(req, res) {
       console.log('✅ Payment record updated with session ID');
     }
 
-    // 6. Construct payment page URL for Hosted Checkout "Website" mode
-    // CORRECT FORMAT: https://na.gateway.mastercard.com/api/page/version/100/pay?charset=UTF-8
-    // The session.id is sent as a form field (session.id), NOT in the URL path
-    // Reference: ARC Pay Hosted Session documentation
-    // https://documenter.getpostman.com/view/9012210/2s935sp37U#b0c0a4bf-de46-4f40-803b-7eac662e1091
-
-    const apiVersion = process.env.ARC_PAY_API_VERSION || '100';
+    // 6. Construct payment page URL for Hosted Payment Page (HPP) redirect
+    // There are TWO methods for Hosted Checkout:
+    // Method 1 (HPP - Redirect): GET https://na.gateway.mastercard.com/checkout/pay/{sessionId}
+    // Method 2 (Embedded): POST to /api/page/version/100/pay with session.id form field
+    // 
+    // We use Method 1 (HPP Redirect) as it's simpler and more reliable
+    // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U
     
-    // CRITICAL: Payment page MUST use na.gateway.mastercard.com domain
-    // Even if API calls use api.arcpay.travel, the payment page is hosted on the gateway domain
     const gatewayDomain = 'https://na.gateway.mastercard.com';
 
     console.log('🔧 Using gateway domain for payment page:', gatewayDomain);
     console.log('   API base URL was:', arcBaseUrl);
-    console.log('   API Version:', apiVersion);
 
-    // Hosted Checkout payment page URL format: {domain}/api/page/version/{version}/pay?charset=UTF-8
-    // Frontend will POST form with session.id field to this URL
-    const paymentPageUrl = `${gatewayDomain}/api/page/version/${apiVersion}/pay?charset=UTF-8`;
+    // Hosted Payment Page URL - simple redirect with session ID in path
+    // Format: https://na.gateway.mastercard.com/checkout/pay/{sessionId}
+    const paymentPageUrl = `${gatewayDomain}/checkout/pay/${sessionId}`;
     
-    console.log('✅ Payment page URL:', paymentPageUrl);
+    console.log('✅ Payment page URL (HPP Redirect):', paymentPageUrl);
     console.log('   Session ID:', sessionId);
 
-    // 7. Return session details for form POST integration
+    // 7. Return session details - frontend will use simple redirect
     return res.status(200).json({
       success: true,
       sessionId: sessionId,
@@ -487,8 +484,9 @@ async function handlePaymentInitiation(req, res) {
       merchantId: arcMerchantId,
       paymentId: payment.id,
       paymentPageUrl: paymentPageUrl,
-      // Keep checkoutUrl for backward compatibility, but use paymentPageUrl instead
-      checkoutUrl: paymentPageUrl
+      checkoutUrl: paymentPageUrl,
+      // Include redirect method so frontend knows to use GET redirect instead of form POST
+      redirectMethod: 'GET'
     });
 
   } catch (error) {

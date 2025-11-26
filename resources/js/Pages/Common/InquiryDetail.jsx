@@ -314,14 +314,7 @@ const InquiryDetail = () => {
       console.log('   Payment URL:', finalPaymentUrl);
       console.log('   Success Indicator:', successIndicator);
 
-      // 2. POST to ARC Pay payment page (Hosted Checkout "Website" mode)
-      // Format: https://na.gateway.mastercard.com/api/page/version/100/pay?charset=UTF-8
-      // IMPORTANT: Must POST with session.id field (NOT in URL path)
-      console.log('🔄 Creating POST form to ARC Pay payment page...');
-      console.log('   Payment URL:', finalPaymentUrl);
-      console.log('   Session ID:', sessionId);
-
-      // Double-check finalPaymentUrl is valid before creating form
+      // Double-check finalPaymentUrl is valid before redirecting
       if (!finalPaymentUrl || finalPaymentUrl === 'undefined' || finalPaymentUrl === 'null') {
         console.error('❌ Invalid payment URL:', finalPaymentUrl);
         console.error('   Full API response was:', data);
@@ -334,48 +327,14 @@ const InquiryDetail = () => {
         throw new Error('Payment session ID is invalid. Please try again.');
       }
 
-      // Create POST form for Hosted Checkout
-      // ARC Pay Hosted Session requires:
-      // 1. POST to /api/page/version/100/pay
-      // 2. session.id field (REQUIRED)
-      // 3. merchant field (REQUIRED) - Merchant ID
-      // NOTE: gatewayReturnURL is NOT accepted as a form parameter - it causes "Unexpected parameter" error
-      // The return URL is configured in INITIATE_CHECKOUT via interaction.returnUrl
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = finalPaymentUrl;
-      form.style.display = 'none';
-      form.enctype = 'application/x-www-form-urlencoded';
-
-      // REQUIRED: Add session.id field - ARC Pay uses this to identify the session
-      const sessionIdInput = document.createElement('input');
-      sessionIdInput.type = 'hidden';
-      sessionIdInput.name = 'session.id';
-      sessionIdInput.value = sessionId;
-      form.appendChild(sessionIdInput);
-
-      // REQUIRED: Add merchant field - ARC Pay requires merchant ID in the form
-      if (merchantId) {
-        const merchantInput = document.createElement('input');
-        merchantInput.type = 'hidden';
-        merchantInput.name = 'merchant';
-        merchantInput.value = merchantId;
-        form.appendChild(merchantInput);
-        console.log('   Merchant ID:', merchantId);
-      } else {
-        console.warn('⚠️ Merchant ID not provided in response');
-      }
-
-      // NOTE: Do NOT include gatewayReturnURL - it causes "Unexpected parameter" error
-      // The return URL is already configured in INITIATE_CHECKOUT via interaction.returnUrl
-
-      // Add form to body and submit
-      document.body.appendChild(form);
-      console.log('📤 Submitting POST form to:', finalPaymentUrl);
-      console.log('   Session ID:', sessionId);
-      console.log('   Merchant ID:', merchantId || 'N/A');
-      console.log('   Return URL configured in INITIATE_CHECKOUT');
-      form.submit();
+      // Redirect to Hosted Payment Page (HPP)
+      // The payment page URL is in format: https://na.gateway.mastercard.com/checkout/pay/{sessionId}
+      // This is a simple GET redirect - no form POST needed
+      console.log('🔄 Redirecting to ARC Pay Hosted Payment Page...');
+      console.log('   Payment URL:', finalPaymentUrl);
+      
+      // Simple redirect to the payment page
+      window.location.href = finalPaymentUrl;
 
       // Note: User will be redirected, so we don't reset loading state
       return; // Exit immediately - form submission will redirect
