@@ -1396,35 +1396,53 @@ async function handlePaymentCallback(req, res) {
       !eci || // No ECI (no 3DS)
       eci === '05' || // Successful 3DS (Visa)
       eci === '02' || // Successful 3DS (Mastercard)
-      eci === '06' // Authentication Attempted (treated as success)
+      eci === '06' || // Authentication Attempted (treated as success)
+      eci === '01' || // Mastercard 3DS attempted
+      eci === '07' // Non-3DS transaction
     );
 
     // CRITICAL: Check multiple success indicators
     // ARC Pay may return SUCCESS in result OR APPROVED in gatewayCode
     const isResultSuccess = transactionResult === 'SUCCESS';
     const isGatewayApproved = gatewayCode === 'APPROVED' || gatewayCode === 'SUCCESS';
-    const isOrderCaptured = orderStatus === 'CAPTURED' || orderStatus === 'AUTHORIZED';
+    const isOrderCaptured = orderStatus === 'CAPTURED' || orderStatus === 'AUTHORIZED' || orderStatus === 'PURCHASED';
+    
+    // If gateway explicitly approved the payment, it's successful
+    // This overrides any 3DS status issues since the bank approved it
+    const isExplicitlyApproved = isGatewayApproved && transactionResult !== 'FAILURE' && transactionResult !== 'ERROR';
     
     // Payment is successful if:
-    // 1. Result is SUCCESS, OR gateway code is APPROVED, OR order is CAPTURED/AUTHORIZED
-    // 2. AND it's not PENDING
-    // 3. AND 3DS checks pass (if applicable)
+    // 1. Gateway explicitly approved (APPROVED gatewayCode) - highest priority
+    // 2. OR Result is SUCCESS with valid 3DS checks
+    // 3. OR Order is CAPTURED/AUTHORIZED
+    // 4. AND it's not PENDING or FAILURE
     const isSuccess = (
-      (isResultSuccess || isGatewayApproved || isOrderCaptured) &&
+      isExplicitlyApproved ||
+      (isResultSuccess && is3DSSuccess && isAuthSuccess && isValidECI) ||
+      isOrderCaptured
+    ) && (
       transactionResult !== 'PENDING' &&
+      transactionResult !== 'FAILURE' &&
+      transactionResult !== 'ERROR' &&
       gatewayCode !== 'PENDING' &&
-      is3DSSuccess &&
-      isAuthSuccess &&
-      isValidECI
+      gatewayCode !== 'DECLINED' &&
+      gatewayCode !== 'ERROR'
     );
 
     console.log('🔍 Success evaluation:', {
+      transactionResult,
+      gatewayCode,
+      orderStatus,
       isResultSuccess,
       isGatewayApproved,
       isOrderCaptured,
+      isExplicitlyApproved,
       is3DSSuccess,
       isAuthSuccess,
       isValidECI,
+      transactionStatus,
+      authenticationStatus,
+      eci,
       finalIsSuccess: isSuccess
     });
 
