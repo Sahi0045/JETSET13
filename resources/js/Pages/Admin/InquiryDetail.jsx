@@ -19,6 +19,15 @@ const InquiryDetail = () => {
   });
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [sendingQuoteId, setSendingQuoteId] = useState(null);
+  
+  // Refund state
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundingPayment, setRefundingPayment] = useState(null);
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  const [refundProcessing, setRefundProcessing] = useState(false);
+  const [refundError, setRefundError] = useState(null);
+  const [refundSuccess, setRefundSuccess] = useState(false);
 
   useEffect(() => {
     fetchInquiryDetails();
@@ -273,6 +282,77 @@ const InquiryDetail = () => {
       alert('Error sending quote');
     } finally {
       setSendingQuoteId(null);
+    }
+  };
+
+  // Open refund modal for a payment
+  const openRefundModal = (payment) => {
+    setRefundingPayment(payment);
+    setRefundAmount(payment.amount.toString());
+    setRefundReason('');
+    setRefundError(null);
+    setRefundSuccess(false);
+    setShowRefundModal(true);
+  };
+
+  // Handle refund submission
+  const handleRefund = async () => {
+    if (!refundingPayment) return;
+    
+    const amount = parseFloat(refundAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setRefundError('Please enter a valid refund amount');
+      return;
+    }
+    
+    if (amount > parseFloat(refundingPayment.amount)) {
+      setRefundError('Refund amount cannot exceed original payment amount');
+      return;
+    }
+
+    try {
+      setRefundProcessing(true);
+      setRefundError(null);
+
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      if (!token) {
+        setRefundError('Authentication required. Please log in again.');
+        return;
+      }
+
+      const response = await fetch('/api/payments?action=payment-refund', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          paymentId: refundingPayment.id,
+          amount: amount,
+          reason: refundReason || 'Admin initiated refund'
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setRefundSuccess(true);
+        // Refresh data after 2 seconds and close modal
+        setTimeout(async () => {
+          setShowRefundModal(false);
+          setRefundingPayment(null);
+          setRefundSuccess(false);
+          await fetchInquiryDetails();
+        }, 2000);
+      } else {
+        setRefundError(result.error || result.message || 'Failed to process refund');
+      }
+    } catch (error) {
+      console.error('Error processing refund:', error);
+      setRefundError('Error processing refund. Please try again.');
+    } finally {
+      setRefundProcessing(false);
     }
   };
 
@@ -1070,6 +1150,50 @@ const InquiryDetail = () => {
                                 <span className="payment-value">{formatDateTime(payment.completed_at)}</span>
                               </div>
                             )}
+                            
+                            {/* Refund Button - Only show for completed payments */}
+                            {payment.payment_status === 'completed' && (
+                              <div className="payment-row" style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #e2e8f0' }}>
+                                <button
+                                  onClick={() => openRefundModal(payment)}
+                                  className="refund-button"
+                                  style={{
+                                    backgroundColor: '#ef4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '10px 20px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontWeight: '500',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    fontSize: '14px',
+                                    width: '100%',
+                                    justifyContent: 'center'
+                                  }}
+                                >
+                                  💸 Issue Refund
+                                </button>
+                              </div>
+                            )}
+                            
+                            {/* Show refunded status */}
+                            {payment.payment_status === 'refunded' && (
+                              <div className="payment-row" style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #e2e8f0' }}>
+                                <div style={{
+                                  backgroundColor: '#fef2f2',
+                                  color: '#dc2626',
+                                  padding: '10px 15px',
+                                  borderRadius: '6px',
+                                  width: '100%',
+                                  textAlign: 'center',
+                                  fontWeight: '500'
+                                }}>
+                                  ✅ This payment has been refunded
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
@@ -1103,6 +1227,213 @@ const InquiryDetail = () => {
           )}
         </div>
       </div>
+
+      {/* Refund Modal */}
+      {showRefundModal && refundingPayment && (
+        <div className="modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="refund-modal" style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '30px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <div className="modal-header" style={{ marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '20px', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                💸 Issue Refund
+              </h3>
+              <button 
+                onClick={() => setShowRefundModal(false)}
+                style={{
+                  position: 'absolute',
+                  top: '15px',
+                  right: '15px',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#64748b'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {refundSuccess ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '30px 0'
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '15px' }}>✅</div>
+                <h4 style={{ color: '#16a34a', marginBottom: '10px' }}>Refund Successful!</h4>
+                <p style={{ color: '#64748b' }}>The refund has been processed successfully.</p>
+              </div>
+            ) : (
+              <>
+                <div className="modal-body">
+                  {/* Payment Info */}
+                  <div style={{
+                    backgroundColor: '#f8fafc',
+                    padding: '15px',
+                    borderRadius: '8px',
+                    marginBottom: '20px'
+                  }}>
+                    <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '5px' }}>Original Payment</div>
+                    <div style={{ fontSize: '24px', fontWeight: '600', color: '#1e293b' }}>
+                      ${parseFloat(refundingPayment.amount).toFixed(2)} {refundingPayment.currency}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '5px' }}>
+                      Transaction ID: {refundingPayment.arc_transaction_id || refundingPayment.id}
+                    </div>
+                  </div>
+
+                  {/* Refund Amount Input */}
+                  <div style={{ marginBottom: '15px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
+                      Refund Amount ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={refundAmount}
+                      onChange={(e) => setRefundAmount(e.target.value)}
+                      max={refundingPayment.amount}
+                      min="0.01"
+                      step="0.01"
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '8px',
+                        fontSize: '16px',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '5px' }}>
+                      Maximum: ${parseFloat(refundingPayment.amount).toFixed(2)}
+                    </div>
+                  </div>
+
+                  {/* Refund Reason */}
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
+                      Reason for Refund (Optional)
+                    </label>
+                    <textarea
+                      value={refundReason}
+                      onChange={(e) => setRefundReason(e.target.value)}
+                      placeholder="Enter reason for refund..."
+                      rows="3"
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        resize: 'vertical',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+
+                  {/* Error Message */}
+                  {refundError && (
+                    <div style={{
+                      backgroundColor: '#fef2f2',
+                      color: '#dc2626',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      marginBottom: '15px',
+                      fontSize: '14px'
+                    }}>
+                      ❌ {refundError}
+                    </div>
+                  )}
+
+                  {/* Warning */}
+                  <div style={{
+                    backgroundColor: '#fffbeb',
+                    border: '1px solid #fcd34d',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    marginBottom: '20px',
+                    fontSize: '13px',
+                    color: '#92400e'
+                  }}>
+                    ⚠️ <strong>Warning:</strong> This action cannot be undone. The refund will be processed through ARC Pay and the customer will receive the funds.
+                  </div>
+                </div>
+
+                {/* Modal Actions */}
+                <div className="modal-actions" style={{
+                  display: 'flex',
+                  gap: '12px',
+                  justifyContent: 'flex-end'
+                }}>
+                  <button
+                    onClick={() => setShowRefundModal(false)}
+                    disabled={refundProcessing}
+                    style={{
+                      padding: '12px 24px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      backgroundColor: 'white',
+                      color: '#374151',
+                      fontWeight: '500',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleRefund}
+                    disabled={refundProcessing}
+                    style={{
+                      padding: '12px 24px',
+                      border: 'none',
+                      borderRadius: '8px',
+                      backgroundColor: refundProcessing ? '#f87171' : '#ef4444',
+                      color: 'white',
+                      fontWeight: '500',
+                      cursor: refundProcessing ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    {refundProcessing ? (
+                      <>
+                        <div className="spinner" style={{
+                          width: '16px',
+                          height: '16px',
+                          border: '2px solid #fca5a5',
+                          borderTopColor: 'white',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }}></div>
+                        Processing...
+                      </>
+                    ) : (
+                      <>💸 Process Refund</>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
