@@ -28,6 +28,12 @@ const InquiryDetail = () => {
   const [refundProcessing, setRefundProcessing] = useState(false);
   const [refundError, setRefundError] = useState(null);
   const [refundSuccess, setRefundSuccess] = useState(false);
+  
+  // Check Status state
+  const [checkingStatusId, setCheckingStatusId] = useState(null);
+  const [statusDetails, setStatusDetails] = useState({});
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [currentStatusPayment, setCurrentStatusPayment] = useState(null);
 
   useEffect(() => {
     fetchInquiryDetails();
@@ -353,6 +359,49 @@ const InquiryDetail = () => {
       setRefundError('Error processing refund. Please try again.');
     } finally {
       setRefundProcessing(false);
+    }
+  };
+
+  // Check payment status from ARC Pay
+  const handleCheckStatus = async (payment) => {
+    try {
+      setCheckingStatusId(payment.id);
+
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      if (!token) {
+        alert('Authentication required. Please log in again.');
+        return;
+      }
+
+      const response = await fetch(`/api/payments?action=payment-retrieve&paymentId=${payment.id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setStatusDetails(prev => ({
+          ...prev,
+          [payment.id]: result.orderData
+        }));
+        setCurrentStatusPayment({ ...payment, arcData: result.orderData });
+        setShowStatusModal(true);
+        
+        // Refresh the inquiry details to get updated local status
+        await fetchInquiryDetails();
+      } else {
+        alert('Failed to retrieve status: ' + (result.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error checking status:', error);
+      alert('Error checking payment status. Please try again.');
+    } finally {
+      setCheckingStatusId(null);
     }
   };
 
@@ -1194,6 +1243,45 @@ const InquiryDetail = () => {
                                 </div>
                               </div>
                             )}
+                            
+                            {/* Check Status Button - Always show */}
+                            <div className="payment-row" style={{ marginTop: '10px' }}>
+                              <button
+                                onClick={() => handleCheckStatus(payment)}
+                                disabled={checkingStatusId === payment.id}
+                                style={{
+                                  backgroundColor: checkingStatusId === payment.id ? '#94a3b8' : '#3b82f6',
+                                  color: 'white',
+                                  border: 'none',
+                                  padding: '10px 20px',
+                                  borderRadius: '6px',
+                                  cursor: checkingStatusId === payment.id ? 'not-allowed' : 'pointer',
+                                  fontWeight: '500',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  fontSize: '14px',
+                                  width: '100%',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                {checkingStatusId === payment.id ? (
+                                  <>
+                                    <div style={{
+                                      width: '14px',
+                                      height: '14px',
+                                      border: '2px solid #cbd5e1',
+                                      borderTopColor: 'white',
+                                      borderRadius: '50%',
+                                      animation: 'spin 1s linear infinite'
+                                    }}></div>
+                                    Checking...
+                                  </>
+                                ) : (
+                                  <>🔍 Check ARC Pay Status</>
+                                )}
+                              </button>
+                            </div>
                           </div>
                         );
                       })()}
@@ -1431,6 +1519,231 @@ const InquiryDetail = () => {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Status Details Modal */}
+      {showStatusModal && currentStatusPayment && (
+        <div className="modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="status-modal" style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '30px',
+            maxWidth: '600px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflow: 'auto',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <div className="modal-header" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '20px', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                🔍 ARC Pay Status Details
+              </h3>
+              <button 
+                onClick={() => setShowStatusModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#64748b'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {currentStatusPayment.arcData ? (
+              <div className="status-details">
+                {/* Order Status Banner */}
+                <div style={{
+                  backgroundColor: currentStatusPayment.arcData.result === 'SUCCESS' ? '#dcfce7' : 
+                                  currentStatusPayment.arcData.result === 'PENDING' ? '#fef3c7' : '#fef2f2',
+                  color: currentStatusPayment.arcData.result === 'SUCCESS' ? '#16a34a' : 
+                         currentStatusPayment.arcData.result === 'PENDING' ? '#d97706' : '#dc2626',
+                  padding: '15px',
+                  borderRadius: '8px',
+                  marginBottom: '20px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '24px', marginBottom: '5px' }}>
+                    {currentStatusPayment.arcData.result === 'SUCCESS' ? '✅' : 
+                     currentStatusPayment.arcData.result === 'PENDING' ? '⏳' : '❌'}
+                  </div>
+                  <div style={{ fontWeight: '600', fontSize: '18px' }}>
+                    {currentStatusPayment.arcData.result || 'Unknown'}
+                  </div>
+                  <div style={{ fontSize: '14px', opacity: 0.8 }}>
+                    Order Status: {currentStatusPayment.arcData.status || 'N/A'}
+                  </div>
+                </div>
+
+                {/* Amount Details */}
+                <div style={{ marginBottom: '20px' }}>
+                  <h4 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>
+                    💰 Amount Details
+                  </h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '6px' }}>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>Total Amount</div>
+                      <div style={{ fontSize: '18px', fontWeight: '600', color: '#1e293b' }}>
+                        ${currentStatusPayment.arcData.amount?.toFixed(2) || '0.00'} {currentStatusPayment.arcData.currency}
+                      </div>
+                    </div>
+                    <div style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '6px' }}>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>Authorized</div>
+                      <div style={{ fontSize: '18px', fontWeight: '600', color: '#3b82f6' }}>
+                        ${currentStatusPayment.arcData.totalAuthorizedAmount?.toFixed(2) || '0.00'}
+                      </div>
+                    </div>
+                    <div style={{ backgroundColor: '#dcfce7', padding: '12px', borderRadius: '6px' }}>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>Captured</div>
+                      <div style={{ fontSize: '18px', fontWeight: '600', color: '#16a34a' }}>
+                        ${currentStatusPayment.arcData.totalCapturedAmount?.toFixed(2) || '0.00'}
+                      </div>
+                    </div>
+                    <div style={{ backgroundColor: '#fef2f2', padding: '12px', borderRadius: '6px' }}>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>Refunded</div>
+                      <div style={{ fontSize: '18px', fontWeight: '600', color: '#dc2626' }}>
+                        ${currentStatusPayment.arcData.totalRefundedAmount?.toFixed(2) || '0.00'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Order Info */}
+                <div style={{ marginBottom: '20px' }}>
+                  <h4 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>
+                    📋 Order Information
+                  </h4>
+                  <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                    <div style={{ display: 'grid', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#64748b' }}>Order ID:</span>
+                        <span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{currentStatusPayment.arcData.id}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#64748b' }}>Merchant:</span>
+                        <span>{currentStatusPayment.arcData.merchant}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#64748b' }}>Created:</span>
+                        <span>{currentStatusPayment.arcData.creationTime ? new Date(currentStatusPayment.arcData.creationTime).toLocaleString() : 'N/A'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#64748b' }}>Last Updated:</span>
+                        <span>{currentStatusPayment.arcData.lastUpdatedTime ? new Date(currentStatusPayment.arcData.lastUpdatedTime).toLocaleString() : 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Transactions List */}
+                {currentStatusPayment.arcData.transaction && currentStatusPayment.arcData.transaction.length > 0 && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <h4 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>
+                      📝 Transaction History ({currentStatusPayment.arcData.transaction.length})
+                    </h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {currentStatusPayment.arcData.transaction.map((txn, idx) => (
+                        <div key={idx} style={{
+                          backgroundColor: '#f8fafc',
+                          padding: '12px',
+                          borderRadius: '8px',
+                          border: '1px solid #e2e8f0'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <span style={{
+                              backgroundColor: txn.transaction?.type === 'PAYMENT' ? '#dbeafe' :
+                                              txn.transaction?.type === 'REFUND' ? '#fce7f3' : '#f3e8ff',
+                              color: txn.transaction?.type === 'PAYMENT' ? '#1d4ed8' :
+                                     txn.transaction?.type === 'REFUND' ? '#be185d' : '#7c3aed',
+                              padding: '4px 10px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}>
+                              {txn.transaction?.type || 'UNKNOWN'}
+                            </span>
+                            <span style={{
+                              backgroundColor: txn.response?.gatewayCode === 'APPROVED' ? '#dcfce7' : '#fef2f2',
+                              color: txn.response?.gatewayCode === 'APPROVED' ? '#16a34a' : '#dc2626',
+                              padding: '4px 10px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}>
+                              {txn.response?.gatewayCode || 'N/A'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                            <span style={{ color: '#64748b' }}>Amount:</span>
+                            <span style={{ fontWeight: '600' }}>${txn.transaction?.amount?.toFixed(2) || '0.00'} {txn.transaction?.currency}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#94a3b8', marginTop: '5px' }}>
+                            <span>ID: {txn.transaction?.id}</span>
+                            <span>{txn.timeOfRecord ? new Date(txn.timeOfRecord).toLocaleString() : ''}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Raw JSON (collapsible) */}
+                <details style={{ marginTop: '15px' }}>
+                  <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: '14px' }}>
+                    🔧 View Raw Response
+                  </summary>
+                  <pre style={{
+                    backgroundColor: '#1e293b',
+                    color: '#e2e8f0',
+                    padding: '15px',
+                    borderRadius: '8px',
+                    fontSize: '11px',
+                    overflow: 'auto',
+                    maxHeight: '300px',
+                    marginTop: '10px'
+                  }}>
+                    {JSON.stringify(currentStatusPayment.arcData, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                No ARC Pay data available
+              </div>
+            )}
+
+            {/* Close Button */}
+            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowStatusModal(false)}
+                style={{
+                  padding: '12px 24px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  fontWeight: '500',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
