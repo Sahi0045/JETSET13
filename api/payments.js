@@ -1399,17 +1399,34 @@ async function handlePaymentCallback(req, res) {
       eci === '06' // Authentication Attempted (treated as success)
     );
 
-    // CRITICAL: Never mark PENDING transactions as successful
-    // Only mark as successful if result is explicitly SUCCESS and all checks pass
+    // CRITICAL: Check multiple success indicators
+    // ARC Pay may return SUCCESS in result OR APPROVED in gatewayCode
+    const isResultSuccess = transactionResult === 'SUCCESS';
+    const isGatewayApproved = gatewayCode === 'APPROVED' || gatewayCode === 'SUCCESS';
+    const isOrderCaptured = orderStatus === 'CAPTURED' || orderStatus === 'AUTHORIZED';
+    
+    // Payment is successful if:
+    // 1. Result is SUCCESS, OR gateway code is APPROVED, OR order is CAPTURED/AUTHORIZED
+    // 2. AND it's not PENDING
+    // 3. AND 3DS checks pass (if applicable)
     const isSuccess = (
-      transactionResult === 'SUCCESS' && // Must be SUCCESS, not PENDING
-      transactionResult !== 'PENDING' && // Explicit check to prevent PENDING from being marked successful
-      gatewayCode !== 'PENDING' && // Gateway code must not be PENDING
+      (isResultSuccess || isGatewayApproved || isOrderCaptured) &&
+      transactionResult !== 'PENDING' &&
+      gatewayCode !== 'PENDING' &&
       is3DSSuccess &&
       isAuthSuccess &&
-      isValidECI &&
-      (gatewayCode === 'APPROVED' || gatewayCode === 'SUCCESS' || (!gatewayCode && transactionResult === 'SUCCESS'))
+      isValidECI
     );
+
+    console.log('🔍 Success evaluation:', {
+      isResultSuccess,
+      isGatewayApproved,
+      isOrderCaptured,
+      is3DSSuccess,
+      isAuthSuccess,
+      isValidECI,
+      finalIsSuccess: isSuccess
+    });
 
     if (isSuccess) {
       console.log('✅ Payment successful');
