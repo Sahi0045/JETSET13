@@ -36,10 +36,20 @@ export default function TravelDashboard() {
   const [bookings, setBookings] = useState([])
   const [requests, setRequests] = useState([])
   const [isLoadingRequests, setIsLoadingRequests] = useState(false)
+  const [isLoadingBookings, setIsLoadingBookings] = useState(false)
 
   useEffect(() => {
     // Check if user is authenticated
     const authStatus = localStorage.getItem('isAuthenticated')
+    const userStr = localStorage.getItem('user')
+    
+    console.log('🔐 Auth Check:', {
+      isAuthenticated: authStatus,
+      hasUser: !!userStr,
+      token: localStorage.getItem('token') ? 'EXISTS' : 'MISSING',
+      supabaseToken: localStorage.getItem('supabase_token') ? 'EXISTS' : 'MISSING'
+    })
+    
     if (authStatus !== 'true') {
       // Set as guest user instead of redirecting
       setIsGuest(true)
@@ -49,9 +59,16 @@ export default function TravelDashboard() {
       }, 500)
     } else {
       setIsAuthenticated(true)
+      // Parse user to get email for debugging
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr)
+          console.log('👤 User:', { email: user.email, id: user.id })
+        } catch (e) {}
+      }
     }
 
-    // Load bookings from localStorage
+    // Load bookings - both from localStorage and database
     loadBookings()
 
     // Load user requests if authenticated
@@ -93,13 +110,14 @@ export default function TravelDashboard() {
   }, [isAuthenticated, activeSidebarItem])
 
   const loadBookings = async () => {
+    setIsLoadingBookings(true)
     const allBookings = []
     
-    console.log('🔍 Loading bookings from localStorage...')
+    console.log('🔍 Loading bookings...')
     
     // Load flight bookings from localStorage
     const flightBooking = localStorage.getItem('completedFlightBooking')
-    console.log('Flight booking raw data:', flightBooking)
+    console.log('Flight booking from localStorage:', flightBooking ? 'Found' : 'Not found')
     
     if (flightBooking) {
       try {
@@ -117,7 +135,7 @@ export default function TravelDashboard() {
 
     // Load cruise bookings from localStorage
     const cruiseBooking = localStorage.getItem('completedBooking')
-    console.log('Cruise booking raw data:', cruiseBooking)
+    console.log('Cruise booking from localStorage:', cruiseBooking ? 'Found' : 'Not found')
     
     if (cruiseBooking) {
       try {
@@ -133,14 +151,14 @@ export default function TravelDashboard() {
       }
     }
 
-    // Load paid bookings from database (quotes with payment_status='paid')
+    // Load paid bookings from database
     try {
       const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token')
       
       if (token) {
         console.log('🔍 Loading paid bookings from database...')
         
-        // Fetch user's inquiries
+        // Method 1: Fetch user's inquiries and their quotes
         const inquiriesResponse = await fetch(getApiUrl('inquiries?endpoint=my'), {
           method: 'GET',
           headers: {
@@ -152,6 +170,7 @@ export default function TravelDashboard() {
 
         if (inquiriesResponse.ok) {
           const inquiriesResult = await inquiriesResponse.json()
+          console.log('📋 Inquiries API response:', inquiriesResult)
           
           if (inquiriesResult.success) {
             const inquiries = Array.isArray(inquiriesResult.data) 
@@ -160,131 +179,147 @@ export default function TravelDashboard() {
             
             console.log('📋 Found inquiries:', inquiries.length)
             
-            // For each inquiry, check for paid quotes
+            // Check for booked/paid inquiries directly first
+            const bookedInquiries = inquiries.filter(inq => 
+              inq.status === 'booked' || inq.status === 'paid'
+            )
+            
+            console.log('📋 Booked/Paid inquiries:', bookedInquiries.length)
+            
+            // For booked inquiries, add them directly as bookings
+            for (const inquiry of bookedInquiries) {
+              const typeMap = {
+                'flight': 'flight',
+                'cruise': 'cruise', 
+                'hotel': 'hotel',
+                'package': 'package',
+                'general': 'package'
+              }
+              
+              const bookingType = typeMap[inquiry.inquiry_type] || 'package'
+              
+              // Create booking from inquiry
+              const booking = {
+                orderId: inquiry.id?.slice(-8) || 'N/A',
+                bookingReference: inquiry.id,
+                type: bookingType,
+                status: 'CONFIRMED',
+                bookingDate: inquiry.updated_at || inquiry.created_at || new Date().toISOString(),
+                amount: inquiry.budget || 0,
+                currency: 'USD',
+                title: `${inquiry.inquiry_type?.charAt(0).toUpperCase() + inquiry.inquiry_type?.slice(1)} Booking`,
+                description: '',
+                inquiryId: inquiry.id,
+                inquiryType: inquiry.inquiry_type,
+                customerName: inquiry.customer_name,
+                customerEmail: inquiry.customer_email,
+                // Travel details
+                origin: inquiry.flight_origin,
+                destination: inquiry.flight_destination,
+                departureDate: inquiry.flight_departure_date,
+                returnDate: inquiry.flight_return_date,
+                hotelDestination: inquiry.hotel_destination,
+                checkinDate: inquiry.hotel_checkin_date,
+                checkoutDate: inquiry.hotel_checkout_date,
+                cruiseDestination: inquiry.cruise_destination,
+                cruiseDepartureDate: inquiry.cruise_departure_date,
+                cruiseDuration: inquiry.cruise_duration
+              }
+              
+              // Check if already added to avoid duplicates
+              const existingIndex = allBookings.findIndex(b => b.inquiryId === inquiry.id)
+              if (existingIndex === -1) {
+                allBookings.push(booking)
+                console.log(`✅ Added booked inquiry: ${booking.orderId} (${bookingType})`)
+              }
+            }
+            
+            // Also check for quotes with payment
             for (const inquiry of inquiries) {
-              // Fetch quotes for this inquiry
-              const quotesResponse = await fetch(getApiUrl(`quotes?inquiryId=${inquiry.id}`), {
-                method: 'GET',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json'
-                },
-                credentials: 'include'
-              })
+              try {
+                // Fetch quotes for this inquiry
+                const quotesResponse = await fetch(getApiUrl(`quotes?inquiryId=${inquiry.id}`), {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  },
+                  credentials: 'include'
+                })
 
-              if (quotesResponse.ok) {
-                const quotesResult = await quotesResponse.json()
-                
-                if (quotesResult.success) {
-                  const quotes = Array.isArray(quotesResult.data) ? quotesResult.data : []
+                if (quotesResponse.ok) {
+                  const quotesResult = await quotesResponse.json()
                   
-                  console.log(`📄 Inquiry ${inquiry.id?.slice(-8)}: Found ${quotes.length} quote(s)`)
-                  quotes.forEach(q => {
-                    console.log(`  Quote ${q.id?.slice(-8)}: payment_status=${q.payment_status}, status=${q.status}, amount=${q.total_amount}`)
-                  })
-                  
-                  // Check payment status for each quote
-                  const quotesWithPaymentStatus = await Promise.all(
-                    quotes.map(async (quote) => {
-                      try {
-                        // Check if there's a completed payment for this quote
-                        const paymentResponse = await fetch(getApiUrl(`payments?action=get-payment-details&quoteId=${quote.id}`), {
-                          headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                          },
-                          credentials: 'include'
-                        })
-                        
-                        if (paymentResponse.ok) {
-                          const paymentData = await paymentResponse.json()
-                          if (paymentData.success && paymentData.payment) {
-                            const payment = paymentData.payment
-                            const isPaymentCompleted = payment.payment_status === 'completed' || payment.payment_status === 'paid'
-                            console.log(`  Quote ${quote.id?.slice(-8)}: Payment status=${payment.payment_status}, isCompleted=${isPaymentCompleted}`)
-                            return { ...quote, hasCompletedPayment: isPaymentCompleted, payment }
-                          }
-                        }
-                      } catch (error) {
-                        console.error(`Error checking payment for quote ${quote.id}:`, error)
+                  if (quotesResult.success) {
+                    const quotes = Array.isArray(quotesResult.data) ? quotesResult.data : []
+                    
+                    // Find paid quotes
+                    const paidQuotes = quotes.filter(q => 
+                      q.payment_status === 'paid' || 
+                      q.status === 'paid' || 
+                      q.status === 'accepted'
+                    )
+                    
+                    console.log(`📄 Inquiry ${inquiry.id?.slice(-8)}: ${paidQuotes.length} paid/accepted quote(s)`)
+                    
+                    // Convert paid quotes to booking format
+                    for (const quote of paidQuotes) {
+                      const typeMap = {
+                        'flight': 'flight',
+                        'cruise': 'cruise',
+                        'hotel': 'hotel',
+                        'package': 'package',
+                        'general': 'package'
                       }
-                      return { ...quote, hasCompletedPayment: false }
-                    })
-                  )
-                  
-                  // Filter for paid/booked quotes - check multiple conditions
-                  // Show bookings if:
-                  // 1. Quote payment_status is 'paid'
-                  // 2. Quote status is 'paid'
-                  // 3. Has a completed payment record
-                  // 4. Inquiry status is 'booked' or 'paid' (even without payment - admin can mark as booked)
-                  const paidQuotes = quotesWithPaymentStatus.filter(q => {
-                    const isPaid = q.payment_status === 'paid' || q.status === 'paid'
-                    const isBooked = inquiry.status === 'booked' || inquiry.status === 'paid'
-                    const hasPayment = q.hasCompletedPayment
-                    
-                    // Consider it a booking if any of these conditions are true
-                    const isPaidQuote = isPaid || hasPayment || isBooked
-                    
-                    console.log(`  Quote ${q.id?.slice(-8)}: payment_status=${q.payment_status}, quote_status=${q.status}, inquiry_status=${inquiry.status}, isPaid=${isPaid}, isBooked=${isBooked}, hasPayment=${hasPayment}, final=${isPaidQuote}`)
-                    return isPaidQuote
-                  })
-                  
-                  console.log(`📄 Inquiry ${inquiry.id?.slice(-8)}: ${paidQuotes.length} paid quote(s) after filtering`)
-                  
-                  // Convert paid quotes to booking format
-                  paidQuotes.forEach(quote => {
-                    // Map inquiry type to booking type
-                    const typeMap = {
-                      'flight': 'flight',
-                      'cruise': 'cruise',
-                      'hotel': 'hotel',
-                      'package': 'package',
-                      'general': 'package'
+                      
+                      const bookingType = typeMap[inquiry.inquiry_type] || 'package'
+                      
+                      // Check if already exists
+                      const existingIndex = allBookings.findIndex(b => 
+                        b.quoteId === quote.id || b.inquiryId === inquiry.id
+                      )
+                      
+                      if (existingIndex === -1) {
+                        const booking = {
+                          orderId: quote.quote_number || quote.id?.slice(-8),
+                          bookingReference: quote.quote_number || quote.id,
+                          type: bookingType,
+                          status: quote.payment_status === 'paid' ? 'paid' : 'CONFIRMED',
+                          bookingDate: quote.paid_at || quote.created_at || new Date().toISOString(),
+                          amount: parseFloat(quote.total_amount || 0),
+                          currency: quote.currency || 'USD',
+                          title: quote.title || `${inquiry.inquiry_type} Booking`,
+                          description: quote.description || '',
+                          inquiryId: inquiry.id,
+                          quoteId: quote.id,
+                          inquiryType: inquiry.inquiry_type,
+                          customerName: inquiry.customer_name,
+                          customerEmail: inquiry.customer_email,
+                          origin: inquiry.flight_origin,
+                          destination: inquiry.flight_destination,
+                          departureDate: inquiry.flight_departure_date,
+                          returnDate: inquiry.flight_return_date,
+                          hotelDestination: inquiry.hotel_destination,
+                          checkinDate: inquiry.hotel_checkin_date,
+                          checkoutDate: inquiry.hotel_checkout_date,
+                          cruiseDestination: inquiry.cruise_destination,
+                          cruiseDepartureDate: inquiry.cruise_departure_date,
+                          cruiseDuration: inquiry.cruise_duration
+                        }
+                        
+                        allBookings.push(booking)
+                        console.log(`✅ Added paid quote: ${booking.orderId} (${bookingType})`)
+                      }
                     }
-                    
-                    const bookingType = typeMap[inquiry.inquiry_type] || 'package'
-                    
-                    // Create booking object
-                    const booking = {
-                      orderId: quote.quote_number || quote.id,
-                      bookingReference: quote.quote_number || quote.id,
-                      type: bookingType,
-                      status: 'CONFIRMED',
-                      bookingDate: quote.paid_at || quote.created_at || new Date().toISOString(),
-                      amount: parseFloat(quote.total_amount || 0),
-                      currency: quote.currency || 'USD',
-                      title: quote.title || `${inquiry.inquiry_type} Booking`,
-                      description: quote.description || '',
-                      inquiryId: inquiry.id,
-                      quoteId: quote.id,
-                      inquiryType: inquiry.inquiry_type,
-                      customerName: inquiry.customer_name,
-                      customerEmail: inquiry.customer_email,
-                      // Travel details from inquiry
-                      travelDetails: inquiry.travel_details || {},
-                      // Flight specific
-                      origin: inquiry.flight_origin,
-                      destination: inquiry.flight_destination,
-                      departureDate: inquiry.flight_departure_date,
-                      returnDate: inquiry.flight_return_date,
-                      // Hotel specific
-                      hotelDestination: inquiry.hotel_destination,
-                      checkinDate: inquiry.hotel_checkin_date,
-                      checkoutDate: inquiry.hotel_checkout_date,
-                      // Cruise specific
-                      cruiseDestination: inquiry.cruise_destination,
-                      cruiseDepartureDate: inquiry.cruise_departure_date,
-                      cruiseDuration: inquiry.cruise_duration
-                    }
-                    
-                    allBookings.push(booking)
-                    console.log(`✅ Added paid booking: ${booking.orderId} (${bookingType})`)
-                  })
+                  }
                 }
+              } catch (quoteError) {
+                console.error(`Error loading quotes for inquiry ${inquiry.id}:`, quoteError)
               }
             }
           }
+        } else {
+          console.log('❌ Failed to fetch inquiries:', inquiriesResponse.status)
         }
       } else {
         console.log('⚠️ No authentication token, skipping database bookings')
@@ -296,6 +331,7 @@ export default function TravelDashboard() {
     console.log('📋 Total bookings loaded:', allBookings.length)
     console.log('All bookings:', allBookings)
     setBookings(allBookings)
+    setIsLoadingBookings(false)
   }
 
   const loadRequests = async () => {
@@ -1208,7 +1244,14 @@ export default function TravelDashboard() {
               )
             ) : (
               /* Bookings Section */
-              filteredBookings.length > 0 ? (
+              isLoadingBookings ? (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="mt-4 text-gray-600">Loading bookings...</p>
+                  </div>
+                </div>
+              ) : filteredBookings.length > 0 ? (
                 <div className="space-y-4">
                   {/* Header */}
                   <div className="flex items-center justify-between">
