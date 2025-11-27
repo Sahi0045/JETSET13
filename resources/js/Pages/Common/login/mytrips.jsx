@@ -4,6 +4,27 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { getApiUrl } from '../../../utils/apiHelper'
 
+// Empty State Component
+const EmptyState = ({ icon, title, description, actionLabel, onAction }) => (
+  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+    <div className="flex flex-col items-center justify-center text-center">
+      <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center text-4xl mb-6 shadow-inner">
+        {icon}
+      </div>
+      <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
+      <p className="text-gray-500 mb-6 max-w-sm">{description}</p>
+      {actionLabel && onAction && (
+        <button
+          onClick={onAction}
+          className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  </div>
+)
+
 export default function TravelDashboard() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState("Upcoming")
@@ -966,86 +987,74 @@ export default function TravelDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Enhanced Header with Modern Design */}
-      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm shadow-lg border-b border-gray-200/50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center gap-4">
-            <div className="flex items-center space-x-4 flex-1 min-w-0">
+    <div className="min-h-screen bg-gray-50">
+      {/* Clean Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center gap-4">
               <button 
                 onClick={() => navigate('/')}
-                className="flex items-center text-blue-600 hover:text-blue-700 transition-all duration-200 p-2 rounded-lg hover:bg-blue-50 group"
-                aria-label="Back to Home"
+                className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-colors p-2 -ml-2 rounded-lg hover:bg-gray-100"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:-translate-x-1 transition-transform duration-200">
-                  <path d="M19 12H5M12 19l-7-7 7-7"/>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                <span className="ml-2 font-semibold hidden sm:inline text-gray-700 group-hover:text-blue-700">Back to Home</span>
+                <span className="font-medium hidden sm:inline">Back</span>
               </button>
-              <div className="flex items-center gap-3 min-w-0 flex-1 sm:flex-initial">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                </div>
-                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">My Trips</h1>
-              </div>
+              <div className="h-6 w-px bg-gray-300 hidden sm:block"></div>
+              <h1 className="text-xl font-bold text-gray-900">My Trips</h1>
             </div>
             
-            <div className="flex items-center space-x-3 flex-shrink-0">
+            <div className="flex items-center gap-3">
               {isGuest && (
                 <button
                   onClick={handleLoginClick}
-                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 text-sm sm:text-base"
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  <span className="flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                    </svg>
-                    Log In
-                  </span>
+                  Sign In
                 </button>
               )}
               <button
                 onClick={toggleMobileMenu}
-                className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200"
-                aria-label="Toggle menu"
+                className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
             </div>
           </div>
-          {isGuest && (
-            <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
-              <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              <p className="text-sm text-amber-800 font-medium">You're viewing as a guest user</p>
-            </div>
-          )}
         </div>
+        
+        {isGuest && (
+          <div className="bg-amber-50 border-b border-amber-200">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+              <p className="text-sm text-amber-800 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                Viewing as guest. Sign in to see your bookings.
+              </p>
+            </div>
+          </div>
+        )}
       </header>
 
-      {/* Enhanced Filter tabs with Modern Design */}
-      <div className="sticky top-[73px] z-10 bg-white/90 backdrop-blur-sm shadow-sm mb-6 border-b border-gray-200/50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2">
-            {["Upcoming", "Cancelled", "Past", "Failed"].map((tab) => (
+      {/* Tab Navigation */}
+      <div className="bg-white border-b border-gray-200 sticky top-16 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex gap-1 py-3 overflow-x-auto hide-scrollbar">
+            {["Upcoming", "Past", "Cancelled", "Failed"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => handleTabChange(tab)}
-                className={`px-6 py-3 rounded-xl text-sm font-semibold whitespace-nowrap transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5 active:translate-y-0 flex-shrink-0 min-w-[120px] justify-center flex items-center gap-2 ${
+                className={`px-5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
                   activeTab === tab 
-                    ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg" 
-                    : "bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-300 hover:bg-blue-50"
+                    ? "bg-blue-600 text-white shadow-sm" 
+                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                 }`}
               >
-                {tab === "Upcoming" && <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                {tab === "Cancelled" && <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
-                {tab === "Past" && <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                {tab === "Failed" && <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>}
                 {tab}
               </button>
             ))}
@@ -1053,273 +1062,223 @@ export default function TravelDashboard() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
-          {/* Enhanced Sidebar with mobile support */}
-          <div className={`
-            fixed lg:relative inset-0 z-20 bg-white/95 lg:bg-transparent backdrop-blur-sm lg:backdrop-blur-none
-            transition-all duration-300 ease-in-out border-r border-gray-200/50 lg:border-r-0
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex gap-6">
+          {/* Sidebar */}
+          <aside className={`
+            fixed lg:relative inset-y-0 left-0 z-40 w-72 bg-white lg:bg-transparent
+            transform transition-transform duration-300 lg:transform-none
             ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-            lg:shadow-none shadow-xl
+            lg:block flex-shrink-0
           `}>
-            <div className="w-full lg:w-80 bg-white rounded-xl lg:rounded-lg p-6 shadow-sm h-full lg:h-auto border border-gray-200/50 lg:border-0">
-              <div className="flex items-center justify-between mb-8 pl-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-sm">
-                    <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <div className="h-full lg:h-auto overflow-y-auto lg:overflow-visible p-4 lg:p-0">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:sticky lg:top-36">
+                <div className="flex items-center justify-between mb-4 lg:hidden">
+                  <h2 className="font-semibold text-gray-900">Categories</h2>
+                  <button onClick={toggleMobileMenu} className="p-1 hover:bg-gray-100 rounded">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
-                  </div>
-                  <span className="text-xl font-bold text-gray-900">My Trips</span>
+                  </button>
                 </div>
-                <button 
-                  onClick={toggleMobileMenu}
-                  className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
-                  aria-label="Close menu"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <nav className="space-y-2">
-                {[
-                  { key: "All Bookings", icon: "📋", desc: "View all trips" },
-                  { key: "Flights", icon: "✈️", desc: "Flight bookings" },
-                  { key: "Cruise", icon: "🚢", desc: "Cruise bookings" },
-                  { key: "Hotels", icon: "🏨", desc: "Hotel bookings" },
-                  { key: "Packages", icon: "🎒", desc: "Travel packages" },
-                  { key: "Requests", icon: "💬", desc: "Travel requests" }
-                ].map((item) => (
+                
+                <nav className="space-y-1">
+                  {[
+                    { key: "All Bookings", icon: "📋", count: bookings.length },
+                    { key: "Flights", icon: "✈️", count: bookings.filter(b => b.type === 'flight').length },
+                    { key: "Hotels", icon: "🏨", count: bookings.filter(b => b.type === 'hotel').length },
+                    { key: "Cruise", icon: "🚢", count: bookings.filter(b => b.type === 'cruise').length },
+                    { key: "Packages", icon: "🎒", count: bookings.filter(b => b.type === 'package').length },
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      onClick={() => handleSidebarItemChange(item.key)}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${
+                        activeSidebarItem === item.key 
+                          ? "bg-blue-50 text-blue-700" 
+                          : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="text-lg">{item.icon}</span>
+                        <span className="font-medium text-sm">{item.key}</span>
+                      </span>
+                      {item.count > 0 && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          activeSidebarItem === item.key 
+                            ? "bg-blue-100 text-blue-700" 
+                            : "bg-gray-100 text-gray-600"
+                        }`}>
+                          {item.count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                  
+                  <div className="border-t border-gray-200 my-3"></div>
+                  
                   <button
-                    key={item.key}
-                    onClick={() => handleSidebarItemChange(item.key)}
-                    className={`w-full text-left p-4 rounded-xl transition-all duration-200 group hover:shadow-md ${
-                      activeSidebarItem === item.key 
-                        ? "bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 border-2 border-blue-200 shadow-md" 
-                        : "hover:bg-gray-50 border-2 border-transparent"
+                    onClick={() => handleSidebarItemChange("Requests")}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${
+                      activeSidebarItem === "Requests" 
+                        ? "bg-purple-50 text-purple-700" 
+                        : "text-gray-700 hover:bg-gray-50"
                     }`}
                   >
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-xl group-hover:scale-110 transition-transform duration-200">{item.icon}</span>
-                      <span className={`font-semibold ${activeSidebarItem === item.key ? 'text-blue-700' : 'text-gray-900'}`}>{item.key}</span>
-                    </div>
-                    <p className={`text-sm ${activeSidebarItem === item.key ? 'text-blue-600' : 'text-gray-500'}`}>{item.desc}</p>
+                    <span className="flex items-center gap-3">
+                      <span className="text-lg">💬</span>
+                      <span className="font-medium text-sm">My Requests</span>
+                    </span>
+                    {requests.length > 0 && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        activeSidebarItem === "Requests" 
+                          ? "bg-purple-100 text-purple-700" 
+                          : "bg-gray-100 text-gray-600"
+                      }`}>
+                        {requests.length}
+                      </span>
+                    )}
                   </button>
-                ))}
-              </nav>
+                </nav>
+              </div>
             </div>
-          </div>
+          </aside>
 
-          {/* Overlay for mobile menu */}
+          {/* Overlay for mobile */}
           {isMobileMenuOpen && (
             <div 
-              className="fixed inset-0 bg-black/50 z-10 lg:hidden backdrop-blur-sm"
+              className="fixed inset-0 bg-black/50 z-30 lg:hidden"
               onClick={toggleMobileMenu}
             />
           )}
 
-          {/* Enhanced main content */}
-          <div className="flex-1 bg-white rounded-xl shadow-lg border border-gray-200/50 overflow-hidden">
+          {/* Main Content */}
+          <main className="flex-1 min-w-0">
             {activeSidebarItem === "Requests" ? (
-              // Requests section
+              /* Requests Section */
               isAuthenticated ? (
                 isLoadingRequests ? (
-                  <div className="flex items-center justify-center p-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <span className="ml-2 text-gray-600">Loading requests...</span>
-                  </div>
-            ) : filteredRequests.length > 0 ? (
-              <div className="p-6 lg:p-8">
-                <div className="mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-                  <div>
-                    <h2 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">{activeTab} Requests</h2>
-                    <p className="text-gray-600 flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      {filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''} found
-                    </p>
-                  </div>
-                  <button
-                    onClick={loadRequests}
-                    className="p-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md group"
-                    title="Refresh requests"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 group-hover:rotate-180 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  </button>
-                </div>
-                <div className="grid gap-6">
-                  {filteredRequests.map(renderRequestCard)}
-                </div>
-              </div>
-            ) : (
-                  <div className="flex flex-col items-center justify-center p-6 sm:p-8 md:p-10">
-                    <div className="w-48 h-48 sm:w-64 sm:h-64 flex items-center justify-center">
-                      <img
-                        src="/images/empty-trips.svg" 
-                        alt="No requests illustration"
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          e.target.onerror = null
-                          e.target.src = "https://via.placeholder.com/300?text=No+Requests"
-                        }}
-                      />
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="mt-4 text-gray-600">Loading requests...</p>
                     </div>
-                    <h2 className="text-xl sm:text-2xl font-semibold mt-6 text-center">
-                      No {activeTab} Requests
-                    </h2>
-                    <p className="text-gray-500 mt-3 text-center max-w-md">
-                      You don't have any {activeTab.toLowerCase()} travel requests.
-                      {activeTab === "Upcoming" && " When you submit an inquiry, it will appear here."}
-                    </p>
-                    <div className="mt-8">
-                      <button 
-                        onClick={() => navigate('/request')} 
-                        className="px-8 py-3 bg-[#0ea5e9] text-white rounded-md hover:bg-[#0284c7] transition shadow-sm"
+                  </div>
+                ) : filteredRequests.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900">{activeTab} Requests</h2>
+                        <p className="text-sm text-gray-500">{filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''}</p>
+                      </div>
+                      <button
+                        onClick={loadRequests}
+                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Refresh"
                       >
-                        Submit New Request
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
                       </button>
                     </div>
+                    
+                    {/* Request Cards */}
+                    <div className="grid gap-4">
+                      {filteredRequests.map(renderRequestCard)}
+                    </div>
                   </div>
+                ) : (
+                  <EmptyState 
+                    icon="💬"
+                    title={`No ${activeTab} Requests`}
+                    description="When you submit a travel inquiry, it will appear here."
+                    actionLabel="Submit New Request"
+                    onAction={() => navigate('/request')}
+                  />
                 )
               ) : (
-                <div className="flex flex-col items-center justify-center p-6 sm:p-8 md:p-10">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                  <h2 className="text-xl sm:text-2xl font-semibold mt-6 text-center">
-                    Login Required
-                  </h2>
-                  <p className="text-gray-500 mt-3 text-center max-w-md">
-                    Please log in to view your travel requests and track their status.
-                  </p>
-                  <div className="mt-8">
-                    <button 
-                      onClick={handleLoginClick} 
-                      className="px-8 py-3 bg-[#0ea5e9] text-white rounded-md hover:bg-[#0284c7] transition shadow-sm"
-                    >
-                      Log In
-                    </button>
-                  </div>
-                </div>
+                <EmptyState 
+                  icon="🔒"
+                  title="Login Required"
+                  description="Please sign in to view your travel requests."
+                  actionLabel="Sign In"
+                  onAction={handleLoginClick}
+                />
               )
             ) : (
-              // Bookings section (existing logic)
+              /* Bookings Section */
               filteredBookings.length > 0 ? (
-              <div className="p-6">
-                <div className="mb-6 flex justify-between items-center">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      {activeTab} {activeSidebarItem === "All Bookings" ? "Bookings" : activeSidebarItem}
-                    </h2>
-                    <p className="text-gray-600">
-                      {filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''} found
-                    </p>
-                    {/* Debug info */}
-                    <p className="text-xs text-gray-400 mt-1">
-                      Total loaded: {bookings.length} | localStorage keys: {localStorage.getItem('completedFlightBooking') ? 'flight✓' : ''} {localStorage.getItem('completedBooking') ? 'cruise✓' : ''}
-                    </p>
-                  </div>
-                  <button
-                    onClick={loadBookings}
-                    className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition"
-                    title="Refresh bookings"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  </button>
-                </div>
                 <div className="space-y-4">
-                  {filteredBookings.map(renderBookingCard)}
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        {activeTab} {activeSidebarItem === "All Bookings" ? "Bookings" : activeSidebarItem}
+                      </h2>
+                      <p className="text-sm text-gray-500">{filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''}</p>
+                    </div>
+                    <button
+                      onClick={loadBookings}
+                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="Refresh"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  {/* Booking Cards */}
+                  <div className="grid gap-4">
+                    {filteredBookings.map(renderBookingCard)}
+                  </div>
                 </div>
-              </div>
-            ) : (
-            <div className="flex flex-col items-center justify-center p-6 sm:p-8 md:p-10">
-              <div className="w-48 h-48 sm:w-64 sm:h-64 flex items-center justify-center">
-                <img
-                  src="/images/empty-trips.svg" 
-                  alt="No bookings illustration"
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    e.target.onerror = null
-                    e.target.src = "https://via.placeholder.com/300?text=No+Bookings"
-                  }}
+              ) : (
+                <EmptyState 
+                  icon={isGuest ? "🔒" : "✈️"}
+                  title={isGuest ? "Sign In to View Bookings" : `No ${activeTab} Bookings`}
+                  description={isGuest 
+                    ? "Sign in to view your trips and bookings." 
+                    : "When you book a trip, it will appear here."
+                  }
+                  actionLabel={isGuest ? "Sign In" : "Book a Trip"}
+                  onAction={isGuest ? handleLoginClick : () => navigate('/')}
                 />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-semibold mt-6 text-center">
-                No {activeTab} Bookings
-              </h2>
-              <p className="text-gray-500 mt-3 text-center max-w-md">
-                {isGuest ? 
-                  "Sign in to view your trips and bookings." :
-                  `You don't have any ${activeTab.toLowerCase()} trips.\nWhen you book a trip, it will appear here.`
-                }
-              </p>
-              <div className="mt-8">
-                {isGuest ? (
-                  <button 
-                    onClick={handleLoginClick} 
-                    className="px-8 py-3 bg-[#0ea5e9] text-white rounded-md hover:bg-[#0284c7] transition shadow-sm"
-                  >
-                    Sign In
-                  </button>
-                ) : (
-                  <button 
-                    onClick={() => navigate('/')} 
-                    className="px-8 py-3 bg-[#0ea5e9] text-white rounded-md hover:bg-[#0284c7] transition shadow-sm"
-                  >
-                    Book a Trip
-                  </button>
-                )}
-              </div>
-            </div>
-            )
+              )
             )}
-          </div>
+          </main>
         </div>
       </div>
 
-      {/* Enhanced Login Popup */}
+      {/* Login Popup */}
       {showLoginPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-            <div className="flex justify-end">
-              <button 
-                onClick={closeLoginPopup}
-                className="text-gray-500 hover:text-gray-700 p-1"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
-              </button>
-            </div>
-            <div className="text-center mb-6">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-[#0ea5e9]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              <h2 className="text-2xl font-bold mt-4">Please Login</h2>
-              <p className="text-gray-600 mt-2">
-                You need to be logged in to view your trips and manage your bookings.
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Sign In Required</h2>
+              <p className="text-gray-600 text-sm mb-6">
+                Sign in to view your trips, bookings, and travel requests.
               </p>
-            </div>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={handleLoginClick}
-                className="w-full py-3 bg-[#0ea5e9] text-white rounded-md hover:bg-[#0284c7] transition font-medium"
-              >
-                Login Now
-              </button>
-              <button
-                onClick={closeLoginPopup}
-                className="w-full py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition font-medium"
-              >
-                Continue as Guest
-              </button>
+              <div className="space-y-3">
+                <button
+                  onClick={handleLoginClick}
+                  className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={closeLoginPopup}
+                  className="w-full py-3 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Continue as Guest
+                </button>
+              </div>
             </div>
           </div>
         </div>
