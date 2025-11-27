@@ -687,42 +687,52 @@ export default function TravelDashboard() {
         )}
         
         <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
-          {isDatabaseBooking && booking.quoteId ? (
+          {isDatabaseBooking ? (
             <button 
               onClick={async () => {
                 try {
-                  const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token')
+                  // If we have both quoteId and inquiryId, fetch full details
+                  if (booking.quoteId && booking.inquiryId) {
+                    const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token')
+                    
+                    // Fetch quote and inquiry data
+                    const [quoteResponse, inquiryResponse] = await Promise.all([
+                      fetch(getApiUrl(`quotes?id=${booking.quoteId}`), {
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        credentials: 'include'
+                      }),
+                      fetch(getApiUrl(`inquiries?id=${booking.inquiryId}`), {
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        credentials: 'include'
+                      })
+                    ])
+                    
+                    const quoteData = await quoteResponse.json()
+                    const inquiryData = await inquiryResponse.json()
+                    
+                    if (quoteData.success && inquiryData.success) {
+                      navigate('/quote-detail', { 
+                        state: { 
+                          quoteData: quoteData.data, 
+                          inquiryData: inquiryData.data 
+                        } 
+                      })
+                      return
+                    }
+                  }
                   
-                  // Fetch quote and inquiry data
-                  const [quoteResponse, inquiryResponse] = await Promise.all([
-                    fetch(getApiUrl(`quotes?id=${booking.quoteId}`), {
-                      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                      credentials: 'include'
-                    }),
-                    fetch(getApiUrl(`inquiries?id=${booking.inquiryId}`), {
-                      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                      credentials: 'include'
-                    })
-                  ])
-                  
-                  const quoteData = await quoteResponse.json()
-                  const inquiryData = await inquiryResponse.json()
-                  
-                  if (quoteData.success && inquiryData.success) {
-                    navigate('/quote-detail', { 
-                      state: { 
-                        quoteData: quoteData.data, 
-                        inquiryData: inquiryData.data 
-                      } 
-                    })
-                  } else {
-                    // Fallback: navigate to inquiry detail
+                  // Fallback: navigate to inquiry detail page
+                  if (booking.inquiryId) {
                     navigate(`/inquiry/${booking.inquiryId}`)
+                  } else {
+                    console.error('No inquiry ID found for booking')
                   }
                 } catch (error) {
-                  console.error('Error loading quote details:', error)
+                  console.error('Error loading booking details:', error)
                   // Fallback: navigate to inquiry detail
-                  navigate(`/inquiry/${booking.inquiryId}`)
+                  if (booking.inquiryId) {
+                    navigate(`/inquiry/${booking.inquiryId}`)
+                  }
                 }
               }}
               className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
