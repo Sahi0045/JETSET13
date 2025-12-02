@@ -287,7 +287,20 @@ async function handlePaymentInitiation(req, res) {
           billingAddress: 'OPTIONAL',
           customerEmail: 'OPTIONAL'
         },
-        timeout: 900
+        timeout: 900,
+        // CRITICAL: Enable 3DS authentication for ARC Pay certification
+        // This ensures "Authentication" transaction appears in ARC Pay portal
+        // Without this, transactions show "Authentication Not In Effect"
+        paymentOptions: {
+          paymentConfirmation: 'CONFIRM_AT_PROVIDER'
+        }
+      },
+      // CRITICAL: 3DS2 Authentication configuration - required for ARC Pay certification
+      // This enables 3D Secure authentication to appear in the transaction view
+      authentication: {
+        acceptVersions: '3DS1,3DS2',
+        channel: 'PAYER_BROWSER',
+        purpose: 'PAYMENT_TRANSACTION'
       },
       order: {
         id: payment.id,
@@ -316,26 +329,20 @@ async function handlePaymentInitiation(req, res) {
       }
     }
     
-    // NOTE: Do NOT include authentication block here - it's not supported in INITIATE_CHECKOUT
-    // NOTE: airline.ticket.issue.travelAgentCode and travelAgentName are required for airline transactions
-    // but may be optional for other transaction types (hotels, packages, etc.)
-
-    // Final verification: Ensure no authentication block exists
-    if (requestBody.authentication) {
-      console.error('❌ ERROR: authentication block found in requestBody! Removing it...');
-      delete requestBody.authentication;
-    }
-    
+    // NOTE: Authentication block IS NOW INCLUDED for 3DS certification
+    // ARC Pay requires 3DS authentication to be visible in the transaction view
+    // Per ARC admin feedback: "Authentication transaction must be associated with Payment"
+    console.log('✅ 3DS Authentication enabled in request');
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
-    console.log('✅ Verified: No authentication block in request');
 
     let arcResponse;
     try {
       const requestBodyString = JSON.stringify(requestBody);
-      // Double-check the string doesn't contain authentication
-      if (requestBodyString.includes('"authentication"') || requestBodyString.includes("'authentication'")) {
-        console.error('❌ CRITICAL: authentication found in JSON string!');
-        console.error('Request body string:', requestBodyString);
+      // Verify authentication is included
+      if (!requestBodyString.includes('"authentication"')) {
+        console.warn('⚠️ WARNING: authentication block not found in request - 3DS may not trigger');
+      } else {
+        console.log('✅ Verified: authentication block present for 3DS');
       }
       
       arcResponse = await fetch(sessionUrl, {
