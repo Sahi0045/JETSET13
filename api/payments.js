@@ -285,22 +285,12 @@ async function handlePaymentInitiation(req, res) {
         },
         displayControl: {
           billingAddress: 'OPTIONAL',
-          customerEmail: 'OPTIONAL'
+          customerEmail: 'OPTIONAL',
+          // CRITICAL: Request 3DS authentication - this makes 3DS mandatory
+          // Per ARC admin: "Authentication transaction must be associated with Payment"
+          threeDSecure: 'SHOW'
         },
-        timeout: 900,
-        // CRITICAL: Enable 3DS authentication for ARC Pay certification
-        // This ensures "Authentication" transaction appears in ARC Pay portal
-        // Without this, transactions show "Authentication Not In Effect"
-        paymentOptions: {
-          paymentConfirmation: 'CONFIRM_AT_PROVIDER'
-        }
-      },
-      // CRITICAL: 3DS2 Authentication configuration - required for ARC Pay certification
-      // This enables 3D Secure authentication to appear in the transaction view
-      authentication: {
-        acceptVersions: '3DS1,3DS2',
-        channel: 'PAYER_BROWSER',
-        purpose: 'PAYMENT_TRANSACTION'
+        timeout: 900
       },
       order: {
         id: payment.id,
