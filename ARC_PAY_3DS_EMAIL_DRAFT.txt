@@ -1,0 +1,96 @@
+Subject: 3DS Authentication Configuration Request - Merchant ID: TESTARC05511704
+
+---
+
+To: ARC Pay Support / Certification Team
+From: JetSet Travel Development Team
+
+---
+
+Hi ARC Team,
+
+Thank you for your feedback regarding the missing 3DS authentication on our test transactions.
+
+ISSUE REPORTED:
+- Transactions show "Payer Authentication Status: Authentication Not In Effect"
+- No Authentication transaction associated with Payment transactions
+- Capture and Refund work correctly, but 3DS verification is missing
+
+OUR CURRENT SETUP:
+- Merchant ID: TESTARC05511704
+- Integration Type: Hosted Checkout (HPP)
+- API Operation: INITIATE_CHECKOUT
+- API Base URL: https://api.arcpay.travel/api/rest/version/100
+
+CURRENT REQUEST STRUCTURE:
+{
+  "apiOperation": "INITIATE_CHECKOUT",
+  "interaction": {
+    "operation": "PURCHASE",
+    "returnUrl": "https://www.jetsetterss.com/payment/callback?quote_id=xxx",
+    "cancelUrl": "https://www.jetsetterss.com/inquiry/xxx?payment=cancelled",
+    "merchant": {
+      "name": "JetSet Travel"
+    },
+    "displayControl": {
+      "billingAddress": "OPTIONAL",
+      "customerEmail": "OPTIONAL"
+    },
+    "timeout": 900
+  },
+  "order": {
+    "id": "payment-uuid",
+    "reference": "payment-uuid",
+    "amount": "111.00",
+    "currency": "USD",
+    "description": "Quote Q-xxx - Travel Booking"
+  },
+  "customer": {
+    "email": "customer@email.com"
+  }
+}
+
+TEST CARDS USED:
+- Mastercard Frictionless: 5123456789012346 (Expiry: 01/39, CVV: 100)
+- Visa Frictionless: 4440000042200014 (Expiry: 01/39, CVV: 100)
+
+---
+
+OUR QUESTIONS:
+
+1. Is 3DS enabled on our merchant account (TESTARC05511704)?
+   - If not, can you please enable it?
+
+2. Do we need to configure 3-D Secure Rules in the Transaction Filtering settings?
+   - If yes, please provide instructions or enable it on our behalf.
+
+3. Are there any additional API parameters required in our INITIATE_CHECKOUT request to trigger 3DS?
+   - We tried adding "authentication" block but received "Unexpected parameter" error.
+
+4. Should 3DS be configured as:
+   - "Always Authenticate" (mandatory for all transactions)?
+   - "Attempt Authentication" (try 3DS, proceed if unavailable)?
+
+---
+
+WHAT WE NEED:
+
+Please configure our merchant account so that:
+- All transactions trigger 3DS authentication
+- Both "Authentication" and "Payment" transactions appear in the portal
+- Payer Authentication Status shows successful authentication (not "Not In Effect")
+
+---
+
+Our Website: https://www.jetsetterss.com
+
+Test Environment Ready: Yes, we can immediately test once 3DS is enabled.
+
+Please let us know what configuration changes are needed on your end or if we need to modify our API integration.
+
+Thank you for your assistance with the certification process.
+
+Best regards,
+
+JetSet Travel Development Team
+Website: https://www.jetsetterss.com

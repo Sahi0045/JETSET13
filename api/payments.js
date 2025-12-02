@@ -287,7 +287,13 @@ async function handlePaymentInitiation(req, res) {
           billingAddress: 'OPTIONAL',
           customerEmail: 'OPTIONAL'
         },
-        timeout: 900
+        timeout: 900,
+        // CRITICAL: Force 3DS authentication for ARC Pay certification
+        // Per ARC documentation: https://api.arcpay.travel/api/documentation/integrationGuidelines/hostedCheckout/features.html
+        // "Set interaction.action.3DSecure=MANDATORY, the Hosted PaymentPage uses 3DS authentication"
+        action: {
+          '3DSecure': 'MANDATORY'
+        }
       },
       order: {
         id: payment.id,
@@ -316,10 +322,10 @@ async function handlePaymentInitiation(req, res) {
       }
     }
     
-    // NOTE: 3DS is handled automatically by ARC Pay's Hosted Payment Page
-    // The merchant account configuration determines whether 3DS is enabled
-    // Contact ARC Pay support to enable 3DS on your merchant account if needed
-    console.log('📤 Sending INITIATE_CHECKOUT request');
+    // NOTE: 3DS is now MANDATORY via interaction.action.3DSecure
+    // Per ARC Pay documentation: https://api.arcpay.travel/api/documentation/integrationGuidelines/hostedCheckout/features.html
+    // This ensures Authentication transaction appears in ARC Pay portal
+    console.log('📤 Sending INITIATE_CHECKOUT request with 3DS MANDATORY');
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
 
     let arcResponse;
