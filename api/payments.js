@@ -285,10 +285,7 @@ async function handlePaymentInitiation(req, res) {
         },
         displayControl: {
           billingAddress: 'OPTIONAL',
-          customerEmail: 'OPTIONAL',
-          // CRITICAL: Request 3DS authentication - this makes 3DS mandatory
-          // Per ARC admin: "Authentication transaction must be associated with Payment"
-          threeDSecure: 'SHOW'
+          customerEmail: 'OPTIONAL'
         },
         timeout: 900
       },
@@ -319,10 +316,10 @@ async function handlePaymentInitiation(req, res) {
       }
     }
     
-    // NOTE: Authentication block IS NOW INCLUDED for 3DS certification
-    // ARC Pay requires 3DS authentication to be visible in the transaction view
-    // Per ARC admin feedback: "Authentication transaction must be associated with Payment"
-    console.log('✅ 3DS Authentication enabled in request');
+    // NOTE: 3DS is handled automatically by ARC Pay's Hosted Payment Page
+    // The merchant account configuration determines whether 3DS is enabled
+    // Contact ARC Pay support to enable 3DS on your merchant account if needed
+    console.log('📤 Sending INITIATE_CHECKOUT request');
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
 
     let arcResponse;
