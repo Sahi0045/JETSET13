@@ -316,9 +316,15 @@ async function handlePaymentInitiation(req, res) {
       }
     }
     
-    // NOTE: 3DS should be handled automatically by ARC Pay's Hosted Checkout
-    // if enabled on the merchant profile. Asked ARC for exact INITIATE_CHECKOUT parameters.
-    console.log('📤 Sending INITIATE_CHECKOUT request');
+    // Add 3DSecure authentication parameters (per ARC Pay support)
+    requestBody["3DSecure"] = {
+      authenticationIndicator: "PAYER_AUTHENTICATION",
+      challengeIndicator: "NO_PREFERENCE",
+      transactionType: "PURCHASE",
+      threeDSVersion: "2.1.0"
+    };
+    
+    console.log('📤 Sending INITIATE_CHECKOUT request with 3DSecure');
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
 
     let arcResponse;
