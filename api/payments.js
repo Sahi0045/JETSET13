@@ -289,12 +289,13 @@ async function handlePaymentInitiation(req, res) {
         },
         timeout: 900
       },
-      // 3DS Authentication configuration for Hosted Checkout
-      // Per ARC Pay support: these fields trigger 3DS authentication
-      authentication: {
-        channel: 'PAYER_BROWSER',
-        purpose: 'PAYMENT_TRANSACTION',
-        redirectResponseUrl: finalReturnUrl
+      // CRITICAL: 3DSecure block required for 3DS authentication per ARC Pay support
+      // This is the exact format ARC Pay provided - NOT "authentication" block
+      '3DSecure': {
+        authenticationIndicator: 'PAYER_AUTHENTICATION',
+        challengeIndicator: 'NO_PREFERENCE',
+        transactionType: 'PURCHASE',
+        threeDSVersion: '2.1.0'
       },
       order: {
         id: payment.id,
@@ -323,20 +324,18 @@ async function handlePaymentInitiation(req, res) {
       }
     }
     
-    // NOTE: 3DS is now MANDATORY via interaction.action.3DSecure
-    // Per ARC Pay documentation: https://api.arcpay.travel/api/documentation/integrationGuidelines/hostedCheckout/features.html
-    // This ensures Authentication transaction appears in ARC Pay portal
-    console.log('📤 Sending INITIATE_CHECKOUT request with 3DS MANDATORY');
+    // NOTE: 3DS is configured via 3DSecure block per ARC Pay support
+    console.log('📤 Sending INITIATE_CHECKOUT request with 3DSecure block');
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
 
     let arcResponse;
     try {
       const requestBodyString = JSON.stringify(requestBody);
-      // Verify authentication is included
-      if (!requestBodyString.includes('"authentication"')) {
-        console.warn('⚠️ WARNING: authentication block not found in request - 3DS may not trigger');
+      // Verify 3DSecure block is included
+      if (!requestBodyString.includes('"3DSecure"')) {
+        console.warn('⚠️ WARNING: 3DSecure block not found in request - 3DS may not trigger');
       } else {
-        console.log('✅ Verified: authentication block present for 3DS');
+        console.log('✅ Verified: 3DSecure block present for 3DS');
       }
       
       arcResponse = await fetch(sessionUrl, {
