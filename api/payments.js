@@ -289,17 +289,16 @@ async function handlePaymentInitiation(req, res) {
         },
         timeout: 900
       },
-      // CRITICAL: 3DSecure block required for 3DS authentication per ARC Pay support
-      // Without this block, 3DS will not be triggered even if enabled on merchant profile
-      '3DSecure': {
-        authenticationIndicator: 'PAYER_AUTHENTICATION',
-        challengeIndicator: 'NO_PREFERENCE',
-        transactionType: 'PURCHASE',
-        threeDSVersion: '2.1.0'
+      // 3DS Authentication configuration for Hosted Checkout
+      // Per ARC Pay support: these fields trigger 3DS authentication
+      authentication: {
+        channel: 'PAYER_BROWSER',
+        purpose: 'PAYMENT_TRANSACTION',
+        redirectResponseUrl: finalReturnUrl
       },
       order: {
         id: payment.id,
-        reference: payment.id, // Required: Unique order reference per ARC Pay docs
+        reference: payment.id,
         amount: parseFloat(quote.total_amount).toFixed(2),
         currency: quote.currency || 'USD',
         description: `Quote ${quote.quote_number || quote.id.slice(-8)} - ${quote.title || 'Travel Booking'}`
