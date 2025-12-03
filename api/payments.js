@@ -287,11 +287,7 @@ async function handlePaymentInitiation(req, res) {
           billingAddress: 'OPTIONAL',
           customerEmail: 'OPTIONAL'
         },
-        timeout: 900,
-        // Tell Hosted Checkout to use 3DS when available
-        action: {
-          '3DSecure': 'MANDATORY'
-        }
+        timeout: 900
       },
       order: {
         id: payment.id,
