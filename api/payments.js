@@ -289,14 +289,6 @@ async function handlePaymentInitiation(req, res) {
         },
         timeout: 900
       },
-      // CRITICAL: 3DSecure block required for 3DS authentication per ARC Pay support
-      // This is the exact format ARC Pay provided - NOT "authentication" block
-      '3DSecure': {
-        authenticationIndicator: 'PAYER_AUTHENTICATION',
-        challengeIndicator: 'NO_PREFERENCE',
-        transactionType: 'PURCHASE',
-        threeDSVersion: '2.1.0'
-      },
       order: {
         id: payment.id,
         reference: payment.id,
@@ -324,19 +316,14 @@ async function handlePaymentInitiation(req, res) {
       }
     }
     
-    // NOTE: 3DS is configured via 3DSecure block per ARC Pay support
-    console.log('📤 Sending INITIATE_CHECKOUT request with 3DSecure block');
+    // NOTE: 3DS should be handled automatically by ARC Pay's Hosted Checkout
+    // if enabled on the merchant profile. Asked ARC for exact INITIATE_CHECKOUT parameters.
+    console.log('📤 Sending INITIATE_CHECKOUT request');
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
 
     let arcResponse;
     try {
       const requestBodyString = JSON.stringify(requestBody);
-      // Verify 3DSecure block is included
-      if (!requestBodyString.includes('"3DSecure"')) {
-        console.warn('⚠️ WARNING: 3DSecure block not found in request - 3DS may not trigger');
-      } else {
-        console.log('✅ Verified: 3DSecure block present for 3DS');
-      }
       
       arcResponse = await fetch(sessionUrl, {
         method: 'POST',
