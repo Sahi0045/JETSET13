@@ -287,13 +287,15 @@ async function handlePaymentInitiation(req, res) {
           billingAddress: 'OPTIONAL',
           customerEmail: 'OPTIONAL'
         },
-        timeout: 900,
-        // CRITICAL: Force 3DS authentication for ARC Pay certification
-        // Per ARC documentation: https://api.arcpay.travel/api/documentation/integrationGuidelines/hostedCheckout/features.html
-        // "Set interaction.action.3DSecure=MANDATORY, the Hosted PaymentPage uses 3DS authentication"
-        action: {
-          '3DSecure': 'MANDATORY'
-        }
+        timeout: 900
+      },
+      // CRITICAL: 3DSecure block required for 3DS authentication per ARC Pay support
+      // Without this block, 3DS will not be triggered even if enabled on merchant profile
+      '3DSecure': {
+        authenticationIndicator: 'PAYER_AUTHENTICATION',
+        challengeIndicator: 'NO_PREFERENCE',
+        transactionType: 'PURCHASE',
+        threeDSVersion: '2.1.0'
       },
       order: {
         id: payment.id,

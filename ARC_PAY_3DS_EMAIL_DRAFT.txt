@@ -1,4 +1,4 @@
-Subject: 3DS Authentication Configuration Request - Merchant ID: TESTARC05511704
+Subject: 3DS Authentication Configuration Update - Merchant ID: TESTARC05511704
 
 ---
 
@@ -11,18 +11,14 @@ Hi ARC Team,
 
 Thank you for your feedback regarding the missing 3DS authentication on our test transactions.
 
-ISSUE REPORTED:
-- Transactions show "Payer Authentication Status: Authentication Not In Effect"
-- No Authentication transaction associated with Payment transactions
-- Capture and Refund work correctly, but 3DS verification is missing
+We have identified the issue and implemented the fix based on your documentation.
 
-OUR CURRENT SETUP:
-- Merchant ID: TESTARC05511704
-- Integration Type: Hosted Checkout (HPP)
-- API Operation: INITIATE_CHECKOUT
-- API Base URL: https://api.arcpay.travel/api/rest/version/100
+ISSUE IDENTIFIED:
+Our INITIATE_CHECKOUT request was missing the 3DS configuration parameter.
 
-CURRENT REQUEST STRUCTURE:
+FIX APPLIED:
+We have added the following to our request:
+
 {
   "apiOperation": "INITIATE_CHECKOUT",
   "interaction": {
@@ -36,7 +32,10 @@ CURRENT REQUEST STRUCTURE:
       "billingAddress": "OPTIONAL",
       "customerEmail": "OPTIONAL"
     },
-    "timeout": 900
+    "timeout": 900,
+    "action": {
+      "3DSecure": "MANDATORY"
+    }
   },
   "order": {
     "id": "payment-uuid",
@@ -50,43 +49,27 @@ CURRENT REQUEST STRUCTURE:
   }
 }
 
-TEST CARDS USED:
-- Mastercard Frictionless: 5123456789012346 (Expiry: 01/39, CVV: 100)
-- Visa Frictionless: 4440000042200014 (Expiry: 01/39, CVV: 100)
+REFERENCE:
+https://api.arcpay.travel/api/documentation/integrationGuidelines/hostedCheckout/features.html
+
+Quote from documentation:
+"Set interaction.action.3DSecure=MANDATORY, the Hosted PaymentPage uses 3DS authentication with the payer"
 
 ---
 
-OUR QUESTIONS:
+REQUEST:
 
-1. Is 3DS enabled on our merchant account (TESTARC05511704)?
-   - If not, can you please enable it?
+1. Please confirm if our merchant account (TESTARC05511704) is configured for 3DS authentication.
 
-2. Do we need to configure 3-D Secure Rules in the Transaction Filtering settings?
-   - If yes, please provide instructions or enable it on our behalf.
+2. If 3DS is not enabled on our merchant account, please enable it so the MANDATORY parameter will work.
 
-3. Are there any additional API parameters required in our INITIATE_CHECKOUT request to trigger 3DS?
-   - We tried adding "authentication" block but received "Unexpected parameter" error.
-
-4. Should 3DS be configured as:
-   - "Always Authenticate" (mandatory for all transactions)?
-   - "Attempt Authentication" (try 3DS, proceed if unavailable)?
-
----
-
-WHAT WE NEED:
-
-Please configure our merchant account so that:
-- All transactions trigger 3DS authentication
-- Both "Authentication" and "Payment" transactions appear in the portal
-- Payer Authentication Status shows successful authentication (not "Not In Effect")
+3. We will run new test transactions and request your review.
 
 ---
 
 Our Website: https://www.jetsetterss.com
 
-Test Environment Ready: Yes, we can immediately test once 3DS is enabled.
-
-Please let us know what configuration changes are needed on your end or if we need to modify our API integration.
+Test Environment Ready: Yes, fix has been deployed.
 
 Thank you for your assistance with the certification process.
 
