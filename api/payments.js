@@ -287,7 +287,11 @@ async function handlePaymentInitiation(req, res) {
           billingAddress: 'OPTIONAL',
           customerEmail: 'OPTIONAL'
         },
-        timeout: 900
+        timeout: 900,
+        // Tell Hosted Checkout to use 3DS when available
+        action: {
+          '3DSecure': 'MANDATORY'
+        }
       },
       order: {
         id: payment.id,
@@ -295,12 +299,6 @@ async function handlePaymentInitiation(req, res) {
         amount: parseFloat(quote.total_amount).toFixed(2),
         currency: quote.currency || 'USD',
         description: `Quote ${quote.quote_number || quote.id.slice(-8)} - ${quote.title || 'Travel Booking'}`
-      },
-      "3DSecure": {
-        "authenticationIndicator": "PAYER_AUTHENTICATION",
-        "challengeIndicator": "NO_PREFERENCE",
-        "transactionType": "PURCHASE",
-        "threeDSVersion": "2.1.0"
       }
     };
 
