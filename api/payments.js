@@ -295,6 +295,12 @@ async function handlePaymentInitiation(req, res) {
         amount: parseFloat(quote.total_amount).toFixed(2),
         currency: quote.currency || 'USD',
         description: `Quote ${quote.quote_number || quote.id.slice(-8)} - ${quote.title || 'Travel Booking'}`
+      },
+      "3DSecure": {
+        "authenticationIndicator": "PAYER_AUTHENTICATION",
+        "challengeIndicator": "NO_PREFERENCE",
+        "transactionType": "PURCHASE",
+        "threeDSVersion": "2.1.0"
       }
     };
 
@@ -316,13 +322,6 @@ async function handlePaymentInitiation(req, res) {
       }
     }
     
-    // Add 3DSecure authentication parameters (per ARC Pay support)
-    requestBody["3DSecure"] = {
-      authenticationIndicator: "PAYER_AUTHENTICATION",
-      challengeIndicator: "NO_PREFERENCE",
-      transactionType: "PURCHASE",
-      threeDSVersion: "2.1.0"
-    };
     
     console.log('📤 Sending INITIATE_CHECKOUT request with 3DSecure');
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
