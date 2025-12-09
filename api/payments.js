@@ -316,9 +316,13 @@ async function handlePaymentInitiation(req, res) {
       }
     }
     
-    
-    console.log('📤 Sending INITIATE_CHECKOUT request with 3DSecure');
-    console.log('Request body:', JSON.stringify(requestBody, null, 2));
+    // Log full request for ARC support debugging (3DS should auto-trigger from merchant profile)
+    console.log('='.repeat(80));
+    console.log('🔵 ARC PAY REQUEST - INITIATE_CHECKOUT');
+    console.log('='.repeat(80));
+    console.log('📤 Endpoint:', sessionUrl);
+    console.log('📤 Request Body:', JSON.stringify(requestBody, null, 2));
+    console.log('='.repeat(80));
 
     let arcResponse;
     try {
@@ -343,9 +347,12 @@ async function handlePaymentInitiation(req, res) {
     }
 
     const responseText = await arcResponse.text();
-    console.log('ARC Pay response status:', arcResponse.status);
-    console.log('ARC Pay response headers:', Object.fromEntries(arcResponse.headers.entries()));
-    console.log('ARC Pay response text:', responseText);
+    console.log('='.repeat(80));
+    console.log('🔵 ARC PAY RESPONSE - INITIATE_CHECKOUT');
+    console.log('='.repeat(80));
+    console.log('📥 HTTP Status:', arcResponse.status);
+    console.log('📥 Response Body:', responseText);
+    console.log('='.repeat(80));
 
     if (!arcResponse.ok) {
       let errorDetails;

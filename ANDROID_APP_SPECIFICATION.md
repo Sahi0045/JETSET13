@@ -69,6 +69,12 @@
 - **Location-based Search**: Find rentals near destinations
 - **Booking Management**: Complete rental booking process
 
+### 6. **📝 Requests & My Trips (Web Parity)**
+- **New Request Form (`/request`)**: Native screen that replicates the Jetsetterss web request form, posting to the same backend inquiry/request endpoint and JSON schema.
+- **Inquiry Lifecycle**: Inquiries created by the app appear in the same Supabase tables and backoffice tools as web, enabling agents to create quotes without any mobile-specific logic.
+- **My Trips (`/my-trips`)**: Screen that shows both bookings and open requests/inquiries using the same REST endpoints as the web My Trips page.
+- **Quote → Payment**: From My Trips, users can open Inquiry Detail, view quotes, and trigger the ARC Pay Hosted Checkout payment flow using `quote_id`, exactly as on web.
+
 ---
 
 ## 🔐 Authentication & User Management
@@ -107,10 +113,18 @@
 
 ### **Payment Gateway Integration**
 - **ARC Pay Integration**: Primary payment processor
-- **Secure Processing**: PCI-compliant payment handling
-- **Transaction Management**: Complete payment lifecycle
-- **Refund Processing**: Automated refund handling
-- **Payment Verification**: Real-time payment confirmation
+- **Integration Model**: Hosted Checkout (ARC Pay hosts card entry + 3DS on their pages)
+- **Secure Processing**: PCI-compliant payment handling via ARC Pay and shared backend API
+- **Transaction Management**: Complete payment lifecycle using existing `/api/payments` endpoints
+- **Refund Processing**: Automated refund handling via backend + ARC Pay APIs
+- **Payment Verification**: Real-time payment confirmation and Supabase status updates
+-- **3DS Authentication**: EMV 3DS2 support (frictionless and challenge flows) configured on the ARC Pay merchant profile
+
+### **📚 ARC Pay Android Implementation**
+- **`ARC_PAY_ANDROID_IMPLEMENTATION_GUIDE.md`** describes:
+  - How the Android app calls `/api/payments?action=initiate-payment` with `quote_id` only
+  - How the WebView loads the ARC Pay Hosted Checkout URL and handles 3DS inside the WebView
+  - How callback URLs (`/payment/callback`) are captured and passed back to the backend for final `PAY`/verification
 
 ### **Payment Features**
 - **Zero Processing Fees**: No additional charges
@@ -190,8 +204,12 @@ FIREBASE_PROJECT_ID=your_project_id
 # APIs (Same as web)
 AMADEUS_API_KEY=your_amadeus_api_key
 AMADEUS_API_SECRET=your_amadeus_api_secret
-ARC_PAY_MERCHANT_ID=your_arc_pay_merchant_id
-ARC_PAY_API_URL=https://api.arcpay.travel/api/rest/version/77/merchant/
+ARC_PAY_API_URL=https://na.gateway.mastercard.com/api/rest/version/100/merchant/TESTARC05511704
+ARC_PAY_MERCHANT_ID=TESTARC05511704
+ARC_PAY_BASE_URL=https://na.gateway.mastercard.com/api/rest/version/100
+ARC_PAY_PORTAL_URL=https://na.gateway.mastercard.com/ma/
+ARC_PAY_API_USERNAME=TESTARC05511704
+ARC_PAY_API_PASSWORD=your_arc_pay_api_password
 ```
 
 ### **Navigation Structure**

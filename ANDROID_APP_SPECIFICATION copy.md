@@ -69,6 +69,12 @@
 - **Location-based Search**: Find rentals near destinations
 - **Booking Management**: Complete rental booking process
 
+### 6. **📝 Requests & My Trips (Web Parity)**
+- **New Request Form (`/request`)**: Android screen that mirrors the web request form fields and submits to the same backend inquiry/request endpoint.
+- **Inquiry Creation**: Creates inquiries in Supabase using the same REST API and payload as the web, so backoffice quoting works unchanged.
+- **My Trips (`/my-trips`)**: Mobile screen that lists upcoming/past bookings and user requests/inquiries using the same APIs as the web My Trips page.
+- **Quote → Pay Flow**: From My Trips, user opens Inquiry Detail, selects a final quote, and taps Pay Now, which launches the ARC Pay Hosted Checkout flow described in `ARC_PAY_ANDROID_IMPLEMENTATION_GUIDE.md`.
+
 ---
 
 ## 🔐 Authentication & User Management
@@ -107,12 +113,13 @@
 
 ### **Payment Gateway Integration**
 - **ARC Pay Integration**: Primary payment processor (Mastercard Payment Gateway Services)
+- **Integration Model**: Hosted Checkout (ARC Pay hosts the card form and 3DS flow)
 - **Secure Processing**: PCI-compliant payment handling
-- **Transaction Management**: Complete payment lifecycle
+- **Transaction Management**: Complete payment lifecycle using shared Jetsetterss backend (`/api/payments`)
 - **Refund Processing**: Automated refund handling
-- **Payment Verification**: Real-time payment confirmation
-- **3DS Authentication**: Full EMV 3DS2 support (frictionless and challenge flows)
-- **Hosted Checkout**: Secure payment processing via ARC Pay's hosted payment page
+- **Payment Verification**: Real-time payment confirmation and status sync with Supabase
+- **3DS Authentication**: Full EMV 3DS2 support (frictionless and challenge flows) via ARC Pay merchant configuration
+- **Hosted Checkout**: ARC Pay hosted payment page loaded inside an in-app WebView
 
 ### **Payment Features**
 - **Zero Processing Fees**: No additional charges

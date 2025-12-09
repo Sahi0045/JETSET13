@@ -4,13 +4,14 @@
 1. [Overview](#overview)
 2. [Architecture & Integration Model](#architecture--integration-model)
 3. [Environment Setup](#environment-setup)
-4. [Payment Flow Implementation](#payment-flow-implementation)
-5. [3DS Authentication Handling](#3ds-authentication-handling)
-6. [Code Implementation](#code-implementation)
-7. [Test Cards & Scenarios](#test-cards--scenarios)
-8. [Error Handling](#error-handling)
-9. [Mobile-Specific Considerations](#mobile-specific-considerations)
-10. [Testing Checklist](#testing-checklist)
+4. [Request / My Trips Flows](#request--my-trips-flows)
+5. [Payment Flow Implementation](#payment-flow-implementation)
+6. [3DS Authentication Handling](#3ds-authentication-handling)
+7. [Code Implementation](#code-implementation)
+8. [Test Cards & Scenarios](#test-cards--scenarios)
+9. [Error Handling](#error-handling)
+10. [Mobile-Specific Considerations](#mobile-specific-considerations)
+11. [Testing Checklist](#testing-checklist)
 
 ---
 
@@ -27,11 +28,111 @@ This guide provides complete implementation instructions for integrating **ARC P
 
 ### Payment Gateway Details
 - **Gateway**: ARC Pay (Mastercard Payment Gateway Services)
-- **API Base URL**: `https://api.arcpay.travel/api/rest/version/100` (for API calls)
-- **Payment Page URL**: `https://na.gateway.mastercard.com/checkout/pay/{sessionId}` (for HPP redirect)
+- **Merchant ID (test)**: `TESTARC05511704`
+- **Gateway API Base URL (backend)**: `https://na.gateway.mastercard.com/api/rest/version/100`
+- **Merchant API URL (backend)**: `https://na.gateway.mastercard.com/api/rest/version/100/merchant/TESTARC05511704`
+- **Hosted Checkout Payment URL (front-end / app)**: `https://na.gateway.mastercard.com/checkout/pay/{sessionId}`
 - **API Version**: `100`
-- **Integration Model**: Hosted Checkout (Hosted Session)
-- **Test Merchant ID**: `TESTARC05511704`
+- **Integration Model**: Hosted Checkout (ARC Pay hosts card form + 3DS)
+
+> **Important 3DS Note**  
+> For Hosted Checkout, 3DS behavior (frictionless vs challenge, mandatory/optional) is controlled by **ARC Pay merchant profile configuration**, **not** by adding a `3DSecure` block to `INITIATE_CHECKOUT`.  
+> The Android app only opens the Hosted Checkout URL in WebView; all 3DS logic happens inside ARC Pay pages.
+
+---
+
+## 📄 Request / My Trips Flows
+
+These sections describe how the Android app mirrors the existing web flows for:
+- **Request form**: `https://www.jetsetterss.com/request`
+- **My Trips / My Requests**: `https://www.jetsetterss.com/my-trips`
+
+### 1. New Request (Inquiry) Flow – `/request`
+
+#### 1.1 Screen: NewRequestScreen
+
+**Purpose**: Let the user submit a new travel request (inquiry) with the same fields and behavior as the web `/request` page.
+
+**Key elements:**
+- Trip type (flight / hotel / cruise / package / custom)
+- From / To / Destination fields
+- Dates (departure / return or start / end)
+- Passenger details (adults, children, infants)
+- Budget / class / room type (depending on trip type)
+- Free-text notes / special requirements
+- Contact info (prefill from logged-in user: name, email, phone)
+
+**Submit behavior (Android):**
+- On submit, call the **same backend endpoint** used by the web request form (e.g. `POST /api/inquiries` or `POST /api/requests`).
+- The body should be identical (field names and structure) to the web request payload so it plugs into the same Supabase tables and quote-generation logic.
+- On success, navigate to:
+  - Either a **“Request Submitted”** screen, or
+  - Directly to **InquiryDetail** screen for that new inquiry (mirrors web behavior after submitting).
+
+> **Important:** The Android app must not invent a new request model. It should **reuse exactly the same REST endpoint and JSON payload** the web `/request` page uses, so that all backoffice tools and quote creation flows continue to work unchanged.
+
+#### 1.2 Recommended Service Layer
+
+- Create `RequestService.js` similar to `PaymentService.js`:
+  - `createRequest(payload)` → `POST /api/<same-endpoint-as-web>`
+  - `getRequestById(id)` → `GET /api/<same-endpoint-as-web>/:id`
+
+The service should:
+- Attach the same auth token header as the web (Bearer token from AsyncStorage).
+- Handle validation errors and show user-friendly messages in the app.
+
+---
+
+### 2. My Trips / My Requests – `/my-trips`
+
+#### 2.1 Screen: MyTripsScreen
+
+**Purpose**: Mirror the web `/my-trips` page, showing:
+- **Upcoming / Past bookings** (paid and booked items)
+- **Requests / Inquiries** with their latest quotes and payment status
+
+**Data sources (must match web):**
+- Use the same backend endpoints as the web `My Trips` page uses, for example:
+  - `GET /api/inquiries?mine=true` – list of user’s inquiries + quotes
+  - `GET /api/bookings?mine=true` – list of confirmed/paid bookings
+  - `GET /api/payments?action=get-payment-details&paymentId=...` – payment details (already supported)
+
+> If the web uses a combined endpoint (e.g. `/api/my-trips`), the Android app should call **that same endpoint** instead of creating new ones.
+
+#### 2.2 Behavior in the app
+
+- On screen focus:
+  - Fetch the same lists as web:
+    - Inquiries + quotes (including `payment_status`, `quote_status`, `inquiry_status`, `final` flags)
+    - Paid bookings (from bookings + payments tables)
+- Use **the same filtering rules** as web:
+  - Upcoming vs past
+  - Paid vs unpaid
+  - Final quote vs non-final quote
+- Tapping a **request/inquiry**:
+  - Navigate to `InquiryDetail` screen (Android), which mirrors `InquiryDetail.jsx` on web.
+- From **InquiryDetail**, when a quote is `final` and `payment_status === 'unpaid'`:
+  - Show **Pay Now** button.
+  - This should navigate into the **ARC Pay payment flow** described in this guide:
+    - `PaymentScreen` → WebView Hosted Checkout → callback → Success / Failed.
+
+#### 2.3 Integration with ARC Pay Flow
+
+- **Entry point:** from `MyTripsScreen` or `InquiryDetailScreen`:
+  - User selects a quote.
+  - App passes `quoteId` (and optionally `inquiryId`) into `PaymentScreen`:
+    - `navigation.navigate('PaymentFlow', { screen: 'Payment', params: { quoteId, inquiryId } })`
+- **Everything after that** uses the already defined ARC Pay flow:
+  - `PaymentService.initiatePayment(quoteId)` → `/api/payments?action=initiate-payment`
+  - Backend handles ARC Pay `INITIATE_CHECKOUT` + 3DS + `PAY`.
+  - WebView shows Hosted Checkout.
+  - Callback hits `/payment/callback` and `payment-callback` backend action.
+  - App shows `PaymentSuccessScreen` or `PaymentFailedScreen`.
+
+This way:
+- `/request` → creates **inquiry + quotes**.
+- `/my-trips` → lists **inquiries, quotes, bookings**.
+- **Pay Now** in app uses **exact same backend and ARC Pay integration** as the web, with no duplicate business logic on the device.
 
 ---
 

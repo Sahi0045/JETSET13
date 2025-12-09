@@ -344,6 +344,106 @@ export default async function handler(req, res) {
       }
     }
 
+    // POST /api/quotes?action=create-for-booking - Create quote for direct booking (mobile/web)
+    // This allows users to create quotes for direct bookings (flights/hotels/cruises/packages)
+    // without requiring admin intervention
+    if (method === 'POST' && query.action === 'create-for-booking') {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required'
+        });
+      }
+
+      try {
+        const {
+          booking_type, // "flight", "hotel", "cruise", "package"
+          title,
+          description,
+          total_amount,
+          currency = 'USD',
+          breakdown = {},
+          booking_details = {}, // Store flight/hotel data here
+          customer_email,
+          customer_name,
+          customer_phone
+        } = req.body;
+
+        // Validate required fields
+        if (!booking_type || !total_amount) {
+          return res.status(400).json({
+            success: false,
+            message: 'booking_type and total_amount are required'
+          });
+        }
+
+        // Validate booking_type
+        const validBookingTypes = ['flight', 'hotel', 'cruise', 'package'];
+        if (!validBookingTypes.includes(booking_type)) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid booking_type. Must be one of: ${validBookingTypes.join(', ')}`
+          });
+        }
+
+        // 1. Auto-create inquiry for this booking
+        const inquiryData = {
+          user_id: req.user.id,
+          travel_type: booking_type,
+          inquiry_type: booking_type, // Same as travel_type
+          customer_email: customer_email || req.user.email,
+          customer_name: customer_name || req.user.name || req.user.email?.split('@')[0],
+          customer_phone: customer_phone || null,
+          status: 'quoted', // Skip "pending" since quote is ready
+          // Store booking details in inquiry for reference
+          inquiry_details: booking_details || {}
+        };
+
+        const inquiry = await Inquiry.create(inquiryData);
+        console.log('✅ Created inquiry for booking:', inquiry.id);
+
+        // 2. Create quote linked to inquiry
+        const quoteData = {
+          inquiry_id: inquiry.id,
+          quote_number: Quote.generateQuoteNumber(),
+          title: title || `${booking_type.charAt(0).toUpperCase() + booking_type.slice(1)} Booking`,
+          description: description || `Direct ${booking_type} booking`,
+          total_amount: parseFloat(total_amount),
+          currency: currency,
+          breakdown: breakdown || {},
+          booking_details: booking_details || {}, // Store flight/hotel data here
+          status: 'sent', // Ready for payment immediately
+          validity_days: 30,
+          // Note: admin_id is not set for user-created quotes
+        };
+
+        const quote = await Quote.create(quoteData);
+        console.log('✅ Created quote for booking:', quote.id);
+
+        return res.status(201).json({
+          success: true,
+          message: 'Quote created successfully',
+          data: {
+            id: quote.id,
+            quote_number: quote.quote_number,
+            inquiry_id: inquiry.id,
+            total_amount: quote.total_amount,
+            currency: quote.currency,
+            status: quote.status,
+            created_at: quote.created_at
+          }
+        });
+      } catch (error) {
+        console.error('Create quote for booking error:', error);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to create quote',
+          error: error.message,
+          details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+      }
+    }
+
     // POST /api/quotes - Create a new quote (admin only)
     if (method === 'POST') {
       console.log('POST /api/quotes - User check:', {
