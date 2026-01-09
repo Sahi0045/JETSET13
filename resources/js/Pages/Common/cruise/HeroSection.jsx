@@ -255,9 +255,9 @@ const HeroSection = () => {
       </div>
 
       {/* Content Container */}
-      <div className="container relative z-10 mx-auto px-4 pt-32 pb-16 sm:px-6 lg:px-8">
+      <div className="container relative z-10 mx-auto px-4 pt-32 pb-16 sm:px-6 lg:px-8 w-full flex flex-col items-center justify-center">
         {/* Hero Text */}
-        <div className="text-center mb-12 space-y-6">
+        <div className="text-center mb-12 space-y-6 w-full max-w-6xl mx-auto">
           <div className="inline-flex items-center px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-4">
             {/* <Ship className="w-4 h-4 text-blue-400 mr-2" /> */}
             {/* <span className="text-white/90 text-sm font-medium">Luxury Cruise Experiences</span> */}
@@ -276,8 +276,8 @@ const HeroSection = () => {
         </div>
 
         {/* Search Form */}
-        <div className="max-w-6xl mx-auto">
-          <form onSubmit={handleSearch} className="search-container">
+        <div className="max-w-6xl mx-auto w-full">
+          <form onSubmit={handleSearch} className="search-container w-full">
             <div className="search-grid">
               {/* Destination */}
               <div className="search-field relative">

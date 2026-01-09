@@ -355,39 +355,40 @@ const TravelPackages = () => {
             <Sparkles className="h-5 w-5 text-yellow-300 mr-2 flex-shrink-0" />
             <p className={`text-white ${isMobileView ? 'text-xs' : 'text-base'} font-medium tracking-wide`}>
               <span className="text-yellow-300 font-bold">SUMMER SPECIAL:</span> 15% OFF!{' '}
-              <span className="font-bold text-yellow-300 whitespace-nowrap">{isMobileView ? '' : 'Call '} 877-jestset-0 ((877) 538-7380)</span>
+              <span className="font-bold text-yellow-300 whitespace-nowrap">{isMobileView ? '' : 'Call '}  (877) 538-7380)</span>
             </p>
           </div>
         </div>
       
         {/* Hero Section */}
         <section
-          className="relative min-h-[85vh] md:min-h-[100vh] flex items-center justify-center overflow-hidden pb-32 md:pb-40"
+          className="relative min-h-[85vh] md:min-h-[100vh] flex items-center justify-center overflow-hidden pb-16 md:pb-32 lg:pb-40 pt-20 md:pt-24 lg:pt-32"
           style={{
             backgroundImage:
               "url('https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=2070&auto=format&fit=crop')",
             backgroundSize: "cover",
             backgroundPosition: "center 30%",
+            backgroundRepeat: "no-repeat",
           }}
         >
           {/* Mobile-specific background for better visibility */}
-          <div className="absolute inset-0 md:hidden bg-gradient-to-b from-black/70 via-black/50 to-black/70"></div>
+          <div className="absolute inset-0 md:hidden bg-gradient-to-b from-black/70 via-black/60 to-black/70"></div>
           {/* Desktop background overlay */}
-          <div className="absolute inset-0 hidden md:block bg-gradient-to-b from-black/50 via-black/30 to-black/50"></div>
+          <div className="absolute inset-0 hidden md:block bg-gradient-to-b from-black/60 via-black/50 to-black/60"></div>
 
-          <div className="container mx-auto px-4 z-10">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 z-10 w-full flex flex-col items-center justify-center relative py-4 sm:py-6 md:py-8">
             {/* Hero content */}
-            <div className="text-center mb-6 md:mb-8 animate-fadeIn">
-              <h1 className="text-3xl md:text-5xl lg:text-7xl font-bold mb-3 md:mb-4 text-white drop-shadow-lg">
+            <div className="text-center mb-6 sm:mb-8 md:mb-10 lg:mb-12 animate-fadeIn w-full max-w-5xl mx-auto">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-4 md:mb-5 lg:mb-6 text-white drop-shadow-2xl px-2 sm:px-4 md:px-6 lg:px-0">
                 Discover Your Next Adventure
               </h1>
-              <p className="text-base md:text-xl lg:text-2xl text-white font-medium drop-shadow-md px-2 md:px-0 max-w-3xl mx-auto">
+              <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl text-white font-medium drop-shadow-lg px-4 sm:px-6 md:px-8 lg:px-0 max-w-3xl mx-auto leading-relaxed">
                 Explore our handpicked destinations and create unforgettable memories
               </p>
             </div>
 
             {/* Mobile Form - Shown only on small screens */}
-            <form onSubmit={handleSearch} className="md:hidden bg-white/95 backdrop-blur-sm rounded-xl p-6 max-w-5xl mx-auto shadow-2xl">
+            <form onSubmit={handleSearch} className="md:hidden bg-white/95 backdrop-blur-sm rounded-xl p-6 max-w-5xl mx-auto shadow-2xl w-full">
               <div className="flex flex-col gap-6">
                 <div className="w-full">
                   <label className="block text-gray-800 text-base font-medium mb-2">Destination</label>
@@ -513,7 +514,7 @@ const TravelPackages = () => {
             </form>
 
             {/* Desktop Form - Original layout preserved with enhancements */}
-            <form onSubmit={handleSearch} className="hidden md:block bg-white/95 backdrop-blur-sm rounded-xl p-8 max-w-5xl mx-auto shadow-2xl transform hover:scale-[1.02] transition-all duration-300">
+            <form onSubmit={handleSearch} className="hidden md:block bg-white/95 backdrop-blur-sm rounded-xl p-8 max-w-5xl mx-auto shadow-2xl transform hover:scale-[1.02] transition-all duration-300 w-full">
               <div className="flex flex-row gap-6">
                 <div className="flex-1" ref={searchRef}>
                   <label className="block text-gray-700 text-sm font-medium mb-1">Destination</label>
@@ -631,9 +632,9 @@ const TravelPackages = () => {
                 </div>
 
                 <div className="flex items-end">
-                  <button type="submit" className="w-auto bg-blue-600 text-white px-8 py-3 rounded-md hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-2 group font-medium">
-                    <Search size={18} />
-                    <span className="text-base group-hover:translate-x-1 transition-transform">
+                  <button type="submit" className="w-auto min-w-[140px] bg-blue-600 text-white px-6 lg:px-8 py-2.5 lg:py-3 rounded-lg hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-2 group font-semibold shadow-lg hover:shadow-xl text-sm lg:text-base uppercase tracking-wide">
+                    <Search size={16} className="lg:w-[18px] lg:h-[18px]" />
+                    <span className="group-hover:translate-x-1 transition-transform">
                       Search
                     </span>
                   </button>
