@@ -661,7 +661,7 @@ export default function LandingPage() {
       <Navbar />
       
       {/* Hero Section */}
-      <div className="relative min-h-[70vh] md:h-screen md:max-h-[900px] overflow-hidden">
+      <div className="relative min-h-[85vh] md:min-h-[100vh] overflow-hidden pb-32 md:pb-40">
         {/* Hero Background with Overlay */}
         <div className="absolute inset-0 bg-gradient-to-r from-blue-900/30 to-black/40 z-10"></div>
         <img

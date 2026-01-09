@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaMapMarkerAlt, FaStar, FaPlane, FaHotel, FaShip, FaCar, FaCalendarAlt, FaUsers, FaGlobe } from 'react-icons/fa';
+import {
+  FaMapMarkerAlt,
+  FaStar,
+  FaPlane,
+  FaCalendarAlt,
+  FaUsers,
+  FaGlobe,
+  FaShip,
+  FaHotel,
+  FaCar
+} from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
 
@@ -16,263 +26,282 @@ const Destinations = () => {
   ];
 
   const destinations = [
+    // ===== NORTH AMERICA =====
     {
       id: 1,
-      name: 'Bali, Indonesia',
-      category: 'beach',
-      image: 'https://images.unsplash.com/photo-1537953773345-d172ccf13cf1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2072&q=80',
-      description: 'Tropical paradise with pristine beaches, ancient temples, and vibrant culture.',
-      rating: 4.8,
-      reviews: 1247,
-      price: 'From $899',
-      duration: '7-14 days',
-      highlights: ['Beach Resorts', 'Temple Tours', 'Rice Terraces', 'Water Sports'],
-      bestTime: 'April to October'
+      name: 'New York City, USA',
+      category: 'city',
+      image: 'https://images.unsplash.com/photo-1534447677768-be436bb09401',
+      description: 'The city that never sleeps, offering iconic landmarks and vibrant culture.',
+      rating: 4.9,
+      reviews: 2543,
+      price: 'From $999',
+      duration: '3–7 days',
+      highlights: ['Broadway', 'Statue of Liberty', 'Central Park'],
+      bestTime: 'Apr–Jun, Sep–Nov'
     },
     {
       id: 2,
-      name: 'Paris, France',
+      name: 'Los Angeles, USA',
       category: 'city',
-      image: 'https://images.unsplash.com/photo-1502602898536-47ad22581b52?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
-      description: 'The City of Light offers world-class art, cuisine, and iconic landmarks.',
-      rating: 4.9,
-      reviews: 2156,
-      price: 'From $1,299',
-      duration: '5-10 days',
-      highlights: ['Eiffel Tower', 'Louvre Museum', 'Notre-Dame', 'Champs-Élysées'],
-      bestTime: 'April to June, September to October'
+      image: 'https://images.unsplash.com/photo-1502920514313-52581002a659',
+      description: 'Hollywood glamour, beaches, and endless entertainment.',
+      rating: 4.7,
+      reviews: 1820,
+      price: 'From $1,099',
+      duration: '4–8 days',
+      highlights: ['Hollywood', 'Santa Monica', 'Beverly Hills'],
+      bestTime: 'Mar–Oct'
     },
     {
       id: 3,
-      name: 'Santorini, Greece',
+      name: 'Miami, USA',
       category: 'beach',
-      image: 'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
-      description: 'Stunning volcanic island with dramatic cliffs and breathtaking sunsets.',
-      rating: 4.9,
-      reviews: 1893,
-      price: 'From $1,199',
-      duration: '5-8 days',
-      highlights: ['Caldera Views', 'Sunset Cruises', 'Wine Tasting', 'Beach Clubs'],
-      bestTime: 'June to September'
+      image: 'https://images.unsplash.com/photo-1505731132164-cca903a55486',
+      description: 'Tropical beaches, nightlife, and Latin culture.',
+      rating: 4.8,
+      reviews: 1432,
+      price: 'From $899',
+      duration: '3–6 days',
+      highlights: ['South Beach', 'Nightlife', 'Cruises'],
+      bestTime: 'Nov–Apr'
     },
     {
       id: 4,
-      name: 'Tokyo, Japan',
+      name: 'Toronto, Canada',
       category: 'city',
-      image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2071&q=80',
-      description: 'Futuristic metropolis blending cutting-edge technology with ancient traditions.',
+      image: 'https://images.unsplash.com/photo-1507992781348-310259076fe0',
+      description: 'Cosmopolitan city with iconic skyline and cultural diversity.',
       rating: 4.7,
-      reviews: 1678,
-      price: 'From $1,499',
-      duration: '7-12 days',
-      highlights: ['Shibuya Crossing', 'Senso-ji Temple', 'Tsukiji Market', 'Mount Fuji'],
-      bestTime: 'March to May, September to November'
+      reviews: 1103,
+      price: 'From $1,049',
+      duration: '4–7 days',
+      highlights: ['CN Tower', 'Niagara Falls', 'Downtown'],
+      bestTime: 'May–Sep'
     },
     {
       id: 5,
-      name: 'Machu Picchu, Peru',
+      name: 'Vancouver, Canada',
       category: 'adventure',
-      image: 'https://images.unsplash.com/photo-1587595431973-160d0d94add1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
-      description: 'Ancient Incan citadel nestled high in the Andes Mountains.',
+      image: 'https://images.unsplash.com/photo-1506045412240-22980140a405',
+      description: 'Mountains, ocean, and outdoor adventures.',
       rating: 4.8,
-      reviews: 892,
-      price: 'From $1,399',
-      duration: '8-12 days',
-      highlights: ['Inca Trail', 'Sacred Valley', 'Cusco City', 'Rainbow Mountain'],
-      bestTime: 'May to September'
+      reviews: 980,
+      price: 'From $1,199',
+      duration: '5–9 days',
+      highlights: ['Stanley Park', 'Hiking', 'Whistler'],
+      bestTime: 'Jun–Sep'
     },
+
+    // ===== INDIA =====
     {
       id: 6,
-      name: 'Marrakech, Morocco',
-      category: 'cultural',
-      image: 'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
-      description: 'Exotic city with bustling souks, stunning architecture, and rich history.',
+      name: 'Mumbai, India',
+      category: 'city',
+      image: 'https://images.unsplash.com/photo-1595658658481-d53d3f999875',
+      description: 'The financial capital of India with vibrant nightlife.',
       rating: 4.6,
-      reviews: 756,
-      price: 'From $999',
-      duration: '5-8 days',
-      highlights: ['Jemaa el-Fnaa', 'Majorelle Garden', 'Medina Tours', 'Atlas Mountains'],
-      bestTime: 'March to May, September to November'
+      reviews: 1650,
+      price: 'From $499',
+      duration: '3–6 days',
+      highlights: ['Marine Drive', 'Gateway of India', 'Street Food'],
+      bestTime: 'Nov–Feb'
     },
     {
       id: 7,
-      name: 'New Zealand',
-      category: 'adventure',
-      image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
-      description: 'Land of stunning landscapes, adventure sports, and Maori culture.',
-      rating: 4.9,
-      reviews: 1345,
-      price: 'From $2,199',
-      duration: '14-21 days',
-      highlights: ['Milford Sound', 'Hobbiton', 'Queenstown', 'Waitomo Caves'],
-      bestTime: 'December to February (Summer)'
+      name: 'Delhi, India',
+      category: 'cultural',
+      image: 'https://images.unsplash.com/photo-1587474260584-136574528ed5',
+      description: 'Historic capital rich in culture and heritage.',
+      rating: 4.5,
+      reviews: 1490,
+      price: 'From $449',
+      duration: '3–5 days',
+      highlights: ['Red Fort', 'Qutub Minar', 'Old Delhi'],
+      bestTime: 'Oct–Mar'
     },
     {
       id: 8,
-      name: 'Istanbul, Turkey',
+      name: 'Goa, India',
+      category: 'beach',
+      image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e',
+      description: 'India’s most popular beach destination.',
+      rating: 4.8,
+      reviews: 2310,
+      price: 'From $399',
+      duration: '4–7 days',
+      highlights: ['Beaches', 'Nightlife', 'Water Sports'],
+      bestTime: 'Nov–Feb'
+    },
+    {
+      id: 9,
+      name: 'Jaipur, India',
       category: 'cultural',
-      image: 'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2071&q=80',
-      description: 'Where East meets West in a city rich with history and culture.',
+      image: 'https://images.unsplash.com/photo-1548013146-72479768bada',
+      description: 'The Pink City with royal palaces and forts.',
       rating: 4.7,
-      reviews: 1123,
+      reviews: 1215,
+      price: 'From $499',
+      duration: '3–5 days',
+      highlights: ['Amber Fort', 'Hawa Mahal', 'City Palace'],
+      bestTime: 'Oct–Mar'
+    },
+
+    // ===== FRANCE =====
+    {
+      id: 10,
+      name: 'Paris, France',
+      category: 'city',
+      image: 'https://images.unsplash.com/photo-1502602898536-47ad22581b52',
+      description: 'The City of Light with art, romance, and cuisine.',
+      rating: 4.9,
+      reviews: 2156,
+      price: 'From $1,299',
+      duration: '5–10 days',
+      highlights: ['Eiffel Tower', 'Louvre', 'Seine Cruise'],
+      bestTime: 'Apr–Jun, Sep–Oct'
+    },
+    {
+      id: 11,
+      name: 'Nice, France',
+      category: 'beach',
+      image: 'https://images.unsplash.com/photo-1505739772255-7f1fd0f2c0be',
+      description: 'French Riviera beauty with Mediterranean charm.',
+      rating: 4.8,
+      reviews: 890,
+      price: 'From $1,199',
+      duration: '4–7 days',
+      highlights: ['Promenade', 'Beaches', 'Old Town'],
+      bestTime: 'May–Sep'
+    },
+    {
+      id: 12,
+      name: 'Marseille, France',
+      category: 'cultural',
+      image: 'https://images.unsplash.com/photo-1605113286275-ec1d80d048bb',
+      description: 'Historic port city with stunning coastline.',
+      rating: 4.6,
+      reviews: 670,
+      price: 'From $1,049',
+      duration: '4–6 days',
+      highlights: ['Old Port', 'Calanques', 'Seafood'],
+      bestTime: 'Apr–Oct'
+    },
+    {
+      id: 13,
+      name: 'Lyon, France',
+      category: 'cultural',
+      image: 'https://images.unsplash.com/photo-1599134842279-fe807d23316e',
+      description: 'Gastronomic capital of France.',
+      rating: 4.7,
+      reviews: 540,
       price: 'From $1,099',
-      duration: '6-10 days',
-      highlights: ['Hagia Sophia', 'Blue Mosque', 'Grand Bazaar', 'Bosphorus Cruise'],
-      bestTime: 'April to May, September to October'
+      duration: '3–5 days',
+      highlights: ['Cuisine', 'Old Town', 'Rivers'],
+      bestTime: 'Apr–Jun, Sep'
     }
   ];
 
-  const filteredDestinations = selectedCategory === 'all' 
-    ? destinations 
-    : destinations.filter(dest => dest.category === selectedCategory);
+  const filteredDestinations =
+    selectedCategory === 'all'
+      ? destinations
+      : destinations.filter(d => d.category === selectedCategory);
 
   return (
     <>
-      <Navbar forceScrolled={true} />
-      <div className="min-h-screen bg-gray-50">
-        {/* Hero Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
+      <Navbar forceScrolled />
+
+      <main className="min-h-screen bg-gray-50">
+        {/* HERO */}
+        <section className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
           <div className="container mx-auto px-4 text-center">
-            <h1 className="text-5xl font-bold mb-6">Explore Amazing Destinations</h1>
-            <p className="text-xl max-w-3xl mx-auto">
-              Discover the world's most incredible places with Jetsetterss. From pristine beaches to bustling cities, 
-              find your perfect destination and start planning your next adventure.
+            <h1 className="text-4xl md:text-5xl font-bold mb-6">
+              Explore Amazing Destinations
+            </h1>
+            <p className="text-lg md:text-xl max-w-3xl mx-auto">
+              Discover the world’s most beautiful cities, beaches, and cultural landmarks.
             </p>
           </div>
-        </div>
+        </section>
 
-        <div className="container mx-auto px-4 py-16">
-          {/* Category Filter */}
-          <section className="mb-12">
-            <div className="flex flex-wrap justify-center gap-4">
-              {categories.map((category) => (
-                <button
-                  key={category.id}
-                  onClick={() => setSelectedCategory(category.id)}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-all duration-300 ${
-                    selectedCategory === category.id
-                      ? 'bg-blue-600 text-white shadow-lg'
-                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                  }`}
-                >
-                  {category.icon}
-                  {category.name}
-                </button>
-              ))}
-            </div>
-          </section>
+        {/* CONTENT */}
+        <section className="container mx-auto px-4 py-16">
+          {/* FILTER */}
+          <div className="flex flex-wrap justify-center gap-4 mb-12">
+            {categories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`flex items-center gap-2 px-6 py-3 rounded-full transition ${
+                  selectedCategory === cat.id
+                    ? 'bg-blue-600 text-white shadow'
+                    : 'bg-white border text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {cat.icon}
+                {cat.name}
+              </button>
+            ))}
+          </div>
 
-          {/* Destinations Grid */}
-          <section className="mb-20">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-              {filteredDestinations.map((destination) => (
-                <div key={destination.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
-                  {/* Destination Image */}
-                  <div className="relative h-48 overflow-hidden">
-                    <img 
-                      src={destination.image} 
-                      alt={destination.name}
-                      className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
-                    />
-                    <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-sm font-semibold text-gray-800">
-                      {destination.price}
-                    </div>
+          {/* GRID */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            {filteredDestinations.map(dest => (
+              <div
+                key={dest.id}
+                className="bg-white rounded-xl shadow hover:shadow-xl transition overflow-hidden"
+              >
+                <img
+                  src={dest.image}
+                  alt={dest.name}
+                  className="h-48 w-full object-cover"
+                />
+                <div className="p-6">
+                  <div className="flex justify-between mb-2">
+                    <h3 className="font-bold text-lg">{dest.name}</h3>
+                    <span className="flex items-center gap-1 text-sm">
+                      <FaStar className="text-yellow-400" />
+                      {dest.rating}
+                    </span>
                   </div>
 
-                  {/* Destination Info */}
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-xl font-bold text-gray-900">{destination.name}</h3>
-                      <div className="flex items-center gap-1">
-                        <FaStar className="text-yellow-400" />
-                        <span className="text-sm font-semibold">{destination.rating}</span>
-                      </div>
-                    </div>
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                    {dest.description}
+                  </p>
 
-                    <p className="text-gray-600 mb-4 line-clamp-2">{destination.description}</p>
+                  <div className="flex justify-between text-sm text-gray-500 mb-4">
+                    <span className="flex items-center gap-1">
+                      <FaCalendarAlt /> {dest.duration}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <FaMapMarkerAlt /> {dest.bestTime}
+                    </span>
+                  </div>
 
-                    {/* Highlights */}
-                    <div className="mb-4">
-                      <div className="flex flex-wrap gap-2">
-                        {destination.highlights.slice(0, 3).map((highlight, index) => (
-                          <span 
-                            key={index}
-                            className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
-                          >
-                            {highlight}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Details */}
-                    <div className="grid grid-cols-2 gap-4 mb-6 text-sm text-gray-600">
-                      <div className="flex items-center gap-2">
-                        <FaCalendarAlt className="text-blue-500" />
-                        <span>{destination.duration}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <FaMapMarkerAlt className="text-red-500" />
-                        <span>{destination.bestTime}</span>
-                      </div>
-                    </div>
-
-                    {/* Reviews */}
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <FaUsers />
-                        <span>{destination.reviews} reviews</span>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-2">
-                      <Link 
-                        to={`/destination/${destination.id}`}
-                        className="flex-1 bg-blue-600 text-white text-center py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                      >
-                        View Details
-                      </Link>
-                      <Link 
-                        to="/flights"
-                        className="bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium"
-                      >
-                        <FaPlane className="inline mr-1" />
-                        Book
-                      </Link>
-                    </div>
+                  <div className="flex gap-2">
+                    <Link
+                      to={`/destination/${dest.id}`}
+                      className="flex-1 bg-blue-600 text-white text-center py-2 rounded hover:bg-blue-700"
+                    >
+                      View
+                    </Link>
+                    <Link
+                      to="/flights"
+                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                    >
+                      <FaPlane />
+                    </Link>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
 
-          {/* Call to Action */}
-          <section className="bg-gradient-to-r from-blue-600 to-purple-700 rounded-2xl p-12 text-center text-white">
-            <h2 className="text-3xl font-bold mb-4">Can't Find Your Dream Destination?</h2>
-            <p className="text-xl mb-8 max-w-2xl mx-auto">
-              Our travel experts are here to help you discover hidden gems and create the perfect itinerary.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link 
-                to="/contact"
-                className="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-              >
-                Contact Our Experts
-              </Link>
-              <Link 
-                to="/flights"
-                className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors"
-              >
-                Search Flights
-              </Link>
-            </div>
-          </section>
-        </div>
-      </div>
       <Footer />
     </>
   );
 };
 
-export default Destinations; 
+export default Destinations;

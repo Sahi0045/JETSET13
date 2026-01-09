@@ -1,4 +1,4 @@
-import { Search, Calendar, ChevronDown, MapPin, Users, Star, ArrowRight, DollarSign, Tag, Heart, Plane, Sunrise, Coffee, X, Clock, Sparkles } from "lucide-react"
+import { Search, ChevronDown, MapPin, Users, Star, ArrowRight, DollarSign, Tag, Heart, Plane, Sunrise, Coffee, X, Clock, Sparkles } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import packagesData from '../../../data/packages.json'
 import { Link } from "react-router-dom"
@@ -7,6 +7,8 @@ import Footer from '../Footer'
 import withPageElements from '../PageWrapper'
 import Price from '../../../Components/Price'
 import currencyService from '../../../Services/CurrencyService'
+import DatePicker from "react-datepicker"
+import "react-datepicker/dist/react-datepicker.css"
 
 const TravelPackages = () => {
   const [selectedPackageType, setSelectedPackageType] = useState("All Inclusive")
@@ -18,15 +20,10 @@ const TravelPackages = () => {
   const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const searchRef = useRef(null)
-  const datepickerRef = useRef(null)
 
   // Date range picker state
-  const [showDatePicker, setShowDatePicker] = useState(false)
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
-  const [selectedStartDate, setSelectedStartDate] = useState(null)
-  const [selectedEndDate, setSelectedEndDate] = useState(null)
-  const [hoverDate, setHoverDate] = useState(null)
+  const [startDate, setStartDate] = useState(null)
+  const [endDate, setEndDate] = useState(null)
 
   useEffect(() => {
     const handleResize = () => {
@@ -35,13 +32,10 @@ const TravelPackages = () => {
 
     window.addEventListener('resize', handleResize);
     
-    // Handle clicks outside of search suggestions and datepicker
+    // Handle clicks outside of search suggestions
     const handleClickOutside = (event) => {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setShowSuggestions(false);
-      }
-      if (datepickerRef.current && !datepickerRef.current.contains(event.target)) {
-        setShowDatePicker(false);
       }
     };
     
@@ -53,54 +47,6 @@ const TravelPackages = () => {
     };
   }, []);
 
-  // Date helpers
-  const isSameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  const isBefore = (a, b) => a && b && new Date(a.setHours(0,0,0,0)) < new Date(b.setHours(0,0,0,0));
-  const formatDisplayDate = (d) => d ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-  const formatRangeText = () => {
-    if (selectedStartDate && selectedEndDate) return `${formatDisplayDate(selectedStartDate)} - ${formatDisplayDate(selectedEndDate)}`;
-    if (selectedStartDate) return `${formatDisplayDate(selectedStartDate)} - Select end`;
-    return 'Select dates';
-  };
-
-  const getCalendarGrid = (month, year) => {
-    const firstDay = new Date(year, month, 1);
-    const startOffset = firstDay.getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const days = [];
-    for (let i = 0; i < startOffset; i++) days.push(null);
-    for (let d = 1; d <= daysInMonth; d++) days.push(new Date(year, month, d));
-    return days;
-  };
-
-  const handleDayClick = (date) => {
-    if (!date) return;
-    const today = new Date(); today.setHours(0,0,0,0);
-    if (date < today) return;
-    if (!selectedStartDate || (selectedStartDate && selectedEndDate)) {
-      setSelectedStartDate(date);
-      setSelectedEndDate(null);
-    } else if (isBefore(selectedStartDate, date) || isSameDay(selectedStartDate, date)) {
-      setSelectedEndDate(date);
-      setShowDatePicker(false);
-    } else {
-      // If clicked date is before start, reset start
-      setSelectedStartDate(date);
-      setSelectedEndDate(null);
-    }
-  };
-
-  const isInRange = (date) => {
-    if (!date || !selectedStartDate) return false;
-    const end = selectedEndDate || hoverDate;
-    if (!end) return false;
-    const a = new Date(selectedStartDate.setHours(0,0,0,0));
-    const b = new Date(end.setHours(0,0,0,0));
-    const min = a < b ? a : b;
-    const max = a < b ? b : a;
-    const x = new Date(date.setHours(0,0,0,0));
-    return x >= min && x <= max;
-  };
 
   // Combine all packages into one array for search
   // Update package images with high-quality Unsplash images
@@ -416,7 +362,7 @@ const TravelPackages = () => {
       
         {/* Hero Section */}
         <section
-          className="relative h-[100vh] md:h-[75vh] flex items-center justify-center overflow-hidden"
+          className="relative min-h-[85vh] md:min-h-[100vh] flex items-center justify-center overflow-hidden pb-32 md:pb-40"
           style={{
             backgroundImage:
               "url('https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=2070&auto=format&fit=crop')",
@@ -502,79 +448,23 @@ const TravelPackages = () => {
 
                 <div className="w-full">
                   <label className="block text-gray-800 text-base font-medium mb-2">Travel Date</label>
-                  <div className="relative" ref={datepickerRef}>
-                    <button
-                      type="button"
-                      onClick={() => setShowDatePicker(!showDatePicker)}
-                      className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-blue-500 cursor-pointer transition-all text-base bg-white"
-                    >
-                      <span>{formatRangeText()}</span>
-                      <Calendar size={20} className="text-blue-500" />
-                    </button>
-
-                    {showDatePicker && (
-                      <div className="absolute left-0 right-0 top-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-3 mt-2">
-                        <div className="flex items-center justify-between mb-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); }
-                              else { setCurrentMonth(currentMonth - 1); }
-                            }}
-                            className="p-2 rounded-full hover:bg-gray-100"
-                            aria-label="Previous month"
-                          >
-                            <ChevronDown className="h-4 w-4 rotate-90 text-gray-600" />
-                          </button>
-                          <div className="text-sm font-medium">{new Date(currentYear, currentMonth).toLocaleString(undefined, { month: 'long', year: 'numeric' })}</div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); }
-                              else { setCurrentMonth(currentMonth + 1); }
-                            }}
-                            className="p-2 rounded-full hover:bg-gray-100"
-                            aria-label="Next month"
-                          >
-                            <ChevronDown className="h-4 w-4 -rotate-90 text-gray-600" />
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500 mb-1">
-                          {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (<div key={d} className="py-1">{d}</div>))}
-                        </div>
-
-                        <div className="grid grid-cols-7 gap-1">
-                          {getCalendarGrid(currentMonth, currentYear).map((date, idx) => {
-                            const today = new Date(); today.setHours(0,0,0,0);
-                            const isDisabled = date && date < today;
-                            const activeStart = isSameDay(date, selectedStartDate);
-                            const activeEnd = isSameDay(date, selectedEndDate);
-                            const inRange = isInRange(date);
-                            return (
-                              <div
-                                key={idx}
-                                onMouseEnter={() => setHoverDate(date || null)}
-                                onMouseLeave={() => setHoverDate(null)}
-                                onClick={() => !isDisabled && handleDayClick(date)}
-                                className={`h-8 flex items-center justify-center rounded text-xs
-                                  ${!date ? 'cursor-default' : isDisabled ? 'text-gray-300 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-50'}
-                                  ${inRange ? 'bg-blue-100 text-blue-700' : ''}
-                                  ${(activeStart || activeEnd) ? 'bg-blue-600 text-white' : ''}
-                                `}
-                              >
-                                {date ? date.getDate() : ''}
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        <div className="mt-3 flex justify-end gap-2">
-                          <button type="button" className="px-3 py-1.5 text-xs bg-gray-500 text-white rounded" onClick={() => { setSelectedStartDate(null); setSelectedEndDate(null); setShowDatePicker(false); }}>Clear</button>
-                          <button type="button" className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded" onClick={() => setShowDatePicker(false)}>Done</button>
-                        </div>
-                      </div>
-                    )}
+                  <div className="relative">
+                    <DatePicker
+                      selected={startDate}
+                      onChange={(dates) => {
+                        const [start, end] = dates;
+                        setStartDate(start);
+                        setEndDate(end);
+                      }}
+                      startDate={startDate}
+                      endDate={endDate}
+                      selectsRange
+                      minDate={new Date()}
+                      placeholderText="Select dates"
+                      className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base bg-white"
+                      wrapperClassName="w-full"
+                      popperClassName="z-[100]"
+                    />
                   </div>
                 </div>
 
@@ -687,79 +577,23 @@ const TravelPackages = () => {
 
                 <div className="flex-1">
                   <label className="block text-gray-700 text-sm font-medium mb-1">Travel Date</label>
-                  <div className="relative" ref={datepickerRef}>
-                    <button
-                      type="button"
-                      onClick={() => setShowDatePicker(!showDatePicker)}
-                      className="w-full flex items-center justify-between p-3 border rounded-md hover:border-blue-500 cursor-pointer transition-all text-base bg-white"
-                    >
-                      <span>{formatRangeText()}</span>
-                      <Calendar size={18} className="text-gray-500" />
-                    </button>
-
-                    {showDatePicker && (
-                      <div className="absolute left-0 top-full bg-white border rounded-md shadow-lg z-50 p-3 mt-2 w-[320px] max-w-[90vw]">
-                        <div className="flex items-center justify-between mb-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); }
-                              else { setCurrentMonth(currentMonth - 1); }
-                            }}
-                            className="p-2 rounded-full hover:bg-gray-100"
-                            aria-label="Previous month"
-                          >
-                            <ChevronDown className="h-4 w-4 rotate-90 text-gray-600" />
-                          </button>
-                          <div className="text-sm font-medium">{new Date(currentYear, currentMonth).toLocaleString(undefined, { month: 'long', year: 'numeric' })}</div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); }
-                              else { setCurrentMonth(currentMonth + 1); }
-                            }}
-                            className="p-2 rounded-full hover:bg-gray-100"
-                            aria-label="Next month"
-                          >
-                            <ChevronDown className="h-4 w-4 -rotate-90 text-gray-600" />
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500 mb-1">
-                          {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (<div key={d} className="py-1">{d}</div>))}
-                        </div>
-
-                        <div className="grid grid-cols-7 gap-1">
-                          {getCalendarGrid(currentMonth, currentYear).map((date, idx) => {
-                            const today = new Date(); today.setHours(0,0,0,0);
-                            const isDisabled = date && date < today;
-                            const activeStart = isSameDay(date, selectedStartDate);
-                            const activeEnd = isSameDay(date, selectedEndDate);
-                            const inRange = isInRange(date);
-                            return (
-                              <div
-                                key={idx}
-                                onMouseEnter={() => setHoverDate(date || null)}
-                                onMouseLeave={() => setHoverDate(null)}
-                                onClick={() => !isDisabled && handleDayClick(date)}
-                                className={`h-8 flex items-center justify-center rounded text-xs
-                                  ${!date ? 'cursor-default' : isDisabled ? 'text-gray-300 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-50'}
-                                  ${inRange ? 'bg-blue-100 text-blue-700' : ''}
-                                  ${(activeStart || activeEnd) ? 'bg-blue-600 text-white' : ''}
-                                `}
-                              >
-                                {date ? date.getDate() : ''}
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        <div className="mt-3 flex justify-end gap-2">
-                          <button type="button" className="px-3 py-1.5 text-xs bg-gray-500 text-white rounded" onClick={() => { setSelectedStartDate(null); setSelectedEndDate(null); setShowDatePicker(false); }}>Clear</button>
-                          <button type="button" className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded" onClick={() => setShowDatePicker(false)}>Done</button>
-                        </div>
-                      </div>
-                    )}
+                  <div className="relative">
+                    <DatePicker
+                      selected={startDate}
+                      onChange={(dates) => {
+                        const [start, end] = dates;
+                        setStartDate(start);
+                        setEndDate(end);
+                      }}
+                      startDate={startDate}
+                      endDate={endDate}
+                      selectsRange
+                      minDate={new Date()}
+                      placeholderText="Select dates"
+                      className="w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base bg-white"
+                      wrapperClassName="w-full"
+                      popperClassName="z-[100]"
+                    />
                   </div>
                 </div>
 
@@ -1130,6 +964,14 @@ const TravelPackages = () => {
         }
         .animate-fadeIn {
           animation: fadeIn 1s ease-out;
+        }
+        .react-datepicker-popper {
+          z-index: 100 !important;
+        }
+        .react-datepicker {
+          border: 1px solid #e5e7eb !important;
+          border-radius: 0.5rem !important;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1) !important;
         }
       `}</style>
 

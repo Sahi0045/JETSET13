@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FaSearch, FaMapMarkerAlt, FaBriefcase, FaUsers, FaHeart, FaLightbulb, FaRocket, FaGraduationCap, FaHandshake, FaGlobe, FaStar, FaShieldAlt, FaSmile } from 'react-icons/fa';
+import Navbar from './Common/Navbar';
+import Footer from './Common/Footer';
 
 const Careers = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -150,9 +152,11 @@ const Careers = () => {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
+    <>
+      <Navbar />
+      <div className="min-h-screen bg-gray-50 pt-[71px]">
+        {/* Hero Section */}
+        <div className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-5xl font-bold mb-6">Join Our Team</h1>
           <p className="text-xl max-w-3xl mx-auto">
@@ -370,7 +374,9 @@ const Careers = () => {
           </div>
         </section>
       </div>
-    </div>
+      </div>
+      <Footer />
+    </>
   );
 };
 

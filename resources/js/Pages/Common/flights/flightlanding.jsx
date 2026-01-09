@@ -366,7 +366,7 @@ function FlightLanding() {
       <Navbar />
       
       {/* Enhanced Hero Section */}
-      <section className="relative h-screen max-h-[900px] overflow-hidden">
+      <section className="relative min-h-[85vh] md:min-h-[100vh] overflow-hidden pb-32 md:pb-40">
         {/* Animated background elements */}
         <div className="absolute inset-0 z-0 overflow-hidden">
           <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>

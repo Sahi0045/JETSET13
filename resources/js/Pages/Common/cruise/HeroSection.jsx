@@ -4,7 +4,9 @@ import './HeroSection.css';
 import { FaMapMarkerAlt, FaCalendarAlt, FaShip, FaAnchor, FaDollarSign, FaSearch, FaStar, FaArrowRight, FaChevronRight, FaAngleDown } from 'react-icons/fa';
 import cruiseData from './data/cruiselines.json';
 import destinationsData from './data/destinations.json';
-import { Search, MapPin, Calendar, DollarSign, ChevronDown, Anchor, Ship, Navigation } from 'lucide-react';
+import { Search, MapPin, DollarSign, ChevronDown, Anchor, Ship, Navigation } from 'lucide-react';
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 const HeroSection = () => {
   const navigate = useNavigate();
@@ -21,11 +23,6 @@ const HeroSection = () => {
   const [destinations, setDestinations] = useState([]);
   const [departurePorts, setDeparturePorts] = useState([]);
   const [scrolled, setScrolled] = useState(false);
-  const [availableMonths] = useState([
-    'January', 'February', 'March', 'April', 'May', 'June', 
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ]);
-  const [availableYears] = useState([2023, 2024, 2025]);
   const [priceRanges] = useState([
     '$100-$500', '$500-$1000', '$1000-$1500', '$1500-$2000', '$2000+'
   ]);
@@ -35,12 +32,9 @@ const HeroSection = () => {
   const [filteredDestinations, setFilteredDestinations] = useState([]);
   const [showDestinationSuggestions, setShowDestinationSuggestions] = useState(false);
   const [selectedPackageType, setSelectedPackageType] = useState('All Inclusive');
-  const [selectedDate, setSelectedDate] = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
   const [priceRange, setPriceRange] = useState('Any Price');
-  const [displayedMonth, setDisplayedMonth] = useState(new Date().getMonth()); 
-  const [displayedYear, setDisplayedYear] = useState(new Date().getFullYear());
-  const datepickerRef = useRef(null);
 
   useEffect(() => {
     // Extract cruise lines and unique destinations from the JSON data
@@ -110,10 +104,6 @@ const HeroSection = () => {
       if (showDestinationSuggestions && !event.target.closest('.search-field')) {
         setShowDestinationSuggestions(false);
       }
-      
-      if (showDatePicker && datepickerRef.current && !datepickerRef.current.contains(event.target)) {
-        setShowDatePicker(false);
-      }
     }
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -121,7 +111,7 @@ const HeroSection = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [activeField, showDestinationSuggestions, showDatePicker]);
+  }, [activeField, showDestinationSuggestions]);
 
   const handleQuickSelect = (value, field) => {
     setSearchValues({
@@ -172,27 +162,6 @@ const HeroSection = () => {
     }
   };
   
-  const handleSelectDate = (month, year) => {
-    const dateString = `${month} ${year}`;
-    setSearchValues({
-      ...searchValues,
-      date: dateString
-    });
-    setActiveField(null);
-  };
-
-  // Generate calendar days for the currently displayed month
-  const generateCalendarDays = () => {
-    const daysInMonth = new Date(displayedYear, displayedMonth + 1, 0).getDate();
-    const firstDayOfMonth = new Date(displayedYear, displayedMonth, 1).getDay();
-    let days = Array(firstDayOfMonth).fill(null);
-    
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i);
-    }
-    
-    return days;
-  };
   
   const handleSearch = (e) => {
     e.preventDefault();
@@ -282,26 +251,26 @@ const HeroSection = () => {
           backgroundImage: "url('https://images.unsplash.com/photo-1548574505-5e239809ee19?q=80&w=2064&auto=format&fit=crop')",
         }}
       >
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/60"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-black/70"></div>
       </div>
 
       {/* Content Container */}
-      <div className="container relative z-10 mx-auto px-4 py-16 sm:px-6 lg:px-8">
+      <div className="container relative z-10 mx-auto px-4 pt-32 pb-16 sm:px-6 lg:px-8">
         {/* Hero Text */}
-        <div className="text-center mb-12 space-y-4">
+        <div className="text-center mb-12 space-y-6">
           <div className="inline-flex items-center px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-4">
             {/* <Ship className="w-4 h-4 text-blue-400 mr-2" /> */}
             {/* <span className="text-white/90 text-sm font-medium">Luxury Cruise Experiences</span> */}
           </div>
           
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white tracking-tight">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white tracking-tight drop-shadow-2xl">
             Discover Your Perfect
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300 drop-shadow-lg">
               Cruise Adventure
             </span>
           </h1>
           
-          <p className="text-lg md:text-xl text-gray-300 max-w-3xl mx-auto">
+          <p className="text-lg md:text-xl text-white max-w-3xl mx-auto font-medium drop-shadow-lg">
             Explore the world's most breathtaking destinations with our handpicked selection of luxury cruise packages
           </p>
         </div>
@@ -390,114 +359,26 @@ const HeroSection = () => {
               {/* Date */}
               <div className="search-field relative">
                 <label className="search-label">
-                  <Calendar className="search-icon" />
                   <span>Travel Date</span>
                 </label>
-                <input
-                  type="text"
-                  placeholder="Select dates"
-                  className="search-input"
-                  value={selectedDate}
-                  onClick={() => setShowDatePicker(!showDatePicker)}
-                  readOnly
-                />
-                
-                {/* Date Picker Popup - Compact Responsive Design */}
-                {showDatePicker && (
-                  <div 
-                    ref={datepickerRef}
-                    className="absolute left-0 right-0 top-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-2 sm:p-3 mt-2 w-full min-w-[260px] sm:min-w-[280px] md:min-w-[300px] max-w-[320px] mx-auto sm:mx-0"
-                  >
-                    <div className="flex justify-between items-center mb-2 sm:mb-3">
-                      <button 
-                        onClick={() => {
-                          if (displayedMonth === 0) {
-                            setDisplayedMonth(11);
-                            setDisplayedYear(displayedYear - 1);
-                          } else {
-                            setDisplayedMonth(displayedMonth - 1);
-                          }
-                        }}
-                        className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 transition-colors touch-manipulation"
-                        type="button"
-                        aria-label="Previous month"
-                      >
-                        <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600 rotate-90" />
-                      </button>
-                      <h3 className="font-medium text-xs sm:text-sm">{availableMonths[displayedMonth]} {displayedYear}</h3>
-                      <button 
-                        onClick={() => {
-                          if (displayedMonth === 11) {
-                            setDisplayedMonth(0);
-                            setDisplayedYear(displayedYear + 1);
-                          } else {
-                            setDisplayedMonth(displayedMonth + 1);
-                          }
-                        }}
-                        className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 transition-colors touch-manipulation"
-                        type="button"
-                        aria-label="Next month"
-                      >
-                        <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600 -rotate-90" />
-                      </button>
-                    </div>
-                    
-                    <div className="grid grid-cols-7 gap-0.5 text-center text-xs font-medium text-gray-500 mb-1.5">
-                      <div className="py-0.5">Su</div>
-                      <div className="py-0.5">Mo</div>
-                      <div className="py-0.5">Tu</div>
-                      <div className="py-0.5">We</div>
-                      <div className="py-0.5">Th</div>
-                      <div className="py-0.5">Fr</div>
-                      <div className="py-0.5">Sa</div>
-                    </div>
-                    
-                    <div className="grid grid-cols-7 gap-0.5">
-                      {generateCalendarDays().map((day, index) => {
-                        const date = day !== null ? new Date(displayedYear, displayedMonth, day) : null;
-                        const isToday = date && new Date().toDateString() === date.toDateString();
-                        const isDisabled = date && date < new Date().setHours(0, 0, 0, 0);
-                        
-                        return (
-                          <div 
-                            key={index}
-                            onClick={() => {
-                              if (day !== null && !isDisabled) {
-                                const newDate = new Date(displayedYear, displayedMonth, day);
-                                setSelectedDate(`${availableMonths[displayedMonth]} ${day}, ${displayedYear}`);
-                                setShowDatePicker(false);
-                              }
-                            }}
-                            className={`
-                              h-6 w-full sm:h-7 flex items-center justify-center rounded text-xs font-medium touch-manipulation
-                              ${day === null ? 'cursor-default' : isDisabled ? 'text-gray-300 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-100 active:bg-blue-200 transition-colors'}
-                              ${isToday ? 'border border-blue-500 bg-blue-50 text-blue-700' : ''}
-                            `}
-                          >
-                            {day}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    
-                    <div className="mt-2 sm:mt-3 flex justify-end gap-1.5">
-                      <button 
-                        onClick={() => setShowDatePicker(false)}
-                        className="px-2 py-1.5 sm:px-3 sm:py-2 bg-gray-500 text-white rounded text-xs font-medium hover:bg-gray-600 transition-colors touch-manipulation"
-                        type="button"
-                      >
-                        Cancel
-                      </button>
-                      <button 
-                        onClick={() => setShowDatePicker(false)}
-                        className="px-2 py-1.5 sm:px-3 sm:py-2 bg-[#0061ff] text-white rounded text-xs font-medium hover:bg-blue-700 transition-colors touch-manipulation"
-                        type="button"
-                      >
-                        Done
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <div className="relative">
+                  <DatePicker
+                    selected={startDate}
+                    onChange={(dates) => {
+                      const [start, end] = dates;
+                      setStartDate(start);
+                      setEndDate(end);
+                    }}
+                    startDate={startDate}
+                    endDate={endDate}
+                    selectsRange
+                    minDate={new Date()}
+                    placeholderText="Select dates"
+                    className="search-input"
+                    wrapperClassName="w-full"
+                    popperClassName="z-[100]"
+                  />
+                </div>
               </div>
 
               {/* Price Range */}

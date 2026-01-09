@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaHeadset, FaPhone, FaEnvelope, FaComments, FaWhatsapp, FaClock, FaMapMarkerAlt, FaSearch, FaQuestionCircle, FaTicketAlt, FaBook, FaUserTie, FaGlobe } from 'react-icons/fa';
+import { FaHeadset, FaPhone, FaEnvelope, FaWhatsapp, FaClock, FaMapMarkerAlt, FaSearch, FaQuestionCircle, FaTicketAlt, FaBook, FaUserTie, FaGlobe } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
 
@@ -90,14 +90,6 @@ const Support = () => {
       contact: "support@jetsetterss.com",
       availability: "Mon-Fri, 9AM-6PM EST",
       response: "Within 4 hours"
-    },
-    {
-      title: "Live Chat",
-      description: "Real-time assistance with our travel experts",
-      icon: <FaComments className="text-4xl text-purple-600" />,
-      contact: "Start Chat",
-      availability: "Mon-Sun, 8AM-10PM EST",
-      response: "Instant response"
     },
     {
       title: "WhatsApp Support",
