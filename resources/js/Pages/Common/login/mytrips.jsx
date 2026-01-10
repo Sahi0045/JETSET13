@@ -42,14 +42,14 @@ export default function TravelDashboard() {
     // Check if user is authenticated
     const authStatus = localStorage.getItem('isAuthenticated')
     const userStr = localStorage.getItem('user')
-    
+
     console.log('🔐 Auth Check:', {
       isAuthenticated: authStatus,
       hasUser: !!userStr,
       token: localStorage.getItem('token') ? 'EXISTS' : 'MISSING',
       supabaseToken: localStorage.getItem('supabase_token') ? 'EXISTS' : 'MISSING'
     })
-    
+
     if (authStatus !== 'true') {
       // Set as guest user instead of redirecting
       setIsGuest(true)
@@ -64,7 +64,7 @@ export default function TravelDashboard() {
         try {
           const user = JSON.parse(userStr)
           console.log('👤 User:', { email: user.email, id: user.id })
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -84,7 +84,7 @@ export default function TravelDashboard() {
       }
     }
     window.addEventListener('focus', handleFocus)
-    
+
     return () => {
       window.removeEventListener('focus', handleFocus)
     }
@@ -112,13 +112,13 @@ export default function TravelDashboard() {
   const loadBookings = async () => {
     setIsLoadingBookings(true)
     const allBookings = []
-    
+
     console.log('🔍 Loading bookings...')
-    
+
     // Load flight bookings from localStorage
     const flightBooking = localStorage.getItem('completedFlightBooking')
     console.log('Flight booking from localStorage:', flightBooking ? 'Found' : 'Not found')
-    
+
     if (flightBooking) {
       try {
         const booking = JSON.parse(flightBooking)
@@ -136,7 +136,7 @@ export default function TravelDashboard() {
     // Load cruise bookings from localStorage
     const cruiseBooking = localStorage.getItem('completedBooking')
     console.log('Cruise booking from localStorage:', cruiseBooking ? 'Found' : 'Not found')
-    
+
     if (cruiseBooking) {
       try {
         const booking = JSON.parse(cruiseBooking)
@@ -154,10 +154,10 @@ export default function TravelDashboard() {
     // Load paid bookings from database
     try {
       const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token')
-      
+
       if (token) {
         console.log('🔍 Loading paid bookings from database...')
-        
+
         // Method 1: Fetch user's inquiries and their quotes
         const inquiriesResponse = await fetch(getApiUrl('inquiries?endpoint=my'), {
           method: 'GET',
@@ -171,33 +171,33 @@ export default function TravelDashboard() {
         if (inquiriesResponse.ok) {
           const inquiriesResult = await inquiriesResponse.json()
           console.log('📋 Inquiries API response:', inquiriesResult)
-          
+
           if (inquiriesResult.success) {
-            const inquiries = Array.isArray(inquiriesResult.data) 
-              ? inquiriesResult.data 
+            const inquiries = Array.isArray(inquiriesResult.data)
+              ? inquiriesResult.data
               : (inquiriesResult.data?.inquiries || [])
-            
+
             console.log('📋 Found inquiries:', inquiries.length)
-            
+
             // Check for booked/paid inquiries directly first
-            const bookedInquiries = inquiries.filter(inq => 
+            const bookedInquiries = inquiries.filter(inq =>
               inq.status === 'booked' || inq.status === 'paid'
             )
-            
+
             console.log('📋 Booked/Paid inquiries:', bookedInquiries.length)
-            
+
             // For booked inquiries, add them directly as bookings
             for (const inquiry of bookedInquiries) {
               const typeMap = {
                 'flight': 'flight',
-                'cruise': 'cruise', 
+                'cruise': 'cruise',
                 'hotel': 'hotel',
                 'package': 'package',
                 'general': 'package'
               }
-              
+
               const bookingType = typeMap[inquiry.inquiry_type] || 'package'
-              
+
               // Create booking from inquiry
               const booking = {
                 orderId: inquiry.id?.slice(-8) || 'N/A',
@@ -213,19 +213,33 @@ export default function TravelDashboard() {
                 inquiryType: inquiry.inquiry_type,
                 customerName: inquiry.customer_name,
                 customerEmail: inquiry.customer_email,
-                // Travel details
+                // Flight travel details
                 origin: inquiry.flight_origin,
                 destination: inquiry.flight_destination,
                 departureDate: inquiry.flight_departure_date,
                 returnDate: inquiry.flight_return_date,
+                passengers: inquiry.flight_passengers,
+                travelClass: inquiry.flight_class,
+                // Hotel travel details
                 hotelDestination: inquiry.hotel_destination,
                 checkinDate: inquiry.hotel_checkin_date,
                 checkoutDate: inquiry.hotel_checkout_date,
+                hotelRooms: inquiry.hotel_rooms,
+                hotelGuests: inquiry.hotel_guests,
+                // Cruise travel details
                 cruiseDestination: inquiry.cruise_destination,
                 cruiseDepartureDate: inquiry.cruise_departure_date,
-                cruiseDuration: inquiry.cruise_duration
+                cruiseDuration: inquiry.cruise_duration,
+                cruisePassengers: inquiry.cruise_passengers,
+                cruiseCabinType: inquiry.cruise_cabin_type,
+                // Package travel details
+                packageDestination: inquiry.package_destination,
+                packageStartDate: inquiry.package_start_date,
+                packageEndDate: inquiry.package_end_date,
+                packageTravelers: inquiry.package_travelers,
+                packageBudgetRange: inquiry.package_budget_range
               }
-              
+
               // Check if already added to avoid duplicates
               const existingIndex = allBookings.findIndex(b => b.inquiryId === inquiry.id)
               if (existingIndex === -1) {
@@ -233,7 +247,7 @@ export default function TravelDashboard() {
                 console.log(`✅ Added booked inquiry: ${booking.orderId} (${bookingType})`)
               }
             }
-            
+
             // Also check for quotes with payment
             for (const inquiry of inquiries) {
               try {
@@ -249,19 +263,19 @@ export default function TravelDashboard() {
 
                 if (quotesResponse.ok) {
                   const quotesResult = await quotesResponse.json()
-                  
+
                   if (quotesResult.success) {
                     const quotes = Array.isArray(quotesResult.data) ? quotesResult.data : []
-                    
+
                     // Find paid quotes
-                    const paidQuotes = quotes.filter(q => 
-                      q.payment_status === 'paid' || 
-                      q.status === 'paid' || 
+                    const paidQuotes = quotes.filter(q =>
+                      q.payment_status === 'paid' ||
+                      q.status === 'paid' ||
                       q.status === 'accepted'
                     )
-                    
+
                     console.log(`📄 Inquiry ${inquiry.id?.slice(-8)}: ${paidQuotes.length} paid/accepted quote(s)`)
-                    
+
                     // Convert paid quotes to booking format
                     for (const quote of paidQuotes) {
                       const typeMap = {
@@ -271,14 +285,14 @@ export default function TravelDashboard() {
                         'package': 'package',
                         'general': 'package'
                       }
-                      
+
                       const bookingType = typeMap[inquiry.inquiry_type] || 'package'
-                      
+
                       // Check if already exists
-                      const existingIndex = allBookings.findIndex(b => 
+                      const existingIndex = allBookings.findIndex(b =>
                         b.quoteId === quote.id || b.inquiryId === inquiry.id
                       )
-                      
+
                       if (existingIndex === -1) {
                         const booking = {
                           orderId: quote.quote_number || quote.id?.slice(-8),
@@ -295,18 +309,33 @@ export default function TravelDashboard() {
                           inquiryType: inquiry.inquiry_type,
                           customerName: inquiry.customer_name,
                           customerEmail: inquiry.customer_email,
+                          // Flight travel details
                           origin: inquiry.flight_origin,
                           destination: inquiry.flight_destination,
                           departureDate: inquiry.flight_departure_date,
                           returnDate: inquiry.flight_return_date,
+                          passengers: inquiry.flight_passengers,
+                          travelClass: inquiry.flight_class,
+                          // Hotel travel details
                           hotelDestination: inquiry.hotel_destination,
                           checkinDate: inquiry.hotel_checkin_date,
                           checkoutDate: inquiry.hotel_checkout_date,
+                          hotelRooms: inquiry.hotel_rooms,
+                          hotelGuests: inquiry.hotel_guests,
+                          // Cruise travel details
                           cruiseDestination: inquiry.cruise_destination,
                           cruiseDepartureDate: inquiry.cruise_departure_date,
-                          cruiseDuration: inquiry.cruise_duration
+                          cruiseDuration: inquiry.cruise_duration,
+                          cruisePassengers: inquiry.cruise_passengers,
+                          cruiseCabinType: inquiry.cruise_cabin_type,
+                          // Package travel details
+                          packageDestination: inquiry.package_destination,
+                          packageStartDate: inquiry.package_start_date,
+                          packageEndDate: inquiry.package_end_date,
+                          packageTravelers: inquiry.package_travelers,
+                          packageBudgetRange: inquiry.package_budget_range
                         }
-                        
+
                         allBookings.push(booking)
                         console.log(`✅ Added paid quote: ${booking.orderId} (${bookingType})`)
                       }
@@ -394,7 +423,7 @@ export default function TravelDashboard() {
           inquiries = Array.isArray(result.data.inquiries) ? result.data.inquiries : [];
         }
         console.log('📋 Total requests loaded:', inquiries.length)
-        
+
         if (inquiries.length === 0) {
           console.warn('⚠️ No inquiries found. Possible reasons:')
           console.warn('   1. No inquiries created yet')
@@ -417,9 +446,9 @@ export default function TravelDashboard() {
             console.log(`📄 Inquiry ${inquiry.id?.slice(-8)} (${inquiry.status}):`, {
               hasQuotes: true,
               quoteCount: inquiry.quotes.length,
-              quotes: inquiry.quotes.map(q => ({ 
-                id: q.id?.slice(-8), 
-                status: q.status, 
+              quotes: inquiry.quotes.map(q => ({
+                id: q.id?.slice(-8),
+                status: q.status,
                 amount: q.total_amount,
                 number: q.quote_number
               }))
@@ -464,13 +493,42 @@ export default function TravelDashboard() {
     setIsMobileMenuOpen(!isMobileMenuOpen)
   }
 
+  // Helper function to get travel date from booking
+  const getTravelDateFromBooking = (booking) => {
+    // Check various date fields depending on booking type
+    if (booking.type === 'flight') {
+      return booking.departureDate || booking.flight_departure_date || booking.flightData?.departureDate;
+    } else if (booking.type === 'cruise') {
+      return booking.cruiseDepartureDate || booking.cruise_departure_date || booking.cruiseData?.departureDate;
+    } else if (booking.type === 'hotel') {
+      return booking.checkinDate || booking.hotel_checkin_date || booking.hotelData?.checkinDate;
+    } else if (booking.type === 'package') {
+      return booking.packageStartDate || booking.package_start_date;
+    }
+    // Fallback to generic departure/start date fields
+    return booking.departureDate || booking.startDate || booking.travelDate;
+  };
+
+  // Check if a booking's travel date is in the past
+  const isTravelDatePast = (booking) => {
+    const travelDate = getTravelDateFromBooking(booking);
+    if (!travelDate) return false; // If no date, consider it upcoming
+
+    const tripDate = new Date(travelDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    tripDate.setHours(0, 0, 0, 0);
+
+    return tripDate < today;
+  };
+
   // Filter bookings based on active tab and sidebar selection
   const getFilteredBookings = () => {
     let filtered = bookings
-    console.log('🔍 Filtering bookings...', { 
-      totalBookings: bookings.length, 
-      activeTab, 
-      activeSidebarItem 
+    console.log('🔍 Filtering bookings...', {
+      totalBookings: bookings.length,
+      activeTab,
+      activeSidebarItem
     })
 
     // Filter by booking type (sidebar)
@@ -488,17 +546,24 @@ export default function TravelDashboard() {
       }
     }
 
-    // Filter by status (tab) - FIXED: Show bookings based on status, not travel date
+    // Filter by status (tab) - Now properly using travel dates
     if (activeTab === "Upcoming") {
-      // Show all confirmed bookings (regardless of travel date)
+      // Show confirmed bookings with travel date in the future (or no date set)
       filtered = filtered.filter(booking => {
-        const isUpcoming = booking.status !== 'CANCELLED' && booking.status !== 'FAILED'
-        console.log(`Booking ${booking.orderId}: status=${booking.status}, isUpcoming=${isUpcoming}`)
-        return isUpcoming
-      })
+        const isCancelled = booking.status === 'CANCELLED' || booking.status === 'FAILED';
+        const isPast = isTravelDatePast(booking);
+        const isUpcoming = !isCancelled && !isPast;
+        console.log(`Booking ${booking.orderId}: status=${booking.status}, travelDate=${getTravelDateFromBooking(booking)}, isPast=${isPast}, isUpcoming=${isUpcoming}`);
+        return isUpcoming;
+      });
     } else if (activeTab === "Past") {
-      // For now, show no bookings in Past (travel date logic would need flight/cruise departure dates)
-      filtered = []
+      // Show bookings where travel date has passed
+      filtered = filtered.filter(booking => {
+        const isCancelled = booking.status === 'CANCELLED' || booking.status === 'FAILED';
+        const isPast = isTravelDatePast(booking);
+        console.log(`Booking ${booking.orderId}: isPast=${isPast}`);
+        return !isCancelled && isPast;
+      });
     } else if (activeTab === "Cancelled") {
       filtered = filtered.filter(booking => booking.status === 'CANCELLED')
     } else if (activeTab === "Failed") {
@@ -509,24 +574,25 @@ export default function TravelDashboard() {
     return filtered
   }
 
+
   const filteredBookings = getFilteredBookings()
 
   const getFilteredRequests = () => {
     let filtered = requests
-    console.log('🔍 Filtering requests...', { 
-      totalRequests: requests.length, 
+    console.log('🔍 Filtering requests...', {
+      totalRequests: requests.length,
       activeTab
     })
 
     // Filter by status (tab) - similar to bookings but for inquiry status
     if (activeTab === "Upcoming") {
       // Show pending, processing, and quoted inquiries (so sent quotes appear here)
-      filtered = filtered.filter(request => 
+      filtered = filtered.filter(request =>
         request.status === 'pending' || request.status === 'processing' || request.status === 'quoted'
       )
     } else if (activeTab === "Past") {
       // Show completed inquiries (quoted, booked)
-      filtered = filtered.filter(request => 
+      filtered = filtered.filter(request =>
         request.status === 'quoted' || request.status === 'booked'
       )
     } else if (activeTab === "Cancelled") {
@@ -546,7 +612,7 @@ export default function TravelDashboard() {
     const isCruiseBooking = booking.type === 'cruise'
     const isHotelBooking = booking.type === 'hotel'
     const isPackageBooking = booking.type === 'package'
-    
+
     // Determine icon and title based on booking type
     const getBookingIcon = () => {
       if (isFlightBooking) return '✈️'
@@ -555,7 +621,7 @@ export default function TravelDashboard() {
       if (isPackageBooking) return '🎒'
       return '📦'
     }
-    
+
     const getBookingTitle = () => {
       if (booking.title) return booking.title
       if (isFlightBooking) return 'Flight Booking'
@@ -564,16 +630,29 @@ export default function TravelDashboard() {
       if (isPackageBooking) return 'Package Booking'
       return 'Travel Booking'
     }
-    
+
     // Check if this is a database booking (has quoteId or inquiryId)
     const isDatabaseBooking = !!(booking.quoteId || booking.inquiryId)
-    
+
+    // Calculate days until trip
+    const travelDate = getTravelDateFromBooking(booking);
+    const getDaysUntil = () => {
+      if (!travelDate) return null;
+      const tripDate = new Date(travelDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      tripDate.setHours(0, 0, 0, 0);
+      const diffTime = tripDate - today;
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    };
+    const daysUntilTrip = getDaysUntil();
+
     return (
-      <div key={booking.orderId || booking.bookingReference || booking.quoteId} 
-           className="group bg-white border border-gray-200 rounded-xl p-6 hover:shadow-xl hover:border-blue-300 transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
+      <div key={booking.orderId || booking.bookingReference || booking.quoteId}
+        className="group bg-white border border-gray-200 rounded-xl p-6 hover:shadow-xl hover:border-blue-300 transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
         {/* Gradient accent bar */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600"></div>
-        
+
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
@@ -595,17 +674,40 @@ export default function TravelDashboard() {
                 )}
               </div>
             </div>
+            {/* Travel Date Countdown Badge */}
+            {daysUntilTrip !== null && daysUntilTrip >= 0 && (
+              <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-2 ${daysUntilTrip === 0 ? 'bg-green-100 text-green-800' :
+                  daysUntilTrip <= 3 ? 'bg-orange-100 text-orange-800' :
+                    daysUntilTrip <= 7 ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-blue-100 text-blue-800'
+                }`}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {daysUntilTrip === 0 ? '🎉 Today!' :
+                  daysUntilTrip === 1 ? 'Tomorrow' :
+                    `${daysUntilTrip} days to go`}
+              </div>
+            )}
+            {daysUntilTrip !== null && daysUntilTrip < 0 && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-2 bg-gray-100 text-gray-600">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Trip Completed
+              </div>
+            )}
           </div>
-          
+
           <div className="flex flex-col items-start sm:items-end gap-2">
             <span className={`inline-flex items-center px-4 py-2 text-xs font-bold rounded-full shadow-sm ${booking.status === 'CONFIRMED' || booking.status === 'paid' ? 'bg-gradient-to-r from-green-500 to-green-600 text-white' :
               booking.status === 'CANCELLED' ? 'bg-gradient-to-r from-red-500 to-red-600 text-white' :
-              'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
-            }`}>
+                'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+              }`}>
               <span className="w-2 h-2 bg-white bg-opacity-50 rounded-full mr-2"></span>
               {booking.status === 'paid' ? 'Paid' : (booking.status || 'Confirmed')}
             </span>
-            
+
             {/* Mobile-friendly status indicator */}
             <div className="sm:hidden text-xs text-gray-500 flex items-center gap-1">
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -615,43 +717,148 @@ export default function TravelDashboard() {
             </div>
           </div>
         </div>
-        
-        {/* Show travel details for database bookings */}
-        {(booking.origin || booking.destination || booking.departureDate || booking.hotelDestination || booking.cruiseDestination) && (
-          <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-            {isFlightBooking && booking.origin && booking.destination && (
-              <p className="text-sm text-gray-700">
-                <span className="font-semibold">Route:</span> {booking.origin} → {booking.destination}
+
+        {/* Show travel details for database bookings - ENHANCED DISPLAY */}
+        {(booking.origin || booking.destination || booking.departureDate || booking.hotelDestination || booking.cruiseDestination || booking.returnDate || booking.checkinDate || booking.checkoutDate || booking.cruiseDepartureDate) && (
+          <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+            <div className="flex items-center gap-2 mb-3">
+              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Travel Details</span>
+            </div>
+
+            {isFlightBooking && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {(booking.origin || booking.destination) && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Route</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.origin || 'N/A'} → {booking.destination || 'N/A'}</p>
+                  </div>
+                )}
                 {booking.departureDate && (
-                  <span className="ml-3">
-                    <span className="font-semibold">Departure:</span> {new Date(booking.departureDate).toLocaleDateString()}
-                  </span>
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Departure</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(booking.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  </div>
                 )}
-              </p>
+                {booking.returnDate && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Return</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(booking.returnDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  </div>
+                )}
+                {(booking.passengers || booking.travelClass) && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">{booking.travelClass ? 'Class & Passengers' : 'Passengers'}</p>
+                    <p className="text-sm font-bold text-gray-900 capitalize">
+                      {booking.travelClass && booking.travelClass.replace('_', ' ')}
+                      {booking.travelClass && booking.passengers && ' • '}
+                      {booking.passengers && `${booking.passengers} ${booking.passengers === 1 ? 'Traveler' : 'Travelers'}`}
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
-            {isHotelBooking && booking.hotelDestination && (
-              <p className="text-sm text-gray-700">
-                <span className="font-semibold">Destination:</span> {booking.hotelDestination}
+
+            {isHotelBooking && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {booking.hotelDestination && (
+                  <div className="bg-white rounded-lg p-3 border border-purple-200">
+                    <p className="text-xs text-purple-600 font-semibold mb-1">Destination</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.hotelDestination}</p>
+                  </div>
+                )}
                 {booking.checkinDate && (
-                  <span className="ml-3">
-                    <span className="font-semibold">Check-in:</span> {new Date(booking.checkinDate).toLocaleDateString()}
-                  </span>
+                  <div className="bg-white rounded-lg p-3 border border-purple-200">
+                    <p className="text-xs text-purple-600 font-semibold mb-1">Check-in</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(booking.checkinDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  </div>
                 )}
-              </p>
+                {booking.checkoutDate && (
+                  <div className="bg-white rounded-lg p-3 border border-purple-200">
+                    <p className="text-xs text-purple-600 font-semibold mb-1">Check-out</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(booking.checkoutDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  </div>
+                )}
+                {(booking.hotelRooms || booking.hotelGuests) && (
+                  <div className="bg-white rounded-lg p-3 border border-purple-200">
+                    <p className="text-xs text-purple-600 font-semibold mb-1">Rooms & Guests</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {booking.hotelRooms && `${booking.hotelRooms} ${booking.hotelRooms === 1 ? 'Room' : 'Rooms'}`}
+                      {booking.hotelRooms && booking.hotelGuests && ' • '}
+                      {booking.hotelGuests && `${booking.hotelGuests} ${booking.hotelGuests === 1 ? 'Guest' : 'Guests'}`}
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
-            {isCruiseBooking && booking.cruiseDestination && (
-              <p className="text-sm text-gray-700">
-                <span className="font-semibold">Destination:</span> {booking.cruiseDestination}
-                {booking.cruiseDepartureDate && (
-                  <span className="ml-3">
-                    <span className="font-semibold">Departure:</span> {new Date(booking.cruiseDepartureDate).toLocaleDateString()}
-                  </span>
+
+            {isCruiseBooking && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {booking.cruiseDestination && (
+                  <div className="bg-white rounded-lg p-3 border border-cyan-200">
+                    <p className="text-xs text-cyan-600 font-semibold mb-1">Destination</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.cruiseDestination}</p>
+                  </div>
                 )}
-              </p>
+                {booking.cruiseDepartureDate && (
+                  <div className="bg-white rounded-lg p-3 border border-cyan-200">
+                    <p className="text-xs text-cyan-600 font-semibold mb-1">Departure</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(booking.cruiseDepartureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  </div>
+                )}
+                {booking.cruiseDuration && (
+                  <div className="bg-white rounded-lg p-3 border border-cyan-200">
+                    <p className="text-xs text-cyan-600 font-semibold mb-1">Duration</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.cruiseDuration} {booking.cruiseDuration === 1 ? 'Day' : 'Days'}</p>
+                  </div>
+                )}
+                {(booking.cruisePassengers || booking.cruiseCabinType) && (
+                  <div className="bg-white rounded-lg p-3 border border-cyan-200">
+                    <p className="text-xs text-cyan-600 font-semibold mb-1">{booking.cruiseCabinType ? 'Cabin & Passengers' : 'Passengers'}</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {booking.cruiseCabinType && `${booking.cruiseCabinType}`}
+                      {booking.cruiseCabinType && booking.cruisePassengers && ' • '}
+                      {booking.cruisePassengers && `${booking.cruisePassengers} ${booking.cruisePassengers === 1 ? 'Person' : 'People'}`}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isPackageBooking && (booking.packageDestination || booking.packageStartDate || booking.packageEndDate || booking.packageTravelers) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {booking.packageDestination && (
+                  <div className="bg-white rounded-lg p-3 border border-emerald-200">
+                    <p className="text-xs text-emerald-600 font-semibold mb-1">Destination</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.packageDestination}</p>
+                  </div>
+                )}
+                {booking.packageStartDate && (
+                  <div className="bg-white rounded-lg p-3 border border-emerald-200">
+                    <p className="text-xs text-emerald-600 font-semibold mb-1">Start Date</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(booking.packageStartDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  </div>
+                )}
+                {booking.packageEndDate && (
+                  <div className="bg-white rounded-lg p-3 border border-emerald-200">
+                    <p className="text-xs text-emerald-600 font-semibold mb-1">End Date</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(booking.packageEndDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  </div>
+                )}
+                {booking.packageTravelers && (
+                  <div className="bg-white rounded-lg p-3 border border-emerald-200">
+                    <p className="text-xs text-emerald-600 font-semibold mb-1">Travelers</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.packageTravelers} {booking.packageTravelers === 1 ? 'Person' : 'People'}</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
-        
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Reference</p>
@@ -670,31 +877,31 @@ export default function TravelDashboard() {
           <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Booking Date</p>
             <p className="text-sm font-semibold text-gray-900">
-              {new Date(booking.bookingDate || booking.orderCreatedAt || booking.paid_at || new Date()).toLocaleDateString('en-US', { 
-                month: 'short', 
+              {new Date(booking.bookingDate || booking.orderCreatedAt || booking.paid_at || new Date()).toLocaleDateString('en-US', {
+                month: 'short',
                 day: 'numeric',
                 year: 'numeric'
               })}
             </p>
           </div>
         </div>
-        
+
         {booking.description && (
           <div className="mb-4 p-3 bg-gray-50 rounded-lg">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Description</p>
             <p className="text-sm text-gray-700">{booking.description}</p>
           </div>
         )}
-        
+
         <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
           {isDatabaseBooking ? (
-            <button 
+            <button
               onClick={async () => {
                 try {
                   // If we have both quoteId and inquiryId, fetch full details
                   if (booking.quoteId && booking.inquiryId) {
                     const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token')
-                    
+
                     // Fetch quote and inquiry data
                     const [quoteResponse, inquiryResponse] = await Promise.all([
                       fetch(getApiUrl(`quotes?id=${booking.quoteId}`), {
@@ -706,21 +913,21 @@ export default function TravelDashboard() {
                         credentials: 'include'
                       })
                     ])
-                    
+
                     const quoteData = await quoteResponse.json()
                     const inquiryData = await inquiryResponse.json()
-                    
+
                     if (quoteData.success && inquiryData.success) {
-                      navigate('/quote-detail', { 
-                        state: { 
-                          quoteData: quoteData.data, 
-                          inquiryData: inquiryData.data 
-                        } 
+                      navigate('/quote-detail', {
+                        state: {
+                          quoteData: quoteData.data,
+                          inquiryData: inquiryData.data
+                        }
                       })
                       return
                     }
                   }
-                  
+
                   // Fallback: navigate to inquiry detail page
                   if (booking.inquiryId) {
                     navigate(`/inquiry/${booking.inquiryId}`)
@@ -746,7 +953,7 @@ export default function TravelDashboard() {
               </span>
             </button>
           ) : (
-            <button 
+            <button
               onClick={() => navigate('/booking-confirmation', { state: { bookingData: booking } })}
               className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
             >
@@ -760,7 +967,7 @@ export default function TravelDashboard() {
             </button>
           )}
           {isFlightBooking && !isDatabaseBooking && (
-            <button 
+            <button
               onClick={() => navigate('/manage-booking', { state: { bookingData: booking } })}
               className="flex-1 sm:flex-none px-6 py-3 border-2 border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
             >
@@ -826,11 +1033,11 @@ export default function TravelDashboard() {
     }
 
     return (
-      <div key={request.id} 
-           className="group bg-white border border-gray-200 rounded-xl p-6 hover:shadow-xl hover:border-blue-300 transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
+      <div key={request.id}
+        className="group bg-white border border-gray-200 rounded-xl p-6 hover:shadow-xl hover:border-blue-300 transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
         {/* Gradient accent bar */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600"></div>
-        
+
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-3">
@@ -850,14 +1057,14 @@ export default function TravelDashboard() {
               </div>
             </div>
           </div>
-          
+
           <div className="flex flex-col items-start sm:items-end gap-2">
             <span className={`inline-flex items-center px-4 py-2 text-xs font-bold rounded-full shadow-sm ${getStatusColor(request.status)}
             `}>
               <span className="w-2 h-2 bg-current bg-opacity-30 rounded-full mr-2"></span>
               {getStatusText(request.status)}
             </span>
-            
+
             {/* Mobile-friendly status indicator */}
             <div className="sm:hidden text-xs text-gray-500 flex items-center gap-1">
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -867,7 +1074,7 @@ export default function TravelDashboard() {
             </div>
           </div>
         </div>
-        
+
         {/* Enhanced Progress bar */}
         <div className="mb-6 p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-100">
           <div className="flex justify-between text-sm font-medium text-gray-700 mb-2">
@@ -875,14 +1082,13 @@ export default function TravelDashboard() {
             <span className="capitalize">{request.status === 'booked' ? 'Completed' : 'In Progress'}</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3 shadow-inner overflow-hidden">
-            <div 
-              className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${
-                request.status === 'pending' ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 w-1/4' :
+            <div
+              className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${request.status === 'pending' ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 w-1/4' :
                 request.status === 'processing' ? 'bg-gradient-to-r from-blue-400 to-blue-500 w-1/2' :
-                request.status === 'quoted' ? 'bg-gradient-to-r from-green-400 to-green-500 w-3/4' :
-                request.status === 'booked' ? 'bg-gradient-to-r from-purple-400 to-purple-500 w-full' :
-                'bg-gradient-to-r from-gray-400 to-gray-500 w-full'
-              }`}
+                  request.status === 'quoted' ? 'bg-gradient-to-r from-green-400 to-green-500 w-3/4' :
+                    request.status === 'booked' ? 'bg-gradient-to-r from-purple-400 to-purple-500 w-full' :
+                      'bg-gradient-to-r from-gray-400 to-gray-500 w-full'
+                }`}
             ></div>
           </div>
           <div className="flex justify-between text-xs text-gray-500 mt-2">
@@ -891,13 +1097,13 @@ export default function TravelDashboard() {
             <span>Booked</span>
           </div>
         </div>
-        
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Last Updated</p>
             <p className="text-sm font-semibold text-gray-900">
-              {new Date(request.updated_at).toLocaleDateString('en-US', { 
-                month: 'short', 
+              {new Date(request.updated_at).toLocaleDateString('en-US', {
+                month: 'short',
                 day: 'numeric',
                 year: 'numeric'
               })}
@@ -914,8 +1120,8 @@ export default function TravelDashboard() {
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0 1 1 0 002 0zM8 9a1 1 0 000 2h2a1 1 0 100 0H8z" clipRule="evenodd" />
                 </svg>
-                {new Date(request.expires_at).toLocaleDateString('en-US', { 
-                  month: 'short', 
+                {new Date(request.expires_at).toLocaleDateString('en-US', {
+                  month: 'short',
                   day: 'numeric',
                   year: 'numeric'
                 })}
@@ -923,7 +1129,7 @@ export default function TravelDashboard() {
             </div>
           )}
         </div>
-        
+
         {/* Inquiry details */}
         <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
           <p className="text-sm font-semibold text-blue-800 mb-3 flex items-center gap-2">
@@ -1039,7 +1245,7 @@ export default function TravelDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-4">
-              <button 
+              <button
                 onClick={() => navigate('/')}
                 className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-colors p-2 -ml-2 rounded-lg hover:bg-gray-100"
               >
@@ -1051,7 +1257,7 @@ export default function TravelDashboard() {
               <div className="h-6 w-px bg-gray-300 hidden sm:block"></div>
               <h1 className="text-xl font-bold text-gray-900">My Trips</h1>
             </div>
-            
+
             <div className="flex items-center gap-3">
               {isGuest && (
                 <button
@@ -1072,7 +1278,7 @@ export default function TravelDashboard() {
             </div>
           </div>
         </div>
-        
+
         {isGuest && (
           <div className="bg-amber-50 border-b border-amber-200">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
@@ -1095,11 +1301,10 @@ export default function TravelDashboard() {
               <button
                 key={tab}
                 onClick={() => handleTabChange(tab)}
-                className={`px-5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
-                  activeTab === tab 
-                    ? "bg-blue-600 text-white shadow-sm" 
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                }`}
+                className={`px-5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  }`}
               >
                 {tab}
               </button>
@@ -1127,7 +1332,7 @@ export default function TravelDashboard() {
                     </svg>
                   </button>
                 </div>
-                
+
                 <nav className="space-y-1">
                   {[
                     { key: "All Bookings", icon: "📋", count: bookings.length },
@@ -1139,48 +1344,44 @@ export default function TravelDashboard() {
                     <button
                       key={item.key}
                       onClick={() => handleSidebarItemChange(item.key)}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${
-                        activeSidebarItem === item.key 
-                          ? "bg-blue-50 text-blue-700" 
-                          : "text-gray-700 hover:bg-gray-50"
-                      }`}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeSidebarItem === item.key
+                        ? "bg-blue-50 text-blue-700"
+                        : "text-gray-700 hover:bg-gray-50"
+                        }`}
                     >
                       <span className="flex items-center gap-3">
                         <span className="text-lg">{item.icon}</span>
                         <span className="font-medium text-sm">{item.key}</span>
                       </span>
                       {item.count > 0 && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          activeSidebarItem === item.key 
-                            ? "bg-blue-100 text-blue-700" 
-                            : "bg-gray-100 text-gray-600"
-                        }`}>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${activeSidebarItem === item.key
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-gray-100 text-gray-600"
+                          }`}>
                           {item.count}
                         </span>
                       )}
                     </button>
                   ))}
-                  
+
                   <div className="border-t border-gray-200 my-3"></div>
-                  
+
                   <button
                     onClick={() => handleSidebarItemChange("Requests")}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${
-                      activeSidebarItem === "Requests" 
-                        ? "bg-purple-50 text-purple-700" 
-                        : "text-gray-700 hover:bg-gray-50"
-                    }`}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeSidebarItem === "Requests"
+                      ? "bg-purple-50 text-purple-700"
+                      : "text-gray-700 hover:bg-gray-50"
+                      }`}
                   >
                     <span className="flex items-center gap-3">
                       <span className="text-lg">💬</span>
                       <span className="font-medium text-sm">My Requests</span>
                     </span>
                     {requests.length > 0 && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        activeSidebarItem === "Requests" 
-                          ? "bg-purple-100 text-purple-700" 
-                          : "bg-gray-100 text-gray-600"
-                      }`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${activeSidebarItem === "Requests"
+                        ? "bg-purple-100 text-purple-700"
+                        : "bg-gray-100 text-gray-600"
+                        }`}>
                         {requests.length}
                       </span>
                     )}
@@ -1192,7 +1393,7 @@ export default function TravelDashboard() {
 
           {/* Overlay for mobile */}
           {isMobileMenuOpen && (
-            <div 
+            <div
               className="fixed inset-0 bg-black/50 z-30 lg:hidden"
               onClick={toggleMobileMenu}
             />
@@ -1228,14 +1429,14 @@ export default function TravelDashboard() {
                         </svg>
                       </button>
                     </div>
-                    
+
                     {/* Request Cards */}
                     <div className="grid gap-4">
                       {filteredRequests.map(renderRequestCard)}
                     </div>
                   </div>
                 ) : (
-                  <EmptyState 
+                  <EmptyState
                     icon="💬"
                     title={`No ${activeTab} Requests`}
                     description="When you submit a travel inquiry, it will appear here."
@@ -1244,7 +1445,7 @@ export default function TravelDashboard() {
                   />
                 )
               ) : (
-                <EmptyState 
+                <EmptyState
                   icon="🔒"
                   title="Login Required"
                   description="Please sign in to view your travel requests."
@@ -1281,18 +1482,18 @@ export default function TravelDashboard() {
                       </svg>
                     </button>
                   </div>
-                  
+
                   {/* Booking Cards */}
                   <div className="grid gap-4">
                     {filteredBookings.map(renderBookingCard)}
                   </div>
                 </div>
               ) : (
-                <EmptyState 
+                <EmptyState
                   icon={isGuest ? "🔒" : "✈️"}
                   title={isGuest ? "Sign In to View Bookings" : `No ${activeTab} Bookings`}
-                  description={isGuest 
-                    ? "Sign in to view your trips and bookings." 
+                  description={isGuest
+                    ? "Sign in to view your trips and bookings."
                     : "When you book a trip, it will appear here."
                   }
                   actionLabel={isGuest ? "Sign In" : "Book a Trip"}

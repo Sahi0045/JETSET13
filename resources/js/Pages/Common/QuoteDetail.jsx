@@ -134,6 +134,260 @@ const QuoteDetail = () => {
             </div>
           </div>
 
+          {/* Travel Details Section */}
+          {inquiryData && (
+            <div className="mb-8">
+              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Travel Details
+              </h2>
+              
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100 shadow-sm">
+                {/* Flight Details */}
+                {inquiryData.inquiry_type === 'flight' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="p-2 bg-blue-600 rounded-lg text-white">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                      <span className="text-lg font-bold text-blue-800">Flight Booking</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {(inquiryData.flight_origin || inquiryData.flight_destination) && (
+                        <div className="bg-white rounded-lg p-4 border border-blue-200 shadow-sm">
+                          <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1">Route</p>
+                          <p className="text-lg font-bold text-gray-900">{inquiryData.flight_origin || 'N/A'} → {inquiryData.flight_destination || 'N/A'}</p>
+                        </div>
+                      )}
+                      {inquiryData.flight_departure_date && (
+                        <div className="bg-white rounded-lg p-4 border border-blue-200 shadow-sm">
+                          <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1">Departure Date</p>
+                          <p className="text-lg font-bold text-gray-900">{new Date(inquiryData.flight_departure_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                        </div>
+                      )}
+                      {inquiryData.flight_return_date && (
+                        <div className="bg-white rounded-lg p-4 border border-blue-200 shadow-sm">
+                          <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1">Return Date</p>
+                          <p className="text-lg font-bold text-gray-900">{new Date(inquiryData.flight_return_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                        </div>
+                      )}
+                      {inquiryData.flight_passengers && (
+                        <div className="bg-white rounded-lg p-4 border border-blue-200 shadow-sm">
+                          <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1">Passengers</p>
+                          <p className="text-lg font-bold text-gray-900">{inquiryData.flight_passengers} {inquiryData.flight_passengers === 1 ? 'Traveler' : 'Travelers'}</p>
+                        </div>
+                      )}
+                      {inquiryData.flight_class && (
+                        <div className="bg-white rounded-lg p-4 border border-blue-200 shadow-sm">
+                          <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1">Travel Class</p>
+                          <p className="text-lg font-bold text-gray-900 capitalize">{inquiryData.flight_class.replace('_', ' ')}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Hotel Details */}
+                {inquiryData.inquiry_type === 'hotel' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="p-2 bg-purple-600 rounded-lg text-white">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
+                      <span className="text-lg font-bold text-purple-800">Hotel Booking</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {inquiryData.hotel_destination && (
+                        <div className="bg-white rounded-lg p-4 border border-purple-200 shadow-sm">
+                          <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-1">Destination</p>
+                          <p className="text-lg font-bold text-gray-900">{inquiryData.hotel_destination}</p>
+                        </div>
+                      )}
+                      {inquiryData.hotel_checkin_date && (
+                        <div className="bg-white rounded-lg p-4 border border-purple-200 shadow-sm">
+                          <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-1">Check-in Date</p>
+                          <p className="text-lg font-bold text-gray-900">{new Date(inquiryData.hotel_checkin_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                        </div>
+                      )}
+                      {inquiryData.hotel_checkout_date && (
+                        <div className="bg-white rounded-lg p-4 border border-purple-200 shadow-sm">
+                          <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-1">Check-out Date</p>
+                          <p className="text-lg font-bold text-gray-900">{new Date(inquiryData.hotel_checkout_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                        </div>
+                      )}
+                      {inquiryData.hotel_rooms && (
+                        <div className="bg-white rounded-lg p-4 border border-purple-200 shadow-sm">
+                          <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-1">Rooms</p>
+                          <p className="text-lg font-bold text-gray-900">{inquiryData.hotel_rooms} {inquiryData.hotel_rooms === 1 ? 'Room' : 'Rooms'}</p>
+                        </div>
+                      )}
+                      {inquiryData.hotel_guests && (
+                        <div className="bg-white rounded-lg p-4 border border-purple-200 shadow-sm">
+                          <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-1">Guests</p>
+                          <p className="text-lg font-bold text-gray-900">{inquiryData.hotel_guests} {inquiryData.hotel_guests === 1 ? 'Guest' : 'Guests'}</p>
+                        </div>
+                      )}
+                      {inquiryData.hotel_room_type && (
+                        <div className="bg-white rounded-lg p-4 border border-purple-200 shadow-sm">
+                          <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-1">Room Type</p>
+                          <p className="text-lg font-bold text-gray-900 capitalize">{inquiryData.hotel_room_type}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Cruise Details */}
+                {inquiryData.inquiry_type === 'cruise' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="p-2 bg-cyan-600 rounded-lg text-white">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <span className="text-lg font-bold text-cyan-800">Cruise Booking</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {inquiryData.cruise_destination && (
+                        <div className="bg-white rounded-lg p-4 border border-cyan-200 shadow-sm">
+                          <p className="text-xs font-semibold text-cyan-600 uppercase tracking-wider mb-1">Destination</p>
+                          <p className="text-lg font-bold text-gray-900">{inquiryData.cruise_destination}</p>
+                        </div>
+                      )}
+                      {inquiryData.cruise_departure_date && (
+                        <div className="bg-white rounded-lg p-4 border border-cyan-200 shadow-sm">
+                          <p className="text-xs font-semibold text-cyan-600 uppercase tracking-wider mb-1">Departure Date</p>
+                          <p className="text-lg font-bold text-gray-900">{new Date(inquiryData.cruise_departure_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                        </div>
+                      )}
+                      {inquiryData.cruise_duration && (
+                        <div className="bg-white rounded-lg p-4 border border-cyan-200 shadow-sm">
+                          <p className="text-xs font-semibold text-cyan-600 uppercase tracking-wider mb-1">Duration</p>
+                          <p className="text-lg font-bold text-gray-900">{inquiryData.cruise_duration} {inquiryData.cruise_duration === 1 ? 'Day' : 'Days'}</p>
+                        </div>
+                      )}
+                      {inquiryData.cruise_passengers && (
+                        <div className="bg-white rounded-lg p-4 border border-cyan-200 shadow-sm">
+                          <p className="text-xs font-semibold text-cyan-600 uppercase tracking-wider mb-1">Passengers</p>
+                          <p className="text-lg font-bold text-gray-900">{inquiryData.cruise_passengers} {inquiryData.cruise_passengers === 1 ? 'Traveler' : 'Travelers'}</p>
+                        </div>
+                      )}
+                      {inquiryData.cruise_cabin_type && (
+                        <div className="bg-white rounded-lg p-4 border border-cyan-200 shadow-sm">
+                          <p className="text-xs font-semibold text-cyan-600 uppercase tracking-wider mb-1">Cabin Type</p>
+                          <p className="text-lg font-bold text-gray-900 capitalize">{inquiryData.cruise_cabin_type}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Package Details */}
+                {inquiryData.inquiry_type === 'package' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="p-2 bg-emerald-600 rounded-lg text-white">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                      </div>
+                      <span className="text-lg font-bold text-emerald-800">Travel Package</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {inquiryData.package_destination && (
+                        <div className="bg-white rounded-lg p-4 border border-emerald-200 shadow-sm">
+                          <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-1">Destination</p>
+                          <p className="text-lg font-bold text-gray-900">{inquiryData.package_destination}</p>
+                        </div>
+                      )}
+                      {inquiryData.package_start_date && (
+                        <div className="bg-white rounded-lg p-4 border border-emerald-200 shadow-sm">
+                          <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-1">Start Date</p>
+                          <p className="text-lg font-bold text-gray-900">{new Date(inquiryData.package_start_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                        </div>
+                      )}
+                      {inquiryData.package_end_date && (
+                        <div className="bg-white rounded-lg p-4 border border-emerald-200 shadow-sm">
+                          <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-1">End Date</p>
+                          <p className="text-lg font-bold text-gray-900">{new Date(inquiryData.package_end_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                        </div>
+                      )}
+                      {inquiryData.package_travelers && (
+                        <div className="bg-white rounded-lg p-4 border border-emerald-200 shadow-sm">
+                          <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-1">Travelers</p>
+                          <p className="text-lg font-bold text-gray-900">{inquiryData.package_travelers} {inquiryData.package_travelers === 1 ? 'Person' : 'People'}</p>
+                        </div>
+                      )}
+                      {inquiryData.package_budget_range && (
+                        <div className="bg-white rounded-lg p-4 border border-emerald-200 shadow-sm">
+                          <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-1">Budget Range</p>
+                          <p className="text-lg font-bold text-gray-900">{inquiryData.package_budget_range}</p>
+                        </div>
+                      )}
+                      {inquiryData.package_interests && inquiryData.package_interests.length > 0 && (
+                        <div className="bg-white rounded-lg p-4 border border-emerald-200 shadow-sm">
+                          <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-1">Interests</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {inquiryData.package_interests.map((interest, idx) => (
+                              <span key={idx} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">{interest}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Customer Info */}
+                <div className="mt-6 pt-4 border-t border-blue-200">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Customer Information</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {inquiryData.customer_name && (
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        <span className="text-sm font-medium text-gray-700">{inquiryData.customer_name}</span>
+                      </div>
+                    )}
+                    {inquiryData.customer_email && (
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-sm font-medium text-gray-700">{inquiryData.customer_email}</span>
+                      </div>
+                    )}
+                    {inquiryData.customer_phone && (
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                        <span className="text-sm font-medium text-gray-700">{inquiryData.customer_phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Special Requirements */}
+                {inquiryData.special_requirements && (
+                  <div className="mt-4 pt-4 border-t border-blue-200">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Special Requirements</p>
+                    <p className="text-sm text-gray-700 bg-white rounded-lg p-3 border border-gray-200">{inquiryData.special_requirements}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {quoteData.breakdown && Array.isArray(quoteData.breakdown) && quoteData.breakdown.length > 0 && (
             <div className="mb-8">
               <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
