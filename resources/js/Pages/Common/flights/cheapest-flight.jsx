@@ -46,7 +46,7 @@ export default function CheapestFlights({ onBookFlight }) {
     <div className="bg-[#2B4D6F] rounded-xl p-8 shadow-lg">
       <div className="flex flex-col md:flex-row md:items-center mb-8 gap-4">
         <h3 className="text-white text-2xl font-medium">Cheapest Fares From</h3>
-        
+
         {/* Source City Dropdown */}
         <div className="relative">
           <button
@@ -104,17 +104,17 @@ export default function CheapestFlights({ onBookFlight }) {
             <div key={flight.id} className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 group">
               {/* Image container with decorative elements */}
               <div className="relative h-32 overflow-hidden">
-                <img 
-                  src={flight.image || "/placeholder.svg"} 
-                  alt={flight.destination} 
-                  className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500" 
+                <img
+                  src={flight.image || "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=2070&auto=format&fit=crop"}
+                  alt={flight.destination}
+                  className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
                 />
                 {/* Overlay gradient for better text visibility */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
-                
+
                 {/* Corner decoration */}
                 <div className="absolute top-0 right-0 w-12 h-12 bg-blue-500/20 backdrop-blur-sm rounded-bl-xl"></div>
-                
+
                 {/* Price tag */}
                 <div className="absolute bottom-2 right-2 bg-blue-600/90 backdrop-blur-sm text-white text-xs font-bold py-1 px-2 rounded-md flex items-center shadow-sm">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
@@ -123,7 +123,7 @@ export default function CheapestFlights({ onBookFlight }) {
                   Best Price
                 </div>
               </div>
-              
+
               {/* Content section */}
               <div className="p-4">
                 {/* Destination and region */}
@@ -140,7 +140,7 @@ export default function CheapestFlights({ onBookFlight }) {
                     <p className="text-gray-500 text-xs font-medium">{flight.date}</p>
                   </div>
                 </div>
-                
+
                 {/* Price and button */}
                 <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
                   <div className="flex items-baseline">
@@ -149,8 +149,8 @@ export default function CheapestFlights({ onBookFlight }) {
                     </p>
                     <span className="text-xs text-gray-500 ml-1">onwards</span>
                   </div>
-                  
-                  <button 
+
+                  <button
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();

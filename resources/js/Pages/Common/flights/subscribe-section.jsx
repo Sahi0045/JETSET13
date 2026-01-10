@@ -32,7 +32,7 @@ export default function SubscribeSection() {
         setStats(response.data.data);
       }
       */
-      
+
       // For demo purposes, use static data
       setStats({
         totalSubscribers: 2500,
@@ -55,30 +55,30 @@ export default function SubscribeSection() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Reset states
     setError('');
     setSuccess(false);
-    
+
     // Validate email
     if (!email) {
       setError('Please enter your email address');
       return;
     }
-    
+
     if (!validateEmail(email)) {
       setError('Please enter a valid email address');
       return;
     }
-    
+
     // Validate consent
     if (!consent) {
       setError('You must agree to receive promotional emails');
       return;
     }
-    
+
     setLoading(true);
-    
+
     try {
       // Use mocked success for now, or connect to real API
       // In production, you would uncomment this code to call the real API
@@ -103,7 +103,7 @@ export default function SubscribeSection() {
         setError(response.data?.message || 'Failed to subscribe. Please try again.');
       }
       */
-      
+
       // For demo purposes, simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       setSuccess(true);
@@ -128,7 +128,7 @@ export default function SubscribeSection() {
       <div className="bg-[url('https://images.unsplash.com/photo-1503220317375-aaad61436b1b?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center rounded-xl overflow-hidden shadow-2xl relative">
         {/* Overlay */}
         <div className="absolute inset-0 bg-gradient-to-r from-blue-900/90 to-blue-900/70 backdrop-blur-sm"></div>
-        
+
         {/* Content container */}
         <div className="relative z-10 p-10 md:p-16">
           {/* Cloud elements */}
@@ -137,18 +137,18 @@ export default function SubscribeSection() {
               <path fill="currentColor" d="M0,192L48,176C96,160,192,128,288,133.3C384,139,480,181,576,197.3C672,213,768,203,864,186.7C960,171,1056,149,1152,149.3C1248,149,1344,171,1392,181.3L1440,192L1440,0L1392,0C1344,0,1248,0,1152,0C1056,0,960,0,864,0C768,0,672,0,576,0C480,0,384,0,288,0C192,0,96,0,48,0L0,0Z"></path>
             </svg>
           </div>
-          
+
           <div className="flex flex-col md:flex-row items-center gap-10">
             {/* Left side - promotional content */}
             <div className="md:w-1/2 text-white">
               <div className="inline-block mb-6 bg-yellow-500 text-blue-900 px-4 py-1 rounded-full font-bold text-sm shadow-lg transform -rotate-2">
                 EXCLUSIVE OFFER
               </div>
-              
+
               <h2 className="text-4xl md:text-5xl font-extrabold mb-6 leading-tight drop-shadow-md">
                 GET <span className="text-yellow-400">10% OFF</span> ON YOUR NEXT FLIGHT BOOKING!
               </h2>
-              
+
               <div className="flex gap-6 mb-8 flex-wrap">
                 <div className="flex items-center">
                   <div className="bg-white/20 p-2 rounded-full mr-3">
@@ -175,14 +175,14 @@ export default function SubscribeSection() {
                   <span>Free cancellation</span>
                 </div>
               </div>
-              
+
               <div className="bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/20 relative overflow-hidden">
                 <div className="absolute -right-6 -top-6 bg-yellow-500/20 h-24 w-24 rounded-full blur-xl"></div>
-                
+
                 <p className="text-lg mb-6">
                   Join over <span className="font-bold text-yellow-400">{stats.totalSubscribers.toLocaleString()}</span> travelers and get the best flight deals directly to your inbox. Be the first to know about:
                 </p>
-                
+
                 <ul className="mb-8 space-y-2">
                   <li className="flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -205,14 +205,14 @@ export default function SubscribeSection() {
                 </ul>
               </div>
             </div>
-            
+
             {/* Right side - form */}
             <div className="md:w-1/2">
               {success ? (
                 <div className="bg-white rounded-xl shadow-2xl p-8 relative overflow-hidden">
                   <div className="absolute -left-12 -top-12 bg-green-500/10 h-40 w-40 rounded-full blur-xl"></div>
                   <div className="absolute -right-12 -bottom-12 bg-blue-500/10 h-40 w-40 rounded-full blur-xl"></div>
-                  
+
                   <div className="flex items-center justify-center flex-col text-center">
                     <div className="bg-green-100 p-4 rounded-full mb-6">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-14 w-14 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -228,16 +228,22 @@ export default function SubscribeSection() {
                 <div className="bg-white rounded-xl shadow-2xl p-8 relative overflow-hidden">
                   <div className="absolute -left-12 -top-12 bg-blue-500/10 h-40 w-40 rounded-full blur-xl"></div>
                   <div className="absolute -right-12 -bottom-12 bg-yellow-500/10 h-40 w-40 rounded-full blur-xl"></div>
-                  
+
                   <div className="flex items-center mb-8">
-                    <img
-                      src={subscriptionAirplane || "https://images.unsplash.com/photo-1556388158-158ea5ccacbd?q=80&w=320&auto=format&fit=crop"}
-                      alt="Airplane"
-                      className="w-16 h-16 object-contain mr-4"
-                    />
+                    {subscriptionAirplane && subscriptionAirplane.startsWith('M') ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 text-blue-600 mr-4" viewBox="0 0 24 24" fill="currentColor">
+                        <path d={subscriptionAirplane} />
+                      </svg>
+                    ) : (
+                      <img
+                        src={subscriptionAirplane || "https://images.unsplash.com/photo-1556388158-158ea5ccacbd?q=80&w=320&auto=format&fit=crop"}
+                        alt="Airplane"
+                        className="w-16 h-16 object-contain mr-4"
+                      />
+                    )}
                     <h3 className="text-2xl font-bold text-gray-800">Subscribe & Save</h3>
                   </div>
-                  
+
                   <form onSubmit={handleSubmit} className="space-y-6 mt-6">
                     <div>
                       <div className="relative">
@@ -258,7 +264,7 @@ export default function SubscribeSection() {
                         </p>
                       )}
                     </div>
-                    
+
                     <div className="flex items-start">
                       <div className="flex items-center h-5">
                         <input
@@ -272,19 +278,18 @@ export default function SubscribeSection() {
                       </div>
                       <div className="ml-3 text-sm">
                         <label htmlFor="consent" className="font-medium text-gray-700">
-                          I agree to receive promotional emails. I understand that I can 
+                          I agree to receive promotional emails. I understand that I can
                           unsubscribe at any time. View our <a href="#" className="text-blue-600 hover:underline">Terms</a> and <a href="#" className="text-blue-600 hover:underline">Privacy Policy</a>.
                         </label>
                       </div>
                     </div>
-                    
+
                     <button
                       type="submit"
-                      className={`w-full py-4 rounded-xl font-bold text-lg relative overflow-hidden transition-all ${
-                        email && consent 
-                          ? "bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg hover:shadow-blue-500/30 hover:scale-[1.02]" 
+                      className={`w-full py-4 rounded-xl font-bold text-lg relative overflow-hidden transition-all ${email && consent
+                          ? "bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg hover:shadow-blue-500/30 hover:scale-[1.02]"
                           : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                      }`}
+                        }`}
                       disabled={!email || !consent}
                     >
                       <span className="relative z-10">GET 10% OFF MY NEXT FLIGHT</span>
@@ -296,15 +301,15 @@ export default function SubscribeSection() {
                       )}
                     </button>
                   </form>
-                  
+
                   <div className="flex items-center justify-center mt-6">
                     <div className="flex -space-x-2 mr-3">
                       {stats.avatars.map((avatar, index) => (
                         <div key={avatar.id || index} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden">
-                          <img 
+                          <img
                             src={avatar.image_url}
-                            alt={`Subscriber ${index + 1}`} 
-                            className="w-full h-full object-cover" 
+                            alt={`Subscriber ${index + 1}`}
+                            className="w-full h-full object-cover"
                           />
                         </div>
                       ))}
@@ -319,7 +324,7 @@ export default function SubscribeSection() {
               )}
             </div>
           </div>
-          
+
           {/* Airplane path decoration */}
           <div className="absolute left-0 bottom-5 w-full overflow-hidden opacity-20">
             <svg viewBox="0 0 1200 120" xmlns="http://www.w3.org/2000/svg" className="text-white">

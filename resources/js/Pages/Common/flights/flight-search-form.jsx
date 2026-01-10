@@ -23,13 +23,13 @@ export default function FlightSearchForm({ initialData, onSearch }) {
       // Consider mobile for screens smaller than 1024px (includes tablets)
       setIsMobileView(window.innerWidth < 1024);
     }
-    
+
     // Set initial value
     checkIfMobile();
-    
+
     // Add event listener
     window.addEventListener('resize', checkIfMobile);
-    
+
     // Clean up
     return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
@@ -118,9 +118,9 @@ export default function FlightSearchForm({ initialData, onSearch }) {
     if (name === "from" || name === "to") {
       const showSuggestions = name === "from" ? setShowFromSuggestions : setShowToSuggestions;
       const setSuggestions = name === "from" ? setFromSuggestions : setToSuggestions;
-      
+
       showSuggestions(true);
-      
+
       // Filter all destinations based on input
       const filtered = allDestinations
         .filter((city) => {
@@ -137,10 +137,10 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           country: city.country,
           type: city.type
         }));
-      
+
       setSuggestions(filtered);
     }
-    
+
     // Clear validation error when field is changed
     if (formErrors[name]) {
       setFormErrors({
@@ -151,13 +151,13 @@ export default function FlightSearchForm({ initialData, onSearch }) {
   }
 
   const handleSuggestionClick = (name, field) => {
-    const selectedCity = field === "from" 
+    const selectedCity = field === "from"
       ? fromSuggestions.find(city => city.name === name)
       : toSuggestions.find(city => city.name === name);
 
     if (selectedCity) {
-      setFormData((prev) => ({ 
-        ...prev, 
+      setFormData((prev) => ({
+        ...prev,
         [field]: selectedCity.name,
         [`${field}Code`]: selectedCity.code,
         [`${field}Country`]: selectedCity.country,
@@ -184,23 +184,23 @@ export default function FlightSearchForm({ initialData, onSearch }) {
 
   const validateForm = () => {
     const errors = {};
-    
+
     if (!formData.from) {
       errors.from = "Please enter departure city";
     }
-    
+
     if (!formData.to) {
       errors.to = "Please enter destination city";
     }
-    
+
     if (!formData.departDate) {
       errors.departDate = "Please select departure date";
     }
-    
+
     if (formData.tripType === "roundTrip" && !formData.returnDate) {
       errors.returnDate = "Please select return date";
     }
-    
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -217,7 +217,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
       fromCode: formData.fromCode || cityCodeMap[formData.from],
       toCode: formData.toCode || cityCodeMap[formData.to]
     };
-    
+
     if (onSearch) {
       onSearch(searchData);
     } else {
@@ -227,7 +227,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
 
   return isMobileView ? (
     // Mobile/Tablet View - Modern Search Bar Style
-    <div className="w-full min-h-screen bg-cover bg-center flex flex-col items-center" style={{ backgroundImage: "url('/path/to/your/background.jpg')" }}>
+    <div className="w-full min-h-screen bg-cover bg-center flex flex-col items-center" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2074&auto=format&fit=crop')" }}>
       {/* Search Bar Card - Responsive for tablets */}
       <div className="w-full max-w-md md:max-w-lg lg:max-w-xl mx-auto mt-4 px-2 md:px-4">
         <div className="bg-white/95 rounded-2xl shadow-xl p-3 md:p-4 lg:p-6 flex flex-col gap-2 md:gap-3">
@@ -416,21 +416,19 @@ export default function FlightSearchForm({ initialData, onSearch }) {
         <div className="flex">
           <button
             onClick={() => handleTripTypeChange("oneWay")}
-            className={`w-1/2 py-3 text-center font-medium transition-colors ${
-              formData.tripType === "oneWay" 
-                ? "bg-blue-500 text-white" 
+            className={`w-1/2 py-3 text-center font-medium transition-colors ${formData.tripType === "oneWay"
+                ? "bg-blue-500 text-white"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+              }`}
           >
             One Way
           </button>
           <button
             onClick={() => handleTripTypeChange("roundTrip")}
-            className={`w-1/2 py-3 text-center font-medium transition-colors ${
-              formData.tripType === "roundTrip" 
-                ? "bg-blue-500 text-white" 
+            className={`w-1/2 py-3 text-center font-medium transition-colors ${formData.tripType === "roundTrip"
+                ? "bg-blue-500 text-white"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+              }`}
           >
             Round Trip
           </button>
@@ -473,7 +471,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
               <p className="text-red-500 text-xs mt-1">{formErrors.from}</p>
             )}
           </div>
-          
+
           {/* To */}
           <div className="flex-1">
             <label className="text-gray-600 text-sm font-medium mb-2 block">To</label>
@@ -509,7 +507,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
               <p className="text-red-500 text-xs mt-1">{formErrors.to}</p>
             )}
           </div>
-          
+
           {/* Depart Date */}
           <div className="flex-1">
             <label className="text-gray-600 text-sm font-medium mb-2 block">Depart Date</label>
@@ -528,7 +526,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
               <p className="text-red-500 text-xs mt-1">{formErrors.departDate}</p>
             )}
           </div>
-          
+
           {/* Return Date - Only visible for Round Trip */}
           {formData.tripType === "roundTrip" && (
             <div className="flex-1">
@@ -549,7 +547,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
               )}
             </div>
           )}
-          
+
           {/* Travelers */}
           <div className="flex-1">
             <label className="text-gray-600 text-sm font-medium mb-2 block">Travelers</label>
@@ -568,7 +566,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
               <Users className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             </div>
           </div>
-          
+
           {/* Search Button */}
           <div className="ml-2">
             <button
@@ -583,16 +581,16 @@ export default function FlightSearchForm({ initialData, onSearch }) {
       </div>
 
       {/* Special Fares */}
-      <div className="flex items-center gap-3">
-        <span className="text-white font-medium">Special Fares:</span>
+      <div className="flex items-center gap-3 mt-2">
+        <span className="text-white font-medium text-shadow-sm drop-shadow-md">Special Fares:</span>
         <div className="flex gap-3">
-          <button className="px-6 py-2 bg-gray-100 bg-opacity-30 hover:bg-opacity-40 text-white rounded-full border border-white">
+          <button className="px-6 py-2 bg-blue-600/80 hover:bg-blue-600 text-white rounded-full border border-blue-400 font-medium shadow-md backdrop-blur-sm transition-all">
             Student
           </button>
-          <button className="px-6 py-2 bg-gray-100 bg-opacity-30 hover:bg-opacity-40 text-white rounded-full border border-white">
+          <button className="px-6 py-2 bg-blue-600/80 hover:bg-blue-600 text-white rounded-full border border-blue-400 font-medium shadow-md backdrop-blur-sm transition-all">
             Senior Citizen
           </button>
-          <button className="px-6 py-2 bg-gray-100 bg-opacity-30 hover:bg-opacity-40 text-white rounded-full border border-white">
+          <button className="px-6 py-2 bg-blue-600/80 hover:bg-blue-600 text-white rounded-full border border-blue-400 font-medium shadow-md backdrop-blur-sm transition-all">
             Armed Forces
           </button>
         </div>

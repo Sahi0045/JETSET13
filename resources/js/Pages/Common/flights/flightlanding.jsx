@@ -19,14 +19,14 @@ function FlightLanding() {
 
   // const handleSearch = (formData) => {
 
-    
+
   //   // Navigate to search page with query parameters
   //   navigate('/flights/search', { state: { searchData: formData } });
   // };
 
   // const handleSearch = async (formData) => {
   //   // if (!validateForm()) return;
-  
+
   //   try {
   //     const response = await fetch("http://localhost:5001/api/flights/search", {
   //       method: "POST",
@@ -35,21 +35,21 @@ function FlightLanding() {
   //       },
   //       body: JSON.stringify(formData),
   //     });
-  
+
   //     const data = await response.json();
-  
+
   //     if (onSearch) {
   //       navigate('/flights/search', { state: { searchData: data } });
   //       onSearch(data);
   //     } else {
   //       console.log("Flight search result:", data);
   //     }
-  
+
   //   } catch (error) {
   //     console.error("Flight search failed:", error);
   //   }
   // };
-  
+
   // 
 
   // Map city names to IATA codes
@@ -262,7 +262,7 @@ function FlightLanding() {
         // Use API endpoint from centralized config
         const apiUrl = apiConfig.endpoints.flights.search;
         console.log('Using API URL:', apiUrl);
-        
+
         const response = await axios.post(apiUrl, searchData, {
           headers: {
             "Content-Type": "application/json",
@@ -271,17 +271,17 @@ function FlightLanding() {
           withCredentials: false,
           timeout: 10000 // 10 second timeout
         });
-        
+
         console.log('Got response:', response);
-        
+
         const data = response.data;
         if (data && data.success !== false) {
           console.log('Search successful, navigating to results with API response');
-          navigate('/flights/search', { 
-            state: { 
+          navigate('/flights/search', {
+            state: {
               searchData: searchData, // Original search parameters
               apiResponse: data // API response
-            } 
+            }
           });
         } else {
           console.log("No flight results found or API error:", data?.error || 'Unknown error');
@@ -297,14 +297,14 @@ function FlightLanding() {
     } catch (error) {
       console.error('Search function error:', error.message);
       // If any other error occurs, still try to navigate
-      navigate('/flights/search', { 
-        state: { 
+      navigate('/flights/search', {
+        state: {
           searchData: {
             ...formData,
             from: cityToIATACode[formData.from] || formData.from,
             to: cityToIATACode[formData.to] || formData.to
           }
-        } 
+        }
       });
     }
   };
@@ -312,8 +312,8 @@ function FlightLanding() {
   // Handle navigation to destination search
   const handleExploreDestinations = () => {
     // Navigate to search page with default search parameters
-    navigate('/flights/search', { 
-      state: { 
+    navigate('/flights/search', {
+      state: {
         searchData: {
           from: "New Delhi", // Default source
           to: "",  // Empty destination for exploring all
@@ -321,8 +321,8 @@ function FlightLanding() {
           departDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from today
           returnDate: "",
           travelers: "1"
-        } 
-      } 
+        }
+      }
     });
   };
 
@@ -337,11 +337,11 @@ function FlightLanding() {
       returnDate: "",
       travelers: "1"
     };
-    
+
     // Get IATA codes for the cities
     const fromCode = cityToIATACode[searchData.from] || searchData.from;
     const toCode = cityToIATACode[searchData.to] || searchData.to;
-    
+
     // Add IATA codes to search data
     const searchRequestData = {
       ...searchData,
@@ -351,41 +351,35 @@ function FlightLanding() {
 
     console.log('Booking flight to destination:', destination);
     console.log('Search data for booking:', searchRequestData);
-    
+
     // Navigate directly to the search page with search parameters
     // This will trigger the search on the search page component
-    navigate('/flights/search', { 
-      state: { 
+    navigate('/flights/search', {
+      state: {
         searchData: searchRequestData
-      } 
+      }
     });
   };
 
   return (
     <div className="min-h-screen">
       <Navbar />
-      
+
       {/* Enhanced Hero Section */}
-      <section className="relative min-h-[85vh] md:min-h-[100vh] overflow-hidden pb-32 md:pb-40">
+      <section className="relative min-h-[70vh] md:min-h-[85vh] pb-16 md:pb-24 bg-slate-900">
         {/* Animated background elements */}
         <div className="absolute inset-0 z-0 overflow-hidden">
           <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
           <div className="absolute top-1/3 right-1/3 w-72 h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
           <div className="absolute bottom-1/4 left-1/4 w-80 h-80 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
         </div>
-        
-        <img
-          src={heroImage || "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2074&auto=format&fit=crop"}
-          alt="Airplane wing view"
-          className="w-full h-full object-cover"
-        />
         <div className="absolute inset-0 bg-gradient-to-b from-blue-900/50 via-indigo-900/40 to-black/60"></div>
-        <div className="absolute inset-0 flex flex-col justify-center px-6 sm:px-8 md:px-16 z-10">
+        <div className="absolute inset-0 flex flex-col justify-center px-6 sm:px-8 md:px-16 z-10 pt-24 pb-8">
           <div className="container mx-auto">
             <div className="max-w-[900px] xl:max-w-[1100px] animate-fade-in-up">
               {/* Hero/Header Section */}
               {typeof window !== 'undefined' && window.innerWidth < 1024 ? (
-                <div className="mb-6 mt-60 md:mt-80">
+                <div className="mb-6 mt-20 md:mt-32">
                   <p className="text-white text-lg md:text-xl lg:text-2xl font-semibold italic text-center drop-shadow-md">Travel is the only thing you buy that makes you richer.</p>
                 </div>
               ) : (
@@ -404,21 +398,12 @@ function FlightLanding() {
                   </p>
                 </>
               )}
-              
+
               {/* <div className="bg-white/10 backdrop-blur-md p-8 rounded-xl shadow-2xl border border-white/20 transform hover:scale-[1.01] transition-transform duration-300"> */}
-                <FlightSearchForm onSearch={handleSearch} />
-              
+              <FlightSearchForm onSearch={handleSearch} />
+
             </div>
           </div>
-        </div>
-        
-        {/* Decorative plane trail */}
-        <div className="absolute bottom-10 right-10 z-10 opacity-60 hidden md:block">
-          <svg width="250" height="80" viewBox="0 0 250 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M10,40 Q60,20 120,40 T240,40" stroke="white" strokeWidth="2" strokeDasharray="4,4" fill="none"/>
-            <path d="M240,40 l-8,-8 M240,40 l-8,8" stroke="white" strokeWidth="2" fill="none"/>
-            <circle cx="10" cy="40" r="4" fill="white"/>
-          </svg>
         </div>
       </section>
 
@@ -433,15 +418,15 @@ function FlightLanding() {
               Explore Popular Destinations
             </h2>
             <p className="text-gray-600 text-lg">
-              Discover our carefully selected destinations loved by travelers worldwide. 
+              Discover our carefully selected destinations loved by travelers worldwide.
               Perfect places for your next adventure.
             </p>
           </div>
-          
+
           <PopularDestinations onSelectDestination={handleBookFlight} />
-          
+
           <div className="flex justify-center mt-12">
-            <button 
+            <button
               onClick={handleExploreDestinations}
               className="group relative px-8 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl"
             >
@@ -466,10 +451,14 @@ function FlightLanding() {
                 <div className="absolute -top-6 -left-6 w-24 h-24 bg-yellow-400 rounded-full opacity-20"></div>
                 <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-blue-500 rounded-full opacity-20"></div>
                 <img
-                  src="https://images.unsplash.com/photo-1583833005442-a186a4efe0f9?q=80&w=1470&auto=format&fit=crop"
-                  alt="Airplane illustration"
-                  className="w-full h-auto object-contain relative z-10 rounded-2xl shadow-2xl transform hover:scale-105 transition-transform duration-500"
+                  src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=1474&auto=format&fit=crop"
+                  alt="Airplane flying in sky"
+                  className="w-full h-auto object-cover relative z-10 rounded-2xl shadow-2xl transform hover:scale-105 transition-transform duration-500"
                   style={{ filter: "drop-shadow(0px 4px 20px rgba(0, 0, 0, 0.15))" }}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = 'https://images.unsplash.com/photo-1569154941061-e231b4725ef1?q=80&w=1470&auto=format&fit=crop';
+                  }}
                 />
               </div>
             </div>
@@ -481,7 +470,7 @@ function FlightLanding() {
                 Find Our <span className="text-blue-600">Lowest Fares</span> to Popular Destinations
               </h2>
               <p className="text-gray-600 text-lg mb-8">
-                Take advantage of our special deals and promotions to get the best value for your travel budget. 
+                Take advantage of our special deals and promotions to get the best value for your travel budget.
                 We're committed to finding you the most affordable flights without compromising on quality.
               </p>
               <div className="flex items-center text-gray-500 mb-2">
@@ -504,7 +493,7 @@ function FlightLanding() {
               </div>
             </div>
           </div>
-          
+
           {/* Cheapest Flights Component */}
           <div className="transform hover:scale-[1.01] transition-transform duration-300">
             <CheapestFlights onBookFlight={handleBookFlight} />
@@ -523,7 +512,7 @@ function FlightLanding() {
               We make your travel experience seamless and enjoyable from booking to arrival
             </p>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
               <div className="w-16 h-16 flex items-center justify-center bg-blue-100 rounded-2xl text-blue-600 mb-6">
@@ -534,7 +523,7 @@ function FlightLanding() {
               <h3 className="text-xl font-bold text-gray-800 mb-3">Best Price Guarantee</h3>
               <p className="text-gray-600">Find a lower price? We'll match it and give you an additional discount on your booking.</p>
             </div>
-            
+
             <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
               <div className="w-16 h-16 flex items-center justify-center bg-green-100 rounded-2xl text-green-600 mb-6">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -544,7 +533,7 @@ function FlightLanding() {
               <h3 className="text-xl font-bold text-gray-800 mb-3">Secure Booking</h3>
               <p className="text-gray-600">Your personal and payment information is always protected with the latest security protocols.</p>
             </div>
-            
+
             <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
               <div className="w-16 h-16 flex items-center justify-center bg-purple-100 rounded-2xl text-purple-600 mb-6">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -562,16 +551,16 @@ function FlightLanding() {
       {/* Enhanced Subscribe Section */}
       <section className="bg-gradient-to-r from-blue-600 to-indigo-700 py-20 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-20 bg-white" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 0)' }}></div>
-        
+
         {/* Decorative elements */}
         <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-white rounded-full opacity-5"></div>
         <div className="absolute bottom-1/3 left-1/6 w-48 h-48 bg-white rounded-full opacity-5"></div>
-        
+
         <SubscribeSection />
-        
+
         <div className="absolute bottom-0 right-0 w-full h-20 bg-white" style={{ clipPath: 'polygon(0 100%, 100% 0, 100% 100%, 0 100%)' }}></div>
       </section>
-      
+
       <Footer />
     </div>
   )
