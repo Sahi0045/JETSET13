@@ -3,6 +3,24 @@ import './RequestPage.css';
 import Navbar from '../Common/Navbar';
 import Footer from '../Common/Footer';
 import withPageElements from '../Common/PageWrapper';
+import {
+  Plane,
+  Hotel,
+  Ship,
+  Package,
+  MessageSquare,
+  User,
+  Mail,
+  Phone,
+  Globe,
+  Calendar,
+  Users,
+  CreditCard,
+  MapPin,
+  CheckCircle,
+  RefreshCw,
+  Send
+} from 'lucide-react';
 
 const RequestPage = () => {
   const [activeTab, setActiveTab] = useState('inquiry');
@@ -156,7 +174,7 @@ const RequestPage = () => {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       };
-      
+
       // Add authorization header if user is logged in
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
@@ -175,7 +193,7 @@ const RequestPage = () => {
 
       // Read response body as text first (can only read once)
       const responseText = await response.text();
-      
+
       // Check if response is OK before parsing JSON
       if (!response.ok) {
         // Try to parse error response as JSON, fallback to text
@@ -831,102 +849,105 @@ const RequestPage = () => {
             <p>Fill out the form below and our travel experts will create a customized itinerary just for you</p>
           </div>
 
-        <div className="request-tabs">
-          <button
-            className={`tab-btn ${activeTab === 'inquiry' ? 'active' : ''}`}
-            onClick={() => setActiveTab('inquiry')}
-          >
-            Travel Inquiry
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'modify' ? 'active' : ''}`}
-            onClick={() => setActiveTab('modify')}
-          >
-            Modify Booking
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'cancel' ? 'active' : ''}`}
-            onClick={() => setActiveTab('cancel')}
-          >
-            Cancel Booking
-          </button>
-        </div>
+          <div className="request-tabs">
+            <button
+              className={`tab-btn ${activeTab === 'inquiry' ? 'active' : ''}`}
+              onClick={() => setActiveTab('inquiry')}
+            >
+              Travel Inquiry
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'modify' ? 'active' : ''}`}
+              onClick={() => setActiveTab('modify')}
+            >
+              Modify Booking
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'cancel' ? 'active' : ''}`}
+              onClick={() => setActiveTab('cancel')}
+            >
+              Cancel Booking
+            </button>
+          </div>
 
-        <div className="request-content">
-          {activeTab === 'inquiry' && (
-            <form onSubmit={handleSubmit} className="request-form">
-              {/* Inquiry Type Selection */}
-              <div className="form-section">
-                <h3>What type of travel are you interested in?</h3>
-                <div className="inquiry-type-selector">
-                  {[
-                    { value: 'flight', label: '✈️ Flight Tickets', desc: 'Book domestic or international flights' },
-                    { value: 'hotel', label: '🏨 Hotel Accommodation', desc: 'Find the perfect place to stay' },
-                    { value: 'cruise', label: '🚢 Cruise Vacation', desc: 'Luxury cruise experiences' },
-                    { value: 'package', label: '🎒 Vacation Packages', desc: 'Complete travel packages' },
-                    { value: 'general', label: '💬 General Inquiry', desc: 'Other travel questions' }
-                  ].map(type => (
-                    <div
-                      key={type.value}
-                      className={`inquiry-type-card ${selectedInquiryType === type.value ? 'selected' : ''}`}
-                      onClick={() => setSelectedInquiryType(type.value)}
-                    >
-                      <div className="card-content">
-                        <h4>{type.label}</h4>
-                        <p>{type.desc}</p>
-                      </div>
-                      <div className="card-radio">
-                        <input
-                          type="radio"
-                          name="inquiry_type"
-                          value={type.value}
-                          checked={selectedInquiryType === type.value}
-                          onChange={() => setSelectedInquiryType(type.value)}
-                        />
-                      </div>
-                    </div>
-                  ))}
+          <div className="request-content">
+            {activeTab === 'inquiry' && (
+              <form onSubmit={handleSubmit} className="request-form">
+                {/* Inquiry Type Selection */}
+                <div className="form-section">
+                  <h3>What type of travel are you interested in?</h3>
+                  {/* Enhanced Inquiry Type Cards */}
+                  <div className="inquiry-type-selector">
+                    {[
+                      { value: 'flight', label: 'Flight Tickets', desc: 'Domestic & International', icon: Plane, color: 'text-blue-500', bg: 'bg-blue-50' },
+                      { value: 'hotel', label: 'Hotel Stays', desc: 'Luxury & Budget', icon: Hotel, color: 'text-indigo-500', bg: 'bg-indigo-50' },
+                      { value: 'cruise', label: 'Cruises', desc: 'Ocean & River', icon: Ship, color: 'text-cyan-500', bg: 'bg-cyan-50' },
+                      { value: 'package', label: 'Packages', desc: 'All-inclusive Tours', icon: Package, color: 'text-rose-500', bg: 'bg-rose-50' },
+                      { value: 'general', label: 'General', desc: 'Custom Requests', icon: MessageSquare, color: 'text-violet-500', bg: 'bg-violet-50' }
+                    ].map((type) => {
+                      const Icon = type.icon;
+                      return (
+                        <div
+                          key={type.value}
+                          className={`inquiry-type-card ${selectedInquiryType === type.value ? 'selected' : ''}`}
+                          onClick={() => setSelectedInquiryType(type.value)}
+                        >
+                          <div className={`icon-wrapper ${type.bg} ${type.color} p-3 rounded-full mr-4`}>
+                            <Icon size={24} strokeWidth={1.5} />
+                          </div>
+                          <div className="card-content">
+                            <h4>{type.label}</h4>
+                            <p>{type.desc}</p>
+                          </div>
+                          <div className="card-radio">
+                            <div className={`radio-indicator ${selectedInquiryType === type.value ? 'active' : ''}`}>
+                              {selectedInquiryType === type.value && <CheckCircle size={16} className="text-white" />}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
+
+                {renderCommonFields()}
+
+                {selectedInquiryType === 'flight' && renderFlightForm()}
+                {selectedInquiryType === 'hotel' && renderHotelForm()}
+                {selectedInquiryType === 'cruise' && renderCruiseForm()}
+                {selectedInquiryType === 'package' && renderPackageForm()}
+                {selectedInquiryType === 'general' && renderGeneralForm()}
+
+                {renderAdditionalFields()}
+
+                <div className="form-actions">
+                  <button type="submit" className="submit-btn" disabled={isSubmitting}>
+                    {isSubmitting ? 'Submitting...' : 'Submit Inquiry'}
+                  </button>
+                  <button type="button" className="clear-btn" onClick={handleClear}>
+                    Clear Form
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {activeTab === 'modify' && (
+              <div className="tab-content">
+                <h3>Modify Existing Booking</h3>
+                <p>Feature coming soon! Please contact our support team for booking modifications.</p>
               </div>
+            )}
 
-              {renderCommonFields()}
-
-              {selectedInquiryType === 'flight' && renderFlightForm()}
-              {selectedInquiryType === 'hotel' && renderHotelForm()}
-              {selectedInquiryType === 'cruise' && renderCruiseForm()}
-              {selectedInquiryType === 'package' && renderPackageForm()}
-              {selectedInquiryType === 'general' && renderGeneralForm()}
-
-              {renderAdditionalFields()}
-
-              <div className="form-actions">
-                <button type="submit" className="submit-btn" disabled={isSubmitting}>
-                  {isSubmitting ? 'Submitting...' : 'Submit Inquiry'}
-                </button>
-                <button type="button" className="clear-btn" onClick={handleClear}>
-                  Clear Form
-                </button>
+            {activeTab === 'cancel' && (
+              <div className="tab-content">
+                <h3>Cancel Booking</h3>
+                <p>Feature coming soon! Please contact our support team for booking cancellations.</p>
               </div>
-            </form>
-          )}
-
-          {activeTab === 'modify' && (
-            <div className="tab-content">
-              <h3>Modify Existing Booking</h3>
-              <p>Feature coming soon! Please contact our support team for booking modifications.</p>
-            </div>
-          )}
-
-          {activeTab === 'cancel' && (
-            <div className="tab-content">
-              <h3>Cancel Booking</h3>
-              <p>Feature coming soon! Please contact our support team for booking cancellations.</p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
-    </div>
-    <Footer />
+      <Footer />
     </>
   );
 };
