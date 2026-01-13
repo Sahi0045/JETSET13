@@ -16,7 +16,7 @@ import {
 
 // Import centralized API configuration
 import apiConfig from '../../../../../src/config/api.js';
-import LoadingSpinner from '../../../../../Components/LoadingSpinner';
+import LoadingSpinner from '../../../Components/LoadingSpinner';
 
 function FlightSearchPage() {
   const location = useLocation();

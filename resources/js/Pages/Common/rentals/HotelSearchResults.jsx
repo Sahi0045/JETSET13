@@ -7,7 +7,7 @@ import axios from 'axios';
 import * as amadeusUtils from './amadeusUtils';
 import DirectAmadeusService from '../../../Services/DirectAmadeusService';
 import { popularDestinations } from './hotel';
-import LoadingSpinner from '../../../../../Components/LoadingSpinner';
+import LoadingSpinner from '../../../Components/LoadingSpinner';
 
 export default function HotelSearchResults() {
   const location = useLocation();

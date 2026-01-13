@@ -10,7 +10,7 @@ import Navbar from "../Navbar";
 import Footer from "../Footer";
 import withPageElements from "../PageWrapper";
 import ArcPayService from "../../../Services/ArcPayService";
-import LoadingSpinner from "../../../../Components/LoadingSpinner";
+import LoadingSpinner from "../../../Components/LoadingSpinner";
 
 function FlightPayment() {
   const location = useLocation();

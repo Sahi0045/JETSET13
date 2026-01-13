@@ -14,7 +14,7 @@ import axios from 'axios';
 import { format } from 'date-fns';
 import * as amadeusUtils from './amadeusUtils';
 import DirectAmadeusService from '../../../Services/DirectAmadeusService';
-import LoadingSpinner from '../../../../Components/LoadingSpinner';
+import LoadingSpinner from '../../../Components/LoadingSpinner';
 
 export default function HotelDetails() {
   const navigate = useNavigate();
