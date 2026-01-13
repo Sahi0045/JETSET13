@@ -7,6 +7,7 @@ import axios from 'axios';
 import * as amadeusUtils from './amadeusUtils';
 import DirectAmadeusService from '../../../Services/DirectAmadeusService';
 import { popularDestinations } from './hotel';
+import LoadingSpinner from '../../../../../Components/LoadingSpinner';
 
 export default function HotelSearchResults() {
   const location = useLocation();
@@ -22,7 +23,7 @@ export default function HotelSearchResults() {
   const [error, setError] = useState(null);
   const [favorites, setFavorites] = useState({});
   const [totalHotels, setTotalHotels] = useState(0);
-  
+
   // Search states
   const [searchDestination, setSearchDestination] = useState(searchParams.cityCode || "");
   const [searchDates, setSearchDates] = useState(() => {
@@ -35,7 +36,7 @@ export default function HotelSearchResults() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState(null);
   const [cityCode, setCityCode] = useState(searchParams.cityCode || "");
-  
+
   // Date picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -45,7 +46,7 @@ export default function HotelSearchResults() {
   const [hoverDate, setHoverDate] = useState(null);
   const datePickerRef = useRef(null);
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  
+
   // Destination search suggestion states
   const [destinationSuggestions, setDestinationSuggestions] = useState([]);
   const [showDestinationSuggestions, setShowDestinationSuggestions] = useState(false);
@@ -56,7 +57,7 @@ export default function HotelSearchResults() {
   useEffect(() => {
     const fetchDestinations = async () => {
       try {
-        const apiUrl = 'https://jet-set-go-psi.vercel.app/api'; 
+        const apiUrl = 'https://jet-set-go-psi.vercel.app/api';
         const response = await axios.get(`${apiUrl}/hotels/destinations`, {
           headers: {
             'Content-Type': 'application/json',
@@ -87,7 +88,7 @@ export default function HotelSearchResults() {
       checkOutDate: selectedEndDate ? amadeusUtils.formatDate(selectedEndDate) : null,
       adults: searchTravelers
     };
-    
+
     // Validate search parameters
     const validation = amadeusUtils.validateSearchParams(params);
     if (!validation.isValid) {
@@ -102,13 +103,13 @@ export default function HotelSearchResults() {
       console.log('Searching with params:', params);
       let hotelsData = [];
       let searchSuccess = false;
-      
+
       // LAYER 1: Try the main production API first
       try {
         // Use direct API URL
         const apiUrl = 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
         console.log('LAYER 1: Using production API:', apiUrl);
-        
+
         const response = await axios.get(`${apiUrl}/hotels/search`, {
           params: {
             destination: params.cityCode,
@@ -133,7 +134,7 @@ export default function HotelSearchResults() {
             hotelsData = response.data.data.hotels;
             console.log('LAYER 1: Found hotels in response.data.data.hotels:', hotelsData.length);
             searchSuccess = hotelsData.length > 0;
-          } 
+          }
           else if (response.data.data?.data && Array.isArray(response.data.data.data)) {
             hotelsData = response.data.data.data;
             console.log('LAYER 1: Found hotels in response.data.data.data:', hotelsData.length);
@@ -149,19 +150,19 @@ export default function HotelSearchResults() {
         console.error('LAYER 1: Production API error:', apiError.message);
         // Continue to next layer if main API fails
       }
-      
+
       // LAYER 2: If no results from production API, try Direct Amadeus API
       if (!searchSuccess) {
         try {
           console.log('LAYER 2: Production API returned no results, trying Direct Amadeus API...');
-          
+
           const amadeusHotels = await DirectAmadeusService.searchHotels(
             params.cityCode,
             params.checkInDate,
             params.checkOutDate,
             params.adults
           );
-          
+
           if (amadeusHotels && amadeusHotels.length > 0) {
             console.log('LAYER 2: Direct Amadeus API returned', amadeusHotels.length, 'hotels');
             hotelsData = amadeusHotels;
@@ -174,11 +175,11 @@ export default function HotelSearchResults() {
           // Continue to layer 3 if Amadeus API also fails
         }
       }
-      
+
       // LAYER 3: If still no results, generate placeholder hotels
       if (!searchSuccess || hotelsData.length === 0) {
         console.log('LAYER 3: Generating placeholder hotels as final fallback');
-        
+
         // Get city info to create more realistic placeholders
         let cityName = params.cityCode;
         try {
@@ -190,10 +191,10 @@ export default function HotelSearchResults() {
         } catch (error) {
           console.error('Error getting city info:', error);
         }
-        
+
         // Generate placeholder hotels (5-8)
         const count = 5 + Math.floor(Math.random() * 4);
-        hotelsData = Array.from({length: count}, (_, i) => ({
+        hotelsData = Array.from({ length: count }, (_, i) => ({
           id: `placeholder-${params.cityCode.toLowerCase()}-${i}-${Date.now()}`,
           name: `${cityName} ${['Grand Hotel', 'Plaza Resort', 'Luxury Suites', 'Executive Inn', 'Palace Hotel', 'Continental', 'International', 'Prestige Hotel'][i % 8]}`,
           hotelId: `PLACEHOLDER-${params.cityCode}-${i}`,
@@ -215,11 +216,11 @@ export default function HotelSearchResults() {
           ][i % 4],
           isPlaceholder: true
         }));
-        
+
         console.log('LAYER 3: Generated', hotelsData.length, 'placeholder hotels');
         searchSuccess = true;
       }
-      
+
       // Process the hotels data (from any of the three layers)
       if (searchSuccess && hotelsData.length > 0) {
         // Ensure all hotels have required fields
@@ -228,12 +229,12 @@ export default function HotelSearchResults() {
           if (!hotel.id) {
             hotel.id = `hotel-${params.cityCode}-${index}-${Date.now()}`;
           }
-          
+
           // Add name if missing
           if (!hotel.name) {
             hotel.name = `${params.cityCode} Hotel ${index + 1}`;
           }
-          
+
           // Add images if missing
           if (!hotel.image) {
             hotel.image = `https://source.unsplash.com/random/300x200/?hotel,${index}`;
@@ -244,18 +245,18 @@ export default function HotelSearchResults() {
               `https://source.unsplash.com/random/300x200/?room,${index}`
             ];
           }
-          
+
           // Add amenities if missing
           if (!hotel.amenities || !Array.isArray(hotel.amenities) || hotel.amenities.length === 0) {
             hotel.amenities = ['Free WiFi', 'Air Conditioning', 'Pool'].slice(0, 3);
           }
-          
+
           return hotel;
         });
-        
+
         // Sort hotels by price (default)
         const sortedHotels = [...processedHotels].sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
-        
+
         // Update state with hotel results
         setSearchResults(sortedHotels);
         setFilteredHotels(sortedHotels);
@@ -287,8 +288,8 @@ export default function HotelSearchResults() {
   const handleDestinationInput = (value) => {
     setSearchDestination(value);
     if (value.length > 0) {
-      const filtered = destinationSuggestions.filter(dest => 
-        dest.name.toLowerCase().includes(value.toLowerCase()) || 
+      const filtered = destinationSuggestions.filter(dest =>
+        dest.name.toLowerCase().includes(value.toLowerCase()) ||
         (dest.country && dest.country.toLowerCase().includes(value.toLowerCase()))
       );
       setFilteredSuggestions(filtered);
@@ -308,7 +309,7 @@ export default function HotelSearchResults() {
   // Update date range display
   const updateDateRange = (startDate, endDate) => {
     setSearchDates(amadeusUtils.formatDateRange(
-      startDate ? amadeusUtils.formatDate(startDate) : null, 
+      startDate ? amadeusUtils.formatDate(startDate) : null,
       endDate ? amadeusUtils.formatDate(endDate) : null
     ));
   };
@@ -321,12 +322,12 @@ export default function HotelSearchResults() {
         setError(null);
         try {
           console.log('Fetching hotels for:', searchParams);
-          
+
           // Use direct API URL
           const apiUrl = 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
-          
+
           console.log('Using API URL:', apiUrl);
-          
+
           try {
             // First try the regular search API
             const response = await axios.get(`${apiUrl}/hotels/search`, {
@@ -349,7 +350,7 @@ export default function HotelSearchResults() {
             processApiResponse(response);
           } catch (apiError) {
             console.error('Regular API error, trying mock API:', apiError);
-            
+
             // Try the mock API as fallback
             try {
               const mockResponse = await axios.get(`${apiUrl}/hotels/mock-search`, {
@@ -364,7 +365,7 @@ export default function HotelSearchResults() {
                   'Accept': 'application/json'
                 }
               });
-              
+
               processApiResponse(mockResponse);
             } catch (mockError) {
               console.error('Mock API also failed:', mockError);
@@ -391,12 +392,12 @@ export default function HotelSearchResults() {
       if (response.data.success) {
         // Try to extract hotels from different possible response structures
         let hotelsData = [];
-        
+
         // Case 1: response.data.data.hotels exists
         if (response.data.data?.hotels && Array.isArray(response.data.data.hotels)) {
           hotelsData = response.data.data.hotels;
           console.log('Found hotels in response.data.data.hotels:', hotelsData.length);
-        } 
+        }
         // Case 2: response.data.data exists and is an array
         else if (response.data.data?.data && Array.isArray(response.data.data.data)) {
           hotelsData = response.data.data.data;
@@ -410,7 +411,7 @@ export default function HotelSearchResults() {
           console.log('No hotels array found in response, using placeholders');
           hotelsData = [];
         }
-        
+
         if (hotelsData.length > 0) {
           // Format each hotel to ensure it has required fields
           const formattedHotels = hotelsData.map((hotel, index) => {
@@ -418,34 +419,34 @@ export default function HotelSearchResults() {
             if (!hotel.id) {
               hotel.id = `hotel-${searchParams.cityCode}-${index}-${Date.now()}`;
             }
-            
+
             // Ensure location field is set
             if (!hotel.location) {
               const cityName = hotel.address?.cityName || searchParams.cityCode;
               const countryCode = hotel.address?.countryCode || '';
               hotel.location = countryCode ? `${cityName}, ${countryCode}` : cityName;
             }
-            
+
             // Ensure image exists
             if (!hotel.image && hotel.images && hotel.images.length > 0) {
               hotel.image = hotel.images[0];
             } else if (!hotel.image) {
               hotel.image = `https://source.unsplash.com/random/300x200/?hotel,${hotel.id}`;
             }
-            
+
             // Ensure amenities is an array
             if (!hotel.amenities || !Array.isArray(hotel.amenities) || hotel.amenities.length === 0) {
               hotel.amenities = ['Free WiFi', 'Air Conditioning', 'Pool'].slice(0, 3);
             }
-            
+
             // Ensure rating is a number between 1-5
             if (!hotel.rating) {
               hotel.rating = (Math.random() * 1 + 4).toFixed(1); // Random between 4-5
             }
-            
+
             return hotel;
           });
-          
+
           // Set the formatted results
           setSearchResults(formattedHotels);
           setFilteredHotels(formattedHotels);
@@ -463,7 +464,7 @@ export default function HotelSearchResults() {
         setIsLoading(false);
       }
     };
-    
+
     // Process existing search results
     const processExistingResults = () => {
       // Process existing search results to ensure all required fields are present
@@ -472,29 +473,29 @@ export default function HotelSearchResults() {
         if (!hotel.id) {
           hotel.id = `hotel-${searchParams.cityCode}-${index}-${Date.now()}`;
         }
-        
+
         // Ensure location field is set
         if (!hotel.location) {
           const cityName = hotel.address?.cityName || searchParams.cityCode;
           const countryCode = hotel.address?.countryCode || '';
           hotel.location = countryCode ? `${cityName}, ${countryCode}` : cityName;
         }
-        
+
         // Ensure image exists
         if (!hotel.image && hotel.images && hotel.images.length > 0) {
           hotel.image = hotel.images[0];
         } else if (!hotel.image) {
           hotel.image = `https://source.unsplash.com/random/300x200/?hotel,${hotel.id}`;
         }
-        
+
         // Ensure amenities is an array
         if (!hotel.amenities || !Array.isArray(hotel.amenities) || hotel.amenities.length === 0) {
           hotel.amenities = ['Free WiFi', 'Air Conditioning', 'Pool'].slice(0, 3);
         }
-        
+
         return hotel;
       });
-      
+
       setSearchResults(processedResults);
       setFilteredHotels(processedResults);
     };
@@ -508,14 +509,14 @@ export default function HotelSearchResults() {
       name: cityCode,
       country: 'Unknown'
     };
-    
+
     // Try to get better city info from destination suggestions
     const destinationInfo = destinationSuggestions.find(dest => dest.code === cityCode);
     if (destinationInfo) {
       cityInfo.name = destinationInfo.name;
       cityInfo.country = destinationInfo.country;
     }
-    
+
     const hotelNames = [
       `${cityInfo.name} Grand Hotel`,
       `${cityInfo.name} Plaza Resort`,
@@ -526,7 +527,7 @@ export default function HotelSearchResults() {
       `${cityInfo.name} Continental`,
       `${cityInfo.name} International`
     ];
-    
+
     const images = [
       'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80',
       'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1470&q=80',
@@ -534,7 +535,7 @@ export default function HotelSearchResults() {
       'https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&w=1600&q=80',
       'https://images.unsplash.com/photo-1564501049412-61c2a3083791?auto=format&fit=crop&w=1470&q=80'
     ];
-    
+
     const amenities = [
       ['WiFi', 'Room Service', 'Restaurant'],
       ['WiFi', 'Pool', 'Fitness Center'],
@@ -542,8 +543,8 @@ export default function HotelSearchResults() {
       ['WiFi', 'Spa', 'Bar'],
       ['WiFi', 'Airport Shuttle', 'Conference Room']
     ];
-    
-    return Array.from({length: count}, (_, i) => ({
+
+    return Array.from({ length: count }, (_, i) => ({
       id: `placeholder-hotel-${cityCode}-${i}-${Date.now()}`,
       cityCode: cityCode,
       location: `${cityInfo.name}, ${cityInfo.country}`,
@@ -576,9 +577,9 @@ export default function HotelSearchResults() {
         // Add null checks to prevent errors with undefined properties
         const nameMatch = hotel.name ? hotel.name.toLowerCase().includes(query) : false;
         const locationMatch = hotel.location ? hotel.location.toLowerCase().includes(query) : false;
-        const amenitiesMatch = Array.isArray(hotel.amenities) ? 
+        const amenitiesMatch = Array.isArray(hotel.amenities) ?
           hotel.amenities.some(amenity => amenity && typeof amenity === 'string' ? amenity.toLowerCase().includes(query) : false) : false;
-          
+
         return nameMatch || locationMatch || amenitiesMatch;
       });
     }
@@ -640,11 +641,7 @@ export default function HotelSearchResults() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-    );
+    return <LoadingSpinner text="Finding the best hotels..." fullScreen={true} />;
   }
 
   if (error) {
@@ -714,7 +711,7 @@ export default function HotelSearchResults() {
                 <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
                   <ul className="py-1">
                     {filteredSuggestions.map((destination, index) => (
-                      <li 
+                      <li
                         key={index}
                         className="px-4 py-2 hover:bg-blue-50 cursor-pointer flex items-center"
                         onClick={() => handleDestinationSelect(destination)}
@@ -734,7 +731,7 @@ export default function HotelSearchResults() {
               <Calendar className="h-4 w-4 text-blue-500" />
               Travel Dates
             </label>
-            <div 
+            <div
               className="relative group cursor-pointer"
               onClick={() => setShowDatePicker(!showDatePicker)}
               ref={datePickerRef}
@@ -793,11 +790,11 @@ export default function HotelSearchResults() {
                     {Array.from({ length: new Date(currentYear, currentMonth + 1, 0).getDate() }).map((_, i) => {
                       const day = i + 1;
                       const date = new Date(currentYear, currentMonth, day);
-                      const isSelected = selectedStartDate && selectedEndDate && 
+                      const isSelected = selectedStartDate && selectedEndDate &&
                         date >= selectedStartDate && date <= selectedEndDate;
                       const isStart = selectedStartDate && date.getTime() === selectedStartDate.getTime();
                       const isEnd = selectedEndDate && date.getTime() === selectedEndDate.getTime();
-                      const isInRange = selectedStartDate && !selectedEndDate && 
+                      const isInRange = selectedStartDate && !selectedEndDate &&
                         date > selectedStartDate && date <= (hoverDate || selectedStartDate);
 
                       return (
@@ -846,7 +843,7 @@ export default function HotelSearchResults() {
               <Users className="h-4 w-4 text-blue-500" />
               Travelers
             </label>
-            <div 
+            <div
               onClick={() => setSearchTravelers(searchTravelers === 2 ? 4 : 2)}
               className="flex items-center w-full py-3 pl-4 pr-10 bg-gray-50/80 border border-gray-200 rounded-xl cursor-pointer transition-all duration-300 hover:border-blue-200"
             >
@@ -860,7 +857,7 @@ export default function HotelSearchResults() {
           </div>
           {/* Search Button */}
           <div className="flex flex-col justify-end">
-            <button 
+            <button
               onClick={handleSearch}
               className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-4 px-12 rounded-xl transition-all duration-300 font-medium flex items-center justify-center gap-3 shadow-lg hover:shadow-blue-500/30"
               disabled={isSearching}
@@ -940,11 +937,11 @@ export default function HotelSearchResults() {
                     <p className="text-sm text-gray-600">per night</p>
                   </div>
                   <button
-                    onClick={() => navigate(`/hotel-details`, { 
-                      state: { 
+                    onClick={() => navigate(`/hotel-details`, {
+                      state: {
                         hotelData: hotel,
                         searchParams: searchParams
-                      } 
+                      }
                     })}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
@@ -963,7 +960,7 @@ export default function HotelSearchResults() {
           </div>
         )}
       </div>
-      
+
       <Footer />
     </div>
   );

@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { 
-  CreditCard, Calendar, Lock, CheckCircle, ArrowLeft, 
-  ChevronDown, ChevronUp, X, Ticket, ShieldCheck, 
-  ArrowRight, ChevronsRight, MapPin, Check, Star, 
+import {
+  CreditCard, Calendar, Lock, CheckCircle, ArrowLeft,
+  ChevronDown, ChevronUp, X, Ticket, ShieldCheck,
+  ArrowRight, ChevronsRight, MapPin, Check, Star,
   Clock, BadgeCheck, AlertCircle, Info, UserCircle
 } from "lucide-react";
 import Navbar from "../Navbar";
 import Footer from "../Footer";
 import withPageElements from "../PageWrapper";
 import ArcPayService from "../../../Services/ArcPayService";
+import LoadingSpinner from "../../../../Components/LoadingSpinner";
 
 function FlightPayment() {
   const location = useLocation();
@@ -101,7 +102,7 @@ function FlightPayment() {
   const handleCardDetailsChange = (e) => {
     const { name, value } = e.target;
     setFormErrors({ ...formErrors, [name]: "" });
-    
+
     if (name === "cardNumber") {
       const formattedValue = value
         .replace(/\s/g, "")
@@ -111,7 +112,7 @@ function FlightPayment() {
       setCardDetails({ ...cardDetails, [name]: formattedValue });
       return;
     }
-    
+
     if (name === "expiryDate") {
       const formattedValue = value
         .replace(/\//g, "")
@@ -120,13 +121,13 @@ function FlightPayment() {
       setCardDetails({ ...cardDetails, [name]: formattedValue });
       return;
     }
-    
+
     setCardDetails({ ...cardDetails, [name]: value });
   };
 
   const validateForm = () => {
     const errors = {};
-    
+
     if (activePaymentMethod === "creditCard") {
       if (!cardDetails.cardNumber.replace(/\s/g, "").match(/^\d{16}$/)) {
         errors.cardNumber = "Please enter a valid 16-digit card number";
@@ -145,7 +146,7 @@ function FlightPayment() {
         errors.upiId = "Please enter a valid UPI ID";
       }
     }
-    
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -162,12 +163,12 @@ function FlightPayment() {
     }
 
     setProcessingPayment(true);
-    
+
     try {
       // Check gateway status first
       console.log('🔍 Checking ARC Pay Gateway status...');
       const gatewayStatus = await ArcPayService.checkGatewayStatus();
-      
+
       if (!gatewayStatus.success || !gatewayStatus.gatewayOperational) {
         console.warn('Gateway status check failed:', gatewayStatus);
         throw new Error('Payment gateway is currently unavailable. Please try again later.');
@@ -179,8 +180,8 @@ function FlightPayment() {
         currency: 'USD',
         orderId: `FLIGHT-${Date.now()}`,
         customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com',
-        customerName: paymentData?.passengerData?.[0] ? 
-          `${paymentData.passengerData[0].firstName} ${paymentData.passengerData[0].lastName}` : 
+        customerName: paymentData?.passengerData?.[0] ?
+          `${paymentData.passengerData[0].firstName} ${paymentData.passengerData[0].lastName}` :
           'Test User',
         description: `Flight booking - ${paymentData?.bookingDetails?.flight?.flightNumber || 'Unknown'}`,
         returnUrl: `${window.location.origin}/flight-create-orders`,
@@ -189,7 +190,7 @@ function FlightPayment() {
 
       console.log('💳 Initializing payment with ARC Pay...');
       const initResponse = await ArcPayService.initializePayment(orderData);
-      
+
       if (!initResponse.success) {
         throw new Error(initResponse.error?.error || 'Failed to initialize payment');
       }
@@ -197,7 +198,7 @@ function FlightPayment() {
       // Only process payment if using credit card
       if (activePaymentMethod === "creditCard") {
         console.log('💳 Processing credit card payment...');
-        
+
         // Validate card details
         const cardValidation = ArcPayService.validateCardDetails(cardDetails);
         if (!cardValidation.isValid) {
@@ -239,7 +240,7 @@ function FlightPayment() {
         console.log('✅ Payment processed successfully');
         setPaymentSuccess(true);
         setShowPaymentResult(true);
-        
+
         console.log('🔍 Payment successful - preparing navigation to FlightCreateOrders');
         console.log('📝 Payment data to pass:', {
           transactionId: processResponse.transactionId,
@@ -249,32 +250,32 @@ function FlightPayment() {
           passengerData: paymentData?.passengerData,
           customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com'
         });
-        
+
         // Navigate to flight order creation instead of directly to confirmation
         setTimeout(() => {
           console.log('🚀 Navigating to FlightCreateOrders...');
           navigate("/flight-create-orders", {
             state: {
               // Payment data
-          transactionId: processResponse.transactionId,
-          amount: finalAmount || paymentData?.calculatedFare?.totalPrice || 0,
+              transactionId: processResponse.transactionId,
+              amount: finalAmount || paymentData?.calculatedFare?.totalPrice || 0,
               orderId: initResponse.orderId,
-              
+
               // Flight data
               selectedFlight: paymentData?.selectedFlight,
               flightData: paymentData?.selectedFlight,
-              
+
               // Passenger data
               passengerData: paymentData?.passengerData,
-              
+
               // Contact info
               customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com',
-              
+
               // Payment details
-          paymentDetails: {
-            ...cardDetails, 
-            cardNumber: `**** **** **** ${cardDetails.cardNumber.slice(-4)}`
-          }
+              paymentDetails: {
+                ...cardDetails,
+                cardNumber: `**** **** **** ${cardDetails.cardNumber.slice(-4)}`
+              }
             }
           });
         }, 2000);
@@ -283,7 +284,7 @@ function FlightPayment() {
         console.log(`💳 Processing ${activePaymentMethod} payment...`);
         setPaymentSuccess(true);
         setShowPaymentResult(true);
-        
+
         console.log('🔍 Payment successful - preparing navigation to FlightCreateOrders');
         console.log('📝 Payment data to pass:', {
           transactionId: `TXN-${Date.now()}`,
@@ -293,27 +294,27 @@ function FlightPayment() {
           passengerData: paymentData?.passengerData,
           customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com'
         });
-        
+
         // Navigate to flight order creation instead of directly to confirmation
         setTimeout(() => {
           console.log('🚀 Navigating to FlightCreateOrders...');
           navigate("/flight-create-orders", {
             state: {
               // Payment data
-          transactionId: `TXN-${Date.now()}`,
-          amount: finalAmount || paymentData?.calculatedFare?.totalPrice || 0,
+              transactionId: `TXN-${Date.now()}`,
+              amount: finalAmount || paymentData?.calculatedFare?.totalPrice || 0,
               orderId: initResponse.orderId,
-              
+
               // Flight data
               selectedFlight: paymentData?.selectedFlight,
               flightData: paymentData?.selectedFlight,
-              
+
               // Passenger data
               passengerData: paymentData?.passengerData,
-              
+
               // Contact info
               customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com',
-              
+
               // Payment details
               paymentDetails: activePaymentMethod === "upi" ? { upiId } : {}
             }
@@ -325,10 +326,10 @@ function FlightPayment() {
       console.error("❌ Payment processing error:", error);
       setPaymentSuccess(false);
       setShowPaymentResult(true);
-      
+
       // Show user-friendly error message
       let errorMessage = 'Payment processing failed. Please try again.';
-      
+
       if (error.message.includes('gateway')) {
         errorMessage = 'Payment gateway is temporarily unavailable. Please try again in a few minutes.';
       } else if (error.message.includes('network') || error.message.includes('timeout')) {
@@ -336,7 +337,7 @@ function FlightPayment() {
       } else if (error.message.includes('card') || error.message.includes('Card')) {
         errorMessage = error.message;
       }
-      
+
       alert(`Payment failed: ${errorMessage}`);
     } finally {
       setProcessingPayment(false);
@@ -357,21 +358,14 @@ function FlightPayment() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-gray-100">
-        <Navbar forceScrolled={true} />
-        <div className="container mx-auto px-4 py-24 flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600 mb-4"></div>
-          <p className="text-center text-gray-600 font-medium text-lg">Loading Secure Payment Gateway...</p>
-        </div>
-        <Footer />
-      </div>
+      <LoadingSpinner text="Loading Secure Payment Gateway..." fullScreen={true} />
     );
   }
 
   return (
     <div className="bg-gradient-to-b from-blue-50 via-white to-gray-100 min-h-screen">
       <Navbar forceScrolled={true} />
-      
+
       {/* Content Container - Starting after navbar */}
       <div className="pt-20 animate-fadeIn">
         {/* Checkout Title */}
@@ -386,7 +380,7 @@ function FlightPayment() {
             </div>
           </div>
         </div>
-        
+
         {/* Progress Bar */}
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 overflow-x-auto">
           <div className={`transition-opacity duration-500 ${pageLoaded ? 'opacity-100' : 'opacity-0'}`}>
@@ -400,9 +394,9 @@ function FlightPayment() {
                 <React.Fragment key={step.label}>
                   <div className="flex flex-col items-center">
                     <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 
-                      ${step.completed ? 'bg-green-100 text-green-600 border-green-500' : 
-                        step.active ? 'bg-blue-600 text-white border-blue-600 animate-pulse shadow-md shadow-blue-300' : 
-                        'bg-gray-100 text-gray-400 border-gray-300'}`}>
+                      ${step.completed ? 'bg-green-100 text-green-600 border-green-500' :
+                        step.active ? 'bg-blue-600 text-white border-blue-600 animate-pulse shadow-md shadow-blue-300' :
+                          'bg-gray-100 text-gray-400 border-gray-300'}`}>
                       {step.icon}
                     </div>
                     <span className={`text-xs mt-2 font-medium ${step.active ? 'text-blue-600' : step.completed ? 'text-green-600' : 'text-gray-600'}`}>
@@ -422,19 +416,19 @@ function FlightPayment() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-16">
           {/* Back Button and Timer */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-0 mb-6 sm:mb-8">
-            <button 
+            <button
               type="button"
-              onClick={() => navigate(-1)} 
+              onClick={() => navigate(-1)}
               className="flex items-center text-gray-700 hover:text-blue-700 transition-colors font-medium p-2 rounded-md hover:bg-gray-100"
             >
               <ArrowLeft className="w-5 h-5 mr-1" />
               <span>Back</span>
             </button>
-            
+
             <div className={`sm:ml-auto flex items-center px-4 py-2 rounded-full shadow-sm text-sm font-semibold 
-              ${timerExpired ? 'bg-red-100 text-red-700 animate-bounce' : 
-                timeLeft < 60 ? 'bg-yellow-100 text-yellow-700 animate-pulse' : 
-                'bg-blue-100 text-blue-700'}`}>
+              ${timerExpired ? 'bg-red-100 text-red-700 animate-bounce' :
+                timeLeft < 60 ? 'bg-yellow-100 text-yellow-700 animate-pulse' :
+                  'bg-blue-100 text-blue-700'}`}>
               <Clock className="h-4 w-4 mr-1.5" />
               <span>
                 {timerExpired ? 'Session Expired' : `Reservation holds for: ${formatTime(timeLeft)}`}
@@ -444,12 +438,12 @@ function FlightPayment() {
 
           <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 transition-all duration-500 
             ${pageLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-            
+
             {/* Order Summary - Show as first on mobile, but move to side on desktop */}
             <div className="lg:col-span-1 lg:order-1 order-2 space-y-4 sm:space-y-6 lg:sticky lg:top-24 lg:self-start">
               {/* Order Summary Card */}
               <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100 hover:shadow-xl transition-shadow duration-300">
-                <div 
+                <div
                   className="p-4 sm:p-5 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition-colors"
                   onClick={toggleFareDetails}
                 >
@@ -457,12 +451,12 @@ function FlightPayment() {
                     <Ticket className="w-5 h-5 mr-2 text-blue-600" />
                     Order Summary
                   </h2>
-                  {showFareDetails ? 
-                    <ChevronUp className="w-5 h-5 text-gray-500" /> : 
+                  {showFareDetails ?
+                    <ChevronUp className="w-5 h-5 text-gray-500" /> :
                     <ChevronDown className="w-5 h-5 text-gray-500" />
                   }
                 </div>
-                
+
                 {showFareDetails && (
                   <div className="p-4 sm:p-5 animate-fadeIn space-y-4">
                     {/* Flight Details */}
@@ -478,7 +472,7 @@ function FlightPayment() {
                       </p>
                       <div className="flex items-center text-sm space-x-2 text-gray-800 font-medium">
                         <span>{paymentData?.bookingDetails?.flight?.departureCity?.substring(0, 3).toUpperCase()}</span>
-                        <ArrowRight className="w-4 h-4 text-gray-400"/>
+                        <ArrowRight className="w-4 h-4 text-gray-400" />
                         <span>{paymentData?.bookingDetails?.flight?.arrivalCity?.substring(0, 3).toUpperCase()}</span>
                         <span className="text-gray-500 font-normal">
                           ({paymentData?.bookingDetails?.flight?.duration})
@@ -488,7 +482,7 @@ function FlightPayment() {
                         {paymentData?.bookingDetails?.flight?.airline}
                       </p>
                     </div>
-                    
+
                     {/* Fare Breakdown */}
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
@@ -528,7 +522,7 @@ function FlightPayment() {
                         </div>
                       )}
                     </div>
-                    
+
                     {/* Total Amount */}
                     <div className="border-t border-gray-200 pt-4 mt-4">
                       <div className="flex justify-between items-center">
@@ -537,7 +531,7 @@ function FlightPayment() {
                       </div>
                       <p className="text-xs text-gray-500 mt-1 text-right">(Inclusive of all taxes)</p>
                     </div>
-                    
+
                     {/* Savings Message */}
                     {paymentData?.calculatedFare?.baseFare > finalAmount && (
                       <div className="bg-green-50 p-3 rounded-lg mt-4 flex items-center border border-green-100">
@@ -556,15 +550,15 @@ function FlightPayment() {
                 <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">Apply Promo Code</h2>
                 <form onSubmit={(e) => { e.preventDefault(); applyPromoCode(); }} className="space-y-3">
                   <div>
-                    <input 
+                    <input
                       type="text"
                       value={promoCode}
                       onChange={handlePromoCodeChange}
                       placeholder="Enter Promo Code"
                       className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 
-                        ${formErrors.promoCode ? 'border-red-500 ring-red-200' : 
-                          promoApplied ? 'border-green-500 ring-green-200' : 
-                          'border-gray-300 focus:ring-blue-500 focus:border-blue-500'}`}
+                        ${formErrors.promoCode ? 'border-red-500 ring-red-200' :
+                          promoApplied ? 'border-green-500 ring-green-200' :
+                            'border-gray-300 focus:ring-blue-500 focus:border-blue-500'}`}
                       disabled={promoApplied}
                     />
                     {formErrors.promoCode && (
@@ -574,7 +568,7 @@ function FlightPayment() {
                   <button
                     type="submit"
                     className={`w-full py-3 rounded-lg font-semibold transition-colors
-                      ${promoApplied ? 'bg-green-600 text-white cursor-not-allowed' : 
+                      ${promoApplied ? 'bg-green-600 text-white cursor-not-allowed' :
                         'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
                     disabled={promoApplied || !promoCode}
                   >
@@ -608,7 +602,7 @@ function FlightPayment() {
                     <span className="text-xs text-gray-600">Verified Payment Gateways</span>
                   </div>
                 </div>
-                
+
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <div className="flex justify-between items-center">
                     <div className="flex space-x-1">
@@ -634,9 +628,9 @@ function FlightPayment() {
                 <div className="space-y-4">
                   {/* Credit Card Option */}
                   <div className={`border rounded-lg overflow-hidden transition-all duration-300 group
-                    ${activePaymentMethod === "creditCard" ? 'border-blue-600 shadow-lg scale-[1.01]' : 
+                    ${activePaymentMethod === "creditCard" ? 'border-blue-600 shadow-lg scale-[1.01]' :
                       'border-gray-200 hover:shadow-md hover:border-gray-300'}`}>
-                    <div 
+                    <div
                       className={`p-3 sm:p-4 flex justify-between items-center cursor-pointer transition-colors
                         ${activePaymentMethod === "creditCard" ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}
                       onClick={() => setActivePaymentMethod("creditCard")}
@@ -673,7 +667,7 @@ function FlightPayment() {
                                 onChange={handleCardDetailsChange}
                                 placeholder="0000 0000 0000 0000"
                                 className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2
-                                  ${formErrors.cardNumber ? 'border-red-500 ring-red-200' : 
+                                  ${formErrors.cardNumber ? 'border-red-500 ring-red-200' :
                                     'border-gray-300 focus:ring-blue-500 focus:border-blue-500'}`}
                               />
                               <div className="absolute inset-y-0 right-3 flex items-center">
@@ -701,7 +695,7 @@ function FlightPayment() {
                                 onChange={handleCardDetailsChange}
                                 placeholder="John Doe"
                                 className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2
-                                  ${formErrors.cardHolder ? 'border-red-500 ring-red-200' : 
+                                  ${formErrors.cardHolder ? 'border-red-500 ring-red-200' :
                                     'border-gray-300 focus:ring-blue-500 focus:border-blue-500'}`}
                               />
                             </div>
@@ -724,7 +718,7 @@ function FlightPayment() {
                                   onChange={handleCardDetailsChange}
                                   placeholder="MM/YY"
                                   className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2
-                                    ${formErrors.expiryDate ? 'border-red-500 ring-red-200' : 
+                                    ${formErrors.expiryDate ? 'border-red-500 ring-red-200' :
                                       'border-gray-300 focus:ring-blue-500 focus:border-blue-500'}`}
                                 />
                               </div>
@@ -748,12 +742,12 @@ function FlightPayment() {
                                   onFocus={() => setIsCardFlipped(true)}
                                   onBlur={() => setIsCardFlipped(false)}
                                   className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2
-                                    ${formErrors.cvv ? 'border-red-500 ring-red-200' : 
+                                    ${formErrors.cvv ? 'border-red-500 ring-red-200' :
                                       'border-gray-300 focus:ring-blue-500 focus:border-blue-500'}`}
                                 />
                                 <div className="absolute inset-y-0 right-3 flex items-center">
-                                  <button 
-                                    type="button" 
+                                  <button
+                                    type="button"
                                     className="text-gray-400 hover:text-gray-600"
                                     onClick={() => setIsCardFlipped(!isCardFlipped)}
                                   >
@@ -837,7 +831,7 @@ function FlightPayment() {
                             type="submit"
                             className={`w-full py-3 sm:py-4 rounded-lg font-semibold text-base sm:text-lg transition-all duration-300
                               flex items-center justify-center shadow-md hover:shadow-lg
-                              ${timerExpired ? 'bg-gray-400 cursor-not-allowed' : 
+                              ${timerExpired ? 'bg-gray-400 cursor-not-allowed' :
                                 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-[1.01]'} 
                               disabled:opacity-70`}
                             disabled={processingPayment || timerExpired}
@@ -859,7 +853,7 @@ function FlightPayment() {
                               </div>
                             )}
                           </button>
-                          
+
                           <div className="flex justify-center items-center text-xs text-gray-500">
                             <Lock className="w-3 h-3 mr-1" />
                             <span>Secure payment powered by 256-bit encryption</span>
@@ -871,18 +865,18 @@ function FlightPayment() {
 
                   {/* UPI Option */}
                   <div className={`border rounded-lg overflow-hidden transition-all duration-300
-                    ${activePaymentMethod === "upi" ? 'border-blue-600 shadow-lg scale-[1.02]' : 
+                    ${activePaymentMethod === "upi" ? 'border-blue-600 shadow-lg scale-[1.02]' :
                       'border-gray-200 hover:shadow-md hover:border-gray-300'}`}>
-                    <div 
+                    <div
                       className={`p-4 flex justify-between items-center cursor-pointer transition-colors
                         ${activePaymentMethod === "upi" ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}
                       onClick={() => setActivePaymentMethod("upi")}
                     >
                       <div className="flex items-center">
                         <div className="h-10 w-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center mr-4">
-                          <img 
-                            src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/UPI-Logo-vector.svg/1280px-UPI-Logo-vector.svg.png" 
-                            alt="UPI" 
+                          <img
+                            src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/UPI-Logo-vector.svg/1280px-UPI-Logo-vector.svg.png"
+                            alt="UPI"
                             className="h-6"
                           />
                         </div>
@@ -911,7 +905,7 @@ function FlightPayment() {
                               onChange={(e) => setUpiId(e.target.value)}
                               placeholder="yourname@bank"
                               className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2
-                                ${formErrors.upiId ? 'border-red-500 ring-red-200' : 
+                                ${formErrors.upiId ? 'border-red-500 ring-red-200' :
                                   'border-gray-300 focus:ring-blue-500 focus:border-blue-500'}`}
                             />
                             {formErrors.upiId && (
@@ -944,7 +938,7 @@ function FlightPayment() {
                             type="submit"
                             className={`w-full py-3 rounded-lg font-semibold text-lg transition-all duration-300
                               flex items-center justify-center shadow-md hover:shadow-lg
-                              ${timerExpired ? 'bg-gray-400 cursor-not-allowed' : 
+                              ${timerExpired ? 'bg-gray-400 cursor-not-allowed' :
                                 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-[1.01]'} 
                               disabled:opacity-70`}
                             disabled={processingPayment || timerExpired}
@@ -1004,7 +998,7 @@ function FlightPayment() {
               <h3 className={`text-xl font-bold ${paymentSuccess ? 'text-green-600' : 'text-red-600'}`}>
                 {paymentSuccess ? "Payment Successful" : "Payment Failed"}
               </h3>
-              <button 
+              <button
                 type="button"
                 onClick={() => setShowPaymentResult(false)}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -1012,7 +1006,7 @@ function FlightPayment() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="text-center py-4">
               {paymentSuccess ? (
                 <>
@@ -1036,7 +1030,7 @@ function FlightPayment() {
                   <p className="text-gray-600 mb-4 text-sm">
                     We couldn't process your payment. Please check your details or try another method.
                   </p>
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setShowPaymentResult(false)}
                     className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"

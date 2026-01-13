@@ -4,49 +4,30 @@ import React from 'react';
 import ContactBanner from './components/ContactBanner';
 import FullPageBanner from './components/FullPageBanner';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import LoadingSpinner from './Components/LoadingSpinner';
 
 // Fallback components
-const LoadingComponent = () => <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Loading...</div>;
+// Fallback components
+const LoadingComponent = () => <LoadingSpinner fullScreen={true} text="Preparing your journey..." />;
 
-const DashboardFallback = () => (
-  <div style={{ padding: '50px', textAlign: 'center' }}>
-    <h1>Dashboard</h1>
-    <p>Your dashboard is loading...</p>
-    <a href="/" style={{ display: 'inline-block', marginTop: '20px', padding: '10px 20px', background: '#0066B2', color: 'white', textDecoration: 'none', borderRadius: '4px' }}>
-      Back to Home
-    </a>
-  </div>
-);
+const DashboardFallback = () => <LoadingSpinner fullScreen={true} text="Loading Dashboard..." />;
 
-const WelcomeFallback = () => (
-  <div style={{ padding: '50px', textAlign: 'center' }}>
-    <h1>Welcome to JetSet</h1>
-    <p>Loading homepage content...</p>
-  </div>
-);
+const WelcomeFallback = () => <LoadingSpinner fullScreen={true} text="Welcome to JetSet..." />;
 
-const ErrorFallback = () => (
-  <div style={{ padding: '50px', textAlign: 'center' }}>
-    <h1>404 - Page Not Found</h1>
-    <p>The page you are looking for does not exist.</p>
-    <a href="/" style={{ display: 'inline-block', marginTop: '20px', padding: '10px 20px', background: '#0066B2', color: 'white', textDecoration: 'none', borderRadius: '4px' }}>
-      Back to Home
-    </a>
-  </div>
-);
+const ErrorFallback = () => <LoadingSpinner fullScreen={true} text="Loading Error Page..." />;
 
 // // Dynamic imports with fallbacks
-const Dashboard = React.lazy(() => 
+const Dashboard = React.lazy(() =>
   import('./Pages/Dashboard')
     .catch(() => ({ default: DashboardFallback }))
 );
 
-const Welcome = React.lazy(() => 
+const Welcome = React.lazy(() =>
   import('./Pages/Welcome')
     .catch(() => ({ default: WelcomeFallback }))
 );
 
-const Error = React.lazy(() => 
+const Error = React.lazy(() =>
   import('./Pages/Error')
     .catch(() => ({ default: ErrorFallback }))
 );
@@ -241,35 +222,19 @@ const Error = React.lazy(() =>
 // );
 
 // Import login page component
-const LoginFallback = () => (
-  <div style={{ padding: '50px', textAlign: 'center' }}>
-    <h1>Login</h1>
-    <p>Loading login page...</p>
-    <a href="/" style={{ display: 'inline-block', marginTop: '20px', padding: '10px 20px', background: '#0066B2', color: 'white', textDecoration: 'none', borderRadius: '4px' }}>
-      Back to Home
-    </a>
-  </div>
-);
+const LoginFallback = () => <LoadingSpinner fullScreen={true} text="Loading Login..." />;
 
 // Login page import
-const Login = React.lazy(() => 
+const Login = React.lazy(() =>
   import('./Pages/Common/login/login')
     .catch(() => ({ default: LoginFallback }))
 );
 
 // Signup page fallback
-const SignupFallback = () => (
-  <div style={{ padding: '50px', textAlign: 'center' }}>
-    <h1>Sign Up</h1>
-    <p>Loading signup page...</p>
-    <a href="/" style={{ display: 'inline-block', marginTop: '20px', padding: '10px 20px', background: '#0066B2', color: 'white', textDecoration: 'none', borderRadius: '4px' }}>
-      Back to Home
-    </a>
-  </div>
-);
+const SignupFallback = () => <LoadingSpinner fullScreen={true} text="Loading Sign Up..." />;
 
 // Signup page import
-const Signup = React.lazy(() => 
+const Signup = React.lazy(() =>
   import('./Pages/Common/login/signup')
     .catch(() => ({ default: SignupFallback }))
 );
@@ -298,21 +263,21 @@ const Signup = React.lazy(() =>
 // );
 
 // Import profiledashboard component
-const ProfileDashboard = React.lazy(() => 
+const ProfileDashboard = React.lazy(() =>
   import('./Pages/Common/login/profiledashboard')
-    .catch(() => ({ default: () => <div>Loading Profile Dashboard...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Profile..." /> }))
 );
 
 // Import mytrips component
-const MyTripsPage = React.lazy(() => 
+const MyTripsPage = React.lazy(() =>
   import('./Pages/Common/login/mytrips')
-    .catch(() => ({ default: () => <div>Loading My Trips Page...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading My Trips..." /> }))
 );
 
 // Import ManageBooking component
-const ManageBooking = React.lazy(() => 
+const ManageBooking = React.lazy(() =>
   import('./Pages/Common/flights/ManageBooking')
-    .catch(() => ({ default: () => <div>Loading Manage Booking...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Manage Booking..." /> }))
 );
 
 // // Add Booking component import
@@ -322,256 +287,256 @@ const ManageBooking = React.lazy(() =>
 // );
 
 // Add BookingConfirmation component import
-const BookingConfirmation = React.lazy(() => 
+const BookingConfirmation = React.lazy(() =>
   import('./Pages/Common/BookingConfirmation')
-    .catch(() => ({ default: () => <div>Loading Booking Confirmation...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Confirmation..." /> }))
 );
 
 // Import the actual components
-const CruiseCards = React.lazy(() => 
+const CruiseCards = React.lazy(() =>
   import('./Pages/Common/cruise/cruise-cards')
-    .catch(() => ({ default: () => <div>Loading Cruise Cards...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Cruises..." /> }))
 );
 
-const Itinerary = React.lazy(() => 
+const Itinerary = React.lazy(() =>
   import('./Pages/Common/cruise/Itinerary')
-    .catch(() => ({ default: () => <div>Loading Itinerary...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Itinerary..." /> }))
 );
 
-const CruiseBookingSummary = React.lazy(() => 
+const CruiseBookingSummary = React.lazy(() =>
   import('./Pages/Common/cruise/CruiseBookingSummary')
-    .catch(() => ({ default: () => <div>Loading Cruise Booking Summary...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Booking Summary..." /> }))
 );
 
-const Flights = React.lazy(() => 
+const Flights = React.lazy(() =>
   import('./Pages/Common/flights/flightsearchpage')
-    .catch(() => ({ default: () => <div>Loading Flights...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Flights..." /> }))
 );
 
-const FlightLanding = React.lazy(() => 
+const FlightLanding = React.lazy(() =>
   import('./Pages/Common/flights/flightlanding')
-    .catch(() => ({ default: () => <div>Loading Flight Landing...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Flight Landing..." /> }))
 );
 
-const FlightSearchPage = React.lazy(() => 
+const FlightSearchPage = React.lazy(() =>
   import('./Pages/Common/flights/flightsearchpage')
-    .catch(() => ({ default: () => <div>Loading Flight Search...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Searching Flights..." /> }))
 );
 
-const FlightBookingConfirmation = React.lazy(() => 
+const FlightBookingConfirmation = React.lazy(() =>
   import('./Pages/Common/flights/FlightBookingConfirmation')
-    .catch(() => ({ default: () => <div>Loading Flight Booking Confirmation...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Confirming Booking..." /> }))
 );
 
-const FlightPayment = React.lazy(() => 
+const FlightPayment = React.lazy(() =>
   import('./Pages/Common/flights/FlightPayment')
-    .catch(() => ({ default: () => <div>Loading Flight Payment...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Processing Payment..." /> }))
 );
 
-const FlightCreateOrders = React.lazy(() => 
+const FlightCreateOrders = React.lazy(() =>
   import('./Pages/Common/flights/FlightCreateOrders')
-    .catch(() => ({ default: () => <div>Loading Flight Create Orders...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Creating Orders..." /> }))
 );
 
-const FlightBookingSuccess = React.lazy(() => 
+const FlightBookingSuccess = React.lazy(() =>
   import('./Pages/Common/flights/FlightBookingSuccess')
-    .catch(() => ({ default: () => <div>Loading Flight Booking Success...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Booking Successful..." /> }))
 );
 
-const Packages = React.lazy(() => 
+const Packages = React.lazy(() =>
   import('./Pages/Common/packages/planding')
-    .catch(() => ({ default: () => <div>Loading Packages...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Packages..." /> }))
 );
 
-const Rentals = React.lazy(() => 
+const Rentals = React.lazy(() =>
   import('./Pages/Common/rentals/LandingPage.jsx')
-    .catch(() => ({ default: () => <div>Loading Rentals...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Rentals..." /> }))
 );
 
-const HotelDetails = React.lazy(() => 
+const HotelDetails = React.lazy(() =>
   import('./Pages/Common/rentals/HotelDetails.jsx')
-    .catch(() => ({ default: () => <div>Loading Hotel Details...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Hotel Details..." /> }))
 );
 
-const HotelSearch = React.lazy(() => 
+const HotelSearch = React.lazy(() =>
   import('./Pages/Common/rentals/HotelSearch.jsx')
-    .catch(() => ({ default: () => <div>Loading Hotel Search...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Searching Hotels..." /> }))
 );
 
-const HotelSearchResults = React.lazy(() => 
+const HotelSearchResults = React.lazy(() =>
   import('./Pages/Common/rentals/HotelSearchResults.jsx')
-    .catch(() => ({ default: () => <div>Loading Hotel Search Results...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Results..." /> }))
 );
 
-const Booking = React.lazy(() => 
+const Booking = React.lazy(() =>
   import('./Pages/Common/rentals/Booking')
-    .catch(() => ({ default: () => <div>Loading Booking...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Booking..." /> }))
 );
 
-const ItineraryPackage = React.lazy(() => 
+const ItineraryPackage = React.lazy(() =>
   import('./Pages/Common/packages/itp')
-    .catch(() => ({ default: () => <div>Loading Itinerary Package...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Itinerary..." /> }))
 );
 
-const PackageBookingSummary = React.lazy(() => 
+const PackageBookingSummary = React.lazy(() =>
   import('./Pages/Common/packages/PackageBookingSummary')
-    .catch(() => ({ default: () => <div>Loading Package Booking Summary...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Package Booking..." /> }))
 );
 
-const Privacy = React.lazy(() => 
+const Privacy = React.lazy(() =>
   import('./Pages/Privacy')
-    .catch(() => ({ default: () => <div>Loading Privacy Policy...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Privacy Policy..." /> }))
 );
 
-const Terms = React.lazy(() => 
+const Terms = React.lazy(() =>
   import('./Pages/Terms')
-    .catch(() => ({ default: () => <div>Loading Terms of Service...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Terms..." /> }))
 );
 
-const Cookies = React.lazy(() => 
+const Cookies = React.lazy(() =>
   import('./Pages/Cookies')
-    .catch(() => ({ default: () => <div>Loading Cookie Policy...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Cookie Policy..." /> }))
 );
 
-const Careers = React.lazy(() => 
+const Careers = React.lazy(() =>
   import('./Pages/Careers')
-    .catch(() => ({ default: () => <div>Loading Careers...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Careers..." /> }))
 );
 
 // New Footer Pages
-const Resources = React.lazy(() => 
+const Resources = React.lazy(() =>
   import('./Pages/Resources')
-    .catch(() => ({ default: () => <div>Loading Resources...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Resources..." /> }))
 );
 
-const Destinations = React.lazy(() => 
+const Destinations = React.lazy(() =>
   import('./Pages/Destinations')
-    .catch(() => ({ default: () => <div>Loading Destinations...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Explore Destinations..." /> }))
 );
 
-const TravelBlog = React.lazy(() => 
+const TravelBlog = React.lazy(() =>
   import('./Pages/TravelBlog')
-    .catch(() => ({ default: () => <div>Loading Travel Blog...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Blog..." /> }))
 );
 
-const Support = React.lazy(() => 
+const Support = React.lazy(() =>
   import('./Pages/Support')
-    .catch(() => ({ default: () => <div>Loading Support...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Support..." /> }))
 );
 
-const FAQs = React.lazy(() => 
+const FAQs = React.lazy(() =>
   import('./Pages/FAQs')
-    .catch(() => ({ default: () => <div>Loading FAQs...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading FAQs..." /> }))
 );
 
-const Company = React.lazy(() => 
+const Company = React.lazy(() =>
   import('./Pages/Company')
-    .catch(() => ({ default: () => <div>Loading Company...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Company Info..." /> }))
 );
 
-const AboutUs = React.lazy(() => 
+const AboutUs = React.lazy(() =>
   import('./Pages/AboutUs')
-    .catch(() => ({ default: () => <div>Loading About Us...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading About Us..." /> }))
 );
 
-const ContactUs = React.lazy(() => 
+const ContactUs = React.lazy(() =>
   import('./Pages/ContactUs')
-    .catch(() => ({ default: () => <div>Loading Contact Us...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Contact info..." /> }))
 );
 
-const PrivacyPolicy = React.lazy(() => 
+const PrivacyPolicy = React.lazy(() =>
   import('./Pages/PrivacyPolicy')
-    .catch(() => ({ default: () => <div>Loading Privacy Policy...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Privacy Policy..." /> }))
 );
 
-const TermsConditions = React.lazy(() => 
+const TermsConditions = React.lazy(() =>
   import('./Pages/TermsConditions')
-    .catch(() => ({ default: () => <div>Loading Terms & Conditions...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Terms..." /> }))
 );
 
 // Add Request Page import
-const RequestPage = React.lazy(() => 
+const RequestPage = React.lazy(() =>
   import('./Pages/Request/RequestPage')
-    .catch(() => ({ default: () => <div>Loading Request Page...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Requests..." /> }))
 );
 
 // Add Inquiry Detail Page import
-const InquiryDetail = React.lazy(() => 
+const InquiryDetail = React.lazy(() =>
   import('./Pages/Common/InquiryDetail')
-    .catch(() => ({ default: () => <div>Loading Inquiry Details...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Inquiry..." /> }))
 );
 
 // Add Quote Detail Page import
-const QuoteDetail = React.lazy(() => 
+const QuoteDetail = React.lazy(() =>
   import('./Pages/Common/QuoteDetail')
-    .catch(() => ({ default: () => <div>Loading Quote Details...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Quote..." /> }))
 );
 
 // Payment Pages
-const PaymentCallback = React.lazy(() => 
+const PaymentCallback = React.lazy(() =>
   import('./Pages/Common/PaymentCallback')
-    .catch(() => ({ default: () => <div>Verifying Payment...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Verifying Payment..." /> }))
 );
 
-const PaymentSuccess = React.lazy(() => 
+const PaymentSuccess = React.lazy(() =>
   import('./Pages/Common/PaymentSuccess')
-    .catch(() => ({ default: () => <div>Loading Payment Success...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Payment Successful..." /> }))
 );
 
-const PaymentFailed = React.lazy(() => 
+const PaymentFailed = React.lazy(() =>
   import('./Pages/Common/PaymentFailed')
-    .catch(() => ({ default: () => <div>Loading Payment Failed...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Payment Info..." /> }))
 );
 
 // Add Admin Panel import
-const AdminPanel = React.lazy(() => 
+const AdminPanel = React.lazy(() =>
   import('./Pages/Admin/AdminPanel')
-    .catch(() => ({ default: () => <div>Loading Admin Panel...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Admin Panel..." /> }))
 );
 
-const AdminLogin = React.lazy(() => 
+const AdminLogin = React.lazy(() =>
   import('./Pages/Admin/AdminLogin')
-    .catch(() => ({ default: () => <div>Loading Admin Login...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Admin Login..." /> }))
 );
 
-const HotelBookingSuccess = React.lazy(() => 
+const HotelBookingSuccess = React.lazy(() =>
   import('./Pages/Common/rentals/HotelBookingSuccess')
-    .catch(() => ({ default: () => <div>Loading Hotel Booking Success...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Hotel Booked..." /> }))
 );
 
 // Supabase Auth Components
-const SupabaseLogin = React.lazy(() => 
+const SupabaseLogin = React.lazy(() =>
   import('./Pages/Common/login/SupabaseLogin')
-    .catch(() => ({ default: () => <div>Loading Supabase Login...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Welcome Back..." /> }))
 );
 
-const SupabaseSignup = React.lazy(() => 
+const SupabaseSignup = React.lazy(() =>
   import('./Pages/Common/login/SupabaseSignup')
-    .catch(() => ({ default: () => <div>Loading Supabase Signup...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Join Us..." /> }))
 );
 
-const SupabaseProfileDashboard = React.lazy(() => 
+const SupabaseProfileDashboard = React.lazy(() =>
   import('./Pages/Common/login/SupabaseProfileDashboard')
-    .catch(() => ({ default: () => <div>Loading Supabase Profile...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Profile..." /> }))
 );
 
-const SupabaseAuthDebug = React.lazy(() => 
+const SupabaseAuthDebug = React.lazy(() =>
   import('./Pages/SupabaseAuthDebug')
-    .catch(() => ({ default: () => <div>Loading Auth Debug...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Debugging Auth..." /> }))
 );
 
-const SupabaseAuthStatus = React.lazy(() => 
+const SupabaseAuthStatus = React.lazy(() =>
   import('./Components/SupabaseAuthStatus')
-    .catch(() => ({ default: () => <div>Loading Auth Status...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Checking Status..." /> }))
 );
 
-const AuthCallback = React.lazy(() => 
+const AuthCallback = React.lazy(() =>
   import('./Pages/AuthCallback')
-    .catch(() => ({ default: () => <div>Processing authentication...</div> }))
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Verifying..." /> }))
 );
 
 // Import ProtectedRoute
-const ProtectedRoute = React.lazy(() => 
+const ProtectedRoute = React.lazy(() =>
   import('./components/ProtectedRoute')
     .catch(() => ({ default: ({ children }) => children }))
 );
@@ -594,7 +559,7 @@ const App = () => {
         <Route path="/supabase-auth-debug" element={<SupabaseAuthDebug />} />
         <Route path="/supabase-auth-status" element={<SupabaseAuthStatus />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
-        
+
         <Route path="/my-trips" element={<MyTripsPage />} />
         <Route path="/manage-booking/:bookingId" element={<ManageBooking />} />
         <Route path="/manage-booking" element={<ManageBooking />} />
@@ -618,17 +583,17 @@ const App = () => {
         <Route path="/hotel-search-results" element={<HotelSearchResults />} />
         <Route path="/hotel-booking-success" element={<HotelBookingSuccess />} />
         <Route path="/rental/booking" element={<Booking />} />
-        
+
         {/* Package Routes */}
         <Route path="/packages/itinerary" element={<ItineraryPackage />} />
         <Route path="/packages/booking-summary" element={<PackageBookingSummary />} />
-        
+
         {/* Footer Pages */}
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/cookies" element={<Cookies />} />
         <Route path="/careers" element={<Careers />} />
-        
+
         {/* New Footer Pages */}
         <Route path="/resources" element={<Resources />} />
         <Route path="/destinations" element={<Destinations />} />
@@ -643,12 +608,12 @@ const App = () => {
         <Route path="/request" element={<RequestPage />} />
         <Route path="/inquiry/:id" element={<InquiryDetail />} />
         <Route path="/quote-detail" element={<QuoteDetail />} />
-        
+
         {/* Payment Routes */}
         <Route path="/payment/callback" element={<PaymentCallback />} />
         <Route path="/payment/success" element={<PaymentSuccess />} />
         <Route path="/payment/failed" element={<PaymentFailed />} />
-        
+
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/*" element={
@@ -656,7 +621,7 @@ const App = () => {
             <AdminPanel />
           </ProtectedRoute>
         } />
-        
+
         {/* Legacy redirects for backward compatibility */}
         <Route path="/about" element={<Navigate to="/about-us" />} />
         <Route path="/blog" element={<Navigate to="/travel-blog" />} />
@@ -667,7 +632,7 @@ const App = () => {
         <Route path="/special-offers" element={<Navigate to="/" />} />
         <Route path="/destinations/:destination" element={<Navigate to="/cruises" />} />
         <Route path="/secure-booking" element={<Navigate to="/privacy-policy" />} />
-        
+
         <Route path="/404" element={<Error />} />
         <Route path="*" element={<Navigate to="/404" />} />
       </Routes>

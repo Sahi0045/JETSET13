@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import withPageElements from './Common/PageWrapper';
+import LoadingSpinner from '../Components/LoadingSpinner';
 
 const Dashboard = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -8,7 +9,7 @@ const Dashboard = () => {
 
     useEffect(() => {
         document.title = 'Dashboard - JetSetters';
-        
+
         // Check authentication from localStorage
         const authStatus = localStorage.getItem('isAuthenticated') === 'true';
         setIsAuthenticated(authStatus);
@@ -22,26 +23,21 @@ const Dashboard = () => {
 
     // If still loading, show loading state
     if (loading) {
-        return (
-            <div style={{ padding: '30px', textAlign: 'center' }}>
-                <h1>Loading...</h1>
-                <p>Checking authentication status...</p>
-            </div>
-        );
+        return <LoadingSpinner text="Loading Dashboard..." fullScreen={true} />;
     }
 
     return (
         <div style={{ padding: '30px', maxWidth: '1000px', margin: '0 auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
                 <h1 style={{ fontSize: '2rem', fontWeight: 'bold' }}>Dashboard</h1>
-                <Link 
+                <Link
                     to="/"
                     style={{ padding: '8px 15px', background: '#0066B2', color: 'white', border: 'none', borderRadius: '4px', textDecoration: 'none' }}
                 >
                     Back to Home
                 </Link>
             </div>
-            
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
                 <div style={{ border: '1px solid #e0e0e0', borderRadius: '8px', padding: '20px', backgroundColor: '#f9f9f9' }}>
                     <h2 style={{ fontSize: '1.5rem', marginBottom: '10px' }}>Cruises</h2>
@@ -50,7 +46,7 @@ const Dashboard = () => {
                         View Cruises →
                     </Link>
                 </div>
-                
+
                 <div style={{ border: '1px solid #e0e0e0', borderRadius: '8px', padding: '20px', backgroundColor: '#f9f9f9' }}>
                     <h2 style={{ fontSize: '1.5rem', marginBottom: '10px' }}>Packages</h2>
                     <p>Find vacation packages and deals</p>
@@ -58,7 +54,7 @@ const Dashboard = () => {
                         Browse Packages →
                     </Link>
                 </div>
-                
+
                 <div style={{ border: '1px solid #e0e0e0', borderRadius: '8px', padding: '20px', backgroundColor: '#f9f9f9' }}>
                     <h2 style={{ fontSize: '1.5rem', marginBottom: '10px' }}>Itineraries</h2>
                     <p>View detailed travel plans</p>

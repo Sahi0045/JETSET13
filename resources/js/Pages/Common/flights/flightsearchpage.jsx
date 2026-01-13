@@ -16,6 +16,7 @@ import {
 
 // Import centralized API configuration
 import apiConfig from '../../../../../src/config/api.js';
+import LoadingSpinner from '../../../../../Components/LoadingSpinner';
 
 function FlightSearchPage() {
   const location = useLocation();
@@ -1063,8 +1064,8 @@ function FlightSearchPage() {
                     setShowSortOptions(false);
                   }}
                   className={`w-full flex items-center px-4 py-3 hover:bg-gray-50 ${sortOrder === option.value
-                      ? 'bg-blue-50 text-blue-600'
-                      : 'text-gray-700'
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-gray-700'
                     }`}
                 >
                   <span className="text-xl mr-3">{option.icon}</span>
@@ -1083,8 +1084,8 @@ function FlightSearchPage() {
           <button
             onClick={() => setIsFilterOpen(true)}
             className={`flex items-center px-3 py-2 rounded-full border shadow-sm whitespace-nowrap ${activeFiltersCount > 0
-                ? 'bg-blue-600 text-white border-blue-700'
-                : 'bg-white text-gray-700 border-gray-200'
+              ? 'bg-blue-600 text-white border-blue-700'
+              : 'bg-white text-gray-700 border-gray-200'
               }`}
           >
             <Filter className="h-4 w-4 mr-1" />
@@ -1096,9 +1097,9 @@ function FlightSearchPage() {
               key={index}
               onClick={() => onFilterChange(filter.type, filter.value)}
               className={`px-3 py-2 rounded-full border shadow-sm whitespace-nowrap ${(filter.type === 'stops' && filters.stops === filter.value) ||
-                  (filter.type === 'price' && filters.price[1] === filter.value[1])
-                  ? 'bg-blue-600 text-white border-blue-700'
-                  : 'bg-white text-gray-700 border-gray-200'
+                (filter.type === 'price' && filters.price[1] === filter.value[1])
+                ? 'bg-blue-600 text-white border-blue-700'
+                : 'bg-white text-gray-700 border-gray-200'
                 }`}
             >
               {filter.label}
@@ -1142,8 +1143,8 @@ function FlightSearchPage() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex-1 min-w-[100px] flex flex-col items-center py-3 px-4 ${activeTab === tab.id
-                      ? 'text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-500'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500'
                     }`}
                 >
                   <tab.icon className="h-5 w-5 mb-1" />
@@ -1168,8 +1169,8 @@ function FlightSearchPage() {
                         key={option.value}
                         onClick={() => onSortChange(option.value)}
                         className={`w-full flex items-center p-4 rounded-xl ${sortOrder === option.value
-                            ? 'bg-blue-50 border-blue-200'
-                            : 'bg-white border-gray-200'
+                          ? 'bg-blue-50 border-blue-200'
+                          : 'bg-white border-gray-200'
                           } border`}
                       >
                         <span className="text-xl mr-3">{option.icon}</span>
@@ -1208,8 +1209,8 @@ function FlightSearchPage() {
                           key={price}
                           onClick={() => onFilterChange('price', [0, price])}
                           className={`p-3 rounded-xl border ${filters.price[1] === price
-                              ? 'bg-blue-50 border-blue-200 text-blue-600'
-                              : 'bg-white border-gray-200 text-gray-700'
+                            ? 'bg-blue-50 border-blue-200 text-blue-600'
+                            : 'bg-white border-gray-200 text-gray-700'
                             }`}
                         >
                           Under ${price.toLocaleString()}
@@ -1230,8 +1231,8 @@ function FlightSearchPage() {
                         key={option.value}
                         onClick={() => onFilterChange('stops', option.value)}
                         className={`w-full flex items-center p-4 rounded-xl ${filters.stops === option.value
-                            ? 'bg-blue-50 border-blue-200'
-                            : 'bg-white border-gray-200'
+                          ? 'bg-blue-50 border-blue-200'
+                          : 'bg-white border-gray-200'
                           } border`}
                       >
                         <span className="text-xl mr-3">{option.icon}</span>
@@ -1256,8 +1257,8 @@ function FlightSearchPage() {
                           onFilterChange('airlines', updatedAirlines);
                         }}
                         className={`w-full flex items-center p-4 rounded-xl ${filters.airlines.includes(airline)
-                            ? 'bg-blue-50 border-blue-200'
-                            : 'bg-white border-gray-200'
+                          ? 'bg-blue-50 border-blue-200'
+                          : 'bg-white border-gray-200'
                           } border`}
                       >
                         <span className="font-medium text-gray-700">{airline}</span>
@@ -1765,7 +1766,9 @@ function FlightSearchPage() {
 
             {loading && (
               <div className="absolute inset-0 bg-white/50 flex items-center justify-center">
-                <div className="loading-spinner rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <div className="transform scale-50">
+                  <LoadingSpinner />
+                </div>
               </div>
             )}
           </div>
@@ -1775,13 +1778,9 @@ function FlightSearchPage() {
       <div className="bg-gray-50 min-h-screen pb-12 pt-8">
         <div className="container mx-auto max-w-6xl px-4">
           {loading ? (
-            <div className="flex flex-col justify-center items-center h-64 bg-white rounded-xl shadow-md p-8">
-              <div className="relative">
-                <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
-                <Plane className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-6 w-6 text-blue-500" />
-              </div>
-              <p className="mt-6 text-gray-600 font-medium">Searching for the best flights...</p>
-              <p className="text-gray-400 text-sm mt-2">This may take a few moments</p>
+            <div className="flex flex-col justify-center items-center py-20 bg-white rounded-xl shadow-md min-h-[400px]">
+              <LoadingSpinner text="Searching for the best flights..." />
+              <p className="text-gray-400 text-sm mt-2">Comparing prices from over 500+ airlines</p>
             </div>
           ) : (
             <div className="flex flex-col md:flex-row gap-6">
@@ -2084,8 +2083,8 @@ function FlightSearchPage() {
                             key={pageNumber}
                             onClick={() => handlePageChange(pageNumber)}
                             className={`w-9 h-9 rounded-md font-medium flex items-center justify-center transition-all focus-ring ${isCurrentPage
-                                ? 'bg-primary-600 text-white shadow-md'
-                                : 'text-gray-700 hover:bg-primary-50 hover:text-primary-600'
+                              ? 'bg-primary-600 text-white shadow-md'
+                              : 'text-gray-700 hover:bg-primary-50 hover:text-primary-600'
                               }`}
                           >
                             {pageNumber}
