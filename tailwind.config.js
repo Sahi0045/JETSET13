@@ -170,7 +170,7 @@ export default {
 
     plugins: [
         forms,
-        function({ addUtilities }) {
+        function ({ addUtilities }) {
             const newUtilities = {
                 '.glass': {
                     'background': 'rgba(255, 255, 255, 0.1)',

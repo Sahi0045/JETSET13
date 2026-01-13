@@ -6,9 +6,9 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import Price from '../../../Components/Price';
 import currencyService from '../../../Services/CurrencyService';
-import { 
-  defaultSearchData, 
-  cheapFlights, 
+import {
+  defaultSearchData,
+  cheapFlights,
   destinations,
   sourceCities,
   specialFares
@@ -23,7 +23,7 @@ function FlightSearchPage() {
   const apiResponse = location.state?.apiResponse;
 
   console.log('searchData:', searchData);
-  
+
   // const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useState(searchData || {
@@ -63,20 +63,20 @@ function FlightSearchPage() {
     const generateDateRange = (centerDate) => {
       const dates = [];
       const baseDate = new Date(centerDate);
-      
+
       // Generate 3 days before and after the selected date
       for (let i = -3; i <= 3; i++) {
         const date = new Date(baseDate);
         date.setDate(baseDate.getDate() + i);
-        
-        const formattedDate = date.toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric' 
+
+        const formattedDate = date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric'
         });
-        
+
         const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
         const isoDate = date.toISOString().split('T')[0];
-        
+
         dates.push({
           date: formattedDate,
           day: dayName,
@@ -87,7 +87,7 @@ function FlightSearchPage() {
           isPast: date < new Date().setHours(0, 0, 0, 0)
         });
       }
-      
+
       return dates;
     };
 
@@ -97,10 +97,10 @@ function FlightSearchPage() {
       const dates = generateDateRange(centerDate);
       setDateRange(dates);
     };
-    
+
     // Initialize dates
     initializeDates();
-    
+
     // Fetch flight data if search parameters are available
     const fetchInitialFlights = async () => {
       if (location.state?.searchData) {
@@ -108,7 +108,7 @@ function FlightSearchPage() {
         setError(null);
         try {
           console.log('Fetching flights with search data:', location.state.searchData);
-          
+
           // Ensure all required fields are present
           const searchData = {
             from: location.state.searchData.from,
@@ -150,7 +150,7 @@ function FlightSearchPage() {
 
           const data = await response.json();
           console.log('API response received:', data);
-          
+
           if (!data.success && !data.data) {
             throw new Error(data.error || 'Failed to fetch flights');
           }
@@ -163,10 +163,10 @@ function FlightSearchPage() {
             const flightData = transformFlightData(data.data || []);
             console.log('Transformed flight data:', flightData);
             setFlights(flightData);
-            
+
             // Update prices in the date range
             if (data.data?.dateWisePrices) {
-              setDateRange(prev => 
+              setDateRange(prev =>
                 prev.map(d => ({
                   ...d,
                   price: data.data.dateWisePrices[d.isoDate] ? `$${data.data.dateWisePrices[d.isoDate]}` : null,
@@ -177,7 +177,7 @@ function FlightSearchPage() {
           }
         } catch (error) {
           console.error('Error fetching initial flights:', error);
-          
+
           // Use mock data if API fails
           if (cheapFlights && cheapFlights.length > 0) {
             console.log('Using mock flight data as fallback');
@@ -192,17 +192,17 @@ function FlightSearchPage() {
         setLoading(false);
       }
     };
-    
+
     fetchInitialFlights();
   }, [location.state]);
-  
+
   // Update search params when location state changes
   useEffect(() => {
     if (location.state?.searchData) {
       setSearchParams(location.state.searchData);
     }
   }, [location.state]);
-  
+
   // Airline code to name mapping
   const airlineMap = {
     // Full-service carriers
@@ -574,14 +574,14 @@ function FlightSearchPage() {
     setLoading(true);
     setSearchParams(formData);
     setError(null);
-    
+
     // Ensure all required fields are present
     if (!formData.from || !formData.to || !formData.departDate) {
       setError('Please fill in all required fields');
       setLoading(false);
       return;
     }
-    
+
     try {
       const searchData = {
         from: formData.from,
@@ -600,7 +600,7 @@ function FlightSearchPage() {
       // Use API endpoint from centralized config
       const apiUrl = apiConfig.endpoints.flights.search;
       console.log('Making API request to:', apiUrl);
-        
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -615,7 +615,7 @@ function FlightSearchPage() {
       }
 
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to fetch flights');
       }
@@ -625,7 +625,7 @@ function FlightSearchPage() {
 
       // Update prices in the date range if available
       if (data.data.dateWisePrices) {
-        setDateRange(prev => 
+        setDateRange(prev =>
           prev.map(d => ({
             ...d,
             price: data.data.dateWisePrices[d.isoDate] ? `$${data.data.dateWisePrices[d.isoDate]}` : d.price,
@@ -635,7 +635,7 @@ function FlightSearchPage() {
       }
     } catch (error) {
       console.error('Error fetching flights:', error);
-      
+
       // Use mock data if API fails
       if (cheapFlights && cheapFlights.length > 0) {
         console.log('Using mock flight data as fallback for search');
@@ -648,7 +648,7 @@ function FlightSearchPage() {
       setLoading(false);
     }
   };
-  
+
   // Handle filter changes
   const handleFilterChange = (filterType, value) => {
     setFilters({
@@ -656,23 +656,23 @@ function FlightSearchPage() {
       [filterType]: value
     });
   };
-  
+
   // Apply filters to flights
   const getFilteredFlights = () => {
     if (!flights || !Array.isArray(flights)) return [];
-    
+
     return flights.filter(flight => {
       // Filter by price
       const flightPrice = flight.price?.amount || 0;
       if (flightPrice < filters.price[0] || flightPrice > filters.price[1]) {
         return false;
       }
-      
+
       // Filter by stops
       if (filters.stops !== "any" && String(flight.stops) !== String(filters.stops)) {
         return false;
       }
-      
+
       // Filter by airlines
       if (filters.airlines.length > 0) {
         const airlineName = flight.airline?.name;
@@ -680,13 +680,13 @@ function FlightSearchPage() {
           return false;
         }
       }
-      
+
       return true;
     }).sort((a, b) => {
       // Sort by selected order
       const aPrice = a.price?.amount || 0;
       const bPrice = b.price?.amount || 0;
-      
+
       if (sortOrder === "price") {
         return aPrice - bPrice;
       } else if (sortOrder === "-price") {
@@ -697,7 +697,7 @@ function FlightSearchPage() {
           if (!durationStr) return 0;
           let hours = 0;
           let minutes = 0;
-          
+
           if (durationStr.includes('H')) {
             hours = parseInt(durationStr.split('PT')[1].split('H')[0]) || 0;
             if (durationStr.includes('M')) {
@@ -706,10 +706,10 @@ function FlightSearchPage() {
           } else if (durationStr.includes('M')) {
             minutes = parseInt(durationStr.split('PT')[1].split('M')[0]) || 0;
           }
-          
+
           return hours * 60 + minutes;
         };
-        
+
         const aDuration = parseDuration(a.duration);
         const bDuration = parseDuration(b.duration);
         return aDuration - bDuration;
@@ -718,7 +718,7 @@ function FlightSearchPage() {
       } else if (sortOrder === "arrival") {
         return (a.segments?.[0]?.arrival?.at || '').localeCompare(b.segments?.[0]?.arrival?.at || '');
       }
-      
+
       return 0;
     });
   };
@@ -727,23 +727,23 @@ function FlightSearchPage() {
   const handleDateNavigate = async (direction) => {
     const currentSelectedDate = dateRange.find(d => d.selected)?.isoDate;
     if (!currentSelectedDate) return;
-    
+
     const newCenterDate = new Date(currentSelectedDate);
     newCenterDate.setDate(newCenterDate.getDate() + (direction * 7));
-    
+
     // Generate new date range
     const newDates = dateRange.map(d => {
       const date = new Date(d.isoDate);
       date.setDate(date.getDate() + (direction * 7));
-      
-      const formattedDate = date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
+
+      const formattedDate = date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
       });
-      
+
       const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
       const isoDate = date.toISOString().split('T')[0];
-      
+
       return {
         ...d,
         date: formattedDate,
@@ -753,17 +753,17 @@ function FlightSearchPage() {
         isPast: date < new Date().setHours(0, 0, 0, 0)
       };
     });
-    
+
     setDateRange(newDates);
   };
 
   // Handle date selection in the date bar
   const handleDateSelect = async (selectedDate) => {
     if (!selectedDate || selectedDate.isPast) return;
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       // Update search params with new date
       const newSearchParams = {
@@ -773,19 +773,19 @@ function FlightSearchPage() {
         departDate: selectedDate.isoDate
       };
       setSearchParams(newSearchParams);
-      
+
       // Update date range to show selection
-      setDateRange(prev => 
+      setDateRange(prev =>
         prev.map(d => ({
           ...d,
           selected: d.isoDate === selectedDate.isoDate
         }))
       );
-      
+
       // Use API endpoint from centralized config
       const apiUrl = apiConfig.endpoints.flights.search;
       console.log('Making API request to:', apiUrl);
-        
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -795,18 +795,18 @@ function FlightSearchPage() {
       });
 
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to fetch flights');
       }
-      
+
       // Transform flight data
       const flightData = transformFlightData(data.data.flights);
       setFlights(flightData);
-      
+
       // Update prices in the date range
       const { dateWisePrices, lowestPrice } = data.data;
-      setDateRange(prev => 
+      setDateRange(prev =>
         prev.map(d => ({
           ...d,
           price: dateWisePrices[d.isoDate] ? `$${dateWisePrices[d.isoDate]}` : d.price,
@@ -832,7 +832,7 @@ function FlightSearchPage() {
     const updatedAirlines = filters.airlines.includes(airline)
       ? filters.airlines.filter(a => a !== airline)
       : [...filters.airlines, airline];
-    
+
     handleFilterChange('airlines', updatedAirlines);
   };
 
@@ -856,21 +856,21 @@ function FlightSearchPage() {
   // Get city suggestions based on search input
   const getCitySuggestions = (input, field) => {
     if (!input) return [];
-    
+
     const searchTerm = input.toLowerCase();
     const currentFrom = field === 'to' ? searchParams.from : null;
     const currentTo = field === 'from' ? searchParams.to : null;
-    
+
     return Object.entries(cityMap)
       .filter(([code, name]) => {
         // Skip the current selected city in the other field
-        if ((field === 'to' && code === currentFrom) || 
-            (field === 'from' && code === currentTo)) {
+        if ((field === 'to' && code === currentFrom) ||
+          (field === 'from' && code === currentTo)) {
           return false;
         }
-        
-        return name.toLowerCase().includes(searchTerm) || 
-               code.toLowerCase().includes(searchTerm);
+
+        return name.toLowerCase().includes(searchTerm) ||
+          code.toLowerCase().includes(searchTerm);
       })
       .map(([code, name]) => ({
         code,
@@ -889,7 +889,7 @@ function FlightSearchPage() {
     ].includes(code)) {
       return 'India';
     }
-    
+
     // US airports
     if ([
       'JFK', 'LAX', 'ORD', 'SFO', 'MIA', 'DFW', 'BOS', 'SEA', 'IAD', 'ATL',
@@ -897,14 +897,14 @@ function FlightSearchPage() {
     ].includes(code)) {
       return 'United States';
     }
-    
+
     // UK airports
     if ([
       'LHR', 'MAN', 'BHX', 'GLA', 'EDI', 'BRS', 'NCL', 'LPL', 'LBA', 'BFS'
     ].includes(code)) {
       return 'United Kingdom';
     }
-    
+
     // Other countries
     const countryMap = {
       'DXB': 'UAE',
@@ -926,7 +926,7 @@ function FlightSearchPage() {
       'AKL': 'New Zealand',
       'CPT': 'South Africa'
     };
-    
+
     return countryMap[code] || 'Unknown';
   };
 
@@ -960,9 +960,8 @@ function FlightSearchPage() {
           value={value}
           onChange={(e) => handleCitySelect(field, e.target.value)}
           placeholder={field === 'from' ? 'From' : 'To'}
-          className={`w-full p-2 border rounded-md ${
-            !isValid ? 'border-red-500' : 'border-gray-300'
-          }`}
+          className={`w-full p-2 border rounded-md ${!isValid ? 'border-red-500' : 'border-gray-300'
+            }`}
         />
         {!isValid && (
           <p className="text-red-500 text-sm mt-1">
@@ -995,14 +994,14 @@ function FlightSearchPage() {
     const filteredData = getFilteredFlights();
     const totalItems = filteredData.length;
     const totalPages = Math.ceil(totalItems / flightsPerPage);
-    
+
     // Calculate the start and end index for the current page
     const startIndex = (currentPage - 1) * flightsPerPage;
     const endIndex = Math.min(startIndex + flightsPerPage, totalItems);
-    
+
     // Get the current page's items
     const currentItems = filteredData.slice(startIndex, endIndex);
-    
+
     return {
       currentItems,
       totalPages,
@@ -1063,11 +1062,10 @@ function FlightSearchPage() {
                     onSortChange(option.value);
                     setShowSortOptions(false);
                   }}
-                  className={`w-full flex items-center px-4 py-3 hover:bg-gray-50 ${
-                    sortOrder === option.value
+                  className={`w-full flex items-center px-4 py-3 hover:bg-gray-50 ${sortOrder === option.value
                       ? 'bg-blue-50 text-blue-600'
                       : 'text-gray-700'
-                  }`}
+                    }`}
                 >
                   <span className="text-xl mr-3">{option.icon}</span>
                   <span className="font-medium">{option.label}</span>
@@ -1084,11 +1082,10 @@ function FlightSearchPage() {
         <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-1">
           <button
             onClick={() => setIsFilterOpen(true)}
-            className={`flex items-center px-3 py-2 rounded-full border shadow-sm whitespace-nowrap ${
-              activeFiltersCount > 0
+            className={`flex items-center px-3 py-2 rounded-full border shadow-sm whitespace-nowrap ${activeFiltersCount > 0
                 ? 'bg-blue-600 text-white border-blue-700'
                 : 'bg-white text-gray-700 border-gray-200'
-            }`}
+              }`}
           >
             <Filter className="h-4 w-4 mr-1" />
             {activeFiltersCount > 0 ? `${activeFiltersCount} Active` : 'All Filters'}
@@ -1098,12 +1095,11 @@ function FlightSearchPage() {
             <button
               key={index}
               onClick={() => onFilterChange(filter.type, filter.value)}
-              className={`px-3 py-2 rounded-full border shadow-sm whitespace-nowrap ${
-                (filter.type === 'stops' && filters.stops === filter.value) ||
-                (filter.type === 'price' && filters.price[1] === filter.value[1])
+              className={`px-3 py-2 rounded-full border shadow-sm whitespace-nowrap ${(filter.type === 'stops' && filters.stops === filter.value) ||
+                  (filter.type === 'price' && filters.price[1] === filter.value[1])
                   ? 'bg-blue-600 text-white border-blue-700'
                   : 'bg-white text-gray-700 border-gray-200'
-              }`}
+                }`}
             >
               {filter.label}
             </button>
@@ -1131,7 +1127,7 @@ function FlightSearchPage() {
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-xl font-bold">Filters & Sort</h2>
-              <button 
+              <button
                 onClick={onClose}
                 className="p-2 hover:bg-gray-100 rounded-full"
               >
@@ -1145,11 +1141,10 @@ function FlightSearchPage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 min-w-[100px] flex flex-col items-center py-3 px-4 ${
-                    activeTab === tab.id
+                  className={`flex-1 min-w-[100px] flex flex-col items-center py-3 px-4 ${activeTab === tab.id
                       ? 'text-blue-600 border-b-2 border-blue-600'
                       : 'text-gray-500'
-                  }`}
+                    }`}
                 >
                   <tab.icon className="h-5 w-5 mb-1" />
                   <span className="text-sm font-medium">{tab.label}</span>
@@ -1172,11 +1167,10 @@ function FlightSearchPage() {
                       <button
                         key={option.value}
                         onClick={() => onSortChange(option.value)}
-                        className={`w-full flex items-center p-4 rounded-xl ${
-                          sortOrder === option.value
+                        className={`w-full flex items-center p-4 rounded-xl ${sortOrder === option.value
                             ? 'bg-blue-50 border-blue-200'
                             : 'bg-white border-gray-200'
-                        } border`}
+                          } border`}
                       >
                         <span className="text-xl mr-3">{option.icon}</span>
                         <span className="font-medium text-gray-700">{option.label}</span>
@@ -1207,17 +1201,16 @@ function FlightSearchPage() {
                         className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                       />
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-3">
                       {[5000, 10000, 15000, 20000].map(price => (
                         <button
                           key={price}
                           onClick={() => onFilterChange('price', [0, price])}
-                          className={`p-3 rounded-xl border ${
-                            filters.price[1] === price
+                          className={`p-3 rounded-xl border ${filters.price[1] === price
                               ? 'bg-blue-50 border-blue-200 text-blue-600'
                               : 'bg-white border-gray-200 text-gray-700'
-                          }`}
+                            }`}
                         >
                           Under ${price.toLocaleString()}
                         </button>
@@ -1236,11 +1229,10 @@ function FlightSearchPage() {
                       <button
                         key={option.value}
                         onClick={() => onFilterChange('stops', option.value)}
-                        className={`w-full flex items-center p-4 rounded-xl ${
-                          filters.stops === option.value
+                        className={`w-full flex items-center p-4 rounded-xl ${filters.stops === option.value
                             ? 'bg-blue-50 border-blue-200'
                             : 'bg-white border-gray-200'
-                        } border`}
+                          } border`}
                       >
                         <span className="text-xl mr-3">{option.icon}</span>
                         <span className="font-medium text-gray-700">{option.label}</span>
@@ -1263,11 +1255,10 @@ function FlightSearchPage() {
                             : [...filters.airlines, airline];
                           onFilterChange('airlines', updatedAirlines);
                         }}
-                        className={`w-full flex items-center p-4 rounded-xl ${
-                          filters.airlines.includes(airline)
+                        className={`w-full flex items-center p-4 rounded-xl ${filters.airlines.includes(airline)
                             ? 'bg-blue-50 border-blue-200'
                             : 'bg-white border-gray-200'
-                        } border`}
+                          } border`}
                       >
                         <span className="font-medium text-gray-700">{airline}</span>
                         {filters.airlines.includes(airline) && (
@@ -1332,7 +1323,7 @@ function FlightSearchPage() {
         {!isOpen && (
           <div className="bg-white shadow-md rounded-xl p-4 mb-4">
             <div className="flex items-center justify-between">
-              <div 
+              <div
                 className="flex-1 cursor-pointer"
                 onClick={() => setIsOpen(true)}
               >
@@ -1365,7 +1356,7 @@ function FlightSearchPage() {
             <div className="p-4">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold">Modify Search</h2>
-                <button 
+                <button
                   onClick={() => setIsOpen(false)}
                   className="p-2 hover:bg-gray-100 rounded-full"
                 >
@@ -1462,7 +1453,7 @@ function FlightSearchPage() {
 
   if (isMobileView) {
     const { currentItems, totalPages, totalItems, startIndex, endIndex } = getPaginatedData();
-    
+
     return (
       <div className="w-full min-h-screen bg-gray-50 flex flex-col">
         <Navbar />
@@ -1475,7 +1466,7 @@ function FlightSearchPage() {
             sortOrder={sortOrder}
             onSortChange={setSortOrder}
           />
-          
+
           {loading ? (
             <div className="flex flex-col justify-center items-center h-64 bg-white rounded-xl shadow-md p-8">
               <div className="relative">
@@ -1499,9 +1490,9 @@ function FlightSearchPage() {
                   <div key={idx} className="bg-white rounded-xl shadow-md p-4 border border-gray-100">
                     {/* Flight Card Content */}
                     <div className="flex items-center gap-3 mb-4">
-                      <img 
-                        src={flight.airline?.logo} 
-                        alt={flight.airline?.name} 
+                      <img
+                        src={flight.airline?.logo}
+                        alt={flight.airline?.name}
                         className="w-12 h-12 object-contain rounded-lg bg-gray-50"
                         onError={(e) => {
                           e.target.onerror = null;
@@ -1514,8 +1505,8 @@ function FlightSearchPage() {
                       </div>
                       <div className="text-right">
                         <div className="text-xl font-bold text-blue-600">
-  <Price amount={flight.price?.amount} showCode={true} />
-</div>
+                          <Price amount={flight.price?.amount} showCode={true} />
+                        </div>
                         <div className="text-xs text-gray-500">per person</div>
                       </div>
                     </div>
@@ -1549,7 +1540,7 @@ function FlightSearchPage() {
                   </div>
                 ))}
               </div>
-              
+
               {/* Pagination Controls */}
               <div className="mt-8 flex flex-col items-center">
                 <div className="text-sm text-gray-600 mb-4">
@@ -1586,119 +1577,119 @@ function FlightSearchPage() {
   // Desktop view
   const { currentItems, totalPages, totalItems, startIndex, endIndex } = getPaginatedData();
 
-// Flight Search Form Component
-const FlightSearchForm = ({ initialData, onSearch }) => {
-  const [formData, setFormData] = useState({
-    from: initialData.from || 'DEL',
-    to: initialData.to || 'HYD',
-    departDate: initialData.departDate || new Date().toISOString().split('T')[0],
-    returnDate: initialData.returnDate || '',
-    travelers: initialData.travelers || 1,
-    tripType: initialData.tripType || 'one-way'
-  });
-
-  const handleInputChange = (field, value) => {
-    setFormData({
-      ...formData,
-      [field]: value
+  // Flight Search Form Component
+  const FlightSearchForm = ({ initialData, onSearch }) => {
+    const [formData, setFormData] = useState({
+      from: initialData.from || 'DEL',
+      to: initialData.to || 'HYD',
+      departDate: initialData.departDate || new Date().toISOString().split('T')[0],
+      returnDate: initialData.returnDate || '',
+      travelers: initialData.travelers || 1,
+      tripType: initialData.tripType || 'one-way'
     });
-  };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSearch(formData);
-  };
+    const handleInputChange = (field, value) => {
+      setFormData({
+        ...formData,
+        [field]: value
+      });
+    };
 
-  return (
-    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3">
-        <label className="block text-sm font-medium text-white mb-1">From</label>
-        <div className="relative">
-          <input
-            type="text"
-            value={formData.from}
-            onChange={(e) => handleInputChange('from', e.target.value)}
-            className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-            placeholder="Enter city or airport"
-          />
-          <Plane className="absolute left-3 top-3 h-4 w-4 text-white/70" />
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      onSearch(formData);
+    };
+
+    return (
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3">
+          <label className="block text-sm font-medium text-white mb-1">From</label>
+          <div className="relative">
+            <input
+              type="text"
+              value={formData.from}
+              onChange={(e) => handleInputChange('from', e.target.value)}
+              className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+              placeholder="Enter city or airport"
+            />
+            <Plane className="absolute left-3 top-3 h-4 w-4 text-white/70" />
+          </div>
         </div>
-      </div>
 
-      <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3">
-        <label className="block text-sm font-medium text-white mb-1">To</label>
-        <div className="relative">
-          <input
-            type="text"
-            value={formData.to}
-            onChange={(e) => handleInputChange('to', e.target.value)}
-            className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-            placeholder="Enter city or airport"
-          />
-          <Plane className="absolute left-3 top-3 h-4 w-4 text-white/70 transform rotate-90" />
+        <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3">
+          <label className="block text-sm font-medium text-white mb-1">To</label>
+          <div className="relative">
+            <input
+              type="text"
+              value={formData.to}
+              onChange={(e) => handleInputChange('to', e.target.value)}
+              className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+              placeholder="Enter city or airport"
+            />
+            <Plane className="absolute left-3 top-3 h-4 w-4 text-white/70 transform rotate-90" />
+          </div>
         </div>
-      </div>
 
-      <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3">
-        <label className="block text-sm font-medium text-white mb-1">Departure Date</label>
-        <div className="relative">
-          <input
-            type="date"
-            value={formData.departDate}
-            onChange={(e) => handleInputChange('departDate', e.target.value)}
-            className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-          />
-          <Calendar className="absolute left-3 top-3 h-4 w-4 text-white/70" />
+        <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3">
+          <label className="block text-sm font-medium text-white mb-1">Departure Date</label>
+          <div className="relative">
+            <input
+              type="date"
+              value={formData.departDate}
+              onChange={(e) => handleInputChange('departDate', e.target.value)}
+              className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+            />
+            <Calendar className="absolute left-3 top-3 h-4 w-4 text-white/70" />
+          </div>
         </div>
-      </div>
 
-      <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3">
-        <label className="block text-sm font-medium text-white mb-1">Travelers</label>
-        <div className="relative">
-          <select
-            value={formData.travelers}
-            onChange={(e) => handleInputChange('travelers', e.target.value)}
-            className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent appearance-none"
+        <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3">
+          <label className="block text-sm font-medium text-white mb-1">Travelers</label>
+          <div className="relative">
+            <select
+              value={formData.travelers}
+              onChange={(e) => handleInputChange('travelers', e.target.value)}
+              className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent appearance-none"
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                <option key={num} value={num}>{num} Traveler{num !== 1 ? 's' : ''}</option>
+              ))}
+            </select>
+            <Users className="absolute left-3 top-3 h-4 w-4 text-white/70" />
+            <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-white/70" />
+          </div>
+        </div>
+
+        <div className="col-span-1 md:col-span-4 flex justify-center">
+          <button
+            type="submit"
+            className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg transition-colors duration-200 flex items-center"
           >
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-              <option key={num} value={num}>{num} Traveler{num !== 1 ? 's' : ''}</option>
-            ))}
-          </select>
-          <Users className="absolute left-3 top-3 h-4 w-4 text-white/70" />
-          <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-white/70" />
+            <Search className="h-5 w-5 mr-2" />
+            Search Flights
+          </button>
         </div>
-      </div>
-
-      <div className="col-span-1 md:col-span-4 flex justify-center">
-        <button
-          type="submit"
-          className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg transition-colors duration-200 flex items-center"
-        >
-          <Search className="h-5 w-5 mr-2" />
-          Search Flights
-        </button>
-      </div>
-    </form>
-  );
-};
+      </form>
+    );
+  };
 
   return (
     <div className="bg-gray-100 min-h-screen">
       <Navbar />
-      
 
-      
+
+
       {/* Enhanced Header Section with Background Image */}
       <div className="relative px-4 py-12 bg-gradient-to-r from-blue-800 to-indigo-900 text-white overflow-hidden">
         <div className="absolute inset-0 overflow-hidden">
-          <img 
-            src="https://images.unsplash.com/photo-1569154941061-e231b4725ef1?q=80&w=2070&auto=format&fit=crop" 
-            alt="Clouds from airplane window" 
+          <img
+            src="https://images.unsplash.com/photo-1569154941061-e231b4725ef1?q=80&w=2070&auto=format&fit=crop"
+            alt="Clouds from airplane window"
             className="w-full h-full object-cover opacity-20"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-blue-900/80 to-indigo-900/80"></div>
         </div>
-        
+
         <div className="container mx-auto relative z-10">
           <div className="flex flex-col items-center mb-8">
             <div className="flex items-center mb-3">
@@ -1709,16 +1700,16 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
             <h1 className="text-4xl md:text-5xl font-bold mb-3 text-center">Find Your Perfect Flight</h1>
             <p className="text-blue-200 text-center max-w-2xl mb-6">Compare prices, schedules, and amenities from top airlines to book the best deal for your trip</p>
           </div>
-          
+
           <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 shadow-xl border border-white/20 transform hover:scale-[1.01] transition-transform duration-300">
-            <FlightSearchForm 
+            <FlightSearchForm
               initialData={searchParams}
               onSearch={handleSearch}
             />
           </div>
         </div>
       </div>
-      
+
       {/* Enhanced Date Navigation Bar */}
       <div className="bg-white shadow-md border-b border-gray-200 sticky top-0 z-20">
         <div className="container mx-auto max-w-6xl px-4 py-3">
@@ -1780,7 +1771,7 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
           </div>
         </div>
       </div>
-      
+
       <div className="bg-gray-50 min-h-screen pb-12 pt-8">
         <div className="container mx-auto max-w-6xl px-4">
           {loading ? (
@@ -1806,7 +1797,7 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                       Filters
                     </h3>
                   </div>
-                  
+
                   {/* Price Range */}
                   <div className="p-5 border-b border-gray-200">
                     <h4 className="font-medium text-gray-800 mb-4">Price Range</h4>
@@ -1815,7 +1806,7 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                         <span className="text-sm font-medium text-primary-600">${filters.price[0]}</span>
                         <span className="text-sm font-medium text-primary-600">${filters.price[1]}</span>
                       </div>
-                      
+
                       <input
                         type="range"
                         min="0"
@@ -1833,32 +1824,32 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                     <h4 className="font-medium text-gray-800 mb-4">Stops</h4>
                     <div className="space-y-2">
                       <label className="flex items-center p-3 hover:bg-primary-50 rounded-lg transition-colors cursor-pointer">
-                        <input 
-                          type="radio" 
+                        <input
+                          type="radio"
                           name="stops"
-                          className="w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500" 
+                          className="w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500"
                           checked={filters.stops === "any"}
                           onChange={() => handleFilterChange('stops', "any")}
                         />
                         <span className="ml-3 text-gray-700 font-medium">Any number of stops</span>
                       </label>
-                      
+
                       <label className="flex items-center p-2 hover:bg-blue-50 rounded-md transition-colors cursor-pointer">
-                        <input 
-                          type="radio" 
+                        <input
+                          type="radio"
                           name="stops"
-                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500" 
+                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                           checked={filters.stops === "0"}
                           onChange={() => handleFilterChange('stops', "0")}
                         />
                         <span className="ml-2 text-gray-700">Non-stop only</span>
                       </label>
-                      
+
                       <label className="flex items-center p-2 hover:bg-blue-50 rounded-md transition-colors cursor-pointer">
-                        <input 
-                          type="radio" 
+                        <input
+                          type="radio"
                           name="stops"
-                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500" 
+                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                           checked={filters.stops === "1"}
                           onChange={() => handleFilterChange('stops', "1")}
                         />
@@ -1866,16 +1857,16 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                       </label>
                     </div>
                   </div>
-                  
+
                   {/* Airlines */}
                   <div className="p-5">
                     <h4 className="font-medium text-gray-800 mb-4">Airlines</h4>
                     <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                       {getAllAirlines().map(airline => (
                         <label key={airline} className="flex items-center p-2 hover:bg-blue-50 rounded-md transition-colors cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                             checked={filters.airlines.includes(airline)}
                             onChange={() => toggleAirlineFilter(airline)}
                           />
@@ -1884,7 +1875,7 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                       ))}
                     </div>
                   </div>
-                  
+
                   {/* Reset Filters */}
                   <div className="p-5 border-t border-gray-200 bg-gray-50">
                     <button
@@ -1903,7 +1894,7 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                   </div>
                 </div>
               </div>
-              
+
               {/* Results */}
               <div className="w-full md:w-3/4">
                 {/* Sort Controls */}
@@ -1911,14 +1902,14 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                   <div className="flex flex-col md:flex-row items-center justify-between">
                     <div className="mb-4 md:mb-0">
                       <p className="text-gray-600">
-                        <span className="font-bold text-primary-600 text-lg">{totalItems}</span> 
+                        <span className="font-bold text-primary-600 text-lg">{totalItems}</span>
                         <span className="text-gray-700"> flights found</span>
                         <span className="text-sm text-gray-500 ml-2">
                           (Showing {startIndex + 1} to {endIndex})
                         </span>
                       </p>
                     </div>
-                    
+
                     <div className="flex items-center space-x-4">
                       <span className="text-gray-700 font-medium">Sort by:</span>
                       <div className="relative">
@@ -1938,7 +1929,7 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Enhanced Flight Cards */}
                 {currentItems.length === 0 ? (
                   <div className="card p-12 text-center">
@@ -1947,7 +1938,7 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                     </div>
                     <h3 className="heading-md text-gray-800 mb-4">No flights found</h3>
                     <p className="text-lead text-gray-600 mb-8 max-w-md mx-auto">We couldn't find any flights matching your criteria. Try adjusting your search filters or dates.</p>
-                    <button 
+                    <button
                       onClick={() => {
                         setFilters({
                           price: [0, 20000],
@@ -1964,8 +1955,8 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                 ) : (
                   <div className="space-y-6">
                     {currentItems.map((flight, index) => (
-                      <div 
-                        key={index} 
+                      <div
+                        key={index}
                         className="card card-hover overflow-hidden border border-gray-200 hover:border-primary-200 transition-all duration-300"
                       >
                         {/* Top section with airline and price */}
@@ -1974,8 +1965,8 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                             {/* Airline and Flight Info */}
                             <div className="flex items-center mb-4 md:mb-0">
                               <div className="w-16 h-16 flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl mr-4 overflow-hidden shadow-soft border border-primary-200">
-                                <img 
-                                  src={flight.airline?.logo} 
+                                <img
+                                  src={flight.airline?.logo}
                                   alt={flight.airline?.name || 'Airline'}
                                   className="w-12 h-12 object-contain"
                                   onError={(e) => {
@@ -1994,7 +1985,7 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                                 </div>
                               </div>
                             </div>
-                            
+
                             {/* Price and Book Button */}
                             <div className="flex flex-col items-end">
                               <div className="text-right mb-3">
@@ -2014,7 +2005,7 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                               </button>
                             </div>
                           </div>
-                          
+
                           {/* Flight Details */}
                           <div className="mt-6 grid grid-cols-4 gap-4 text-sm text-gray-600">
                             <div>
@@ -2063,13 +2054,13 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                     ))}
                   </div>
                 )}
-                
+
                 {/* Enhanced Pagination */}
                 <div className="mt-8 flex flex-col items-center">
                   <div className="text-sm text-gray-600 mb-4">
                     Showing {startIndex + 1} to {endIndex} of {totalItems} flights
                   </div>
-                                      <nav className="inline-flex items-center gap-1 card p-2">
+                  <nav className="inline-flex items-center gap-1 card p-2">
                     <button
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
@@ -2077,11 +2068,11 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                     >
                       <ChevronLeft className="h-5 w-5" />
                     </button>
-                    
+
                     {[...Array(totalPages)].map((_, idx) => {
                       const pageNumber = idx + 1;
                       const isCurrentPage = pageNumber === currentPage;
-                      
+
                       // Show first page, last page, and pages around current page
                       if (
                         pageNumber === 1 ||
@@ -2092,17 +2083,16 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                           <button
                             key={pageNumber}
                             onClick={() => handlePageChange(pageNumber)}
-                            className={`w-9 h-9 rounded-md font-medium flex items-center justify-center transition-all focus-ring ${
-                              isCurrentPage
+                            className={`w-9 h-9 rounded-md font-medium flex items-center justify-center transition-all focus-ring ${isCurrentPage
                                 ? 'bg-primary-600 text-white shadow-md'
                                 : 'text-gray-700 hover:bg-primary-50 hover:text-primary-600'
-                            }`}
+                              }`}
                           >
                             {pageNumber}
                           </button>
                         );
                       }
-                      
+
                       // Show ellipsis for skipped pages
                       if (
                         (pageNumber === 2 && currentPage > 3) ||
@@ -2117,10 +2107,10 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
                           </span>
                         );
                       }
-                      
+
                       return null;
                     })}
-                    
+
                     <button
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
@@ -2135,7 +2125,7 @@ const FlightSearchForm = ({ initialData, onSearch }) => {
           )}
         </div>
       </div>
-      
+
       <Footer />
     </div>
   )

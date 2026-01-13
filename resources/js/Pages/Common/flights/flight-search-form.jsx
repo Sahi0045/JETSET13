@@ -417,8 +417,8 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           <button
             onClick={() => handleTripTypeChange("oneWay")}
             className={`w-1/2 py-3 text-center font-medium transition-colors ${formData.tripType === "oneWay"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              ? "bg-blue-500 text-white"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
           >
             One Way
@@ -426,8 +426,8 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           <button
             onClick={() => handleTripTypeChange("roundTrip")}
             className={`w-1/2 py-3 text-center font-medium transition-colors ${formData.tripType === "roundTrip"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              ? "bg-blue-500 text-white"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
           >
             Round Trip
