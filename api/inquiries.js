@@ -1,5 +1,6 @@
 import Inquiry from '../backend/models/inquiry.model.js';
 import { optionalProtect } from '../backend/middleware/auth.middleware.js';
+import { sendInquiryEmails } from '../backend/services/email.service.js';
 
 // Note: Supabase connection is already initialized in inquiry.model.js
 
@@ -45,8 +46,8 @@ export default async function handler(req, res) {
       if (req.user) {
         inquiryData.user_id = req.user.id;
         inquiryData.customer_email = req.user.email;
-        inquiryData.customer_name = req.user.firstName && req.user.lastName 
-          ? `${req.user.firstName} ${req.user.lastName}` 
+        inquiryData.customer_name = req.user.firstName && req.user.lastName
+          ? `${req.user.firstName} ${req.user.lastName}`
           : inquiryData.customer_name;
 
         console.log('✅ Creating authenticated inquiry for user:', req.user.email);
@@ -56,6 +57,13 @@ export default async function handler(req, res) {
 
       // Create inquiry
       const inquiry = await Inquiry.create(inquiryData);
+
+      // Send email notifications (non-blocking - don't fail if emails fail)
+      console.log('📧 Triggering email notifications for inquiry:', inquiry.id);
+      sendInquiryEmails(inquiry).catch(emailError => {
+        // Log error but don't fail the request
+        console.error('⚠️ Email notification error (non-blocking):', emailError.message);
+      });
 
       return res.status(201).json({
         success: true,
@@ -72,26 +80,26 @@ export default async function handler(req, res) {
       // Check if getting a specific inquiry by ID
       if (query.id) {
         try {
-        if (!req.user) {
-          return res.status(401).json({
-            success: false,
-            message: 'Authentication required'
-          });
-        }
+          if (!req.user) {
+            return res.status(401).json({
+              success: false,
+              message: 'Authentication required'
+            });
+          }
 
-        const inquiry = await Inquiry.findById(query.id);
+          const inquiry = await Inquiry.findById(query.id);
 
-        if (!inquiry) {
-          return res.status(404).json({
-            success: false,
-            message: 'Inquiry not found'
-          });
-        }
+          if (!inquiry) {
+            return res.status(404).json({
+              success: false,
+              message: 'Inquiry not found'
+            });
+          }
 
           // SIMPLE RULE: If inquiry appears in user's list, they can view it
           // Check if user is admin - always allow
-        const isAdmin = ['admin', 'staff'].includes(req.user.role);
-          
+          const isAdmin = ['admin', 'staff'].includes(req.user.role);
+
           if (isAdmin) {
             console.log('✅ Admin access granted');
             // Return inquiry immediately for admin
@@ -100,23 +108,23 @@ export default async function handler(req, res) {
               data: inquiry
             });
           }
-          
+
           // For regular users: use SAME logic as findForUser
           // findForUser returns inquiries where: user_id matches OR customer_email matches (ilike)
           const userEmail = req.user.email || req.user.user_email || (req.user.user_metadata && req.user.user_metadata.email);
-          
+
           // Normalize emails for comparison (trim, lowercase, remove any whitespace)
           const normalizeEmail = (email) => {
             if (!email) return '';
             return String(email).trim().toLowerCase().replace(/\s+/g, '');
           };
-          
+
           const normalizedUserEmail = normalizeEmail(userEmail);
           const normalizedInquiryEmail = normalizeEmail(inquiry.customer_email);
-          
+
           const matchesByUserId = inquiry.user_id && req.user.id && String(inquiry.user_id) === String(req.user.id);
           const matchesByEmail = normalizedInquiryEmail && normalizedUserEmail && normalizedInquiryEmail === normalizedUserEmail;
-          
+
           console.log('🔍 Access check:', {
             inquiryId: query.id?.slice(-8),
             userId: req.user.id,
@@ -138,18 +146,18 @@ export default async function handler(req, res) {
               userId: req.user.id,
               inquiryUserId: inquiry.user_id
             });
-          return res.status(403).json({
-            success: false,
-            message: 'Access denied'
-          });
-        }
-          
+            return res.status(403).json({
+              success: false,
+              message: 'Access denied'
+            });
+          }
+
           console.log('✅ Access granted - inquiry matches user');
-          
+
           // Auto-link inquiry if it matches by email but doesn't have user_id
           if (!inquiry.user_id && matchesByEmail) {
             try {
-              await Inquiry.update(query.id, { 
+              await Inquiry.update(query.id, {
                 user_id: req.user.id,
                 updated_at: new Date().toISOString()
               });
@@ -159,10 +167,10 @@ export default async function handler(req, res) {
             }
           }
 
-        return res.status(200).json({
-          success: true,
-          data: inquiry
-        });
+          return res.status(200).json({
+            success: true,
+            data: inquiry
+          });
         } catch (error) {
           console.error('❌ Error fetching inquiry by ID:', error.message);
           console.error('Error stack:', error.stack);
