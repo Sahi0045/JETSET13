@@ -366,40 +366,46 @@ function FlightLanding() {
       <Navbar />
 
       {/* Enhanced Hero Section */}
-      <section className="relative min-h-[70vh] md:min-h-[85vh] pb-16 md:pb-24 bg-slate-900">
+      {/* Enhanced Hero Section */}
+      <section className="relative w-full min-h-screen md:min-h-[85vh] bg-slate-900 flex flex-col">
         {/* Animated background elements */}
         <div className="absolute inset-0 z-0 overflow-hidden">
           <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
           <div className="absolute top-1/3 right-1/3 w-72 h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
           <div className="absolute bottom-1/4 left-1/4 w-80 h-80 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
         </div>
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-900/50 via-indigo-900/40 to-black/60"></div>
-        <div className="absolute inset-0 flex flex-col justify-center px-6 sm:px-8 md:px-16 z-10 pt-24 pb-8">
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-900/50 via-indigo-900/40 to-black/60 z-0"></div>
+
+        {/* Content Container - Relative positioning for natural flow */}
+        <div className="relative z-10 flex-1 flex flex-col justify-center px-4 sm:px-6 md:px-16 pt-32 pb-20">
           <div className="container mx-auto">
-            <div className="max-w-[900px] xl:max-w-[1100px] animate-fade-in-up">
+            <div className="max-w-[900px] xl:max-w-[1100px] animate-fade-in-up mx-auto lg:mx-0">
               {/* Hero/Header Section */}
-              {typeof window !== 'undefined' && window.innerWidth < 1024 ? (
-                <div className="mb-6 mt-20 md:mt-32">
-                  <p className="text-white text-lg md:text-xl lg:text-2xl font-semibold italic text-center drop-shadow-md">Travel is the only thing you buy that makes you richer.</p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center mb-4">
-                    <div className="h-0.5 w-16 bg-blue-400 mr-4"></div>
-                    <h2 className="text-blue-300 text-xl font-light tracking-wider uppercase">
-                      <span className="font-script">Explore the World</span>
-                    </h2>
+              <div className="mb-8 md:mb-12 text-center lg:text-left">
+                {typeof window !== 'undefined' && window.innerWidth < 1024 ? (
+                  <div className="mb-6">
+                    <p className="text-white text-lg md:text-xl font-semibold italic drop-shadow-md">Travel is the only thing you buy that makes you richer.</p>
                   </div>
-                  <h1 className="text-white text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-4 md:mb-6 leading-tight">
-                    Find Your <span className="text-blue-300">Perfect Flight</span> Today
-                  </h1>
-                  <p className="text-gray-200 text-base sm:text-lg md:text-xl mb-6 md:mb-10 max-w-3xl">
-                    Discover amazing deals on flights to destinations worldwide. Book with confidence and travel with peace of mind.
-                  </p>
-                </>
-              )}
+                ) : (
+                  <>
+                    <div className="flex items-center mb-4">
+                      <div className="h-0.5 w-16 bg-blue-400 mr-4"></div>
+                      <h2 className="text-blue-300 text-xl font-light tracking-wider uppercase">
+                        <span className="font-script">Explore the World</span>
+                      </h2>
+                    </div>
+                    <h1 className="text-white text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-4 md:mb-6 leading-tight">
+                      Find Your <span className="text-blue-300">Perfect Flight</span> Today
+                    </h1>
+                    <p className="text-gray-200 text-base sm:text-lg md:text-xl mb-6 md:mb-10 max-w-3xl">
+                      Discover amazing deals on flights to destinations worldwide. Book with confidence and travel with peace of mind.
+                    </p>
+                  </>
+                )}
+              </div>
 
               {/* <div className="bg-white/10 backdrop-blur-md p-8 rounded-xl shadow-2xl border border-white/20 transform hover:scale-[1.01] transition-transform duration-300"> */}
+
               <FlightSearchForm onSearch={handleSearch} />
 
             </div>
