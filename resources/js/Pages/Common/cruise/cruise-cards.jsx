@@ -22,6 +22,43 @@ const CruiseCards = () => {
   const [error, setError] = useState(null);
   const [usingFallback, setUsingFallback] = useState(false);
 
+  const applyFiltersAndTitle = (cruises) => {
+    let filtered = cruises;
+    let nextTitle = "All Cruises";
+
+    if (cruiseLineParam) {
+      filtered = filtered.filter(cruise =>
+        (cruise.name || '').toLowerCase().includes(cruiseLineParam.toLowerCase())
+      );
+      nextTitle = `${cruiseLineParam} Cruises`;
+    }
+
+    if (destinationParam) {
+      const selectedDestination = destinationsData.destinations.find(dest =>
+        dest.name.toLowerCase() === destinationParam.toLowerCase()
+      );
+
+      if (selectedDestination) {
+        filtered = filtered.filter(cruise =>
+          selectedDestination.cruiseLines.includes(cruise.name)
+        );
+        nextTitle = `${selectedDestination.name} Cruises`;
+      }
+    }
+
+    if (countryParam) {
+      filtered = filtered.filter(cruise =>
+        (cruise.departurePorts || []).some(port =>
+          (port || '').toLowerCase().includes(countryParam.toLowerCase())
+        )
+      );
+      nextTitle = `Cruises from ${countryParam}`;
+    }
+
+    setTitle(nextTitle);
+    return filtered;
+  };
+
   const fetchCruiseData = async () => {
     setIsLoading(true);
     setError(null);
@@ -50,7 +87,8 @@ const CruiseCards = () => {
         departureDate: cruise.departure_date
       }));
 
-      setFilteredCruises(transformedCruises);
+      const filtered = applyFiltersAndTitle(transformedCruises);
+      setFilteredCruises(filtered);
       setUsingFallback(false);
     } catch (apiError) {
       console.error('Error fetching cruise data:', apiError);
@@ -58,37 +96,7 @@ const CruiseCards = () => {
       setUsingFallback(true);
       
       // Fallback to local JSON data
-      let filtered = cruiseLineData.cruiseLines;
-
-      if (cruiseLineParam) {
-        filtered = filtered.filter(cruise => 
-          cruise.name.toLowerCase().includes(cruiseLineParam.toLowerCase())
-        );
-        setTitle(`${cruiseLineParam} Cruises`);
-      }
-
-      if (destinationParam) {
-        const selectedDestination = destinationsData.destinations.find(dest => 
-          dest.name.toLowerCase() === destinationParam.toLowerCase()
-        );
-
-        if (selectedDestination) {
-          filtered = filtered.filter(cruise => 
-            selectedDestination.cruiseLines.includes(cruise.name)
-          );
-          setTitle(`${selectedDestination.name} Cruises`);
-        }
-      }
-
-      if (countryParam) {
-        filtered = filtered.filter(cruise => 
-          cruise.departurePorts.some(port => 
-            port.toLowerCase().includes(countryParam.toLowerCase())
-          )
-        );
-        setTitle(`Cruises from ${countryParam}`);
-      }
-
+      const filtered = applyFiltersAndTitle(cruiseLineData.cruiseLines);
       setFilteredCruises(filtered);
     } finally {
       setIsLoading(false);
