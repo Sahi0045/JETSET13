@@ -287,6 +287,9 @@ async function handlePaymentInitiation(req, res) {
           billingAddress: 'OPTIONAL',
           customerEmail: 'OPTIONAL'
         },
+        action: {
+          '3DSecure': 'MANDATORY'
+        },
         timeout: 900
       },
       order: {

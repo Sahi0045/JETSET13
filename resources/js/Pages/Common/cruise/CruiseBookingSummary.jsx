@@ -46,13 +46,16 @@ function CruiseBookingSummary() {
 
       if (selectedCruise) {
         setCruiseData({
+          id: selectedCruise.id,
           name: selectedCruise.name,
+          image: selectedCruise.image,
           price: selectedCruise.price,
           duration: selectedCruise.duration,
           departure: selectedCruise.departurePorts[0],
           arrival: selectedCruise.destinations[0],
           departureDate: selectedCruise.departureDate,
-          returnDate: selectedCruise.returnDate
+          returnDate: selectedCruise.returnDate,
+          description: selectedCruise.description
         });
       }
     };
@@ -264,6 +267,15 @@ function CruiseBookingSummary() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Booking Summary</h1>
             <p className="text-gray-600 mt-2">Complete your booking for {cruiseData.name}</p>
+          </div>
+
+          {/* Cruise Image */}
+          <div className="mb-8 rounded-lg overflow-hidden shadow-lg">
+            <img
+              src={cruiseData.image || "/images/Rectangle 1434 (1).png"}
+              alt={cruiseData.name}
+              className="w-full h-[400px] object-cover"
+            />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
