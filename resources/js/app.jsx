@@ -1,7 +1,6 @@
 // CSS imports moved to main.jsx entry point
 
 import React from 'react';
-import ContactBanner from './components/ContactBanner';
 import FullPageBanner from './components/FullPageBanner';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoadingSpinner from './Components/LoadingSpinner';
@@ -643,7 +642,6 @@ const App = () => {
         <Route path="/404" element={<Error />} />
         <Route path="*" element={<Navigate to="/404" />} />
       </Routes>
-      <ContactBanner />
     </React.Suspense>
   );
 };
