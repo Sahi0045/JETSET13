@@ -210,43 +210,43 @@ export default function CompleteProfile() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-[#f0f7fc] flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#006d92]"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+      <div className="min-h-screen bg-gradient-to-br from-[#B9D0DC] via-[#65B3CF] to-[#055B75] flex items-center justify-center">
+        <div className="text-center bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-2xl">
+          <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-t-4 border-[#055B75]"></div>
+          <p className="mt-6 text-[#055B75] text-xl font-semibold">Loading...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f0f7fc] py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#B9D0DC] via-[#65B3CF] to-[#055B75] py-8 px-4">
       <div className="container mx-auto max-w-2xl">
-        <div className="bg-white rounded-lg shadow-md p-6 md:p-8">
+        <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 backdrop-blur-sm bg-opacity-95">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-[#006d92] text-white rounded-full mb-4">
-              <FaUser size={32} />
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#055B75] to-[#65B3CF] text-white rounded-full mb-4 shadow-lg">
+              <FaUser size={36} />
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
+            <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-[#055B75] to-[#65B3CF] bg-clip-text text-transparent mb-3">
               Complete Your Profile
             </h1>
-            <p className="text-gray-600">
+            <p className="text-[#626363] text-lg">
               Please provide the following details to continue
             </p>
           </div>
 
           {/* Success Message */}
           {successMessage && (
-            <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
-              <p className="font-medium">{successMessage}</p>
+            <div className="mb-6 bg-gradient-to-r from-[#65B3CF] to-[#B9D0DC] border-2 border-[#055B75] text-white px-4 py-3 rounded-xl shadow-md">
+              <p className="font-semibold">{successMessage}</p>
             </div>
           )}
 
           {/* Error Message */}
           {errors.submit && (
-            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-              <p className="font-medium">{errors.submit}</p>
+            <div className="mb-6 bg-red-50 border-2 border-red-400 text-red-700 px-4 py-3 rounded-xl shadow-md">
+              <p className="font-semibold">{errors.submit}</p>
             </div>
           )}
 
@@ -254,7 +254,7 @@ export default function CompleteProfile() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* First Name */}
             <div>
-              <label htmlFor="first_name" className="block text-gray-700 font-medium mb-2">
+              <label htmlFor="first_name" className="block text-[#055B75] font-semibold mb-2 text-lg">
                 First Name <span className="text-red-500">*</span>
               </label>
               <input
@@ -264,19 +264,19 @@ export default function CompleteProfile() {
                 value={data.first_name}
                 onChange={handleChange}
                 placeholder="Enter your first name"
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#006d92] focus:border-transparent ${
-                  errors.first_name ? 'border-red-500' : 'border-gray-300'
+                className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-[#65B3CF] focus:border-[#055B75] transition-all ${
+                  errors.first_name ? 'border-red-500' : 'border-[#B9D0DC] hover:border-[#65B3CF]'
                 }`}
                 disabled={processing}
               />
               {errors.first_name && (
-                <p className="mt-1 text-sm text-red-600">{errors.first_name}</p>
+                <p className="mt-2 text-sm text-red-600 font-medium">{errors.first_name}</p>
               )}
             </div>
 
             {/* Last Name */}
             <div>
-              <label htmlFor="last_name" className="block text-gray-700 font-medium mb-2">
+              <label htmlFor="last_name" className="block text-[#055B75] font-semibold mb-2 text-lg">
                 Last Name <span className="text-red-500">*</span>
               </label>
               <input
@@ -286,20 +286,20 @@ export default function CompleteProfile() {
                 value={data.last_name}
                 onChange={handleChange}
                 placeholder="Enter your last name"
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#006d92] focus:border-transparent ${
-                  errors.last_name ? 'border-red-500' : 'border-gray-300'
+                className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-[#65B3CF] focus:border-[#055B75] transition-all ${
+                  errors.last_name ? 'border-red-500' : 'border-[#B9D0DC] hover:border-[#65B3CF]'
                 }`}
                 disabled={processing}
               />
               {errors.last_name && (
-                <p className="mt-1 text-sm text-red-600">{errors.last_name}</p>
+                <p className="mt-2 text-sm text-red-600 font-medium">{errors.last_name}</p>
               )}
             </div>
 
             {/* Mobile Number */}
             <div>
-              <label htmlFor="mobile_number" className="block text-gray-700 font-medium mb-2">
-                <FaPhone className="inline mr-2" />
+              <label htmlFor="mobile_number" className="block text-[#055B75] font-semibold mb-2 text-lg">
+                <FaPhone className="inline mr-2 text-[#65B3CF]" />
                 Mobile Number <span className="text-red-500">*</span>
               </label>
               <input
@@ -310,20 +310,20 @@ export default function CompleteProfile() {
                 onChange={handleChange}
                 placeholder="Enter 10-digit mobile number"
                 maxLength="10"
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#006d92] focus:border-transparent ${
-                  errors.mobile_number ? 'border-red-500' : 'border-gray-300'
+                className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-[#65B3CF] focus:border-[#055B75] transition-all ${
+                  errors.mobile_number ? 'border-red-500' : 'border-[#B9D0DC] hover:border-[#65B3CF]'
                 }`}
                 disabled={processing}
               />
               {errors.mobile_number && (
-                <p className="mt-1 text-sm text-red-600">{errors.mobile_number}</p>
+                <p className="mt-2 text-sm text-red-600 font-medium">{errors.mobile_number}</p>
               )}
             </div>
 
             {/* Date of Birth */}
             <div>
-              <label htmlFor="date_of_birth" className="block text-gray-700 font-medium mb-2">
-                <FaCalendar className="inline mr-2" />
+              <label htmlFor="date_of_birth" className="block text-[#055B75] font-semibold mb-2 text-lg">
+                <FaCalendar className="inline mr-2 text-[#65B3CF]" />
                 Date of Birth <span className="text-red-500">*</span>
               </label>
               <input
@@ -333,19 +333,19 @@ export default function CompleteProfile() {
                 value={data.date_of_birth}
                 onChange={handleChange}
                 max={new Date().toISOString().split('T')[0]}
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#006d92] focus:border-transparent ${
-                  errors.date_of_birth ? 'border-red-500' : 'border-gray-300'
+                className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-[#65B3CF] focus:border-[#055B75] transition-all ${
+                  errors.date_of_birth ? 'border-red-500' : 'border-[#B9D0DC] hover:border-[#65B3CF]'
                 }`}
                 disabled={processing}
               />
               {errors.date_of_birth && (
-                <p className="mt-1 text-sm text-red-600">{errors.date_of_birth}</p>
+                <p className="mt-2 text-sm text-red-600 font-medium">{errors.date_of_birth}</p>
               )}
             </div>
 
             {/* Gender */}
             <div>
-              <label className="block text-gray-700 font-medium mb-2">
+              <label className="block text-[#055B75] font-semibold mb-3 text-lg">
                 Gender <span className="text-red-500">*</span>
               </label>
               <div className="flex flex-wrap gap-4">
@@ -354,10 +354,10 @@ export default function CompleteProfile() {
                     key={gender}
                     type="button"
                     onClick={() => setData({ ...data, gender })}
-                    className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                    className={`px-8 py-3 rounded-xl font-semibold transition-all transform hover:scale-105 ${
                       data.gender === gender
-                        ? 'bg-[#006d92] text-white'
-                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                        ? 'bg-gradient-to-r from-[#055B75] to-[#65B3CF] text-white shadow-lg'
+                        : 'bg-white border-2 border-[#B9D0DC] text-[#626363] hover:border-[#65B3CF] hover:bg-[#B9D0DC]/20'
                     }`}
                     disabled={processing}
                   >
@@ -368,11 +368,11 @@ export default function CompleteProfile() {
             </div>
 
             {/* Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 pt-4">
+            <div className="flex flex-col sm:flex-row gap-4 pt-6">
               <button
                 type="submit"
                 disabled={processing}
-                className="flex-1 bg-[#006d92] text-white py-3 px-6 rounded-lg font-medium hover:bg-[#005a7a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                className="flex-1 bg-gradient-to-r from-[#055B75] to-[#65B3CF] text-white py-4 px-8 rounded-xl font-bold text-lg hover:shadow-2xl hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
                 {processing ? (
                   <>
@@ -388,15 +388,15 @@ export default function CompleteProfile() {
                 type="button"
                 onClick={handleSkip}
                 disabled={processing}
-                className="sm:w-auto px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="sm:w-auto px-8 py-4 border-2 border-[#7F8073] text-[#626363] rounded-xl font-semibold hover:bg-[#7F8073]/10 hover:border-[#626363] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Skip for Now
               </button>
             </div>
           </form>
 
-          <p className="text-center text-sm text-gray-500 mt-6">
-            You can update your profile anytime from the profile page
+          <p className="text-center text-sm text-[#626363] mt-6 font-medium">
+            💡 You can update your profile anytime from the profile page
           </p>
         </div>
       </div>
