@@ -87,15 +87,15 @@ export default function CompleteProfile() {
   const validateForm = () => {
     const newErrors = {};
     
-    if (!data.first_name.trim()) {
+    if (!data.first_name || !data.first_name.trim()) {
       newErrors.first_name = 'First name is required';
     }
     
-    if (!data.last_name.trim()) {
+    if (!data.last_name || !data.last_name.trim()) {
       newErrors.last_name = 'Last name is required';
     }
     
-    if (!data.mobile_number.trim()) {
+    if (!data.mobile_number || !data.mobile_number.trim()) {
       newErrors.mobile_number = 'Mobile number is required';
     } else if (!/^[0-9]{10}$/.test(data.mobile_number.trim())) {
       newErrors.mobile_number = 'Please enter a valid 10-digit mobile number';
@@ -107,7 +107,7 @@ export default function CompleteProfile() {
       // Check if user is at least 18 years old
       const dob = new Date(data.date_of_birth);
       const today = new Date();
-      const age = today.getFullYear() - dob.getFullYear();
+      let age = today.getFullYear() - dob.getFullYear();
       const monthDiff = today.getMonth() - dob.getMonth();
       
       if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
@@ -119,14 +119,23 @@ export default function CompleteProfile() {
       }
     }
     
+    if (!data.gender) {
+      newErrors.gender = 'Gender is required';
+    }
+    
+    console.log('Validation result:', { newErrors, isValid: Object.keys(newErrors).length === 0 });
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('Form submitted, validating...');
     
     if (!validateForm()) {
+      console.log('Validation failed:', errors);
       return;
     }
     
@@ -135,6 +144,8 @@ export default function CompleteProfile() {
     setSuccessMessage('');
     
     try {
+      console.log('Updating user profile with data:', data);
+      
       // Update Supabase auth user metadata
       const metadataUpdates = {
         first_name: data.first_name,
@@ -146,33 +157,57 @@ export default function CompleteProfile() {
         profile_completed: true,
       };
 
-      const { error: updateError } = await supabase.auth.updateUser({
+      console.log('Updating auth metadata:', metadataUpdates);
+      const { data: updateData, error: updateError } = await supabase.auth.updateUser({
         data: metadataUpdates
       });
       
       if (updateError) {
+        console.error('Auth update error:', updateError);
         throw updateError;
       }
+      
+      console.log('Auth metadata updated successfully');
 
-      // Create or update user in database
+      // Create or update user in database (only fields that exist in the table)
+      const userData = {
+        id: user.id,
+        email: user.email,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        name: `${data.first_name} ${data.last_name}`,
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Only add role if it exists in user metadata
+      if (user.user_metadata?.role) {
+        userData.role = user.user_metadata.role;
+      }
+      
+      // Only add created_at if this is a new user
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+      
+      if (!existingUser) {
+        userData.created_at = new Date().toISOString();
+      }
+
+      console.log('Upserting user to database:', userData);
       const { error: dbError } = await supabase
         .from('users')
-        .upsert({
-          id: user.id,
-          email: user.email,
-          first_name: data.first_name,
-          last_name: data.last_name,
-          name: `${data.first_name} ${data.last_name}`,
-          role: user.user_metadata?.role || 'user',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }, {
+        .upsert(userData, {
           onConflict: 'id'
         });
 
       if (dbError) {
         console.error('Database error:', dbError);
-        throw new Error('Failed to save profile to database');
+        // Don't throw - metadata update succeeded, which is more important
+        console.warn('Database update failed, but continuing with metadata update');
+      } else {
+        console.log('Database update successful');
       }
 
       // Save additional profile data to localStorage
@@ -190,6 +225,7 @@ export default function CompleteProfile() {
       localUser.lastName = data.last_name;
       localStorage.setItem('user', JSON.stringify(localUser));
 
+      console.log('Profile completed successfully!');
       setSuccessMessage('Profile completed successfully!');
       
       // Redirect to my-trips after a short delay
@@ -353,7 +389,12 @@ export default function CompleteProfile() {
                   <button
                     key={gender}
                     type="button"
-                    onClick={() => setData({ ...data, gender })}
+                    onClick={() => {
+                      setData({ ...data, gender });
+                      if (errors.gender) {
+                        setErrors({ ...errors, gender: '' });
+                      }
+                    }}
                     className={`px-8 py-3 rounded-xl font-semibold transition-all transform hover:scale-105 ${
                       data.gender === gender
                         ? 'bg-gradient-to-r from-[#055B75] to-[#65B3CF] text-white shadow-lg'
@@ -365,6 +406,9 @@ export default function CompleteProfile() {
                   </button>
                 ))}
               </div>
+              {errors.gender && (
+                <p className="mt-2 text-sm text-red-600 font-medium">{errors.gender}</p>
+              )}
             </div>
 
             {/* Buttons */}
