@@ -268,6 +268,12 @@ const ProfileDashboard = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Profile..." /> }))
 );
 
+// Import CompleteProfile component
+const CompleteProfile = React.lazy(() =>
+  import('./Pages/Common/login/CompleteProfile')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading..." /> }))
+);
+
 // Import mytrips component
 const MyTripsPage = React.lazy(() =>
   import('./Pages/Common/login/mytrips')
@@ -551,6 +557,7 @@ const App = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/profiledashboard" element={<ProfileDashboard />} />
+        <Route path="/complete-profile" element={<CompleteProfile />} />
 
         {/* Supabase Auth Routes */}
         <Route path="/supabase-login" element={<SupabaseLogin />} />

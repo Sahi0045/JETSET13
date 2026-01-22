@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaGoogle, FaEye, FaEyeSlash, FaSpinner, FaLock, FaEnvelope } from 'react-icons/fa';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
+import supabase from '../../../lib/supabase';
 import './login.css';
 
 export default function SupabaseLogin() {
@@ -105,10 +106,28 @@ export default function SupabaseLogin() {
 
             console.log('Login successful:', authData);
             
-            // Wait a moment for auth state to update, then navigate
-            setTimeout(() => {
-                navigate('/my-trips', { replace: true });
-            }, 500);
+            // Check if user has completed profile
+            if (authData.user) {
+                const userMetadata = authData.user.user_metadata || {};
+                const profileCompleted = userMetadata.profile_completed;
+                
+                // Check if user exists in database with complete info
+                const { data: dbUser } = await supabase.from('users')
+                    .select('first_name, last_name')
+                    .eq('id', authData.user.id)
+                    .single();
+                
+                const hasCompleteProfile = dbUser && dbUser.first_name && dbUser.last_name;
+                
+                // Wait a moment for auth state to update, then navigate
+                setTimeout(() => {
+                    if (profileCompleted || hasCompleteProfile) {
+                        navigate('/my-trips', { replace: true });
+                    } else {
+                        navigate('/complete-profile', { replace: true });
+                    }
+                }, 500);
+            }
         } catch (error) {
             setProcessing(false);
             console.error('Login error:', error);

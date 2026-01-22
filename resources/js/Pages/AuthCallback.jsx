@@ -73,8 +73,25 @@ const AuthCallback = () => {
               }
             }
 
-            // Redirect to intended destination
-            const intendedPath = sessionStorage.getItem('auth_redirect') || '/my-trips';
+            // Check if profile is complete
+            const userMetadata = data.session.user.user_metadata || {};
+            const profileCompleted = userMetadata.profile_completed;
+            
+            // Check database for complete profile
+            const { data: dbUser } = await supabase.from('users')
+              .select('first_name, last_name')
+              .eq('id', data.session.user.id)
+              .single();
+            
+            const hasCompleteProfile = dbUser && dbUser.first_name && dbUser.last_name;
+
+            // Redirect to intended destination or complete-profile
+            let intendedPath = sessionStorage.getItem('auth_redirect') || '/my-trips';
+            
+            if (!profileCompleted && !hasCompleteProfile) {
+              intendedPath = '/complete-profile';
+            }
+            
             sessionStorage.removeItem('auth_redirect');
             
             // Clean the URL by removing hash
@@ -126,8 +143,25 @@ const AuthCallback = () => {
               }
             }
 
-            // Redirect to intended destination or my-trips
-            const intendedPath = sessionStorage.getItem('auth_redirect') || '/my-trips';
+            // Check if profile is complete
+            const userMetadata = data.session.user.user_metadata || {};
+            const profileCompleted = userMetadata.profile_completed;
+            
+            // Check database for complete profile
+            const { data: dbUser } = await supabase.from('users')
+              .select('first_name, last_name')
+              .eq('id', data.session.user.id)
+              .single();
+            
+            const hasCompleteProfile = dbUser && dbUser.first_name && dbUser.last_name;
+
+            // Redirect to intended destination or complete-profile
+            let intendedPath = sessionStorage.getItem('auth_redirect') || '/my-trips';
+            
+            if (!profileCompleted && !hasCompleteProfile) {
+              intendedPath = '/complete-profile';
+            }
+            
             sessionStorage.removeItem('auth_redirect');
             
             navigate(intendedPath, { replace: true });
