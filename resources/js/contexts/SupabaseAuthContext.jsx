@@ -162,6 +162,37 @@ export const SupabaseAuthProvider = ({ children }) => {
 
       if (error) throw error;
 
+      // Immediately update the auth state
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.session.user);
+        
+        // Sync with localStorage immediately
+        const role = data.session.user.user_metadata?.role || 'user';
+        const serializedUser = {
+          id: data.session.user.id,
+          email: data.session.user.email,
+          firstName: data.session.user.user_metadata?.first_name || data.session.user.user_metadata?.full_name?.split(' ')[0] || '',
+          lastName: data.session.user.user_metadata?.last_name || data.session.user.user_metadata?.full_name?.split(' ')[1] || '',
+          photoURL: data.session.user.user_metadata?.avatar_url || data.session.user.user_metadata?.picture,
+          role
+        };
+
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('user', JSON.stringify(serializedUser));
+
+        if (data.session.access_token) {
+          localStorage.setItem('token', data.session.access_token);
+          localStorage.setItem('supabase_token', data.session.access_token);
+
+          if (role === 'admin') {
+            localStorage.setItem('adminToken', data.session.access_token);
+          } else {
+            localStorage.removeItem('adminToken');
+          }
+        }
+      }
+
       return { data, error: null };
     } catch (error) {
       console.error('Sign in error:', error);

@@ -105,8 +105,10 @@ export default function SupabaseLogin() {
 
             console.log('Login successful:', authData);
             
-            // Navigation will happen automatically via the useEffect hook
-            // that watches the user state
+            // Wait a moment for auth state to update, then navigate
+            setTimeout(() => {
+                navigate('/my-trips', { replace: true });
+            }, 500);
         } catch (error) {
             setProcessing(false);
             console.error('Login error:', error);

@@ -25,12 +25,28 @@ export default function ProfilePage() {
     profile_photo: null,
   })
 
-  // Redirect if not authenticated
+  // Check and refresh session if needed
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      navigate('/supabase-login', { replace: true })
+    const checkAndRefreshSession = async () => {
+      if (!authLoading && !user) {
+        // Try to refresh the session from Supabase
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession()
+          if (error || !session) {
+            console.log('No valid session, redirecting to login')
+            navigate('/supabase-login', { replace: true })
+          } else {
+            console.log('Session found on profile mount:', session.user.email)
+          }
+        } catch (err) {
+          console.error('Error checking session:', err)
+          navigate('/supabase-login', { replace: true })
+        }
+      }
     }
-  }, [authLoading, isAuthenticated, navigate])
+    
+    checkAndRefreshSession()
+  }, [authLoading, user, navigate])
 
   // Fetch user data from Supabase and database
   useEffect(() => {
