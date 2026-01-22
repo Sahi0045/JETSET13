@@ -224,18 +224,18 @@ const Error = React.lazy(() =>
 // Import login page component
 const LoginFallback = () => <LoadingSpinner fullScreen={true} text="Loading Login..." />;
 
-// Login page import
+// Login page import (using Supabase)
 const Login = React.lazy(() =>
-  import('./Pages/Common/login/login')
+  import('./Pages/Common/login/SupabaseLogin')
     .catch(() => ({ default: LoginFallback }))
 );
 
 // Signup page fallback
 const SignupFallback = () => <LoadingSpinner fullScreen={true} text="Loading Sign Up..." />;
 
-// Signup page import
+// Signup page import (using Supabase)
 const Signup = React.lazy(() =>
-  import('./Pages/Common/login/signup')
+  import('./Pages/Common/login/SupabaseSignup')
     .catch(() => ({ default: SignupFallback }))
 );
 
