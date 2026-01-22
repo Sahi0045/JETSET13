@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import './Navbar.css';
 import CurrencySelector from '../../Components/CurrencySelector';
 
 const Navbar = ({ forceScrolled }) => {
+  const location = useLocation();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(forceScrolled || false);
@@ -11,11 +12,17 @@ const Navbar = ({ forceScrolled }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Helper to check if link is active
+  const isActive = (path) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname.startsWith(path);
+  };
+
   // Check authentication from localStorage
   useEffect(() => {
     const authStatus = localStorage.getItem('isAuthenticated') === 'true';
     const userData = localStorage.getItem('user');
-    
+
     setIsAuthenticated(authStatus);
     if (userData) {
       try {
@@ -28,7 +35,7 @@ const Navbar = ({ forceScrolled }) => {
   }, []);
 
   useEffect(() => {
-    
+
     // Add scroll event listener only if not force scrolled
     if (!forceScrolled) {
       const handleScroll = () => {
@@ -38,18 +45,18 @@ const Navbar = ({ forceScrolled }) => {
           setIsScrolled(scrolled);
         }
       };
-      
+
       window.addEventListener('scroll', handleScroll);
-      
+
       // Call once to set initial state
       handleScroll();
-      
+
       return () => {
         window.removeEventListener('scroll', handleScroll);
       };
     }
   }, [isScrolled, forceScrolled]);
-  
+
   // Update isScrolled if forceScrolled prop changes
   useEffect(() => {
     if (forceScrolled) {
@@ -85,38 +92,44 @@ const Navbar = ({ forceScrolled }) => {
   };
 
   return (
-    <nav className={`navbar ${isScrolled || forceScrolled ? 'scrolled' : 'transparent'}`}>
+    <nav className={`navbar ${isScrolled || forceScrolled ? 'scrolled' : ''}`}>
       <div className="navbar-left">
         <Link to="/" className="logo-link">
           <div className="logo">
-            <img src="images/jetset.jpeg" alt="JET SETTERS" />
+            <img
+              src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png"
+              alt="JET SETTERS"
+              className="h-16 w-auto object-contain"
+            />
           </div>
         </Link>
       </div>
 
       {/* Desktop navigation */}
-      <div className="navbar-center">
-        <Link to="/" className="nav-link">
-          Cruise
-        </Link>
-        <Link to="/flights" className="nav-link">
-          Flight
-        </Link>
-        <Link to="/packages" className="nav-link">
-          Packages
-        </Link>
-        <Link to="/rental" className="nav-link">
-          Hotels
-        </Link>
-        <Link to="/my-trips" className="nav-link">
-          My Trips
-        </Link>
-        <Link to="/request" className="nav-link">
-          Request
-        </Link>
-      </div>
+      {/* Desktop navigation moved to right */}
 
       <div className="navbar-right">
+        <div className="desktop-nav-links flex items-center gap-8 mr-8 hidden lg:flex">
+          <Link to="/" className={`nav-link ${isActive('/') ? 'active' : ''}`}>
+            Cruise
+          </Link>
+          <Link to="/flights" className={`nav-link ${isActive('/flights') ? 'active' : ''}`}>
+            Flight
+          </Link>
+          <Link to="/packages" className={`nav-link ${isActive('/packages') ? 'active' : ''}`}>
+            Packages
+          </Link>
+          <Link to="/rental" className={`nav-link ${isActive('/rental') ? 'active' : ''}`}>
+            Hotels
+          </Link>
+          <Link to="/my-trips" className={`nav-link ${isActive('/my-trips') ? 'active' : ''}`}>
+            My Trips
+          </Link>
+          <Link to="/request" className={`nav-link ${isActive('/request') ? 'active' : ''}`}>
+            Request
+          </Link>
+        </div>
+
         {/* Currency Selector */}
         <div className="currency-selector-container mr-4">
           <CurrencySelector />
@@ -130,24 +143,24 @@ const Navbar = ({ forceScrolled }) => {
           </div>
         ) : isAuthenticated ? (
           <div className="profile-container">
-            <button 
-              className="profile-button" 
+            <button
+              className="profile-button"
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             >
               <div className="profile-icon">
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round"
-                  >
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="12" cy="7" r="4"></circle>
-                  </svg>
-                </div>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+              </div>
               <span className="profile-name">
                 {user?.firstName || user?.email?.split('@')[0] || 'User'}
               </span>
@@ -160,13 +173,13 @@ const Navbar = ({ forceScrolled }) => {
                 </div>
                 <div className="profile-divider"></div>
                 <button onClick={handleProfile}>
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
                     strokeLinejoin="round"
                   >
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -175,13 +188,13 @@ const Navbar = ({ forceScrolled }) => {
                   Profile
                 </button>
                 <button onClick={handleLogout}>
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
                     strokeLinejoin="round"
                   >
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -201,13 +214,13 @@ const Navbar = ({ forceScrolled }) => {
 
         {/* Mobile menu button */}
         <button className="mobile-menu-button" onClick={toggleMobileMenu}>
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
             strokeLinejoin="round"
             className={isMobileMenuOpen ? "hidden" : ""}
           >
@@ -215,13 +228,13 @@ const Navbar = ({ forceScrolled }) => {
             <line x1="3" y1="6" x2="21" y2="6"></line>
             <line x1="3" y1="18" x2="21" y2="18"></line>
           </svg>
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
             strokeLinejoin="round"
             className={isMobileMenuOpen ? "" : "hidden"}
           >
@@ -252,7 +265,7 @@ const Navbar = ({ forceScrolled }) => {
           <Link to="/request" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
             Request
           </Link>
-          
+
           {/* Add Currency Selector to mobile menu */}
           <div className="mobile-currency-selector py-2 border-t border-gray-200 mt-2">
             <div className="px-4 py-2 text-sm text-gray-500">Select Currency</div>
@@ -260,13 +273,13 @@ const Navbar = ({ forceScrolled }) => {
               <CurrencySelector />
             </div>
           </div>
-          
+
           {!isAuthenticated && (
             <button className="mobile-login-button" onClick={handleLogin}>
               Login
             </button>
           )}
-          
+
           {isAuthenticated && (
             <>
               <button onClick={handleProfile} className="mobile-profile-button">

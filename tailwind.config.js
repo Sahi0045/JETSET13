@@ -19,32 +19,45 @@ export default {
                 display: ['Inter', 'Figtree', ...defaultTheme.fontFamily.sans],
             },
             colors: {
-                // Primary brand colors (keeping existing blue theme)
+                // Primary brand colors (Coastal Theme)
                 primary: {
-                    50: '#eff6ff',
-                    100: '#dbeafe',
-                    200: '#bfdbfe',
-                    300: '#93c5fd',
-                    400: '#60a5fa',
-                    500: '#3b82f6',
-                    600: '#0066b2', // Main brand blue
-                    700: '#036cca',
-                    800: '#1e40af',
-                    900: '#1e3a8a',
-                    950: '#172554',
+                    50: '#f0f9ff',
+                    100: '#B9D0DC', // Pale Blue (Base/Light)
+                    200: '#9bcbe3',
+                    300: '#7abde1',
+                    400: '#65B3CF', // Sky Blue (Bright/Vibrant - Main Action)
+                    500: '#055B75', // Deep Teal (Primary Brand - Contrast)
+                    600: '#044a60',
+                    700: '#033a4c',
+                    800: '#022b39',
+                    900: '#011c26',
+                    950: '#000f15',
                 },
                 secondary: {
-                    50: '#f8fafc',
-                    100: '#f1f5f9',
-                    200: '#e2e8f0',
-                    300: '#cbd5e1',
-                    400: '#94a3b8',
-                    500: '#64748b',
-                    600: '#475569',
-                    700: '#334155',
-                    800: '#1e293b',
-                    900: '#0f172a',
+                    50: '#f7f7f6',
+                    100: '#eef0ef',
+                    200: '#dde0de',
+                    300: '#c5c8c5',
+                    400: '#a7aaa5',
+                    500: '#7F8073', // Olive Taupe (Natural/Warm)
+                    600: '#64655a',
+                    700: '#4e4f45',
+                    800: '#3a3b33',
+                    900: '#282923',
                 },
+                neutral: {
+                    50: '#f9fafb', // Lighter than slate-50
+                    100: '#f3f4f6',
+                    200: '#e5e7eb',
+                    300: '#d1d5db',
+                    400: '#9ca3af',
+                    500: '#6b7280',
+                    600: '#4b5563',
+                    700: '#626363', // Soft Charcoal (Text)
+                    800: '#1f2937',
+                    900: '#111827',
+                },
+                // Keeping existing accent but making it compatible if needed
                 accent: {
                     50: '#fef3c7',
                     100: '#fde68a',
@@ -104,11 +117,11 @@ export default {
                 '5xl': '2.5rem',
             },
             boxShadow: {
-                'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
-                'medium': '0 4px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                'large': '0 10px 40px -10px rgba(0, 0, 0, 0.15), 0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-                'glow': '0 0 20px rgba(59, 130, 246, 0.3)',
-                'glow-lg': '0 0 30px rgba(59, 130, 246, 0.4)',
+                'soft': '0 2px 15px -3px rgba(5, 91, 117, 0.05), 0 10px 20px -2px rgba(5, 91, 117, 0.02)', // Tinted w/ Teal
+                'medium': '0 4px 25px -5px rgba(5, 91, 117, 0.08), 0 10px 10px -5px rgba(5, 91, 117, 0.03)',
+                'large': '0 10px 40px -10px rgba(5, 91, 117, 0.12), 0 20px 25px -5px rgba(5, 91, 117, 0.08)',
+                'glow': '0 0 20px rgba(101, 179, 207, 0.4)', // Sky Blue Glow
+                'glow-lg': '0 0 30px rgba(101, 179, 207, 0.5)',
             },
             animation: {
                 'fade-in': 'fadeIn 0.5s ease-in-out',
@@ -160,7 +173,7 @@ export default {
             typography: {
                 DEFAULT: {
                     css: {
-                        color: '#334155',
+                        color: '#626363', // Soft Charcoal
                         maxWidth: 'none',
                     },
                 },
@@ -173,23 +186,23 @@ export default {
         function ({ addUtilities }) {
             const newUtilities = {
                 '.glass': {
-                    'background': 'rgba(255, 255, 255, 0.1)',
-                    'backdrop-filter': 'blur(10px)',
-                    'border': '1px solid rgba(255, 255, 255, 0.2)',
+                    'background': 'rgba(255, 255, 255, 0.7)',
+                    'backdrop-filter': 'blur(12px)',
+                    'border': '1px solid rgba(255, 255, 255, 0.5)',
                 },
                 '.glass-dark': {
-                    'background': 'rgba(0, 0, 0, 0.1)',
-                    'backdrop-filter': 'blur(10px)',
+                    'background': 'rgba(5, 91, 117, 0.4)', // Deep Teal tint
+                    'backdrop-filter': 'blur(12px)',
                     'border': '1px solid rgba(255, 255, 255, 0.1)',
                 },
                 '.gradient-primary': {
-                    'background': 'linear-gradient(135deg, #0066b2 0%, #1e88e5 100%)',
+                    'background': 'linear-gradient(135deg, #055B75 0%, #65B3CF 100%)', // Deep Teal to Sky Blue
                 },
                 '.gradient-secondary': {
-                    'background': 'linear-gradient(135deg, #64748b 0%, #475569 100%)',
+                    'background': 'linear-gradient(135deg, #7F8073 0%, #a7aaa5 100%)', // Olive Taupe Gradient
                 },
                 '.text-gradient': {
-                    'background': 'linear-gradient(135deg, #0066b2 0%, #1e88e5 100%)',
+                    'background': 'linear-gradient(135deg, #055B75 0%, #65B3CF 100%)',
                     '-webkit-background-clip': 'text',
                     '-webkit-text-fill-color': 'transparent',
                     'background-clip': 'text',

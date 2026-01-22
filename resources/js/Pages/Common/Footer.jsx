@@ -7,7 +7,7 @@ import './Footer.css';
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
-  
+
   return (
     <footer className="footer">
       <div className="container">
@@ -15,8 +15,7 @@ const Footer = () => {
           <div className="footer-column">
             <Link to="/" className="footer-logo-link">
               <div className="footer-logo">
-                <img src="/images/jetset.jpeg" alt="JET SETTERS" className="logo-icon" />
-                <h3 className="column-title">JET SETTERS</h3>
+                <img src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png" alt="JET SETTERS" className="logo-icon" />
               </div>
             </Link>
             <p className="column-description">
@@ -28,22 +27,22 @@ const Footer = () => {
             <nav aria-label="Travel Navigation">
               <ul className="nav-list">
                 <li>
-                  <Link to="/cruises" className="nav-link">
+                  <Link to="/cruises" className="footer-nav-link">
                     Cruise
                   </Link>
                 </li>
                 <li>
-                  <Link to="/flights" className="nav-link">
+                  <Link to="/flights" className="footer-nav-link">
                     Flight
                   </Link>
                 </li>
                 <li>
-                  <Link to="/packages" className="nav-link">
+                  <Link to="/packages" className="footer-nav-link">
                     Packages
                   </Link>
                 </li>
                 <li>
-                  <Link to="/rental" className="nav-link">
+                  <Link to="/rental" className="footer-nav-link">
                     Hotels
                   </Link>
                 </li>
@@ -55,22 +54,22 @@ const Footer = () => {
             <nav aria-label="Resources Navigation">
               <ul className="nav-list">
                 <li>
-                  <Link to="/destinations" className="nav-link">
+                  <Link to="/destinations" className="footer-nav-link">
                     Destinations
                   </Link>
                 </li>
                 <li>
-                  <Link to="/blog" className="nav-link">
+                  <Link to="/blog" className="footer-nav-link">
                     Travel Blog
                   </Link>
                 </li>
                 <li>
-                  <Link to="/support" className="nav-link">
+                  <Link to="/support" className="footer-nav-link">
                     Support
                   </Link>
                 </li>
                 <li>
-                  <Link to="/faq" className="nav-link">
+                  <Link to="/faq" className="footer-nav-link">
                     FAQs
                   </Link>
                 </li>
@@ -82,27 +81,27 @@ const Footer = () => {
             <nav aria-label="Company Navigation">
               <ul className="nav-list">
                 <li>
-                  <Link to="/about" className="nav-link">
+                  <Link to="/about" className="footer-nav-link">
                     About Us
                   </Link>
                 </li>
                 <li>
-                  <Link to="/careers" className="nav-link">
+                  <Link to="/careers" className="footer-nav-link">
                     Careers
                   </Link>
                 </li>
                 <li>
-                  <Link to="/contact" className="nav-link">
+                  <Link to="/contact" className="footer-nav-link">
                     Contact Us
                   </Link>
                 </li>
                 <li>
-                  <Link to="/privacy" className="nav-link">
+                  <Link to="/privacy" className="footer-nav-link">
                     Privacy Policy
                   </Link>
                 </li>
                 <li>
-                  <Link to="/terms" className="nav-link">
+                  <Link to="/terms" className="footer-nav-link">
                     Terms & Conditions
                   </Link>
                 </li>
@@ -133,11 +132,11 @@ const Footer = () => {
                 <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
               </svg>
             </a>
-            <a 
-              href="https://www.instagram.com/jetsetters_global/" 
+            <a
+              href="https://www.instagram.com/jetsetters_global/"
               target="_blank"
               rel="noopener noreferrer"
-              className="social-link" 
+              className="social-link"
               aria-label="Instagram"
             >
               <svg

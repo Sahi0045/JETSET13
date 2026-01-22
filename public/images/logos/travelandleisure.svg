@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="140" height="40" viewBox="0 0 140 40">
-  <rect width="140" height="40" fill="#228B22" rx="4"/>
-  <text x="70" y="16" font-family="Arial, sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="white">
+
+  <text x="70" y="16" font-family="Arial, sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="#6B7280">
     TRAVEL &amp; LEISURE
   </text>
-  <text x="70" y="30" font-family="Arial, sans-serif" font-size="8" text-anchor="middle" fill="white">
+  <text x="70" y="30" font-family="Arial, sans-serif" font-size="8" text-anchor="middle" fill="#6B7280">
     MAGAZINE
   </text>
 </svg> 

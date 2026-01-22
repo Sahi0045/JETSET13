@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import HeroSection from './HeroSection';
 import DestinationSection from './DestinationSection';
 import CruiseLineSection from './CruiseLineSection';
-import { FaShip, FaAnchor, FaStar, FaLifeRing, FaUsers, FaCheckCircle, FaTimes, FaQuoteRight, FaUser, FaEnvelope, FaCommentAlt } from 'react-icons/fa';
+import { FaShip, FaAnchor, FaStar, FaLifeRing, FaUsers, FaCheckCircle, FaTimes, FaQuoteRight, FaUser, FaEnvelope, FaCommentAlt, FaTripadvisor } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
@@ -39,41 +39,47 @@ const styles = {
 
 const TrustIndicators = () => {
   return (
-    <div className="py-8 md:py-10 bg-white border-t border-b border-gray-100">
+    <div className="py-8 md:py-10 bg-transparent">
       <div className="max-w-7xl mx-auto px-4">
         <div className="text-center mb-6 md:mb-8">
-          <h3 className="text-xl md:text-2xl font-bold text-gray-800">Trusted by Thousands</h3>
+          <h3 className="text-xl md:text-2xl font-bold text-[#0066b2]">Trusted by Thousands</h3>
         </div>
-        
+
         <div className="flex flex-wrap justify-center gap-8 md:gap-16">
           <div className="text-center">
             <div className="text-2xl md:text-3xl font-bold text-[#0066b2] mb-1">12K+</div>
-            <div className="text-gray-600 text-sm">Happy Customers</div>
+            <div className="text-gray-500 text-sm">Happy Customers</div>
           </div>
-          
+
           <div className="text-center">
             <div className="text-2xl md:text-3xl font-bold text-[#0066b2] mb-1">150+</div>
-            <div className="text-gray-600 text-sm">Destinations</div>
+            <div className="text-gray-500 text-sm">Destinations</div>
           </div>
-          
+
           <div className="text-center">
             <div className="text-2xl md:text-3xl font-bold text-[#0066b2] mb-1">98%</div>
-            <div className="text-gray-600 text-sm">Satisfaction Rate</div>
+            <div className="text-gray-500 text-sm">Satisfaction Rate</div>
           </div>
-          
+
           <div className="text-center">
             <div className="text-2xl md:text-3xl font-bold text-[#0066b2] mb-1">24/7</div>
-            <div className="text-gray-600 text-sm">Customer Support</div>
+            <div className="text-gray-500 text-sm">Customer Support</div>
           </div>
         </div>
-        
+
         <div className="mt-6 md:mt-8 flex justify-center">
-          <div className="grid grid-cols-3 gap-4 md:flex md:gap-8 opacity-60">
-            <img src="/images/logos/forbes.png" alt="Forbes" className="h-5 md:h-6" />
-            <img src="/images/logos/travelandleisure.png" alt="Travel+Leisure" className="h-5 md:h-6" />
-            <img src="/images/logos/cruisecritic.png" alt="Cruise Critic" className="h-5 md:h-6" />
-            <img src="/images/logos/tripadvisor.png" alt="TripAdvisor" className="h-5 md:h-6 hidden md:block" />
-            <img src="/images/logos/cntraveler.png" alt="CN Traveler" className="h-5 md:h-6 hidden md:block" />
+          <div className="grid grid-cols-3 gap-4 md:flex md:gap-8 justify-center items-center">
+            <img src="/images/logos/forbes.svg" alt="Forbes" className="h-8 md:h-10 opacity-90" />
+            <img src="/images/logos/travelandleisure.svg" alt="Travel+Leisure" className="h-8 md:h-10 opacity-90" />
+            <img src="/images/logos/cruisecritic.svg" alt="Cruise Critic" className="h-8 md:h-10 opacity-90" />
+            <div className="flex items-center gap-2 opacity-90 hidden md:flex">
+              <FaTripadvisor className="text-[#6B7280] text-3xl" />
+              <div className="flex flex-col items-start leading-none">
+                <span className="text-[#6B7280] font-bold text-[10px] tracking-wide">TRIPADVISOR</span>
+                <span className="text-[#6B7280] text-[8px] tracking-wider">REVIEWS</span>
+              </div>
+            </div>
+            <img src="/images/logos/cntraveler.svg" alt="CN Traveler" className="h-8 md:h-10 hidden md:block opacity-90" />
           </div>
         </div>
       </div>
@@ -102,7 +108,7 @@ const TestimonialBanner = () => {
     e.preventDefault();
     console.log("Contact form submitted:", contactForm);
     setSubmitted(true);
-    
+
     // Reset form after 3 seconds
     setTimeout(() => {
       setSubmitted(false);
@@ -157,49 +163,62 @@ const TestimonialBanner = () => {
   }, [showTestimonials, testimonialItems.length]);
 
   return (
-    <div className="py-10 bg-gradient-to-r from-[#0066b2] to-[#1e88e5] text-white relative">
-      <div className="max-w-7xl mx-auto px-4 md:px-0 text-center">
-        <div className="flex flex-col md:flex-row items-center justify-between">
-          <div className="mb-6 md:mb-0 md:w-2/3 text-center md:text-left">
-            <h3 className="text-2xl md:text-3xl font-bold mb-2">"The best cruise booking experience I've ever had!"</h3>
-            <p className="opacity-90 mb-4">— Sarah Johnson, traveled with Royal Caribbean</p>
-            <div className="flex items-center justify-center md:justify-start pl-10">
-              <FaStar className="text-yellow-300" />
-              <FaStar className="text-yellow-300" />
-              <FaStar className="text-yellow-300" />
-              <FaStar className="text-yellow-300" />
-              <FaStar className="text-yellow-300" />
-              <span className="ml-7 text-sm opacity-90">5.0 from over 3,200 reviews</span>
+    <div className="py-16 md:py-20 bg-transparent text-white relative">
+      <div className="max-w-6xl mx-auto px-6 md:px-8">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+          {/* Testimonial Content */}
+          <div className="md:w-3/5 text-center md:text-left space-y-5">
+            {/* Quote - Main Focus */}
+            <blockquote className="text-2xl md:text-4xl font-light italic leading-relaxed tracking-tight">
+              "The best cruise booking experience I've ever had!"
+            </blockquote>
+
+            {/* Author Attribution */}
+            <p className="text-white/75 text-base font-medium tracking-wide">
+              — Sarah Johnson, <span className="font-normal">traveled with Royal Caribbean</span>
+            </p>
+
+            {/* Star Rating - Refined */}
+            <div className="flex items-center justify-center gap-1 pt-2">
+              <div className="flex gap-0.5">
+                <FaStar className="text-amber-300 text-sm" />
+                <FaStar className="text-amber-300 text-sm" />
+                <FaStar className="text-amber-300 text-sm" />
+                <FaStar className="text-amber-300 text-sm" />
+                <FaStar className="text-amber-300 text-sm" />
+              </div>
+              <span className="ml-3 text-sm text-white/60 font-light">5.0 from over 3,200 reviews</span>
             </div>
           </div>
-          
-          <div className="flex space-x-3">
-            <button 
-              className="bg-white text-[#0066b2] font-bold py-2 px-4 text-sm rounded-full hover:bg-opacity-90 transition-all flex items-center hover:shadow-lg hover:-translate-y-1 duration-300"
+
+          {/* CTAs - Reduced Prominence */}
+          <div className="flex flex-col sm:flex-row gap-3 md:flex-col lg:flex-row">
+            <button
+              className="px-5 py-2.5 text-sm font-medium rounded-full border border-white/40 text-white bg-white/10 hover:bg-white/20 transition-all duration-200 flex items-center justify-center backdrop-blur-sm"
               onClick={() => setShowTestimonials(true)}
             >
-              <FaUsers className="mr-2" /> Read Testimonials
+              <FaUsers className="mr-2 text-xs opacity-80" /> Read Testimonials
             </button>
-            <button 
-              className="bg-transparent border-2 border-white text-white font-bold py-2 px-4 text-sm rounded-full hover:bg-white hover:text-[#0066b2] transition-all flex items-center hover:shadow-lg hover:-translate-y-1 duration-300"
+            <button
+              className="px-5 py-2.5 text-sm font-medium rounded-full border border-white/30 text-white/80 hover:text-white hover:border-white/50 transition-all duration-200 flex items-center justify-center"
               onClick={() => setShowContactForm(true)}
             >
-              <FaLifeRing className="mr-2" /> Contact Support
+              <FaLifeRing className="mr-2 text-xs opacity-70" /> Contact Support
             </button>
           </div>
         </div>
       </div>
-      
+
       {/* Contact Support Modal */}
       {showContactForm && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn"
           onClick={() => setShowContactForm(false)}
           style={{
             animation: 'fadeIn 0.3s ease-out',
           }}
         >
-          <div 
+          <div
             className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-0 relative overflow-hidden"
             onClick={(e) => e.stopPropagation()}
             style={{
@@ -207,29 +226,29 @@ const TestimonialBanner = () => {
               boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)',
             }}
           >
-            <div className="bg-gradient-to-r from-[#0066b2] to-[#1e88e5] pt-8 pb-12 px-6 text-white relative">
-              <button 
+            <div className="bg-gradient-to-r from-[#055B75] to-[#034457] pt-8 pb-12 px-6 text-white relative">
+              <button
                 className="absolute top-4 right-4 text-white hover:text-gray-200 transition-colors"
                 onClick={() => setShowContactForm(false)}
                 aria-label="Close popup"
               >
                 <FaTimes size={20} />
               </button>
-              
+
               <div className="flex items-center mb-2">
                 <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mr-4">
-                  <FaLifeRing className="text-[#0066b2]" size={20} />
+                  <FaLifeRing className="text-[#055B75]" size={20} />
                 </div>
                 <h2 className="text-2xl font-bold">Contact Our Support Team</h2>
               </div>
-              
+
               <p className="opacity-90 text-sm">
                 Our cruise experts are here to assist you with any questions
               </p>
-              
+
               <div className="absolute -bottom-6 left-0 right-0 h-12 bg-white rounded-t-[50%]"></div>
             </div>
-            
+
             <div className="px-6 pb-6 pt-8">
               {submitted ? (
                 <div className="text-center py-10 px-4 animate-fadeIn">
@@ -266,7 +285,7 @@ const TestimonialBanner = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className={`transition-all duration-200 ${activeField === 'email' ? 'transform -translate-y-1' : ''}`}>
                     <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="email">
                       Email Address
@@ -289,7 +308,7 @@ const TestimonialBanner = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className={`transition-all duration-200 ${activeField === 'message' ? 'transform -translate-y-1' : ''}`}>
                     <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="message">
                       How can we help?
@@ -312,14 +331,14 @@ const TestimonialBanner = () => {
                       ></textarea>
                     </div>
                   </div>
-                  
+
                   <button
                     type="submit"
                     className="w-full bg-gradient-to-r from-[#0066b2] to-[#1e88e5] text-white font-bold py-4 px-4 rounded-xl hover:shadow-lg transition-all duration-300 flex items-center justify-center mt-6"
                   >
                     Submit Request
                   </button>
-                  
+
                   <p className="text-xs text-center text-gray-500 mt-4">
                     We typically respond within 24 hours
                   </p>
@@ -329,14 +348,14 @@ const TestimonialBanner = () => {
           </div>
         </div>
       )}
-      
+
       {/* Testimonials Modal */}
       {showTestimonials && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn"
           onClick={() => setShowTestimonials(false)}
         >
-          <div 
+          <div
             className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-0 relative overflow-hidden"
             onClick={(e) => e.stopPropagation()}
             style={{
@@ -345,28 +364,28 @@ const TestimonialBanner = () => {
             }}
           >
             <div className="bg-gradient-to-r from-[#0066b2] to-[#1e88e5] pt-8 pb-12 px-6 text-white relative">
-              <button 
+              <button
                 className="absolute top-4 right-4 text-white hover:text-gray-200 transition-colors"
                 onClick={() => setShowTestimonials(false)}
                 aria-label="Close popup"
               >
                 <FaTimes size={20} />
               </button>
-              
+
               <div className="flex items-center mb-2">
                 <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mr-4">
-                  <FaUsers className="text-[#0066b2]" size={20} />
+                  <FaUsers className="text-[#055B75]" size={20} />
                 </div>
                 <h2 className="text-2xl font-bold">What Our Customers Say</h2>
               </div>
-              
+
               <p className="opacity-90 text-sm">
                 Real experiences from verified customers
               </p>
-              
+
               <div className="absolute -bottom-6 left-0 right-0 h-12 bg-white rounded-t-[50%]"></div>
             </div>
-            
+
             <div className="px-6 pb-8 pt-8">
               {/* Featured Testimonial */}
               <div className="mb-8 p-6 bg-blue-50 rounded-xl relative animate-fadeIn">
@@ -374,10 +393,10 @@ const TestimonialBanner = () => {
                   <FaQuoteRight size={40} />
                 </div>
                 <div className="flex items-start">
-                  <img 
-                    src={testimonialItems[currentTestimonial].image} 
-                    alt={testimonialItems[currentTestimonial].name} 
-                    className="w-16 h-16 rounded-full mr-4 object-cover border-4 border-white shadow-md" 
+                  <img
+                    src={testimonialItems[currentTestimonial].image}
+                    alt={testimonialItems[currentTestimonial].name}
+                    className="w-16 h-16 rounded-full mr-4 object-cover border-4 border-white shadow-md"
                   />
                   <div className="flex-1">
                     <h4 className="text-xl font-bold text-gray-800">{testimonialItems[currentTestimonial].name}</h4>
@@ -390,12 +409,12 @@ const TestimonialBanner = () => {
                     <p className="text-gray-700 italic">"{testimonialItems[currentTestimonial].text}"</p>
                   </div>
                 </div>
-                
+
                 {/* Dots for navigation */}
                 <div className="flex justify-center mt-6 space-x-2">
                   {testimonialItems.map((_, index) => (
-                    <button 
-                      key={index} 
+                    <button
+                      key={index}
                       className={`w-3 h-3 rounded-full transition-all duration-300 ${currentTestimonial === index ? 'bg-blue-500 w-6' : 'bg-gray-300'}`}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -405,13 +424,13 @@ const TestimonialBanner = () => {
                   ))}
                 </div>
               </div>
-              
+
               {/* Additional Testimonials Grid */}
               <h3 className="font-bold text-gray-800 mb-4">More Customer Stories</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[250px] overflow-y-auto pr-2">
                 {testimonialItems.filter((_, i) => i !== currentTestimonial).map((item, index) => (
-                  <div 
-                    key={index} 
+                  <div
+                    key={index}
                     className="bg-gray-50 p-4 rounded-lg hover:shadow-md transition-all duration-300 cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -432,10 +451,10 @@ const TestimonialBanner = () => {
                   </div>
                 ))}
               </div>
-              
+
               <div className="mt-6 text-center">
-                <Link to="/reviews" className="text-[#0066b2] font-bold hover:underline flex items-center justify-center">
-                  View All Customer Reviews 
+                <Link to="/reviews" className="text-[#055B75] font-bold hover:underline flex items-center justify-center">
+                  View All Customer Reviews
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-1" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
@@ -443,7 +462,7 @@ const TestimonialBanner = () => {
               </div>
             </div>
           </div>
-          
+
           <style jsx global>{`
             @keyframes fadeIn {
               from { opacity: 0; }
@@ -470,20 +489,20 @@ const PromoSection = () => {
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <div className="flex flex-col md:flex-row">
             <div className="md:w-1/2 relative">
-              <img 
-                src="/images/Rectangle 1434 (2).png" 
-                alt="Limited Time Offer" 
+              <img
+                src="/images/Rectangle 1434 (2).png"
+                alt="Limited Time Offer"
                 className="w-full h-full object-cover"
               />
               <div className="absolute top-4 left-4 bg-red-500 text-white px-4 py-2 rounded-full text-sm font-bold">
                 Limited Time
               </div>
             </div>
-            
+
             <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
               <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-4">Summer Cruise Special</h3>
               <p className="text-gray-600 mb-6">Book your summer cruise now and get up to 30% off on select destinations. Plus, receive a complimentary beverage package for two.</p>
-              
+
               <ul className="mb-8">
                 {['Up to 30% off select cruises', 'Free beverage package', 'Flexible cancellation policy', 'Kids sail free on select cruises'].map((item, index) => (
                   <li key={index} className="flex items-center mb-3">
@@ -492,7 +511,7 @@ const PromoSection = () => {
                   </li>
                 ))}
               </ul>
-              
+
               <button className="bg-[#0066b2] hover:bg-[#005091] text-white font-bold py-3 px-8 rounded-md transition-colors self-start">
                 View Special Offers
               </button>
@@ -509,19 +528,19 @@ const HomePage = () => {
   const [subscriptionSubmitted, setSubscriptionSubmitted] = useState(false);
   const [subscriptionError, setSubscriptionError] = useState('');
   const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
-  
+
   useEffect(() => {
     // Scroll to top when component mounts
     window.scrollTo(0, 0);
-    
+
     // Add smooth scrolling for better UX
     document.documentElement.style.scrollBehavior = 'smooth';
-    
+
     // Handle screen resize for mobile detection
     const handleResize = () => {
       setIsMobileView(window.innerWidth < 768);
     };
-    
+
     window.addEventListener('resize', handleResize);
     return () => {
       document.documentElement.style.scrollBehavior = 'auto';
@@ -563,11 +582,11 @@ const HomePage = () => {
 
   return (
     <div className="home-page-wrapper" style={styles.homePageWrapper}>
-      <Navbar />
-      
+
+
       {/* Special Offer Banner - positioned with absolute for better placement */}
       <div className="relative">
-        <div className={`w-full text-center bg-gradient-to-r from-blue-900/90 via-blue-800/90 to-blue-900/90 py-3 backdrop-blur-sm z-20 border-y border-blue-500/30 ${isMobileView ? 'px-3' : ''}`} style={{position: 'absolute', top: isMobileView ? '60px' : '73px', left: 0, right: 0}}>
+        <div className={`w-full text-center bg-gradient-to-r from-blue-900/90 via-blue-800/90 to-blue-900/90 py-3 backdrop-blur-sm z-20 border-y border-blue-500/30 ${isMobileView ? 'px-3' : ''}`}>
           <div className="container mx-auto px-2 flex justify-center items-center flex-wrap">
             <Sparkles className="h-5 w-5 text-yellow-300 mr-2 flex-shrink-0" />
             <p className={`text-white ${isMobileView ? 'text-xs' : 'text-base'} font-medium tracking-wide`}>
@@ -576,57 +595,57 @@ const HomePage = () => {
           </div>
         </div>
       </div>
-      
+
       {/* Main content */}
       <main style={styles.main}>
         {/* Hero Section - immediately below navbar */}
-        <section id="hero" style={{...styles.section, ...styles.firstSection}}>
+        <section id="hero" style={{ ...styles.section, ...styles.firstSection }}>
           <HeroSection />
         </section>
-        
+
         {/* Primary Content Sections */}
         <section id="destinations" style={styles.section}>
           <DestinationSection />
         </section>
-        
+
         <section id="cruise-lines" style={styles.section}>
           <CruiseLineSection />
         </section>
-        
-        {/* Trust & Testimonials */}
-        <section id="trust-indicators" style={styles.section}>
-          <TrustIndicators />
-        </section>
-        
-        <section id="testimonials" style={styles.section}>
-          <TestimonialBanner />
-        </section>
-        
+
         {/* Promotional and Partners */}
-        <section id="promo" style={styles.section}>
+        <section id="promo" className="mb-0">
           <PromoSection />
         </section>
-        
-        
+
+        {/* Unified Trust & Testimonials Section */}
+        <section className="bg-white">
+          <TrustIndicators />
+        </section>
+
+        <section className="bg-gradient-to-r from-[#055B75] to-[#034457]">
+          <TestimonialBanner />
+        </section>
+
+
         {/* Simple Email Subscription Section */}
-        <section className="subscription-section py-10 md:py-16 relative" style={{ 
+        <section className="subscription-section py-8 relative" style={{
           backgroundImage: "url('https://images.unsplash.com/photo-1599640842225-85d111c60e6b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1974&q=80')",
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat"
         }}>
-          {/* Overlay */}
-          <div className="absolute inset-0 bg-blue-900 opacity-80"></div>
-          
+          {/* Overlay with matched gradient */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#055B75] to-[#034457] opacity-95"></div>
+
           <div className="container mx-auto px-4 md:px-6 relative z-10">
-            <div className="max-w-xl mx-auto bg-white bg-opacity-10 backdrop-blur-sm rounded-2xl p-6 md:p-10 border border-white border-opacity-20 shadow-lg">
+            <div className="max-w-xl mx-auto bg-white bg-opacity-10 backdrop-blur-sm rounded-2xl p-6 md:p-8 border border-white border-opacity-20 shadow-lg">
               <div className="flex flex-col items-center text-center">
                 <div className="mb-2">
                   <FaEnvelope className="text-white text-2xl" />
                 </div>
                 <h3 className="text-2xl md:text-3xl font-bold text-white mb-2">Stay Updated</h3>
                 <p className="text-white text-opacity-90 mb-6">Subscribe to receive the latest cruise deals and travel tips directly to your inbox.</p>
-                
+
                 <div className="flex items-center gap-2 mb-6 hidden md:flex">
                   <div className="flex -space-x-2">
                     <img className="inline-block h-8 w-8 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1491528323818-fdd1faba62cc?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
@@ -635,7 +654,7 @@ const HomePage = () => {
                   </div>
                   <span className="text-sm text-white">Join 25,000+ subscribers</span>
                 </div>
-                
+
                 {subscriptionSubmitted ? (
                   <div className="w-full bg-green-500 bg-opacity-20 backdrop-blur-sm rounded-lg p-4 text-white animate-fadeIn">
                     <div className="flex items-center justify-center">
@@ -654,9 +673,9 @@ const HomePage = () => {
                         className="w-full md:flex-1 px-4 py-3 rounded-lg md:rounded-l-lg md:rounded-r-none bg-white border-0 focus:outline-none focus:ring-2 focus:ring-blue-300"
                         required
                       />
-                      <button 
-                        type="submit" 
-                        className="w-full md:w-auto mt-2 md:mt-0 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg md:rounded-l-none md:rounded-r-lg flex items-center justify-center md:justify-start transition-colors"
+                      <button
+                        type="submit"
+                        className="w-full md:w-auto mt-2 md:mt-0 px-4 py-3 bg-[#65B3CF] hover:bg-[#5aa3be] text-white font-bold rounded-lg md:rounded-l-none md:rounded-r-lg flex items-center justify-center md:justify-start transition-colors"
                       >
                         Subscribe
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -671,7 +690,7 @@ const HomePage = () => {
                     )}
                   </form>
                 )}
-                
+
                 <div className="mt-4">
                   <p className="text-white text-opacity-80 text-xs">By subscribing, you agree to our <a href="#" className="underline hover:text-white">Privacy Policy</a></p>
                 </div>
@@ -680,18 +699,18 @@ const HomePage = () => {
           </div>
         </section>
       </main>
-      
+
       {/* <PopularPorts /> */}
-      
+
       {/* <NewsletterSection /> */}
-      
+
       {/* <ContactSection /> */}
-      
-      
-      
+
+
+
       {/* Mobile scroll to top button - only visible on small screens */}
-      <button 
-        onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})} 
+      <button
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
         className="fixed bottom-6 right-6 bg-blue-600 text-white p-3 rounded-full shadow-lg z-50 hover:bg-blue-700 transition-colors md:hidden"
         aria-label="Scroll to top"
       >

@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="120" height="40" viewBox="0 0 120 40">
-  <rect width="120" height="40" fill="#00AF87" rx="4"/>
-  <circle cx="30" cy="20" r="8" fill="white"/>
+
+  <circle cx="30" cy="20" r="8" fill="#6B7280"/>
   <circle cx="30" cy="20" r="5" fill="#00AF87"/>
-  <text x="90" y="16" font-family="Arial, sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="white">
+  <text x="90" y="16" font-family="Arial, sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="#6B7280">
     TRIPADVISOR
   </text>
-  <text x="90" y="28" font-family="Arial, sans-serif" font-size="7" text-anchor="middle" fill="white">
+  <text x="90" y="28" font-family="Arial, sans-serif" font-size="7" text-anchor="middle" fill="#6B7280">
     REVIEWS
   </text>
 </svg> 

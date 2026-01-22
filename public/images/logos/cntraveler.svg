@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="130" height="40" viewBox="0 0 130 40">
-  <rect width="130" height="40" fill="#8B4513" rx="4"/>
-  <text x="65" y="16" font-family="Arial, sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="white">
+
+  <text x="65" y="16" font-family="Arial, sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="#6B7280">
     CN TRAVELER
   </text>
-  <text x="65" y="30" font-family="Arial, sans-serif" font-size="8" text-anchor="middle" fill="white">
+  <text x="65" y="30" font-family="Arial, sans-serif" font-size="8" text-anchor="middle" fill="#6B7280">
     CONDE NAST
   </text>
 </svg> 

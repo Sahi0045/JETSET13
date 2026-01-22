@@ -2,14 +2,18 @@
 
 import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
+import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext"
+import supabase from "../../../lib/supabase"
 
 export default function ProfilePage() {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
+  const { user, loading: authLoading, isAuthenticated, updateProfile } = useSupabaseAuth()
   
   const [processing, setProcessing] = useState(false)
   const [recentlySuccessful, setRecentlySuccessful] = useState(false)
   const [errors, setErrors] = useState({})
+  const [loading, setLoading] = useState(true)
   
   const [data, setData] = useState({
     first_name: "",
@@ -21,21 +25,165 @@ export default function ProfilePage() {
     profile_photo: null,
   })
 
-  // Load user data from localStorage if available
+  // Redirect if not authenticated
   useEffect(() => {
-    const savedUserData = localStorage.getItem('userData')
-    if (savedUserData) {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/supabase-login', { replace: true })
+    }
+  }, [authLoading, isAuthenticated, navigate])
+
+  // Fetch user data from Supabase and database
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user) {
+        console.log('ProfilePage: No user found, waiting...')
+        setLoading(false)
+        return
+      }
+
       try {
-        const parsedData = JSON.parse(savedUserData)
-        setData(prevData => ({
-          ...prevData,
-          ...parsedData
-        }))
-      } catch (e) {
-        console.error("Failed to parse user data from localStorage", e)
+        setLoading(true)
+        console.log('ProfilePage: Fetching user data for:', user.id, user.email)
+        
+        // Get data from Supabase auth user metadata
+        const userMetadata = user.user_metadata || {}
+        console.log('ProfilePage: User metadata:', userMetadata)
+        
+        const savedUserData = localStorage.getItem('userData')
+        let parsedSavedData = {}
+        
+        if (savedUserData) {
+          try {
+            parsedSavedData = JSON.parse(savedUserData)
+            console.log('ProfilePage: Parsed localStorage data:', parsedSavedData)
+          } catch (e) {
+            console.error("Failed to parse user data from localStorage", e)
+          }
+        }
+
+        // Try to fetch from database users table (only columns that exist)
+        let dbUserData = {}
+        try {
+          // First try by ID (Supabase auth user ID)
+          let { data: dbUser, error: dbError } = await supabase
+            .from('users')
+            .select('id, email, first_name, last_name, name')
+            .eq('id', user.id)
+            .single()
+
+          // If not found by ID, try by email
+          if (dbError && dbError.code === 'PGRST116') {
+            console.log('ProfilePage: User not found by ID, trying by email...')
+            const { data: dbUserByEmail, error: emailError } = await supabase
+              .from('users')
+              .select('id, email, first_name, last_name, name')
+              .eq('email', user.email)
+              .single()
+            
+            if (!emailError && dbUserByEmail) {
+              dbUser = dbUserByEmail
+              dbError = null
+            } else {
+              // User doesn't exist in database, create them
+              console.log('ProfilePage: User not in database, creating...')
+              const newUserData = {
+                id: user.id,
+                email: user.email,
+                name: userMetadata.full_name || userMetadata.name || `${userMetadata.first_name || ''} ${userMetadata.last_name || ''}`.trim() || user.email,
+                first_name: userMetadata.first_name || userMetadata.full_name?.split(' ')[0] || '',
+                last_name: userMetadata.last_name || userMetadata.full_name?.split(' ')[1] || '',
+                role: userMetadata.role || 'user',
+              }
+              
+              const { data: createdUser, error: createError } = await supabase
+                .from('users')
+                .insert(newUserData)
+                .select()
+                .single()
+              
+              if (!createError && createdUser) {
+                dbUser = createdUser
+                dbError = null
+                console.log('ProfilePage: User created in database:', createdUser)
+              } else {
+                console.error('ProfilePage: Failed to create user in database:', createError)
+              }
+            }
+          }
+
+          console.log('ProfilePage: Database query result:', { dbUser, dbError })
+
+          if (!dbError && dbUser) {
+            dbUserData = {
+              first_name: dbUser.first_name || dbUser.name?.split(' ')[0] || '',
+              last_name: dbUser.last_name || dbUser.name?.split(' ')[1] || '',
+              email: dbUser.email || user.email || '',
+            }
+            console.log('ProfilePage: Extracted dbUserData:', dbUserData)
+          } else if (dbError) {
+            console.log('ProfilePage: Database error:', dbError.message)
+          }
+        } catch (dbErr) {
+          console.error('ProfilePage: Database fetch exception:', dbErr)
+        }
+
+        // Get localStorage user data (from auth context)
+        const localStorageUser = localStorage.getItem('user')
+        let parsedLocalUser = {}
+        if (localStorageUser) {
+          try {
+            parsedLocalUser = JSON.parse(localStorageUser)
+            console.log('ProfilePage: Parsed localStorage user:', parsedLocalUser)
+          } catch (e) {
+            console.error('Failed to parse localStorage user:', e)
+          }
+        }
+
+        // Merge data: database > Supabase metadata > localStorage user > saved localStorage > defaults
+        const mergedData = {
+          first_name: dbUserData.first_name || 
+                     userMetadata.first_name || 
+                     parsedLocalUser.firstName ||
+                     parsedSavedData.first_name || 
+                     userMetadata.full_name?.split(' ')[0] || 
+                     '',
+          last_name: dbUserData.last_name || 
+                    userMetadata.last_name || 
+                    parsedLocalUser.lastName ||
+                    parsedSavedData.last_name || 
+                    userMetadata.full_name?.split(' ')[1] || 
+                    '',
+          email: dbUserData.email || user.email || parsedLocalUser.email || '',
+          mobile_number: userMetadata.phone || 
+                        user.phone || 
+                        parsedSavedData.mobile_number || 
+                        '',
+          date_of_birth: userMetadata.date_of_birth || 
+                        parsedSavedData.date_of_birth || 
+                        '',
+          gender: userMetadata.gender || 
+                 parsedSavedData.gender || 
+                 'Male',
+          profile_photo: parsedSavedData.profile_photo || null,
+        }
+
+        console.log('ProfilePage: Final merged data:', mergedData)
+        setData(mergedData)
+      } catch (error) {
+        console.error('ProfilePage: Error fetching user data:', error)
+        setErrors({ fetch: 'Failed to load profile data. Please refresh the page.' })
+      } finally {
+        setLoading(false)
       }
     }
-  }, [])
+
+    if (user) {
+      fetchUserData()
+    } else if (!authLoading) {
+      // User is not authenticated and auth is done loading
+      setLoading(false)
+    }
+  }, [user, authLoading])
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files?.[0]
@@ -44,9 +192,10 @@ export default function ProfilePage() {
     }
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setProcessing(true)
+    setErrors({})
     
     // Validate form
     const newErrors = {}
@@ -59,24 +208,81 @@ export default function ProfilePage() {
       return
     }
 
-    // Save the user data to localStorage
-    const dataToSave = {...data}
-    if (data.profile_photo) {
-      // Don't try to stringify the File object
-      delete dataToSave.profile_photo
-    }
-    localStorage.setItem('userData', JSON.stringify(dataToSave))
-    
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Update Supabase auth user metadata
+      const metadataUpdates = {
+        first_name: data.first_name,
+        last_name: data.last_name,
+        full_name: `${data.first_name} ${data.last_name}`,
+        phone: data.mobile_number,
+        date_of_birth: data.date_of_birth,
+        gender: data.gender,
+      }
+
+      const { error: updateError } = await updateProfile(metadataUpdates)
+      
+      if (updateError) {
+        throw updateError
+      }
+
+      // Update database users table (only columns that exist)
+      if (user?.id) {
+        const { error: dbError } = await supabase
+          .from('users')
+          .upsert({
+            id: user.id,
+            email: data.email,
+            first_name: data.first_name,
+            last_name: data.last_name,
+            name: `${data.first_name} ${data.last_name}`,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'id'
+          })
+
+        if (dbError) {
+          console.error('Database update error:', dbError)
+          // Don't throw, just log - auth update succeeded
+        } else {
+          console.log('Database user updated successfully')
+        }
+      }
+
+      // Save to localStorage for quick access
+      const dataToSave = {...data}
+      if (data.profile_photo) {
+        // Don't try to stringify the File object
+        delete dataToSave.profile_photo
+      }
+      localStorage.setItem('userData', JSON.stringify(dataToSave))
+      
       setProcessing(false)
       setRecentlySuccessful(true)
       
       // Reset success message after a delay
       setTimeout(() => {
         setRecentlySuccessful(false)
-      }, 2000)
-    }, 800)
+      }, 3000)
+    } catch (error) {
+      console.error('Error updating profile:', error)
+      setErrors({ submit: error.message || 'Failed to update profile. Please try again.' })
+      setProcessing(false)
+    }
+  }
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-[#f0f7fc] flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#006d92]"></div>
+          <p className="mt-4 text-gray-600">Loading profile...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return null // Will redirect
   }
 
   return (
@@ -227,6 +433,11 @@ export default function ProfilePage() {
           {recentlySuccessful && (
             <div className="mt-4 bg-green-50 p-3 rounded-md border border-green-200">
               <p className="text-green-600 text-sm font-medium">Profile updated successfully!</p>
+            </div>
+          )}
+          {errors.submit && (
+            <div className="mt-4 bg-red-50 p-3 rounded-md border border-red-200">
+              <p className="text-red-600 text-sm font-medium">{errors.submit}</p>
             </div>
           )}
         </div>

@@ -42,7 +42,7 @@ const HeroSection = () => {
       const lines = cruiseData.cruiseLines.map(line => line.name);
       setCruiseLines(lines);
       setCruiseLinesDetails(cruiseData.cruiseLines);
-      
+
       // Extract all unique destinations
       const allDestinations = new Set();
       cruiseData.cruiseLines.forEach(line => {
@@ -62,7 +62,7 @@ const HeroSection = () => {
           dest.departurePorts.forEach(port => ports.add(port));
         }
       });
-      
+
       // If we have ports from destinations, use those, otherwise fallback to default list
       if (ports.size > 0) {
         setDeparturePorts(Array.from(ports).sort());
@@ -94,13 +94,13 @@ const HeroSection = () => {
       setActiveField(null);
     }, 200);
   };
-  
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (activeField && !event.target.closest('.search-item')) {
         setActiveField(null);
       }
-      
+
       if (showDestinationSuggestions && !event.target.closest('.search-field')) {
         setShowDestinationSuggestions(false);
       }
@@ -118,21 +118,21 @@ const HeroSection = () => {
       ...searchValues,
       [field]: value
     });
-    
+
     // If selecting a cruise line, filter the destinations
     if (field === 'cruiseLine') {
       filterDestinationsByCruiseLine(value);
     }
-    
+
     // If selecting a destination, filter the cruise lines
     if (field === 'location') {
       filterCruiseLinesByDestination(value);
     }
   };
-  
+
   const filterDestinationsByCruiseLine = (cruiseLineName) => {
     if (!cruiseLineName) return;
-    
+
     const selectedCruiseLine = cruiseLinesDetails.find(line => line.name === cruiseLineName);
     if (selectedCruiseLine && selectedCruiseLine.destinations) {
       // If the currently selected location isn't offered by this cruise line, clear it
@@ -144,15 +144,15 @@ const HeroSection = () => {
       }
     }
   };
-  
+
   const filterCruiseLinesByDestination = (destination) => {
     if (!destination) return;
-    
+
     // Find cruise lines that offer this destination
-    const linesWithDestination = cruiseLinesDetails.filter(line => 
+    const linesWithDestination = cruiseLinesDetails.filter(line =>
       line.destinations && line.destinations.includes(destination)
     );
-    
+
     // If the currently selected cruise line doesn't offer this destination, clear it
     if (searchValues.cruiseLine && !linesWithDestination.some(line => line.name === searchValues.cruiseLine)) {
       setSearchValues(prev => ({
@@ -161,37 +161,37 @@ const HeroSection = () => {
       }));
     }
   };
-  
-  
+
+
   const handleSearch = (e) => {
     e.preventDefault();
     setIsSearching(true);
-    
+
     // Create query parameters from search values
     const queryParams = new URLSearchParams();
     Object.entries(searchValues).forEach(([key, value]) => {
       if (value) queryParams.append(key, value);
     });
-    
+
     // Filter cruise results based on search criteria
     const filteredResults = cruiseData.cruiseLines.filter(cruise => {
       let matches = true;
-      
+
       // Filter by cruise line
       if (searchValues.cruiseLine && cruise.name !== searchValues.cruiseLine) {
         matches = false;
       }
-      
+
       // Filter by destination
       if (searchValues.location && !cruise.destinations.includes(searchValues.location)) {
         matches = false;
       }
-      
+
       // Filter by price range (basic implementation)
       if (searchValues.price) {
         const priceRange = searchValues.price;
         const cruisePrice = parseInt(cruise.price.replace(/\D/g, ''));
-        
+
         if (priceRange === '$100-$500' && (cruisePrice < 100 || cruisePrice > 500)) {
           matches = false;
         } else if (priceRange === '$500-$1000' && (cruisePrice < 500 || cruisePrice > 1000)) {
@@ -204,12 +204,12 @@ const HeroSection = () => {
           matches = false;
         }
       }
-      
+
       return matches;
     });
-    
+
     setSearchResults(filteredResults);
-    
+
     // Navigate to cruises page with search parameters
     setTimeout(() => {
       setIsSearching(false);
@@ -222,22 +222,22 @@ const HeroSection = () => {
     if (!searchValues.cruiseLine) {
       return destinations;
     }
-    
+
     const selectedCruiseLine = cruiseLinesDetails.find(line => line.name === searchValues.cruiseLine);
     if (selectedCruiseLine && selectedCruiseLine.destinations) {
       return selectedCruiseLine.destinations.sort();
     }
-    
+
     return destinations;
   };
-  
+
   // Function to get available cruise lines based on selected destination
   const getAvailableCruiseLines = () => {
     if (!searchValues.location) {
       return cruiseLinesDetails;
     }
-    
-    return cruiseLinesDetails.filter(line => 
+
+    return cruiseLinesDetails.filter(line =>
       line.destinations && line.destinations.includes(searchValues.location)
     );
   };
@@ -245,13 +245,13 @@ const HeroSection = () => {
   return (
     <section className="hero-section">
       {/* Background Image with Overlay */}
-      <div 
+      <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
           backgroundImage: "url('https://images.unsplash.com/photo-1548574505-5e239809ee19?q=80&w=2064&auto=format&fit=crop')",
         }}
       >
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-black/70"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/60"></div>
       </div>
 
       {/* Content Container */}
@@ -262,14 +262,14 @@ const HeroSection = () => {
             {/* <Ship className="w-4 h-4 text-blue-400 mr-2" /> */}
             {/* <span className="text-white/90 text-sm font-medium">Luxury Cruise Experiences</span> */}
           </div>
-          
+
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white tracking-tight drop-shadow-2xl">
             Discover Your Perfect
             <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300 drop-shadow-lg">
               Cruise Adventure
             </span>
           </h1>
-          
+
           <p className="text-lg md:text-xl text-white max-w-3xl mx-auto font-medium drop-shadow-lg">
             Explore the world's most breathtaking destinations with our handpicked selection of luxury cruise packages
           </p>
@@ -293,10 +293,10 @@ const HeroSection = () => {
                   onChange={(e) => {
                     const query = e.target.value;
                     setSearchQuery(query);
-                    
+
                     // Filter destinations based on input
                     if (query.length > 0) {
-                      const filtered = destinations.filter(dest => 
+                      const filtered = destinations.filter(dest =>
                         dest.toLowerCase().includes(query.toLowerCase())
                       );
                       setFilteredDestinations(filtered);
@@ -311,13 +311,13 @@ const HeroSection = () => {
                     }
                   }}
                 />
-                
+
                 {/* Destination Suggestions */}
                 {showDestinationSuggestions && filteredDestinations.length > 0 && (
                   <div className="absolute left-0 right-0 top-full bg-white border border-gray-200 rounded-xl shadow-xl z-30 mt-2 max-h-64 overflow-y-auto">
                     <ul className="py-2">
                       {filteredDestinations.map((destination, index) => (
-                        <li 
+                        <li
                           key={index}
                           className="px-4 py-2 hover:bg-blue-50 cursor-pointer"
                           onClick={() => {

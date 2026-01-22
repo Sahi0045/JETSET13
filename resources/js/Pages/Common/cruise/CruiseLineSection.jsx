@@ -10,13 +10,13 @@ const CruiseLineSection = () => {
     <section className="cruise-line-section">
       <div className="cruise-line-header">
         <img src="/images/cruise-icon.svg" alt="Cruise Icon" className="cruise-icon" />
-        <h2 className="section-title">EXPLORE BY DESTINATION</h2>
+        <h2 className="section-title">EXPLORE BY CRUISE LINE</h2>
       </div>
-      
+
       <p className="section-subtitle">
-        Discover breathtaking destinations and unforgettable experiences
+        Discover top-rated cruise lines and premium experiences
       </p>
-      
+
       <div className="cruise-lines-grid">
         {cruiseLineData.cruiseLines.map((cruiseLine) => (
           <div key={cruiseLine.id} className="cruise-line-card">
@@ -32,7 +32,7 @@ const CruiseLineSection = () => {
               <p className="price">
                 Starts from <Price amount={cruiseLine.price.replace(/[^0-9.]/g, '')} />/p.p
               </p>
-              <Link 
+              <Link
                 to={`/cruises?cruiseLine=${encodeURIComponent(cruiseLine.name)}`}
                 className="book-now"
               >
@@ -42,8 +42,8 @@ const CruiseLineSection = () => {
           </div>
         ))}
       </div>
-      
-      <Link 
+
+      <Link
         to="/cruises"
         className="explore-more"
       >
