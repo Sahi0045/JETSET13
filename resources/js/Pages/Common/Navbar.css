@@ -6,19 +6,18 @@
       padding: 0 32px;
       position: relative;
       z-index: 1000;
-      background-color: #ffffff;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      background-color: #f8fafc;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.04);
       transition: all 0.3s ease-in-out;
     }
 
     /* Transparent styles removed for solid layout */
 
     .navbar.scrolled {
-      background-color: rgba(255, 255, 255, 0.9);
+      background-color: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(12px);
       box-shadow: 0 4px 20px rgba(5, 91, 117, 0.08);
-      /* Soft Teal Shadow */
       border-bottom: 1px solid rgba(255, 255, 255, 0.5);
     }
 
