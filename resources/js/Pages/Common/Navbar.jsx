@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './Navbar.css';
 import CurrencySelector from '../../Components/CurrencySelector';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
 const Navbar = ({ forceScrolled }) => {
   const location = useLocation();
+  const { user: authUser, isAuthenticated: supabaseAuth, signOut } = useSupabaseAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(forceScrolled || false);
@@ -18,13 +20,24 @@ const Navbar = ({ forceScrolled }) => {
     return location.pathname.startsWith(path);
   };
 
-  // Check authentication from localStorage
+  // Check authentication from Supabase context and localStorage
   useEffect(() => {
     const authStatus = localStorage.getItem('isAuthenticated') === 'true';
     const userData = localStorage.getItem('user');
 
-    setIsAuthenticated(authStatus);
-    if (userData) {
+    // Use Supabase auth state if available, otherwise fall back to localStorage
+    setIsAuthenticated(supabaseAuth || authStatus);
+    
+    if (authUser) {
+      // Use Supabase user data
+      setUser({
+        id: authUser.id,
+        email: authUser.email,
+        firstName: authUser.user_metadata?.first_name || authUser.user_metadata?.full_name?.split(' ')[0] || '',
+        lastName: authUser.user_metadata?.last_name || authUser.user_metadata?.full_name?.split(' ')[1] || '',
+        photoURL: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture,
+      });
+    } else if (userData) {
       try {
         setUser(JSON.parse(userData));
       } catch (error) {
@@ -32,7 +45,7 @@ const Navbar = ({ forceScrolled }) => {
       }
     }
     setLoading(false);
-  }, []);
+  }, [authUser, supabaseAuth]);
 
   useEffect(() => {
 
@@ -79,15 +92,34 @@ const Navbar = ({ forceScrolled }) => {
 
   const handleLogout = async () => {
     try {
+      setIsDropdownOpen(false);
+      
+      // Sign out from Supabase
+      const { error } = await signOut();
+      
+      if (error) {
+        console.error('Supabase logout error:', error);
+      }
+      
+      // Clear all localStorage
       localStorage.removeItem('isAuthenticated');
       localStorage.removeItem('user');
       localStorage.removeItem('token');
-      setIsDropdownOpen(false);
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('supabase_token');
+      localStorage.removeItem('userData');
+      
+      // Update local state
       setIsAuthenticated(false);
       setUser(null);
+      
+      // Redirect to home page
       window.location.href = '/';
     } catch (error) {
       console.error('Logout error:', error);
+      // Still clear localStorage and redirect even if there's an error
+      localStorage.clear();
+      window.location.href = '/';
     }
   };
 
