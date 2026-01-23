@@ -47,12 +47,12 @@ const TrustIndicators = () => {
 
         <div className="flex flex-wrap justify-center gap-8 md:gap-16">
           <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-[#0066b2] mb-1">12K+</div>
+            <div className="text-2xl md:text-3xl font-bold text-[#0066b2] mb-1">500+</div>
             <div className="text-gray-500 text-sm">Happy Customers</div>
           </div>
 
           <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-[#0066b2] mb-1">150+</div>
+            <div className="text-2xl md:text-3xl font-bold text-[#0066b2] mb-1">50+</div>
             <div className="text-gray-500 text-sm">Destinations</div>
           </div>
 
