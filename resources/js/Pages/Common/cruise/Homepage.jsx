@@ -212,64 +212,64 @@ const TestimonialBanner = () => {
       {/* Contact Support Modal */}
       {showContactForm && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn"
+          className="fixed inset-0 bg-transparent backdrop-blur-[2px] flex items-center justify-center z-50 p-2 sm:p-4 animate-fadeIn overflow-y-auto"
           onClick={() => setShowContactForm(false)}
           style={{
             animation: 'fadeIn 0.3s ease-out',
           }}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-0 relative overflow-hidden"
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-0 relative overflow-hidden my-auto"
             onClick={(e) => e.stopPropagation()}
             style={{
               animation: 'slideUp 0.4s ease-out',
-              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.15)',
             }}
           >
-            <div className="bg-gradient-to-r from-[#055B75] to-[#034457] pt-8 pb-12 px-6 text-white relative">
+            <div className="bg-gradient-to-r from-[#055B75] to-[#034457] pt-6 sm:pt-8 pb-10 sm:pb-12 px-4 sm:px-6 text-white relative">
               <button
-                className="absolute top-4 right-4 text-white hover:text-gray-200 transition-colors"
+                className="absolute top-3 sm:top-4 right-3 sm:right-4 text-white hover:text-gray-200 transition-colors z-10"
                 onClick={() => setShowContactForm(false)}
                 aria-label="Close popup"
               >
-                <FaTimes size={20} />
+                <FaTimes className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
 
               <div className="flex items-center mb-2">
-                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mr-4">
-                  <FaLifeRing className="text-[#055B75]" size={20} />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center mr-3 sm:mr-4">
+                  <FaLifeRing className="text-[#055B75] w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <h2 className="text-2xl font-bold">Contact Our Support Team</h2>
+                <h2 className="text-xl sm:text-2xl font-bold">Contact Our Support Team</h2>
               </div>
 
-              <p className="opacity-90 text-sm">
+              <p className="opacity-90 text-xs sm:text-sm">
                 Our cruise experts are here to assist you with any questions
               </p>
 
               <div className="absolute -bottom-6 left-0 right-0 h-12 bg-white rounded-t-[50%]"></div>
             </div>
 
-            <div className="px-6 pb-6 pt-8">
+            <div className="px-4 sm:px-6 pb-4 sm:pb-6 pt-6 sm:pt-8">
               {submitted ? (
-                <div className="text-center py-10 px-4 animate-fadeIn">
-                  <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <FaCheckCircle className="text-green-500" size={40} />
+                <div className="text-center py-8 sm:py-10 px-4 animate-fadeIn">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6">
+                    <FaCheckCircle className="text-green-500 w-10 h-10 sm:w-12 sm:h-12" />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-800 mb-3">Thank You!</h3>
-                  <p className="text-gray-600 mb-6">
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2 sm:mb-3">Thank You!</h3>
+                  <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
                     We've received your message and will get back to you within 24 hours.
                   </p>
-                  <div className="w-16 h-1 bg-green-500 mx-auto"></div>
+                  <div className="w-12 sm:w-16 h-1 bg-green-500 mx-auto"></div>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-5">
+                <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
                   <div className={`transition-all duration-200 ${activeField === 'name' ? 'transform -translate-y-1' : ''}`}>
-                    <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="name">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-semibold mb-2" htmlFor="name">
                       Your Name
                     </label>
                     <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'name' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <FaUser className={`transition-colors ${activeField === 'name' ? 'text-[#0066b2]' : 'text-gray-400'}`} />
+                      <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+                        <FaUser className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${activeField === 'name' ? 'text-[#0066b2]' : 'text-gray-400'}`} />
                       </div>
                       <input
                         type="text"
@@ -280,19 +280,19 @@ const TestimonialBanner = () => {
                         onFocus={() => handleFocus('name')}
                         onBlur={handleBlur}
                         required
-                        className="w-full bg-gray-50 pl-12 pr-4 py-3 border-none rounded-lg focus:outline-none"
+                        className="w-full bg-gray-50 pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 border-none rounded-lg focus:outline-none text-sm sm:text-base"
                         placeholder="John Doe"
                       />
                     </div>
                   </div>
 
                   <div className={`transition-all duration-200 ${activeField === 'email' ? 'transform -translate-y-1' : ''}`}>
-                    <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="email">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-semibold mb-2" htmlFor="email">
                       Email Address
                     </label>
                     <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'email' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <FaEnvelope className={`transition-colors ${activeField === 'email' ? 'text-[#0066b2]' : 'text-gray-400'}`} />
+                      <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+                        <FaEnvelope className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${activeField === 'email' ? 'text-[#0066b2]' : 'text-gray-400'}`} />
                       </div>
                       <input
                         type="email"
@@ -303,19 +303,19 @@ const TestimonialBanner = () => {
                         onFocus={() => handleFocus('email')}
                         onBlur={handleBlur}
                         required
-                        className="w-full bg-gray-50 pl-12 pr-4 py-3 border-none rounded-lg focus:outline-none"
+                        className="w-full bg-gray-50 pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 border-none rounded-lg focus:outline-none text-sm sm:text-base"
                         placeholder="john@example.com"
                       />
                     </div>
                   </div>
 
                   <div className={`transition-all duration-200 ${activeField === 'message' ? 'transform -translate-y-1' : ''}`}>
-                    <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="message">
+                    <label className="block text-gray-700 text-xs sm:text-sm font-semibold mb-2" htmlFor="message">
                       How can we help?
                     </label>
                     <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'message' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                      <div className="absolute top-3 left-0 pl-4 flex items-start pointer-events-none">
-                        <FaCommentAlt className={`transition-colors ${activeField === 'message' ? 'text-[#0066b2]' : 'text-gray-400'}`} />
+                      <div className="absolute top-2.5 sm:top-3 left-0 pl-3 sm:pl-4 flex items-start pointer-events-none">
+                        <FaCommentAlt className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${activeField === 'message' ? 'text-[#0066b2]' : 'text-gray-400'}`} />
                       </div>
                       <textarea
                         id="message"
@@ -326,7 +326,7 @@ const TestimonialBanner = () => {
                         onBlur={handleBlur}
                         required
                         rows="4"
-                        className="w-full bg-gray-50 pl-12 pr-4 py-3 border-none rounded-lg focus:outline-none resize-none"
+                        className="w-full bg-gray-50 pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 border-none rounded-lg focus:outline-none resize-none text-sm sm:text-base"
                         placeholder="Please describe your question or issue..."
                       ></textarea>
                     </div>
@@ -334,12 +334,12 @@ const TestimonialBanner = () => {
 
                   <button
                     type="submit"
-                    className="w-full bg-gradient-to-r from-[#0066b2] to-[#1e88e5] text-white font-bold py-4 px-4 rounded-xl hover:shadow-lg transition-all duration-300 flex items-center justify-center mt-6"
+                    className="w-full bg-gradient-to-r from-[#0066b2] to-[#1e88e5] text-white font-bold py-3 sm:py-4 px-4 rounded-xl hover:shadow-lg transition-all duration-300 flex items-center justify-center mt-4 sm:mt-6 text-sm sm:text-base"
                   >
                     Submit Request
                   </button>
 
-                  <p className="text-xs text-center text-gray-500 mt-4">
+                  <p className="text-xs text-center text-gray-500 mt-3 sm:mt-4">
                     We typically respond within 24 hours
                   </p>
                 </form>
@@ -352,70 +352,70 @@ const TestimonialBanner = () => {
       {/* Testimonials Modal */}
       {showTestimonials && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn"
+          className="fixed inset-0 bg-transparent backdrop-blur-[2px] flex items-center justify-center z-50 p-2 sm:p-4 animate-fadeIn overflow-y-auto"
           onClick={() => setShowTestimonials(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-0 relative overflow-hidden"
+            className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-0 relative overflow-hidden my-auto max-h-[95vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
             style={{
               animation: 'slideUp 0.4s ease-out',
-              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.15)',
             }}
           >
-            <div className="bg-gradient-to-r from-[#0066b2] to-[#1e88e5] pt-8 pb-12 px-6 text-white relative">
+            <div className="bg-gradient-to-r from-[#0066b2] to-[#1e88e5] pt-6 sm:pt-8 pb-10 sm:pb-12 px-4 sm:px-6 text-white relative">
               <button
-                className="absolute top-4 right-4 text-white hover:text-gray-200 transition-colors"
+                className="absolute top-3 sm:top-4 right-3 sm:right-4 text-white hover:text-gray-200 transition-colors z-10"
                 onClick={() => setShowTestimonials(false)}
                 aria-label="Close popup"
               >
-                <FaTimes size={20} />
+                <FaTimes className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
 
               <div className="flex items-center mb-2">
-                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mr-4">
-                  <FaUsers className="text-[#055B75]" size={20} />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center mr-3 sm:mr-4">
+                  <FaUsers className="text-[#055B75] w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <h2 className="text-2xl font-bold">What Our Customers Say</h2>
+                <h2 className="text-xl sm:text-2xl font-bold">What Our Customers Say</h2>
               </div>
 
-              <p className="opacity-90 text-sm">
+              <p className="opacity-90 text-xs sm:text-sm">
                 Real experiences from verified customers
               </p>
 
               <div className="absolute -bottom-6 left-0 right-0 h-12 bg-white rounded-t-[50%]"></div>
             </div>
 
-            <div className="px-6 pb-8 pt-8">
+            <div className="px-4 sm:px-6 pb-6 sm:pb-8 pt-6 sm:pt-8">
               {/* Featured Testimonial */}
-              <div className="mb-8 p-6 bg-blue-50 rounded-xl relative animate-fadeIn">
-                <div className="absolute right-6 top-6 text-blue-200">
-                  <FaQuoteRight size={40} />
+              <div className="mb-6 sm:mb-8 p-4 sm:p-6 bg-blue-50 rounded-xl relative animate-fadeIn">
+                <div className="absolute right-4 sm:right-6 top-4 sm:top-6 text-blue-200">
+                  <FaQuoteRight className="w-8 h-8 sm:w-10 sm:h-10" />
                 </div>
-                <div className="flex items-start">
+                <div className="flex flex-col sm:flex-row items-start">
                   <img
                     src={testimonialItems[currentTestimonial].image}
                     alt={testimonialItems[currentTestimonial].name}
-                    className="w-16 h-16 rounded-full mr-4 object-cover border-4 border-white shadow-md"
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full mb-3 sm:mb-0 sm:mr-4 object-cover border-4 border-white shadow-md"
                   />
                   <div className="flex-1">
-                    <h4 className="text-xl font-bold text-gray-800">{testimonialItems[currentTestimonial].name}</h4>
-                    <p className="text-sm text-gray-600 mb-3">{testimonialItems[currentTestimonial].position}</p>
-                    <div className="flex mb-4">
+                    <h4 className="text-lg sm:text-xl font-bold text-gray-800">{testimonialItems[currentTestimonial].name}</h4>
+                    <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">{testimonialItems[currentTestimonial].position}</p>
+                    <div className="flex mb-3 sm:mb-4">
                       {[...Array(testimonialItems[currentTestimonial].rating)].map((_, i) => (
-                        <FaStar key={i} className="text-yellow-400 mr-1" />
+                        <FaStar key={i} className="text-yellow-400 text-sm sm:text-base mr-1" />
                       ))}
                     </div>
-                    <p className="text-gray-700 italic">"{testimonialItems[currentTestimonial].text}"</p>
+                    <p className="text-sm sm:text-base text-gray-700 italic">"{testimonialItems[currentTestimonial].text}"</p>
                   </div>
                 </div>
 
                 {/* Dots for navigation */}
-                <div className="flex justify-center mt-6 space-x-2">
+                <div className="flex justify-center mt-4 sm:mt-6 space-x-2">
                   {testimonialItems.map((_, index) => (
                     <button
                       key={index}
-                      className={`w-3 h-3 rounded-full transition-all duration-300 ${currentTestimonial === index ? 'bg-blue-500 w-6' : 'bg-gray-300'}`}
+                      className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full transition-all duration-300 ${currentTestimonial === index ? 'bg-blue-500 w-4 sm:w-6' : 'bg-gray-300'}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         setCurrentTestimonial(index);
@@ -426,21 +426,21 @@ const TestimonialBanner = () => {
               </div>
 
               {/* Additional Testimonials Grid */}
-              <h3 className="font-bold text-gray-800 mb-4">More Customer Stories</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[250px] overflow-y-auto pr-2">
+              <h3 className="text-base sm:text-lg font-bold text-gray-800 mb-3 sm:mb-4">More Customer Stories</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 max-h-[200px] sm:max-h-[250px] overflow-y-auto pr-2">
                 {testimonialItems.filter((_, i) => i !== currentTestimonial).map((item, index) => (
                   <div
                     key={index}
-                    className="bg-gray-50 p-4 rounded-lg hover:shadow-md transition-all duration-300 cursor-pointer"
+                    className="bg-gray-50 p-3 sm:p-4 rounded-lg hover:shadow-md transition-all duration-300 cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
                       setCurrentTestimonial(testimonialItems.findIndex(t => t.name === item.name));
                     }}
                   >
                     <div className="flex items-center">
-                      <img src={item.image} alt={item.name} className="w-10 h-10 rounded-full mr-3 object-cover" />
+                      <img src={item.image} alt={item.name} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full mr-2 sm:mr-3 object-cover" />
                       <div>
-                        <h4 className="font-bold text-gray-800">{item.name}</h4>
+                        <h4 className="text-sm sm:text-base font-bold text-gray-800">{item.name}</h4>
                         <div className="flex">
                           {[...Array(item.rating)].map((_, i) => (
                             <FaStar key={i} className="text-yellow-400 text-xs mr-1" />
@@ -452,10 +452,10 @@ const TestimonialBanner = () => {
                 ))}
               </div>
 
-              <div className="mt-6 text-center">
-                <Link to="/reviews" className="text-[#055B75] font-bold hover:underline flex items-center justify-center">
+              <div className="mt-4 sm:mt-6 text-center">
+                <Link to="/reviews" className="text-[#055B75] font-bold hover:underline flex items-center justify-center text-sm sm:text-base">
                   View All Customer Reviews
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 ml-1" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
                 </Link>
