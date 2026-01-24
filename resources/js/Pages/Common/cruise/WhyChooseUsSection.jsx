@@ -48,8 +48,8 @@ const WhyChooseUsSection = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {reasons.map((reason, index) => (
-            <div 
-              key={index} 
+            <div
+              key={index}
               className="bg-white p-6 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100 hover:border-blue-200 group"
             >
               <div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-5 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300 text-2xl">
@@ -62,27 +62,27 @@ const WhyChooseUsSection = () => {
         </div>
 
         <div className="mt-16 text-center">
-          <a 
-            href="/about" 
+          <a
+            href="/about"
             className="inline-flex items-center px-8 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md hover:shadow-lg"
           >
             Learn More About Us
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-5 w-5 ml-2" 
-              viewBox="0 0 20 20" 
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 ml-2"
+              viewBox="0 0 20 20"
               fill="currentColor"
             >
-              <path 
-                fillRule="evenodd" 
-                d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" 
-                clipRule="evenodd" 
+              <path
+                fillRule="evenodd"
+                d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z"
+                clipRule="evenodd"
               />
             </svg>
           </a>
         </div>
       </div>
-      
+
       {/* Testimonial Highlight */}
       <div className="mt-20 bg-gray-50 py-12">
         <div className="container mx-auto px-4">
@@ -92,9 +92,9 @@ const WhyChooseUsSection = () => {
                 "JetSet Cruises made booking our family vacation incredibly easy. Their customer service team went above and beyond to help us find the perfect cruise, and their exclusive deals saved us hundreds!"
               </div>
               <div className="flex items-center">
-                <img 
-                  src="/images/testimonial-avatar.jpg" 
-                  alt="Customer Testimonial" 
+                <img
+                  src="/images/testimonial-avatar.jpg"
+                  alt="Customer Testimonial"
                   className="w-12 h-12 rounded-full object-cover mr-4"
                   onError={(e) => {
                     e.target.onerror = null;
@@ -107,7 +107,7 @@ const WhyChooseUsSection = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="md:w-1/2 bg-white p-6 rounded-xl shadow-md border border-gray-200">
               <h3 className="text-xl font-bold text-gray-800 mb-3">Our Commitment</h3>
               <p className="text-gray-600 mb-4">

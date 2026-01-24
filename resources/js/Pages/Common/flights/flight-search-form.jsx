@@ -214,7 +214,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           <button
             onClick={() => handleTripTypeChange("oneWay")}
             className={`w-1/2 py-3 text-center font-medium transition-colors ${formData.tripType === "oneWay"
-              ? "bg-blue-500 text-white"
+              ? "bg-[#055B75] text-white"
               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
           >
@@ -223,7 +223,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           <button
             onClick={() => handleTripTypeChange("roundTrip")}
             className={`w-1/2 py-3 text-center font-medium transition-colors ${formData.tripType === "roundTrip"
-              ? "bg-blue-500 text-white"
+              ? "bg-[#055B75] text-white"
               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
           >
@@ -368,7 +368,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           <div className="ml-2 w-full lg:w-auto">
             <button
               onClick={handleSearch}
-              className="h-12 w-full lg:w-auto bg-[#1a56db] hover:bg-blue-700 text-white px-8 rounded-md flex items-center justify-center transition-colors"
+              className="h-12 w-full lg:w-auto bg-[#055B75] hover:bg-[#044A5F] text-white px-8 rounded-md flex items-center justify-center transition-colors shadow-md hover:shadow-lg"
             >
               <Search className="h-5 w-5 mr-2" />
               <span className="font-medium">Search</span>
@@ -379,15 +379,15 @@ export default function FlightSearchForm({ initialData, onSearch }) {
 
       {/* Special Fares */}
       <div className="flex flex-wrap items-center gap-3 mt-2 justify-center lg:justify-start">
-        <span className="text-white font-medium text-shadow-sm drop-shadow-md">Special Fares:</span>
+        <span className="text-[#055B75] font-medium drop-shadow-sm">Special Fares:</span>
         <div className="flex flex-wrap gap-2 lg:gap-3">
-          <button className="px-4 lg:px-6 py-2 bg-blue-600/80 hover:bg-blue-600 text-white rounded-full border border-blue-400 font-medium shadow-md backdrop-blur-sm transition-all text-sm lg:text-base">
+          <button className="px-4 lg:px-6 py-2 bg-white text-[#055B75] hover:bg-[#055B75] hover:text-white rounded-full border border-[#055B75] font-medium shadow-sm transition-all text-sm lg:text-base">
             Student
           </button>
-          <button className="px-4 lg:px-6 py-2 bg-blue-600/80 hover:bg-blue-600 text-white rounded-full border border-blue-400 font-medium shadow-md backdrop-blur-sm transition-all text-sm lg:text-base">
+          <button className="px-4 lg:px-6 py-2 bg-white text-[#055B75] hover:bg-[#055B75] hover:text-white rounded-full border border-[#055B75] font-medium shadow-sm transition-all text-sm lg:text-base">
             Senior Citizen
           </button>
-          <button className="px-4 lg:px-6 py-2 bg-blue-600/80 hover:bg-blue-600 text-white rounded-full border border-blue-400 font-medium shadow-md backdrop-blur-sm transition-all text-sm lg:text-base">
+          <button className="px-4 lg:px-6 py-2 bg-white text-[#055B75] hover:bg-[#055B75] hover:text-white rounded-full border border-[#055B75] font-medium shadow-sm transition-all text-sm lg:text-base">
             Armed Forces
           </button>
         </div>

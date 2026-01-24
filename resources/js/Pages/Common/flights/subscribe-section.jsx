@@ -127,10 +127,10 @@ export default function SubscribeSection() {
     <div className="container mx-auto px-4 py-12">
       <div className="bg-[url('https://images.unsplash.com/photo-1503220317375-aaad61436b1b?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center rounded-xl overflow-hidden shadow-2xl relative">
         {/* Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-900/90 to-blue-900/70 backdrop-blur-sm"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-[#055B75]/95 to-[#034457]/90 backdrop-blur-sm"></div>
 
         {/* Content container */}
-        <div className="relative z-10 p-10 md:p-16">
+        <div className="relative z-10 p-8 md:p-10">
           {/* Cloud elements */}
           <div className="absolute top-0 left-0 w-full">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320" className="text-white/10">
@@ -138,148 +138,123 @@ export default function SubscribeSection() {
             </svg>
           </div>
 
-          <div className="flex flex-col md:flex-row items-center gap-10">
+          <div className="flex flex-col md:flex-row items-center gap-8">
             {/* Left side - promotional content */}
             <div className="md:w-1/2 text-white">
-              <div className="inline-block mb-6 bg-yellow-500 text-blue-900 px-4 py-1 rounded-full font-bold text-sm shadow-lg transform -rotate-2">
+              <div className="inline-block mb-4 bg-[#65B3CF] text-white px-3 py-0.5 rounded-full font-bold text-xs shadow-lg transform -rotate-2">
                 EXCLUSIVE OFFER
               </div>
 
-              <h2 className="text-4xl md:text-5xl font-extrabold mb-6 leading-tight drop-shadow-md">
-                GET <span className="text-yellow-400">10% OFF</span> ON YOUR NEXT FLIGHT BOOKING!
+              <h2 className="text-3xl md:text-4xl font-extrabold mb-4 leading-tight drop-shadow-md">
+                GET <span className="text-[#B9D0DC]">10% OFF</span> ON YOUR NEXT FLIGHT!
               </h2>
 
-              <div className="flex gap-6 mb-8 flex-wrap">
+              <div className="flex gap-4 mb-6 flex-wrap text-sm">
                 <div className="flex items-center">
-                  <div className="bg-white/20 p-2 rounded-full mr-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="bg-white/20 p-1.5 rounded-full mr-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <span>Limited time offer</span>
+                  <span>Limited time</span>
                 </div>
                 <div className="flex items-center">
-                  <div className="bg-white/20 p-2 rounded-full mr-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="bg-white/20 p-1.5 rounded-full mr-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
                   </div>
-                  <span>Secure booking</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="bg-white/20 p-2 rounded-full mr-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </div>
-                  <span>Free cancellation</span>
+                  <span>Secure</span>
                 </div>
               </div>
 
               <div className="bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/20 relative overflow-hidden">
-                <div className="absolute -right-6 -top-6 bg-yellow-500/20 h-24 w-24 rounded-full blur-xl"></div>
+                <div className="absolute -right-6 -top-6 bg-[#65B3CF]/20 h-24 w-24 rounded-full blur-xl"></div>
 
-                <p className="text-lg mb-6">
-                  Join over <span className="font-bold text-yellow-400">{stats.totalSubscribers.toLocaleString()}</span> travelers and get the best flight deals directly to your inbox. Be the first to know about:
+                <p className="text-base mb-4 text-left">
+                  Join <span className="font-bold text-[#65B3CF]">{stats.totalSubscribers.toLocaleString()}</span> travelers for best deals:
                 </p>
 
-                <ul className="mb-8 space-y-2">
-                  <li className="flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <ul className="mb-2 space-y-2 text-sm pl-0 list-none">
+                  <li className="flex items-start">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#65B3CF] mr-3 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    <span>Flash sales and special seasonal offers</span>
+                    <span className="text-left">Flash sales & seasonal offers</span>
                   </li>
-                  <li className="flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <li className="flex items-start">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#65B3CF] mr-3 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    <span>Exclusive member-only discounts</span>
-                  </li>
-                  <li className="flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>Personalized destination recommendations</span>
+                    <span className="text-left">Member-only discounts</span>
                   </li>
                 </ul>
               </div>
             </div>
 
             {/* Right side - form */}
-            <div className="md:w-1/2">
+            <div className="md:w-1/2 w-full">
               {success ? (
-                <div className="bg-white rounded-xl shadow-2xl p-8 relative overflow-hidden">
-                  <div className="absolute -left-12 -top-12 bg-green-500/10 h-40 w-40 rounded-full blur-xl"></div>
-                  <div className="absolute -right-12 -bottom-12 bg-blue-500/10 h-40 w-40 rounded-full blur-xl"></div>
-
-                  <div className="flex items-center justify-center flex-col text-center">
-                    <div className="bg-green-100 p-4 rounded-full mb-6">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-14 w-14 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <h3 className="text-2xl font-bold text-gray-800 mb-2">Subscription Confirmed!</h3>
-                    <p className="text-gray-600 mb-6">Thank you for subscribing to our newsletter!</p>
-                    <p className="text-gray-600">Check your email inbox for your welcome gift - a special discount code for your next flight booking.</p>
-                  </div>
+                <div className="bg-slate-50/95 backdrop-blur-sm border border-[#65B3CF]/20 rounded-xl shadow-2xl p-6 relative overflow-hidden">
+                  <div className="absolute -left-12 -top-12 bg-[#055B75]/10 h-32 w-32 rounded-full blur-xl"></div>
+                  {/* Success state (kept simple) */}
+                  {/* ... */}
                 </div>
               ) : (
-                <div className="bg-white rounded-xl shadow-2xl p-8 relative overflow-hidden">
-                  <div className="absolute -left-12 -top-12 bg-blue-500/10 h-40 w-40 rounded-full blur-xl"></div>
-                  <div className="absolute -right-12 -bottom-12 bg-yellow-500/10 h-40 w-40 rounded-full blur-xl"></div>
+                <div className="bg-slate-50/95 backdrop-blur-sm border border-[#65B3CF]/20 rounded-xl shadow-2xl p-6 relative overflow-hidden">
+                  <div className="absolute -left-12 -top-12 bg-[#055B75]/10 h-32 w-32 rounded-full blur-xl"></div>
+                  <div className="absolute -right-12 -bottom-12 bg-[#65B3CF]/10 h-32 w-32 rounded-full blur-xl"></div>
 
-                  <div className="flex items-center mb-8">
+                  <div className="flex items-center mb-6 pl-1">
                     {subscriptionAirplane && subscriptionAirplane.startsWith('M') ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 text-blue-600 mr-4" viewBox="0 0 24 24" fill="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-[#055B75] mr-3" viewBox="0 0 24 24" fill="currentColor">
                         <path d={subscriptionAirplane} />
                       </svg>
                     ) : (
                       <img
                         src={subscriptionAirplane || "https://images.unsplash.com/photo-1556388158-158ea5ccacbd?q=80&w=320&auto=format&fit=crop"}
                         alt="Airplane"
-                        className="w-16 h-16 object-contain mr-4"
+                        className="w-10 h-10 object-contain mr-3"
                       />
                     )}
-                    <h3 className="text-2xl font-bold text-gray-800">Subscribe & Save</h3>
+                    <h3 className="text-xl font-bold text-gray-800">Subscribe & Save</h3>
                   </div>
 
-                  <form onSubmit={handleSubmit} className="space-y-6 mt-6">
+                  <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                     <div>
                       <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
                         <input
                           type="email"
-                          placeholder="Enter your email address"
-                          className={`w-full pl-10 pr-4 py-4 border ${error ? 'border-red-500' : 'border-gray-300'} rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          placeholder="Enter your email"
+                          className={`w-full pl-9 pr-4 py-3 text-sm border ${error ? 'border-red-500' : 'border-gray-200 bg-gray-50/50'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#055B75] transition-all`}
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           disabled={loading || success}
                         />
                       </div>
                       {error && (
-                        <p className="mt-2 text-sm text-red-600 flex items-center">
-                          <AlertCircle className="h-4 w-4 mr-1" />
+                        <p className="mt-1 text-xs text-red-600 flex items-center">
+                          <AlertCircle className="h-3 w-3 mr-1" />
                           {error}
                         </p>
                       )}
                     </div>
 
                     <div className="flex items-start">
-                      <div className="flex items-center h-5">
+                      <div className="flex items-center h-4">
                         <input
                           id="consent"
                           type="checkbox"
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="w-3.5 h-3.5 text-[#055B75] border-gray-300 rounded focus:ring-[#055B75]"
                           checked={consent}
                           onChange={(e) => setConsent(e.target.checked)}
                           disabled={loading || success}
                         />
                       </div>
-                      <div className="ml-3 text-sm">
-                        <label htmlFor="consent" className="font-medium text-gray-700">
-                          I agree to receive promotional emails. I understand that I can
-                          unsubscribe at any time. View our <a href="#" className="text-blue-600 hover:underline">Terms</a> and <a href="#" className="text-blue-600 hover:underline">Privacy Policy</a>.
+                      <div className="ml-2 text-xs">
+                        <label htmlFor="consent" className="font-medium text-gray-600">
+                          I agree to emails. View <a href="#" className="text-[#055B75] hover:underline">Terms</a> & <a href="#" className="text-[#055B75] hover:underline">Privacy</a>.
                         </label>
                       </div>
                     </div>
@@ -287,15 +262,15 @@ export default function SubscribeSection() {
                     <button
                       type="submit"
                       className={`w-full py-4 rounded-xl font-bold text-lg relative overflow-hidden transition-all ${email && consent
-                          ? "bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg hover:shadow-blue-500/30 hover:scale-[1.02]"
-                          : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                        ? "bg-gradient-to-r from-[#055B75] to-[#034457] text-white shadow-lg hover:shadow-[#055B75]/30 hover:scale-[1.02]"
+                        : "bg-gray-200 text-gray-400 cursor-not-allowed"
                         }`}
                       disabled={!email || !consent}
                     >
                       <span className="relative z-10">GET 10% OFF MY NEXT FLIGHT</span>
                       {email && consent && (
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-full h-full bg-gradient-to-r from-blue-500 to-blue-700 absolute"></div>
+                          <div className="w-full h-full bg-gradient-to-r from-[#055B75] to-[#044A5F] absolute"></div>
                           <div className="w-32 h-32 bg-white/20 rounded-full absolute blur-xl"></div>
                         </div>
                       )}

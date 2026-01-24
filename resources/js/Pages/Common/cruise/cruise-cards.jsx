@@ -15,7 +15,7 @@ const CruiseCards = () => {
   const cruiseLineParam = searchParams.get('cruiseLine');
   const destinationParam = searchParams.get('destination');
   const countryParam = searchParams.get('country');
-  
+
   const [title, setTitle] = useState("All Cruises");
   const [filteredCruises, setFilteredCruises] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,17 +62,17 @@ const CruiseCards = () => {
   const fetchCruiseData = async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       // Fetch cruise data from our API endpoint
       const response = await fetch('/api/cruises');
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch cruise data');
       }
 
       const apiResponse = await response.json();
-      
+
       // Transform API data to match our local data structure
       const transformedCruises = apiResponse.data.map(cruise => ({
         id: cruise.id || Math.random().toString(36).substr(2, 9),
@@ -94,7 +94,7 @@ const CruiseCards = () => {
       console.error('Error fetching cruise data:', apiError);
       setError('Unable to fetch live cruise data. Using fallback data.');
       setUsingFallback(true);
-      
+
       // Fallback to local JSON data
       const filtered = applyFiltersAndTitle(cruiseLineData.cruiseLines);
       setFilteredCruises(filtered);
@@ -135,7 +135,7 @@ const CruiseCards = () => {
       <div className="fixed top-0 left-0 right-0 z-50">
         <Navbar forceScrolled={true} />
       </div>
-      
+
       <div className="pt-[80px]"> {/* Add padding-top to account for fixed Navbar */}
         <div className="bg-white border-b border-gray-200">
           <div className="container mx-auto px-4 h-16 flex items-center justify-center">
@@ -224,7 +224,7 @@ const CruiseCards = () => {
           )}
         </div>
       </div>
-      
+
       <Footer />
     </div>
   );

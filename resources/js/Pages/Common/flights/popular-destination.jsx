@@ -16,7 +16,7 @@ export default function PopularDestinations({ onSelectDestination }) {
       {destinations.map((destination, index) => (
         <div
           key={destination.id}
-          className={`rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 relative h-[320px] cursor-pointer group ${selectedDestination?.id === destination.id ? 'ring-2 ring-blue-500' : ''
+          className={`rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 relative h-[320px] cursor-pointer group ${selectedDestination?.id === destination.id ? 'ring-2 ring-[#055B75]' : ''
             }`}
           onClick={() => handleDestinationClick(destination)}
         >
@@ -35,7 +35,7 @@ export default function PopularDestinations({ onSelectDestination }) {
           {/* Badge - Only for first item */}
           {index === 0 && (
             <div className="absolute top-4 left-4 z-10">
-              <div className="bg-blue-600 text-white text-sm font-medium py-1 px-4 rounded-full shadow-md animate-pulse">
+              <div className="bg-[#055B75] text-white text-sm font-medium py-1 px-4 rounded-full shadow-md animate-pulse">
                 Popular Choice
               </div>
             </div>
@@ -50,7 +50,7 @@ export default function PopularDestinations({ onSelectDestination }) {
             <div>
               <h3 className="text-white text-2xl font-bold mb-1">
                 {destination.name}
-                <span className="ml-2 text-blue-300 text-sm font-normal">
+                <span className="ml-2 text-[#65B3CF] text-sm font-normal">
                   ({destination.code})
                 </span>
               </h3>
@@ -85,7 +85,7 @@ export default function PopularDestinations({ onSelectDestination }) {
                 <div className="flex items-center">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 text-yellow-400 mr-1"
+                    className="h-5 w-5 text-[#65B3CF] mr-1"
                     viewBox="0 0 20 20"
                     fill="currentColor"
                   >
@@ -100,7 +100,7 @@ export default function PopularDestinations({ onSelectDestination }) {
 
                 {/* Book now button */}
                 <button
-                  className={`bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-xs font-medium py-1 px-3 rounded-lg transition-colors ${selectedDestination?.id === destination.id ? 'bg-blue-500 hover:bg-blue-600' : ''
+                  className={`bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-xs font-medium py-1 px-3 rounded-lg transition-colors ${selectedDestination?.id === destination.id ? 'bg-[#055B75] hover:bg-[#044A5F]' : ''
                     }`}
                   onClick={(e) => {
                     e.preventDefault();

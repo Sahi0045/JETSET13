@@ -1045,9 +1045,9 @@ function FlightSearchPage() {
             className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-xl shadow-sm border border-gray-200"
           >
             <div className="flex items-center">
-              <ArrowUpDown className="h-4 w-4 text-blue-600 mr-2" />
+              <ArrowUpDown className="h-4 w-4 text-[#055B75] mr-2" />
               <span className="text-gray-700">Sort by: </span>
-              <span className="font-medium text-blue-600 ml-1">
+              <span className="font-medium text-[#055B75] ml-1">
                 {sortOptions.find(opt => opt.value === sortOrder)?.label || 'Best Match'}
               </span>
             </div>
@@ -1063,15 +1063,15 @@ function FlightSearchPage() {
                     onSortChange(option.value);
                     setShowSortOptions(false);
                   }}
-                  className={`w-full flex items-center px-4 py-3 hover:bg-gray-50 ${sortOrder === option.value
-                    ? 'bg-blue-50 text-blue-600'
+                  className={`w-full flex items-center px-4 py-3 hover:bg-[#F0FAFC] ${sortOrder === option.value
+                    ? 'bg-[#F0FAFC] text-[#055B75]'
                     : 'text-gray-700'
                     }`}
                 >
                   <span className="text-xl mr-3">{option.icon}</span>
                   <span className="font-medium">{option.label}</span>
                   {sortOrder === option.value && (
-                    <span className="ml-auto text-blue-600">✓</span>
+                    <span className="ml-auto text-[#055B75]">✓</span>
                   )}
                 </button>
               ))}
@@ -1084,7 +1084,7 @@ function FlightSearchPage() {
           <button
             onClick={() => setIsFilterOpen(true)}
             className={`flex items-center px-3 py-2 rounded-full border shadow-sm whitespace-nowrap ${activeFiltersCount > 0
-              ? 'bg-blue-600 text-white border-blue-700'
+              ? 'bg-[#055B75] text-white border-[#034457]'
               : 'bg-white text-gray-700 border-gray-200'
               }`}
           >
@@ -1098,7 +1098,7 @@ function FlightSearchPage() {
               onClick={() => onFilterChange(filter.type, filter.value)}
               className={`px-3 py-2 rounded-full border shadow-sm whitespace-nowrap ${(filter.type === 'stops' && filters.stops === filter.value) ||
                 (filter.type === 'price' && filters.price[1] === filter.value[1])
-                ? 'bg-blue-600 text-white border-blue-700'
+                ? 'bg-[#055B75] text-white border-[#034457]'
                 : 'bg-white text-gray-700 border-gray-200'
                 }`}
             >
@@ -1126,11 +1126,11 @@ function FlightSearchPage() {
         <div className="absolute inset-x-0 bottom-0 h-[90vh] bg-white rounded-t-2xl shadow-xl transform transition-transform duration-300 ease-in-out">
           <div className="flex flex-col h-full">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-[#055B75] to-[#034457] text-white rounded-t-2xl">
               <h2 className="text-xl font-bold">Filters & Sort</h2>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-gray-100 rounded-full"
+                className="p-2 hover:bg-white/10 rounded-full text-white"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -1143,7 +1143,7 @@ function FlightSearchPage() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex-1 min-w-[100px] flex flex-col items-center py-3 px-4 ${activeTab === tab.id
-                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    ? 'text-[#055B75] border-b-2 border-[#055B75]'
                     : 'text-gray-500'
                     }`}
                 >
@@ -1169,14 +1169,14 @@ function FlightSearchPage() {
                         key={option.value}
                         onClick={() => onSortChange(option.value)}
                         className={`w-full flex items-center p-4 rounded-xl ${sortOrder === option.value
-                          ? 'bg-blue-50 border-blue-200'
+                          ? 'bg-[#F0FAFC] border-[#65B3CF]'
                           : 'bg-white border-gray-200'
                           } border`}
                       >
                         <span className="text-xl mr-3">{option.icon}</span>
                         <span className="font-medium text-gray-700">{option.label}</span>
                         {sortOrder === option.value && (
-                          <span className="ml-auto text-blue-600">✓</span>
+                          <span className="ml-auto text-[#055B75]">✓</span>
                         )}
                       </button>
                     ))}
@@ -1188,7 +1188,7 @@ function FlightSearchPage() {
                     <div>
                       <div className="flex justify-between mb-2">
                         <span className="font-medium text-gray-700">Price range</span>
-                        <span className="text-blue-600 font-medium">
+                        <span className="text-[#055B75] font-medium">
                           ${filters.price[0]} - ${filters.price[1]}
                         </span>
                       </div>
@@ -1199,7 +1199,7 @@ function FlightSearchPage() {
                         step="1000"
                         value={filters.price[1]}
                         onChange={(e) => onFilterChange('price', [filters.price[0], parseInt(e.target.value)])}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#055B75]"
                       />
                     </div>
 
@@ -1209,7 +1209,7 @@ function FlightSearchPage() {
                           key={price}
                           onClick={() => onFilterChange('price', [0, price])}
                           className={`p-3 rounded-xl border ${filters.price[1] === price
-                            ? 'bg-blue-50 border-blue-200 text-blue-600'
+                            ? 'bg-[#F0FAFC] border-[#65B3CF] text-[#055B75]'
                             : 'bg-white border-gray-200 text-gray-700'
                             }`}
                         >
@@ -1231,14 +1231,14 @@ function FlightSearchPage() {
                         key={option.value}
                         onClick={() => onFilterChange('stops', option.value)}
                         className={`w-full flex items-center p-4 rounded-xl ${filters.stops === option.value
-                          ? 'bg-blue-50 border-blue-200'
+                          ? 'bg-[#F0FAFC] border-[#65B3CF]'
                           : 'bg-white border-gray-200'
                           } border`}
                       >
                         <span className="text-xl mr-3">{option.icon}</span>
                         <span className="font-medium text-gray-700">{option.label}</span>
                         {filters.stops === option.value && (
-                          <span className="ml-auto text-blue-600">✓</span>
+                          <span className="ml-auto text-[#055B75]">✓</span>
                         )}
                       </button>
                     ))}
@@ -1257,13 +1257,13 @@ function FlightSearchPage() {
                           onFilterChange('airlines', updatedAirlines);
                         }}
                         className={`w-full flex items-center p-4 rounded-xl ${filters.airlines.includes(airline)
-                          ? 'bg-blue-50 border-blue-200'
+                          ? 'bg-[#F0FAFC] border-[#65B3CF]'
                           : 'bg-white border-gray-200'
                           } border`}
                       >
                         <span className="font-medium text-gray-700">{airline}</span>
                         {filters.airlines.includes(airline) && (
-                          <span className="ml-auto text-blue-600">✓</span>
+                          <span className="ml-auto text-[#055B75]">✓</span>
                         )}
                       </button>
                     ))}
@@ -1288,7 +1288,7 @@ function FlightSearchPage() {
                 </button>
                 <button
                   onClick={onClose}
-                  className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                  className="flex-1 py-3 bg-[#055B75] text-white rounded-xl font-medium hover:bg-[#034457] transition-colors"
                 >
                   Apply Filters
                 </button>
@@ -1343,9 +1343,9 @@ function FlightSearchPage() {
               </div>
               <button
                 onClick={() => setIsFilterOpen(true)}
-                className="ml-4 bg-blue-50 hover:bg-blue-100 rounded-lg p-2 transition-colors"
+                className="ml-4 bg-[#F0FAFC] hover:bg-[#D4EFFA] rounded-lg p-2 transition-colors"
               >
-                <Filter className="h-5 w-5 text-blue-600" />
+                <Filter className="h-5 w-5 text-[#055B75]" />
               </button>
             </div>
           </div>
@@ -1374,7 +1374,7 @@ function FlightSearchPage() {
                       type="text"
                       value={localSearchParams.from}
                       onChange={(e) => setLocalSearchParams(prev => ({ ...prev, from: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#055B75]"
                       placeholder="Enter city or airport"
                     />
                   </div>
@@ -1384,7 +1384,7 @@ function FlightSearchPage() {
                       type="text"
                       value={localSearchParams.to}
                       onChange={(e) => setLocalSearchParams(prev => ({ ...prev, to: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#055B75]"
                       placeholder="Enter city or airport"
                     />
                   </div>
@@ -1398,7 +1398,7 @@ function FlightSearchPage() {
                       type="date"
                       value={localSearchParams.departDate}
                       onChange={(e) => setLocalSearchParams(prev => ({ ...prev, departDate: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#055B75]"
                     />
                   </div>
                   <div>
@@ -1407,7 +1407,7 @@ function FlightSearchPage() {
                       type="date"
                       value={localSearchParams.returnDate || ''}
                       onChange={(e) => setLocalSearchParams(prev => ({ ...prev, returnDate: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#055B75]"
                     />
                   </div>
                 </div>
@@ -1418,7 +1418,7 @@ function FlightSearchPage() {
                   <select
                     value={localSearchParams.travelers}
                     onChange={(e) => setLocalSearchParams(prev => ({ ...prev, travelers: e.target.value }))}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#055B75]"
                   >
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
                       <option key={num} value={num}>{num} Traveler{num !== 1 ? 's' : ''}</option>
@@ -1429,7 +1429,7 @@ function FlightSearchPage() {
                 {/* Search Button */}
                 <button
                   type="submit"
-                  className="w-full py-4 bg-blue-600 text-white rounded-xl font-semibold text-lg shadow-md hover:bg-blue-700 transition-colors"
+                  className="w-full py-4 bg-[#055B75] text-white rounded-xl font-semibold text-lg shadow-md hover:bg-[#034457] transition-colors"
                 >
                   Search Flights
                 </button>
@@ -1456,7 +1456,7 @@ function FlightSearchPage() {
     const { currentItems, totalPages, totalItems, startIndex, endIndex } = getPaginatedData();
 
     return (
-      <div className="w-full min-h-screen bg-gray-50 flex flex-col">
+      <div className="w-full min-h-screen bg-[#F0FAFC] flex flex-col">
         <Navbar />
         <div className="flex-1 px-4 pt-4 pb-24">
           <MobileSearchBar
@@ -1681,25 +1681,25 @@ function FlightSearchPage() {
 
 
       {/* Enhanced Header Section with Background Image */}
-      <div className="relative px-4 py-12 bg-gradient-to-r from-blue-800 to-indigo-900 text-white overflow-hidden">
+      <div className="relative px-4 py-12 bg-gradient-to-r from-[#055B75] to-[#034457] text-white overflow-hidden">
         <div className="absolute inset-0 overflow-hidden">
           <img
             src="https://images.unsplash.com/photo-1569154941061-e231b4725ef1?q=80&w=2070&auto=format&fit=crop"
             alt="Clouds from airplane window"
             className="w-full h-full object-cover opacity-20"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-900/80 to-indigo-900/80"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-[#055B75]/80 to-[#034457]/80"></div>
         </div>
 
         <div className="container mx-auto relative z-10">
           <div className="flex flex-col items-center mb-8">
             <div className="flex items-center mb-3">
-              <div className="h-0.5 w-10 bg-blue-400 mr-3"></div>
-              <span className="text-blue-300 uppercase tracking-wider text-sm font-medium">Flight Search</span>
-              <div className="h-0.5 w-10 bg-blue-400 ml-3"></div>
+              <div className="h-0.5 w-10 bg-[#65B3CF] mr-3"></div>
+              <span className="text-[#9FD6E8] uppercase tracking-wider text-sm font-medium">Flight Search</span>
+              <div className="h-0.5 w-10 bg-[#65B3CF] ml-3"></div>
             </div>
             <h1 className="text-4xl md:text-5xl font-bold mb-3 text-center">Find Your Perfect Flight</h1>
-            <p className="text-blue-200 text-center max-w-2xl mb-6">Compare prices, schedules, and amenities from top airlines to book the best deal for your trip</p>
+            <p className="text-[#B9D0DC] text-center max-w-2xl mb-6">Compare prices, schedules, and amenities from top airlines to book the best deal for your trip</p>
           </div>
 
           <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 shadow-xl border border-white/20 transform hover:scale-[1.01] transition-transform duration-300">
@@ -1732,9 +1732,9 @@ function FlightSearchPage() {
                   disabled={date.isPast}
                   className={`
                     date-button flex flex-col items-center p-2 rounded-lg min-w-[80px]
-                    ${date.selected ? 'selected' : ''}
-                    ${date.isWeekend ? 'weekend' : ''}
-                    ${date.isLowestPrice ? 'lowest-price' : ''}
+                    ${date.selected ? 'selected bg-[#055B75] text-white shadow-md' : 'hover:bg-[#F0FAFC]'}
+                    ${date.isWeekend && !date.selected ? 'text-[#055B75]' : ''}
+                    ${date.isLowestPrice && !date.selected ? 'border border-[#65B3CF] bg-[#F0FAFC]' : ''}
                     ${date.isPast ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                 >
@@ -1775,7 +1775,7 @@ function FlightSearchPage() {
         </div>
       </div>
 
-      <div className="bg-gray-50 min-h-screen pb-12 pt-8">
+      <div className="bg-[#F0FAFC] min-h-screen pb-12 pt-8">
         <div className="container mx-auto max-w-6xl px-4">
           {loading ? (
             <div className="flex flex-col justify-center items-center py-20 bg-white rounded-xl shadow-md min-h-[400px]">
@@ -1786,9 +1786,9 @@ function FlightSearchPage() {
             <div className="flex flex-col md:flex-row gap-6">
               {/* Enhanced Filter Sidebar */}
               <div className="w-full md:w-1/4">
-                <div className="card border border-gray-200 sticky top-24 overflow-hidden">
+                <div className="bg-white rounded-lg shadow-md border border-gray-200 sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
                   {/* Filter Header */}
-                  <div className="gradient-primary p-5 text-white relative overflow-hidden">
+                  <div className="bg-gradient-to-r from-[#055B75] to-[#034457] p-5 text-white relative overflow-hidden">
                     <div className="absolute -right-4 -top-4 h-16 w-16 rounded-full bg-white/10"></div>
                     <div className="absolute -right-1 top-8 h-8 w-8 rounded-full bg-white/10"></div>
                     <h3 className="text-lg font-bold flex items-center relative z-10">
@@ -1798,12 +1798,12 @@ function FlightSearchPage() {
                   </div>
 
                   {/* Price Range */}
-                  <div className="p-5 border-b border-gray-200">
+                  <div className="p-5 border-b border-gray-200 bg-white">
                     <h4 className="font-medium text-gray-800 mb-4">Price Range</h4>
                     <div className="px-2">
                       <div className="flex justify-between mb-3">
-                        <span className="text-sm font-medium text-primary-600">${filters.price[0]}</span>
-                        <span className="text-sm font-medium text-primary-600">${filters.price[1]}</span>
+                        <span className="text-sm font-medium text-[#055B75]">${filters.price[0]}</span>
+                        <span className="text-sm font-medium text-[#055B75]">${filters.price[1]}</span>
                       </div>
 
                       <input
@@ -1813,63 +1813,63 @@ function FlightSearchPage() {
                         step="1000"
                         value={filters.price[1]}
                         onChange={(e) => handleFilterChange('price', [filters.price[0], parseInt(e.target.value)])}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600 focus-ring"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#055B75] focus:ring-[#055B75]"
                       />
                     </div>
                   </div>
 
                   {/* Stops */}
-                  <div className="p-5 border-b border-gray-200">
+                  <div className="p-5 border-b border-gray-200 bg-white">
                     <h4 className="font-medium text-gray-800 mb-4">Stops</h4>
                     <div className="space-y-2">
-                      <label className="flex items-center p-3 hover:bg-primary-50 rounded-lg transition-colors cursor-pointer">
+                      <label className="flex items-center p-3 hover:bg-[#F0FAFC] rounded-lg transition-colors cursor-pointer">
                         <input
                           type="radio"
                           name="stops"
-                          className="w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                          className="w-4 h-4 text-[#055B75] border-gray-300 focus:ring-[#055B75]"
                           checked={filters.stops === "any"}
                           onChange={() => handleFilterChange('stops', "any")}
                         />
-                        <span className="ml-3 text-gray-700 font-medium">Any number of stops</span>
+                        <span className="ml-3 text-sm text-gray-700 font-medium">Any number of stops</span>
                       </label>
 
-                      <label className="flex items-center p-2 hover:bg-blue-50 rounded-md transition-colors cursor-pointer">
+                      <label className="flex items-center p-2 hover:bg-[#F0FAFC] rounded-md transition-colors cursor-pointer">
                         <input
                           type="radio"
                           name="stops"
-                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                          className="w-4 h-4 text-[#055B75] border-gray-300 focus:ring-[#055B75] focus:ring-2"
                           checked={filters.stops === "0"}
                           onChange={() => handleFilterChange('stops', "0")}
                         />
-                        <span className="ml-2 text-gray-700">Non-stop only</span>
+                        <span className="ml-2 text-sm text-gray-700">Non-stop only</span>
                       </label>
 
-                      <label className="flex items-center p-2 hover:bg-blue-50 rounded-md transition-colors cursor-pointer">
+                      <label className="flex items-center p-2 hover:bg-[#F0FAFC] rounded-md transition-colors cursor-pointer">
                         <input
                           type="radio"
                           name="stops"
-                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                          className="w-4 h-4 text-[#055B75] border-gray-300 focus:ring-[#055B75] focus:ring-2"
                           checked={filters.stops === "1"}
                           onChange={() => handleFilterChange('stops', "1")}
                         />
-                        <span className="ml-2 text-gray-700">1 stop max</span>
+                        <span className="ml-2 text-sm text-gray-700">1 stop max</span>
                       </label>
                     </div>
                   </div>
 
                   {/* Airlines */}
-                  <div className="p-5">
+                  <div className="p-5 bg-white">
                     <h4 className="font-medium text-gray-800 mb-4">Airlines</h4>
-                    <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#65B3CF] scrollbar-track-gray-100">
                       {getAllAirlines().map(airline => (
-                        <label key={airline} className="flex items-center p-2 hover:bg-blue-50 rounded-md transition-colors cursor-pointer">
+                        <label key={airline} className="flex items-center p-2 hover:bg-[#F0FAFC] rounded-md transition-colors cursor-pointer">
                           <input
                             type="checkbox"
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            className="w-4 h-4 text-[#055B75] border-gray-300 rounded focus:ring-[#055B75] focus:ring-2"
                             checked={filters.airlines.includes(airline)}
                             onChange={() => toggleAirlineFilter(airline)}
                           />
-                          <span className="ml-2 text-gray-700">{airline}</span>
+                          <span className="ml-2 text-sm text-gray-700 font-medium">{airline}</span>
                         </label>
                       ))}
                     </div>
@@ -1897,11 +1897,11 @@ function FlightSearchPage() {
               {/* Results */}
               <div className="w-full md:w-3/4">
                 {/* Sort Controls */}
-                <div className="card p-6 mb-6 border border-gray-200">
+                <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-200">
                   <div className="flex flex-col md:flex-row items-center justify-between">
                     <div className="mb-4 md:mb-0">
                       <p className="text-gray-600">
-                        <span className="font-bold text-primary-600 text-lg">{totalItems}</span>
+                        <span className="font-bold text-[#055B75] text-lg">{totalItems}</span>
                         <span className="text-gray-700"> flights found</span>
                         <span className="text-sm text-gray-500 ml-2">
                           (Showing {startIndex + 1} to {endIndex})
@@ -1915,7 +1915,7 @@ function FlightSearchPage() {
                         <select
                           value={sortOrder}
                           onChange={(e) => setSortOrder(e.target.value)}
-                          className="form-input appearance-none pl-3 pr-10 py-2 bg-primary-50 border border-primary-200 rounded-lg text-gray-700 font-medium focus-ring"
+                          className="appearance-none pl-3 pr-10 py-2 bg-[#B9D0DC] border border-[#B9D0DC] rounded-lg text-[#055B75] font-medium focus:ring-2 focus:ring-[#65B3CF] focus:outline-none placeholder-[#055B75]"
                         >
                           <option value="price">Price - Low to High</option>
                           <option value="-price">Price - High to Low</option>
@@ -1923,7 +1923,7 @@ function FlightSearchPage() {
                           <option value="departure">Departure - Earliest</option>
                           <option value="arrival">Arrival - Earliest</option>
                         </select>
-                        <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-primary-500 h-4 w-4 pointer-events-none" />
+                        <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#055B75] h-4 w-4 pointer-events-none" />
                       </div>
                     </div>
                   </div>
@@ -1931,12 +1931,12 @@ function FlightSearchPage() {
 
                 {/* Enhanced Flight Cards */}
                 {currentItems.length === 0 ? (
-                  <div className="card p-12 text-center">
-                    <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-primary-100 mb-8 animate-bounce-gentle">
-                      <Plane className="h-12 w-12 text-primary-500" />
+                  <div className="bg-white rounded-xl shadow-md p-12 text-center">
+                    <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-[#F0FAFC] mb-8 animate-bounce-gentle">
+                      <Plane className="h-12 w-12 text-[#055B75]" />
                     </div>
-                    <h3 className="heading-md text-gray-800 mb-4">No flights found</h3>
-                    <p className="text-lead text-gray-600 mb-8 max-w-md mx-auto">We couldn't find any flights matching your criteria. Try adjusting your search filters or dates.</p>
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">No flights found</h3>
+                    <p className="text-gray-600 mb-8 max-w-md mx-auto">We couldn't find any flights matching your criteria. Try adjusting your search filters or dates.</p>
                     <button
                       onClick={() => {
                         setFilters({
@@ -1945,9 +1945,9 @@ function FlightSearchPage() {
                           airlines: []
                         });
                       }}
-                      className="btn btn-primary btn-lg"
+                      className="px-6 py-3 bg-[#055B75] text-white rounded-lg font-medium hover:bg-[#034457] transition-colors"
                     >
-                      <X className="h-4 w-4 mr-2" />
+                      <X className="h-4 w-4 mr-2 inline" />
                       Reset All Filters
                     </button>
                   </div>
@@ -1956,14 +1956,14 @@ function FlightSearchPage() {
                     {currentItems.map((flight, index) => (
                       <div
                         key={index}
-                        className="card card-hover overflow-hidden border border-gray-200 hover:border-primary-200 transition-all duration-300"
+                        className="bg-white rounded-xl shadow-sm hover:shadow-md overflow-hidden border border-gray-200 hover:border-[#65B3CF] transition-all duration-300 group"
                       >
                         {/* Top section with airline and price */}
                         <div className="p-5">
                           <div className="flex flex-col md:flex-row items-center justify-between">
                             {/* Airline and Flight Info */}
                             <div className="flex items-center mb-4 md:mb-0">
-                              <div className="w-16 h-16 flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl mr-4 overflow-hidden shadow-soft border border-primary-200">
+                              <div className="w-16 h-16 flex items-center justify-center bg-[#F0FAFC] rounded-xl mr-4 overflow-hidden border border-gray-100 group-hover:border-[#B9D0DC] transition-colors">
                                 <img
                                   src={flight.airline?.logo}
                                   alt={flight.airline?.name || 'Airline'}
@@ -1978,7 +1978,7 @@ function FlightSearchPage() {
                               <div>
                                 <h3 className="font-bold text-gray-900 text-lg">{flight.airline?.name || 'Unknown Airline'}</h3>
                                 <div className="text-sm text-gray-500 flex items-center">
-                                  <span className="font-medium text-blue-600">{flight.segments?.[0]?.flightNumber || 'N/A'}</span>
+                                  <span className="font-medium text-[#055B75]">{flight.segments?.[0]?.flightNumber || 'N/A'}</span>
                                   <span className="mx-2">•</span>
                                   <span>{flight.segments?.[0]?.aircraft || 'Unknown Aircraft'}</span>
                                 </div>
@@ -1988,17 +1988,17 @@ function FlightSearchPage() {
                             {/* Price and Book Button */}
                             <div className="flex flex-col items-end">
                               <div className="text-right mb-3">
-                                <div className="text-3xl font-bold text-primary-600 flex items-center">
+                                <div className="text-3xl font-bold text-[#055B75] flex items-center">
                                   <Price amount={flight.price} showCode={true} />
                                   {Math.random() > 0.7 && (
-                                    <span className="ml-2 badge badge-success text-xs font-bold">DEAL</span>
+                                    <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-bold">DEAL</span>
                                   )}
                                 </div>
                                 <div className="text-xs text-gray-500">per passenger</div>
                               </div>
                               <button
                                 onClick={() => handleBookFlight(flight)}
-                                className="btn btn-primary btn-lg gradient-primary hover:shadow-glow"
+                                className="px-8 py-3 bg-[#055B75] hover:bg-[#034457] text-white rounded-lg font-semibold shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5"
                               >
                                 Book Now
                               </button>
@@ -2008,42 +2008,46 @@ function FlightSearchPage() {
                           {/* Flight Details */}
                           <div className="mt-6 grid grid-cols-4 gap-4 text-sm text-gray-600">
                             <div>
-                              <div className="font-medium">Departure</div>
-                              <div className="font-bold text-gray-800">{flight.departure?.time || 'N/A'}</div>
-                              <div>{flight.departure?.date || 'N/A'}</div>
+                              <div className="font-medium text-gray-500 mb-1">Departure</div>
+                              <div className="font-bold text-gray-800 text-lg">{flight.departure?.time || 'N/A'}</div>
+                              <div className="text-gray-500 mb-1">{flight.departure?.date || 'N/A'}</div>
                               <div className="text-xs">
                                 <span className="font-medium">{flight.departure?.cityName || flight.departure?.airport || 'N/A'}</span>
                                 {flight.departure?.terminal && (
-                                  <span className="ml-1 text-blue-600">Terminal {flight.departure?.terminal}</span>
+                                  <span className="ml-1 text-[#055B75] bg-[#F0FAFC] px-1 rounded">T{flight.departure?.terminal}</span>
                                 )}
                               </div>
                             </div>
                             <div>
-                              <div className="font-medium">Arrival</div>
-                              <div className="font-bold text-gray-800">{flight.arrival?.time || 'N/A'}</div>
-                              <div>{flight.arrival?.date || 'N/A'}</div>
+                              <div className="font-medium text-gray-500 mb-1">Arrival</div>
+                              <div className="font-bold text-gray-800 text-lg">{flight.arrival?.time || 'N/A'}</div>
+                              <div className="text-gray-500 mb-1">{flight.arrival?.date || 'N/A'}</div>
                               <div className="text-xs">
                                 <span className="font-medium">{flight.arrival?.cityName || flight.arrival?.airport || 'N/A'}</span>
                                 {flight.arrival?.terminal && (
-                                  <span className="ml-1 text-blue-600">Terminal {flight.arrival?.terminal}</span>
+                                  <span className="ml-1 text-[#055B75] bg-[#F0FAFC] px-1 rounded">T{flight.arrival?.terminal}</span>
                                 )}
                               </div>
                             </div>
                             <div>
-                              <div className="font-medium">Duration</div>
+                              <div className="font-medium text-gray-500 mb-1">Duration</div>
                               <div className="font-bold text-gray-800">
                                 {flight.duration?.replace('PT', '').replace('H', 'h ').replace('M', 'm') || 'N/A'}
                               </div>
-                              <div className="text-xs">
-                                {flight.stops === 0 ? 'Non-stop' : `${flight.stops} ${flight.stops === 1 ? 'stop' : 'stops'}`}
+                              <div className="text-xs mt-1">
+                                {flight.stops === 0 ? (
+                                  <span className="text-green-600 font-medium">Non-stop</span>
+                                ) : (
+                                  <span className="text-orange-600 font-medium">{flight.stops} {flight.stops === 1 ? 'stop' : 'stops'}</span>
+                                )}
                               </div>
                             </div>
                             <div>
-                              <div className="font-medium">Class</div>
+                              <div className="font-medium text-gray-500 mb-1">Class</div>
                               <div className="font-bold text-gray-800">
                                 {flight.cabin?.charAt(0).toUpperCase() + flight.cabin?.slice(1).toLowerCase() || 'Economy'}
                               </div>
-                              <div className="text-xs">
+                              <div className="text-xs mt-1">
                                 {flight.baggage?.checked?.weight ? `${flight.baggage.checked.weight}${flight.baggage.checked.weightUnit}` : 'No checked baggage'}
                               </div>
                             </div>
@@ -2059,11 +2063,11 @@ function FlightSearchPage() {
                   <div className="text-sm text-gray-600 mb-4">
                     Showing {startIndex + 1} to {endIndex} of {totalItems} flights
                   </div>
-                  <nav className="inline-flex items-center gap-1 card p-2">
+                  <nav className="inline-flex items-center gap-1 bg-white rounded-lg p-2 border border-gray-200 shadow-sm">
                     <button
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className="p-2 rounded-md text-gray-500 hover:bg-primary-50 hover:text-primary-600 transition-colors disabled:opacity-50 focus-ring"
+                      className="p-2 rounded-md text-gray-500 hover:bg-[#F0FAFC] hover:text-[#055B75] transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-gray-500"
                     >
                       <ChevronLeft className="h-5 w-5" />
                     </button>
@@ -2082,9 +2086,9 @@ function FlightSearchPage() {
                           <button
                             key={pageNumber}
                             onClick={() => handlePageChange(pageNumber)}
-                            className={`w-9 h-9 rounded-md font-medium flex items-center justify-center transition-all focus-ring ${isCurrentPage
-                              ? 'bg-primary-600 text-white shadow-md'
-                              : 'text-gray-700 hover:bg-primary-50 hover:text-primary-600'
+                            className={`w-9 h-9 rounded-md font-medium flex items-center justify-center transition-all ${isCurrentPage
+                              ? 'bg-[#055B75] text-white shadow-md'
+                              : 'text-gray-700 hover:bg-[#F0FAFC] hover:text-[#055B75]'
                               }`}
                           >
                             {pageNumber}
@@ -2100,7 +2104,7 @@ function FlightSearchPage() {
                         return (
                           <span
                             key={pageNumber}
-                            className="w-9 h-9 flex items-center justify-center text-gray-500"
+                            className="w-9 h-9 flex items-center justify-center text-gray-400"
                           >
                             ...
                           </span>
@@ -2113,7 +2117,7 @@ function FlightSearchPage() {
                     <button
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className="p-2 rounded-md text-gray-500 hover:bg-blue-50 hover:text-blue-600 transition-colors disabled:opacity-50"
+                      className="p-2 rounded-md text-gray-500 hover:bg-[#F0FAFC] hover:text-[#055B75] transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-gray-500"
                     >
                       <ChevronRight className="h-5 w-5" />
                     </button>

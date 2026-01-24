@@ -39,7 +39,7 @@ function CruiseBookingSummary() {
       if (cruiseId) {
         selectedCruise = allCruises.find(cruise => cruise.id === parseInt(cruiseId));
       } else if (cruiseLine) {
-        selectedCruise = allCruises.find(cruise => 
+        selectedCruise = allCruises.find(cruise =>
           cruise.name.toLowerCase() === cruiseLine.toLowerCase()
         );
       }
@@ -66,7 +66,7 @@ function CruiseBookingSummary() {
   const handlePassengerChange = (type, index, field, value) => {
     setPassengerDetails(prev => ({
       ...prev,
-      [type]: prev[type].map((passenger, i) => 
+      [type]: prev[type].map((passenger, i) =>
         i === index ? { ...passenger, [field]: value } : passenger
       )
     }));
@@ -165,7 +165,7 @@ function CruiseBookingSummary() {
 
       // First create an order, then process payment
       const orderId = `CRUISE-${Date.now()}`;
-      
+
       // Step 1: Create order
       const orderData = {
         amount: convertedTotalAmount,
@@ -190,7 +190,7 @@ function CruiseBookingSummary() {
       });
 
       const orderResult = await orderResponse.json();
-      
+
       if (!orderResult.success) {
         throw new Error(orderResult.error || 'Failed to create order');
       }
@@ -434,8 +434,8 @@ function CruiseBookingSummary() {
                     <div className="flex justify-between font-semibold text-lg">
                       <span>Total</span>
                       <span>
-                        <Price 
-                          amount={parseFloat(cruiseData.price.replace(/[^0-9.]/g, '')) + 150 + 200} 
+                        <Price
+                          amount={parseFloat(cruiseData.price.replace(/[^0-9.]/g, '')) + 150 + 200}
                           showCode={true}
                         />
                       </span>

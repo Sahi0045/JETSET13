@@ -367,37 +367,40 @@ function FlightLanding() {
 
       {/* Enhanced Hero Section */}
       {/* Enhanced Hero Section */}
-      <section className="relative w-full min-h-screen md:min-h-[85vh] bg-slate-900 flex flex-col">
-        {/* Animated background elements */}
-        <div className="absolute inset-0 z-0 overflow-hidden">
-          <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
-          <div className="absolute top-1/3 right-1/3 w-72 h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
-          <div className="absolute bottom-1/4 left-1/4 w-80 h-80 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
+      <section className="relative w-full min-h-screen md:min-h-[85vh] flex flex-col justify-center">
+        {/* Background Image */}
+        <div
+          className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: "url('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2074&auto=format&fit=crop')", // Bright airplane/sky image
+          }}
+        >
+          {/* Bright Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/60 to-transparent"></div>
         </div>
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-900/50 via-indigo-900/40 to-black/60 z-0"></div>
 
-        {/* Content Container - Relative positioning for natural flow */}
-        <div className="relative z-10 flex-1 flex flex-col justify-center px-4 sm:px-6 md:px-16 pt-32 pb-20">
+        {/* Content Container */}
+        <div className="relative z-10 w-full flex flex-col justify-center px-4 sm:px-6 md:px-16 pt-32 pb-20">
           <div className="container mx-auto">
             <div className="max-w-[900px] xl:max-w-[1100px] animate-fade-in-up mx-auto lg:mx-0">
               {/* Hero/Header Section */}
-              <div className="mb-8 md:mb-12 text-center lg:text-left">
+              <div className="mb-8 md:mb-12">
                 {typeof window !== 'undefined' && window.innerWidth < 1024 ? (
-                  <div className="mb-6">
-                    <p className="text-white text-lg md:text-xl font-semibold italic drop-shadow-md">Travel is the only thing you buy that makes you richer.</p>
+                  <div className="mb-6 text-center">
+                    <p className="text-[#055B75] text-lg md:text-xl font-semibold italic drop-shadow-sm">Travel is the only thing you buy that makes you richer.</p>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center mb-4">
-                      <div className="h-0.5 w-16 bg-blue-400 mr-4"></div>
-                      <h2 className="text-blue-300 text-xl font-light tracking-wider uppercase">
+                    <div className="flex items-center mb-4 text-left">
+                      <div className="h-0.5 w-16 bg-[#055B75] mr-4"></div>
+                      <h2 className="text-[#055B75] text-xl font-light tracking-wider uppercase">
                         <span className="font-script">Explore the World</span>
                       </h2>
                     </div>
-                    <h1 className="text-white text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-4 md:mb-6 leading-tight">
-                      Find Your <span className="text-blue-300">Perfect Flight</span> Today
+                    <h1 className="text-gray-900 text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-4 md:mb-6 leading-tight text-center">
+                      Find Your <span className="text-[#055B75]">Perfect Flight</span> Today
                     </h1>
-                    <p className="text-gray-200 text-base sm:text-lg md:text-xl mb-6 md:mb-10 max-w-3xl">
+                    <p className="text-gray-600 text-base sm:text-lg md:text-xl mb-6 md:mb-10 max-w-3xl font-medium mx-auto text-center">
                       Discover amazing deals on flights to destinations worldwide. Book with confidence and travel with peace of mind.
                     </p>
                   </>
@@ -414,13 +417,13 @@ function FlightLanding() {
       </section>
 
       {/* Popular Destinations Section with Enhanced UI */}
-      <section className="py-20 bg-gradient-to-b from-white to-blue-50">
+      <section className="pt-20 pb-8 bg-gradient-to-b from-white to-[#F0FAFC]">
         <div className="container mx-auto px-4">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <div className="inline-block bg-blue-100 text-blue-700 px-4 py-1 rounded-full text-sm font-medium mb-4 animate-bounce-subtle">
+          <div className="text-center max-w-3xl mx-auto mb-12">
+            <div className="inline-block bg-[#E0F7FA] text-[#055B75] px-4 py-1 rounded-full text-sm font-medium mb-4 animate-bounce-subtle">
               Top Trending Destinations
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-800 mb-6">
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
               Explore Popular Destinations
             </h2>
             <p className="text-gray-600 text-lg">
@@ -431,10 +434,10 @@ function FlightLanding() {
 
           <PopularDestinations onSelectDestination={handleBookFlight} />
 
-          <div className="flex justify-center mt-12">
+          <div className="flex justify-center mt-8">
             <button
               onClick={handleExploreDestinations}
-              className="group relative px-8 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl"
+              className="group relative px-8 py-3.5 bg-gradient-to-r from-[#055B75] to-[#0099CC] text-white rounded-lg font-medium shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl"
             >
               <div className="absolute top-0 left-0 w-full h-full bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
               <span className="relative flex items-center">
@@ -449,7 +452,7 @@ function FlightLanding() {
       </section>
 
       {/* Enhanced Cheapest Flights Section */}
-      <section className="py-20 bg-blue-50">
+      <section className="pt-8 pb-12 bg-[#F0FAFC]">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between mb-16">
             <div className="md:w-1/2 mb-10 md:mb-0">
@@ -469,30 +472,30 @@ function FlightLanding() {
               </div>
             </div>
             <div className="md:w-1/2 md:pl-16">
-              <div className="inline-block bg-indigo-100 text-indigo-700 px-4 py-1 rounded-full text-sm font-medium mb-4">
+              <div className="inline-block bg-[#E0F7FA] text-[#055B75] px-4 py-1 rounded-full text-sm font-medium mb-4">
                 Incredible Savings
               </div>
-              <h2 className="text-4xl md:text-5xl font-bold text-gray-800 mb-6 leading-tight">
-                Find Our <span className="text-blue-600">Lowest Fares</span> to Popular Destinations
+              <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6 leading-tight">
+                Find Our <span className="text-[#055B75]">Lowest Fares</span> to Popular Destinations
               </h2>
               <p className="text-gray-600 text-lg mb-8">
                 Take advantage of our special deals and promotions to get the best value for your travel budget.
                 We're committed to finding you the most affordable flights without compromising on quality.
               </p>
               <div className="flex items-center text-gray-500 mb-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#055B75]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span>Price match guarantee</span>
               </div>
               <div className="flex items-center text-gray-500 mb-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#055B75]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span>No hidden fees or charges</span>
               </div>
               <div className="flex items-center text-gray-500">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#055B75]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span>24/7 customer support</span>
@@ -508,7 +511,7 @@ function FlightLanding() {
       </section>
 
       {/* Features Section - NEW */}
-      <section className="py-20 bg-white">
+      <section className="pt-12 pb-20 bg-white">
         <div className="container mx-auto px-4">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h2 className="text-4xl font-bold text-gray-800 mb-6">
@@ -521,7 +524,7 @@ function FlightLanding() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
-              <div className="w-16 h-16 flex items-center justify-center bg-blue-100 rounded-2xl text-blue-600 mb-6">
+              <div className="w-16 h-16 flex items-center justify-center bg-[#E0F7FA] rounded-2xl text-[#055B75] mb-6">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -531,7 +534,7 @@ function FlightLanding() {
             </div>
 
             <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
-              <div className="w-16 h-16 flex items-center justify-center bg-green-100 rounded-2xl text-green-600 mb-6">
+              <div className="w-16 h-16 flex items-center justify-center bg-[#E0F7FA] rounded-2xl text-[#055B75] mb-6">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
@@ -541,7 +544,7 @@ function FlightLanding() {
             </div>
 
             <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
-              <div className="w-16 h-16 flex items-center justify-center bg-purple-100 rounded-2xl text-purple-600 mb-6">
+              <div className="w-16 h-16 flex items-center justify-center bg-[#E0F7FA] rounded-2xl text-[#055B75] mb-6">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -555,16 +558,12 @@ function FlightLanding() {
       </section>
 
       {/* Enhanced Subscribe Section */}
-      <section className="bg-gradient-to-r from-blue-600 to-indigo-700 py-20 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-20 bg-white" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 0)' }}></div>
-
+      <section className="bg-gradient-to-b from-[#034457] to-[#055B75] py-12 relative overflow-hidden">
         {/* Decorative elements */}
         <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-white rounded-full opacity-5"></div>
         <div className="absolute bottom-1/3 left-1/6 w-48 h-48 bg-white rounded-full opacity-5"></div>
 
         <SubscribeSection />
-
-        <div className="absolute bottom-0 right-0 w-full h-20 bg-white" style={{ clipPath: 'polygon(0 100%, 100% 0, 100% 100%, 0 100%)' }}></div>
       </section>
 
       <Footer />

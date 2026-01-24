@@ -433,7 +433,7 @@ const Itinerary = () => {
       if (cruiseId) {
         selectedCruise = allCruises.find(cruise => cruise.id === parseInt(cruiseId));
       } else if (cruiseLine) {
-        selectedCruise = allCruises.find(cruise => 
+        selectedCruise = allCruises.find(cruise =>
           cruise.name.toLowerCase() === cruiseLine.toLowerCase()
         );
       }
@@ -476,24 +476,24 @@ const Itinerary = () => {
 
     findCruise();
   }, [cruiseId, cruiseLine]);
-  
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validate form data
     if (!formData.name || !formData.phone || !formData.email) {
       setFormSubmitError('Please fill in all required fields');
       return;
     }
-    
+
     setFormSubmitting(true);
     setFormSubmitError('');
-    
+
     try {
       // Call the callback service and wait for a response
       const result = await callbackService.createCallbackRequest({
@@ -503,9 +503,9 @@ const Itinerary = () => {
         preferredTime: formData.preferredDate,
         message: formData.message
       });
-      
+
       console.log('Callback request successful:', result);
-      
+
       // Reset form
       setFormData({
         name: '',
@@ -514,7 +514,7 @@ const Itinerary = () => {
         preferredDate: '',
         message: ''
       });
-      
+
       setFormSubmitting(false);
       setFormSubmitSuccess(true);
 
@@ -531,24 +531,24 @@ const Itinerary = () => {
       );
     }
   };
-  
+
   const handleFocus = (field) => {
     setActiveField(field);
   };
-  
+
   const handleBlur = () => {
     setActiveField(null);
   };
-  
+
   return (
     <>
       <Navbar />
-      
+
       {/* Hero Header Image */}
       <div className="relative w-full">
-        <img 
+        <img
           src={cruiseData?.image || "/images/Rectangle 1434 (1).png"}
-          alt="Cruise Itinerary" 
+          alt="Cruise Itinerary"
           className="w-full h-[400px] object-cover object-center brightness-75"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/30 to-black/60 flex flex-col items-center justify-center px-4">
@@ -563,17 +563,17 @@ const Itinerary = () => {
 
       <div className="itinerary-container">
         <CombinedStyles />
-        
+
         {/* Navigation */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-          <Link 
-            to="/cruises" 
+          <Link
+            to="/cruises"
             className="bg-[#0066b2] hover:bg-[#005091] text-white font-medium py-2 px-4 rounded-md transition-colors"
           >
             Back to Cruises
           </Link>
         </div>
-        
+
         {/* Cruise Header */}
         <div className="cruise-header bg-white rounded-[20px] overflow-hidden shadow-lg relative p-6 md:p-10">
           <div className="flex flex-col md:flex-row justify-between items-start gap-6">
@@ -599,7 +599,7 @@ const Itinerary = () => {
                   <div>
                     <span className="block text-gray-800 font-semibold mb-1">Embarkation</span>
                     <span className="text-gray-600">
-                      {cruiseData?.bookingInfo?.embarkation?.date || 'Jan 13th'}, 
+                      {cruiseData?.bookingInfo?.embarkation?.date || 'Jan 13th'},
                       {cruiseData?.bookingInfo?.embarkation?.time || '4:30 PM'}
                     </span>
                   </div>
@@ -655,13 +655,13 @@ const Itinerary = () => {
                 </div>
               </div>
 
-              <button 
+              <button
                 className="w-full md:w-auto bg-[#0066b2] hover:bg-[#005091] text-white font-medium py-3 px-8 rounded-full transition-all duration-300 flex items-center justify-center gap-2 mb-3 md:mb-0 md:mr-3"
                 onClick={() => setIsCallbackModalOpen(true)}
               >
                 <FaPhone size={16} /> Request Call Back
               </button>
-              <Link 
+              <Link
                 to={`/cruise-booking-summary?cruiseId=${cruiseId || ''}&cruiseLine=${encodeURIComponent(cruiseData?.name || cruiseLine || '')}&price=${encodeURIComponent(cruiseData?.price?.amount || '')}&duration=${encodeURIComponent(cruiseData?.duration || '')}&departure=${encodeURIComponent(cruiseData?.route?.departure || '')}&arrival=${encodeURIComponent(cruiseData?.route?.arrival || '')}&departureDate=${encodeURIComponent(cruiseData?.bookingInfo?.embarkation?.date || '')}&returnDate=${encodeURIComponent(cruiseData?.bookingInfo?.disembarkation?.date || '')}`}
                 className="w-full md:w-auto bg-[#00b894] hover:bg-[#00a885] text-white font-medium py-3 px-8 rounded-full transition-all duration-300 flex items-center justify-center gap-2"
               >
@@ -723,11 +723,11 @@ const Itinerary = () => {
           <div className="reviewer-position">
             {cruiseData?.reviews?.reviewer?.position || 'Verified Customer'}
           </div>
-          
+
           <div className="reviewer-images">
             {cruiseData?.reviews?.reviewers?.map((reviewer) => (
-              <div 
-                key={reviewer.id} 
+              <div
+                key={reviewer.id}
                 className={`reviewer-image ${reviewer.isActive ? 'active' : ''}`}
               >
                 <img src={reviewer.image} alt={`Reviewer ${reviewer.id}`} />
@@ -736,14 +736,14 @@ const Itinerary = () => {
           </div>
         </div>
       </div>
-      
+
       {/* Callback Request Popup */}
       {isCallbackModalOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={() => setIsCallbackModalOpen(false)}
         >
-          <div 
+          <div
             className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-0 relative overflow-hidden animate-fadeIn"
             onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
             style={{
@@ -752,28 +752,28 @@ const Itinerary = () => {
             }}
           >
             <div className="bg-gradient-to-r from-[#0066b2] to-[#1e88e5] pt-6 pb-10 px-5 text-white relative">
-              <button 
+              <button
                 className="absolute top-3 right-3 text-white hover:text-gray-200 transition-colors"
                 onClick={() => setIsCallbackModalOpen(false)}
                 aria-label="Close popup"
               >
                 <FaTimes size={18} />
               </button>
-              
+
               <div className="flex items-center mb-2">
                 <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3">
                   <FaPhone className="text-[#0066b2]" size={16} />
                 </div>
                 <h2 className="text-xl font-bold">Request a Call Back</h2>
               </div>
-              
+
               <p className="opacity-90 text-xs">
                 Our cruise expert will contact you to discuss {cruiseLine || 'Royal Caribbean'} options
               </p>
-              
+
               <div className="absolute -bottom-5 left-0 right-0 h-10 bg-white rounded-t-[50%]"></div>
             </div>
-            
+
             <div className="px-5 pb-5 pt-3">
               {formSubmitSuccess ? (
                 <div className="text-center py-8 px-3 animate-fadeIn" style={{ animation: 'fadeIn 0.5s ease-out' }}>
@@ -810,7 +810,7 @@ const Itinerary = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className={`transition-all duration-200 ${activeField === 'email' ? 'transform -translate-y-1' : ''}`}>
                     <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="email">
                       Email Address*
@@ -833,7 +833,7 @@ const Itinerary = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className={`transition-all duration-200 ${activeField === 'phone' ? 'transform -translate-y-1' : ''}`}>
                     <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="phone">
                       Phone Number*
@@ -856,7 +856,7 @@ const Itinerary = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className={`transition-all duration-200 ${activeField === 'preferredDate' ? 'transform -translate-y-1' : ''}`}>
                     <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="preferredDate">
                       Preferred Call Time
@@ -878,7 +878,7 @@ const Itinerary = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className={`transition-all duration-200 ${activeField === 'message' ? 'transform -translate-y-1' : ''}`}>
                     <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="message">
                       Additional Information
@@ -900,14 +900,14 @@ const Itinerary = () => {
                       ></textarea>
                     </div>
                   </div>
-                  
+
                   <button
                     type="submit"
                     className="w-full bg-gradient-to-r from-[#0066b2] to-[#1e88e5] text-white font-bold py-3 px-4 rounded-xl hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 mt-4 text-sm"
                   >
                     <FaPhone size={14} /> Request Call Back
                   </button>
-                  
+
                   <p className="text-[10px] text-center text-gray-500 mt-2">
                     By submitting this form, you agree to our <a href="#" className="text-[#0066b2]">Terms & Conditions</a> and <a href="#" className="text-[#0066b2]">Privacy Policy</a>
                   </p>
@@ -915,7 +915,7 @@ const Itinerary = () => {
               )}
             </div>
           </div>
-          
+
           <style global>{`
             @keyframes fadeIn {
               from { opacity: 0; transform: translateY(20px); }
@@ -927,7 +927,7 @@ const Itinerary = () => {
           `}</style>
         </div>
       )}
-      
+
       <Footer />
     </>
   );

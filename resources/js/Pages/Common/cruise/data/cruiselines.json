@@ -12,9 +12,36 @@
       "longDescription": "Experience the perfect blend of adventure and relaxation aboard Royal Caribbean's innovative ships, featuring thrilling activities, world-class entertainment, and delicious dining options.",
       "rating": 4.7,
       "reviews": 3245,
-      "destinations": ["Caribbean", "Bahamas", "Mexico", "Alaska", "Europe", "Asia", "Australia", "Hawaii"],
-      "departurePorts": ["Miami", "Fort Lauderdale", "Orlando", "Seattle", "Sydney", "Barcelona", "Rome", "Vancouver"],
-      "amenities": ["Waterslides", "Rock Climbing", "Broadway Shows", "Fine Dining", "Kids Club", "Casino", "Spa", "Adult-Only Areas"],
+      "destinations": [
+        "Caribbean",
+        "Bahamas",
+        "Mexico",
+        "Alaska",
+        "Europe",
+        "Asia",
+        "Australia",
+        "Hawaii"
+      ],
+      "departurePorts": [
+        "Miami",
+        "Fort Lauderdale",
+        "Orlando",
+        "Seattle",
+        "Sydney",
+        "Barcelona",
+        "Rome",
+        "Vancouver"
+      ],
+      "amenities": [
+        "Waterslides",
+        "Rock Climbing",
+        "Broadway Shows",
+        "Fine Dining",
+        "Kids Club",
+        "Casino",
+        "Spa",
+        "Adult-Only Areas"
+      ],
       "popular": true,
       "promos": [
         {
@@ -28,7 +55,13 @@
           "expiryDate": "2023-09-15"
         }
       ],
-      "ships": ["Wonder of the Seas", "Symphony of the Seas", "Harmony of the Seas", "Allure of the Seas", "Oasis of the Seas"],
+      "ships": [
+        "Wonder of the Seas",
+        "Symphony of the Seas",
+        "Harmony of the Seas",
+        "Allure of the Seas",
+        "Oasis of the Seas"
+      ],
       "itinerary": [
         {
           "day": 1,
@@ -92,9 +125,36 @@
       "longDescription": "Enjoy the freedom and flexibility of Freestyle Cruising with Norwegian Cruise Line, where you can dine when you want, wear what you want, and enjoy a variety of activities at your own pace.",
       "rating": 4.5,
       "reviews": 2876,
-      "destinations": ["Mediterranean", "Europe", "Caribbean", "Alaska", "Hawaii", "Bermuda", "Panama Canal", "South America"],
-      "departurePorts": ["Miami", "New York", "Boston", "Los Angeles", "Barcelona", "Rome", "Venice", "Amsterdam"],
-      "amenities": ["Freestyle Dining", "Broadway Shows", "Go-Kart Tracks", "Observation Lounges", "Waterparks", "Spa", "Casino", "Specialty Restaurants"],
+      "destinations": [
+        "Mediterranean",
+        "Europe",
+        "Caribbean",
+        "Alaska",
+        "Hawaii",
+        "Bermuda",
+        "Panama Canal",
+        "South America"
+      ],
+      "departurePorts": [
+        "Miami",
+        "New York",
+        "Boston",
+        "Los Angeles",
+        "Barcelona",
+        "Rome",
+        "Venice",
+        "Amsterdam"
+      ],
+      "amenities": [
+        "Freestyle Dining",
+        "Broadway Shows",
+        "Go-Kart Tracks",
+        "Observation Lounges",
+        "Waterparks",
+        "Spa",
+        "Casino",
+        "Specialty Restaurants"
+      ],
       "popular": true,
       "promos": [
         {
@@ -108,7 +168,13 @@
           "expiryDate": "2023-07-31"
         }
       ],
-      "ships": ["Norwegian Prima", "Norwegian Encore", "Norwegian Bliss", "Norwegian Joy", "Norwegian Escape"],
+      "ships": [
+        "Norwegian Prima",
+        "Norwegian Encore",
+        "Norwegian Bliss",
+        "Norwegian Joy",
+        "Norwegian Escape"
+      ],
       "itinerary": [
         {
           "day": 1,
@@ -172,9 +238,36 @@
       "longDescription": "Sail in modern luxury with Celebrity Cruises, featuring stunning design, globally-inspired cuisine, and immersive destination experiences for the discerning traveler.",
       "rating": 4.8,
       "reviews": 1853,
-      "destinations": ["Europe", "Alaska", "Caribbean", "Asia", "South Pacific", "South America", "Antarctica", "Australia/New Zealand"],
-      "departurePorts": ["Miami", "Fort Lauderdale", "Seattle", "Vancouver", "Sydney", "Auckland", "Singapore", "Tokyo"],
-      "amenities": ["The Retreat", "Luxury Spa", "Michelin-Starred Chefs", "Wine Cellars", "Solarium", "Luminae Restaurant", "Butler Service", "Exclusive Lounges"],
+      "destinations": [
+        "Europe",
+        "Alaska",
+        "Caribbean",
+        "Asia",
+        "South Pacific",
+        "South America",
+        "Antarctica",
+        "Australia/New Zealand"
+      ],
+      "departurePorts": [
+        "Miami",
+        "Fort Lauderdale",
+        "Seattle",
+        "Vancouver",
+        "Sydney",
+        "Auckland",
+        "Singapore",
+        "Tokyo"
+      ],
+      "amenities": [
+        "The Retreat",
+        "Luxury Spa",
+        "Michelin-Starred Chefs",
+        "Wine Cellars",
+        "Solarium",
+        "Luminae Restaurant",
+        "Butler Service",
+        "Exclusive Lounges"
+      ],
       "popular": true,
       "promos": [
         {
@@ -188,7 +281,13 @@
           "expiryDate": "2023-12-31"
         }
       ],
-      "ships": ["Celebrity Edge", "Celebrity Apex", "Celebrity Beyond", "Celebrity Flora", "Celebrity Solstice"]
+      "ships": [
+        "Celebrity Edge",
+        "Celebrity Apex",
+        "Celebrity Beyond",
+        "Celebrity Flora",
+        "Celebrity Solstice"
+      ]
     },
     {
       "id": 4,
@@ -202,9 +301,36 @@
       "longDescription": "Create magical memories with Disney Cruise Line, featuring Disney characters, Broadway-quality shows, immersive kids clubs, and exclusive adult areas for the perfect family vacation.",
       "rating": 4.9,
       "reviews": 2450,
-      "destinations": ["Caribbean", "Mediterranean", "Alaska", "Bahamas", "Bermuda", "Mexico", "Europe", "Pacific Coast"],
-      "departurePorts": ["Port Canaveral", "Miami", "Galveston", "San Diego", "Vancouver", "Barcelona", "Rome", "New York"],
-      "amenities": ["Character Experiences", "Disney Shows", "Kids Clubs", "Adult-Only Areas", "Themed Dining", "Waterslides", "Movie Theaters", "Fireworks at Sea"],
+      "destinations": [
+        "Caribbean",
+        "Mediterranean",
+        "Alaska",
+        "Bahamas",
+        "Bermuda",
+        "Mexico",
+        "Europe",
+        "Pacific Coast"
+      ],
+      "departurePorts": [
+        "Port Canaveral",
+        "Miami",
+        "Galveston",
+        "San Diego",
+        "Vancouver",
+        "Barcelona",
+        "Rome",
+        "New York"
+      ],
+      "amenities": [
+        "Character Experiences",
+        "Disney Shows",
+        "Kids Clubs",
+        "Adult-Only Areas",
+        "Themed Dining",
+        "Waterslides",
+        "Movie Theaters",
+        "Fireworks at Sea"
+      ],
       "popular": true,
       "promos": [
         {
@@ -218,7 +344,13 @@
           "expiryDate": "2023-09-30"
         }
       ],
-      "ships": ["Disney Wish", "Disney Dream", "Disney Fantasy", "Disney Magic", "Disney Wonder"]
+      "ships": [
+        "Disney Wish",
+        "Disney Dream",
+        "Disney Fantasy",
+        "Disney Magic",
+        "Disney Wonder"
+      ]
     },
     {
       "id": 5,
@@ -232,9 +364,36 @@
       "longDescription": "Come back new with Princess Cruises, offering destination-focused itineraries, immersive cultural experiences, and the innovative OceanMedallion technology for a personalized cruise vacation.",
       "rating": 4.6,
       "reviews": 2187,
-      "destinations": ["Alaska", "Caribbean", "Europe", "Asia", "South America", "Australia/New Zealand", "Mexico", "Panama Canal"],
-      "departurePorts": ["Los Angeles", "San Francisco", "Seattle", "Fort Lauderdale", "New York", "Rome", "Athens", "Sydney"],
-      "amenities": ["OceanMedallion", "Movies Under the Stars", "Discovery at SEA", "Original Musical Productions", "Chef's Table", "Lotus Spa", "The Sanctuary", "Chocolate Journeys"],
+      "destinations": [
+        "Alaska",
+        "Caribbean",
+        "Europe",
+        "Asia",
+        "South America",
+        "Australia/New Zealand",
+        "Mexico",
+        "Panama Canal"
+      ],
+      "departurePorts": [
+        "Los Angeles",
+        "San Francisco",
+        "Seattle",
+        "Fort Lauderdale",
+        "New York",
+        "Rome",
+        "Athens",
+        "Sydney"
+      ],
+      "amenities": [
+        "OceanMedallion",
+        "Movies Under the Stars",
+        "Discovery at SEA",
+        "Original Musical Productions",
+        "Chef's Table",
+        "Lotus Spa",
+        "The Sanctuary",
+        "Chocolate Journeys"
+      ],
       "popular": false,
       "promos": [
         {
@@ -248,7 +407,13 @@
           "expiryDate": "2023-08-15"
         }
       ],
-      "ships": ["Discovery Princess", "Enchanted Princess", "Sky Princess", "Majestic Princess", "Royal Princess"]
+      "ships": [
+        "Discovery Princess",
+        "Enchanted Princess",
+        "Sky Princess",
+        "Majestic Princess",
+        "Royal Princess"
+      ]
     },
     {
       "id": 6,
@@ -262,9 +427,36 @@
       "longDescription": "Experience European elegance and international ambiance aboard MSC Cruises, featuring Mediterranean-inspired cuisine, world-class entertainment, and modern ships with impressive amenities.",
       "rating": 4.3,
       "reviews": 1659,
-      "destinations": ["Mediterranean", "Caribbean", "Northern Europe", "South America", "Middle East", "Africa", "Asia", "Canada/New England"],
-      "departurePorts": ["Miami", "Orlando", "New York", "Barcelona", "Venice", "Rome", "Marseille", "Dubai"],
-      "amenities": ["MSC Yacht Club", "Formula 1 Simulators", "4D Cinema", "Aquapark", "Cirque du Soleil at Sea", "Swarovski Crystal Staircases", "MSC Aurea Spa", "Kids Clubs"],
+      "destinations": [
+        "Mediterranean",
+        "Caribbean",
+        "Northern Europe",
+        "South America",
+        "Middle East",
+        "Africa",
+        "Asia",
+        "Canada/New England"
+      ],
+      "departurePorts": [
+        "Miami",
+        "Orlando",
+        "New York",
+        "Barcelona",
+        "Venice",
+        "Rome",
+        "Marseille",
+        "Dubai"
+      ],
+      "amenities": [
+        "MSC Yacht Club",
+        "Formula 1 Simulators",
+        "4D Cinema",
+        "Aquapark",
+        "Cirque du Soleil at Sea",
+        "Swarovski Crystal Staircases",
+        "MSC Aurea Spa",
+        "Kids Clubs"
+      ],
       "popular": false,
       "promos": [
         {
@@ -278,7 +470,13 @@
           "expiryDate": "2023-07-31"
         }
       ],
-      "ships": ["MSC Seashore", "MSC Virtuosa", "MSC Grandiosa", "MSC Bellissima", "MSC Seaside"]
+      "ships": [
+        "MSC Seashore",
+        "MSC Virtuosa",
+        "MSC Grandiosa",
+        "MSC Bellissima",
+        "MSC Seaside"
+      ]
     },
     {
       "id": 7,
@@ -292,9 +490,36 @@
       "longDescription": "Choose fun with Carnival Cruise Line, offering casual, family-friendly cruising with lively atmospheres, entertaining activities, casual dining options, and affordable vacation experiences.",
       "rating": 4.4,
       "reviews": 3578,
-      "destinations": ["Caribbean", "Mexico", "Bahamas", "Alaska", "Hawaii", "Europe", "Panama Canal", "Bermuda"],
-      "departurePorts": ["Miami", "Orlando", "Galveston", "Long Beach", "Tampa", "Charleston", "Baltimore", "Mobile"],
-      "amenities": ["Waterworks", "SkyRide", "Seuss at Sea", "Comedy Club", "Playlist Productions", "Cloud 9 Spa", "Carnival Eats", "Sports Square"],
+      "destinations": [
+        "Caribbean",
+        "Mexico",
+        "Bahamas",
+        "Alaska",
+        "Hawaii",
+        "Europe",
+        "Panama Canal",
+        "Bermuda"
+      ],
+      "departurePorts": [
+        "Miami",
+        "Orlando",
+        "Galveston",
+        "Long Beach",
+        "Tampa",
+        "Charleston",
+        "Baltimore",
+        "Mobile"
+      ],
+      "amenities": [
+        "Waterworks",
+        "SkyRide",
+        "Seuss at Sea",
+        "Comedy Club",
+        "Playlist Productions",
+        "Cloud 9 Spa",
+        "Carnival Eats",
+        "Sports Square"
+      ],
       "popular": true,
       "promos": [
         {
@@ -308,7 +533,13 @@
           "expiryDate": "2023-12-31"
         }
       ],
-      "ships": ["Mardi Gras", "Carnival Celebration", "Carnival Panorama", "Carnival Horizon", "Carnival Vista"]
+      "ships": [
+        "Mardi Gras",
+        "Carnival Celebration",
+        "Carnival Panorama",
+        "Carnival Horizon",
+        "Carnival Vista"
+      ]
     },
     {
       "id": 8,
@@ -322,9 +553,36 @@
       "longDescription": "Sail with sophistication on Holland America Line, known for spacious ships, impeccable service, enriching activities, and immersive destination programming for a refined cruise experience.",
       "rating": 4.5,
       "reviews": 1432,
-      "destinations": ["Alaska", "Europe", "South America", "Caribbean", "Panama Canal", "Mexico", "Hawaii", "Australia/New Zealand"],
-      "departurePorts": ["Seattle", "Vancouver", "San Diego", "Fort Lauderdale", "Amsterdam", "Boston", "New York", "Sydney"],
-      "amenities": ["Lincoln Center Stage", "B.B. King's Blues Club", "Culinary Arts Center", "America's Test Kitchen", "BBC Earth Experiences", "Digital Workshop", "Greenhouse Spa", "Explorations Café"],
+      "destinations": [
+        "Alaska",
+        "Europe",
+        "South America",
+        "Caribbean",
+        "Panama Canal",
+        "Mexico",
+        "Hawaii",
+        "Australia/New Zealand"
+      ],
+      "departurePorts": [
+        "Seattle",
+        "Vancouver",
+        "San Diego",
+        "Fort Lauderdale",
+        "Amsterdam",
+        "Boston",
+        "New York",
+        "Sydney"
+      ],
+      "amenities": [
+        "Lincoln Center Stage",
+        "B.B. King's Blues Club",
+        "Culinary Arts Center",
+        "America's Test Kitchen",
+        "BBC Earth Experiences",
+        "Digital Workshop",
+        "Greenhouse Spa",
+        "Explorations Café"
+      ],
       "popular": false,
       "promos": [
         {
@@ -338,7 +596,13 @@
           "expiryDate": "2023-07-15"
         }
       ],
-      "ships": ["Rotterdam", "Nieuw Statendam", "Koningsdam", "Nieuw Amsterdam", "Eurodam"]
+      "ships": [
+        "Rotterdam",
+        "Nieuw Statendam",
+        "Koningsdam",
+        "Nieuw Amsterdam",
+        "Eurodam"
+      ]
     },
     {
       "id": 9,
@@ -352,9 +616,36 @@
       "longDescription": "Discover the world with Azamara's destination-focused cruising, featuring longer stays, more overnights, immersive land programs, and inclusive amenities for a truly immersive travel experience.",
       "rating": 4.7,
       "reviews": 986,
-      "destinations": ["Mediterranean", "Asia", "South America", "Northern Europe", "Caribbean", "Africa", "Australia", "Arabian Gulf"],
-      "departurePorts": ["Barcelona", "Athens", "Venice", "Miami", "Singapore", "Hong Kong", "Cape Town", "Sydney"],
-      "amenities": ["AzAmazing Evenings", "White Night Parties", "Destination Immersion", "Butler Service", "Inclusive Beverages", "Sanctum Spa", "Fine Dining", "Wine Tastings"],
+      "destinations": [
+        "Mediterranean",
+        "Asia",
+        "South America",
+        "Northern Europe",
+        "Caribbean",
+        "Africa",
+        "Australia",
+        "Arabian Gulf"
+      ],
+      "departurePorts": [
+        "Barcelona",
+        "Athens",
+        "Venice",
+        "Miami",
+        "Singapore",
+        "Hong Kong",
+        "Cape Town",
+        "Sydney"
+      ],
+      "amenities": [
+        "AzAmazing Evenings",
+        "White Night Parties",
+        "Destination Immersion",
+        "Butler Service",
+        "Inclusive Beverages",
+        "Sanctum Spa",
+        "Fine Dining",
+        "Wine Tastings"
+      ],
       "popular": false,
       "promos": [
         {
@@ -368,7 +659,12 @@
           "expiryDate": "2023-10-15"
         }
       ],
-      "ships": ["Azamara Onward", "Azamara Journey", "Azamara Quest", "Azamara Pursuit"]
+      "ships": [
+        "Azamara Onward",
+        "Azamara Journey",
+        "Azamara Quest",
+        "Azamara Pursuit"
+      ]
     },
     {
       "id": 10,
@@ -382,9 +678,36 @@
       "longDescription": "Explore the world in comfort with Viking Cruises, featuring elegant Scandinavian design, culturally enriching experiences, thoughtfully designed itineraries, and inclusive value on both ocean and river voyages.",
       "rating": 4.9,
       "reviews": 1245,
-      "destinations": ["Scandinavia", "Mediterranean", "Northern Europe", "Caribbean", "Australia/New Zealand", "South America", "Asia", "Africa"],
-      "departurePorts": ["Bergen", "Stockholm", "Amsterdam", "Barcelona", "Athens", "Rome", "London", "Venice"],
-      "amenities": ["All Veranda Staterooms", "Inclusive Shore Excursions", "Beer & Wine with Meals", "Specialty Restaurants", "Infinity Pool", "Nordic Spa", "Explorers' Lounge", "Cultural Enrichment"],
+      "destinations": [
+        "Scandinavia",
+        "Mediterranean",
+        "Northern Europe",
+        "Caribbean",
+        "Australia/New Zealand",
+        "South America",
+        "Asia",
+        "Africa"
+      ],
+      "departurePorts": [
+        "Bergen",
+        "Stockholm",
+        "Amsterdam",
+        "Barcelona",
+        "Athens",
+        "Rome",
+        "London",
+        "Venice"
+      ],
+      "amenities": [
+        "All Veranda Staterooms",
+        "Inclusive Shore Excursions",
+        "Beer & Wine with Meals",
+        "Specialty Restaurants",
+        "Infinity Pool",
+        "Nordic Spa",
+        "Explorers' Lounge",
+        "Cultural Enrichment"
+      ],
       "popular": true,
       "promos": [
         {
@@ -398,7 +721,13 @@
           "expiryDate": "2023-12-31"
         }
       ],
-      "ships": ["Viking Star", "Viking Sea", "Viking Sky", "Viking Venus", "Viking Jupiter"]
+      "ships": [
+        "Viking Star",
+        "Viking Sea",
+        "Viking Sky",
+        "Viking Venus",
+        "Viking Jupiter"
+      ]
     },
     {
       "id": 11,
@@ -412,9 +741,36 @@
       "longDescription": "Indulge in the ultimate luxury with Silversea Cruises, featuring spacious all-suite accommodations, personalized butler service, gourmet dining, and an all-inclusive experience for the most discerning travelers.",
       "rating": 4.8,
       "reviews": 765,
-      "destinations": ["Mediterranean", "Caribbean", "Alaska", "South Pacific", "Antarctica", "Galapagos", "Arctic", "Africa"],
-      "departurePorts": ["Fort Lauderdale", "San Cristobal", "Venice", "Barcelona", "Reykjavik", "Tokyo", "Sydney", "Ushuaia"],
-      "amenities": ["Butler Service", "All-Suite Accommodations", "All-Inclusive Beverages", "Gourmet Dining", "Expedition Teams", "Zodiac Excursions", "Relais & Châteaux Partnership", "Thermal Suite"],
+      "destinations": [
+        "Mediterranean",
+        "Caribbean",
+        "Alaska",
+        "South Pacific",
+        "Antarctica",
+        "Galapagos",
+        "Arctic",
+        "Africa"
+      ],
+      "departurePorts": [
+        "Fort Lauderdale",
+        "San Cristobal",
+        "Venice",
+        "Barcelona",
+        "Reykjavik",
+        "Tokyo",
+        "Sydney",
+        "Ushuaia"
+      ],
+      "amenities": [
+        "Butler Service",
+        "All-Suite Accommodations",
+        "All-Inclusive Beverages",
+        "Gourmet Dining",
+        "Expedition Teams",
+        "Zodiac Excursions",
+        "Relais & Châteaux Partnership",
+        "Thermal Suite"
+      ],
       "popular": false,
       "promos": [
         {
@@ -428,7 +784,13 @@
           "expiryDate": "2023-10-31"
         }
       ],
-      "ships": ["Silver Muse", "Silver Moon", "Silver Dawn", "Silver Origin", "Silver Spirit"]
+      "ships": [
+        "Silver Muse",
+        "Silver Moon",
+        "Silver Dawn",
+        "Silver Origin",
+        "Silver Spirit"
+      ]
     },
     {
       "id": 12,
@@ -442,9 +804,36 @@
       "longDescription": "Savor the world with Oceania Cruises, renowned for the finest cuisine at sea, elegant mid-size ships, destination-rich itineraries, and an extraordinary value where so much is included.",
       "rating": 4.7,
       "reviews": 1127,
-      "destinations": ["Mediterranean", "Northern Europe", "Alaska", "Caribbean", "South America", "Asia", "Africa", "South Pacific"],
-      "departurePorts": ["Miami", "New York", "Barcelona", "Rome", "Lisbon", "Istanbul", "Tokyo", "Rio de Janeiro"],
-      "amenities": ["Culinary Center", "Artist Loft", "Finest Cuisine at Sea", "Aquamar Spa", "Casinos", "Library", "Enrichment Programs", "Canyon Ranch Spa"],
+      "destinations": [
+        "Mediterranean",
+        "Northern Europe",
+        "Alaska",
+        "Caribbean",
+        "South America",
+        "Asia",
+        "Africa",
+        "South Pacific"
+      ],
+      "departurePorts": [
+        "Miami",
+        "New York",
+        "Barcelona",
+        "Rome",
+        "Lisbon",
+        "Istanbul",
+        "Tokyo",
+        "Rio de Janeiro"
+      ],
+      "amenities": [
+        "Culinary Center",
+        "Artist Loft",
+        "Finest Cuisine at Sea",
+        "Aquamar Spa",
+        "Casinos",
+        "Library",
+        "Enrichment Programs",
+        "Canyon Ranch Spa"
+      ],
       "popular": false,
       "promos": [
         {
@@ -458,7 +847,13 @@
           "expiryDate": "2023-12-31"
         }
       ],
-      "ships": ["Oceania Vista", "Oceania Riviera", "Oceania Marina", "Oceania Nautica", "Oceania Sirena"]
+      "ships": [
+        "Oceania Vista",
+        "Oceania Riviera",
+        "Oceania Marina",
+        "Oceania Nautica",
+        "Oceania Sirena"
+      ]
     }
   ]
 }

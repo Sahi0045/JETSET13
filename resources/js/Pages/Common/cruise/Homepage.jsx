@@ -25,8 +25,8 @@ const styles = {
     flex: '1 0 auto',
   },
   section: {
-    marginTop: '3rem',
-    marginBottom: '3rem',
+    marginTop: '1.5rem',
+    marginBottom: '1.5rem',
     scrollMarginTop: '80px', // For smooth scrolling with fixed header
   },
   firstSection: {
@@ -163,13 +163,13 @@ const TestimonialBanner = () => {
   }, [showTestimonials, testimonialItems.length]);
 
   return (
-    <div className="py-16 md:py-20 bg-transparent text-white relative">
+    <div className="py-8 md:py-12 bg-transparent text-white relative">
       <div className="max-w-6xl mx-auto px-6 md:px-8">
         <div className="flex flex-col md:flex-row items-center justify-between gap-8">
           {/* Testimonial Content */}
-          <div className="md:w-3/5 text-center md:text-left space-y-5">
+          <div className="md:w-3/5 text-center md:text-left space-y-3">
             {/* Quote - Main Focus */}
-            <blockquote className="text-2xl md:text-4xl font-light italic leading-relaxed tracking-tight">
+            <blockquote className="text-xl md:text-3xl font-light italic leading-relaxed tracking-tight">
               "The best cruise booking experience I've ever had!"
             </blockquote>
 
@@ -628,7 +628,7 @@ const HomePage = () => {
 
 
         {/* Simple Email Subscription Section */}
-        <section className="subscription-section py-8 relative" style={{
+        <section className="subscription-section py-4 relative" style={{
           backgroundImage: "url('https://images.unsplash.com/photo-1599640842225-85d111c60e6b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1974&q=80')",
           backgroundSize: "cover",
           backgroundPosition: "center",
@@ -637,27 +637,27 @@ const HomePage = () => {
           {/* Overlay with matched gradient */}
           <div className="absolute inset-0 bg-gradient-to-r from-[#055B75] to-[#034457] opacity-95"></div>
 
-          <div className="container mx-auto px-4 md:px-6 relative z-10">
-            <div className="max-w-xl mx-auto bg-white bg-opacity-10 backdrop-blur-sm rounded-2xl p-6 md:p-8 border border-white border-opacity-20 shadow-lg">
+          <div className="container mx-auto px-4 md:px-6 relative z-10 py-2">
+            <div className="max-w-md mx-auto bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-3 md:p-4 border border-white border-opacity-20 shadow-lg">
               <div className="flex flex-col items-center text-center">
-                <div className="mb-2">
-                  <FaEnvelope className="text-white text-2xl" />
+                <div className="mb-1">
+                  <FaEnvelope className="text-white text-lg" />
                 </div>
-                <h3 className="text-2xl md:text-3xl font-bold text-white mb-2">Stay Updated</h3>
-                <p className="text-white text-opacity-90 mb-6">Subscribe to receive the latest cruise deals and travel tips directly to your inbox.</p>
+                <h3 className="text-lg md:text-xl font-bold text-white mb-1">Stay Updated</h3>
+                <p className="text-white text-opacity-90 mb-3 text-xs md:text-sm">Subscribe to receive the latest cruise deals and travel tips.</p>
 
-                <div className="flex items-center gap-2 mb-6 hidden md:flex">
+                <div className="flex items-center gap-2 mb-3 hidden md:flex">
                   <div className="flex -space-x-2">
-                    <img className="inline-block h-8 w-8 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1491528323818-fdd1faba62cc?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                    <img className="inline-block h-8 w-8 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1550525811-e5869dd03032?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                    <img className="inline-block h-8 w-8 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2.25&w=256&h=256&q=80" alt="" />
+                    <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1491528323818-fdd1faba62cc?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
+                    <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1550525811-e5869dd03032?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
+                    <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2.25&w=256&h=256&q=80" alt="" />
                   </div>
-                  <span className="text-sm text-white">Join 25,000+ subscribers</span>
+                  <span className="text-xs text-white">Join 25,000+ subscribers</span>
                 </div>
 
                 {subscriptionSubmitted ? (
-                  <div className="w-full bg-green-500 bg-opacity-20 backdrop-blur-sm rounded-lg p-4 text-white animate-fadeIn">
-                    <div className="flex items-center justify-center">
+                  <div className="w-full bg-green-500 bg-opacity-20 backdrop-blur-sm rounded-lg p-3 text-white animate-fadeIn">
+                    <div className="flex items-center justify-center text-sm">
                       <FaCheckCircle className="text-green-400 mr-2" />
                       <span>Successfully subscribed! Thank you.</span>
                     </div>
@@ -669,16 +669,16 @@ const HomePage = () => {
                         type="email"
                         value={subscriptionEmail}
                         onChange={(e) => setSubscriptionEmail(e.target.value)}
-                        placeholder="Enter your email address"
-                        className="w-full md:flex-1 px-4 py-3 rounded-lg md:rounded-l-lg md:rounded-r-none bg-white border-0 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        placeholder="Enter your email"
+                        className="w-full md:flex-1 px-3 py-2 text-sm rounded-lg md:rounded-l-lg md:rounded-r-none bg-white border-0 focus:outline-none focus:ring-2 focus:ring-blue-300"
                         required
                       />
                       <button
                         type="submit"
-                        className="w-full md:w-auto mt-2 md:mt-0 px-4 py-3 bg-[#65B3CF] hover:bg-[#5aa3be] text-white font-bold rounded-lg md:rounded-l-none md:rounded-r-lg flex items-center justify-center md:justify-start transition-colors"
+                        className="w-full md:w-auto mt-1 md:mt-0 px-3 py-2 text-sm bg-[#65B3CF] hover:bg-[#5aa3be] text-white font-semibold rounded-lg md:rounded-l-none md:rounded-r-lg flex items-center justify-center md:justify-start transition-colors"
                       >
                         Subscribe
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 ml-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                         </svg>
                       </button>
@@ -691,7 +691,7 @@ const HomePage = () => {
                   </form>
                 )}
 
-                <div className="mt-4">
+                <div className="mt-2">
                   <p className="text-white text-opacity-80 text-xs">By subscribing, you agree to our <a href="#" className="underline hover:text-white">Privacy Policy</a></p>
                 </div>
               </div>

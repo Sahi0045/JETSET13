@@ -4,7 +4,7 @@
   min-height: 85vh;
   width: 100%;
   overflow: hidden;
-  padding-bottom: 8rem;
+  padding-bottom: 3rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -14,7 +14,7 @@
 @media (min-width: 768px) {
   .hero-section {
     min-height: 100vh;
-    padding-bottom: 10rem;
+    padding-bottom: 4rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1065,7 +1065,7 @@ select.search-input {
   .hero-section {
     min-height: 100vh;
     padding-top: 120px; /* Increased padding-top to create more space after navbar */
-    padding-bottom: 10rem;
+    padding-bottom: 4rem;
   }
 
   .hero-content {
@@ -1174,7 +1174,7 @@ select.search-input {
 @supports (-webkit-touch-callout: none) {
   .hero-section {
     min-height: 100vh;
-    padding-bottom: 10rem;
+    padding-bottom: 4rem;
   }
 }
 
