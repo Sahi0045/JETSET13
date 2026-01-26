@@ -1,8 +1,26 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { destinations } from "./data.js"
+
+// Preload images immediately when module loads
+const preloadImages = () => {
+  destinations.forEach((destination) => {
+    if (destination.image) {
+      const img = new Image();
+      img.src = destination.image;
+    }
+  });
+};
+
+// Start preloading immediately
+preloadImages();
 
 export default function PopularDestinations({ onSelectDestination }) {
   const [selectedDestination, setSelectedDestination] = useState(null);
+
+  // Also preload on component mount as a backup
+  useEffect(() => {
+    preloadImages();
+  }, []);
 
   const handleDestinationClick = (destination) => {
     setSelectedDestination(destination);
