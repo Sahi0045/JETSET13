@@ -42,7 +42,7 @@ export const destinations = [
     name: "Singapore",
     code: "SIN",
     region: "Singapore",
-    image: "https://images.unsplash.com/photo-1525625293386-38f0e1d2b5e5?q=80&w=2074&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1508964942454-1a56651d54ac?q=80&w=2074&auto=format&fit=crop",
   },
   {
     id: 7,
