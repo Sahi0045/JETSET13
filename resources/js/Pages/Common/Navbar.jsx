@@ -27,7 +27,7 @@ const Navbar = ({ forceScrolled }) => {
 
     // Use Supabase auth state if available, otherwise fall back to localStorage
     setIsAuthenticated(supabaseAuth || authStatus);
-    
+
     if (authUser) {
       // Use Supabase user data
       setUser({
@@ -93,14 +93,14 @@ const Navbar = ({ forceScrolled }) => {
   const handleLogout = async () => {
     try {
       setIsDropdownOpen(false);
-      
+
       // Sign out from Supabase
       const { error } = await signOut();
-      
+
       if (error) {
         console.error('Supabase logout error:', error);
       }
-      
+
       // Clear all localStorage
       localStorage.removeItem('isAuthenticated');
       localStorage.removeItem('user');
@@ -108,11 +108,11 @@ const Navbar = ({ forceScrolled }) => {
       localStorage.removeItem('adminToken');
       localStorage.removeItem('supabase_token');
       localStorage.removeItem('userData');
-      
+
       // Update local state
       setIsAuthenticated(false);
       setUser(null);
-      
+
       // Redirect to home page
       window.location.href = '/';
     } catch (error) {
@@ -142,7 +142,7 @@ const Navbar = ({ forceScrolled }) => {
 
       <div className="navbar-right">
         <div className="desktop-nav-links flex items-center gap-8 mr-8 hidden lg:flex">
-          <Link to="/" className={`nav-link ${isActive('/') ? 'active' : ''}`}>
+          <Link to="/cruise" className={`nav-link ${isActive('/cruise') ? 'active' : ''}`}>
             Cruise
           </Link>
           <Link to="/flights" className={`nav-link ${isActive('/flights') ? 'active' : ''}`}>
@@ -151,7 +151,7 @@ const Navbar = ({ forceScrolled }) => {
           <Link to="/packages" className={`nav-link ${isActive('/packages') ? 'active' : ''}`}>
             Packages
           </Link>
-          <Link to="/rental" className={`nav-link ${isActive('/rental') ? 'active' : ''}`}>
+          <Link to="/hotels" className={`nav-link ${isActive('/hotels') ? 'active' : ''}`}>
             Hotels
           </Link>
           <Link to="/my-trips" className={`nav-link ${isActive('/my-trips') ? 'active' : ''}`}>
@@ -279,7 +279,7 @@ const Navbar = ({ forceScrolled }) => {
       {/* Mobile menu */}
       <div className={`mobile-menu ${isMobileMenuOpen ? 'open' : ''}`}>
         <div className="mobile-menu-links">
-          <Link to="/" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
+          <Link to="/cruise" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
             Cruise
           </Link>
           <Link to="/flights" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>

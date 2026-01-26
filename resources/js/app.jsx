@@ -313,6 +313,11 @@ const CruiseBookingSummary = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Booking Summary..." /> }))
 );
 
+const CruiseHomepage = React.lazy(() =>
+  import('./Pages/Common/cruise/Homepage')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Cruise Homepage..." /> }))
+);
+
 const Flights = React.lazy(() =>
   import('./Pages/Common/flights/flightsearchpage')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Flights..." /> }))
@@ -376,6 +381,11 @@ const HotelSearchResults = React.lazy(() =>
 const Booking = React.lazy(() =>
   import('./Pages/Common/rentals/Booking')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Booking..." /> }))
+);
+
+const Hotels = React.lazy(() =>
+  import('./Pages/Common/hotels/HotelsLanding')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Hotels..." /> }))
 );
 
 const ItineraryPackage = React.lazy(() =>
@@ -571,6 +581,7 @@ const App = () => {
         <Route path="/manage-booking" element={<ManageBooking />} />
         <Route path="/forgot-password" element={<Navigate to="/login" />} />
         <Route path="/booking-confirmation" element={<BookingConfirmation />} />
+        <Route path="/cruise" element={<CruiseHomepage />} />
         <Route path="/cruises" element={<CruiseCards />} />
         <Route path="/itinerary" element={<Itinerary />} />
         <Route path="/cruise-booking-summary" element={<CruiseBookingSummary />} />
@@ -588,7 +599,9 @@ const App = () => {
         <Route path="/hotel-search" element={<HotelSearch />} />
         <Route path="/hotel-search-results" element={<HotelSearchResults />} />
         <Route path="/hotel-booking-success" element={<HotelBookingSuccess />} />
+        <Route path="/hotel-booking-success" element={<HotelBookingSuccess />} />
         <Route path="/rental/booking" element={<Booking />} />
+        <Route path="/hotels" element={<Hotels />} />
 
         {/* Package Routes */}
         <Route path="/packages/itinerary" element={<ItineraryPackage />} />

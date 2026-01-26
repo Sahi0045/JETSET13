@@ -581,7 +581,9 @@ const HomePage = () => {
   };
 
   return (
-    <div className="home-page-wrapper" style={styles.homePageWrapper}>
+    <>
+      <Navbar />
+      <div className="home-page-wrapper" style={styles.homePageWrapper}>
 
 
       {/* Special Offer Banner - positioned with absolute for better placement */}
@@ -719,6 +721,8 @@ const HomePage = () => {
         </svg>
       </button>
     </div>
+    <Footer />
+    </>
   );
 };
 

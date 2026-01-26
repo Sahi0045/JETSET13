@@ -1,8 +1,6 @@
 import React from 'react';
 // Removed Inertia.js imports
-import Navbar from './Common/Navbar';
-import Homepage from './Common/cruise/Homepage';
-import Footer from './Common/Footer';
+import FlightLanding from './Common/flights/flightlanding';
 import withPageElements from './Common/PageWrapper';
 
 const Welcome = () => {
@@ -23,12 +21,7 @@ const Welcome = () => {
 
     return (
         <>
-            <Navbar/>
-            
-
-            
-            <Homepage/>
-            <Footer/>
+            <FlightLanding/>
 {/*         
             <h1>Hello I'm Manindar Reddy Lakkireddy </h1>
             <p>I have  3 years of exp</p> */}

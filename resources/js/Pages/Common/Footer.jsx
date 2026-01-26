@@ -42,7 +42,7 @@ const Footer = () => {
                   </Link>
                 </li>
                 <li>
-                  <Link to="/rental" className="footer-nav-link">
+                  <Link to="/hotels" className="footer-nav-link">
                     Hotels
                   </Link>
                 </li>
