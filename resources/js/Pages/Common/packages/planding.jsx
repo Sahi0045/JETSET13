@@ -422,10 +422,10 @@ const TravelPackages = () => {
           backgroundRepeat: "no-repeat",
         }}
       >
-        {/* Mobile-specific background - lighter overlay */}
-        <div className="absolute inset-0 md:hidden bg-gradient-to-b from-black/40 via-black/30 to-black/40"></div>
-        {/* Desktop background overlay - lighter for brightness */}
-        <div className="absolute inset-0 hidden md:block bg-gradient-to-b from-black/35 via-black/25 to-black/35"></div>
+        {/* Mobile-specific background - ultra-light overlay (10-15%) */}
+        <div className="absolute inset-0 md:hidden bg-gradient-to-b from-black/15 via-black/10 to-black/15"></div>
+        {/* Desktop background overlay - ultra-light for maximum brightness */}
+        <div className="absolute inset-0 hidden md:block bg-gradient-to-b from-black/15 via-transparent to-black/10"></div>
 
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 z-10 w-full flex flex-col items-center justify-center relative py-4 sm:py-6 md:py-8">
           {/* Hero content */}
