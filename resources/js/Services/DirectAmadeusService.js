@@ -8,15 +8,14 @@ import * as amadeusUtils from '../Pages/Common/rentals/amadeusUtils';
 // Production API URL from environment variables
 const PRODUCTION_API_URL = import.meta.env.VITE_APP_URL || 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
 
-// Amadeus API credentials
-// Amadeus API credentials from environment variables
-const API_KEY = import.meta.env.VITE_AMADEUS_API_KEY || 'ZsgV43XBz0GbNk85zQuzvWnhARwXX4IE';
-const API_SECRET = import.meta.env.VITE_AMADEUS_API_SECRET || '2uFgpTVo5GA4ytwq';
+// Amadeus API credentials from environment variables (TEST keys)
+const API_KEY = import.meta.env.VITE_AMADEUS_API_KEY || 'rsGqoSAv1h9JE70yQVrHwtal1o8R0UAk';
+const API_SECRET = import.meta.env.VITE_AMADEUS_API_SECRET || 'onMEn9iLGPNYAAVE';
 
-// Amadeus API URLs
-const AMADEUS_AUTH_URL = 'https://api.amadeus.com/v1/security/oauth2/token';
-const AMADEUS_HOTELS_URL = 'https://api.amadeus.com/v1/reference-data/locations/hotels/by-city';
-const AMADEUS_HOTEL_OFFERS_URL = 'https://api.amadeus.com/v3/shopping/hotel-offers';
+// Amadeus API URLs - Using TEST environment
+const AMADEUS_AUTH_URL = 'https://test.api.amadeus.com/v1/security/oauth2/token';
+const AMADEUS_HOTELS_URL = 'https://test.api.amadeus.com/v1/reference-data/locations/hotels/by-city';
+const AMADEUS_HOTEL_OFFERS_URL = 'https://test.api.amadeus.com/v3/shopping/hotel-offers';
 
 // Determine environment
 const IS_PROD = import.meta.env.PROD;
