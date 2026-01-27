@@ -5,8 +5,10 @@ import DirectAmadeusService from './DirectAmadeusService';
 import hotelsData from '../data/hotels.json';
 import axios from 'axios';
 
-// Use relative URL for local dev (Vite proxy), production URL otherwise
-const isProduction = import.meta.env.PROD;
+// Detect production based on domain (more reliable than import.meta.env.PROD)
+const isProduction = typeof window !== 'undefined' && 
+    (window.location.hostname.includes('jetsetterss.com') || 
+     window.location.hostname.includes('vercel.app'));
 const API_BASE_URL = isProduction ? 'https://www.jetsetterss.com/api' : '/api';
 
 class HotelService {
