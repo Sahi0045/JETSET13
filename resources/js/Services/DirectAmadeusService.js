@@ -9,8 +9,9 @@ import * as amadeusUtils from '../Pages/Common/rentals/amadeusUtils';
 const PRODUCTION_API_URL = import.meta.env.VITE_APP_URL || 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
 
 // Amadeus API credentials
-const API_KEY = 'ZsgV43XBz0GbNk85zQuzvWnhARwXX4IE';
-const API_SECRET = '2uFgpTVo5GA4ytwq';
+// Amadeus API credentials from environment variables
+const API_KEY = import.meta.env.VITE_AMADEUS_API_KEY || 'ZsgV43XBz0GbNk85zQuzvWnhARwXX4IE';
+const API_SECRET = import.meta.env.VITE_AMADEUS_API_SECRET || '2uFgpTVo5GA4ytwq';
 
 // Amadeus API URLs
 const AMADEUS_AUTH_URL = 'https://api.amadeus.com/v1/security/oauth2/token';
@@ -31,7 +32,7 @@ const ENDPOINTS = {
   // Production API endpoints
   DESTINATIONS: '/hotels/destinations',
   MOCK_SEARCH: '/hotels/mock-search',
-  
+
   // Direct Amadeus API endpoints (no proxy)
   HOTELS_SEARCH: '/hotels/search',
   HOTEL_OFFERS: '/hotels/offers'
@@ -74,7 +75,7 @@ async function getCityInfo(cityCode) {
         return cityInfo;
       }
     }
-    
+
     // Fallback city data if API doesn't have it
     const fallbackCities = {
       'NYC': { name: 'New York', country: 'United States' },
@@ -83,7 +84,7 @@ async function getCityInfo(cityCode) {
       'ROM': { name: 'Rome', country: 'Italy' },
       'TYO': { name: 'Tokyo', country: 'Japan' }
     };
-    
+
     return fallbackCities[cityCode] || { name: cityCode, country: 'Unknown' };
   } catch (error) {
     console.error('Failed to get city info:', error.message);
@@ -133,10 +134,10 @@ const cityCoordinates = {
 async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
   try {
     console.log(`🏨 Searching real hotels for ${cityCode} via direct Amadeus API...`);
-    
+
     // Step 1: Get access token
     const token = await getAmadeusAccessToken();
-    
+
     // Step 2: Get hotels by city
     console.log(`🏨 Getting hotels in ${cityCode}...`);
     const hotelsResponse = await axios.get(AMADEUS_HOTELS_URL, {
@@ -150,19 +151,19 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
         hotelSource: 'ALL'
       }
     });
-    
+
     const hotels = hotelsResponse.data.data || [];
     console.log(`✅ Found ${hotels.length} hotels in ${cityCode}`);
-    
+
     if (hotels.length === 0) {
       console.log('No hotels found via Amadeus API, falling back to placeholders');
       throw new Error('No hotels found');
     }
-    
+
     // Step 3: Get hotel availability for the first 5 hotels
     const selectedHotels = hotels.slice(0, 5).map(h => h.hotelId);
     console.log(`🏨 Checking availability for ${selectedHotels.length} hotels...`);
-    
+
     const availabilityResponse = await axios.get(AMADEUS_HOTEL_OFFERS_URL, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -178,31 +179,31 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
         bestRateOnly: true
       }
     });
-    
+
     const availableHotels = availabilityResponse.data.data || [];
     console.log(`✅ Found ${availableHotels.length} hotels with availability`);
-    
+
     // Get city info for display
     const cityInfo = await getCityInfo(cityCode);
-    
+
     if (availableHotels.length > 0) {
       // Format available hotels to match our application structure
       const formattedHotels = availableHotels.map((hotelOffer, index) => {
         const hotel = hotelOffer.hotel;
         const offer = hotelOffer.offers && hotelOffer.offers.length > 0 ? hotelOffer.offers[0] : null;
-        
+
         // Find original hotel data for additional info
         const originalHotel = hotels.find(h => h.hotelId === hotel.hotelId) || {};
-        
+
         // Use unsplash for placeholder images
         const hotelImages = [
           `https://source.unsplash.com/random/300x200/?hotel,${index}`,
           `https://source.unsplash.com/random/300x200/?room,${index}`
         ];
-        
+
         // Standard amenities
         const defaultAmenities = ['Free WiFi', 'Air Conditioning', '24-hour Front Desk'];
-        
+
         // Ensure hotel name exists and use it - this is the critical part for fixing the name display issue
         let hotelName = 'Unknown Hotel';
         if (hotel.name && hotel.name.trim() !== '') {
@@ -215,12 +216,12 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
           hotelName = `${cityInfo.name} ${['Grand Hotel', 'Plaza Resort', 'Luxury Suites', 'Executive Inn', 'Palace Hotel'][index % 5]}`;
           console.log(`Generated name: ${hotelName} for hotel with missing name, ID ${hotel.hotelId}`);
         }
-        
+
         // Extract geo location information if available
         const geoCode = originalHotel.geoCode || hotel.geoCode || null;
         const latitude = geoCode?.latitude || null;
         const longitude = geoCode?.longitude || null;
-        
+
         return {
           id: `amadeus-${hotel.hotelId}-${Date.now()}`,
           name: hotelName, // Use the properly handled hotel name
@@ -244,7 +245,7 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
           } : null
         };
       });
-      
+
       console.log(`Successfully formatted ${formattedHotels.length} real hotels from Amadeus API`);
       return formattedHotels;
     } else {
@@ -255,9 +256,9 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
           `https://source.unsplash.com/random/300x200/?hotel,${index}`,
           `https://source.unsplash.com/random/300x200/?room,${index}`
         ];
-        
+
         const defaultAmenities = ['Free WiFi', 'Air Conditioning', '24-hour Front Desk'];
-        
+
         // Ensure hotel name exists and use it
         let hotelName = 'Unknown Hotel';
         if (hotel.name && hotel.name.trim() !== '') {
@@ -267,12 +268,12 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
           hotelName = `${cityInfo.name} ${['Grand Hotel', 'Plaza Resort', 'Luxury Suites', 'Executive Inn', 'Palace Hotel'][index % 5]}`;
           console.log(`Generated name: ${hotelName} for hotel with missing name, ID ${hotel.hotelId}`);
         }
-        
+
         // Extract geo location information if available
         const geoCode = hotel.geoCode || null;
         const latitude = geoCode?.latitude || null;
         const longitude = geoCode?.longitude || null;
-        
+
         return {
           id: `amadeus-${hotel.hotelId}-${Date.now()}`,
           name: hotelName,
@@ -300,17 +301,17 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
           }
         };
       });
-      
+
       console.log(`Returning ${formattedHotels.length} hotels without availability data`);
       return formattedHotels;
     }
   } catch (error) {
     console.error('❌ Error getting hotels via direct Amadeus API:', error.message);
-    
+
     // Generate branded placeholder hotels as final fallback
     console.log('Generating branded placeholder hotels for', cityCode);
     const cityInfo = await getCityInfo(cityCode);
-    
+
     // Hotel name templates based on city with premium branding
     const hotelNames = [
       `${cityInfo.name} Grand Luxury Hotel`,
@@ -322,7 +323,7 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
       `${cityInfo.name} InterContinental Premier`,
       `${cityInfo.name} Luxury International`
     ];
-    
+
     // High quality hotel images
     const images = [
       'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80',
@@ -331,7 +332,7 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
       'https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&w=1600&q=80',
       'https://images.unsplash.com/photo-1564501049412-61c2a3083791?auto=format&fit=crop&w=1470&q=80'
     ];
-    
+
     // Premium amenities combinations
     const amenities = [
       ['Free High-Speed WiFi', '24/7 Room Service', 'Fine Dining Restaurant'],
@@ -340,10 +341,10 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
       ['High-Speed WiFi', 'Luxury Spa', 'Rooftop Bar'],
       ['Business WiFi', 'Airport Shuttle Service', 'Executive Conference Room']
     ];
-    
+
     // Generate 5-8 premium placeholder hotels
     const count = Math.floor(Math.random() * 4) + 5;
-    const mockHotels = Array.from({length: Math.min(count, hotelNames.length)}, (_, i) => ({
+    const mockHotels = Array.from({ length: Math.min(count, hotelNames.length) }, (_, i) => ({
       id: `placeholder-${cityCode.toLowerCase()}-${i}-${Date.now()}`,
       name: hotelNames[i],
       hotelId: `PLACEHOLDER-${cityCode}-${i}`,
@@ -353,7 +354,7 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
       currency: 'USD',
       rating: (Math.random() * 0.5 + 4.5).toFixed(1), // 4.5-5.0 premium ratings
       image: images[i % images.length],
-      images: [images[i % images.length], images[(i+1) % images.length]],
+      images: [images[i % images.length], images[(i + 1) % images.length]],
       amenities: amenities[i % amenities.length],
       address: {
         cityName: cityInfo.name,
@@ -361,7 +362,7 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
       },
       isPlaceholder: true // Flag to identify placeholder data
     }));
-    
+
     console.log(`Generated ${mockHotels.length} premium placeholder hotels`);
     return mockHotels;
   }
@@ -371,10 +372,10 @@ async function searchHotels(cityCode, checkInDate, checkOutDate, adults = 2) {
 async function getHotelOffers(hotelId, checkInDate, checkOutDate, adults = 2) {
   try {
     console.log(`🏨 Getting real offers for hotel ${hotelId} via direct Amadeus API...`);
-    
+
     // Step 1: Get access token
     const token = await getAmadeusAccessToken();
-    
+
     // Step 2: Get hotel offers directly from Amadeus
     const response = await axios.get(AMADEUS_HOTEL_OFFERS_URL, {
       headers: {
@@ -391,40 +392,40 @@ async function getHotelOffers(hotelId, checkInDate, checkOutDate, adults = 2) {
         bestRateOnly: false // Get all available offers for this hotel
       }
     });
-    
+
     const hotelOffers = response.data.data || [];
-    
+
     if (hotelOffers.length === 0) {
       console.log(`No offers found for hotel ${hotelId}`);
       throw new Error('No offers found');
     }
-    
+
     // Get the offers from the first hotel result
     const offers = hotelOffers[0]?.offers || [];
     console.log(`✅ Found ${offers.length} offers for hotel ${hotelId}`);
-    
+
     return offers;
   } catch (error) {
     console.error('Error getting hotel offers via proxy:', error.message);
-    
+
     // Generate fallback offers if real offers can't be fetched
     console.log('Generating fallback offers...');
-    
+
     // Calculate number of nights
     const startDate = new Date(checkInDate);
     const endDate = new Date(checkOutDate);
     const nights = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
-    
+
     // Base price per night (random between $100 and $400)
     const basePrice = Math.floor(Math.random() * 300) + 100;
-    
+
     // Generate room types
     const roomTypes = ['STANDARD_ROOM', 'DELUXE_ROOM', 'EXECUTIVE_ROOM', 'SUITE'];
     const boardTypes = ['ROOM_ONLY', 'BREAKFAST_INCLUDED', 'HALF_BOARD', 'FULL_BOARD'];
-    
+
     // Generate 3-5 offers with different room types
     const offerCount = Math.floor(Math.random() * 3) + 3;
-    const fallbackOffers = Array.from({length: offerCount}, (_, i) => ({
+    const fallbackOffers = Array.from({ length: offerCount }, (_, i) => ({
       id: `offer-${hotelId}-${i}`,
       roomType: roomTypes[i % roomTypes.length],
       boardType: boardTypes[Math.floor(Math.random() * boardTypes.length)],
@@ -447,7 +448,7 @@ async function getHotelOffers(hotelId, checkInDate, checkOutDate, adults = 2) {
         }
       }
     }));
-    
+
     return fallbackOffers;
   }
 }
