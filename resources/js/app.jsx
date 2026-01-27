@@ -609,17 +609,20 @@ const App = () => {
         <Route path="/flight-create-orders" element={<FlightCreateOrders />} />
         <Route path="/flight-booking-success" element={<FlightBookingSuccess />} />
         <Route path="/packages" element={<Packages />} />
-        <Route path="/rental" element={<Rentals />} />
-        <Route path="/hotel-details" element={<HotelDetails />} />
-        <Route path="/hotel-search" element={<HotelSearch />} />
-        <Route path="/hotel-search-results" element={<HotelSearchResults />} />
-        <Route path="/hotel-booking-success" element={<HotelBookingSuccess />} />
-        <Route path="/hotel-booking-success" element={<HotelBookingSuccess />} />
-        <Route path="/rental/booking" element={<Booking />} />
+        
+        {/* Hotels Routes - Primary */}
         <Route path="/hotels" element={<Hotels />} />
         <Route path="/hotels/search" element={<SearchHotels />} />
         <Route path="/hotels/details" element={<HotelDetailsPage />} />
         <Route path="/hotels/booking-summary" element={<HotelBookingSummary />} />
+        <Route path="/hotel-booking-success" element={<HotelBookingSuccess />} />
+        
+        {/* Legacy hotel routes - redirect to new system */}
+        <Route path="/rental" element={<Navigate to="/hotels" />} />
+        <Route path="/rental/booking" element={<Navigate to="/hotels" />} />
+        <Route path="/hotel-details" element={<Navigate to="/hotels" />} />
+        <Route path="/hotel-search" element={<Navigate to="/hotels/search" />} />
+        <Route path="/hotel-search-results" element={<Navigate to="/hotels/search" />} />
 
         {/* Package Routes */}
         <Route path="/packages/itinerary" element={<ItineraryPackage />} />

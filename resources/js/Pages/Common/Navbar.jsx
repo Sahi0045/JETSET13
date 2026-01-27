@@ -288,8 +288,8 @@ const Navbar = ({ forceScrolled }) => {
           <Link to="/packages" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
             Packages
           </Link>
-          <Link to="/rental" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
-            Rental
+          <Link to="/hotels" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
+            Hotels
           </Link>
           <Link to="/my-trips" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
             My Trips
