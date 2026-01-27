@@ -6,7 +6,7 @@ import axios from 'axios';
 import * as amadeusUtils from '../Pages/Common/rentals/amadeusUtils';
 
 // Production API URL from environment variables
-const PRODUCTION_API_URL = import.meta.env.VITE_APP_URL || 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
+const PRODUCTION_API_URL = import.meta.env.VITE_APP_URL || 'https://www.jetsetterss.com/api';
 
 // Amadeus API credentials from environment variables (TEST keys)
 const API_KEY = import.meta.env.VITE_AMADEUS_API_KEY || 'rsGqoSAv1h9JE70yQVrHwtal1o8R0UAk';

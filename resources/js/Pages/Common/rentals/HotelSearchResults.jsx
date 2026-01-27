@@ -57,7 +57,7 @@ export default function HotelSearchResults() {
   useEffect(() => {
     const fetchDestinations = async () => {
       try {
-        const apiUrl = 'https://jet-set-go-psi.vercel.app/api';
+        const apiUrl = 'https://www.jetsetterss.com/api';
         const response = await axios.get(`${apiUrl}/hotels/destinations`, {
           headers: {
             'Content-Type': 'application/json',
@@ -107,7 +107,7 @@ export default function HotelSearchResults() {
       // LAYER 1: Try the main production API first
       try {
         // Use direct API URL
-        const apiUrl = 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
+        const apiUrl = 'https://www.jetsetterss.com/api';
         console.log('LAYER 1: Using production API:', apiUrl);
 
         const response = await axios.get(`${apiUrl}/hotels/search`, {
@@ -324,7 +324,7 @@ export default function HotelSearchResults() {
           console.log('Fetching hotels for:', searchParams);
 
           // Use direct API URL
-          const apiUrl = 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
+          const apiUrl = 'https://www.jetsetterss.com/api';
 
           console.log('Using API URL:', apiUrl);
 

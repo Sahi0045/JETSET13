@@ -3,7 +3,7 @@
 // API credentials and URLs
 export const AMADEUS_API_KEY = 'ZsgV43XBz0GbNk85zQuzvWnhARwXX4IE';
 export const AMADEUS_API_SECRET = '2uFgpTVo5GA4ytwq';
-export const API_URL = 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
+export const API_URL = 'https://www.jetsetterss.com/api';
 
 // API version URLs - used for direct API calls if needed
 export const API_VERSIONS = {

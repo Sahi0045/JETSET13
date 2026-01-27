@@ -8,7 +8,7 @@ import { popularDestinations } from './hotel';
 import * as amadeusUtils from './amadeusUtils';
 
 // Use environment variables instead of hardcoded credentials
-const API_URL = import.meta.env.VITE_API_URL || 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://www.jetsetterss.com/api';
 
 const HotelSearch = () => {
   const navigate = useNavigate();

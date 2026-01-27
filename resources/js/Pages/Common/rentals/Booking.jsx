@@ -83,7 +83,7 @@ export default function Booking() {
         specialRequests: bookingRequest.specialRequests
       };
 
-      const hotelBookingResponse = await axios.post('https://prod-opznkssex-shubhams-projects-4a867368.vercel.app/api/hotels', bookingRequestData);
+      const hotelBookingResponse = await axios.post('https://www.jetsetterss.com/api/hotels', bookingRequestData);
 
       if (hotelBookingResponse.data.success) {
         const booking = hotelBookingResponse.data.booking;
@@ -104,7 +104,7 @@ export default function Booking() {
             }
           };
 
-          const paymentResponse = await axios.post('https://prod-opznkssex-shubhams-projects-4a867368.vercel.app/api/hotels', paymentData);
+          const paymentResponse = await axios.post('https://www.jetsetterss.com/api/hotels', paymentData);
 
           if (paymentResponse.data.success) {
             console.log('Arc Pay order created successfully');

@@ -329,7 +329,7 @@ export default function HotelDetails() {
           try {
             console.log('First attempt: Using production API with real hotel ID:', selectedHotel.hotelId);
 
-            const response = await fetch('https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api/hotels', {
+            const response = await fetch('https://www.jetsetterss.com/api/hotels', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -626,7 +626,7 @@ export default function HotelDetails() {
         currency: 'USD'
       };
 
-      const hotelBookingResponse = await axios.post('https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api/hotels', {
+      const hotelBookingResponse = await axios.post('https://www.jetsetterss.com/api/hotels', {
         action: 'bookHotel',
         ...bookingData
       });
@@ -647,7 +647,7 @@ export default function HotelDetails() {
           }
         };
 
-        const paymentResponse = await axios.post('https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api/hotels', {
+        const paymentResponse = await axios.post('https://www.jetsetterss.com/api/hotels', {
           action: 'createPayment',
           ...paymentData
         });
@@ -709,7 +709,7 @@ export default function HotelDetails() {
       // Send confirmation email
       try {
         // Use direct API URL
-        const apiUrl = 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
+        const apiUrl = 'https://www.jetsetterss.com/api';
 
         console.log('Using API URL for email:', apiUrl);
 
