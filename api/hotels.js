@@ -3,18 +3,18 @@ import axios from 'axios';
 // Amadeus API configuration - USE TEST API with test credentials
 const AMADEUS_API_URLS = {
   v1: 'https://test.api.amadeus.com/v1',
-  v2: 'https://test.api.amadeus.com/v2', 
+  v2: 'https://test.api.amadeus.com/v2',
   v3: 'https://test.api.amadeus.com/v3'
 };
 
 // ARC Pay configuration
 const ARC_PAY_CONFIG = {
-    API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/100/merchant/TESTARC05511704',
-    MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704',
-    API_USERNAME: process.env.ARC_PAY_API_USERNAME || 'TESTARC05511704',
-    API_PASSWORD: process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c',
-    BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100',
-    PORTAL_URL: process.env.ARC_PAY_PORTAL_URL || 'https://api.arcpay.travel/ma/'
+  API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/100/merchant/TESTARC05511704',
+  MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704',
+  API_USERNAME: process.env.ARC_PAY_API_USERNAME || 'TESTARC05511704',
+  API_PASSWORD: process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c',
+  BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100',
+  PORTAL_URL: process.env.ARC_PAY_PORTAL_URL || 'https://api.arcpay.travel/ma/'
 };
 
 // Get Amadeus access token
@@ -25,8 +25,8 @@ const getAccessToken = async () => {
     params.append('grant_type', 'client_credentials');
     params.append('client_id', process.env.AMADEUS_API_KEY || process.env.REACT_APP_AMADEUS_API_KEY);
     params.append('client_secret', process.env.AMADEUS_API_SECRET || process.env.REACT_APP_AMADEUS_API_SECRET);
-    
-    const response = await axios.post('https://test.api.amadeus.com/v1/security/oauth2/token', 
+
+    const response = await axios.post('https://test.api.amadeus.com/v1/security/oauth2/token',
       params.toString(),
       {
         headers: {
@@ -34,7 +34,7 @@ const getAccessToken = async () => {
         }
       }
     );
-    
+
     return response.data.access_token;
   } catch (error) {
     console.error('❌ Amadeus authentication failed:', error.response?.data || error.message);
@@ -45,17 +45,17 @@ const getAccessToken = async () => {
 // Helper function to get auth config for ARC Pay API
 // ARC Pay uses merchant.MERCHANT_ID:password format for Basic Auth
 const getArcPayAuthConfig = () => {
-    const authString = `merchant.${ARC_PAY_CONFIG.MERCHANT_ID}:${ARC_PAY_CONFIG.API_PASSWORD}`;
-    const authHeader = 'Basic ' + Buffer.from(authString).toString('base64');
-    
-    return {
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': authHeader
-        },
-        timeout: 30000
-    };
+  const authString = `merchant.${ARC_PAY_CONFIG.MERCHANT_ID}:${ARC_PAY_CONFIG.API_PASSWORD}`;
+  const authHeader = 'Basic ' + Buffer.from(authString).toString('base64');
+
+  return {
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': authHeader
+    },
+    timeout: 30000
+  };
 };
 
 export default async function handler(req, res) {
@@ -72,7 +72,8 @@ export default async function handler(req, res) {
   // Route based on URL path or query parameter
   const { query } = req;
   let endpoint = query.endpoint; // From query parameter
-  
+  let hotelId = query.hotelId; // From query parameter
+
   // Also check the URL path for direct endpoint access
   if (!endpoint && req.url) {
     if (req.url.includes('/destinations')) {
@@ -81,6 +82,11 @@ export default async function handler(req, res) {
       endpoint = 'locations';
     } else if (req.url.includes('/search')) {
       endpoint = 'search';
+    } else if (req.url.includes('/offers')) {
+      endpoint = 'offers';
+      // Try to extract hotelId from path /api/hotels/offers/XXXX
+      const match = req.url.match(/\/offers\/([^?]+)/);
+      if (match) hotelId = match[1];
     }
   }
 
@@ -91,8 +97,14 @@ export default async function handler(req, res) {
       return await handleLocationSearch(req, res);
     } else if (endpoint === 'search') {
       return await handleHotelSearch(req, res);
+    } else if (endpoint === 'offers') {
+      // Put hotelId in body if exists (handler expects it there)
+      if (hotelId) {
+        req.body = { ...req.body, hotelId };
+      }
+      return await getHotelOffers(req, res);
     } else {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
         error: 'Endpoint not found. Available endpoints: /destinations, /locations, /search',
         url: req.url,
@@ -102,7 +114,7 @@ export default async function handler(req, res) {
   } else if (req.method === 'POST') {
     return await handleHotelRequest(req, res);
   } else {
-    res.status(405).json({ 
+    res.status(405).json({
       success: false,
       error: 'Method not allowed.',
       allowedMethods: ['GET', 'POST']
@@ -112,10 +124,10 @@ export default async function handler(req, res) {
 
 async function handleHotelRequest(req, res) {
   try {
-    const { 
-      hotelId, 
-      checkInDate, 
-      checkOutDate, 
+    const {
+      hotelId,
+      checkInDate,
+      checkOutDate,
       travelers,
       action = 'getOffers' // Default action
     } = req.body;
@@ -164,7 +176,7 @@ async function getHotelOffers(req, res) {
   try {
     console.log('🏨 Fetching hotel offers from Amadeus API...');
     const token = await getAccessToken();
-    
+
     // Get hotel offers from Amadeus
     const offersResponse = await axios.get(`${AMADEUS_API_URLS.v3}/shopping/hotel-offers`, {
       headers: {
@@ -184,9 +196,9 @@ async function getHotelOffers(req, res) {
     if (offersResponse.data.data && offersResponse.data.data.length > 0) {
       const hotelData = offersResponse.data.data[0];
       const offers = hotelData.offers || [];
-      
+
       console.log(`✅ Found ${offers.length} offers for hotel ${hotelId}`);
-      
+
       // Format offers for frontend
       const formattedOffers = offers.map((offer, index) => ({
         id: offer.id || `offer-${index}`,
@@ -273,11 +285,11 @@ function generateFallbackOffers(res, hotelId) {
 
 async function bookHotel(req, res) {
   try {
-    const { 
-      hotelId, 
-      offerId, 
-      guestDetails, 
-      checkInDate, 
+    const {
+      hotelId,
+      offerId,
+      guestDetails,
+      checkInDate,
       checkOutDate,
       totalPrice,
       currency = 'USD'
@@ -295,7 +307,7 @@ async function bookHotel(req, res) {
 
     // Generate booking reference
     const bookingReference = `HTL${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-    
+
     // For now, we'll create a placeholder booking since full Amadeus booking requires production access
     const bookingData = {
       bookingReference: bookingReference,
@@ -386,7 +398,7 @@ async function createHotelPayment(req, res) {
 
       if (arcPayResponse.data.result === 'SUCCESS') {
         console.log('✅ Arc Pay order created successfully');
-        
+
         return res.status(200).json({
           success: true,
           orderId: arcPayResponse.data.order.reference,
@@ -400,7 +412,7 @@ async function createHotelPayment(req, res) {
 
     } catch (arcPayError) {
       console.error('❌ Arc Pay order creation failed:', arcPayError.message);
-      
+
       // Return a mock payment URL for development
       return res.status(200).json({
         success: true,
@@ -663,7 +675,7 @@ async function handleDestinations(req, res) {
 
   // Filter by country
   if (country) {
-    filteredDestinations = filteredDestinations.filter(dest => 
+    filteredDestinations = filteredDestinations.filter(dest =>
       dest.country.toLowerCase().includes(country.toLowerCase())
     );
   }
@@ -730,7 +742,7 @@ async function handleLocationSearch(req, res) {
         displayName: `${loc.address?.cityName || loc.name}${loc.address?.countryName ? ', ' + loc.address.countryName : ''}`
       }))
       // Remove duplicates by city code
-      .filter((loc, index, self) => 
+      .filter((loc, index, self) =>
         index === self.findIndex(l => l.cityCode === loc.cityCode || l.code === loc.code)
       )
       .slice(0, 10);
@@ -743,7 +755,7 @@ async function handleLocationSearch(req, res) {
 
   } catch (error) {
     console.error('❌ Error searching locations:', error.response?.data || error.message);
-    
+
     return res.status(500).json({
       success: false,
       error: 'Failed to search locations. Please try again.',
@@ -776,7 +788,7 @@ async function handleHotelSearch(req, res) {
   // City mappings for destination codes
   const cityMappings = {
     'PAR': 'Paris',
-    'LON': 'London', 
+    'LON': 'London',
     'NYC': 'New York',
     'TYO': 'Tokyo',
     'DXB': 'Dubai',
@@ -809,10 +821,10 @@ async function handleHotelSearch(req, res) {
       hasReactApiKey: !!process.env.REACT_APP_AMADEUS_API_KEY,
       hasReactApiSecret: !!process.env.REACT_APP_AMADEUS_API_SECRET
     });
-    
+
     const token = await getAccessToken();
     console.log('✅ Got Amadeus token successfully');
-    
+
     // Search for hotels in the city
     const hotelListResponse = await axios.get(`${AMADEUS_API_URLS.v1}/reference-data/locations/hotels/by-city`, {
       headers: {
@@ -829,7 +841,7 @@ async function handleHotelSearch(req, res) {
 
     if (hotelListResponse.data.data && hotelListResponse.data.data.length > 0) {
       console.log(`✅ Found ${hotelListResponse.data.data.length} real hotels from Amadeus for ${destination}`);
-      
+
       // Format real hotel data for frontend
       const realHotels = hotelListResponse.data.data.slice(0, 8).map((hotel, index) => ({
         id: hotel.hotelId,
@@ -957,7 +969,7 @@ async function handleHotelSearch(req, res) {
           occupancy: 2
         },
         {
-          type: 'Deluxe Room', 
+          type: 'Deluxe Room',
           price: (basePrice + (index * 25) + 50).toFixed(2),
           currency: 'USD',
           available: true,

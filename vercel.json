@@ -15,6 +15,10 @@
       "destination": "/api/hotels?endpoint=destinations"
     },
     {
+      "source": "/api/hotels/offers/:id",
+      "destination": "/api/hotels?endpoint=offers&hotelId=:id"
+    },
+    {
       "source": "/api/auth/login",
       "destination": "/api/auth"
     },
