@@ -5,9 +5,9 @@ import hotelsData from '../data/hotels.json';
 import axios from 'axios';
 
 // Detect production based on domain (more reliable than import.meta.env.PROD)
-const isProduction = typeof window !== 'undefined' && 
-    (window.location.hostname.includes('jetsetterss.com') || 
-     window.location.hostname.includes('vercel.app'));
+const isProduction = typeof window !== 'undefined' &&
+    (window.location.hostname.includes('jetsetterss.com') ||
+        window.location.hostname.includes('vercel.app'));
 const API_BASE_URL = isProduction ? 'https://www.jetsetterss.com/api' : '/api';
 
 class HotelService {
@@ -27,12 +27,12 @@ class HotelService {
 
         try {
             console.log(`🔍 HotelService: Searching locations for: ${keyword}`);
-            
+
             // Use different URL patterns for production (Vercel) vs local dev (Express)
-            const url = isProduction 
+            const url = isProduction
                 ? `${API_BASE_URL}/hotels?endpoint=locations&keyword=${encodeURIComponent(keyword)}`
                 : `${API_BASE_URL}/hotels/locations?keyword=${encodeURIComponent(keyword)}`;
-            
+
             const response = await axios.get(url, { timeout: 10000 });
 
             console.log(`📡 Location API response:`, response.data);
@@ -41,7 +41,7 @@ class HotelService {
                 console.log(`✅ Found ${response.data.data.length} locations from API`);
                 return response.data.data;
             }
-            
+
             console.log('⚠️ API returned success but no data');
             return [];
         } catch (error) {
@@ -69,7 +69,12 @@ class HotelService {
             try {
                 console.log(`🌐 Attempting backend /hotels/search for ${cityCode}...`);
 
-                const response = await axios.get(`${API_BASE_URL}/hotels/search`, {
+                // Use different URL patterns for production (Vercel) vs local dev (Express)
+                const url = isProduction
+                    ? `${API_BASE_URL}/hotels?endpoint=search`
+                    : `${API_BASE_URL}/hotels/search`;
+
+                const response = await axios.get(url, {
                     params: {
                         destination: cityCode,
                         checkInDate,
@@ -252,7 +257,7 @@ class HotelService {
             'jaipur': 'JAI',
             'ahmedabad': 'AMD',
             'pune': 'PNQ',
-            
+
             // Europe
             'london': 'LON',
             'paris': 'PAR',
@@ -268,7 +273,7 @@ class HotelService {
             'prague': 'PRG',
             'madrid': 'MAD',
             'milan': 'MXP',
-            
+
             // Americas
             'new york': 'NYC',
             'newyork': 'NYC',
@@ -280,14 +285,14 @@ class HotelService {
             'toronto': 'YYZ',
             'vancouver': 'YVR',
             'cancun': 'CUN',
-            
+
             // Oceania & Others
             'sydney': 'SYD',
             'melbourne': 'MEL',
             'maldives': 'MLE',
             'mauritius': 'MRU',
             'cape town': 'CPT',
-            
+
             // Common IATA codes (pass through)
             'dxb': 'DXB',
             'lon': 'LON',
