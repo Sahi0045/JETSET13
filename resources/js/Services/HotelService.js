@@ -169,26 +169,88 @@ class HotelService {
         if (!destination) return null;
 
         const cityCodeMap = {
+            // Middle East & Asia
             'dubai': 'DXB',
+            'tokyo': 'TYO',
+            'singapore': 'SIN',
+            'hong kong': 'HKG',
+            'bangkok': 'BKK',
+            'bali': 'DPS',
+            'mumbai': 'BOM',
+            'delhi': 'DEL',
+            'new delhi': 'DEL',
+            'bangalore': 'BLR',
+            'bengaluru': 'BLR',
+            'chennai': 'MAA',
+            'kolkata': 'CCU',
+            'hyderabad': 'HYD',
+            'goa': 'GOI',
+            'jaipur': 'JAI',
+            'ahmedabad': 'AMD',
+            'pune': 'PNQ',
+            
+            // Europe
             'london': 'LON',
             'paris': 'PAR',
-            'maldives': 'MLE',
-            'tokyo': 'TYO',
-            'new york': 'NYC',
-            'newyork': 'NYC',
-            'singapore': 'SIN',
+            'rome': 'ROM',
+            'barcelona': 'BCN',
+            'amsterdam': 'AMS',
+            'berlin': 'BER',
+            'istanbul': 'IST',
             'switzerland': 'ZRH',
             'swiss alps': 'ZRH',
-            // Common codes
+            'zurich': 'ZRH',
+            'vienna': 'VIE',
+            'prague': 'PRG',
+            'madrid': 'MAD',
+            'milan': 'MXP',
+            
+            // Americas
+            'new york': 'NYC',
+            'newyork': 'NYC',
+            'los angeles': 'LAX',
+            'las vegas': 'LAS',
+            'miami': 'MIA',
+            'san francisco': 'SFO',
+            'chicago': 'ORD',
+            'toronto': 'YYZ',
+            'vancouver': 'YVR',
+            'cancun': 'CUN',
+            
+            // Oceania & Others
+            'sydney': 'SYD',
+            'melbourne': 'MEL',
+            'maldives': 'MLE',
+            'mauritius': 'MRU',
+            'cape town': 'CPT',
+            
+            // Common IATA codes (pass through)
             'dxb': 'DXB',
             'lon': 'LON',
             'par': 'PAR',
             'nyc': 'NYC',
-            'sin': 'SIN'
+            'sin': 'SIN',
+            'del': 'DEL',
+            'bom': 'BOM',
+            'blr': 'BLR',
+            'maa': 'MAA',
+            'ccu': 'CCU',
+            'hyd': 'HYD',
+            'goi': 'GOI',
+            'jai': 'JAI',
+            'tyo': 'TYO',
+            'hkg': 'HKG',
+            'bkk': 'BKK',
+            'lax': 'LAX',
+            'sfo': 'SFO',
+            'mia': 'MIA',
+            'ord': 'ORD',
+            'syd': 'SYD',
+            'mel': 'MEL'
         };
 
         const normalized = destination.toLowerCase().trim();
-        return cityCodeMap[normalized] || null;
+        return cityCodeMap[normalized] || destination.toUpperCase();
     }
 
     /**

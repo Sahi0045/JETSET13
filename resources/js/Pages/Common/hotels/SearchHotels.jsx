@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, MapPin, Star, ArrowRight, Heart, X, ChevronDown, Wifi, Coffee, Car, Dumbbell, Bath } from 'lucide-react';
 import Navbar from '../Navbar';
@@ -8,10 +8,40 @@ import hotelService from '../../../Services/HotelService';
 import currencyService from '../../../Services/CurrencyService';
 import Price from '../../../Components/Price';
 
+// Popular destinations for autocomplete suggestions
+const POPULAR_DESTINATIONS = [
+    { name: 'Delhi', code: 'DEL', country: 'India' },
+    { name: 'Mumbai', code: 'BOM', country: 'India' },
+    { name: 'Bangalore', code: 'BLR', country: 'India' },
+    { name: 'Chennai', code: 'MAA', country: 'India' },
+    { name: 'Kolkata', code: 'CCU', country: 'India' },
+    { name: 'Hyderabad', code: 'HYD', country: 'India' },
+    { name: 'Goa', code: 'GOI', country: 'India' },
+    { name: 'Jaipur', code: 'JAI', country: 'India' },
+    { name: 'Dubai', code: 'DXB', country: 'UAE' },
+    { name: 'Singapore', code: 'SIN', country: 'Singapore' },
+    { name: 'Bangkok', code: 'BKK', country: 'Thailand' },
+    { name: 'London', code: 'LON', country: 'United Kingdom' },
+    { name: 'Paris', code: 'PAR', country: 'France' },
+    { name: 'New York', code: 'NYC', country: 'USA' },
+    { name: 'Los Angeles', code: 'LAX', country: 'USA' },
+    { name: 'Tokyo', code: 'TYO', country: 'Japan' },
+    { name: 'Hong Kong', code: 'HKG', country: 'China' },
+    { name: 'Sydney', code: 'SYD', country: 'Australia' },
+    { name: 'Bali', code: 'DPS', country: 'Indonesia' },
+    { name: 'Maldives', code: 'MLE', country: 'Maldives' },
+    { name: 'Rome', code: 'ROM', country: 'Italy' },
+    { name: 'Barcelona', code: 'BCN', country: 'Spain' },
+    { name: 'Amsterdam', code: 'AMS', country: 'Netherlands' },
+    { name: 'Las Vegas', code: 'LAS', country: 'USA' },
+    { name: 'Miami', code: 'MIA', country: 'USA' },
+];
+
 const SearchHotels = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const searchParams = new URLSearchParams(location.search);
+    const searchInputRef = useRef(null);
 
     // Extract search parameters from URL
     const [searchQuery, setSearchQuery] = useState(searchParams.get('destination') || '');
@@ -22,6 +52,10 @@ const SearchHotels = () => {
         adults: parseInt(searchParams.get('adults')) || 2,
         children: parseInt(searchParams.get('children')) || 0
     });
+
+    // Autocomplete state
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [selectedDestination, setSelectedDestination] = useState(null);
 
     // State
     const [hotels, setHotels] = useState([]);
@@ -134,8 +168,38 @@ const SearchHotels = () => {
     // Handle search form submit
     const handleSearchSubmit = (e) => {
         e.preventDefault();
+        setShowSuggestions(false);
         // Just updating state will trigger the useEffect
     };
+
+    // Filter suggestions based on search query
+    const filteredSuggestions = useMemo(() => {
+        if (!searchQuery || searchQuery.length < 1) return POPULAR_DESTINATIONS.slice(0, 8);
+        const query = searchQuery.toLowerCase();
+        return POPULAR_DESTINATIONS.filter(dest => 
+            dest.name.toLowerCase().includes(query) || 
+            dest.code.toLowerCase().includes(query) ||
+            dest.country.toLowerCase().includes(query)
+        ).slice(0, 8);
+    }, [searchQuery]);
+
+    // Handle destination selection from suggestions
+    const handleSelectDestination = (destination) => {
+        setSearchQuery(destination.name);
+        setSelectedDestination(destination);
+        setShowSuggestions(false);
+    };
+
+    // Close suggestions when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (searchInputRef.current && !searchInputRef.current.contains(e.target)) {
+                setShowSuggestions(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // Get amenity icon
     const getAmenityIcon = (amenity) => {
@@ -162,26 +226,57 @@ const SearchHotels = () => {
             <div className="bg-white shadow-md sticky top-0 z-40">
                 <div className="container mx-auto px-4 py-4">
                     <form onSubmit={handleSearchSubmit} className="flex flex-col md:flex-row gap-4 items-center">
-                        {/* Search Input */}
-                        <div className="relative flex-1 w-full group">
+                        {/* Search Input with Autocomplete */}
+                        <div className="relative flex-1 w-full group" ref={searchInputRef}>
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                 <Search className="text-gray-400 group-hover:text-[#055B75] transition-colors" size={20} />
                             </div>
                             <input
                                 type="text"
-                                placeholder="Search destinations or hotels..."
+                                placeholder="Search destinations (e.g., Delhi, Dubai, Paris)..."
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    setSelectedDestination(null);
+                                }}
+                                onFocus={() => setShowSuggestions(true)}
                                 className="w-full pl-12 pr-10 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#65B3CF] focus:border-[#055B75] transition-all"
+                                autoComplete="off"
                             />
                             {searchQuery && (
                                 <button
                                     type="button"
-                                    onClick={() => setSearchQuery('')}
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setSelectedDestination(null);
+                                    }}
                                     className="absolute inset-y-0 right-0 pr-4 flex items-center"
                                 >
                                     <X size={18} className="text-gray-400 hover:text-[#055B75]" />
                                 </button>
+                            )}
+
+                            {/* Suggestions Dropdown */}
+                            {showSuggestions && filteredSuggestions.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+                                    <div className="p-2 border-b border-gray-100 text-xs text-gray-500 font-medium uppercase tracking-wide">
+                                        {searchQuery ? 'Matching Destinations' : 'Popular Destinations'}
+                                    </div>
+                                    {filteredSuggestions.map((dest) => (
+                                        <button
+                                            key={dest.code}
+                                            type="button"
+                                            onClick={() => handleSelectDestination(dest)}
+                                            className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
+                                        >
+                                            <MapPin size={18} className="text-[#055B75] flex-shrink-0" />
+                                            <div className="flex-1">
+                                                <div className="font-medium text-gray-800">{dest.name}</div>
+                                                <div className="text-sm text-gray-500">{dest.country} • {dest.code}</div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
                             )}
                         </div>
 
