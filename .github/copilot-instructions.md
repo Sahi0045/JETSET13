@@ -63,6 +63,7 @@ npm start            # Production server (serves dist/ + API)
 - Path aliases: `@/` → `resources/js/`, `@pages/` → `resources/js/Pages/`, `@components/` → `resources/js/Components/`
 - React.lazy() with error fallbacks for all page components
 - Services in `resources/js/Services/` wrap API calls with axios
+- **⚠️ NEVER hardcode Vercel preview URLs** - always use `https://www.jetsetterss.com/api` for production or import from `config/api.config.js`
 
 ### Backend
 - Route files: `backend/routes/{resource}.routes.js`
