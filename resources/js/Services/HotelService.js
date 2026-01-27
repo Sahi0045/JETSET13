@@ -1,7 +1,6 @@
 // Hotel Service - Amadeus API with JSON fallback
 // Tries Amadeus API first, falls back to hotels.json when API fails
 
-import DirectAmadeusService from './DirectAmadeusService';
 import hotelsData from '../data/hotels.json';
 import axios from 'axios';
 
@@ -13,9 +12,7 @@ const API_BASE_URL = isProduction ? 'https://www.jetsetterss.com/api' : '/api';
 
 class HotelService {
     constructor() {
-        this.amadeus = DirectAmadeusService;
         this.fallbackData = hotelsData;
-        this.useApiFirst = true;
     }
 
     /**
@@ -64,24 +61,41 @@ class HotelService {
     async searchHotels(destination, checkInDate, checkOutDate, adults = 2) {
         console.log(`🏨 HotelService: Searching hotels for ${destination}`);
 
-        // Try to map destination name to city code
+        // Try to map destination name to IATA city code
         const cityCode = this.getCityCode(destination);
 
-        if (this.useApiFirst && cityCode) {
+        // First, try our own backend API which calls Amadeus server-side (no browser → Amadeus CORS issues)
+        if (cityCode) {
             try {
-                console.log(`🌐 Attempting Amadeus API search for ${cityCode}...`);
-                const apiResults = await this.amadeus.searchHotels(cityCode, checkInDate, checkOutDate, adults);
+                console.log(`🌐 Attempting backend /hotels/search for ${cityCode}...`);
 
-                if (apiResults && apiResults.length > 0) {
-                    console.log(`✅ API returned ${apiResults.length} hotels`);
-                    return apiResults.map(hotel => this.normalizeApiHotel(hotel));
+                const response = await axios.get(`${API_BASE_URL}/hotels/search`, {
+                    params: {
+                        destination: cityCode,
+                        checkInDate,
+                        checkOutDate,
+                        adults
+                    },
+                    timeout: 15000
+                });
+
+                console.log('📡 Backend /hotels/search response:', response.data);
+
+                const hotels = response.data?.data?.hotels || [];
+
+                if (Array.isArray(hotels) && hotels.length > 0) {
+                    console.log(`✅ Backend API returned ${hotels.length} hotels`);
+                    // Backend already formats hotels for the frontend, so just return them
+                    return hotels;
                 }
+
+                console.log('⚠️ Backend API returned no hotels, falling back to JSON data');
             } catch (error) {
-                console.warn('⚠️ Amadeus API search failed:', error.message);
+                console.error('❌ Error calling backend /hotels/search:', error.response?.data || error.message);
             }
         }
 
-        // Fallback to JSON data
+        // Final fallback: local JSON catalog
         console.log(`📁 Using hotels.json fallback data for ${destination}`);
         return this.searchFromJson(destination);
     }
@@ -138,14 +152,22 @@ class HotelService {
             }));
         }
 
-        // Try Amadeus API
+        // Try backend API for offers
         try {
-            const apiOffers = await this.amadeus.getHotelOffers(hotelId, checkInDate, checkOutDate, adults);
-            if (apiOffers && apiOffers.length > 0) {
-                return apiOffers;
+            const response = await axios.get(`${API_BASE_URL}/hotels/offers/${hotelId}`, {
+                params: {
+                    checkInDate,
+                    checkOutDate,
+                    adults
+                },
+                timeout: 10000
+            });
+
+            if (response.data?.success && response.data?.data?.data) {
+                return response.data.data.data;
             }
         } catch (error) {
-            console.warn('⚠️ Failed to get API offers:', error.message);
+            console.warn('⚠️ Failed to get backend API offers:', error.message);
         }
 
         return [];
