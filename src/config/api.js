@@ -1,7 +1,7 @@
 // API URL Configuration
 
 // Default production and development URLs
-const DEFAULT_PROD_URL = 'https://prod-r8ncjf76l-shubhams-projects-4a867368.vercel.app/api';
+const DEFAULT_PROD_URL = 'https://www.jetsetterss.com/api';
 const DEFAULT_DEV_PORT = 5005;
 
 // Get the base API URL from environment variables - prioritize frontend-safe variables
@@ -52,9 +52,9 @@ const getApiBaseUrl = () => {
   
   // Handle jetsetterss.com domain
   if (window.location.hostname.includes('jetsetterss.com')) {
-    // Use the actual Vercel deployment URL for API calls
-    apiUrl = DEFAULT_PROD_URL;
-    console.log('Detected jetsetterss.com domain, redirecting to Vercel API:', apiUrl);
+    // Use the same domain for API calls
+    apiUrl = 'https://www.jetsetterss.com/api';
+    console.log('Detected jetsetterss.com domain, using production API:', apiUrl);
   }
   
   // If still no URL, fall back to default production URL
