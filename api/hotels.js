@@ -802,8 +802,16 @@ async function handleHotelSearch(req, res) {
 
   // Try to get real hotels from Amadeus API first
   try {
-    console.log('🏨 Attempting to fetch real hotels from Amadeus API...');
+    console.log(`🏨 Attempting to fetch real hotels from Amadeus API for ${destination}...`);
+    console.log('Using API credentials:', {
+      hasApiKey: !!process.env.AMADEUS_API_KEY,
+      hasApiSecret: !!process.env.AMADEUS_API_SECRET,
+      hasReactApiKey: !!process.env.REACT_APP_AMADEUS_API_KEY,
+      hasReactApiSecret: !!process.env.REACT_APP_AMADEUS_API_SECRET
+    });
+    
     const token = await getAccessToken();
+    console.log('✅ Got Amadeus token successfully');
     
     // Search for hotels in the city
     const hotelListResponse = await axios.get(`${AMADEUS_API_URLS.v1}/reference-data/locations/hotels/by-city`, {
@@ -815,11 +823,12 @@ async function handleHotelSearch(req, res) {
         radius: 50,
         radiusUnit: 'KM',
         hotelSource: 'ALL'
-      }
+      },
+      timeout: 10000
     });
 
     if (hotelListResponse.data.data && hotelListResponse.data.data.length > 0) {
-      console.log(`✅ Found ${hotelListResponse.data.data.length} real hotels from Amadeus`);
+      console.log(`✅ Found ${hotelListResponse.data.data.length} real hotels from Amadeus for ${destination}`);
       
       // Format real hotel data for frontend
       const realHotels = hotelListResponse.data.data.slice(0, 8).map((hotel, index) => ({
@@ -828,10 +837,12 @@ async function handleHotelSearch(req, res) {
         name: hotel.name,
         location: `${hotel.address?.cityName || cityName}${hotel.address?.countryCode ? `, ${hotel.address.countryCode}` : ''}`,
         address: hotel.address,
+        geoCode: hotel.geoCode,
         price: (150 + index * 25).toFixed(2),
         currency: 'USD',
         rating: (4.0 + Math.random() * 1.0).toFixed(1),
         reviews: Math.floor(Math.random() * 1000) + 100,
+        stars: 4,
         image: `https://images.unsplash.com/photo-${1566073771259 + index}?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80`,
         images: [
           `https://images.unsplash.com/photo-${1566073771259 + index}?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80`,
@@ -841,6 +852,8 @@ async function handleHotelSearch(req, res) {
         availability: 'Available',
         source: 'amadeus-real-data'
       }));
+
+      console.log(`📤 Returning ${realHotels.length} real hotels to frontend`);
 
       return res.status(200).json({
         success: true,
@@ -866,9 +879,12 @@ async function handleHotelSearch(req, res) {
         message: `Found ${realHotels.length} real hotels in ${cityName}`,
         timestamp: new Date().toISOString()
       });
+    } else {
+      console.log(`⚠️ Amadeus returned 0 hotels for ${destination}, using fallback`);
     }
   } catch (amadeusError) {
-    console.error('⚠️ Amadeus API failed, falling back to mock data:', amadeusError.message);
+    console.error(`❌ Amadeus API failed for ${destination}:`, amadeusError.response?.data || amadeusError.message);
+    console.error('Full error:', amadeusError);
   }
 
   // Fallback to mock data if Amadeus fails
