@@ -124,11 +124,21 @@ export default async function handler(req, res) {
     } catch (amadeusError) {
       console.error('❌ Amadeus API error:', amadeusError);
       
+      // Check if it's a credentials issue
+      const isCredentialError = amadeusError.message?.includes('credentials') || 
+                                amadeusError.message?.includes('Missing Amadeus');
+      
       return res.status(500).json({
         success: false,
         error: 'Flight search failed',
         details: amadeusError.message || 'Unable to search flights at this time',
-        code: amadeusError.code || 500
+        code: amadeusError.code || 500,
+        debug: {
+          hasApiKey: !!process.env.AMADEUS_API_KEY,
+          hasApiSecret: !!process.env.AMADEUS_API_SECRET,
+          hasReactApiKey: !!process.env.REACT_APP_AMADEUS_API_KEY,
+          isCredentialError
+        }
       });
     }
 
