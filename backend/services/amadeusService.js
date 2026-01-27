@@ -6,11 +6,11 @@ dotenv.config();
 
 class AmadeusService {
   constructor() {
-    // Use production API endpoints with production credentials
+    // Use TEST API endpoints with test credentials
     this.baseUrls = {
-      v1: 'https://api.amadeus.com/v1',
-      v2: 'https://api.amadeus.com/v2',
-      v3: 'https://api.amadeus.com/v3'
+      v1: 'https://test.api.amadeus.com/v1',
+      v2: 'https://test.api.amadeus.com/v2',
+      v3: 'https://test.api.amadeus.com/v3'
     };
     this.token = null;
     this.tokenExpiration = null;
