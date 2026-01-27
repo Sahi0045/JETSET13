@@ -5,8 +5,9 @@ import DirectAmadeusService from './DirectAmadeusService';
 import hotelsData from '../data/hotels.json';
 import axios from 'axios';
 
-// API URL for production
-const API_BASE_URL = import.meta.env.VITE_APP_URL || 'https://www.jetsetterss.com/api';
+// Use relative URL for local dev (Vite proxy), production URL otherwise
+const isProduction = import.meta.env.PROD;
+const API_BASE_URL = isProduction ? 'https://www.jetsetterss.com/api' : '/api';
 
 class HotelService {
     constructor() {
@@ -27,13 +28,13 @@ class HotelService {
 
         try {
             console.log(`🔍 HotelService: Searching locations for: ${keyword}`);
-            const response = await axios.get(`${API_BASE_URL}/hotels`, {
-                params: {
-                    endpoint: 'locations',
-                    keyword: keyword
-                },
-                timeout: 10000
-            });
+            
+            // Use different URL patterns for production (Vercel) vs local dev (Express)
+            const url = isProduction 
+                ? `${API_BASE_URL}/hotels?endpoint=locations&keyword=${encodeURIComponent(keyword)}`
+                : `${API_BASE_URL}/hotels/locations?keyword=${encodeURIComponent(keyword)}`;
+            
+            const response = await axios.get(url, { timeout: 10000 });
 
             console.log(`📡 Location API response:`, response.data);
 
