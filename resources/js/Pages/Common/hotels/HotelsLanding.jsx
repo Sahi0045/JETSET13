@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Users, Star, ArrowRight, Sparkles, Shield, Clock, Award } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
@@ -7,60 +8,76 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 
 const HotelsLanding = () => {
+    const navigate = useNavigate();
     const [destination, setDestination] = useState('');
     const [dateRange, setDateRange] = useState([null, null]);
     const [startDate, endDate] = dateRange;
     const [guests, setGuests] = useState({ rooms: 1, adults: 2, children: 0 });
     const [showGuestDropdown, setShowGuestDropdown] = useState(false);
 
-    // Mock Data for Featured Hotels
+    // Featured hotels data - IDs match hotels.json
     const featuredHotels = [
         {
-            id: 1,
-            name: "Azure Paradise Resort",
+            id: 'maldives-1',
+            name: "Soneva Fushi",
             location: "Maldives",
-            image: "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?q=80&w=2049&auto=format&fit=crop",
+            image: "https://images.unsplash.com/photo-1573843981267-be1999ff37cd?auto=format&fit=crop&w=1600&q=80",
             rating: 4.9,
-            reviews: 128,
-            price: 450,
-            tags: ["Beachfront", "Luxury", "Spa"]
+            reviews: 876,
+            price: 2200,
+            tags: ["Overwater", "Eco-Luxury", "Diving"]
         },
         {
-            id: 2,
-            name: "Alpine Grand Hotel",
+            id: 'swiss-1',
+            name: "The Chedi Andermatt",
             location: "Swiss Alps",
-            image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070&auto=format&fit=crop",
-            rating: 4.8,
-            reviews: 95,
-            price: 320,
-            tags: ["Mountain View", "Skiing", "Cozy"]
+            image: "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?auto=format&fit=crop&w=1600&q=80",
+            rating: 4.9,
+            reviews: 567,
+            price: 950,
+            tags: ["Ski Resort", "Mountain Views", "Luxury"]
         },
         {
-            id: 3,
-            name: "Urban Oasis Suites",
-            location: "dubai",
-            image: "https://images.unsplash.com/photo-1582719508461-905c673771fd?q=80&w=2025&auto=format&fit=crop",
-            rating: 4.7,
-            reviews: 210,
-            price: 280,
-            tags: ["City Center", "Pool", "Modern"]
+            id: 'dubai-1',
+            name: "Burj Al Arab Jumeirah",
+            location: "Dubai",
+            image: "https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&w=1600&q=80",
+            rating: 5.0,
+            reviews: 2456,
+            price: 1500,
+            tags: ["Ultra Luxury", "Beachfront", "Iconic"]
         },
         {
-            id: 4,
-            name: "Santorini Sunset Villa",
-            location: "Greece",
-            image: "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?q=80&w=2072&auto=format&fit=crop",
-            rating: 4.95,
-            reviews: 156,
-            price: 550,
-            tags: ["Sea View", "Romantic", "Private Pool"]
+            id: 'paris-1',
+            name: "Four Seasons George V",
+            location: "Paris",
+            image: "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1600&q=80",
+            rating: 4.9,
+            reviews: 1987,
+            price: 1200,
+            tags: ["Luxury", "Champs-Élysées", "Michelin"]
         }
     ];
 
+    // Handler to navigate to hotel details
+    const handleHotelClick = (hotelId) => {
+        navigate(`/hotels/details?id=${hotelId}`);
+    };
+
     const handleSearch = (e) => {
         e.preventDefault();
-        console.log("Searching hotels...", { destination, startDate, endDate, guests });
-        // TODO: Navigate to search results page
+
+        // Build search parameters
+        const params = new URLSearchParams();
+        if (destination) params.set('destination', destination);
+        if (startDate) params.set('checkIn', startDate.toISOString().split('T')[0]);
+        if (endDate) params.set('checkOut', endDate.toISOString().split('T')[0]);
+        params.set('rooms', guests.rooms);
+        params.set('adults', guests.adults);
+        params.set('children', guests.children);
+
+        // Navigate to search results
+        navigate(`/hotels/search?${params.toString()}`);
     };
 
     return (
@@ -290,7 +307,10 @@ const HotelsLanding = () => {
                                     </div>
 
                                     <div className="mt-auto pt-4 border-t border-gray-100">
-                                        <button className="w-full bg-white border-2 border-[#055B75] text-[#055B75] py-3 rounded-xl font-bold hover:bg-[#055B75] hover:text-white transition-all duration-300 flex items-center justify-center gap-2 group/btn">
+                                        <button
+                                            onClick={() => handleHotelClick(hotel.id)}
+                                            className="w-full bg-white border-2 border-[#055B75] text-[#055B75] py-3 rounded-xl font-bold hover:bg-[#055B75] hover:text-white transition-all duration-300 flex items-center justify-center gap-2 group/btn"
+                                        >
                                             Check Availability
                                             <ArrowRight size={18} className="group-hover/btn:translate-x-1 transition-transform" />
                                         </button>
@@ -300,7 +320,10 @@ const HotelsLanding = () => {
                         ))}
                     </div>
 
-                    <button className="md:hidden mt-8 w-full flex items-center justify-center gap-2 bg-white border-2 border-[#055B75] text-[#055B75] font-bold py-4 rounded-xl hover:bg-[#F0FAFC] transition-colors">
+                    <button
+                        onClick={() => navigate('/hotels/search')}
+                        className="md:hidden mt-8 w-full flex items-center justify-center gap-2 bg-white border-2 border-[#055B75] text-[#055B75] font-bold py-4 rounded-xl hover:bg-[#F0FAFC] transition-colors"
+                    >
                         View All Hotels <ArrowRight size={20} />
                     </button>
                 </div>

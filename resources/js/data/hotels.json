@@ -1,0 +1,778 @@
+{
+    "stats": {
+        "destinations": "50+",
+        "hotels": "500+",
+        "reviews": "10K+",
+        "support": "24/7"
+    },
+    "destinations": {
+        "dubai": {
+            "name": "Dubai",
+            "country": "UAE",
+            "code": "DXB",
+            "image": "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1600&q=80",
+            "hotels": [
+                {
+                    "id": "dubai-1",
+                    "name": "Burj Al Arab Jumeirah",
+                    "location": "Jumeirah Beach Road, Dubai",
+                    "description": "Experience unparalleled luxury at this iconic sail-shaped marvel. The world's most luxurious hotel offers the finest Arabian hospitality with breathtaking views of the Arabian Gulf.",
+                    "image": "https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&w=1600&q=80",
+                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80",
+                        "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 5.0,
+                    "reviews": 2456,
+                    "price": 1500,
+                    "currency": "USD",
+                    "discount": 15,
+                    "stars": 7,
+                    "amenities": [
+                        "Private Beach",
+                        "Helipad",
+                        "Butler Service",
+                        "Infinity Pool",
+                        "Luxury Spa",
+                        "Fine Dining",
+                        "Free WiFi",
+                        "Airport Transfer"
+                    ],
+                    "tags": [
+                        "Ultra Luxury",
+                        "Beachfront",
+                        "Iconic"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Deluxe Suite",
+                            "price": 1500,
+                            "beds": "1 King Bed",
+                            "size": "170 sqm",
+                            "view": "Ocean View",
+                            "amenities": [
+                                "Private Terrace",
+                                "Jacuzzi",
+                                "Butler Service"
+                            ]
+                        },
+                        {
+                            "type": "Panoramic Suite",
+                            "price": 2500,
+                            "beds": "1 King Bed",
+                            "size": "330 sqm",
+                            "view": "Panoramic Ocean View",
+                            "amenities": [
+                                "Private Terrace",
+                                "Jacuzzi",
+                                "Butler Service",
+                                "Private Bar"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 25.1412,
+                        "lng": 55.1853
+                    }
+                },
+                {
+                    "id": "dubai-2",
+                    "name": "Atlantis The Palm",
+                    "location": "Palm Jumeirah, Dubai",
+                    "description": "Iconic resort on Palm Jumeirah featuring Aquaventure Waterpark, underwater suites, and world-class dining experiences.",
+                    "image": "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?auto=format&fit=crop&w=1600&q=80",
+                        "https://images.unsplash.com/photo-1564501049412-61c2a3083791?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 4.8,
+                    "reviews": 3245,
+                    "price": 650,
+                    "currency": "USD",
+                    "discount": 20,
+                    "stars": 5,
+                    "amenities": [
+                        "Waterpark",
+                        "Aquarium",
+                        "Private Beach",
+                        "Multiple Pools",
+                        "Luxury Spa",
+                        "Celebrity Restaurants",
+                        "Free WiFi",
+                        "Kids Club"
+                    ],
+                    "tags": [
+                        "Family Friendly",
+                        "Beachfront",
+                        "Entertainment"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Palm Room",
+                            "price": 650,
+                            "beds": "1 King or 2 Twin Beds",
+                            "size": "45 sqm",
+                            "view": "Palm View",
+                            "amenities": [
+                                "Balcony",
+                                "Waterpark Access",
+                                "Mini Bar"
+                            ]
+                        },
+                        {
+                            "type": "Underwater Suite",
+                            "price": 8000,
+                            "beds": "1 King Bed",
+                            "size": "165 sqm",
+                            "view": "Ambassador Lagoon View",
+                            "amenities": [
+                                "Floor-to-ceiling Aquarium Views",
+                                "Butler Service",
+                                "Private Bar"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 25.1304,
+                        "lng": 55.1171
+                    }
+                },
+                {
+                    "id": "dubai-3",
+                    "name": "Address Downtown",
+                    "location": "Downtown Dubai",
+                    "description": "Ultra-modern luxury hotel in the heart of Downtown Dubai, overlooking Burj Khalifa and Dubai Fountain.",
+                    "image": "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1600&q=80",
+                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 4.7,
+                    "reviews": 1876,
+                    "price": 450,
+                    "currency": "USD",
+                    "discount": 10,
+                    "stars": 5,
+                    "amenities": [
+                        "Rooftop Pool",
+                        "Spa",
+                        "Fine Dining",
+                        "Free WiFi",
+                        "Fitness Center",
+                        "Dubai Mall Access",
+                        "Valet Parking"
+                    ],
+                    "tags": [
+                        "City Center",
+                        "Modern",
+                        "Views"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Premier Room",
+                            "price": 450,
+                            "beds": "1 King Bed",
+                            "size": "42 sqm",
+                            "view": "Burj Khalifa View",
+                            "amenities": [
+                                "Balcony",
+                                "Premium Amenities",
+                                "Mini Bar"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 25.1972,
+                        "lng": 55.2744
+                    }
+                }
+            ]
+        },
+        "london": {
+            "name": "London",
+            "country": "United Kingdom",
+            "code": "LON",
+            "image": "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=1600&q=80",
+            "hotels": [
+                {
+                    "id": "london-1",
+                    "name": "The Savoy",
+                    "location": "Strand, London",
+                    "description": "Legendary Art Deco hotel on the Thames, offering timeless elegance and impeccable service since 1889.",
+                    "image": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80",
+                        "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 4.9,
+                    "reviews": 2134,
+                    "price": 850,
+                    "currency": "USD",
+                    "discount": 0,
+                    "stars": 5,
+                    "amenities": [
+                        "Thames Views",
+                        "Spa",
+                        "Fine Dining",
+                        "Free WiFi",
+                        "Fitness Center",
+                        "Concierge",
+                        "24h Room Service"
+                    ],
+                    "tags": [
+                        "Historic",
+                        "Luxury",
+                        "Thames"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Superior Queen Room",
+                            "price": 850,
+                            "beds": "1 Queen Bed",
+                            "size": "35 sqm",
+                            "view": "City View",
+                            "amenities": [
+                                "Marble Bathroom",
+                                "Premium Toiletries",
+                                "Mini Bar"
+                            ]
+                        },
+                        {
+                            "type": "River Suite",
+                            "price": 1800,
+                            "beds": "1 King Bed",
+                            "size": "65 sqm",
+                            "view": "Thames River View",
+                            "amenities": [
+                                "Separate Living Room",
+                                "Butler Service",
+                                "Balcony"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 51.5101,
+                        "lng": -0.1204
+                    }
+                },
+                {
+                    "id": "london-2",
+                    "name": "The Ritz London",
+                    "location": "Piccadilly, London",
+                    "description": "Iconic 5-star hotel known for its world-famous afternoon tea and Louis XVI-style décor.",
+                    "image": "https://images.unsplash.com/photo-1564501049412-61c2a3083791?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1564501049412-61c2a3083791?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 4.8,
+                    "reviews": 1567,
+                    "price": 950,
+                    "currency": "USD",
+                    "discount": 5,
+                    "stars": 5,
+                    "amenities": [
+                        "Afternoon Tea",
+                        "Fine Dining",
+                        "Spa",
+                        "Free WiFi",
+                        "Fitness Center",
+                        "Concierge"
+                    ],
+                    "tags": [
+                        "Iconic",
+                        "Classic",
+                        "Afternoon Tea"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Superior Room",
+                            "price": 950,
+                            "beds": "1 King Bed",
+                            "size": "30 sqm",
+                            "view": "City View",
+                            "amenities": [
+                                "Marble Bathroom",
+                                "24h Room Service"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 51.5072,
+                        "lng": -0.1420
+                    }
+                }
+            ]
+        },
+        "paris": {
+            "name": "Paris",
+            "country": "France",
+            "code": "PAR",
+            "image": "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=1600&q=80",
+            "hotels": [
+                {
+                    "id": "paris-1",
+                    "name": "Four Seasons Hotel George V",
+                    "location": "Avenue George V, Paris",
+                    "description": "Landmark hotel near the Champs-Élysées featuring extraordinary floral displays and Michelin-starred dining.",
+                    "image": "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1600&q=80",
+                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 4.9,
+                    "reviews": 1987,
+                    "price": 1200,
+                    "currency": "USD",
+                    "discount": 0,
+                    "stars": 5,
+                    "amenities": [
+                        "Michelin Dining",
+                        "Spa",
+                        "Indoor Pool",
+                        "Free WiFi",
+                        "Fitness Center",
+                        "Concierge"
+                    ],
+                    "tags": [
+                        "Luxury",
+                        "Champs-Élysées",
+                        "Michelin"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Superior Room",
+                            "price": 1200,
+                            "beds": "1 King Bed",
+                            "size": "40 sqm",
+                            "view": "Courtyard View",
+                            "amenities": [
+                                "Marble Bathroom",
+                                "Premium Linens"
+                            ]
+                        },
+                        {
+                            "type": "Eiffel Suite",
+                            "price": 3500,
+                            "beds": "1 King Bed",
+                            "size": "90 sqm",
+                            "view": "Eiffel Tower View",
+                            "amenities": [
+                                "Private Terrace",
+                                "Butler Service",
+                                "Separate Living"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 48.8698,
+                        "lng": 2.3006
+                    }
+                },
+                {
+                    "id": "paris-2",
+                    "name": "Le Meurice",
+                    "location": "Rue de Rivoli, Paris",
+                    "description": "Palace hotel with ornate 18th-century décor, overlooking Tuileries Garden near the Louvre.",
+                    "image": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 4.8,
+                    "reviews": 1234,
+                    "price": 1100,
+                    "currency": "USD",
+                    "discount": 10,
+                    "stars": 5,
+                    "amenities": [
+                        "Tuileries Views",
+                        "Michelin Dining",
+                        "Spa",
+                        "Free WiFi",
+                        "Fitness Center"
+                    ],
+                    "tags": [
+                        "Palace",
+                        "Historic",
+                        "Louvre"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Superior Room",
+                            "price": 1100,
+                            "beds": "1 King or 2 Twin Beds",
+                            "size": "35 sqm",
+                            "view": "City View",
+                            "amenities": [
+                                "Marble Bathroom",
+                                "Mini Bar"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 48.8651,
+                        "lng": 2.3280
+                    }
+                }
+            ]
+        },
+        "maldives": {
+            "name": "Maldives",
+            "country": "Maldives",
+            "code": "MLE",
+            "image": "https://images.unsplash.com/photo-1573843981267-be1999ff37cd?auto=format&fit=crop&w=1600&q=80",
+            "hotels": [
+                {
+                    "id": "maldives-1",
+                    "name": "Soneva Fushi",
+                    "location": "Baa Atoll, Maldives",
+                    "description": "Barefoot luxury resort in UNESCO Biosphere Reserve, offering overwater villas and sustainable luxury.",
+                    "image": "https://images.unsplash.com/photo-1573843981267-be1999ff37cd?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1573843981267-be1999ff37cd?auto=format&fit=crop&w=1600&q=80",
+                        "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 4.9,
+                    "reviews": 876,
+                    "price": 2200,
+                    "currency": "USD",
+                    "discount": 0,
+                    "stars": 5,
+                    "amenities": [
+                        "Overwater Villas",
+                        "Private Beach",
+                        "Diving Center",
+                        "Spa",
+                        "Observatory",
+                        "Cinema",
+                        "Free WiFi"
+                    ],
+                    "tags": [
+                        "Overwater",
+                        "Eco-Luxury",
+                        "Diving"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Beach Villa",
+                            "price": 2200,
+                            "beds": "1 King Bed",
+                            "size": "350 sqm",
+                            "view": "Beach View",
+                            "amenities": [
+                                "Private Pool",
+                                "Beach Access",
+                                "Butler Service"
+                            ]
+                        },
+                        {
+                            "type": "Water Villa",
+                            "price": 3500,
+                            "beds": "1 King Bed",
+                            "size": "400 sqm",
+                            "view": "Ocean View",
+                            "amenities": [
+                                "Private Pool",
+                                "Direct Ocean Access",
+                                "Butler Service"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 5.1057,
+                        "lng": 73.0706
+                    }
+                }
+            ]
+        },
+        "tokyo": {
+            "name": "Tokyo",
+            "country": "Japan",
+            "code": "TYO",
+            "image": "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1600&q=80",
+            "hotels": [
+                {
+                    "id": "tokyo-1",
+                    "name": "Park Hyatt Tokyo",
+                    "location": "Shinjuku, Tokyo",
+                    "description": "Iconic luxury hotel made famous by 'Lost in Translation', offering stunning views of Mt. Fuji and the city skyline.",
+                    "image": "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 4.8,
+                    "reviews": 1654,
+                    "price": 750,
+                    "currency": "USD",
+                    "discount": 10,
+                    "stars": 5,
+                    "amenities": [
+                        "City Views",
+                        "Indoor Pool",
+                        "Spa",
+                        "Fine Dining",
+                        "Free WiFi",
+                        "Fitness Center"
+                    ],
+                    "tags": [
+                        "Skyline Views",
+                        "Modern",
+                        "Iconic"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Park Room",
+                            "price": 750,
+                            "beds": "1 King Bed",
+                            "size": "55 sqm",
+                            "view": "City View",
+                            "amenities": [
+                                "Floor-to-ceiling Windows",
+                                "Deep Soaking Tub",
+                                "Mini Bar"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 35.6861,
+                        "lng": 139.6901
+                    }
+                },
+                {
+                    "id": "tokyo-2",
+                    "name": "Aman Tokyo",
+                    "location": "Otemachi, Tokyo",
+                    "description": "Urban sanctuary blending traditional Japanese design with contemporary comfort in the heart of Tokyo.",
+                    "image": "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 4.9,
+                    "reviews": 987,
+                    "price": 1100,
+                    "currency": "USD",
+                    "discount": 0,
+                    "stars": 5,
+                    "amenities": [
+                        "Spa",
+                        "Indoor Pool",
+                        "Fine Dining",
+                        "Free WiFi",
+                        "Fitness Center",
+                        "Traditional Onsen"
+                    ],
+                    "tags": [
+                        "Japanese Design",
+                        "Zen",
+                        "Urban Retreat"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Deluxe Room",
+                            "price": 1100,
+                            "beds": "1 King Bed",
+                            "size": "71 sqm",
+                            "view": "Imperial Palace View",
+                            "amenities": [
+                                "Japanese Design",
+                                "Deep Soaking Tub",
+                                "Mini Bar"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 35.6867,
+                        "lng": 139.7638
+                    }
+                }
+            ]
+        },
+        "newyork": {
+            "name": "New York",
+            "country": "USA",
+            "code": "NYC",
+            "image": "https://images.unsplash.com/photo-1485871981521-5b1fd3805eee?auto=format&fit=crop&w=1600&q=80",
+            "hotels": [
+                {
+                    "id": "nyc-1",
+                    "name": "The Plaza Hotel",
+                    "location": "Fifth Avenue, New York",
+                    "description": "New York's legendary landmark hotel overlooking Central Park, featuring Beaux-Arts architecture.",
+                    "image": "https://images.unsplash.com/photo-1564501049412-61c2a3083791?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1564501049412-61c2a3083791?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 4.7,
+                    "reviews": 2345,
+                    "price": 895,
+                    "currency": "USD",
+                    "discount": 5,
+                    "stars": 5,
+                    "amenities": [
+                        "Central Park Views",
+                        "Spa",
+                        "Fine Dining",
+                        "Free WiFi",
+                        "Fitness Center",
+                        "Butler Service"
+                    ],
+                    "tags": [
+                        "Iconic",
+                        "Central Park",
+                        "Historic"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Grand Luxe Room",
+                            "price": 895,
+                            "beds": "1 King Bed",
+                            "size": "37 sqm",
+                            "view": "City View",
+                            "amenities": [
+                                "Marble Bathroom",
+                                "24h Room Service"
+                            ]
+                        },
+                        {
+                            "type": "Central Park Suite",
+                            "price": 2500,
+                            "beds": "1 King Bed",
+                            "size": "83 sqm",
+                            "view": "Central Park View",
+                            "amenities": [
+                                "Separate Living Room",
+                                "Butler Service",
+                                "Terrace"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 40.7645,
+                        "lng": -73.9744
+                    }
+                }
+            ]
+        },
+        "singapore": {
+            "name": "Singapore",
+            "country": "Singapore",
+            "code": "SIN",
+            "image": "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&w=1600&q=80",
+            "hotels": [
+                {
+                    "id": "singapore-1",
+                    "name": "Marina Bay Sands",
+                    "location": "Marina Bay, Singapore",
+                    "description": "Iconic integrated resort featuring the world's largest rooftop infinity pool with stunning city views.",
+                    "image": "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 4.7,
+                    "reviews": 4567,
+                    "price": 550,
+                    "currency": "USD",
+                    "discount": 15,
+                    "stars": 5,
+                    "amenities": [
+                        "Infinity Pool",
+                        "Casino",
+                        "Shopping Mall",
+                        "Fine Dining",
+                        "Spa",
+                        "Free WiFi",
+                        "Fitness Center"
+                    ],
+                    "tags": [
+                        "Iconic",
+                        "Infinity Pool",
+                        "Entertainment"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Deluxe Room",
+                            "price": 550,
+                            "beds": "1 King or 2 Twin Beds",
+                            "size": "40 sqm",
+                            "view": "City View",
+                            "amenities": [
+                                "Infinity Pool Access",
+                                "Mini Bar"
+                            ]
+                        },
+                        {
+                            "type": "Marina Suite",
+                            "price": 1200,
+                            "beds": "1 King Bed",
+                            "size": "75 sqm",
+                            "view": "Marina Bay View",
+                            "amenities": [
+                                "Club Lounge Access",
+                                "Butler Service"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 1.2834,
+                        "lng": 103.8607
+                    }
+                }
+            ]
+        },
+        "switzerland": {
+            "name": "Swiss Alps",
+            "country": "Switzerland",
+            "code": "ZRH",
+            "image": "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?auto=format&fit=crop&w=1600&q=80",
+            "hotels": [
+                {
+                    "id": "swiss-1",
+                    "name": "The Chedi Andermatt",
+                    "location": "Andermatt, Switzerland",
+                    "description": "Alpine luxury resort blending Asian design with Swiss tradition, offering ski-in/ski-out access.",
+                    "image": "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?auto=format&fit=crop&w=1600&q=80",
+                    "images": [
+                        "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?auto=format&fit=crop&w=1600&q=80"
+                    ],
+                    "rating": 4.9,
+                    "reviews": 567,
+                    "price": 950,
+                    "currency": "USD",
+                    "discount": 0,
+                    "stars": 5,
+                    "amenities": [
+                        "Ski-in/Ski-out",
+                        "Spa",
+                        "Indoor Pool",
+                        "Fine Dining",
+                        "Free WiFi",
+                        "Fitness Center"
+                    ],
+                    "tags": [
+                        "Ski Resort",
+                        "Mountain Views",
+                        "Luxury"
+                    ],
+                    "rooms": [
+                        {
+                            "type": "Deluxe Room",
+                            "price": 950,
+                            "beds": "1 King Bed",
+                            "size": "50 sqm",
+                            "view": "Mountain View",
+                            "amenities": [
+                                "Fireplace",
+                                "Balcony",
+                                "Mini Bar"
+                            ]
+                        }
+                    ],
+                    "coordinates": {
+                        "lat": 46.6356,
+                        "lng": 8.5939
+                    }
+                }
+            ]
+        }
+    }
+}

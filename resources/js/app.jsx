@@ -388,6 +388,21 @@ const Hotels = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Hotels..." /> }))
 );
 
+const SearchHotels = React.lazy(() =>
+  import('./Pages/Common/hotels/SearchHotels')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Hotel Search..." /> }))
+);
+
+const HotelDetailsPage = React.lazy(() =>
+  import('./Pages/Common/hotels/HotelDetailsPage')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Hotel Details..." /> }))
+);
+
+const HotelBookingSummary = React.lazy(() =>
+  import('./Pages/Common/hotels/HotelBookingSummary')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Booking Summary..." /> }))
+);
+
 const ItineraryPackage = React.lazy(() =>
   import('./Pages/Common/packages/itp')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Itinerary..." /> }))
@@ -602,6 +617,9 @@ const App = () => {
         <Route path="/hotel-booking-success" element={<HotelBookingSuccess />} />
         <Route path="/rental/booking" element={<Booking />} />
         <Route path="/hotels" element={<Hotels />} />
+        <Route path="/hotels/search" element={<SearchHotels />} />
+        <Route path="/hotels/details" element={<HotelDetailsPage />} />
+        <Route path="/hotels/booking-summary" element={<HotelBookingSummary />} />
 
         {/* Package Routes */}
         <Route path="/packages/itinerary" element={<ItineraryPackage />} />
