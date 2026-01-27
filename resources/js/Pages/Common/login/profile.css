@@ -763,19 +763,29 @@
 
 /* Modal */
 .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    position: fixed !important;
+    inset: 0 !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(0, 0, 0, 0.5) !important;
     backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 9999 !important;
     padding: 1rem;
 }
 
 .modal {
-    background: white;
+    position: relative !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background: white !important;
     border-radius: var(--radius-xl);
     width: 100%;
     max-width: 480px;
@@ -783,6 +793,7 @@
     overflow-y: auto;
     box-shadow: var(--shadow-xl);
     animation: modalIn 0.2s ease-out;
+    z-index: 10000 !important;
 }
 
 .modal.modal-lg {
@@ -802,7 +813,9 @@
 }
 
 .modal-header {
-    display: flex;
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
     align-items: center;
     justify-content: space-between;
     padding: 1.5rem;
@@ -814,12 +827,14 @@
     font-weight: 700;
     color: var(--gray-900);
     margin: 0;
+    display: block !important;
+    visibility: visible !important;
 }
 
 .modal-close {
     width: 36px;
     height: 36px;
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: center;
     background: var(--gray-100);
@@ -836,18 +851,23 @@
 }
 
 .modal-body {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
     padding: 1.5rem;
 }
 
 .modal-footer {
     padding: 1rem 1.5rem;
     border-top: 1px solid var(--gray-100);
-    display: flex;
+    display: flex !important;
+    visibility: visible !important;
     justify-content: flex-end;
 }
 
 .modal-actions {
-    display: flex;
+    display: flex !important;
+    visibility: visible !important;
     gap: 0.75rem;
     margin-top: 1.5rem;
 }
