@@ -19,6 +19,16 @@ export default async function handler(req, res) {
     });
   }
 
+  // Debug: Check environment variables at the start
+  const envDebug = {
+    hasAmadeusKey: !!process.env.AMADEUS_API_KEY,
+    hasAmadeusSecret: !!process.env.AMADEUS_API_SECRET,
+    hasReactAmadeusKey: !!process.env.REACT_APP_AMADEUS_API_KEY,
+    hasReactAmadeusSecret: !!process.env.REACT_APP_AMADEUS_API_SECRET,
+    keyPrefix: process.env.AMADEUS_API_KEY?.substring(0, 5) || 'none'
+  };
+  console.log('🔑 Environment variables check:', envDebug);
+
   try {
     console.log('🔍 Flight search request received');
     console.log('Request body:', req.body);
@@ -147,7 +157,12 @@ export default async function handler(req, res) {
     return res.status(500).json({
       success: false,
       error: 'Internal server error while searching flights',
-      details: error.message
+      details: error.message,
+      debug: {
+        hasAmadeusKey: !!process.env.AMADEUS_API_KEY,
+        hasAmadeusSecret: !!process.env.AMADEUS_API_SECRET,
+        keyPrefix: process.env.AMADEUS_API_KEY?.substring(0, 5) || 'none'
+      }
     });
   }
 }
