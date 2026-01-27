@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom"
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext"
 import supabase from "../../../lib/supabase"
 import PhoneInputWithCountry from "../components/PhoneInputWithCountry"
+import './profile.css'
 
 export default function ProfilePage() {
   const navigate = useNavigate()
@@ -15,12 +16,13 @@ export default function ProfilePage() {
   const [recentlySuccessful, setRecentlySuccessful] = useState(false)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(true)
+  const [activeSection, setActiveSection] = useState('profile')
 
   // Account Security states
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [showTwoFactorModal, setShowTwoFactorModal] = useState(false)
   const [showConnectedAccountsModal, setShowConnectedAccountsModal] = useState(false)
-  const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' })
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState('')
   const [passwordUpdatedAt, setPasswordUpdatedAt] = useState(null)
@@ -28,8 +30,10 @@ export default function ProfilePage() {
   const [twoFactorLoading, setTwoFactorLoading] = useState(false)
   const [twoFactorQR, setTwoFactorQR] = useState(null)
   const [twoFactorSecret, setTwoFactorSecret] = useState('')
+  const [twoFactorFactorId, setTwoFactorFactorId] = useState(null)
   const [verificationCode, setVerificationCode] = useState('')
   const [twoFactorError, setTwoFactorError] = useState('')
+  const [twoFactorSuccess, setTwoFactorSuccess] = useState('')
   const [connectedAccounts, setConnectedAccounts] = useState([])
 
   const [data, setData] = useState({
@@ -51,8 +55,6 @@ export default function ProfilePage() {
           if (error || !session) {
             console.log('No valid session, redirecting to login')
             navigate('/supabase-login', { replace: true })
-          } else {
-            console.log('Session found on profile mount:', session.user.email)
           }
         } catch (err) {
           console.error('Error checking session:', err)
@@ -60,7 +62,6 @@ export default function ProfilePage() {
         }
       }
     }
-
     checkAndRefreshSession()
   }, [authLoading, user, navigate])
 
@@ -68,18 +69,13 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user) {
-        console.log('ProfilePage: No user found, waiting...')
         setLoading(false)
         return
       }
 
       try {
         setLoading(true)
-        console.log('ProfilePage: Fetching user data for:', user.id, user.email)
-
-        // Get data from Supabase auth user metadata
         const userMetadata = user.user_metadata || {}
-        console.log('ProfilePage: User metadata:', userMetadata)
 
         // Get password last updated timestamp
         if (userMetadata.password_updated_at) {
@@ -94,7 +90,8 @@ export default function ProfilePage() {
             provider: identity.provider,
             email: identity.identity_data?.email || user.email,
             created_at: identity.created_at,
-            last_sign_in: identity.last_sign_in_at
+            last_sign_in: identity.last_sign_in_at,
+            avatar: identity.identity_data?.avatar_url || identity.identity_data?.picture
           }))
           setConnectedAccounts(accounts)
         }
@@ -104,7 +101,10 @@ export default function ProfilePage() {
           const { data: factors, error: mfaError } = await supabase.auth.mfa.listFactors()
           if (!mfaError && factors && factors.totp && factors.totp.length > 0) {
             const verifiedFactor = factors.totp.find(f => f.status === 'verified')
-            setTwoFactorEnabled(!!verifiedFactor)
+            if (verifiedFactor) {
+              setTwoFactorEnabled(true)
+              setTwoFactorFactorId(verifiedFactor.id)
+            }
           }
         } catch (mfaErr) {
           console.log('MFA check skipped:', mfaErr.message)
@@ -116,7 +116,6 @@ export default function ProfilePage() {
         if (savedUserData) {
           try {
             parsedSavedData = JSON.parse(savedUserData)
-            console.log('ProfilePage: Parsed localStorage data:', parsedSavedData)
           } catch (e) {
             console.error("Failed to parse user data from localStorage", e)
           }
@@ -132,7 +131,6 @@ export default function ProfilePage() {
             .single()
 
           if (dbError && dbError.code === 'PGRST116') {
-            console.log('ProfilePage: User not found by ID, trying by email...')
             const { data: dbUserByEmail, error: emailError } = await supabase
               .from('users')
               .select('id, email, first_name, last_name, name')
@@ -143,11 +141,10 @@ export default function ProfilePage() {
               dbUser = dbUserByEmail
               dbError = null
             } else {
-              console.log('ProfilePage: User not in database, creating...')
               const newUserData = {
                 id: user.id,
                 email: user.email,
-                name: userMetadata.full_name || userMetadata.name || `${userMetadata.first_name || ''} ${userMetadata.last_name || ''}`.trim() || user.email,
+                name: userMetadata.full_name || `${userMetadata.first_name || ''} ${userMetadata.last_name || ''}`.trim() || user.email,
                 first_name: userMetadata.first_name || userMetadata.full_name?.split(' ')[0] || '',
                 last_name: userMetadata.last_name || userMetadata.full_name?.split(' ')[1] || '',
                 role: userMetadata.role || 'user',
@@ -161,10 +158,6 @@ export default function ProfilePage() {
 
               if (!createError && createdUser) {
                 dbUser = createdUser
-                dbError = null
-                console.log('ProfilePage: User created in database:', createdUser)
-              } else {
-                console.error('ProfilePage: Failed to create user in database:', createError)
               }
             }
           }
@@ -177,52 +170,30 @@ export default function ProfilePage() {
             }
           }
         } catch (dbErr) {
-          console.error('ProfilePage: Database fetch exception:', dbErr)
+          console.error('Database fetch exception:', dbErr)
         }
 
-        // Get localStorage user data
         const localStorageUser = localStorage.getItem('user')
         let parsedLocalUser = {}
         if (localStorageUser) {
           try {
             parsedLocalUser = JSON.parse(localStorageUser)
-          } catch (e) {
-            console.error('Failed to parse localStorage user:', e)
-          }
+          } catch (e) { }
         }
 
-        // Merge data
         const mergedData = {
-          first_name: dbUserData.first_name ||
-            userMetadata.first_name ||
-            parsedLocalUser.firstName ||
-            parsedSavedData.first_name ||
-            userMetadata.full_name?.split(' ')[0] ||
-            '',
-          last_name: dbUserData.last_name ||
-            userMetadata.last_name ||
-            parsedLocalUser.lastName ||
-            parsedSavedData.last_name ||
-            userMetadata.full_name?.split(' ')[1] ||
-            '',
+          first_name: dbUserData.first_name || userMetadata.first_name || parsedLocalUser.firstName || parsedSavedData.first_name || userMetadata.full_name?.split(' ')[0] || '',
+          last_name: dbUserData.last_name || userMetadata.last_name || parsedLocalUser.lastName || parsedSavedData.last_name || userMetadata.full_name?.split(' ')[1] || '',
           email: dbUserData.email || user.email || parsedLocalUser.email || '',
-          mobile_number: userMetadata.phone ||
-            user.phone ||
-            parsedSavedData.mobile_number ||
-            '',
-          date_of_birth: userMetadata.date_of_birth ||
-            parsedSavedData.date_of_birth ||
-            '',
-          gender: userMetadata.gender ||
-            parsedSavedData.gender ||
-            'Male',
+          mobile_number: userMetadata.phone || user.phone || parsedSavedData.mobile_number || '',
+          date_of_birth: userMetadata.date_of_birth || parsedSavedData.date_of_birth || '',
+          gender: userMetadata.gender || parsedSavedData.gender || 'Male',
           profile_photo: parsedSavedData.profile_photo || null,
         }
 
-        console.log('ProfilePage: Final merged data:', mergedData)
         setData(mergedData)
       } catch (error) {
-        console.error('ProfilePage: Error fetching user data:', error)
+        console.error('Error fetching user data:', error)
         setErrors({ fetch: 'Failed to load profile data. Please refresh the page.' })
       } finally {
         setLoading(false)
@@ -273,52 +244,33 @@ export default function ProfilePage() {
       }
 
       const { error: updateError } = await updateProfile(metadataUpdates)
+      if (updateError) throw updateError
 
-      if (updateError) {
-        throw updateError
-      }
-
-      // Update database users table
       if (user?.id) {
-        const { error: dbError } = await supabase
-          .from('users')
-          .upsert({
-            id: user.id,
-            email: data.email,
-            first_name: data.first_name,
-            last_name: data.last_name,
-            name: `${data.first_name} ${data.last_name}`,
-            updated_at: new Date().toISOString(),
-          }, {
-            onConflict: 'id'
-          })
-
-        if (dbError) {
-          console.error('Database update error:', dbError)
-        }
+        await supabase.from('users').upsert({
+          id: user.id,
+          email: data.email,
+          first_name: data.first_name,
+          last_name: data.last_name,
+          name: `${data.first_name} ${data.last_name}`,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'id' })
       }
 
-      // Save to localStorage
       const dataToSave = { ...data }
-      if (data.profile_photo) {
-        delete dataToSave.profile_photo
-      }
+      delete dataToSave.profile_photo
       localStorage.setItem('userData', JSON.stringify(dataToSave))
 
       setProcessing(false)
       setRecentlySuccessful(true)
-
-      setTimeout(() => {
-        setRecentlySuccessful(false)
-      }, 3000)
+      setTimeout(() => setRecentlySuccessful(false), 3000)
     } catch (error) {
-      console.error('Error updating profile:', error)
-      setErrors({ submit: error.message || 'Failed to update profile. Please try again.' })
+      setErrors({ submit: error.message || 'Failed to update profile.' })
       setProcessing(false)
     }
   }
 
-  // Password change handlers
+  // Password handlers
   const handlePasswordSubmit = async (e) => {
     e.preventDefault()
     setPasswordError('')
@@ -328,7 +280,14 @@ export default function ProfilePage() {
       setPasswordError('Password must be at least 8 characters')
       return
     }
-
+    if (!/[A-Z]/.test(passwordData.newPassword)) {
+      setPasswordError('Password must contain at least one uppercase letter')
+      return
+    }
+    if (!/[0-9]/.test(passwordData.newPassword)) {
+      setPasswordError('Password must contain at least one number')
+      return
+    }
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       setPasswordError('Passwords do not match')
       return
@@ -338,18 +297,15 @@ export default function ProfilePage() {
 
     try {
       const { error } = await updatePassword(passwordData.newPassword)
-
       if (error) {
         setPasswordError(error.message || 'Failed to update password')
         setProcessing(false)
         return
       }
 
-      // Update password timestamp in user metadata
       await updateProfile({ password_updated_at: new Date().toISOString() })
-
       setPasswordSuccess('Password updated successfully!')
-      setPasswordData({ newPassword: '', confirmPassword: '' })
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
       setPasswordUpdatedAt(new Date())
 
       setTimeout(() => {
@@ -363,23 +319,41 @@ export default function ProfilePage() {
     }
   }
 
-  // 2FA handlers
+  // 2FA handlers with backend validation
   const handleEnableTwoFactor = async () => {
     setTwoFactorLoading(true)
     setTwoFactorError('')
+    setTwoFactorSuccess('')
+    setVerificationCode('')
 
     try {
+      console.log('Starting MFA enrollment...')
+
       const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
         factorType: 'totp',
         friendlyName: 'Authenticator App'
       })
 
       if (enrollError) {
+        console.error('MFA enrollment error:', enrollError)
         throw enrollError
+      }
+
+      console.log('MFA enrollment successful:', {
+        factorId: enrollData.id,
+        hasQrCode: !!enrollData.totp?.qr_code,
+        hasSecret: !!enrollData.totp?.secret
+      })
+
+      if (!enrollData.totp?.qr_code) {
+        throw new Error('QR code not generated. Please try again.')
       }
 
       setTwoFactorQR(enrollData.totp.qr_code)
       setTwoFactorSecret(enrollData.totp.secret)
+      setTwoFactorFactorId(enrollData.id)
+
+      console.log('Factor ID saved:', enrollData.id)
     } catch (error) {
       console.error('MFA enrollment error:', error)
       setTwoFactorError(error.message || 'Two-factor authentication is not available. Please contact support.')
@@ -394,36 +368,71 @@ export default function ProfilePage() {
       return
     }
 
+    if (!twoFactorFactorId) {
+      setTwoFactorError('No factor ID found. Please try enabling 2FA again.')
+      return
+    }
+
     setTwoFactorLoading(true)
     setTwoFactorError('')
 
     try {
-      // Get the current challenge
+      console.log('Starting 2FA verification with factorId:', twoFactorFactorId)
+
+      // Step 1: Create a challenge for the enrolled factor
       const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
-        factorId: twoFactorSecret
+        factorId: twoFactorFactorId
       })
 
       if (challengeError) {
-        throw challengeError
+        console.error('Challenge error:', challengeError)
+        throw new Error(challengeError.message || 'Failed to create verification challenge')
       }
 
-      // Verify the code
-      const { error: verifyError } = await supabase.auth.mfa.verify({
-        factorId: twoFactorSecret,
+      console.log('Challenge created:', challengeData.id)
+
+      // Step 2: Verify the TOTP code against the challenge
+      const { data: verifyData, error: verifyError } = await supabase.auth.mfa.verify({
+        factorId: twoFactorFactorId,
         challengeId: challengeData.id,
         code: verificationCode
       })
 
       if (verifyError) {
-        throw verifyError
+        console.error('Verify error:', verifyError)
+        // Provide more helpful error messages
+        if (verifyError.message.includes('invalid') || verifyError.message.includes('expired')) {
+          throw new Error('Invalid or expired code. Please enter the current code from your authenticator app.')
+        }
+        throw new Error(verifyError.message || 'Verification failed')
+      }
+
+      console.log('2FA verification successful:', verifyData)
+
+      // Update user metadata to track 2FA status
+      try {
+        await updateProfile({
+          mfa_enabled: true,
+          mfa_enabled_at: new Date().toISOString()
+        })
+      } catch (profileError) {
+        console.warn('Could not update profile metadata:', profileError)
+        // Don't fail if metadata update fails - 2FA is still enabled
       }
 
       setTwoFactorEnabled(true)
       setTwoFactorQR(null)
+      setTwoFactorSecret('')
       setVerificationCode('')
-      setShowTwoFactorModal(false)
+      setTwoFactorSuccess('Two-factor authentication enabled successfully!')
+
+      setTimeout(() => {
+        setShowTwoFactorModal(false)
+        setTwoFactorSuccess('')
+      }, 2500)
     } catch (error) {
-      setTwoFactorError(error.message || 'Failed to verify code. Please try again.')
+      console.error('2FA verification error:', error)
+      setTwoFactorError(error.message || 'Invalid verification code. Please try again.')
     } finally {
       setTwoFactorLoading(false)
     }
@@ -439,12 +448,16 @@ export default function ProfilePage() {
         const factorId = factors.totp[0].id
         const { error } = await supabase.auth.mfa.unenroll({ factorId })
 
-        if (error) {
-          throw error
-        }
+        if (error) throw error
 
+        await updateProfile({ mfa_enabled: false })
         setTwoFactorEnabled(false)
-        setShowTwoFactorModal(false)
+        setTwoFactorSuccess('Two-factor authentication disabled successfully!')
+
+        setTimeout(() => {
+          setShowTwoFactorModal(false)
+          setTwoFactorSuccess('')
+        }, 2000)
       }
     } catch (error) {
       setTwoFactorError(error.message || 'Failed to disable 2FA')
@@ -453,355 +466,433 @@ export default function ProfilePage() {
     }
   }
 
-  // Helper function to format time ago
   const formatTimeAgo = (date) => {
-    if (!date) return 'Never'
+    if (!date) return 'Never updated'
     const now = new Date()
     const diff = now - new Date(date)
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+    const minutes = Math.floor(diff / (1000 * 60))
+    const hours = Math.floor(minutes / 60)
+    const days = Math.floor(hours / 24)
     const months = Math.floor(days / 30)
     const years = Math.floor(months / 12)
 
     if (years > 0) return `${years} year${years > 1 ? 's' : ''} ago`
     if (months > 0) return `${months} month${months > 1 ? 's' : ''} ago`
     if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`
-    return 'Today'
+    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`
+    if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`
+    return 'Just now'
   }
 
-  // Get provider icon
   const getProviderIcon = (provider) => {
-    switch (provider) {
-      case 'google':
-        return (
-          <svg width="20" height="20" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-          </svg>
-        )
-      default:
-        return (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
-        )
+    if (provider === 'google') {
+      return (
+        <svg width="24" height="24" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+        </svg>
+      )
     }
+    return (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 16v-4M12 8h.01" />
+      </svg>
+    )
   }
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-[#f0f7fc] flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#006d92]"></div>
-          <p className="mt-4 text-gray-600">Loading profile...</p>
+      <div className="profile-loading-container">
+        <div className="profile-loading-spinner">
+          <div className="spinner-ring"></div>
+          <p>Loading your profile...</p>
         </div>
       </div>
     )
   }
 
-  if (!isAuthenticated) {
-    return null
-  }
+  if (!isAuthenticated) return null
+
+  const sidebarItems = [
+    { id: 'profile', label: 'Personal Information', icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8z' },
+    { id: 'security', label: 'Account Security', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4' },
+    { id: 'preferences', label: 'Preferences', icon: 'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z' },
+  ]
 
   return (
-    <div className="min-h-screen bg-[#f0f7fc] py-4 sm:py-6 md:py-8">
-      <header className="container mx-auto px-4 sm:px-6 mb-6">
-        <button
-          onClick={() => navigate('/')}
-          className="flex items-center text-[#006d92] hover:text-[#005a7a] transition"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-          <span className="ml-2 font-medium">Back to Home</span>
-        </button>
+    <div className="profile-dashboard">
+      {/* Header */}
+      <header className="profile-header">
+        <div className="header-content">
+          <button onClick={() => navigate('/')} className="back-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            <span>Back to Home</span>
+          </button>
+          <div className="header-title">
+            <h1>Account Settings</h1>
+            <p>Manage your profile and security preferences</p>
+          </div>
+        </div>
       </header>
 
-      <form onSubmit={handleSubmit} encType="multipart/form-data" className="container mx-auto px-4 sm:px-6 max-w-4xl">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-8 text-center">My Profile</h1>
-
-        {/* Profile Card */}
-        <div className="bg-white rounded-xl shadow-sm p-6 sm:p-8 mb-6 border border-gray-100">
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-            <div className="flex flex-col items-center">
+      <div className="profile-main">
+        {/* Sidebar */}
+        <aside className="profile-sidebar">
+          <div className="sidebar-profile-card">
+            <div className="profile-avatar-container">
               {data.profile_photo ? (
-                <div className="w-[100px] h-[100px] rounded-full overflow-hidden ring-4 ring-[#5aadd0]/20">
-                  <img src={URL.createObjectURL(data.profile_photo)} alt="Profile" className="w-full h-full object-cover" />
-                </div>
+                <img src={URL.createObjectURL(data.profile_photo)} alt="Profile" className="profile-avatar" />
               ) : (
-                <div className="w-[100px] h-[100px] rounded-full bg-[#5aadd0] flex items-center justify-center text-white text-5xl font-semibold ring-4 ring-[#5aadd0]/20">
-                  {data.first_name ? data.first_name[0].toUpperCase() : "S"}
+                <div className="profile-avatar-placeholder">
+                  {data.first_name ? data.first_name[0].toUpperCase() : user?.email?.[0]?.toUpperCase() || 'U'}
                 </div>
               )}
+              <button className="avatar-edit-btn" onClick={() => fileInputRef.current?.click()}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
               <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
-              <button type="button" className="text-[#006d92] font-medium mt-3 text-sm hover:underline" onClick={() => fileInputRef.current?.click()}>
-                Add Profile Photo
-              </button>
             </div>
-
-            <div className="flex-1 text-center sm:text-left">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{data.first_name && data.last_name ? `${data.first_name} ${data.last_name}` : "Full Name"}</h2>
-              <p className="text-gray-500 mt-1">{data.mobile_number || "+91XXXXXXXXXX"}</p>
-              <p className="text-[#006d92] hover:underline cursor-pointer">{data.email || "email@example.com"}</p>
+            <h3 className="profile-name">{data.first_name} {data.last_name || ''}</h3>
+            <p className="profile-email">{data.email}</p>
+            <div className="profile-status">
+              <span className="status-badge verified">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                Verified Account
+              </span>
             </div>
           </div>
-        </div>
 
-        {/* Personal Info Card */}
-        <div className="bg-white rounded-xl shadow-sm p-6 sm:p-8 mb-6 border border-gray-100">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-6">Personal Information</h2>
+          <nav className="sidebar-nav">
+            {sidebarItems.map(item => (
+              <button
+                key={item.id}
+                onClick={() => setActiveSection(item.id)}
+                className={`nav-item ${activeSection === item.id ? 'active' : ''}`}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d={item.icon} />
+                </svg>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
 
-          {/* Gender Buttons */}
-          <div className="mb-6">
-            <label className="block text-gray-600 text-sm mb-2">Gender</label>
-            <div className="flex gap-3">
-              {["Male", "Female", "Others"].map((value) => (
-                <button
-                  type="button"
-                  key={value}
-                  className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${data.gender === value
-                    ? "bg-[#006d92] text-white shadow-sm"
-                    : "bg-white border border-gray-300 text-gray-600 hover:border-[#006d92] hover:text-[#006d92]"
-                    }`}
-                  onClick={() => setData({ ...data, gender: value })}
-                >
-                  {value}
+        {/* Main Content */}
+        <main className="profile-content">
+          {/* Personal Information Section */}
+          {activeSection === 'profile' && (
+            <form onSubmit={handleSubmit} className="content-section">
+              <div className="section-header">
+                <div className="section-title-group">
+                  <h2>Personal Information</h2>
+                  <p>Update your personal details and contact information</p>
+                </div>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>First Name <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    value={data.first_name}
+                    onChange={(e) => setData({ ...data, first_name: e.target.value })}
+                    placeholder="Enter first name"
+                    className={errors.first_name ? 'error' : ''}
+                  />
+                  {errors.first_name && <span className="error-text">{errors.first_name}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Last Name</label>
+                  <input
+                    type="text"
+                    value={data.last_name}
+                    onChange={(e) => setData({ ...data, last_name: e.target.value })}
+                    placeholder="Enter last name"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Email Address <span className="required">*</span></label>
+                  <input
+                    type="email"
+                    value={data.email}
+                    onChange={(e) => setData({ ...data, email: e.target.value })}
+                    placeholder="Enter email"
+                    className={errors.email ? 'error' : ''}
+                  />
+                  {errors.email && <span className="error-text">{errors.email}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Phone Number</label>
+                  <PhoneInputWithCountry
+                    value={data.mobile_number}
+                    onChange={handlePhoneChange}
+                    placeholder="Enter phone number"
+                    error={errors.mobile_number}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Date of Birth</label>
+                  <input
+                    type="date"
+                    value={data.date_of_birth}
+                    onChange={(e) => setData({ ...data, date_of_birth: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Gender</label>
+                  <div className="gender-selector">
+                    {['Male', 'Female', 'Other'].map(gender => (
+                      <button
+                        key={gender}
+                        type="button"
+                        className={`gender-btn ${data.gender === gender ? 'active' : ''}`}
+                        onClick={() => setData({ ...data, gender })}
+                      >
+                        {gender}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {recentlySuccessful && (
+                <div className="alert success">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                  Profile updated successfully!
+                </div>
+              )}
+
+              {errors.submit && (
+                <div className="alert error">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  {errors.submit}
+                </div>
+              )}
+
+              <div className="form-actions">
+                <button type="submit" className="btn-primary" disabled={processing}>
+                  {processing ? (
+                    <>
+                      <span className="btn-spinner"></span>
+                      Saving...
+                    </>
+                  ) : 'Save Changes'}
                 </button>
-              ))}
-            </div>
-          </div>
+                <button type="button" className="btn-secondary" onClick={() => window.location.reload()}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
 
-          {/* Input Fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-gray-600 text-sm mb-2">Phone Number</label>
-              <PhoneInputWithCountry
-                value={data.mobile_number}
-                onChange={handlePhoneChange}
-                placeholder="Enter phone number"
-                error={errors.mobile_number}
-              />
-            </div>
-            <div>
-              <label className="block text-gray-600 text-sm mb-2">Email</label>
-              <input
-                type="email"
-                placeholder="email@example.com"
-                value={data.email}
-                onChange={(e) => setData({ ...data, email: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-[#006d92] focus:ring-1 focus:ring-[#006d92] outline-none transition-all"
-              />
-              {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-            </div>
-            <div>
-              <label className="block text-gray-600 text-sm mb-2">First Name</label>
-              <input
-                type="text"
-                placeholder="First Name"
-                value={data.first_name}
-                onChange={(e) => setData({ ...data, first_name: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-[#006d92] focus:ring-1 focus:ring-[#006d92] outline-none transition-all"
-              />
-              {errors.first_name && <p className="text-red-500 text-xs mt-1">{errors.first_name}</p>}
-            </div>
-            <div>
-              <label className="block text-gray-600 text-sm mb-2">Last Name</label>
-              <input
-                type="text"
-                placeholder="Last Name"
-                value={data.last_name}
-                onChange={(e) => setData({ ...data, last_name: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-[#006d92] focus:ring-1 focus:ring-[#006d92] outline-none transition-all"
-              />
-              {errors.last_name && <p className="text-red-500 text-xs mt-1">{errors.last_name}</p>}
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-gray-600 text-sm mb-2">Date of Birth</label>
-              <input
-                type="date"
-                placeholder="Date of Birth"
-                value={data.date_of_birth}
-                onChange={(e) => setData({ ...data, date_of_birth: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-[#006d92] focus:ring-1 focus:ring-[#006d92] outline-none transition-all"
-              />
-              {errors.date_of_birth && <p className="text-red-500 text-xs mt-1">{errors.date_of_birth}</p>}
-            </div>
-          </div>
+          {/* Security Section */}
+          {activeSection === 'security' && (
+            <div className="content-section">
+              <div className="section-header">
+                <div className="section-title-group">
+                  <h2>Account Security</h2>
+                  <p>Manage your password and security settings</p>
+                </div>
+              </div>
 
-          {/* Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 mt-6">
-            <button
-              type="submit"
-              disabled={processing}
-              className="px-8 py-2.5 bg-[#006d92] text-white rounded-lg font-medium hover:bg-[#005a7a] transition-all disabled:opacity-50 shadow-sm"
-            >
-              {processing ? 'Saving...' : 'Save Changes'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setData({
-                first_name: "",
-                last_name: "",
-                email: "",
-                mobile_number: "",
-                date_of_birth: "",
-                gender: "Male",
-                profile_photo: null
-              })}
-              className="px-8 py-2.5 bg-white border border-gray-300 text-[#006d92] rounded-lg font-medium hover:bg-gray-50 transition-all"
-            >
-              Reset Form
-            </button>
-          </div>
+              <div className="security-cards">
+                {/* Password Card */}
+                <div className="security-card">
+                  <div className="security-card-icon password">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  </div>
+                  <div className="security-card-content">
+                    <h3>Password</h3>
+                    <p className="security-meta">Last updated {formatTimeAgo(passwordUpdatedAt)}</p>
+                    <p className="security-desc">Keep your account secure with a strong password</p>
+                  </div>
+                  <button className="btn-action" onClick={() => setShowPasswordModal(true)}>
+                    Change Password
+                  </button>
+                </div>
 
-          {recentlySuccessful && (
-            <div className="mt-4 bg-green-50 p-3 rounded-lg border border-green-200">
-              <p className="text-green-600 text-sm font-medium">Profile updated successfully!</p>
+                {/* 2FA Card */}
+                <div className="security-card">
+                  <div className={`security-card-icon ${twoFactorEnabled ? 'enabled' : 'disabled'}`}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      {twoFactorEnabled && <polyline points="9 12 12 15 16 10" />}
+                    </svg>
+                  </div>
+                  <div className="security-card-content">
+                    <h3>Two-Factor Authentication</h3>
+                    <p className="security-meta">
+                      Status: <span className={twoFactorEnabled ? 'status-on' : 'status-off'}>
+                        {twoFactorEnabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </p>
+                    <p className="security-desc">Add an extra layer of security using an authenticator app</p>
+                  </div>
+                  <button className={`btn-action ${twoFactorEnabled ? 'manage' : 'enable'}`} onClick={() => setShowTwoFactorModal(true)}>
+                    {twoFactorEnabled ? 'Manage' : 'Enable'}
+                  </button>
+                </div>
+
+                {/* Connected Accounts Card */}
+                <div className="security-card">
+                  <div className="security-card-icon accounts">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                  </div>
+                  <div className="security-card-content">
+                    <h3>Connected Accounts</h3>
+                    <p className="security-meta">{connectedAccounts.length} account{connectedAccounts.length !== 1 ? 's' : ''} linked</p>
+                    <p className="security-desc">Manage your social login connections</p>
+                  </div>
+                  <button className="btn-action" onClick={() => setShowConnectedAccountsModal(true)}>
+                    Manage
+                  </button>
+                </div>
+              </div>
+
+              {/* Security Tips */}
+              <div className="security-tips">
+                <h4>Security Recommendations</h4>
+                <ul>
+                  <li className={passwordUpdatedAt && (new Date() - passwordUpdatedAt) < 90 * 24 * 60 * 60 * 1000 ? 'checked' : ''}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Update your password regularly (every 90 days)
+                  </li>
+                  <li className={twoFactorEnabled ? 'checked' : ''}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Enable two-factor authentication
+                  </li>
+                  <li className="checked">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Use a unique password for this account
+                  </li>
+                </ul>
+              </div>
             </div>
           )}
-          {errors.submit && (
-            <div className="mt-4 bg-red-50 p-3 rounded-lg border border-red-200">
-              <p className="text-red-600 text-sm font-medium">{errors.submit}</p>
+
+          {/* Preferences Section */}
+          {activeSection === 'preferences' && (
+            <div className="content-section">
+              <div className="section-header">
+                <div className="section-title-group">
+                  <h2>Preferences</h2>
+                  <p>Customize your experience and notifications</p>
+                </div>
+              </div>
+
+              <div className="preferences-grid">
+                <div className="preference-card">
+                  <h4>Email Notifications</h4>
+                  <p>Receive updates about your bookings and offers</p>
+                  <label className="toggle">
+                    <input type="checkbox" defaultChecked />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+                <div className="preference-card">
+                  <h4>SMS Notifications</h4>
+                  <p>Get important alerts via text message</p>
+                  <label className="toggle">
+                    <input type="checkbox" />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+                <div className="preference-card">
+                  <h4>Marketing Emails</h4>
+                  <p>Receive promotional offers and deals</p>
+                  <label className="toggle">
+                    <input type="checkbox" defaultChecked />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
             </div>
           )}
-        </div>
+        </main>
+      </div>
 
-        {/* Account Security Section */}
-        <div className="bg-white rounded-xl shadow-sm p-6 sm:p-8 mb-6 border border-gray-100">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-5">Account Security</h2>
-
-          <div className="space-y-4">
-            <div className="flex justify-between items-center py-3 border-b border-gray-100">
-              <div>
-                <h3 className="font-medium text-gray-800">Password</h3>
-                <p className="text-sm text-gray-500">Last updated {formatTimeAgo(passwordUpdatedAt)}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowPasswordModal(true)}
-                className="text-[#006d92] font-medium hover:underline text-sm"
-              >
-                Change Password
-              </button>
-            </div>
-
-            <div className="flex justify-between items-center py-3 border-b border-gray-100">
-              <div>
-                <h3 className="font-medium text-gray-800">Two-factor Authentication</h3>
-                <p className="text-sm text-gray-500">
-                  {twoFactorEnabled
-                    ? '✓ Enabled - Your account is protected with 2FA'
-                    : 'Add an extra layer of security to your account'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowTwoFactorModal(true)}
-                className={`font-medium hover:underline text-sm ${twoFactorEnabled ? 'text-green-600' : 'text-[#006d92]'}`}
-              >
-                {twoFactorEnabled ? 'Manage' : 'Enable'}
-              </button>
-            </div>
-
-            <div className="flex justify-between items-center py-3">
-              <div>
-                <h3 className="font-medium text-gray-800">Connected Accounts</h3>
-                <p className="text-sm text-gray-500">
-                  {connectedAccounts.length > 0
-                    ? `${connectedAccounts.length} account${connectedAccounts.length > 1 ? 's' : ''} linked`
-                    : 'Link your social accounts for easier login'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowConnectedAccountsModal(true)}
-                className="text-[#006d92] font-medium hover:underline text-sm"
-              >
-                Manage
-              </button>
-            </div>
-          </div>
-        </div>
-      </form>
-
-      {/* Password Change Modal */}
+      {/* Password Modal */}
       {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">Change Password</h3>
-              <button
-                onClick={() => {
-                  setShowPasswordModal(false)
-                  setPasswordData({ newPassword: '', confirmPassword: '' })
-                  setPasswordError('')
-                  setPasswordSuccess('')
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
+        <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Change Password</h3>
+              <button className="modal-close" onClick={() => setShowPasswordModal(false)}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
             </div>
 
-            <form onSubmit={handlePasswordSubmit}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-gray-600 text-sm mb-2">New Password</label>
-                  <input
-                    type="password"
-                    value={passwordData.newPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    placeholder="Enter new password"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:border-[#006d92] focus:ring-1 focus:ring-[#006d92] outline-none"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Must be at least 8 characters</p>
-                </div>
-                <div>
-                  <label className="block text-gray-600 text-sm mb-2">Confirm Password</label>
-                  <input
-                    type="password"
-                    value={passwordData.confirmPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                    placeholder="Confirm new password"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:border-[#006d92] focus:ring-1 focus:ring-[#006d92] outline-none"
-                  />
-                </div>
+            <form onSubmit={handlePasswordSubmit} className="modal-body">
+              <div className="form-group">
+                <label>New Password</label>
+                <input
+                  type="password"
+                  value={passwordData.newPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                  placeholder="Enter new password"
+                />
+                <small className="input-hint">Min 8 characters, 1 uppercase, 1 number</small>
               </div>
 
-              {passwordError && (
-                <div className="mt-4 bg-red-50 p-3 rounded-lg border border-red-200">
-                  <p className="text-red-600 text-sm">{passwordError}</p>
-                </div>
-              )}
+              <div className="form-group">
+                <label>Confirm Password</label>
+                <input
+                  type="password"
+                  value={passwordData.confirmPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                  placeholder="Confirm new password"
+                />
+              </div>
 
-              {passwordSuccess && (
-                <div className="mt-4 bg-green-50 p-3 rounded-lg border border-green-200">
-                  <p className="text-green-600 text-sm">{passwordSuccess}</p>
-                </div>
-              )}
+              {passwordError && <div className="alert error">{passwordError}</div>}
+              {passwordSuccess && <div className="alert success">{passwordSuccess}</div>}
 
-              <div className="flex gap-3 mt-6">
-                <button
-                  type="submit"
-                  disabled={processing}
-                  className="flex-1 px-6 py-2.5 bg-[#006d92] text-white rounded-lg font-medium hover:bg-[#005a7a] transition-all disabled:opacity-50"
-                >
-                  {processing ? 'Updating...' : 'Update Password'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPasswordModal(false)
-                    setPasswordData({ newPassword: '', confirmPassword: '' })
-                    setPasswordError('')
-                  }}
-                  className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-all"
-                >
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowPasswordModal(false)}>
                   Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={processing}>
+                  {processing ? 'Updating...' : 'Update Password'}
                 </button>
               </div>
             </form>
@@ -809,156 +900,177 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Two-Factor Authentication Modal */}
+      {/* 2FA Modal */}
       {showTwoFactorModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">Two-Factor Authentication</h3>
-              <button
-                onClick={() => {
-                  setShowTwoFactorModal(false)
-                  setTwoFactorQR(null)
-                  setVerificationCode('')
-                  setTwoFactorError('')
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
+        <div className="modal-overlay" onClick={() => setShowTwoFactorModal(false)}>
+          <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Two-Factor Authentication</h3>
+              <button className="modal-close" onClick={() => setShowTwoFactorModal(false)}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
             </div>
 
-            {twoFactorEnabled ? (
-              <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <polyline points="22 4 12 14.01 9 11.01" />
-                  </svg>
-                </div>
-                <h4 className="font-medium text-gray-800 mb-2">2FA is Enabled</h4>
-                <p className="text-gray-500 text-sm mb-6">Your account is protected with two-factor authentication.</p>
-                <button
-                  onClick={handleDisableTwoFactor}
-                  disabled={twoFactorLoading}
-                  className="px-6 py-2.5 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-all disabled:opacity-50"
-                >
-                  {twoFactorLoading ? 'Disabling...' : 'Disable 2FA'}
-                </button>
-              </div>
-            ) : twoFactorQR ? (
-              <div className="text-center">
-                <p className="text-gray-600 text-sm mb-4">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
-                <div className="bg-white p-4 rounded-lg inline-block mb-4 border">
-                  <img src={twoFactorQR} alt="2FA QR Code" className="w-48 h-48" />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-gray-600 text-sm mb-2">Enter verification code</label>
-                  <input
-                    type="text"
-                    value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="000000"
-                    className="w-32 px-4 py-3 border border-gray-200 rounded-lg text-center text-xl tracking-widest focus:border-[#006d92] outline-none mx-auto"
-                    maxLength={6}
-                  />
-                </div>
-                {twoFactorError && (
-                  <div className="mb-4 bg-red-50 p-3 rounded-lg border border-red-200">
-                    <p className="text-red-600 text-sm">{twoFactorError}</p>
+            <div className="modal-body">
+              {twoFactorEnabled ? (
+                <div className="two-factor-enabled">
+                  <div className="success-icon-large">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      <polyline points="9 12 12 15 16 10" />
+                    </svg>
                   </div>
-                )}
-                <button
-                  onClick={handleVerifyTwoFactor}
-                  disabled={twoFactorLoading || verificationCode.length !== 6}
-                  className="px-6 py-2.5 bg-[#006d92] text-white rounded-lg font-medium hover:bg-[#005a7a] transition-all disabled:opacity-50"
-                >
-                  {twoFactorLoading ? 'Verifying...' : 'Verify & Enable'}
-                </button>
-              </div>
-            ) : (
-              <div className="text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#006d92" strokeWidth="2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
+                  <h4>2FA is Enabled</h4>
+                  <p>Your account is protected with two-factor authentication.</p>
+
+                  {twoFactorSuccess && <div className="alert success">{twoFactorSuccess}</div>}
+                  {twoFactorError && <div className="alert error">{twoFactorError}</div>}
+
+                  <button className="btn-danger" onClick={handleDisableTwoFactor} disabled={twoFactorLoading}>
+                    {twoFactorLoading ? 'Disabling...' : 'Disable 2FA'}
+                  </button>
                 </div>
-                <h4 className="font-medium text-gray-800 mb-2">Protect Your Account</h4>
-                <p className="text-gray-500 text-sm mb-6">Enable two-factor authentication for an extra layer of security. You'll need an authenticator app like Google Authenticator.</p>
-                {twoFactorError && (
-                  <div className="mb-4 bg-red-50 p-3 rounded-lg border border-red-200">
-                    <p className="text-red-600 text-sm">{twoFactorError}</p>
+              ) : twoFactorQR ? (
+                <div className="two-factor-setup">
+                  <div className="setup-steps">
+                    <div className="step">
+                      <span className="step-number">1</span>
+                      <p>Download an authenticator app like Google Authenticator or Authy</p>
+                    </div>
+                    <div className="step">
+                      <span className="step-number">2</span>
+                      <p>Scan the QR code below with your authenticator app</p>
+                    </div>
                   </div>
-                )}
-                <button
-                  onClick={handleEnableTwoFactor}
-                  disabled={twoFactorLoading}
-                  className="px-6 py-2.5 bg-[#006d92] text-white rounded-lg font-medium hover:bg-[#005a7a] transition-all disabled:opacity-50"
-                >
-                  {twoFactorLoading ? 'Setting up...' : 'Set Up 2FA'}
-                </button>
-              </div>
-            )}
+
+                  <div className="qr-container">
+                    <img src={twoFactorQR} alt="2FA QR Code" className="qr-code" />
+                    <p className="secret-code">Secret: <code>{twoFactorSecret}</code></p>
+                  </div>
+
+                  <div className="step">
+                    <span className="step-number">3</span>
+                    <p>Enter the 6-digit code from your app to verify</p>
+                  </div>
+
+                  <div className="verification-input">
+                    <input
+                      type="text"
+                      value={verificationCode}
+                      onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
+                      maxLength={6}
+                      className="code-input"
+                    />
+                  </div>
+
+                  {twoFactorError && <div className="alert error">{twoFactorError}</div>}
+                  {twoFactorSuccess && <div className="alert success">{twoFactorSuccess}</div>}
+
+                  <div className="modal-actions">
+                    <button className="btn-secondary" onClick={() => { setTwoFactorQR(null); setVerificationCode(''); }}>
+                      Back
+                    </button>
+                    <button
+                      className="btn-primary"
+                      onClick={handleVerifyTwoFactor}
+                      disabled={twoFactorLoading || verificationCode.length !== 6}
+                    >
+                      {twoFactorLoading ? 'Verifying...' : 'Verify & Enable'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="two-factor-intro">
+                  <div className="intro-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                  </div>
+                  <h4>Protect Your Account</h4>
+                  <p>Two-factor authentication adds an extra layer of security to your account. You'll need to enter a code from your authenticator app each time you sign in.</p>
+
+                  <div className="benefits">
+                    <div className="benefit">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span>Prevent unauthorized access</span>
+                    </div>
+                    <div className="benefit">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span>Secure your bookings and payments</span>
+                    </div>
+                    <div className="benefit">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span>Industry-standard security</span>
+                    </div>
+                  </div>
+
+                  {twoFactorError && <div className="alert error">{twoFactorError}</div>}
+
+                  <button className="btn-primary btn-large" onClick={handleEnableTwoFactor} disabled={twoFactorLoading}>
+                    {twoFactorLoading ? 'Setting up...' : 'Set Up Two-Factor Authentication'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* Connected Accounts Modal */}
       {showConnectedAccountsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">Connected Accounts</h3>
-              <button
-                onClick={() => setShowConnectedAccountsModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
+        <div className="modal-overlay" onClick={() => setShowConnectedAccountsModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Connected Accounts</h3>
+              <button className="modal-close" onClick={() => setShowConnectedAccountsModal(false)}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
             </div>
 
-            {connectedAccounts.length > 0 ? (
-              <div className="space-y-3">
-                {connectedAccounts.map((account, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      {getProviderIcon(account.provider)}
-                      <div>
-                        <p className="font-medium text-gray-800 capitalize">{account.provider}</p>
-                        <p className="text-sm text-gray-500">{account.email}</p>
+            <div className="modal-body">
+              {connectedAccounts.length > 0 ? (
+                <div className="connected-accounts-list">
+                  {connectedAccounts.map((account, index) => (
+                    <div key={index} className="connected-account">
+                      <div className="account-provider">
+                        {getProviderIcon(account.provider)}
                       </div>
+                      <div className="account-info">
+                        <h4 className="capitalize">{account.provider}</h4>
+                        <p>{account.email}</p>
+                      </div>
+                      <span className="connected-badge">Connected</span>
                     </div>
-                    <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded">
-                      Connected
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2">
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
+                  ))}
                 </div>
-                <h4 className="font-medium text-gray-800 mb-2">No Connected Accounts</h4>
-                <p className="text-gray-500 text-sm">You haven't linked any social accounts yet. Sign in with Google to link your account.</p>
-              </div>
-            )}
+              ) : (
+                <div className="no-accounts">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <h4>No Connected Accounts</h4>
+                  <p>You haven't linked any social accounts yet. Sign in with Google to link your account.</p>
+                </div>
+              )}
+            </div>
 
-            <div className="mt-6 pt-4 border-t border-gray-100">
-              <button
-                onClick={() => setShowConnectedAccountsModal(false)}
-                className="w-full px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-all"
-              >
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setShowConnectedAccountsModal(false)}>
                 Close
               </button>
             </div>
