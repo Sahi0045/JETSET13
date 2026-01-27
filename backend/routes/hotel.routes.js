@@ -3,6 +3,7 @@ import { listHotels, searchHotels, getDestinations, getHotelDetails, checkAvaila
 import axios from 'axios';
 import dayjs from 'dayjs';
 import dotenv from 'dotenv';
+import amadeusService from '../services/amadeusService.js';
 
 // Ensure environment variables are loaded
 dotenv.config();
@@ -17,6 +18,33 @@ const AMADEUS_API_URLS = {
 const router = express.Router();
 // console.log('coming to this page')
 // Get list of destinations
+router.get('/destinations', getDestinations);
+
+// Search locations/cities for autocomplete
+router.get('/locations', async (req, res) => {
+  try {
+    const { keyword } = req.query;
+    
+    if (!keyword || keyword.length < 2) {
+      return res.status(400).json({
+        success: false,
+        error: 'Keyword must be at least 2 characters'
+      });
+    }
+    
+    const result = await amadeusService.searchLocations(keyword, 'CITY');
+    return res.json(result);
+  } catch (error) {
+    console.error('Error searching locations:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to search locations',
+      message: error.message
+    });
+  }
+});
+
+// List hotels in a city
 router.get('/destinations', getDestinations);
 
 // List hotels in a city

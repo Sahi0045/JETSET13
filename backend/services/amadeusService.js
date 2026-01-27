@@ -292,6 +292,61 @@ class AmadeusService {
 
   // ===== UTILITY METHODS =====
 
+  /**
+   * Search for cities/locations using Amadeus API autocomplete
+   * @param {string} keyword - Search keyword (city name, airport code, etc.)
+   * @param {string} subType - Type of location: CITY, AIRPORT, or both
+   * @returns {Promise<Object>} - List of matching locations
+   */
+  async searchLocations(keyword, subType = 'CITY,AIRPORT') {
+    try {
+      const token = await this.getAccessToken();
+      
+      console.log(`🔍 Searching locations for keyword: ${keyword}`);
+      
+      const response = await axios.get(`${this.baseUrls.v1}/reference-data/locations`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        params: {
+          keyword: keyword,
+          subType: subType,
+          'page[limit]': 10,
+          view: 'LIGHT'
+        }
+      });
+
+      const locations = response.data.data || [];
+      console.log(`✅ Found ${locations.length} locations for "${keyword}"`);
+
+      // Format locations for frontend
+      const formattedLocations = locations.map(loc => ({
+        name: loc.name || loc.address?.cityName || keyword,
+        code: loc.iataCode,
+        type: loc.subType,
+        cityName: loc.address?.cityName || loc.name,
+        cityCode: loc.address?.cityCode || loc.iataCode,
+        country: loc.address?.countryName || loc.address?.countryCode || '',
+        countryCode: loc.address?.countryCode || '',
+        // For display
+        displayName: `${loc.name || loc.address?.cityName}${loc.address?.countryName ? ', ' + loc.address.countryName : ''}`
+      }));
+
+      return {
+        success: true,
+        data: formattedLocations
+      };
+
+    } catch (error) {
+      console.error('❌ Error searching locations:', error.response?.data || error.message);
+      return {
+        success: false,
+        error: error.response?.data?.errors?.[0]?.detail || error.message,
+        data: []
+      };
+    }
+  }
+
   async getAirportsByCity(cityCode) {
     try {
       const token = await this.getAccessToken();

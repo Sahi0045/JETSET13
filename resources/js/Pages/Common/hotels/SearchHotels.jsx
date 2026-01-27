@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, MapPin, Star, ArrowRight, Heart, X, ChevronDown, Wifi, Coffee, Car, Dumbbell, Bath } from 'lucide-react';
+import { Search, MapPin, Star, ArrowRight, Heart, X, ChevronDown, Wifi, Coffee, Car, Dumbbell, Bath, Loader2 } from 'lucide-react';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
@@ -8,33 +8,14 @@ import hotelService from '../../../Services/HotelService';
 import currencyService from '../../../Services/CurrencyService';
 import Price from '../../../Components/Price';
 
-// Popular destinations for autocomplete suggestions
+// Popular destinations shown when input is empty
 const POPULAR_DESTINATIONS = [
     { name: 'Delhi', code: 'DEL', country: 'India' },
     { name: 'Mumbai', code: 'BOM', country: 'India' },
-    { name: 'Bangalore', code: 'BLR', country: 'India' },
-    { name: 'Chennai', code: 'MAA', country: 'India' },
-    { name: 'Kolkata', code: 'CCU', country: 'India' },
-    { name: 'Hyderabad', code: 'HYD', country: 'India' },
-    { name: 'Goa', code: 'GOI', country: 'India' },
-    { name: 'Jaipur', code: 'JAI', country: 'India' },
     { name: 'Dubai', code: 'DXB', country: 'UAE' },
     { name: 'Singapore', code: 'SIN', country: 'Singapore' },
-    { name: 'Bangkok', code: 'BKK', country: 'Thailand' },
     { name: 'London', code: 'LON', country: 'United Kingdom' },
     { name: 'Paris', code: 'PAR', country: 'France' },
-    { name: 'New York', code: 'NYC', country: 'USA' },
-    { name: 'Los Angeles', code: 'LAX', country: 'USA' },
-    { name: 'Tokyo', code: 'TYO', country: 'Japan' },
-    { name: 'Hong Kong', code: 'HKG', country: 'China' },
-    { name: 'Sydney', code: 'SYD', country: 'Australia' },
-    { name: 'Bali', code: 'DPS', country: 'Indonesia' },
-    { name: 'Maldives', code: 'MLE', country: 'Maldives' },
-    { name: 'Rome', code: 'ROM', country: 'Italy' },
-    { name: 'Barcelona', code: 'BCN', country: 'Spain' },
-    { name: 'Amsterdam', code: 'AMS', country: 'Netherlands' },
-    { name: 'Las Vegas', code: 'LAS', country: 'USA' },
-    { name: 'Miami', code: 'MIA', country: 'USA' },
 ];
 
 const SearchHotels = () => {
@@ -42,6 +23,7 @@ const SearchHotels = () => {
     const location = useLocation();
     const searchParams = new URLSearchParams(location.search);
     const searchInputRef = useRef(null);
+    const debounceTimer = useRef(null);
 
     // Extract search parameters from URL
     const [searchQuery, setSearchQuery] = useState(searchParams.get('destination') || '');
@@ -56,6 +38,8 @@ const SearchHotels = () => {
     // Autocomplete state
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [selectedDestination, setSelectedDestination] = useState(null);
+    const [suggestions, setSuggestions] = useState(POPULAR_DESTINATIONS);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
     // State
     const [hotels, setHotels] = useState([]);
@@ -73,6 +57,53 @@ const SearchHotels = () => {
         { value: 'rating', label: 'Highest Rated' },
         { value: 'stars', label: 'Star Rating' }
     ];
+
+    // Debounced search for locations
+    const searchLocations = useCallback(async (keyword) => {
+        if (!keyword || keyword.length < 2) {
+            setSuggestions(POPULAR_DESTINATIONS);
+            setLoadingSuggestions(false);
+            return;
+        }
+
+        setLoadingSuggestions(true);
+        try {
+            const results = await hotelService.searchLocations(keyword);
+            if (results && results.length > 0) {
+                setSuggestions(results);
+            } else {
+                setSuggestions([]);
+            }
+        } catch (error) {
+            console.error('Error searching locations:', error);
+            setSuggestions(POPULAR_DESTINATIONS);
+        } finally {
+            setLoadingSuggestions(false);
+        }
+    }, []);
+
+    // Handle search query change with debounce
+    const handleSearchQueryChange = (value) => {
+        setSearchQuery(value);
+        setSelectedDestination(null);
+        
+        if (debounceTimer.current) {
+            clearTimeout(debounceTimer.current);
+        }
+        
+        debounceTimer.current = setTimeout(() => {
+            searchLocations(value);
+        }, 300);
+    };
+
+    // Cleanup debounce timer
+    useEffect(() => {
+        return () => {
+            if (debounceTimer.current) {
+                clearTimeout(debounceTimer.current);
+            }
+        };
+    }, []);
 
     // Fetch hotels on mount and when search params change
     useEffect(() => {
@@ -172,20 +203,9 @@ const SearchHotels = () => {
         // Just updating state will trigger the useEffect
     };
 
-    // Filter suggestions based on search query
-    const filteredSuggestions = useMemo(() => {
-        if (!searchQuery || searchQuery.length < 1) return POPULAR_DESTINATIONS.slice(0, 8);
-        const query = searchQuery.toLowerCase();
-        return POPULAR_DESTINATIONS.filter(dest => 
-            dest.name.toLowerCase().includes(query) || 
-            dest.code.toLowerCase().includes(query) ||
-            dest.country.toLowerCase().includes(query)
-        ).slice(0, 8);
-    }, [searchQuery]);
-
     // Handle destination selection from suggestions
     const handleSelectDestination = (destination) => {
-        setSearchQuery(destination.name);
+        setSearchQuery(destination.name || destination.cityName);
         setSelectedDestination(destination);
         setShowSuggestions(false);
     };
@@ -233,22 +253,25 @@ const SearchHotels = () => {
                             </div>
                             <input
                                 type="text"
-                                placeholder="Search destinations (e.g., Delhi, Dubai, Paris)..."
+                                placeholder="Search any city worldwide..."
                                 value={searchQuery}
-                                onChange={(e) => {
-                                    setSearchQuery(e.target.value);
-                                    setSelectedDestination(null);
-                                }}
+                                onChange={(e) => handleSearchQueryChange(e.target.value)}
                                 onFocus={() => setShowSuggestions(true)}
                                 className="w-full pl-12 pr-10 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#65B3CF] focus:border-[#055B75] transition-all"
                                 autoComplete="off"
                             />
+                            {loadingSuggestions && (
+                                <div className="absolute inset-y-0 right-10 flex items-center">
+                                    <Loader2 size={16} className="text-[#055B75] animate-spin" />
+                                </div>
+                            )}
                             {searchQuery && (
                                 <button
                                     type="button"
                                     onClick={() => {
                                         setSearchQuery('');
                                         setSelectedDestination(null);
+                                        setSuggestions(POPULAR_DESTINATIONS);
                                     }}
                                     className="absolute inset-y-0 right-0 pr-4 flex items-center"
                                 >
@@ -257,25 +280,40 @@ const SearchHotels = () => {
                             )}
 
                             {/* Suggestions Dropdown */}
-                            {showSuggestions && filteredSuggestions.length > 0 && (
+                            {showSuggestions && (
                                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
-                                    <div className="p-2 border-b border-gray-100 text-xs text-gray-500 font-medium uppercase tracking-wide">
-                                        {searchQuery ? 'Matching Destinations' : 'Popular Destinations'}
+                                    <div className="p-2 border-b border-gray-100 text-xs text-gray-500 font-medium uppercase tracking-wide flex items-center gap-2">
+                                        {loadingSuggestions ? (
+                                            <>
+                                                <Loader2 size={12} className="animate-spin" />
+                                                Searching cities...
+                                            </>
+                                        ) : searchQuery && searchQuery.length >= 2 ? (
+                                            `${suggestions.length} Results for "${searchQuery}"`
+                                        ) : (
+                                            'Popular Destinations'
+                                        )}
                                     </div>
-                                    {filteredSuggestions.map((dest) => (
-                                        <button
-                                            key={dest.code}
-                                            type="button"
-                                            onClick={() => handleSelectDestination(dest)}
-                                            className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
-                                        >
-                                            <MapPin size={18} className="text-[#055B75] flex-shrink-0" />
-                                            <div className="flex-1">
-                                                <div className="font-medium text-gray-800">{dest.name}</div>
-                                                <div className="text-sm text-gray-500">{dest.country} • {dest.code}</div>
-                                            </div>
-                                        </button>
-                                    ))}
+                                    {suggestions.length > 0 ? (
+                                        suggestions.map((dest, index) => (
+                                            <button
+                                                key={dest.code || index}
+                                                type="button"
+                                                onClick={() => handleSelectDestination(dest)}
+                                                className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
+                                            >
+                                                <MapPin size={18} className="text-[#055B75] flex-shrink-0" />
+                                                <div className="flex-1">
+                                                    <div className="font-medium text-gray-800">{dest.name || dest.cityName}</div>
+                                                    <div className="text-sm text-gray-500">{dest.country} • {dest.code}</div>
+                                                </div>
+                                            </button>
+                                        ))
+                                    ) : !loadingSuggestions && searchQuery.length >= 2 ? (
+                                        <div className="px-4 py-3 text-gray-500 text-sm">
+                                            No destinations found. Try a different search.
+                                        </div>
+                                    ) : null}
                                 </div>
                             )}
                         </div>

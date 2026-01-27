@@ -72,6 +72,8 @@ export default async function handler(req, res) {
   if (!endpoint && req.url) {
     if (req.url.includes('/destinations')) {
       endpoint = 'destinations';
+    } else if (req.url.includes('/locations')) {
+      endpoint = 'locations';
     } else if (req.url.includes('/search')) {
       endpoint = 'search';
     }
@@ -80,12 +82,14 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     if (endpoint === 'destinations') {
       return await handleDestinations(req, res);
+    } else if (endpoint === 'locations') {
+      return await handleLocationSearch(req, res);
     } else if (endpoint === 'search') {
       return await handleHotelSearch(req, res);
     } else {
       return res.status(404).json({ 
         success: false,
-        error: 'Endpoint not found. Available endpoints: /destinations, /search',
+        error: 'Endpoint not found. Available endpoints: /destinations, /locations, /search',
         url: req.url,
         query: query
       });
@@ -673,6 +677,108 @@ async function handleDestinations(req, res) {
     total: filteredDestinations.length,
     message: 'Hotel destinations retrieved successfully'
   });
+}
+
+// Handle location/city search for autocomplete
+async function handleLocationSearch(req, res) {
+  const { keyword } = req.query;
+
+  if (!keyword || keyword.length < 2) {
+    return res.status(400).json({
+      success: false,
+      error: 'Keyword must be at least 2 characters'
+    });
+  }
+
+  try {
+    console.log(`🔍 Searching locations for: ${keyword}`);
+    const token = await getAccessToken();
+
+    // Use Amadeus location search API
+    const response = await axios.get(`${AMADEUS_API_URLS.v1}/reference-data/locations`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      params: {
+        keyword: keyword,
+        subType: 'CITY',
+        'page[limit]': 10,
+        view: 'LIGHT'
+      }
+    });
+
+    const locations = response.data.data || [];
+    console.log(`✅ Found ${locations.length} locations for "${keyword}"`);
+
+    // Format locations for frontend
+    const formattedLocations = locations.map(loc => ({
+      name: loc.name || loc.address?.cityName || keyword,
+      code: loc.iataCode,
+      type: loc.subType,
+      cityName: loc.address?.cityName || loc.name,
+      cityCode: loc.address?.cityCode || loc.iataCode,
+      country: loc.address?.countryName || loc.address?.countryCode || '',
+      countryCode: loc.address?.countryCode || '',
+      displayName: `${loc.name || loc.address?.cityName}${loc.address?.countryName ? ', ' + loc.address.countryName : ''}`
+    }));
+
+    return res.json({
+      success: true,
+      data: formattedLocations
+    });
+
+  } catch (error) {
+    console.error('❌ Error searching locations:', error.response?.data || error.message);
+    
+    // Return fallback suggestions based on keyword
+    const fallbackLocations = getFallbackLocations(keyword);
+    return res.json({
+      success: true,
+      data: fallbackLocations,
+      fallback: true
+    });
+  }
+}
+
+// Fallback locations when API fails
+function getFallbackLocations(keyword) {
+  const allLocations = [
+    { name: 'Delhi', code: 'DEL', country: 'India', countryCode: 'IN' },
+    { name: 'Mumbai', code: 'BOM', country: 'India', countryCode: 'IN' },
+    { name: 'Bangalore', code: 'BLR', country: 'India', countryCode: 'IN' },
+    { name: 'Chennai', code: 'MAA', country: 'India', countryCode: 'IN' },
+    { name: 'Kolkata', code: 'CCU', country: 'India', countryCode: 'IN' },
+    { name: 'Hyderabad', code: 'HYD', country: 'India', countryCode: 'IN' },
+    { name: 'Goa', code: 'GOI', country: 'India', countryCode: 'IN' },
+    { name: 'Jaipur', code: 'JAI', country: 'India', countryCode: 'IN' },
+    { name: 'Dubai', code: 'DXB', country: 'United Arab Emirates', countryCode: 'AE' },
+    { name: 'Singapore', code: 'SIN', country: 'Singapore', countryCode: 'SG' },
+    { name: 'Bangkok', code: 'BKK', country: 'Thailand', countryCode: 'TH' },
+    { name: 'London', code: 'LON', country: 'United Kingdom', countryCode: 'GB' },
+    { name: 'Paris', code: 'PAR', country: 'France', countryCode: 'FR' },
+    { name: 'New York', code: 'NYC', country: 'United States', countryCode: 'US' },
+    { name: 'Los Angeles', code: 'LAX', country: 'United States', countryCode: 'US' },
+    { name: 'Tokyo', code: 'TYO', country: 'Japan', countryCode: 'JP' },
+    { name: 'Hong Kong', code: 'HKG', country: 'China', countryCode: 'HK' },
+    { name: 'Sydney', code: 'SYD', country: 'Australia', countryCode: 'AU' },
+    { name: 'Bali', code: 'DPS', country: 'Indonesia', countryCode: 'ID' },
+    { name: 'Maldives', code: 'MLE', country: 'Maldives', countryCode: 'MV' },
+    { name: 'Rome', code: 'ROM', country: 'Italy', countryCode: 'IT' },
+    { name: 'Barcelona', code: 'BCN', country: 'Spain', countryCode: 'ES' },
+    { name: 'Amsterdam', code: 'AMS', country: 'Netherlands', countryCode: 'NL' },
+    { name: 'Las Vegas', code: 'LAS', country: 'United States', countryCode: 'US' },
+    { name: 'Miami', code: 'MIA', country: 'United States', countryCode: 'US' },
+  ];
+
+  const query = keyword.toLowerCase();
+  return allLocations.filter(loc =>
+    loc.name.toLowerCase().includes(query) ||
+    loc.code.toLowerCase().includes(query) ||
+    loc.country.toLowerCase().includes(query)
+  ).slice(0, 8).map(loc => ({
+    ...loc,
+    displayName: `${loc.name}, ${loc.country}`
+  }));
 }
 
 // Handle hotel search

@@ -1,39 +1,21 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Users, Star, ArrowRight, Sparkles, Shield, Clock, Award } from 'lucide-react';
+import { Search, MapPin, Calendar, Users, Star, ArrowRight, Sparkles, Shield, Clock, Award, Loader2 } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
+import hotelService from '../../../Services/HotelService';
 
-// Popular destinations for autocomplete suggestions
+// Popular destinations shown when input is empty
 const POPULAR_DESTINATIONS = [
     { name: 'Delhi', code: 'DEL', country: 'India' },
     { name: 'Mumbai', code: 'BOM', country: 'India' },
-    { name: 'Bangalore', code: 'BLR', country: 'India' },
-    { name: 'Chennai', code: 'MAA', country: 'India' },
-    { name: 'Kolkata', code: 'CCU', country: 'India' },
-    { name: 'Hyderabad', code: 'HYD', country: 'India' },
-    { name: 'Goa', code: 'GOI', country: 'India' },
-    { name: 'Jaipur', code: 'JAI', country: 'India' },
     { name: 'Dubai', code: 'DXB', country: 'UAE' },
     { name: 'Singapore', code: 'SIN', country: 'Singapore' },
-    { name: 'Bangkok', code: 'BKK', country: 'Thailand' },
     { name: 'London', code: 'LON', country: 'United Kingdom' },
     { name: 'Paris', code: 'PAR', country: 'France' },
-    { name: 'New York', code: 'NYC', country: 'USA' },
-    { name: 'Los Angeles', code: 'LAX', country: 'USA' },
-    { name: 'Tokyo', code: 'TYO', country: 'Japan' },
-    { name: 'Hong Kong', code: 'HKG', country: 'China' },
-    { name: 'Sydney', code: 'SYD', country: 'Australia' },
-    { name: 'Bali', code: 'DPS', country: 'Indonesia' },
-    { name: 'Maldives', code: 'MLE', country: 'Maldives' },
-    { name: 'Rome', code: 'ROM', country: 'Italy' },
-    { name: 'Barcelona', code: 'BCN', country: 'Spain' },
-    { name: 'Amsterdam', code: 'AMS', country: 'Netherlands' },
-    { name: 'Las Vegas', code: 'LAS', country: 'USA' },
-    { name: 'Miami', code: 'MIA', country: 'USA' },
 ];
 
 const HotelsLanding = () => {
@@ -45,17 +27,56 @@ const HotelsLanding = () => {
     const [guests, setGuests] = useState({ rooms: 1, adults: 2, children: 0 });
     const [showGuestDropdown, setShowGuestDropdown] = useState(false);
     const [showDestinationSuggestions, setShowDestinationSuggestions] = useState(false);
+    
+    // API-based suggestions
+    const [suggestions, setSuggestions] = useState(POPULAR_DESTINATIONS);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+    const debounceTimer = useRef(null);
 
-    // Filter suggestions based on destination input
-    const filteredSuggestions = useMemo(() => {
-        if (!destination || destination.length < 1) return POPULAR_DESTINATIONS.slice(0, 6);
-        const query = destination.toLowerCase();
-        return POPULAR_DESTINATIONS.filter(dest => 
-            dest.name.toLowerCase().includes(query) || 
-            dest.code.toLowerCase().includes(query) ||
-            dest.country.toLowerCase().includes(query)
-        ).slice(0, 6);
-    }, [destination]);
+    // Debounced search for locations
+    const searchLocations = useCallback(async (keyword) => {
+        if (!keyword || keyword.length < 2) {
+            setSuggestions(POPULAR_DESTINATIONS);
+            setLoadingSuggestions(false);
+            return;
+        }
+
+        setLoadingSuggestions(true);
+        try {
+            const results = await hotelService.searchLocations(keyword);
+            if (results && results.length > 0) {
+                setSuggestions(results);
+            } else {
+                // Fallback to filtering popular destinations
+                const query = keyword.toLowerCase();
+                const filtered = POPULAR_DESTINATIONS.filter(dest =>
+                    dest.name.toLowerCase().includes(query) ||
+                    dest.code.toLowerCase().includes(query)
+                );
+                setSuggestions(filtered.length > 0 ? filtered : []);
+            }
+        } catch (error) {
+            console.error('Error searching locations:', error);
+            setSuggestions(POPULAR_DESTINATIONS);
+        } finally {
+            setLoadingSuggestions(false);
+        }
+    }, []);
+
+    // Handle destination input change with debounce
+    const handleDestinationChange = (value) => {
+        setDestination(value);
+        
+        // Clear existing timer
+        if (debounceTimer.current) {
+            clearTimeout(debounceTimer.current);
+        }
+        
+        // Set new timer for debounced search
+        debounceTimer.current = setTimeout(() => {
+            searchLocations(value);
+        }, 300);
+    };
 
     // Handle destination selection
     const handleSelectDestination = (dest) => {
@@ -72,6 +93,15 @@ const HotelsLanding = () => {
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Cleanup debounce timer
+    useEffect(() => {
+        return () => {
+            if (debounceTimer.current) {
+                clearTimeout(debounceTimer.current);
+            }
+        };
     }, []);
 
     // Featured hotels data - IDs match hotels.json
@@ -177,34 +207,52 @@ const HotelsLanding = () => {
                                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-[#055B75] group-hover:scale-110 transition-transform" size={20} />
                                     <input
                                         type="text"
-                                        placeholder="Where are you going? (e.g., Delhi, Dubai)"
-                                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#65B3CF] focus:border-[#055B75] outline-none transition-all hover:bg-white"
+                                        placeholder="Search any city worldwide..."
+                                        className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#65B3CF] focus:border-[#055B75] outline-none transition-all hover:bg-white"
                                         value={destination}
-                                        onChange={(e) => setDestination(e.target.value)}
+                                        onChange={(e) => handleDestinationChange(e.target.value)}
                                         onFocus={() => setShowDestinationSuggestions(true)}
                                         autoComplete="off"
                                     />
+                                    {loadingSuggestions && (
+                                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 text-[#055B75] animate-spin" size={18} />
+                                    )}
 
                                     {/* Destination Suggestions Dropdown */}
-                                    {showDestinationSuggestions && filteredSuggestions.length > 0 && (
+                                    {showDestinationSuggestions && (
                                         <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-lg z-50 max-h-64 overflow-y-auto">
-                                            <div className="p-2 border-b border-gray-100 text-xs text-gray-500 font-medium uppercase tracking-wide">
-                                                {destination ? 'Matching Destinations' : 'Popular Destinations'}
+                                            <div className="p-2 border-b border-gray-100 text-xs text-gray-500 font-medium uppercase tracking-wide flex items-center gap-2">
+                                                {loadingSuggestions ? (
+                                                    <>
+                                                        <Loader2 size={12} className="animate-spin" />
+                                                        Searching...
+                                                    </>
+                                                ) : destination && destination.length >= 2 ? (
+                                                    `${suggestions.length} Results for "${destination}"`
+                                                ) : (
+                                                    'Popular Destinations'
+                                                )}
                                             </div>
-                                            {filteredSuggestions.map((dest) => (
-                                                <button
-                                                    key={dest.code}
-                                                    type="button"
-                                                    onClick={() => handleSelectDestination(dest)}
-                                                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
-                                                >
-                                                    <MapPin size={18} className="text-[#055B75] flex-shrink-0" />
-                                                    <div className="flex-1">
-                                                        <div className="font-medium text-gray-800">{dest.name}</div>
-                                                        <div className="text-sm text-gray-500">{dest.country} • {dest.code}</div>
-                                                    </div>
-                                                </button>
-                                            ))}
+                                            {suggestions.length > 0 ? (
+                                                suggestions.map((dest, index) => (
+                                                    <button
+                                                        key={dest.code || index}
+                                                        type="button"
+                                                        onClick={() => handleSelectDestination(dest)}
+                                                        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
+                                                    >
+                                                        <MapPin size={18} className="text-[#055B75] flex-shrink-0" />
+                                                        <div className="flex-1">
+                                                            <div className="font-medium text-gray-800">{dest.name || dest.cityName}</div>
+                                                            <div className="text-sm text-gray-500">{dest.country} • {dest.code}</div>
+                                                        </div>
+                                                    </button>
+                                                ))
+                                            ) : !loadingSuggestions && destination.length >= 2 ? (
+                                                <div className="px-4 py-3 text-gray-500 text-sm">
+                                                    No destinations found. Try a different search.
+                                                </div>
+                                            ) : null}
                                         </div>
                                     )}
                                 </div>
