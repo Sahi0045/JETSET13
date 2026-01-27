@@ -8,16 +8,6 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
 
-// Popular destinations shown when input is empty
-const POPULAR_DESTINATIONS = [
-    { name: 'Delhi', code: 'DEL', country: 'India' },
-    { name: 'Mumbai', code: 'BOM', country: 'India' },
-    { name: 'Dubai', code: 'DXB', country: 'UAE' },
-    { name: 'Singapore', code: 'SIN', country: 'Singapore' },
-    { name: 'London', code: 'LON', country: 'United Kingdom' },
-    { name: 'Paris', code: 'PAR', country: 'France' },
-];
-
 const HotelsLanding = () => {
     const navigate = useNavigate();
     const destinationInputRef = useRef(null);
@@ -29,14 +19,14 @@ const HotelsLanding = () => {
     const [showDestinationSuggestions, setShowDestinationSuggestions] = useState(false);
     
     // API-based suggestions
-    const [suggestions, setSuggestions] = useState(POPULAR_DESTINATIONS);
+    const [suggestions, setSuggestions] = useState([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
     const debounceTimer = useRef(null);
 
     // Debounced search for locations
     const searchLocations = useCallback(async (keyword) => {
         if (!keyword || keyword.length < 2) {
-            setSuggestions(POPULAR_DESTINATIONS);
+            setSuggestions([]);
             setLoadingSuggestions(false);
             return;
         }
@@ -47,17 +37,11 @@ const HotelsLanding = () => {
             if (results && results.length > 0) {
                 setSuggestions(results);
             } else {
-                // Fallback to filtering popular destinations
-                const query = keyword.toLowerCase();
-                const filtered = POPULAR_DESTINATIONS.filter(dest =>
-                    dest.name.toLowerCase().includes(query) ||
-                    dest.code.toLowerCase().includes(query)
-                );
-                setSuggestions(filtered.length > 0 ? filtered : []);
+                setSuggestions([]);
             }
         } catch (error) {
             console.error('Error searching locations:', error);
-            setSuggestions(POPULAR_DESTINATIONS);
+            setSuggestions([]);
         } finally {
             setLoadingSuggestions(false);
         }
@@ -218,19 +202,17 @@ const HotelsLanding = () => {
                                         <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 text-[#055B75] animate-spin" size={18} />
                                     )}
 
-                                    {/* Destination Suggestions Dropdown */}
-                                    {showDestinationSuggestions && (
+                                    {/* Destination Suggestions Dropdown - only show when typing */}
+                                    {showDestinationSuggestions && destination.length >= 2 && (
                                         <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-lg z-50 max-h-64 overflow-y-auto">
                                             <div className="p-2 border-b border-gray-100 text-xs text-gray-500 font-medium uppercase tracking-wide flex items-center gap-2">
                                                 {loadingSuggestions ? (
                                                     <>
                                                         <Loader2 size={12} className="animate-spin" />
-                                                        Searching...
+                                                        Searching Amadeus...
                                                     </>
-                                                ) : destination && destination.length >= 2 ? (
-                                                    `${suggestions.length} Results for "${destination}"`
                                                 ) : (
-                                                    'Popular Destinations'
+                                                    `${suggestions.length} Results for "${destination}"`
                                                 )}
                                             </div>
                                             {suggestions.length > 0 ? (
@@ -248,7 +230,7 @@ const HotelsLanding = () => {
                                                         </div>
                                                     </button>
                                                 ))
-                                            ) : !loadingSuggestions && destination.length >= 2 ? (
+                                            ) : !loadingSuggestions ? (
                                                 <div className="px-4 py-3 text-gray-500 text-sm">
                                                     No destinations found. Try a different search.
                                                 </div>

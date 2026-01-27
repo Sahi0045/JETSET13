@@ -8,16 +8,6 @@ import hotelService from '../../../Services/HotelService';
 import currencyService from '../../../Services/CurrencyService';
 import Price from '../../../Components/Price';
 
-// Popular destinations shown when input is empty
-const POPULAR_DESTINATIONS = [
-    { name: 'Delhi', code: 'DEL', country: 'India' },
-    { name: 'Mumbai', code: 'BOM', country: 'India' },
-    { name: 'Dubai', code: 'DXB', country: 'UAE' },
-    { name: 'Singapore', code: 'SIN', country: 'Singapore' },
-    { name: 'London', code: 'LON', country: 'United Kingdom' },
-    { name: 'Paris', code: 'PAR', country: 'France' },
-];
-
 const SearchHotels = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -38,7 +28,7 @@ const SearchHotels = () => {
     // Autocomplete state
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [selectedDestination, setSelectedDestination] = useState(null);
-    const [suggestions, setSuggestions] = useState(POPULAR_DESTINATIONS);
+    const [suggestions, setSuggestions] = useState([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
     // State
@@ -61,7 +51,7 @@ const SearchHotels = () => {
     // Debounced search for locations
     const searchLocations = useCallback(async (keyword) => {
         if (!keyword || keyword.length < 2) {
-            setSuggestions(POPULAR_DESTINATIONS);
+            setSuggestions([]);
             setLoadingSuggestions(false);
             return;
         }
@@ -76,7 +66,7 @@ const SearchHotels = () => {
             }
         } catch (error) {
             console.error('Error searching locations:', error);
-            setSuggestions(POPULAR_DESTINATIONS);
+            setSuggestions([]);
         } finally {
             setLoadingSuggestions(false);
         }
@@ -271,7 +261,7 @@ const SearchHotels = () => {
                                     onClick={() => {
                                         setSearchQuery('');
                                         setSelectedDestination(null);
-                                        setSuggestions(POPULAR_DESTINATIONS);
+                                        setSuggestions([]);
                                     }}
                                     className="absolute inset-y-0 right-0 pr-4 flex items-center"
                                 >
@@ -280,7 +270,7 @@ const SearchHotels = () => {
                             )}
 
                             {/* Suggestions Dropdown */}
-                            {showSuggestions && (
+                            {showSuggestions && searchQuery.length >= 2 && (
                                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
                                     <div className="p-2 border-b border-gray-100 text-xs text-gray-500 font-medium uppercase tracking-wide flex items-center gap-2">
                                         {loadingSuggestions ? (
@@ -288,10 +278,8 @@ const SearchHotels = () => {
                                                 <Loader2 size={12} className="animate-spin" />
                                                 Searching cities...
                                             </>
-                                        ) : searchQuery && searchQuery.length >= 2 ? (
-                                            `${suggestions.length} Results for "${searchQuery}"`
                                         ) : (
-                                            'Popular Destinations'
+                                            `${suggestions.length} Results for "${searchQuery}"`
                                         )}
                                     </div>
                                     {suggestions.length > 0 ? (

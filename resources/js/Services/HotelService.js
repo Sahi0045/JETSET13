@@ -16,7 +16,7 @@ class HotelService {
     }
 
     /**
-     * Search locations/cities for autocomplete
+     * Search locations/cities for autocomplete using Amadeus API
      * @param {string} keyword - Search keyword
      * @returns {Promise<Array>} - Array of location objects
      */
@@ -26,55 +26,28 @@ class HotelService {
         }
 
         try {
-            console.log(`🔍 Searching locations for: ${keyword}`);
+            console.log(`🔍 HotelService: Searching locations for: ${keyword}`);
             const response = await axios.get(`${API_BASE_URL}/hotels`, {
                 params: {
                     endpoint: 'locations',
                     keyword: keyword
-                }
+                },
+                timeout: 10000
             });
 
+            console.log(`📡 Location API response:`, response.data);
+
             if (response.data.success && response.data.data) {
-                console.log(`✅ Found ${response.data.data.length} locations`);
+                console.log(`✅ Found ${response.data.data.length} locations from API`);
                 return response.data.data;
             }
+            
+            console.log('⚠️ API returned success but no data');
             return [];
         } catch (error) {
-            console.error('❌ Error searching locations:', error);
-            // Return fallback locations
-            return this.getFallbackLocations(keyword);
+            console.error('❌ Error searching locations:', error.response?.data || error.message);
+            return [];
         }
-    }
-
-    /**
-     * Fallback locations when API fails
-     */
-    getFallbackLocations(keyword) {
-        const allLocations = [
-            { name: 'Delhi', code: 'DEL', country: 'India' },
-            { name: 'Mumbai', code: 'BOM', country: 'India' },
-            { name: 'Bangalore', code: 'BLR', country: 'India' },
-            { name: 'Chennai', code: 'MAA', country: 'India' },
-            { name: 'Kolkata', code: 'CCU', country: 'India' },
-            { name: 'Hyderabad', code: 'HYD', country: 'India' },
-            { name: 'Goa', code: 'GOI', country: 'India' },
-            { name: 'Jaipur', code: 'JAI', country: 'India' },
-            { name: 'Dubai', code: 'DXB', country: 'UAE' },
-            { name: 'Singapore', code: 'SIN', country: 'Singapore' },
-            { name: 'Bangkok', code: 'BKK', country: 'Thailand' },
-            { name: 'London', code: 'LON', country: 'United Kingdom' },
-            { name: 'Paris', code: 'PAR', country: 'France' },
-            { name: 'New York', code: 'NYC', country: 'USA' },
-            { name: 'Tokyo', code: 'TYO', country: 'Japan' },
-            { name: 'Sydney', code: 'SYD', country: 'Australia' },
-        ];
-
-        const query = keyword.toLowerCase();
-        return allLocations.filter(loc =>
-            loc.name.toLowerCase().includes(query) ||
-            loc.code.toLowerCase().includes(query) ||
-            loc.country.toLowerCase().includes(query)
-        ).slice(0, 8);
     }
 
     /**

@@ -1,10 +1,10 @@
 import axios from 'axios';
 
-// Amadeus API configuration
+// Amadeus API configuration - USE TEST API with test credentials
 const AMADEUS_API_URLS = {
-  v1: 'https://api.amadeus.com/v1',
-  v2: 'https://api.amadeus.com/v2', 
-  v3: 'https://api.amadeus.com/v3'
+  v1: 'https://test.api.amadeus.com/v1',
+  v2: 'https://test.api.amadeus.com/v2', 
+  v3: 'https://test.api.amadeus.com/v3'
 };
 
 // ARC Pay configuration
@@ -20,15 +20,20 @@ const ARC_PAY_CONFIG = {
 // Get Amadeus access token
 const getAccessToken = async () => {
   try {
-    const response = await axios.post('https://api.amadeus.com/v1/security/oauth2/token', {
-      grant_type: 'client_credentials',
-      client_id: process.env.AMADEUS_API_KEY || process.env.REACT_APP_AMADEUS_API_KEY,
-      client_secret: process.env.AMADEUS_API_SECRET || process.env.REACT_APP_AMADEUS_API_SECRET
-    }, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+    // Use URLSearchParams for proper form encoding
+    const params = new URLSearchParams();
+    params.append('grant_type', 'client_credentials');
+    params.append('client_id', process.env.AMADEUS_API_KEY || process.env.REACT_APP_AMADEUS_API_KEY);
+    params.append('client_secret', process.env.AMADEUS_API_SECRET || process.env.REACT_APP_AMADEUS_API_SECRET);
+    
+    const response = await axios.post('https://test.api.amadeus.com/v1/security/oauth2/token', 
+      params.toString(),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
       }
-    });
+    );
     
     return response.data.access_token;
   } catch (error) {
@@ -693,6 +698,7 @@ async function handleLocationSearch(req, res) {
   try {
     console.log(`🔍 Searching locations for: ${keyword}`);
     const token = await getAccessToken();
+    console.log(`✅ Got Amadeus token for location search`);
 
     // Use Amadeus location search API
     const response = await axios.get(`${AMADEUS_API_URLS.v1}/reference-data/locations`, {
@@ -701,84 +707,49 @@ async function handleLocationSearch(req, res) {
       },
       params: {
         keyword: keyword,
-        subType: 'CITY',
-        'page[limit]': 10,
-        view: 'LIGHT'
+        subType: 'CITY,AIRPORT',
+        'page[limit]': 15,
+        view: 'FULL'
       }
     });
 
     const locations = response.data.data || [];
-    console.log(`✅ Found ${locations.length} locations for "${keyword}"`);
+    console.log(`✅ Found ${locations.length} locations for "${keyword}" from Amadeus API`);
 
-    // Format locations for frontend
-    const formattedLocations = locations.map(loc => ({
-      name: loc.name || loc.address?.cityName || keyword,
-      code: loc.iataCode,
-      type: loc.subType,
-      cityName: loc.address?.cityName || loc.name,
-      cityCode: loc.address?.cityCode || loc.iataCode,
-      country: loc.address?.countryName || loc.address?.countryCode || '',
-      countryCode: loc.address?.countryCode || '',
-      displayName: `${loc.name || loc.address?.cityName}${loc.address?.countryName ? ', ' + loc.address.countryName : ''}`
-    }));
+    // Format locations for frontend - prioritize cities
+    const formattedLocations = locations
+      .filter(loc => loc.iataCode) // Only include locations with IATA codes
+      .map(loc => ({
+        name: loc.address?.cityName || loc.name || keyword,
+        code: loc.iataCode,
+        type: loc.subType,
+        cityName: loc.address?.cityName || loc.name,
+        cityCode: loc.address?.cityCode || loc.iataCode,
+        country: loc.address?.countryName || '',
+        countryCode: loc.address?.countryCode || '',
+        displayName: `${loc.address?.cityName || loc.name}${loc.address?.countryName ? ', ' + loc.address.countryName : ''}`
+      }))
+      // Remove duplicates by city code
+      .filter((loc, index, self) => 
+        index === self.findIndex(l => l.cityCode === loc.cityCode || l.code === loc.code)
+      )
+      .slice(0, 10);
 
     return res.json({
       success: true,
-      data: formattedLocations
+      data: formattedLocations,
+      source: 'amadeus'
     });
 
   } catch (error) {
     console.error('❌ Error searching locations:', error.response?.data || error.message);
     
-    // Return fallback suggestions based on keyword
-    const fallbackLocations = getFallbackLocations(keyword);
-    return res.json({
-      success: true,
-      data: fallbackLocations,
-      fallback: true
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to search locations. Please try again.',
+      details: error.response?.data?.errors?.[0]?.detail || error.message
     });
   }
-}
-
-// Fallback locations when API fails
-function getFallbackLocations(keyword) {
-  const allLocations = [
-    { name: 'Delhi', code: 'DEL', country: 'India', countryCode: 'IN' },
-    { name: 'Mumbai', code: 'BOM', country: 'India', countryCode: 'IN' },
-    { name: 'Bangalore', code: 'BLR', country: 'India', countryCode: 'IN' },
-    { name: 'Chennai', code: 'MAA', country: 'India', countryCode: 'IN' },
-    { name: 'Kolkata', code: 'CCU', country: 'India', countryCode: 'IN' },
-    { name: 'Hyderabad', code: 'HYD', country: 'India', countryCode: 'IN' },
-    { name: 'Goa', code: 'GOI', country: 'India', countryCode: 'IN' },
-    { name: 'Jaipur', code: 'JAI', country: 'India', countryCode: 'IN' },
-    { name: 'Dubai', code: 'DXB', country: 'United Arab Emirates', countryCode: 'AE' },
-    { name: 'Singapore', code: 'SIN', country: 'Singapore', countryCode: 'SG' },
-    { name: 'Bangkok', code: 'BKK', country: 'Thailand', countryCode: 'TH' },
-    { name: 'London', code: 'LON', country: 'United Kingdom', countryCode: 'GB' },
-    { name: 'Paris', code: 'PAR', country: 'France', countryCode: 'FR' },
-    { name: 'New York', code: 'NYC', country: 'United States', countryCode: 'US' },
-    { name: 'Los Angeles', code: 'LAX', country: 'United States', countryCode: 'US' },
-    { name: 'Tokyo', code: 'TYO', country: 'Japan', countryCode: 'JP' },
-    { name: 'Hong Kong', code: 'HKG', country: 'China', countryCode: 'HK' },
-    { name: 'Sydney', code: 'SYD', country: 'Australia', countryCode: 'AU' },
-    { name: 'Bali', code: 'DPS', country: 'Indonesia', countryCode: 'ID' },
-    { name: 'Maldives', code: 'MLE', country: 'Maldives', countryCode: 'MV' },
-    { name: 'Rome', code: 'ROM', country: 'Italy', countryCode: 'IT' },
-    { name: 'Barcelona', code: 'BCN', country: 'Spain', countryCode: 'ES' },
-    { name: 'Amsterdam', code: 'AMS', country: 'Netherlands', countryCode: 'NL' },
-    { name: 'Las Vegas', code: 'LAS', country: 'United States', countryCode: 'US' },
-    { name: 'Miami', code: 'MIA', country: 'United States', countryCode: 'US' },
-  ];
-
-  const query = keyword.toLowerCase();
-  return allLocations.filter(loc =>
-    loc.name.toLowerCase().includes(query) ||
-    loc.code.toLowerCase().includes(query) ||
-    loc.country.toLowerCase().includes(query)
-  ).slice(0, 8).map(loc => ({
-    ...loc,
-    displayName: `${loc.name}, ${loc.country}`
-  }));
 }
 
 // Handle hotel search
