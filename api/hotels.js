@@ -865,7 +865,7 @@ async function handleHotelSearch(req, res) {
         source: 'amadeus-real-data'
       }));
 
-      console.log(`📤 Returning ${realHotels.length} real hotels to frontend`);
+      console.log(`📤 Return ${realHotels.length} real hotels to frontend`);
 
       return res.status(200).json({
         success: true,
