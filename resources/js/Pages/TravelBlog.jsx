@@ -107,8 +107,8 @@ const TravelBlog = () => {
   const filteredPosts = blogPosts.filter(post => {
     const matchesCategory = selectedCategory === 'all' || post.category === selectedCategory;
     const matchesSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         post.excerpt.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         post.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+      post.excerpt.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      post.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
 
@@ -117,47 +117,45 @@ const TravelBlog = () => {
   return (
     <>
       <Navbar forceScrolled={true} />
-      <div className="min-h-screen bg-gray-50">
-        {/* Hero Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
-          <div className="container mx-auto px-4 text-center">
-            <h1 className="text-5xl font-bold mb-6">Travel Blog</h1>
-            <p className="text-xl max-w-3xl mx-auto">
-              Discover inspiring travel stories, expert tips, and insider knowledge from our team of travel enthusiasts. 
-              Get inspired for your next adventure with Jetsetterss.
+      <div className="min-h-screen bg-white">
+        {/* Hero Section - Clean Airbnb Style */}
+        <div className="border-b border-gray-200 bg-white py-16">
+          <div className="container mx-auto px-4 max-w-7xl">
+            <h1 className="text-5xl md:text-6xl font-semibold text-neutral-700 mb-4">Travel Blog</h1>
+            <p className="text-lg text-neutral-600 max-w-2xl">
+              Inspiring stories, expert tips, and insider knowledge to help you plan your next adventure.
             </p>
           </div>
         </div>
 
-        <div className="container mx-auto px-4 py-16">
+        <div className="container mx-auto px-4 max-w-7xl py-12">
           {/* Search and Filter Section */}
           <section className="mb-12">
-            <div className="flex flex-col lg:flex-row gap-6 items-center justify-between">
+            <div className="flex flex-col lg:flex-row gap-6 items-start justify-between">
               {/* Search Bar */}
-              <div className="relative flex-1 max-w-md">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <div className="relative flex-1 max-w-md w-full">
+                <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400" />
                 <input
                   type="text"
-                  placeholder="Search articles, destinations, tips..."
+                  placeholder="Search articles..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-1 focus:ring-primary-500 focus:border-primary-500 transition-shadow"
                 />
               </div>
 
               {/* Category Filter */}
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 {categories.map((category) => (
                   <button
                     key={category.id}
                     onClick={() => setSelectedCategory(category.id)}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                      selectedCategory === category.id
-                        ? 'bg-blue-600 text-white shadow-lg'
-                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                    }`}
+                    className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${selectedCategory === category.id
+                        ? 'bg-neutral-700 text-white'
+                        : 'bg-white text-neutral-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
                   >
-                    {category.name} ({category.count})
+                    {category.name}
                   </button>
                 ))}
               </div>
@@ -167,53 +165,46 @@ const TravelBlog = () => {
           {/* Featured Post */}
           {featuredPost && (
             <section className="mb-16">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Featured Article</h2>
-              <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow duration-300">
                 <div className="lg:flex">
                   <div className="lg:w-1/2">
-                    <img 
-                      src={featuredPost.image} 
+                    <img
+                      src={featuredPost.image}
                       alt={featuredPost.title}
-                      className="w-full h-64 lg:h-full object-cover"
+                      className="w-full h-72 lg:h-full object-cover"
                     />
                   </div>
-                  <div className="lg:w-1/2 p-8">
-                    <div className="flex items-center gap-4 mb-4">
-                      <span className="bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full font-medium">
+                  <div className="lg:w-1/2 p-8 lg:p-10">
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className="text-xs text-primary-500 font-medium uppercase tracking-wide">
                         {featuredPost.category}
                       </span>
-                      <span className="text-sm text-gray-500">Featured</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
+                      <span className="text-xs text-gray-500">Featured</span>
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-4">{featuredPost.title}</h3>
-                    <p className="text-gray-600 mb-6">{featuredPost.excerpt}</p>
-                    
-                    <div className="flex items-center gap-6 mb-6 text-sm text-gray-500">
+                    <h3 className="text-3xl font-semibold text-neutral-700 mb-4 leading-tight">{featuredPost.title}</h3>
+                    <p className="text-neutral-600 mb-6 leading-relaxed">{featuredPost.excerpt}</p>
+
+                    <div className="flex items-center gap-6 mb-8 text-sm text-neutral-500">
                       <div className="flex items-center gap-2">
-                        <FaUser />
+                        <FaUser className="text-xs" />
                         <span>{featuredPost.author}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <FaCalendarAlt />
-                        <span>{new Date(featuredPost.publishDate).toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <FaClock />
+                        <FaClock className="text-xs" />
                         <span>{featuredPost.readTime}</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <Link 
+                    <div className="flex items-center gap-3">
+                      <Link
                         to={`/blog/${featuredPost.id}`}
-                        className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                        className="bg-neutral-700 text-white px-6 py-3 rounded-xl hover:bg-neutral-800 transition-colors font-medium"
                       >
-                        Read Full Article
+                        Read Article
                       </Link>
-                      <button className="p-3 text-gray-400 hover:text-red-500 transition-colors">
+                      <button className="p-3 text-neutral-400 hover:text-primary-500 transition-colors">
                         <FaHeart />
-                      </button>
-                      <button className="p-3 text-gray-400 hover:text-blue-500 transition-colors">
-                        <FaShare />
                       </button>
                     </div>
                   </div>
@@ -226,74 +217,48 @@ const TravelBlog = () => {
           <section className="mb-20">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {filteredPosts.filter(post => !post.featured).map((post) => (
-                <article key={post.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+                <article key={post.id} className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300">
                   {/* Post Image */}
-                  <div className="relative h-48 overflow-hidden">
-                    <img 
-                      src={post.image} 
+                  <div className="relative h-56 overflow-hidden">
+                    <img
+                      src={post.image}
                       alt={post.title}
-                      className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
-                    <div className="absolute top-4 left-4">
-                      <span className="bg-blue-600 text-white text-xs px-3 py-1 rounded-full font-medium">
-                        {post.category}
-                      </span>
-                    </div>
                   </div>
 
                   {/* Post Content */}
                   <div className="p-6">
-                    <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2">{post.title}</h3>
-                    <p className="text-gray-600 mb-4 line-clamp-3">{post.excerpt}</p>
-
-                    {/* Tags */}
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {post.tags.slice(0, 3).map((tag, index) => (
-                        <span 
-                          key={index}
-                          className="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full"
-                        >
-                          {tag}
-                        </span>
-                      ))}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xs text-primary-500 font-medium uppercase tracking-wide">
+                        {post.category}
+                      </span>
                     </div>
+                    <h3 className="text-xl font-semibold text-neutral-700 mb-3 line-clamp-2 leading-snug">{post.title}</h3>
+                    <p className="text-neutral-600 mb-4 line-clamp-3 text-sm leading-relaxed">{post.excerpt}</p>
 
                     {/* Meta Information */}
-                    <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                      <div className="flex items-center gap-2">
-                        <FaUser />
+                    <div className="flex items-center gap-4 text-xs text-neutral-500 mb-4 pb-4 border-b border-gray-100">
+                      <div className="flex items-center gap-1.5">
+                        <FaUser className="text-[10px]" />
                         <span>{post.author}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <FaClock />
+                      <div className="flex items-center gap-1.5">
+                        <FaClock className="text-[10px]" />
                         <span>{post.readTime}</span>
                       </div>
                     </div>
 
-                    {/* Engagement Stats */}
-                    <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                      <div className="flex items-center gap-4">
-                        <span>{post.likes} likes</span>
-                        <span>{post.views} views</span>
-                      </div>
-                      <span>{new Date(post.publishDate).toLocaleDateString()}</span>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-2">
-                      <Link 
-                        to={`/blog/${post.id}`}
-                        className="flex-1 bg-blue-600 text-white text-center py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                      >
-                        Read More
-                      </Link>
-                      <button className="p-2 text-gray-400 hover:text-red-500 transition-colors">
-                        <FaHeart />
-                      </button>
-                      <button className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
-                        <FaBookmark />
-                      </button>
-                    </div>
+                    {/* Action Button */}
+                    <Link
+                      to={`/blog/${post.id}`}
+                      className="inline-flex items-center text-sm font-medium text-neutral-700 hover:text-primary-500 transition-colors"
+                    >
+                      Read more
+                      <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
                   </div>
                 </article>
               ))}
@@ -301,18 +266,18 @@ const TravelBlog = () => {
           </section>
 
           {/* Newsletter Signup */}
-          <section className="bg-gradient-to-r from-blue-600 to-purple-700 rounded-2xl p-12 text-center text-white">
-            <h2 className="text-3xl font-bold mb-4">Stay Updated with Travel Inspiration</h2>
-            <p className="text-xl mb-8 max-w-2xl mx-auto">
-              Get the latest travel stories, tips, and destination guides delivered to your inbox every week.
+          <section className="bg-gray-50 border border-gray-200 rounded-2xl p-12 text-center">
+            <h2 className="text-3xl font-semibold text-neutral-700 mb-3">Stay Inspired</h2>
+            <p className="text-lg text-neutral-600 mb-8 max-w-2xl mx-auto">
+              Get travel stories and tips delivered to your inbox every week.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto">
               <input
                 type="email"
-                placeholder="Enter your email"
-                className="flex-1 px-4 py-3 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-white"
+                placeholder="Email address"
+                className="flex-1 px-5 py-3.5 rounded-xl border border-gray-300 text-neutral-700 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
-              <button className="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
+              <button className="bg-primary-500 text-white px-7 py-3.5 rounded-xl font-medium hover:bg-primary-600 transition-colors">
                 Subscribe
               </button>
             </div>

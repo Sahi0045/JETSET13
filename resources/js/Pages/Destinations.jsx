@@ -125,7 +125,7 @@ const Destinations = () => {
       name: 'Goa, India',
       category: 'beach',
       image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e',
-      description: 'India’s most popular beach destination.',
+      description: 'India\'s most popular beach destination.',
       rating: 4.8,
       reviews: 2310,
       price: 'From $399',
@@ -211,32 +211,31 @@ const Destinations = () => {
     <>
       <Navbar forceScrolled />
 
-      <main className="min-h-screen bg-gray-50">
+      <main className="min-h-screen bg-white">
         {/* HERO */}
-        <section className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
-          <div className="container mx-auto px-4 text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
-              Explore Amazing Destinations
+        <section className="border-b border-gray-200 bg-white py-16">
+          <div className="container mx-auto px-4 max-w-7xl">
+            <h1 className="text-5xl md:text-6xl font-semibold text-neutral-700 mb-4">
+              Explore Destinations
             </h1>
-            <p className="text-lg md:text-xl max-w-3xl mx-auto">
-              Discover the world’s most beautiful cities, beaches, and cultural landmarks.
+            <p className="text-lg text-neutral-600 max-w-2xl">
+              Discover the world's most beautiful cities, beaches, and cultural landmarks.
             </p>
           </div>
         </section>
 
         {/* CONTENT */}
-        <section className="container mx-auto px-4 py-16">
+        <section className="container mx-auto px-4 max-w-7xl py-12">
           {/* FILTER */}
-          <div className="flex flex-wrap justify-center gap-4 mb-12">
+          <div className="flex flex-wrap gap-3 mb-12">
             {categories.map(cat => (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`flex items-center gap-2 px-6 py-3 rounded-full transition ${
-                  selectedCategory === cat.id
-                    ? 'bg-blue-600 text-white shadow'
-                    : 'bg-white border text-gray-700 hover:bg-gray-100'
-                }`}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${selectedCategory === cat.id
+                  ? 'bg-neutral-700 text-white'
+                  : 'bg-white text-neutral-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
               >
                 {cat.icon}
                 {cat.name}
@@ -245,53 +244,45 @@ const Destinations = () => {
           </div>
 
           {/* GRID */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredDestinations.map(dest => (
               <div
                 key={dest.id}
-                className="bg-white rounded-xl shadow hover:shadow-xl transition overflow-hidden"
+                className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300"
               >
-                <img
-                  src={dest.image}
-                  alt={dest.name}
-                  className="h-48 w-full object-cover"
-                />
-                <div className="p-6">
-                  <div className="flex justify-between mb-2">
-                    <h3 className="font-bold text-lg">{dest.name}</h3>
-                    <span className="flex items-center gap-1 text-sm">
-                      <FaStar className="text-yellow-400" />
-                      {dest.rating}
+                <div className="relative">
+                  <img
+                    src={dest.image}
+                    alt={dest.name}
+                    className="h-56 w-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                </div>
+                <div className="p-5">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-semibold text-lg text-neutral-700 line-clamp-1">{dest.name}</h3>
+                    <span className="flex items-center gap-1 text-sm flex-shrink-0 ml-2">
+                      <FaStar className="text-neutral-700 text-xs" />
+                      <span className="font-medium text-neutral-700">{dest.rating}</span>
                     </span>
                   </div>
 
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                  <p className="text-sm text-neutral-600 mb-4 line-clamp-2 leading-relaxed">
                     {dest.description}
                   </p>
 
-                  <div className="flex justify-between text-sm text-gray-500 mb-4">
-                    <span className="flex items-center gap-1">
-                      <FaCalendarAlt /> {dest.duration}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <FaMapMarkerAlt /> {dest.bestTime}
-                    </span>
+                  <div className="space-y-2 mb-4 pb-4 border-b border-gray-100">
+                    <div className="flex justify-between text-xs text-neutral-500">
+                      <span>{dest.duration}</span>
+                      <span className="font-medium text-neutral-700">{dest.price}</span>
+                    </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <Link
-                      to={`/destination/${dest.id}`}
-                      className="flex-1 bg-blue-600 text-white text-center py-2 rounded hover:bg-blue-700"
-                    >
-                      View
-                    </Link>
-                    <Link
-                      to="/flights"
-                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-                    >
-                      <FaPlane />
-                    </Link>
-                  </div>
+                  <Link
+                    to={`/destination/${dest.id}`}
+                    className="block w-full bg-neutral-700 text-white text-center py-2.5 rounded-xl hover:bg-neutral-800 transition-colors font-medium text-sm"
+                  >
+                    View Details
+                  </Link>
                 </div>
               </div>
             ))}

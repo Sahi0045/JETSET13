@@ -104,70 +104,65 @@ const Support = () => {
   const filteredIssues = commonIssues.filter(issue => {
     const matchesCategory = selectedCategory === 'all' || issue.category === selectedCategory;
     const matchesSearch = issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         issue.description.toLowerCase().includes(searchQuery.toLowerCase());
+      issue.description.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
   return (
     <>
       <Navbar forceScrolled={true} />
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-white">
         {/* Hero Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
-          <div className="container mx-auto px-4 text-center">
-            <h1 className="text-5xl font-bold mb-6">Customer Support</h1>
-            <p className="text-xl max-w-3xl mx-auto">
-              We're here to help you every step of the way. Get assistance with bookings, 
-              travel questions, or any other concerns you might have.
+        <div className="border-b border-gray-200 bg-white py-16">
+          <div className="container mx-auto px-4 max-w-7xl">
+            <h1 className="text-5xl md:text-6xl font-semibold text-neutral-700 mb-4">Customer Support</h1>
+            <p className="text-lg text-neutral-600 max-w-2xl">
+              We're here to help you every step of the way.
             </p>
           </div>
         </div>
 
-        <div className="container mx-auto px-4 py-16">
+        <div className="container mx-auto px-4 max-w-7xl py-12">
           {/* Quick Contact Section */}
-          <section className="mb-20">
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold text-gray-900 mb-4">How Can We Help You?</h2>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                Choose the most convenient way to get in touch with our support team
+          <section className="mb-16">
+            <div className="mb-10">
+              <h2 className="text-3xl font-semibold text-neutral-700 mb-3">How Can We Help You?</h2>
+              <p className="text-lg text-neutral-600">
+                Choose the most convenient way to get in touch
               </p>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {contactMethods.map((method, index) => (
-                <div key={index} className="bg-white rounded-xl shadow-lg p-8 text-center hover:shadow-xl transition-shadow duration-300">
-                  <div className="mb-6">
+                <div key={index} className="bg-white rounded-xl border border-gray-200 p-8 hover:shadow-lg transition-shadow duration-300">
+                  <div className="mb-5 text-neutral-700">
                     {method.icon}
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">{method.title}</h3>
-                  <p className="text-gray-600 mb-4">{method.description}</p>
-                  
-                  <div className="space-y-2 text-sm text-gray-600 mb-6">
-                    <div className="flex items-center justify-center gap-2">
-                      <FaClock className="text-blue-500" />
+                  <h3 className="text-xl font-semibold text-neutral-700 mb-3">{method.title}</h3>
+                  <p className="text-neutral-600 mb-5 text-sm">{method.description}</p>
+
+                  <div className="space-y-2.5 text-sm text-neutral-500 mb-6 pb-6 border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <FaClock className="text-xs text-neutral-400" />
                       <span>{method.availability}</span>
                     </div>
-                    <div className="flex items-center justify-center gap-2">
-                      <FaUserTie className="text-green-500" />
+                    <div className="flex items-center gap-2">
+                      <FaUserTie className="text-xs text-neutral-400" />
                       <span>{method.response}</span>
                     </div>
                   </div>
 
-                  {method.title === "Live Chat" ? (
-                    <button className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors font-medium">
-                      {method.contact}
-                    </button>
-                  ) : method.title === "WhatsApp Support" ? (
-                    <a 
+                  {method.title === "WhatsApp Support" ? (
+                    <a
                       href={`https://wa.me/18005378381`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block w-full bg-green-500 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors font-medium"
+                      className="block w-full bg-primary-500 text-white py-3 px-6 rounded-xl hover:bg-primary-600 transition-colors font-medium text-center"
                     >
                       {method.contact}
                     </a>
                   ) : (
-                    <div className="text-lg font-semibold text-blue-600">
+                    <div className="text-base font-medium text-primary-500">
                       {method.contact}
                     </div>
                   )}
@@ -177,40 +172,39 @@ const Support = () => {
           </section>
 
           {/* Search and Help Section */}
-          <section className="mb-20">
-            <div className="bg-white rounded-2xl shadow-lg p-8">
-              <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-gray-900 mb-4">Find Quick Answers</h2>
-                <p className="text-gray-600 max-w-2xl mx-auto">
-                  Search our knowledge base for instant solutions to common questions
+          <section className="mb-16">
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-8">
+              <div className="mb-8">
+                <h2 className="text-2xl font-semibold text-neutral-700 mb-2">Find Quick Answers</h2>
+                <p className="text-neutral-600">
+                  Search our knowledge base for instant solutions
                 </p>
               </div>
 
               {/* Search Bar */}
-              <div className="max-w-2xl mx-auto mb-8">
+              <div className="max-w-2xl mb-8">
                 <div className="relative">
-                  <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl" />
+                  <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400" />
                   <input
                     type="text"
-                    placeholder="Search for help articles, FAQs, or common issues..."
+                    placeholder="Search for help articles..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                    className="w-full pl-12 pr-4 py-3.5 border border-gray-300 rounded-xl focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
               </div>
 
               {/* Category Filter */}
-              <div className="flex flex-wrap justify-center gap-3 mb-8">
+              <div className="flex flex-wrap gap-2 mb-8">
                 {supportCategories.map((category) => (
                   <button
                     key={category.id}
                     onClick={() => setSelectedCategory(category.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                      selectedCategory === category.id
-                        ? 'bg-blue-600 text-white shadow-lg'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${selectedCategory === category.id
+                        ? 'bg-neutral-700 text-white'
+                        : 'bg-white text-neutral-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
                   >
                     {category.icon}
                     {category.name}
@@ -219,20 +213,23 @@ const Support = () => {
               </div>
 
               {/* Common Issues */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredIssues.map((issue) => (
-                  <div key={issue.id} className="bg-gray-50 rounded-lg p-6 hover:bg-gray-100 transition-colors">
+                  <div key={issue.id} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
                     <div className="flex items-start justify-between mb-3">
-                      <h3 className="text-lg font-semibold text-gray-900">{issue.title}</h3>
-                      <FaQuestionCircle className="text-blue-500 mt-1" />
+                      <h3 className="text-base font-semibold text-neutral-700 pr-4">{issue.title}</h3>
+                      <FaQuestionCircle className="text-primary-500 flex-shrink-0" />
                     </div>
-                    <p className="text-gray-600 mb-3">{issue.description}</p>
-                    <p className="text-sm text-gray-700 mb-4 font-medium">{issue.solution}</p>
-                    <Link 
+                    <p className="text-sm text-neutral-600 mb-3 leading-relaxed">{issue.description}</p>
+                    <p className="text-sm text-neutral-700 mb-3">{issue.solution}</p>
+                    <Link
                       to={issue.link}
-                      className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                      className="text-primary-500 hover:text-primary-600 font-medium text-sm inline-flex items-center"
                     >
-                      Learn More →
+                      Learn More
+                      <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
                     </Link>
                   </div>
                 ))}
@@ -242,31 +239,31 @@ const Support = () => {
 
           {/* Office Locations */}
           {Array.isArray(officeLocations) && officeLocations.length > 0 && (
-            <section className="mb-20">
-              <div className="text-center mb-12">
-                <h2 className="text-4xl font-bold text-gray-900 mb-4">Visit Our Offices</h2>
-                <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                  Drop by our offices for in-person assistance and travel consultations
+            <section className="mb-16">
+              <div className="mb-10">
+                <h2 className="text-3xl font-semibold text-neutral-700 mb-3">Visit Our Offices</h2>
+                <p className="text-lg text-neutral-600">
+                  Drop by for in-person assistance
                 </p>
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {officeLocations.map((office, index) => (
-                  <div key={index} className="bg-white rounded-xl shadow-lg p-8 text-center">
+                  <div key={index} className="bg-white rounded-xl border border-gray-200 p-8">
                     <div className="mb-6">
                       {office.icon}
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-3">{office.city}</h3>
-                    <p className="text-gray-600 mb-4">
+                    <h3 className="text-xl font-semibold text-neutral-700 mb-3">{office.city}</h3>
+                    <p className="text-neutral-600 mb-4">
                       {office.address}<br />
                       {office.country}
                     </p>
-                    <div className="text-sm text-gray-500">
-                      <div className="flex items-center justify-center gap-2 mb-2">
+                    <div className="text-sm text-neutral-500">
+                      <div className="flex items-center gap-2 mb-2">
                         <FaClock />
                         <span>{office.hours}</span>
                       </div>
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center gap-2">
                         <FaPhone />
                         <span>{office.phone}</span>
                       </div>
@@ -278,21 +275,21 @@ const Support = () => {
           )}
 
           {/* Additional Support Options */}
-          <section className="bg-gradient-to-r from-blue-600 to-purple-700 rounded-2xl p-12 text-center text-white">
-            <h2 className="text-3xl font-bold mb-4">Still Need Help?</h2>
-            <p className="text-xl mb-8 max-w-2xl mx-auto">
-              Our dedicated support team is committed to ensuring you have the best travel experience possible.
+          <section className="bg-gray-50 border border-gray-200 rounded-2xl p-12 text-center">
+            <h2 className="text-3xl font-semibold text-neutral-700 mb-3">Still Need Help?</h2>
+            <p className="text-lg text-neutral-600 mb-8 max-w-2xl mx-auto">
+              Our dedicated support team is committed to ensuring you have the best travel experience.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link 
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
                 to="/contact"
-                className="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                className="bg-neutral-700 text-white px-8 py-3.5 rounded-xl font-medium hover:bg-neutral-800 transition-colors"
               >
                 Contact Us
               </Link>
-              <Link 
+              <Link
                 to="/faqs"
-                className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors"
+                className="bg-white border-2 border-neutral-700 text-neutral-700 px-8 py-3.5 rounded-xl font-medium hover:bg-gray-50 transition-colors"
               >
                 View FAQs
               </Link>

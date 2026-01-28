@@ -159,7 +159,7 @@ const FAQs = () => {
 
   const filteredFAQs = faqItems.filter(item => {
     const matchesSearch = item.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         item.answer.toLowerCase().includes(searchQuery.toLowerCase());
+      item.answer.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch;
   });
 
@@ -188,46 +188,45 @@ const FAQs = () => {
   return (
     <>
       <Navbar forceScrolled={true} />
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-white">
         {/* Hero Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
-          <div className="container mx-auto px-4 text-center">
-            <h1 className="text-5xl font-bold mb-6">Frequently Asked Questions</h1>
-            <p className="text-xl max-w-3xl mx-auto">
-              Find answers to the most common questions about travel, bookings, and our services. 
-              Can't find what you're looking for? Our support team is here to help.
+        <div className="border-b border-gray-200 bg-white py-16">
+          <div className="container mx-auto px-4 max-w-7xl">
+            <h1 className="text-5xl md:text-6xl font-semibold text-neutral-700 mb-4">Frequently Asked Questions</h1>
+            <p className="text-lg text-neutral-600 max-w-2xl">
+              Find answers to common questions about travel, bookings, and our services.
             </p>
           </div>
         </div>
 
-        <div className="container mx-auto px-4 py-16">
+        <div className="container mx-auto px-4 max-w-7xl py-12">
           {/* Search Section */}
           <section className="max-w-3xl mx-auto mb-16">
             <div className="relative">
-              <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl" />
+              <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-400" />
               <input
                 type="text"
-                placeholder="Search for answers to your questions..."
+                placeholder="Search for answers..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-xl focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
-            <p className="text-center text-gray-600 mt-4">
+            <p className="text-center text-neutral-500 mt-4 text-sm">
               {filteredFAQs.length} questions found
             </p>
           </section>
 
           {/* Category Overview */}
           <section className="mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">Browse by Category</h2>
+            <h2 className="text-2xl font-semibold text-neutral-700 mb-8">Browse by Category</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {faqCategories.map((category) => (
                 <div key={category.id} className="text-center">
-                  <div className={`w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl ${getCategoryColor(category.color)}`}>
+                  <div className={`w-14 h-14 mx-auto mb-3 rounded-full flex items-center justify-center text-lg ${getCategoryColor(category.color)}`}>
                     {category.icon}
                   </div>
-                  <h3 className="text-sm font-medium text-gray-900">{category.name}</h3>
+                  <h3 className="text-xs font-medium text-neutral-700">{category.name}</h3>
                 </div>
               ))}
             </div>
@@ -235,32 +234,32 @@ const FAQs = () => {
 
           {/* FAQ Items */}
           <section className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">Common Questions</h2>
-            
-            <div className="space-y-4">
+            <h2 className="text-2xl font-semibold text-neutral-700 mb-8">Common Questions</h2>
+
+            <div className="space-y-3">
               {filteredFAQs.map((item) => (
-                <div key={item.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+                <div key={item.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
                   <button
                     onClick={() => toggleItem(item.id)}
-                    className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-gray-50 transition-colors"
+                    className="w-full px-6 py-5 text-left flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-start gap-4">
-                      <div className={`mt-1 p-2 rounded-full ${getCategoryColor(faqCategories.find(cat => cat.id === item.category)?.color || 'gray')}`}>
-                        <FaQuestionCircle className="text-sm" />
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className={`mt-1 p-2 rounded-full flex-shrink-0 ${getCategoryColor(faqCategories.find(cat => cat.id === item.category)?.color || 'gray')}`}>
+                        <FaQuestionCircle className="text-xs" />
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-900 pr-4">{item.question}</h3>
+                      <h3 className="text-base font-semibold text-neutral-700 pr-4">{item.question}</h3>
                     </div>
                     {expandedItems.has(item.id) ? (
-                      <FaChevronUp className="text-gray-400 flex-shrink-0" />
+                      <FaChevronUp className="text-neutral-400 flex-shrink-0 text-sm" />
                     ) : (
-                      <FaChevronDown className="text-gray-400 flex-shrink-0" />
+                      <FaChevronDown className="text-neutral-400 flex-shrink-0 text-sm" />
                     )}
                   </button>
-                  
+
                   {expandedItems.has(item.id) && (
-                    <div className="px-6 pb-4">
-                      <div className="pl-16">
-                        <p className="text-gray-600 leading-relaxed">{item.answer}</p>
+                    <div className="px-6 pb-5">
+                      <div className="pl-14">
+                        <p className="text-neutral-600 leading-relaxed text-sm">{item.answer}</p>
                       </div>
                     </div>
                   )}
@@ -270,21 +269,21 @@ const FAQs = () => {
           </section>
 
           {/* Still Need Help Section */}
-          <section className="mt-20 bg-gradient-to-r from-blue-600 to-purple-700 rounded-2xl p-12 text-center text-white">
-            <h2 className="text-3xl font-bold mb-4">Still Have Questions?</h2>
-            <p className="text-xl mb-8 max-w-2xl mx-auto">
-              Our dedicated support team is here to help with any questions not covered in our FAQs.
+          <section className="mt-20 bg-gray-50 border border-gray-200 rounded-2xl p-12 text-center">
+            <h2 className="text-3xl font-semibold text-neutral-700 mb-3">Still Have Questions?</h2>
+            <p className="text-lg text-neutral-600 mb-8 max-w-2xl mx-auto">
+              Our support team is here to help with any questions not covered in our FAQs.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link 
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
                 to="/support"
-                className="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                className="bg-neutral-700 text-white px-8 py-3.5 rounded-xl font-medium hover:bg-neutral-800 transition-colors"
               >
                 Contact Support
               </Link>
-              <Link 
+              <Link
                 to="/contact"
-                className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors"
+                className="bg-white border-2 border-neutral-700 text-neutral-700 px-8 py-3.5 rounded-xl font-medium hover:bg-gray-50 transition-colors"
               >
                 Get in Touch
               </Link>
@@ -293,28 +292,28 @@ const FAQs = () => {
 
           {/* Quick Links */}
           <section className="mt-16">
-            <h3 className="text-2xl font-bold text-gray-900 text-center mb-8">Quick Links</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Link 
+            <h3 className="text-xl font-semibold text-neutral-700 mb-6">Quick Links</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Link
                 to="/resources"
-                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center"
+                className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
               >
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">Travel Resources</h4>
-                <p className="text-gray-600">Guides, tips, and tools for better travel</p>
+                <h4 className="text-base font-semibold text-neutral-700 mb-2">Travel Resources</h4>
+                <p className="text-neutral-600 text-sm">Guides, tips, and tools for better travel</p>
               </Link>
-              <Link 
+              <Link
                 to="/destinations"
-                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center"
+                className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
               >
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">Destinations</h4>
-                <p className="text-gray-600">Explore amazing places around the world</p>
+                <h4 className="text-base font-semibold text-neutral-700 mb-2">Destinations</h4>
+                <p className="text-neutral-600 text-sm">Explore amazing places around the world</p>
               </Link>
-              <Link 
+              <Link
                 to="/travel-blog"
-                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow text-center"
+                className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
               >
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">Travel Blog</h4>
-                <p className="text-gray-600">Stories, tips, and travel inspiration</p>
+                <h4 className="text-base font-semibold text-neutral-700 mb-2">Travel Blog</h4>
+                <p className="text-neutral-600 text-sm">Stories, tips, and travel inspiration</p>
               </Link>
             </div>
           </section>
