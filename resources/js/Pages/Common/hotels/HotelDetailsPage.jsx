@@ -8,6 +8,7 @@ import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
 import currencyService from '../../../Services/CurrencyService';
 import Price from '../../../Components/Price';
+import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 
 const HotelDetailsPage = () => {
     const navigate = useNavigate();
@@ -39,6 +40,9 @@ const HotelDetailsPage = () => {
     });
     const [formSubmitting, setFormSubmitting] = useState(false);
     const [formSuccess, setFormSuccess] = useState(false);
+
+    // Auth state (Supabase)
+    const { isAuthenticated: supabaseAuth } = useSupabaseAuth();
 
     // Helpers for default dates (e.g., tomorrow and day after)
     const getDefaultCheckIn = () => {
@@ -144,6 +148,16 @@ const HotelDetailsPage = () => {
 
     // Navigate to booking
     const handleBookNow = () => {
+        // Require login before proceeding to booking
+        const isLoggedIn = supabaseAuth || localStorage.getItem('isAuthenticated') === 'true';
+
+        if (!isLoggedIn) {
+            // Redirect to Supabase login, preserving return URL
+            const returnTo = `${location.pathname}${location.search}`;
+            navigate(`/supabase-login?redirect=${encodeURIComponent(returnTo)}`);
+            return;
+        }
+
         if (!selectedRoom) {
             alert('Please select a room first');
             return;
