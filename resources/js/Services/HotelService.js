@@ -127,21 +127,87 @@ class HotelService {
 
         // Check if it's an Amadeus hotel ID (prefixed by backend)
         if (hotelId.startsWith('amadeus-')) {
+            // First, try to get cached hotel data from search results (stored in sessionStorage)
+            const cachedHotel = this.getCachedHotelData(hotelId);
+            
             const rawHotelId = hotelId.replace('amadeus-', '');
             console.log(`🔍 Detected Amadeus hotel ID, fetching details for ${rawHotelId}`);
+            
             const amadeusHotel = await this.fetchAmadeusHotelDetails(
                 rawHotelId,
                 checkInDate,
                 checkOutDate,
                 adults
             );
+            
             if (amadeusHotel) {
+                // Merge cached data (name, location, etc.) with Amadeus offers
+                if (cachedHotel) {
+                    return {
+                        ...cachedHotel,
+                        ...amadeusHotel,
+                        name: cachedHotel.name || amadeusHotel.name,
+                        location: cachedHotel.location || amadeusHotel.location,
+                        address: cachedHotel.address || amadeusHotel.address,
+                        rooms: amadeusHotel.rooms || cachedHotel.rooms
+                    };
+                }
                 return amadeusHotel;
+            }
+            
+            // If Amadeus fetch failed, use cached hotel data from search results
+            if (cachedHotel) {
+                console.log('✅ Using cached hotel data from search results');
+                return cachedHotel;
             }
         }
 
         // Fallback: try to find in all JSON destinations
         return this.getHotelFromJsonById(hotelId);
+    }
+
+    /**
+     * Get cached hotel data from sessionStorage (stored during search)
+     */
+    getCachedHotelData(hotelId) {
+        try {
+            const cached = sessionStorage.getItem(`hotel-${hotelId}`);
+            if (cached) {
+                const hotel = JSON.parse(cached);
+                console.log(`📦 Found cached hotel data for ${hotelId}`);
+                
+                // Ensure it has rooms for booking
+                if (!hotel.rooms || hotel.rooms.length === 0) {
+                    hotel.rooms = [
+                        {
+                            id: `${hotelId}-standard`,
+                            type: 'Standard Room',
+                            beds: '1 King or 2 Twin beds',
+                            size: '25-30 sqm',
+                            view: 'City view',
+                            amenities: ['Free WiFi', 'TV', 'Mini bar'],
+                            price: parseFloat(hotel.price) || 150,
+                            currency: hotel.currency || 'USD'
+                        },
+                        {
+                            id: `${hotelId}-deluxe`,
+                            type: 'Deluxe Room',
+                            beds: '1 King bed',
+                            size: '35-40 sqm',
+                            view: 'Premium view',
+                            amenities: ['Free WiFi', 'TV', 'Mini bar', 'Coffee maker'],
+                            price: (parseFloat(hotel.price) || 150) + 50,
+                            currency: hotel.currency || 'USD'
+                        }
+                    ];
+                }
+                
+                return hotel;
+            }
+        } catch (error) {
+            console.error('Error reading cached hotel data:', error);
+        }
+        return null;
     }
 
     /**
