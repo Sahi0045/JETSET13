@@ -178,6 +178,9 @@ const SearchHotels = () => {
 
     // Navigate to hotel details
     const handleHotelClick = (hotel) => {
+        // Store hotel data in sessionStorage so details page can use it as fallback
+        sessionStorage.setItem(`hotel-${hotel.id}`, JSON.stringify(hotel));
+        
         const params = new URLSearchParams();
         params.set('id', hotel.id);
         if (checkInDate) params.set('checkIn', checkInDate);

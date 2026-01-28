@@ -156,7 +156,11 @@ async function handleHotelRequest(req, res) {
 }
 
 async function getHotelOffers(req, res) {
-  const { hotelId, checkInDate, checkOutDate, travelers = 2 } = req.body;
+  // Support both GET (query params) and POST (body)
+  const hotelId = req.body?.hotelId || req.query?.hotelId;
+  const checkInDate = req.body?.checkInDate || req.query?.checkInDate;
+  const checkOutDate = req.body?.checkOutDate || req.query?.checkOutDate;
+  const travelers = req.body?.travelers || req.query?.adults || 2;
 
   // Validate required parameters
   if (!hotelId) {
@@ -212,8 +216,14 @@ async function getHotelOffers(req, res) {
         maxOccupancy: offer.room?.typeEstimated?.beds || 2
       }));
 
+      // Return in format expected by frontend (data object with offers)
       return res.status(200).json({
         success: true,
+        data: {
+          hotelId: hotelId,
+          hotel: hotelData.hotel || {},
+          offers: formattedOffers
+        },
         hotelId: hotelId,
         offers: formattedOffers,
         meta: {
@@ -271,8 +281,13 @@ function generateFallbackOffers(res, hotelId) {
     }
   ];
 
+  // Return in format expected by frontend (data object with offers)
   return res.status(200).json({
     success: true,
+    data: {
+      hotelId: hotelId,
+      offers: fallbackOffers
+    },
     hotelId: hotelId,
     offers: fallbackOffers,
     meta: {
