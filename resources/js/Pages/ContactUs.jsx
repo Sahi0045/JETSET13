@@ -8,7 +8,9 @@ import {
   FaTwitter,
   FaInstagram,
   FaFacebook,
-  FaCheckCircle
+  FaCheckCircle,
+  FaPlane,
+  FaArrowRight
 } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
@@ -58,38 +60,28 @@ const ContactUs = () => {
     {
       icon: <FaPhone className="text-2xl" />,
       title: "Phone",
-      value: "+1 (877) 538-7380",
-      link: "tel:+18775387380"
+      value: "+1 (888) 581-3028",
+      link: "tel:+18885813028"
     },
     {
       icon: <FaEnvelope className="text-2xl" />,
       title: "Email",
-      value: "support@jetsetterss.com",
-      link: "mailto:support@jetsetterss.com"
+      value: "privacy@jetsetterss.com",
+      link: "mailto:privacy@jetsetterss.com"
     },
     {
       icon: <FaMapMarkerAlt className="text-2xl" />,
       title: "Headquarters",
-      value: "New York, USA",
+      value: "513 W Bonaventure Ave, Tracy, CA 95391, USA",
       link: null
     }
   ];
 
   const offices = [
     {
-      city: "New York",
+      city: "Tracy",
       country: "USA",
-      address: "123 Broadway, Suite 500, New York, NY 10001"
-    },
-    {
-      city: "London",
-      country: "UK",
-      address: "45 King Street, London, EC2V 8AS"
-    },
-    {
-      city: "Singapore",
-      country: "Singapore",
-      address: "1 Raffles Place, #20-61, Singapore 048616"
+      address: "513 W Bonaventure Ave, Tracy, CA 95391"
     }
   ];
 
@@ -372,6 +364,54 @@ const ContactUs = () => {
                     <p className="text-gray-600">{faq.a}</p>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA Section */}
+        <section className="py-20 bg-[#055B75]">
+          <div className="container mx-auto px-4">
+            <div className="max-w-4xl mx-auto text-center text-white">
+              <h2 className="text-3xl md:text-4xl font-bold mb-6">
+                Ready to Start Your Journey?
+              </h2>
+              <p className="text-xl mb-10 opacity-90">
+                Join millions of travelers who trust Jetsetterss for their adventures
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+                <Link
+                  to="/flights"
+                  className="inline-flex items-center justify-center gap-2 bg-white text-[#055B75] px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transition-all duration-300"
+                >
+                  <FaPlane /> Book Your Flight
+                </Link>
+                <Link
+                  to="/about-us"
+                  className="inline-flex items-center justify-center gap-2 border-2 border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-[#055B75] transition-all duration-300"
+                >
+                  About Us <FaArrowRight />
+                </Link>
+              </div>
+
+              {/* Social Media */}
+              <div className="border-t border-white/20 pt-8">
+                <p className="text-sm mb-4 opacity-80">Follow Us</p>
+                <div className="flex gap-4 justify-center">
+                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300">
+                    <FaLinkedin className="text-xl" />
+                  </a>
+                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300">
+                    <FaTwitter className="text-xl" />
+                  </a>
+                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300">
+                    <FaInstagram className="text-xl" />
+                  </a>
+                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300">
+                    <FaFacebook className="text-xl" />
+                  </a>
+                </div>
               </div>
             </div>
           </div>

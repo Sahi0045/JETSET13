@@ -34,32 +34,44 @@ const AboutUs = () => {
     {
       name: "Sarah Mitchell",
       role: "CEO & Co-founder",
-      image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=face"
+      image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=face",
+      focusAreas: ["Strategy", "Partnerships", "Regulatory", "Technology Oversight"],
+      responsibilities: ["Strategic vision and company direction", "Building key industry partnerships", "Ensuring regulatory compliance", "Overseeing technology initiatives"]
     },
     {
       name: "David Chen",
       role: "CTO & Co-founder",
-      image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&crop=face"
+      image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&crop=face",
+      focusAreas: ["Tech Architecture", "Blockchain"],
+      responsibilities: ["Leading technology architecture", "Implementing blockchain solutions", "Managing development teams", "Driving innovation in travel tech"]
     },
     {
       name: "Emily Rodriguez",
       role: "Chief Product Officer",
-      image: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop&crop=face"
+      image: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop&crop=face",
+      focusAreas: ["Product Strategy", "User Experience", "Product Development"],
+      responsibilities: ["Defining product roadmap", "Enhancing user experience", "Leading product development", "Market research and analysis"]
     },
     {
       name: "Michael Thompson",
-      role: "VP of Operations",
-      image: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400&h=400&fit=crop&crop=face"
+      role: "Chief Strategy Advisor",
+      image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face",
+      focusAreas: ["Strategy", "Business Development"],
+      responsibilities: ["Strategic planning and execution", "Business development initiatives", "Market expansion strategies", "Competitive analysis"]
     },
     {
-      name: "Priya Sharma",
-      role: "Head of Customer Success",
-      image: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=400&h=400&fit=crop&crop=face"
+      name: "Jessica Williams",
+      role: "CMO",
+      image: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=400&h=400&fit=crop&crop=face",
+      focusAreas: ["Marketing", "Growth", "Brand"],
+      responsibilities: ["Leading marketing campaigns", "Driving user growth", "Brand management", "Digital marketing strategy"]
     },
     {
-      name: "James Wilson",
-      role: "Director of Engineering",
-      image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face"
+      name: "Alex Kumar",
+      role: "Research and Analytics Lead",
+      image: "https://images.unsplash.com/photo-1507591064344-4c6ce005b128?w=400&h=400&fit=crop&crop=face",
+      focusAreas: ["Research", "Analytics"],
+      responsibilities: ["Market research and insights", "Data analysis and reporting", "Performance metrics tracking", "Customer behavior analysis"]
     }
   ];
 
@@ -143,28 +155,48 @@ const AboutUs = () => {
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto text-center mb-16">
               <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-                We're a team of leaders!
+                Leadership & Core Team
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
               {leadership.map((leader, index) => (
                 <div key={index} className="group">
-                  <div className="bg-white rounded-2xl overflow-hidden border border-gray-200 hover:border-[#055B75] transition-all duration-300 hover:shadow-lg">
-                    <div className="aspect-square overflow-hidden bg-gray-100">
-                      <img
-                        src={leader.image}
-                        alt={leader.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    </div>
-                    <div className="p-6 text-center">
-                      <h3 className="text-xl font-bold text-gray-900 mb-2">{leader.name}</h3>
-                      <p className="text-gray-600">{leader.role}</p>
-                    </div>
+                  <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-[#055B75] transition-all duration-300 hover:shadow-lg">
+                    <h3 className="text-xl font-bold text-gray-900 mb-1">{leader.name}</h3>
+                    <p className="text-[#055B75] font-semibold mb-4">{leader.role}</p>
+                      
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Focus Areas:</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {leader.focusAreas.map((area, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+                              {area}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Key Responsibilities:</h4>
+                        <ul className="space-y-1">
+                          {leader.responsibilities.map((resp, idx) => (
+                            <li key={idx} className="text-sm text-gray-600 flex items-start">
+                              <span className="text-[#055B75] mr-2">•</span>
+                              {resp}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                   </div>
                 </div>
               ))}
+            </div>
+            
+            <div className="mt-16 text-center">
+              <p className="text-gray-600 italic">
+                "Incubated by Bennett University (Times of India Group)"
+              </p>
             </div>
           </div>
         </section>
@@ -176,7 +208,7 @@ const AboutUs = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                 <div>
                   <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-                    Our Journey Since 2009
+                    Our Journey Since 2010
                   </h2>
                   <div className="space-y-4 text-gray-600 text-lg leading-relaxed">
                     <p>
@@ -207,7 +239,7 @@ const AboutUs = () => {
                 <div className="relative">
                   <div className="rounded-2xl overflow-hidden shadow-2xl">
                     <img
-                      src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1470&auto=format&fit=crop"
+                      src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?q=80&w=1484&auto=format&fit=crop"
                       alt="Jetsetterss Team"
                       className="w-full h-[500px] object-cover"
                     />
@@ -253,11 +285,9 @@ const AboutUs = () => {
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-8 max-w-2xl mx-auto">
               {[
-                { city: "New York", type: "Headquarters", country: "USA" },
-                { city: "London", type: "European Hub", country: "UK" },
-                { city: "Singapore", type: "Asia Pacific Hub", country: "Singapore" }
+                { city: "New York", type: "Headquarters", country: "USA" }
               ].map((office, index) => (
                 <div key={index} className="bg-white rounded-2xl p-8 border border-gray-200 hover:border-[#055B75] transition-all duration-300 hover:shadow-lg text-center">
                   <FaGlobe className="text-4xl text-[#055B75] mx-auto mb-4" />
