@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Calendar, Users, MapPin, CreditCard, User, Mail, Phone, Check, Shield, ChevronLeft, Clock, AlertCircle } from 'lucide-react';
+import axios from 'axios';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
@@ -71,6 +72,10 @@ const HotelBookingSummary = () => {
     }, [hotelId]);
 
     // Calculate prices
+    const API_BASE_URL = window.location.hostname.includes('jetsetterss.com') || window.location.hostname.includes('vercel.app')
+        ? 'https://www.jetsetterss.com/api'
+        : '/api';
+
     const subtotal = pricePerNight * nights;
     const taxes = Math.round(subtotal * 0.12);
     const serviceFee = Math.round(subtotal * 0.05);
@@ -135,15 +140,39 @@ const HotelBookingSummary = () => {
 
         setFormSubmitting(true);
 
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        try {
+            // Step 1: create a backend booking record (mock Amadeus booking)
+            const bookingPayload = {
+                hotelId,
+                roomType,
+                checkInDate: checkIn,
+                checkOutDate: checkOut,
+                totalPrice: total,
+                currency: 'USD',
+                guestDetails: guestInfo
+            };
 
-        // Generate booking reference
-        const ref = 'JET' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 6).toUpperCase();
-        setBookingReference(ref);
-        setBookingComplete(true);
-        setStep(3);
-        setFormSubmitting(false);
+            const bookingResponse = await axios.post(`${API_BASE_URL}/hotels`, {
+                action: 'bookHotel',
+                ...bookingPayload
+            });
+
+            if (!bookingResponse.data?.success) {
+                throw new Error(bookingResponse.data?.error || 'Booking failed');
+            }
+
+            const ref = bookingResponse.data.booking?.bookingReference || bookingResponse.data.bookingReference ||
+                'JET' + Date.now().toString(36).toUpperCase();
+
+            setBookingReference(ref);
+            setBookingComplete(true);
+            setStep(3);
+        } catch (error) {
+            console.error('Booking error:', error);
+            alert('Booking failed. Please try again.');
+        } finally {
+            setFormSubmitting(false);
+        }
     };
 
     // Format date for display

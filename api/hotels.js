@@ -844,7 +844,7 @@ async function handleHotelSearch(req, res) {
 
       // Format real hotel data for frontend
       const realHotels = hotelListResponse.data.data.slice(0, 8).map((hotel, index) => ({
-        id: hotel.hotelId,
+        id: `amadeus-${hotel.hotelId}`,
         hotelId: hotel.hotelId,
         name: hotel.name,
         location: `${hotel.address?.cityName || cityName}${hotel.address?.countryCode ? `, ${hotel.address.countryCode}` : ''}`,

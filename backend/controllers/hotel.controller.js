@@ -179,8 +179,13 @@ export const searchHotels = async (req, res) => {
       console.log('Searching hotels using AmadeusService with params:', searchParams);
       const searchResults = await amadeusService.searchHotels(searchParams);
       
-      // Check if we have data from search
-      if (!searchResults.data || (Array.isArray(searchResults.data) && searchResults.data.length === 0)) {
+      // Format hotel data for frontend
+      const formattedHotels = [];
+      
+      // Check if searchResults has 'hotels' property (when availability check fails, it returns just hotel list)
+      const hotelList = searchResults.hotels || searchResults.data || [];
+      
+      if (!hotelList || (Array.isArray(hotelList) && hotelList.length === 0)) {
         console.log('No hotels found in the search results');
         
         // Return empty results with a friendly message
@@ -193,38 +198,11 @@ export const searchHotels = async (req, res) => {
         });
       }
       
-      // Format hotel data for frontend
-      const formattedHotels = [];
-      
-      // Process hotels with both basic info and availability
-      if (searchResults.data && Array.isArray(searchResults.data) && searchResults.data.length > 0) {
-        // Format each hotel
-        searchResults.data.forEach((hotel, index) => {
-          const cityName = hotel.address?.cityName || searchParams.cityCode;
-          const countryCode = hotel.address?.countryCode || '';
-          
-          formattedHotels.push({
-            id: hotel.hotelId,
-            name: hotel.name,
-            cityCode: searchParams.cityCode,
-            location: countryCode ? `${cityName}, ${countryCode}` : cityName,
-            address: hotel.address,
-            geoCode: hotel.geoCode,
-            rating: Math.floor(Math.random() * 2) + 4, // Random rating between 4-5 for demo
-            price: (150 + index * 25).toString(), // Dummy price
-            currency: 'USD',
-            image: `https://source.unsplash.com/random/300x200/?hotel,${index}`,
-            images: [
-              `https://source.unsplash.com/random/300x200/?hotel,${index}`,
-              `https://source.unsplash.com/random/300x200/?room,${index}`
-            ],
-            amenities: ['Free WiFi', 'Air Conditioning', 'Pool', '24-hour Front Desk'].sort(() => 0.5 - Math.random()).slice(0, 3)
-          });
-        });
-      }
-      // Process hotel offers if available
-      else if (searchResults.data && Array.isArray(searchResults.data) && searchResults.data.length > 0) {
-        // Get mapped hotels
+      // If we have hotel offers with prices (searchResults.data is offer array)
+      if (searchResults.data && Array.isArray(searchResults.data) && searchResults.data.length > 0 && searchResults.data[0].offers) {
+        console.log('Processing hotels WITH availability/offers');
+        
+        // Get mapped hotels for additional info
         const hotelInfoMap = {};
         if (searchResults.hotels && Array.isArray(searchResults.hotels)) {
           searchResults.hotels.forEach(hotel => {
@@ -242,15 +220,17 @@ export const searchHotels = async (req, res) => {
           if (hotelOffer.offers && hotelOffer.offers.length > 0) {
             const offer = hotelOffer.offers[0];
             formattedHotels.push({
-              id: hotelId,
+              id: `amadeus-${hotelId}`,
+              hotelId,
               name: hotelOffer.hotel.name,
               cityCode: searchParams.cityCode,
               location: countryCode ? `${cityName}, ${countryCode}` : cityName,
               address: basicInfo.address || {},
               geoCode: basicInfo.geoCode || {},
-              rating: Math.floor(Math.random() * 2) + 4, // Random rating between 4-5 for demo
+              rating: Math.floor(Math.random() * 2) + 4,
               price: offer.price.total,
               currency: offer.price.currency,
+              stars: 4,
               image: `https://source.unsplash.com/random/300x200/?hotel,${hotelId}`,
               images: [
                 `https://source.unsplash.com/random/300x200/?hotel,${hotelId}`,
@@ -260,13 +240,43 @@ export const searchHotels = async (req, res) => {
             });
           }
         });
+      } 
+      // Otherwise, process all hotels from the list (no availability check)
+      else {
+        console.log(`Processing ALL ${hotelList.length} hotels WITHOUT availability check`);
+        
+        hotelList.slice(0, 20).forEach((hotel, index) => {
+          const cityName = hotel.address?.cityName || searchParams.cityCode;
+          const countryCode = hotel.address?.countryCode || '';
+          
+          formattedHotels.push({
+            id: `amadeus-${hotel.hotelId}`,
+            hotelId: hotel.hotelId,
+            name: hotel.name,
+            cityCode: searchParams.cityCode,
+            location: countryCode ? `${cityName}, ${countryCode}` : cityName,
+            address: hotel.address,
+            geoCode: hotel.geoCode,
+            rating: Math.floor(Math.random() * 2) + 4,
+            price: (150 + index * 25).toString(),
+            currency: 'USD',
+            stars: 4,
+            image: `https://source.unsplash.com/random/300x200/?hotel,${index}`,
+            images: [
+              `https://source.unsplash.com/random/300x200/?hotel,${index}`,
+              `https://source.unsplash.com/random/300x200/?room,${index}`
+            ],
+            amenities: ['Free WiFi', 'Air Conditioning', 'Pool', '24-hour Front Desk'].sort(() => 0.5 - Math.random()).slice(0, 3)
+          });
+        });
       }
       
       // If we still have no hotels, try a fallback solution with a known working hotel
       if (formattedHotels.length === 0) {
         console.log('Using fallback hotel for empty results');
         formattedHotels.push({
-          id: 'EDLONDER', // Known working hotel ID from tests
+          id: 'amadeus-EDLONDER', // Known working hotel ID from tests
+          hotelId: 'EDLONDER',
           name: 'ED Hotel London',
           cityCode: searchParams.cityCode,
           location: 'London, GB',

@@ -40,6 +40,22 @@ const HotelDetailsPage = () => {
     const [formSubmitting, setFormSubmitting] = useState(false);
     const [formSuccess, setFormSuccess] = useState(false);
 
+    // Helpers for default dates (e.g., tomorrow and day after)
+    const getDefaultCheckIn = () => {
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        return tomorrow.toISOString().split('T')[0];
+    };
+
+    const getDefaultCheckOut = () => {
+        const checkIn = formData.checkIn || getDefaultCheckIn();
+        const inDate = new Date(checkIn);
+        const outDate = new Date(inDate);
+        outDate.setDate(inDate.getDate() + 1);
+        return outDate.toISOString().split('T')[0];
+    };
+
     // Fetch hotel details
     useEffect(() => {
         const fetchHotel = async () => {
@@ -51,7 +67,16 @@ const HotelDetailsPage = () => {
 
             setLoading(true);
             try {
-                const hotelData = await hotelService.getHotelById(hotelId);
+                // For Amadeus hotels, pass dates and adults so backend can fetch real offers
+                const effectiveCheckIn = checkInDate || getDefaultCheckIn();
+                const effectiveCheckOut = checkOutDate || getDefaultCheckOut();
+
+                const hotelData = await hotelService.getHotelById(
+                    hotelId,
+                    effectiveCheckIn,
+                    effectiveCheckOut,
+                    adultsParam
+                );
                 if (hotelData) {
                     setHotel(hotelData);
                     // If there are rooms, select the first one by default

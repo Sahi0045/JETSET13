@@ -451,87 +451,15 @@ class AmadeusService {
       
       console.log(`Found ${hotelListResponse.data.data?.length || 0} hotels in ${params.cityCode}`);
       
-      // If we don't need to check availability, return hotel list
-      if (!params.checkInDate || !params.checkOutDate) {
-        return hotelListResponse.data;
-      }
-      
       // If no hotels found, return empty results
       if (!hotelListResponse.data.data || hotelListResponse.data.data.length === 0) {
         return { data: [] };
       }
       
-      // Filter and prioritize hotels
-      const prioritizedHotels = this.prioritizeHotels(hotelListResponse.data.data);
-      console.log(`Prioritized ${prioritizedHotels.length} best hotels (excluding test properties)`);
-      
-      // If no suitable hotels found after filtering, use the full list
-      const hotelsToCheck = prioritizedHotels.length > 0 ? prioritizedHotels : hotelListResponse.data.data;
-      
-      // Get the first 5 hotel IDs to check availability
-      const hotelIds = hotelsToCheck.slice(0, 5).map(hotel => hotel.hotelId);
-      
-      try {
-        // Try to check availability using v3 endpoint
-        const availabilityResponse = await axios.get(`${this.baseUrls.v3}/shopping/hotel-offers`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/vnd.amadeus+json'
-          },
-          params: {
-            hotelIds: hotelIds.join(','),
-            checkInDate: params.checkInDate,
-            checkOutDate: params.checkOutDate,
-            adults: params.adults || 2,
-            roomQuantity: 1,
-            currency: 'USD',
-            bestRateOnly: true
-          }
-        });
-        
-        console.log(`Found ${availabilityResponse.data.data?.length || 0} hotels with availability`);
-        
-        // Return the combined results
-        return {
-          ...availabilityResponse.data,
-          hotels: hotelListResponse.data.data
-        };
-      } catch (availabilityError) {
-        console.warn('Could not check availability, returning hotel list only:', availabilityError.message);
-        
-        // If availability check fails, try with fallback hotel ID
-        try {
-          console.log('Trying with fallback hotel ID: EDLONDER');
-          const fallbackResponse = await axios.get(`${this.baseUrls.v3}/shopping/hotel-offers`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Accept': 'application/vnd.amadeus+json'
-            },
-            params: {
-              hotelIds: 'EDLONDER',
-              checkInDate: params.checkInDate,
-              checkOutDate: params.checkOutDate,
-              adults: params.adults || 2,
-              roomQuantity: 1,
-              currency: 'USD',
-              bestRateOnly: true
-            }
-          });
-          
-          if (fallbackResponse.data.data && fallbackResponse.data.data.length > 0) {
-            console.log('Successfully found availability with fallback hotel');
-            return {
-              ...fallbackResponse.data,
-              hotels: hotelListResponse.data.data
-            };
-          }
-        } catch (fallbackError) {
-          console.log('Fallback hotel search also failed, returning hotel list only');
-        }
-        
-        // Return just the hotel list
-        return hotelListResponse.data;
-      }
+      // SKIP availability check for test environment to show all hotels
+      // Most test hotel IDs don't support availability checks, so we just return the hotel list
+      console.log(`Returning all ${hotelListResponse.data.data.length} hotels without availability check (test environment)`);
+      return hotelListResponse.data;
     } catch (error) {
       console.error('❌ Hotel search error:', error.response?.data || error.message);
       throw error;
