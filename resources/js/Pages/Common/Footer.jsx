@@ -27,7 +27,7 @@ const Footer = () => {
             <nav aria-label="Travel Navigation">
               <ul className="nav-list">
                 <li>
-                  <Link to="/cruises" className="footer-nav-link">
+                  <Link to="/cruise" className="footer-nav-link">
                     Cruise
                   </Link>
                 </li>
@@ -96,12 +96,12 @@ const Footer = () => {
                   </Link>
                 </li>
                 <li>
-                  <Link to="/privacy" className="footer-nav-link">
+                  <Link to="/privacy-policy" className="footer-nav-link">
                     Privacy Policy
                   </Link>
                 </li>
                 <li>
-                  <Link to="/terms" className="footer-nav-link">
+                  <Link to="/terms-conditions" className="footer-nav-link">
                     Terms & Conditions
                   </Link>
                 </li>

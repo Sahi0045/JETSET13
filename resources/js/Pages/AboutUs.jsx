@@ -1,297 +1,326 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FaHeart, FaShieldAlt, FaUsers, FaGlobe, FaAward, FaHandshake, FaLightbulb, FaRocket, FaStar, FaCheckCircle } from 'react-icons/fa';
+import { FaHeart, FaShieldAlt, FaUsers, FaGlobe, FaLightbulb, FaRocket, FaPlane, FaArrowRight, FaLinkedin, FaTwitter, FaInstagram, FaFacebook } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
 
 const AboutUs = () => {
-  const companyHighlights = [
+  const stats = [
+    { number: "2009", label: "Company Founded" },
+    { number: "2M+", label: "Happy Travelers" },
+    { number: "150+", label: "Countries Served" },
+    { number: "500+", label: "Travel Experts" }
+  ];
+
+  const coreValues = [
     {
-      title: "Global Reach",
-      description: "Serving travelers in over 150 countries worldwide",
-      icon: <FaGlobe className="text-4xl text-blue-600" />
+      title: "Trust and Transparency",
+      description: "We prioritize building strong, open relationships with our travelers, founded on mutual trust and honesty in every interaction.",
+      icon: <FaShieldAlt className="text-4xl" />
     },
     {
-      title: "Expert Team",
-      description: "Over 500 travel professionals with decades of combined experience",
-      icon: <FaUsers className="text-4xl text-green-600" />
+      title: "Customer Growth",
+      description: "We foster memorable experiences that encourage personal growth through travel, empowering our customers to explore the world confidently.",
+      icon: <FaUsers className="text-4xl" />
     },
     {
-      title: "Innovation Leader",
-      description: "Pioneering AI-powered travel recommendations and mobile solutions",
-      icon: <FaLightbulb className="text-4xl text-yellow-600" />
-    },
-    {
-      title: "Customer Satisfaction",
-      description: "4.9/5 rating from over 2 million satisfied customers",
-      icon: <FaStar className="text-4xl text-purple-600" />
+      title: "Innovation and Excellence",
+      description: "By leveraging cutting-edge technology, we drive creativity and deliver exceptional travel solutions that exceed expectations.",
+      icon: <FaLightbulb className="text-4xl" />
     }
   ];
 
-  const services = [
+  const leadership = [
     {
-      title: "Flight Bookings",
-      description: "Comprehensive flight search and booking with 500+ airlines worldwide",
-      icon: <FaRocket className="text-3xl text-blue-600" />,
-      features: ["Best Price Guarantee", "24/7 Support", "Flexible Booking Options"]
+      name: "Sarah Mitchell",
+      role: "CEO & Co-founder",
+      image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=face"
     },
     {
-      title: "Hotel Accommodations",
-      description: "Over 2 million properties from budget to luxury accommodations",
-      icon: <FaHandshake className="text-3xl text-green-600" />,
-      features: ["Verified Reviews", "Best Rate Guarantee", "Free Cancellation"]
+      name: "David Chen",
+      role: "CTO & Co-founder",
+      image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&crop=face"
     },
     {
-      title: "Cruise Vacations",
-      description: "Curated cruise experiences with major cruise lines globally",
-      icon: <FaAward className="text-3xl text-purple-600" />,
-      features: ["Expert Cruise Planning", "Exclusive Deals", "Shore Excursions"]
+      name: "Emily Rodriguez",
+      role: "Chief Product Officer",
+      image: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop&crop=face"
     },
     {
-      title: "Vacation Packages",
-      description: "All-inclusive packages combining flights, hotels, and activities",
-      icon: <FaCheckCircle className="text-3xl text-orange-600" />,
-      features: ["Custom Itineraries", "Group Discounts", "Travel Insurance"]
+      name: "Michael Thompson",
+      role: "VP of Operations",
+      image: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400&h=400&fit=crop&crop=face"
+    },
+    {
+      name: "Priya Sharma",
+      role: "Head of Customer Success",
+      image: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=400&h=400&fit=crop&crop=face"
+    },
+    {
+      name: "James Wilson",
+      role: "Director of Engineering",
+      image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face"
     }
   ];
 
-  const achievements = [
-    {
-      year: "2009",
-      achievement: "Company Founded",
-      description: "Started with a vision to democratize luxury travel"
-    },
-    {
-      year: "2012",
-      achievement: "First Million Customers",
-      description: "Reached our first million happy travelers milestone"
-    },
-    {
-      year: "2015",
-      achievement: "Global Expansion",
-      description: "Expanded to serve customers in over 50 countries"
-    },
-    {
-      year: "2018",
-      achievement: "Technology Innovation",
-      description: "Launched AI-powered travel recommendation engine"
-    },
-    {
-      year: "2021",
-      achievement: "Sustainability Commitment",
-      description: "Committed to carbon-neutral operations"
-    },
-    {
-      year: "2024",
-      achievement: "Industry Recognition",
-      description: "Named one of the top 10 travel companies globally"
-    }
-  ];
-
-  const teamValues = [
-    {
-      title: "Passion for Travel",
-      description: "Every team member shares a deep love for exploration and discovery",
-      icon: <FaHeart className="text-3xl text-red-500" />
-    },
-    {
-      title: "Customer-Centric",
-      description: "We put our customers' needs and satisfaction first in everything we do",
-      icon: <FaUsers className="text-3xl text-blue-500" />
-    },
-    {
-      title: "Innovation",
-      description: "Constantly pushing boundaries to create better travel experiences",
-      icon: <FaLightbulb className="text-3xl text-yellow-500" />
-    },
-    {
-      title: "Integrity",
-      description: "Operating with complete transparency and ethical practices",
-      icon: <FaShieldAlt className="text-3xl text-green-500" />
-    }
+  const partners = [
+    { name: "Amadeus", logo: "https://via.placeholder.com/150x60/055B75/FFFFFF?text=Amadeus" },
+    { name: "Sabre", logo: "https://via.placeholder.com/150x60/055B75/FFFFFF?text=Sabre" },
+    { name: "Travelport", logo: "https://via.placeholder.com/150x60/055B75/FFFFFF?text=Travelport" },
+    { name: "IATA", logo: "https://via.placeholder.com/150x60/055B75/FFFFFF?text=IATA" }
   ];
 
   return (
     <>
-      <Navbar forceScrolled={true} />
-      <div className="min-h-screen bg-gray-50">
-        {/* Hero Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
-          <div className="container mx-auto px-4 text-center">
-            <h1 className="text-5xl font-bold mb-6">About Jetsetterss</h1>
-            <p className="text-xl max-w-3xl mx-auto">
-              We're passionate about creating extraordinary travel experiences that inspire, 
-              connect, and transform lives. Discover what makes us different and why millions 
-              of travelers choose Jetsetterss for their adventures.
-            </p>
-          </div>
-        </div>
-
-        <div className="container mx-auto px-4 py-16">
-          {/* Who We Are */}
-          <section className="mb-20">
+      <Navbar />
+      <div className="min-h-screen bg-white pt-[71px]">
+        {/* Hero Section - Clean and Simple */}
+        <section className="relative bg-gradient-to-br from-gray-50 to-white py-20 md:py-32">
+          <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto text-center">
-              <h2 className="text-4xl font-bold text-gray-900 mb-8">Who We Are</h2>
-              <div className="prose prose-lg mx-auto text-gray-600">
-                <p className="mb-6">
-                  Jetsetterss is more than just a travel company – we're a community of passionate explorers, 
-                  dreamers, and adventure-seekers. Founded in 2009, we've been helping people discover the 
-                  world's most incredible destinations for over 15 years.
-                </p>
-                <p className="mb-6">
-                  Our team consists of experienced travelers, industry experts, and technology innovators 
-                  who understand that every journey is unique. We believe that travel has the power to 
-                  transform lives, broaden perspectives, and create lasting memories.
-                </p>
-                <p>
-                  From the moment you start planning your trip to the day you return home, we're here to 
-                  ensure every detail is perfect. We're not just selling travel – we're creating experiences 
-                  that will stay with you forever.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* Why Choose Jetsetterss */}
-          <section className="mb-20">
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold text-gray-900 mb-4">Why Choose Jetsetterss?</h2>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                Discover what sets us apart and why travelers trust us with their most precious moments
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-6 leading-tight">
+                Behind the scenes <span className="text-[#055B75]">@Jetsetterss</span>
+              </h1>
+              <p className="text-xl md:text-2xl text-gray-600 leading-relaxed max-w-3xl mx-auto">
+                Our exponential growth and incredible success has been nothing short of a dream.
+                It's no surprise that behind it is a strong, decisive leadership and passionate, dependable team.
               </p>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {companyHighlights.map((highlight, index) => (
-                <div key={index} className="bg-white rounded-xl shadow-lg p-8 text-center hover:shadow-xl transition-shadow duration-300">
-                  <div className="mb-6">
-                    {highlight.icon}
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-4">{highlight.title}</h3>
-                  <p className="text-gray-600">{highlight.description}</p>
+          </div>
+        </section>
+
+        {/* The Humans Behind the Magic */}
+        <section className="py-16 bg-white">
+          <div className="container mx-auto px-4">
+            <div className="max-w-4xl mx-auto text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
+                The humans behind the magic
+              </h2>
+              <p className="text-lg md:text-xl text-gray-600 leading-relaxed">
+                When we aren't furiously building and shipping our next brilliant idea, we are celebrating
+                the small moments - a birthday, an anniversary, a festival, any minor occasion that brings
+                us together to share our joy (or order desserts guilt free).
+              </p>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-5xl mx-auto">
+              {stats.map((stat, index) => (
+                <div key={index} className="text-center p-6 rounded-xl bg-gradient-to-br from-gray-50 to-white border border-gray-100">
+                  <div className="text-4xl md:text-5xl font-bold text-[#055B75] mb-2">{stat.number}</div>
+                  <div className="text-gray-600 font-medium">{stat.label}</div>
                 </div>
               ))}
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* Comprehensive Travel Services */}
-          <section className="mb-20">
-            <div className="bg-white rounded-2xl shadow-lg p-12">
-              <div className="text-center mb-12">
-                <h2 className="text-4xl font-bold text-gray-900 mb-4">Comprehensive Travel Services</h2>
-                <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                  From flights to accommodations, we handle every aspect of your journey
-                </p>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                {services.map((service, index) => (
-                  <div key={index} className="text-center">
-                    <div className="mb-4">
-                      {service.icon}
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">{service.title}</h3>
-                    <p className="text-gray-600 text-sm">{service.description}</p>
-                  </div>
-                ))}
-              </div>
+        {/* Core Values Section */}
+        <section className="py-20 bg-gradient-to-br from-gray-50 to-white">
+          <div className="container mx-auto px-4">
+            <div className="max-w-4xl mx-auto text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
+                We value Trust, Growth, and Collaboration above everything else.
+              </h2>
             </div>
-          </section>
 
-          {/* Our Journey Through the Years */}
-          <section className="mb-20">
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold text-gray-900 mb-4">Our Journey Through the Years</h2>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                Key milestones and achievements that have shaped our company's success
-              </p>
-            </div>
-            
-            <div className="max-w-5xl mx-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {achievements.map((achievement, index) => (
-                  <div key={index} className="bg-white rounded-xl shadow-lg p-6 text-center hover:shadow-lg transition-shadow duration-300">
-                    <div className="text-3xl font-bold text-blue-600 mb-2">{achievement.year}</div>
-                    <div className="text-gray-600 font-medium">{achievement.achievement}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* What Drives Our Team */}
-          <section className="mb-20">
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold text-gray-900 mb-4">What Drives Our Team</h2>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                The core values and principles that guide everything we do
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {teamValues.map((value, index) => (
-                <div key={index} className="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-shadow duration-300">
-                  <div className="flex items-center gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+              {coreValues.map((value, index) => (
+                <div key={index} className="bg-white rounded-2xl p-8 border border-gray-200 hover:border-[#055B75] transition-all duration-300 hover:shadow-lg">
+                  <div className="text-[#055B75] mb-6">
                     {value.icon}
-                    <h3 className="text-xl font-bold text-gray-900">{value.title}</h3>
                   </div>
-                  <p className="text-gray-600">{value.description}</p>
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">{value.title}</h3>
+                  <p className="text-gray-600 leading-relaxed">{value.description}</p>
                 </div>
               ))}
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* Commitment to Excellence */}
-          <section className="mb-20">
-            <div className="bg-gradient-to-r from-blue-600 to-purple-700 rounded-2xl p-12 text-white">
-              <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold mb-4">Our Commitment to Excellence</h2>
-                <p className="text-xl max-w-2xl mx-auto">
-                  We're committed to providing the highest level of service and creating 
-                  experiences that exceed your expectations
-                </p>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {companyHighlights.map((commitment, index) => (
-                  <div key={index} className="text-center">
-                    <div className="mb-4">
-                      {commitment.icon}
+        {/* Leadership Team */}
+        <section className="py-20 bg-white">
+          <div className="container mx-auto px-4">
+            <div className="max-w-4xl mx-auto text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
+                We're a team of leaders!
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+              {leadership.map((leader, index) => (
+                <div key={index} className="group">
+                  <div className="bg-white rounded-2xl overflow-hidden border border-gray-200 hover:border-[#055B75] transition-all duration-300 hover:shadow-lg">
+                    <div className="aspect-square overflow-hidden bg-gray-100">
+                      <img
+                        src={leader.image}
+                        alt={leader.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
                     </div>
-                    <h3 className="text-xl font-bold mb-2">{commitment.title}</h3>
-                    <p className="text-blue-100">{commitment.description}</p>
+                    <div className="p-6 text-center">
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">{leader.name}</h3>
+                      <p className="text-gray-600">{leader.role}</p>
+                    </div>
                   </div>
-                ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Our Story Section */}
+        <section className="py-20 bg-gradient-to-br from-gray-50 to-white">
+          <div className="container mx-auto px-4">
+            <div className="max-w-5xl mx-auto">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                <div>
+                  <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
+                    Our Journey Since 2009
+                  </h2>
+                  <div className="space-y-4 text-gray-600 text-lg leading-relaxed">
+                    <p>
+                      Jetsetterss began with a simple vision: to make travel accessible, affordable,
+                      and extraordinary for everyone. What started as a small team of passionate travelers
+                      has grown into a global platform serving millions.
+                    </p>
+                    <p>
+                      We've built our reputation on trust, innovation, and an unwavering commitment to
+                      customer satisfaction. Every day, our team works tirelessly to ensure that your
+                      travel experience is seamless from start to finish.
+                    </p>
+                    <p>
+                      Today, we're proud to be recognized as one of the leading travel platforms globally,
+                      but we're just getting started. Our mission remains the same: to inspire and enable
+                      people to explore the world.
+                    </p>
+                  </div>
+                  <div className="mt-8">
+                    <Link
+                      to="/careers"
+                      className="inline-flex items-center gap-2 bg-[#055B75] text-white px-8 py-4 rounded-lg font-semibold hover:bg-[#034457] transition-all duration-300"
+                    >
+                      Join Our Team <FaArrowRight />
+                    </Link>
+                  </div>
+                </div>
+                <div className="relative">
+                  <div className="rounded-2xl overflow-hidden shadow-2xl">
+                    <img
+                      src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1470&auto=format&fit=crop"
+                      alt="Jetsetterss Team"
+                      className="w-full h-[500px] object-cover"
+                    />
+                  </div>
+                  <div className="absolute -bottom-6 -right-6 bg-[#055B75] text-white p-8 rounded-2xl shadow-xl max-w-xs">
+                    <div className="text-4xl font-bold mb-2">15+</div>
+                    <div className="text-sm opacity-90">Years of Excellence in Travel Industry</div>
+                  </div>
+                </div>
               </div>
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* Call to Action */}
-          <section className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">Ready to Start Your Journey?</h2>
-            <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-              Join millions of travelers who have already discovered the world with Jetsetterss
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link 
-                to="/flights"
-                className="bg-blue-600 text-white px-8 py-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-              >
-                Start Planning
-              </Link>
-              <Link 
-                to="/contact"
-                className="bg-transparent border-2 border-blue-600 text-blue-600 px-8 py-4 rounded-lg font-semibold hover:bg-blue-600 hover:text-white transition-colors"
-              >
-                Get in Touch
-              </Link>
+        {/* Partners Section */}
+        <section className="py-20 bg-white">
+          <div className="container mx-auto px-4">
+            <div className="max-w-4xl mx-auto text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
+                Trusted by the best
+              </h2>
+              <p className="text-lg text-gray-600">
+                We partner with industry leaders to bring you the best travel experiences
+              </p>
             </div>
-          </section>
-        </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
+              {partners.map((partner, index) => (
+                <div key={index} className="flex items-center justify-center p-6 bg-gray-50 rounded-xl border border-gray-200 hover:border-[#055B75] transition-all duration-300">
+                  <img src={partner.logo} alt={partner.name} className="max-w-full h-auto opacity-60 hover:opacity-100 transition-opacity" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Our Offices */}
+        <section className="py-20 bg-gradient-to-br from-gray-50 to-white">
+          <div className="container mx-auto px-4">
+            <div className="max-w-4xl mx-auto text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
+                Our Offices Worldwide
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+              {[
+                { city: "New York", type: "Headquarters", country: "USA" },
+                { city: "London", type: "European Hub", country: "UK" },
+                { city: "Singapore", type: "Asia Pacific Hub", country: "Singapore" }
+              ].map((office, index) => (
+                <div key={index} className="bg-white rounded-2xl p-8 border border-gray-200 hover:border-[#055B75] transition-all duration-300 hover:shadow-lg text-center">
+                  <FaGlobe className="text-4xl text-[#055B75] mx-auto mb-4" />
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">{office.city}</h3>
+                  <p className="text-gray-600 mb-1">{office.type}</p>
+                  <p className="text-sm text-gray-500">{office.country}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* CTA Section */}
+        <section className="py-20 bg-[#055B75]">
+          <div className="container mx-auto px-4">
+            <div className="max-w-4xl mx-auto text-center text-white">
+              <h2 className="text-3xl md:text-4xl font-bold mb-6">
+                Ready to Start Your Journey?
+              </h2>
+              <p className="text-xl mb-10 opacity-90">
+                Join millions of travelers who trust Jetsetterss for their adventures
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+                <Link
+                  to="/flights"
+                  className="inline-flex items-center justify-center gap-2 bg-white text-[#055B75] px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transition-all duration-300"
+                >
+                  <FaPlane /> Book Your Flight
+                </Link>
+                <Link
+                  to="/contact"
+                  className="inline-flex items-center justify-center gap-2 border-2 border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-[#055B75] transition-all duration-300"
+                >
+                  Contact Us <FaArrowRight />
+                </Link>
+              </div>
+
+              {/* Social Media */}
+              <div className="border-t border-white/20 pt-8">
+                <p className="text-sm mb-4 opacity-80">Follow Us</p>
+                <div className="flex gap-4 justify-center">
+                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300">
+                    <FaLinkedin className="text-xl" />
+                  </a>
+                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300">
+                    <FaTwitter className="text-xl" />
+                  </a>
+                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300">
+                    <FaInstagram className="text-xl" />
+                  </a>
+                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300">
+                    <FaFacebook className="text-xl" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
       <Footer />
     </>
   );
 };
 
-export default AboutUs; 
+export default AboutUs;
