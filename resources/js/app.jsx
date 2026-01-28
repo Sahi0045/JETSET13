@@ -1,7 +1,6 @@
 // CSS imports moved to main.jsx entry point
 
 import React from 'react';
-import FullPageBanner from './components/FullPageBanner';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoadingSpinner from './Components/LoadingSpinner';
 
@@ -574,7 +573,6 @@ const ProtectedRoute = React.lazy(() =>
 const App = () => {
   return (
     <React.Suspense fallback={<LoadingComponent />}>
-      <FullPageBanner />
       <Routes>
         <Route path="/" element={<Welcome />} />
         <Route path="/dashboard" element={<Dashboard />} />
