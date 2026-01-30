@@ -177,6 +177,9 @@ async function handleInitiatePayment(req, res) {
                 cancelUrl: finalCancelUrl,
                 merchant: { name: 'JetSet Travel' },
                 displayControl: { billingAddress: 'OPTIONAL', customerEmail: 'OPTIONAL' },
+                action: {
+                    '3DSecure': 'MANDATORY'
+                },
                 timeout: 900
             },
             order: {
@@ -185,6 +188,10 @@ async function handleInitiatePayment(req, res) {
                 amount: parseFloat(quote.total_amount).toFixed(2),
                 currency: quote.currency || 'USD',
                 description: `Quote ${quote.quote_number || quote.id.slice(-8)} - ${quote.title || 'Travel Booking'}`
+            },
+            // Force 3DS challenge (OTP) - required for v77 to trigger authentication
+            authentication: {
+                challengePreference: 'CHALLENGE_MANDATED'
             }
         };
 
