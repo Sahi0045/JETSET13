@@ -23,7 +23,7 @@ All required ARC Pay operations have been implemented and are ready for certific
 node test-arc-certification.js
 ```
 
----
+
 
 ### ✅ 2. Voids
 **Status:** Implemented
