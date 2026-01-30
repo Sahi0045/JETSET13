@@ -232,8 +232,9 @@ async function handleInitiatePayment(req, res) {
             })
             .eq('id', payment.id);
 
-        const apiVersion = process.env.ARC_PAY_API_VERSION || '100';
-        const paymentPageUrl = `https://na.gateway.mastercard.com/api/page/version/${apiVersion}/pay?charset=UTF-8`;
+        // HPP (Hosted Payment Page) Redirect URL - simple GET redirect with session ID
+        // This matches the format in api/payments.js
+        const paymentPageUrl = `https://na.gateway.mastercard.com/checkout/pay/${sessionId}`;
 
         console.log('✅ Payment session created:', sessionId);
 
@@ -244,7 +245,8 @@ async function handleInitiatePayment(req, res) {
             merchantId: arcMerchantId,
             paymentId: payment.id,
             paymentPageUrl,
-            checkoutUrl: paymentPageUrl
+            checkoutUrl: paymentPageUrl,
+            redirectMethod: 'GET'
         });
 
     } catch (error) {
