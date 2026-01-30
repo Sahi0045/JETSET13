@@ -26,7 +26,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PRODUCTION_URL = process.env.PRODUCTION_URL || 'https://www.jetsetterss.com';
 const ARC_MERCHANT_ID = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
 const ARC_API_PASSWORD = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
-const ARC_BASE_URL = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+const ARC_BASE_URL = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error('❌ Missing Supabase credentials in .env');

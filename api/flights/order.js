@@ -3,11 +3,11 @@ import axios from 'axios';
 
 // ARC Pay configuration
 const ARC_PAY_CONFIG = {
-    API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/100/merchant/TESTARC05511704',
+    API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/77/merchant/TESTARC05511704',
     MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704',
     API_USERNAME: process.env.ARC_PAY_API_USERNAME || 'TESTARC05511704',
     API_PASSWORD: process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c',
-    BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100',
+    BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77',
     PORTAL_URL: process.env.ARC_PAY_PORTAL_URL || 'https://api.arcpay.travel/ma/'
 };
 
@@ -16,7 +16,7 @@ const ARC_PAY_CONFIG = {
 const getArcPayAuthConfig = () => {
     const authString = `merchant.${ARC_PAY_CONFIG.MERCHANT_ID}:${ARC_PAY_CONFIG.API_PASSWORD}`;
     const authHeader = 'Basic ' + Buffer.from(authString).toString('base64');
-    
+
     return {
         headers: {
             'Content-Type': 'application/json',
@@ -43,9 +43,9 @@ export default async function handler(req, res) {
     } else if (req.method === 'GET') {
         return await getFlightOrder(req, res);
     } else {
-        return res.status(405).json({ 
-            success: false, 
-            error: 'Method not allowed' 
+        return res.status(405).json({
+            success: false,
+            error: 'Method not allowed'
         });
     }
 }
@@ -54,13 +54,13 @@ export default async function handler(req, res) {
 async function createFlightOrder(req, res) {
     try {
         console.log('📋 Flight order creation request received');
-        
-        const { 
-            flightOffer, 
-            travelers, 
-            contactInfo, 
+
+        const {
+            flightOffer,
+            travelers,
+            contactInfo,
             paymentDetails,
-            arcPayOrderId 
+            arcPayOrderId
         } = req.body;
 
         // Validate required fields
@@ -82,7 +82,7 @@ async function createFlightOrder(req, res) {
                     `${ARC_PAY_CONFIG.API_URL}/order/${arcPayOrderId}`,
                     getArcPayAuthConfig()
                 );
-                
+
                 if (paymentVerification.data.result === 'SUCCESS') {
                     paymentVerified = true;
                     console.log('✅ Payment verified successfully');
@@ -178,27 +178,27 @@ async function createFlightOrder(req, res) {
                 bookingReference: orderData.reference || `BOOK-${Date.now()}`,
                 paymentStatus: paymentVerified ? 'VERIFIED' : 'PENDING',
                 arcPayOrderId: arcPayOrderId,
-                
+
                 // Flight details
                 flightOffers: orderData.flightOffers || [pricedOffer],
                 travelers: travelers_data,
-                
+
                 // Contact and booking info
                 contacts: orderData.contacts,
                 ticketingAgreement: ticketingAgreement,
-                
+
                 // Pricing information
                 totalPrice: {
                     amount: pricedOffer.price?.total || flightOffer.price?.total,
                     currency: pricedOffer.price?.currency || flightOffer.price?.currency || 'USD'
                 },
-                
+
                 // Creation timestamp
                 createdAt: orderData.creationDate || new Date().toISOString(),
-                
+
                 // Documents if available
                 documents: orderData.documents || [],
-                
+
                 // Full order data for reference
                 fullOrderData: orderData
             },
@@ -206,12 +206,12 @@ async function createFlightOrder(req, res) {
         };
 
         console.log(`✅ Order created: ID=${response.data.orderId}, PNR=${response.data.pnr}`);
-        
+
         return res.status(200).json(response);
 
     } catch (error) {
         console.error('❌ Flight order creation error:', error);
-        
+
         return res.status(500).json({
             success: false,
             error: 'Failed to create flight order',
@@ -225,7 +225,7 @@ async function createFlightOrder(req, res) {
 async function getFlightOrder(req, res) {
     try {
         const { orderId } = req.query;
-        
+
         if (!orderId) {
             return res.status(400).json({
                 success: false,
@@ -234,9 +234,9 @@ async function getFlightOrder(req, res) {
         }
 
         console.log(`Fetching flight order details for: ${orderId}`);
-        
+
         const orderDetails = await AmadeusService.getFlightOrderDetails(orderId);
-        
+
         if (!orderDetails.success) {
             throw new Error(orderDetails.error);
         }
@@ -251,20 +251,20 @@ async function getFlightOrder(req, res) {
                 pnr: pnr,
                 status: orderData.status || 'CONFIRMED',
                 bookingReference: orderData.reference,
-                
+
                 // Flight and traveler details
                 flightOffers: orderData.flightOffers,
                 travelers: orderData.travelers,
                 contacts: orderData.contacts,
-                
+
                 // Pricing and documents
                 totalPrice: orderData.flightOffers?.[0]?.price,
                 documents: orderData.documents || [],
-                
+
                 // Timestamps
                 createdAt: orderData.creationDate,
                 lastModified: orderData.lastModificationDate,
-                
+
                 // Full order data
                 fullOrderData: orderData
             },
@@ -273,7 +273,7 @@ async function getFlightOrder(req, res) {
 
     } catch (error) {
         console.error('❌ Error fetching flight order details:', error);
-        
+
         return res.status(500).json({
             success: false,
             error: 'Failed to fetch flight order details',

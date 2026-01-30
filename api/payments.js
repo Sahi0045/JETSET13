@@ -93,7 +93,7 @@ export default async function handler(req, res) {
       body: req.body
     });
     console.error('='.repeat(60));
-    
+
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -226,7 +226,7 @@ async function handlePaymentInitiation(req, res) {
     // 4. Call ARC Pay API to create hosted checkout session
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
     const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
-    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/100';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
     if (!arcMerchantId || !arcApiPassword) {
       console.error('ARC Pay credentials not configured');
@@ -259,7 +259,7 @@ async function handlePaymentInitiation(req, res) {
     const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
     const finalReturnUrl = return_url || `${frontendBaseUrl}/payment/callback?quote_id=${quote.id}&inquiry_id=${quote.inquiry_id}`;
     const finalCancelUrl = cancel_url || `${frontendBaseUrl}/inquiry/${quote.inquiry_id}?payment=cancelled`;
-    
+
     console.log('🔗 Return URL:', finalReturnUrl);
     console.log('🔗 Cancel URL:', finalCancelUrl);
 
@@ -307,7 +307,7 @@ async function handlePaymentInitiation(req, res) {
       requestBody.customer = {
         email: customerEmail
       };
-      
+
       // Add mobile phone if available from inquiry
       const customerPhone = inquiry?.customer_phone || quote.customer_phone;
       if (customerPhone) {
@@ -318,7 +318,7 @@ async function handlePaymentInitiation(req, res) {
         }
       }
     }
-    
+
     // Log full request for ARC support debugging (3DS should auto-trigger from merchant profile)
     console.log('='.repeat(80));
     console.log('🔵 ARC PAY REQUEST - INITIATE_CHECKOUT');
@@ -330,7 +330,7 @@ async function handlePaymentInitiation(req, res) {
     let arcResponse;
     try {
       const requestBodyString = JSON.stringify(requestBody);
-      
+
       arcResponse = await fetch(sessionUrl, {
         method: 'POST',
         headers: {
@@ -364,7 +364,7 @@ async function handlePaymentInitiation(req, res) {
       } catch {
         errorDetails = { message: responseText, rawResponse: responseText };
       }
-      
+
       console.error('='.repeat(80));
       console.error('❌ ARC Pay API ERROR:');
       console.error('   HTTP Status:', arcResponse.status, arcResponse.statusText);
@@ -373,20 +373,20 @@ async function handlePaymentInitiation(req, res) {
       console.error('   Request URL:', sessionUrl);
       console.error('   Request Body:', JSON.stringify(requestBody, null, 2));
       console.error('='.repeat(80));
-      
+
       // Return more detailed error information
-      const errorMessage = errorDetails.error?.explanation || 
-                          errorDetails.error?.message || 
-                          errorDetails.message || 
-                          errorDetails.explanation ||
-                          errorDetails.result ||
-                          errorDetails.reason ||
-                          'Unknown error from ARC Pay';
-      
+      const errorMessage = errorDetails.error?.explanation ||
+        errorDetails.error?.message ||
+        errorDetails.message ||
+        errorDetails.explanation ||
+        errorDetails.result ||
+        errorDetails.reason ||
+        'Unknown error from ARC Pay';
+
       const errorField = errorDetails.error?.field || errorDetails.field;
       const errorCause = errorDetails.error?.cause || errorDetails.cause;
       const errorCode = errorDetails.error?.code || errorDetails.code;
-      
+
       return res.status(500).json({
         success: false,
         error: 'Failed to create payment session with ARC Pay',
@@ -459,7 +459,7 @@ async function handlePaymentInitiation(req, res) {
     // 
     // We use Method 1 (HPP Redirect) as it's simpler and more reliable
     // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U
-    
+
     const gatewayDomain = 'https://na.gateway.mastercard.com';
 
     console.log('🔧 Using gateway domain for payment page:', gatewayDomain);
@@ -468,7 +468,7 @@ async function handlePaymentInitiation(req, res) {
     // Hosted Payment Page URL - simple redirect with session ID in path
     // Format: https://na.gateway.mastercard.com/checkout/pay/{sessionId}
     const paymentPageUrl = `${gatewayDomain}/checkout/pay/${sessionId}`;
-    
+
     console.log('✅ Payment page URL (HPP Redirect):', paymentPageUrl);
     console.log('   Session ID:', sessionId);
 
@@ -497,11 +497,11 @@ async function handlePaymentInitiation(req, res) {
       console.error('Error cause:', error.cause);
     }
     console.error('='.repeat(60));
-    
+
     // Provide more specific error messages
     let errorMessage = 'Payment initiation failed';
     let errorDetails = error.message || 'Unknown error';
-    
+
     if (error.message?.includes('fetch') || error.message?.includes('network')) {
       errorMessage = 'Network error connecting to payment gateway';
       errorDetails = 'Failed to reach ARC Pay API. Please try again.';
@@ -512,11 +512,11 @@ async function handlePaymentInitiation(req, res) {
       errorMessage = 'Database error';
       errorDetails = 'Failed to access database. Please try again.';
     }
-    
+
     // Ensure we always return a response
     if (!res.headersSent) {
-    return res.status(500).json({
-      success: false,
+      return res.status(500).json({
+        success: false,
         error: errorMessage,
         details: errorDetails,
         errorType: error.name || 'Error',
@@ -559,12 +559,12 @@ async function handlePaymentCallback(req, res) {
     // ARC Pay hosted form may send data with different parameter names
     // Try multiple possible formats
     const resultIndicator = req.body?.resultIndicator || req.query?.resultIndicator ||
-                           req.body?.result || req.query?.result ||
-                           req.body?.resultIndicator || req.query?.resultIndicator;
+      req.body?.result || req.query?.result ||
+      req.body?.resultIndicator || req.query?.resultIndicator;
     const sessionId = req.body?.sessionId || req.query?.sessionId ||
-                     req.body?.['session.id'] || req.query?.['session.id'] ||
-                     req.body?.session_id || req.query?.session_id ||
-                     req.body?.sessionId || req.query?.sessionId;
+      req.body?.['session.id'] || req.query?.['session.id'] ||
+      req.body?.session_id || req.query?.session_id ||
+      req.body?.sessionId || req.query?.sessionId;
 
     console.log('   Extracted - Result Indicator:', resultIndicator);
     console.log('   Extracted - Session ID:', sessionId);
@@ -582,7 +582,7 @@ async function handlePaymentCallback(req, res) {
 
       // Try to get inquiryId from payment record if we have quoteId
       let inquiryId = req.body?.inquiry_id || req.query?.inquiry_id;
-      
+
       if (quoteId && !inquiryId) {
         const { data: paymentByQuote } = await supabase
           .from('payments')
@@ -591,7 +591,7 @@ async function handlePaymentCallback(req, res) {
           .order('created_at', { ascending: false })
           .limit(1)
           .single();
-        
+
         if (paymentByQuote?.inquiry_id) {
           inquiryId = paymentByQuote.inquiry_id;
         }
@@ -607,7 +607,7 @@ async function handlePaymentCallback(req, res) {
     // 1. Retrieve payment by session ID or quote ID
     let payment;
     let paymentError;
-    
+
     if (sessionId) {
       const result = await supabase
         .from('payments')
@@ -635,7 +635,7 @@ async function handlePaymentCallback(req, res) {
         quoteId: quoteId || 'undefined',
         error: paymentError?.message
       });
-      
+
       const inquiryId = payment?.inquiry_id || req.body?.inquiry_id || req.query?.inquiry_id;
       if (inquiryId) {
         return res.redirect(`/inquiry/${inquiryId}?payment=failed&error=invalid_session`);
@@ -666,7 +666,7 @@ async function handlePaymentCallback(req, res) {
     // 3. Retrieve order and transaction details from ARC Pay
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
     const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
-    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
     // ARC Pay uses merchant.MERCHANT_ID:password format for authentication
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
@@ -712,7 +712,7 @@ async function handlePaymentCallback(req, res) {
       if (!txnResponse.ok) {
         const errorText = await txnResponse.text();
         console.error('❌ Failed to retrieve transaction from ARC Pay:', txnResponse.status, errorText);
-        
+
         // If we have order data, use it instead
         if (orderData) {
           console.log('📋 Using order data as fallback');
@@ -725,7 +725,7 @@ async function handlePaymentCallback(req, res) {
       }
     } catch (txnError) {
       console.error('❌ Error retrieving transaction:', txnError.message);
-      
+
       // If we have order data, use it as fallback
       if (orderData) {
         console.log('📋 Using order data as fallback due to transaction error');
@@ -753,23 +753,23 @@ async function handlePaymentCallback(req, res) {
     // ARC Pay returns transaction data in transaction[0] array
     const transactionArray = transaction.transaction || [];
     const latestTransaction = transactionArray.length > 0 ? transactionArray[transactionArray.length - 1] : null;
-    
+
     // Get transaction-level data (most recent transaction)
     let transactionResult = latestTransaction?.result || transaction.result;
     let transactionGatewayCode = latestTransaction?.response?.gatewayCode || transaction.response?.gatewayCode;
     const transactionAuth = latestTransaction?.authentication || transaction.authentication || {};
-    
+
     // Order-level status
     const orderStatus = transaction.status;
     let orderAuthStatus = transaction.authenticationStatus || latestTransaction?.order?.authenticationStatus;
-    
+
     // 3DS2 authentication fields - check transaction first, then order
     const threeDS2 = transactionAuth.threeDS2 || transactionAuth['3ds2'] || transaction.authentication?.threeDS2 || transaction.authentication?.['3ds2'] || {};
     let transactionStatus = threeDS2.transactionStatus || transactionAuth.transactionStatus;
     const statusReasonCode = threeDS2.statusReasonCode || transactionAuth.statusReasonCode;
     let eci = threeDS2.eci || transactionAuth.eci || transaction.eci;
     const authenticationToken = threeDS2.authenticationToken || transactionAuth.authenticationToken;
-    
+
     // Legacy 3DS fields
     const authenticationResult = transactionAuth.result || transaction.authentication?.result || transaction.threeDSecure?.result;
     let authenticationStatus = orderAuthStatus || transaction.authenticationStatus || transactionAuth.status || latestTransaction?.authenticationStatus;
@@ -792,20 +792,20 @@ async function handlePaymentCallback(req, res) {
     // Handle 3DS2 transaction status according to ARC Pay documentation
     // Y = Frictionless (successful), C = Challenge, A = Authentication Attempted,
     // N = Not Authenticated, R = Rejected, U = Unavailable
-    
+
     // CRITICAL: Never mark PENDING transactions as successful
     // If transaction result is PENDING, it means the transaction is still being processed
     if (transactionResult === 'PENDING' || gatewayCode === 'PENDING') {
       console.log('⏳ Transaction is still pending - waiting for final status');
-      
+
       // Check if 3DS challenge is still in progress
-      if (transactionStatus === 'C' || 
-          authenticationStatus === 'AUTHENTICATION_PENDING' ||
-          orderStatus === 'AUTHENTICATION_INITIATED' ||
-          orderStatus === 'AUTHENTICATION_PENDING') {
-        
+      if (transactionStatus === 'C' ||
+        authenticationStatus === 'AUTHENTICATION_PENDING' ||
+        orderStatus === 'AUTHENTICATION_INITIATED' ||
+        orderStatus === 'AUTHENTICATION_PENDING') {
+
         console.log('⏳ 3DS authentication challenge still pending');
-        
+
         await supabase
           .from('payments')
           .update({
@@ -834,25 +834,25 @@ async function handlePaymentCallback(req, res) {
           return res.redirect('/payment/failed?error=processing_error');
         }
       }
-      
+
       // Check if 3DS authentication is successful but PAY hasn't been processed yet
       // This can happen with Hosted Checkout when authentication completes but PAY needs to be triggered
       // First, check if PAY was already processed automatically by ARC Pay
-      const hasPayTransaction = transactionArray.some(txn => 
+      const hasPayTransaction = transactionArray.some(txn =>
         txn.transaction?.type === 'PAYMENT' ||
-        txn.type === 'PAYMENT' || 
+        txn.type === 'PAYMENT' ||
         txn.apiOperation === 'PAY' ||
         (txn.result === 'SUCCESS' && txn.response?.gatewayCode === 'APPROVED' && txn.transaction?.type === 'PAYMENT')
       );
-      
+
       // Check if order has been captured/paid (indicates PAY was processed)
-      const orderCaptured = transaction.order?.status === 'CAPTURED' || 
-                           transaction.order?.status === 'PAID' ||
-                           transaction.status === 'CAPTURED' ||
-                           transaction.status === 'PAID' ||
-                           (transaction.order?.totalCapturedAmount > 0) ||
-                           (transaction.totalCapturedAmount > 0);
-      
+      const orderCaptured = transaction.order?.status === 'CAPTURED' ||
+        transaction.order?.status === 'PAID' ||
+        transaction.status === 'CAPTURED' ||
+        transaction.status === 'PAID' ||
+        (transaction.order?.totalCapturedAmount > 0) ||
+        (transaction.totalCapturedAmount > 0);
+
       // Determine if we should call PAY
       // Conditions:
       // 1. Authentication is successful (AUTHENTICATION_SUCCESSFUL or AUTHENTICATION_ATTEMPTED)
@@ -860,7 +860,7 @@ async function handlePaymentCallback(req, res) {
       // 3. Order status is AUTHENTICATED (authentication done, but payment not processed)
       // 4. No PAY transaction exists yet
       // 5. Order not yet captured
-      
+
       // CRITICAL: If order status is AUTHENTICATED, we MUST call PAY
       // This is the key indicator that authentication completed but payment hasn't been processed
       const isAuthenticatedButNotPaid = (
@@ -869,19 +869,19 @@ async function handlePaymentCallback(req, res) {
         !orderCaptured &&
         (transaction.order?.totalCapturedAmount === 0 || !transaction.order?.totalCapturedAmount)
       );
-      
+
       const shouldCallPay = (
         isAuthenticatedButNotPaid || (
-          (authenticationStatus === 'AUTHENTICATION_SUCCESSFUL' || 
-           authenticationStatus === 'AUTHENTICATION_ATTEMPTED' ||
-           orderStatus === 'AUTHENTICATED') &&
+          (authenticationStatus === 'AUTHENTICATION_SUCCESSFUL' ||
+            authenticationStatus === 'AUTHENTICATION_ATTEMPTED' ||
+            orderStatus === 'AUTHENTICATED') &&
           (transactionStatus === 'Y' || transactionStatus === 'A' || !transactionStatus) &&
           (authenticationToken || orderStatus === 'AUTHENTICATED') &&
           !hasPayTransaction &&
           !orderCaptured
         )
       );
-      
+
       console.log('🔍 PAY Decision Check:', {
         orderStatus,
         authenticationStatus,
@@ -892,9 +892,9 @@ async function handlePaymentCallback(req, res) {
         shouldCallPay,
         totalCapturedAmount: transaction.order?.totalCapturedAmount || transaction.totalCapturedAmount
       });
-      
+
       if (shouldCallPay) {
-        
+
         console.log('✅ 3DS Authentication successful but PAY not yet processed - calling PAY');
         console.log(`   Order Status: ${orderStatus}`);
         console.log(`   Transaction Status: ${transactionStatus || 'N/A'}`);
@@ -903,23 +903,23 @@ async function handlePaymentCallback(req, res) {
         console.log(`   Order Captured: ${orderCaptured}`);
         console.log(`   Authentication Token: ${authenticationToken ? authenticationToken.substring(0, 20) + '...' : 'N/A'}`);
         console.log(`   Transaction Array Length: ${transactionArray.length}`);
-        
+
         // Get authentication transaction ID from multiple possible locations
         // ARC Pay stores this in different places depending on the response structure
         // Check for nested 3ds structure: authentication.3ds.transactionId
-        let authTransactionId = transaction.authentication?.transactionId || 
-                                  transaction.authentication?.['3ds']?.transactionId ||
-                                  transaction.authentication?.threeDS2?.transactionId ||
-                                  transactionAuth.transactionId ||
-                                  transactionAuth?.['3ds']?.transactionId ||
-                                  latestTransaction?.authentication?.transactionId ||
-                                  latestTransaction?.authentication?.['3ds']?.transactionId ||
-                                  transaction.transactionId ||
-                                  latestTransaction?.transactionId ||
-                                  orderData?.authentication?.transactionId ||
-                                  orderData?.authentication?.['3ds']?.transactionId ||
-                                  orderData?.transactionId;
-        
+        let authTransactionId = transaction.authentication?.transactionId ||
+          transaction.authentication?.['3ds']?.transactionId ||
+          transaction.authentication?.threeDS2?.transactionId ||
+          transactionAuth.transactionId ||
+          transactionAuth?.['3ds']?.transactionId ||
+          latestTransaction?.authentication?.transactionId ||
+          latestTransaction?.authentication?.['3ds']?.transactionId ||
+          transaction.transactionId ||
+          latestTransaction?.transactionId ||
+          orderData?.authentication?.transactionId ||
+          orderData?.authentication?.['3ds']?.transactionId ||
+          orderData?.transactionId;
+
         // If not found, search through transaction array for authentication transaction
         // Check both direct transactionId and nested 3ds.transactionId
         // Use the LATEST authentication transaction (last in array) for PAY
@@ -927,12 +927,12 @@ async function handlePaymentCallback(req, res) {
           // Search from end to beginning to get the most recent authentication
           for (let i = transactionArray.length - 1; i >= 0; i--) {
             const txn = transactionArray[i];
-            
+
             // Only process AUTHENTICATION type transactions
             if (txn.transaction?.type !== 'AUTHENTICATION' && txn.type !== 'AUTHENTICATION') {
               continue;
             }
-            
+
             // Check for authentication.3ds.transactionId (most common structure)
             if (txn.authentication?.['3ds']?.transactionId) {
               authTransactionId = txn.authentication['3ds'].transactionId;
@@ -947,7 +947,7 @@ async function handlePaymentCallback(req, res) {
             }
           }
         }
-        
+
         // Also check orderData transaction array if available
         if (!authTransactionId && orderData?.transaction) {
           const orderTxnArray = Array.isArray(orderData.transaction) ? orderData.transaction : [orderData.transaction];
@@ -972,7 +972,7 @@ async function handlePaymentCallback(req, res) {
             }
           }
         }
-        
+
         // Also check the order-level authentication.3ds.transactionId (fallback)
         // But prefer the latest from transaction array
         if (!authTransactionId) {
@@ -992,15 +992,15 @@ async function handlePaymentCallback(req, res) {
             console.log(`   Found auth transaction ID in orderData (3ds): ${authTransactionId}`);
           }
         }
-        
+
         if (authTransactionId) {
           console.log(`   ✅ Using Authentication Transaction ID: ${authTransactionId}`);
-          
+
           // Check if we already attempted PAY for this payment (prevent duplicate calls)
           const paymentMetadata = payment.metadata || {};
           const lastPayAttempt = paymentMetadata.lastPayAttempt;
           const now = Date.now();
-          
+
           // Only proceed if we haven't attempted PAY in the last 5 seconds (prevents duplicate calls)
           if (lastPayAttempt && (now - lastPayAttempt) < 5000) {
             console.log('⚠️ PAY already attempted recently, skipping to prevent duplicate');
@@ -1019,17 +1019,17 @@ async function handlePaymentCallback(req, res) {
                   }
                 })
                 .eq('id', payment.id);
-              
+
               // Generate a unique transaction ID for the PAY operation
               // Format: pay-{timestamp}-{paymentId}
               const payTransactionId = `pay-${Date.now()}-${payment.id.slice(-8)}`;
               console.log(`   🚀 Calling PAY API...`);
               console.log(`   Using PAY transaction ID: ${payTransactionId}`);
-              
+
               // Call PAY with the authentication transaction ID
               const payUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${payTransactionId}`;
               console.log(`   PAY URL: ${payUrl}`);
-              
+
               // Build PAY request body according to ARC Pay documentation
               // Required fields: apiOperation, authentication.transactionId, session.id
               // Optional: transaction.reference
@@ -1045,12 +1045,12 @@ async function handlePaymentCallback(req, res) {
                   reference: `PAY-${payment.id}`
                 }
               };
-              
+
               // Note: order.amount and sourceOfFunds are NOT needed for PAY after 3DS
               // The amount and card details are already captured in the INITIATE_CHECKOUT session
-            
+
               console.log('   PAY Request Body:', JSON.stringify(payRequestBody, null, 2));
-              
+
               const payResponse = await fetch(payUrl, {
                 method: 'PUT',
                 headers: {
@@ -1060,11 +1060,11 @@ async function handlePaymentCallback(req, res) {
                 },
                 body: JSON.stringify(payRequestBody)
               });
-              
+
               const payResponseText = await payResponse.text();
               console.log(`   PAY Response Status: ${payResponse.status}`);
               console.log(`   PAY Response: ${payResponseText.substring(0, 500)}`);
-              
+
               // Clean up payAttemptInProgress flag
               await supabase
                 .from('payments')
@@ -1078,7 +1078,7 @@ async function handlePaymentCallback(req, res) {
                   }
                 })
                 .eq('id', payment.id);
-              
+
               if (payResponse.ok) {
                 let payData;
                 try {
@@ -1088,28 +1088,28 @@ async function handlePaymentCallback(req, res) {
                   console.error('   Response text:', payResponseText);
                   // Continue with original transaction data
                 }
-                
+
                 if (payData) {
                   console.log('✅ PAY request successful:', payData.result);
                   console.log('   Gateway Code:', payData.response?.gatewayCode);
                   console.log('   Order Status:', payData.order?.status);
                   console.log('   Total Captured:', payData.order?.totalCapturedAmount);
-                  
+
                   // Update transaction data with PAY response
                   transaction = payData;
                   transactionResult = payData.result || payData.transaction?.[0]?.result;
                   gatewayCode = payData.response?.gatewayCode || payData.transaction?.[0]?.response?.gatewayCode;
-                  
+
                   // Re-extract authentication status from PAY response
                   const payAuth = payData.authentication || payData.transaction?.[0]?.authentication || {};
                   const payThreeDS2 = payAuth.threeDS2 || payAuth['3ds2'] || {};
                   transactionStatus = payThreeDS2.transactionStatus || transactionStatus;
                   authenticationStatus = payData.authenticationStatus || payData.order?.authenticationStatus || payAuth.status || authenticationStatus;
                   eci = payThreeDS2.eci || eci;
-                  
+
                   // Update order status from PAY response
                   orderStatus = payData.order?.status || payData.status || orderStatus;
-                  
+
                   console.log('📊 PAY response analysis:', {
                     result: transactionResult,
                     gatewayCode,
@@ -1124,12 +1124,12 @@ async function handlePaymentCallback(req, res) {
               } else {
                 console.error('❌ PAY request failed:', payResponse.status);
                 console.error('   Response:', payResponseText);
-                
+
                 // Try to parse error response
                 try {
                   const errorData = JSON.parse(payResponseText);
                   console.error('   Error details:', JSON.stringify(errorData, null, 2));
-                  
+
                   // Update payment with error details
                   await supabase
                     .from('payments')
@@ -1144,14 +1144,14 @@ async function handlePaymentCallback(req, res) {
                 } catch (e) {
                   // Not JSON, already logged as text
                 }
-                
+
                 // Continue with original transaction data - don't fail the callback
                 // The transaction might still be processing
               }
             } catch (payError) {
               console.error('❌ Error calling PAY:', payError.message);
               console.error('   Stack:', payError.stack);
-              
+
               // Clean up payAttemptInProgress flag on error
               await supabase
                 .from('payments')
@@ -1163,7 +1163,7 @@ async function handlePaymentCallback(req, res) {
                   }
                 })
                 .eq('id', payment.id);
-              
+
               // Continue with original transaction data
             }
           }
@@ -1184,7 +1184,7 @@ async function handlePaymentCallback(req, res) {
             transactionArrayLength: transactionArray.length,
             orderDataHasTransaction: !!orderData?.transaction
           });
-          
+
           // Log detailed transaction array structure
           if (transactionArray.length > 0) {
             console.log('   Transaction Array Details:');
@@ -1198,7 +1198,7 @@ async function handlePaymentCallback(req, res) {
               });
             });
           }
-          
+
           // Log order-level authentication structure
           if (transaction.authentication) {
             console.log('   Order-level authentication structure:', {
@@ -1213,7 +1213,7 @@ async function handlePaymentCallback(req, res) {
       } else if (hasPayTransaction) {
         console.log('✅ PAY transaction already exists - ARC Pay processed it automatically');
       }
-      
+
       // If PENDING but not 3DS related, wait a moment and retry once
       console.log('⏳ Transaction pending - will retry status check');
       await supabase
@@ -1232,7 +1232,7 @@ async function handlePaymentCallback(req, res) {
 
       // Wait 2 seconds and retry checking the order status
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       try {
         const retryResponse = await fetch(
           `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}`,
@@ -1244,11 +1244,11 @@ async function handlePaymentCallback(req, res) {
             }
           }
         );
-        
+
         if (retryResponse.ok) {
           const retryData = await retryResponse.json();
           console.log('🔄 Retry check result:', retryData.result, retryData.status);
-          
+
           // If still pending after retry, redirect to status check page
           if (retryData.result === 'PENDING' || retryData.status === 'AUTHENTICATION_PENDING') {
             // Ensure both values exist before using in redirect URL
@@ -1262,7 +1262,7 @@ async function handlePaymentCallback(req, res) {
               return res.redirect('/payment/failed?error=processing_error');
             }
           }
-          
+
           // Update transaction with retry data
           transaction = retryData;
           // Re-extract values from retry data
@@ -1283,16 +1283,16 @@ async function handlePaymentCallback(req, res) {
         // Continue with original transaction data
       }
     }
-    
+
     // Check if 3DS authentication is still pending (Challenge flow) - after retry check
-    if (transactionStatus === 'C' || 
-        orderStatus === 'AUTHENTICATION_INITIATED' || 
-        orderStatus === 'AUTHENTICATION_PENDING' ||
-        authenticationStatus === 'AUTHENTICATION_INITIATED' ||
-        authenticationStatus === 'AUTHENTICATION_PENDING') {
-      
+    if (transactionStatus === 'C' ||
+      orderStatus === 'AUTHENTICATION_INITIATED' ||
+      orderStatus === 'AUTHENTICATION_PENDING' ||
+      authenticationStatus === 'AUTHENTICATION_INITIATED' ||
+      authenticationStatus === 'AUTHENTICATION_PENDING') {
+
       console.log('⏳ 3DS authentication challenge pending');
-      
+
       await supabase
         .from('payments')
         .update({
@@ -1319,24 +1319,24 @@ async function handlePaymentCallback(req, res) {
     }
 
     // Check if 3DS authentication was not authenticated, rejected, or unavailable
-    if (transactionStatus === 'N' || 
-        transactionStatus === 'R' ||
-        transactionStatus === 'U' ||
-        authenticationResult === 'FAILURE' || 
-        authenticationResult === 'UNAVAILABLE' ||
-        authenticationStatus === 'AUTHENTICATION_FAILED' ||
-        authenticationStatus === 'AUTHENTICATION_UNAVAILABLE' ||
-        (transactionResult === 'FAILURE' && authenticationStatus === 'AUTHENTICATION_FAILED')) {
-      
+    if (transactionStatus === 'N' ||
+      transactionStatus === 'R' ||
+      transactionStatus === 'U' ||
+      authenticationResult === 'FAILURE' ||
+      authenticationResult === 'UNAVAILABLE' ||
+      authenticationStatus === 'AUTHENTICATION_FAILED' ||
+      authenticationStatus === 'AUTHENTICATION_UNAVAILABLE' ||
+      (transactionResult === 'FAILURE' && authenticationStatus === 'AUTHENTICATION_FAILED')) {
+
       console.log('❌ 3DS authentication failed, rejected, or unavailable');
-      
+
       const failureReason = transactionStatus === 'N' ? '3DS Not Authenticated' :
-                           transactionStatus === 'R' ? '3DS Authentication Rejected' :
-                           transactionStatus === 'U' ? '3DS Authentication Unavailable' :
-                           statusReasonCode ? `3DS Error Code: ${statusReasonCode}` :
-                           authenticationStatus === 'AUTHENTICATION_UNAVAILABLE' ? '3DS Authentication Unavailable' :
-                           '3D Secure authentication failed';
-      
+        transactionStatus === 'R' ? '3DS Authentication Rejected' :
+          transactionStatus === 'U' ? '3DS Authentication Unavailable' :
+            statusReasonCode ? `3DS Error Code: ${statusReasonCode}` :
+              authenticationStatus === 'AUTHENTICATION_UNAVAILABLE' ? '3DS Authentication Unavailable' :
+                '3D Secure authentication failed';
+
       await supabase
         .from('payments')
         .update({
@@ -1373,7 +1373,7 @@ async function handlePaymentCallback(req, res) {
     // 3. authenticationStatus === 'AUTHENTICATION_SUCCESSFUL' (if 3DS was required)
     // 4. gatewayCode is APPROVED or SUCCESS
     // 5. ECI code indicates successful authentication (05, 02 for successful 3DS, or no ECI if no 3DS)
-    
+
     const is3DSSuccess = (
       transactionStatus === 'Y' || // Frictionless - successful
       transactionStatus === 'A' || // Authentication Attempted - treated as success per ARC Pay docs
@@ -1402,11 +1402,11 @@ async function handlePaymentCallback(req, res) {
     const isResultSuccess = transactionResult === 'SUCCESS';
     const isGatewayApproved = gatewayCode === 'APPROVED' || gatewayCode === 'SUCCESS';
     const isOrderCaptured = orderStatus === 'CAPTURED' || orderStatus === 'AUTHORIZED' || orderStatus === 'PURCHASED';
-    
+
     // If gateway explicitly approved the payment, it's successful
     // This overrides any 3DS status issues since the bank approved it
     const isExplicitlyApproved = isGatewayApproved && transactionResult !== 'FAILURE' && transactionResult !== 'ERROR';
-    
+
     // Payment is successful if:
     // 1. Gateway explicitly approved (APPROVED gatewayCode) - highest priority
     // 2. OR Result is SUCCESS with valid 3DS checks
@@ -1417,13 +1417,13 @@ async function handlePaymentCallback(req, res) {
       (isResultSuccess && is3DSSuccess && isAuthSuccess && isValidECI) ||
       isOrderCaptured
     ) && (
-      transactionResult !== 'PENDING' &&
-      transactionResult !== 'FAILURE' &&
-      transactionResult !== 'ERROR' &&
-      gatewayCode !== 'PENDING' &&
-      gatewayCode !== 'DECLINED' &&
-      gatewayCode !== 'ERROR'
-    );
+        transactionResult !== 'PENDING' &&
+        transactionResult !== 'FAILURE' &&
+        transactionResult !== 'ERROR' &&
+        gatewayCode !== 'PENDING' &&
+        gatewayCode !== 'DECLINED' &&
+        gatewayCode !== 'ERROR'
+      );
 
     console.log('🔍 Success evaluation:', {
       transactionResult,
@@ -1450,7 +1450,7 @@ async function handlePaymentCallback(req, res) {
       console.log(`   Payment ID: ${payment.id}`);
       console.log(`   Quote ID: ${payment.quote_id}`);
       console.log(`   Inquiry ID: ${payment.inquiry_id}`);
-      
+
       // Update payment status
       const { error: paymentUpdateError } = await supabase
         .from('payments')
@@ -1458,9 +1458,9 @@ async function handlePaymentCallback(req, res) {
           payment_status: 'completed',
           completed_at: new Date().toISOString(),
           arc_transaction_id: transaction.transaction?.id || transaction.id,
-          payment_method: transaction.sourceOfFunds?.provided?.card?.brand || 
-                         transaction.card?.brand ||
-                         transaction.paymentMethod,
+          payment_method: transaction.sourceOfFunds?.provided?.card?.brand ||
+            transaction.card?.brand ||
+            transaction.paymentMethod,
           metadata: {
             transaction: transaction,
             threeDS2: {
@@ -1528,7 +1528,7 @@ async function handlePaymentCallback(req, res) {
       // Check if it's still PENDING (should have been handled earlier, but double-check)
       if (transactionResult === 'PENDING' || gatewayCode === 'PENDING') {
         console.log('⏳ Payment still pending - not marking as failed');
-        
+
         await supabase
           .from('payments')
           .update({
@@ -1555,19 +1555,19 @@ async function handlePaymentCallback(req, res) {
           return res.redirect('/payment/failed?error=processing_error');
         }
       }
-      
+
       // Payment failed or declined
       console.log('❌ Payment failed or declined');
       console.log(`   Result: ${transactionResult}`);
       console.log(`   Gateway Code: ${gatewayCode}`);
       console.log(`   Authentication Status: ${authenticationStatus}`);
-      
-      const failureReason = transaction.error?.cause || 
-                           transaction.error?.explanation ||
-                           latestTransaction?.response?.gatewayCode ||
-                           gatewayCode ||
-                           transaction.response?.reason ||
-                           'payment_declined';
+
+      const failureReason = transaction.error?.cause ||
+        transaction.error?.explanation ||
+        latestTransaction?.response?.gatewayCode ||
+        gatewayCode ||
+        transaction.response?.reason ||
+        'payment_declined';
 
       await supabase
         .from('payments')
@@ -1705,7 +1705,7 @@ async function handleSessionCreate(req, res) {
   }
 
   const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
+
   const sessionData = {
     sessionId,
     createdAt: new Date().toISOString(),
@@ -1793,7 +1793,7 @@ async function handlePaymentProcess(req, res) {
   }
 
   const { cardNumber, expiryDate, cvv, cardHolder } = cardDetails;
-  
+
   if (!cardNumber || !expiryDate || !cvv || !cardHolder) {
     return res.status(400).json({
       success: false,
@@ -1803,13 +1803,13 @@ async function handlePaymentProcess(req, res) {
 
   // Generate transaction ID
   const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
+
   // Simulate processing delay
   await new Promise(resolve => setTimeout(resolve, 1000));
-  
+
   // Simulate success (90% success rate for demo)
   const isSuccess = Math.random() > 0.1;
-  
+
   if (!isSuccess) {
     return res.status(400).json({
       success: false,
@@ -1933,7 +1933,7 @@ async function handlePaymentRefund(req, res) {
     // Call ARC Pay REFUND API
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
     const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
-    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
@@ -2141,7 +2141,7 @@ async function handlePaymentVoid(req, res) {
     // Call ARC Pay VOID API
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
     const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
-    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
@@ -2253,7 +2253,7 @@ async function handlePaymentCapture(req, res) {
     // Call ARC Pay CAPTURE API
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
     const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
-    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
@@ -2380,7 +2380,7 @@ async function handlePaymentRetrieve(req, res) {
     // Call ARC Pay RETRIEVE API
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
     const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
-    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
@@ -2468,9 +2468,9 @@ async function handleHealthCheck(req, res) {
       .from('quotes')
       .select('id')
       .limit(1);
-    
+
     const supabaseStatus = error ? 'error' : 'ok';
-    
+
     res.json({
       success: true,
       status: 'healthy',
@@ -2503,7 +2503,7 @@ async function handleDebug(req, res) {
     SUPABASE_KEY: (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY) ? 'Set (hidden)' : 'Not set',
     ARC_PAY_MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704 (fallback)',
     ARC_PAY_API_PASSWORD: process.env.ARC_PAY_API_PASSWORD ? 'Set (hidden)' : '4d41a81750f1ee3f6aa4adf0dfd6310c (fallback)',
-    ARC_PAY_BASE_URL: process.env.ARC_PAY_BASE_URL || process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/100 (fallback)',
+    ARC_PAY_BASE_URL: process.env.ARC_PAY_BASE_URL || process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/77 (fallback)',
     NODE_ENV: process.env.NODE_ENV || 'Not set',
     FRONTEND_URL: process.env.FRONTEND_URL || 'Not set'
   };

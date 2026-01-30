@@ -12,10 +12,10 @@ const ARC_PAY_CONFIG = {
     INTEGRATION_PASSWORD_2: process.env.ARC_PAY_INTEGRATION_PASSWORD_2 || '03762006ad1c7c3337af5fbdbe922d2e',
     REPORTING_PASSWORD_1: process.env.ARC_PAY_REPORTING_PASSWORD_1 || 'e1c1f80f6e8dcc3c3d0b28c3f4fcbae3',
     REPORTING_PASSWORD_2: process.env.ARC_PAY_REPORTING_PASSWORD_2 || '575a62ce17983304ae468a943d57ca1d',
-    BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100',
-    API_URL: process.env.ARC_PAY_API_URL || `https://api.arcpay.travel/api/rest/version/100/merchant/${process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704'}`,
+    BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77',
+    API_URL: process.env.ARC_PAY_API_URL || `https://api.arcpay.travel/api/rest/version/77/merchant/${process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704'}`,
     PORTAL_URL: process.env.ARC_PAY_PORTAL_URL || 'https://api.arcpay.travel/ma/',
-    CHECK_GATEWAY_URL: 'https://api.arcpay.travel/api/rest/version/100/information'
+    CHECK_GATEWAY_URL: 'https://api.arcpay.travel/api/rest/version/77/information'
 };
 
 // Helper function to get auth config

@@ -13,7 +13,7 @@ const supabase = createClient(
 const ARC_PAY_CONFIG = {
     MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704',
     API_PASSWORD: process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c',
-    BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100'
+    BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77'
 };
 
 console.log('🧪 Testing Payment Initiation Flow\n');

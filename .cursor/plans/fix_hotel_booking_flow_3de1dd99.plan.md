@@ -50,8 +50,8 @@ Based on the console logs and screenshots provided:
 
 **Files affected:**
 
-- [`backend/controllers/hotel.controller.js`](backend/controllers/hotel.controller.js) - Line 207, 245 (returns raw `hotel.hotelId`)
-- [`resources/js/Services/HotelService.js`](resources/js/Services/HotelService.js) - Lines 98-114 (checks for `-` or `amadeus-` prefix)
+- `[backend/controllers/hotel.controller.js](backend/controllers/hotel.controller.js)` - Line 207, 245 (returns raw `hotel.hotelId`)
+- `[resources/js/Services/HotelService.js](resources/js/Services/HotelService.js)` - Lines 98-114 (checks for `-` or `amadeus-` prefix)
 
 ### Issue 2: Details Page Not Fetching Real Offers
 
@@ -64,22 +64,22 @@ Based on the console logs and screenshots provided:
 
 **Files affected:**
 
-- [`resources/js/Pages/Common/hotels/HotelDetailsPage.jsx`](resources/js/Pages/Common/hotels/HotelDetailsPage.jsx) - Lines 44-73
-- [`resources/js/Services/HotelService.js`](resources/js/Services/HotelService.js) - Lines 94-152
+- `[resources/js/Pages/Common/hotels/HotelDetailsPage.jsx](resources/js/Pages/Common/hotels/HotelDetailsPage.jsx)` - Lines 44-73
+- `[resources/js/Services/HotelService.js](resources/js/Services/HotelService.js)` - Lines 94-152
 
 ### Issue 3: Backend Endpoint Not Deployed
 
 **Current state:**
 
-- Vercel uses [`api/hotels.js`](api/hotels.js) serverless function
-- Express backend uses [`backend/routes/hotel.routes.js`](backend/routes/hotel.routes.js)
+- Vercel uses `[api/hotels.js](api/hotels.js)` serverless function
+- Express backend uses `[backend/routes/hotel.routes.js](backend/routes/hotel.routes.js)`
 - Production calls `https://www.jetsetterss.com/api/hotels/search` → 404
 - Vercel routing expects query param: `/api/hotels?endpoint=search`
 
 **Files affected:**
 
-- [`vercel.json`](vercel.json) - Routing configuration
-- [`api/hotels.js`](api/hotels.js) - Serverless handler (needs proper routing)
+- `[vercel.json](vercel.json)` - Routing configuration
+- `[api/hotels.js](api/hotels.js)` - Serverless handler (needs proper routing)
 
 ## Solution Architecture
 
@@ -126,13 +126,15 @@ flowchart TB
     BookEndpoint -->|"booking ref"| BookingPage
 ```
 
+
+
 ## Implementation Plan
 
 ### Step 1: Fix Hotel ID Format Consistency
 
 **Update backend to add consistent ID prefixes:**
 
-In [`backend/controllers/hotel.controller.js`](backend/controllers/hotel.controller.js), change hotel formatting (lines 206-222):
+In `[backend/controllers/hotel.controller.js](backend/controllers/hotel.controller.js)`, change hotel formatting (lines 206-222):
 
 ```javascript
 formattedHotels.push({
@@ -145,7 +147,7 @@ formattedHotels.push({
 
 **Update HotelService to handle both formats:**
 
-In [`resources/js/Services/HotelService.js`](resources/js/Services/HotelService.js), improve `getHotelById()` (lines 94-115):
+In `[resources/js/Services/HotelService.js](resources/js/Services/HotelService.js)`, improve `getHotelById()` (lines 94-115):
 
 ```javascript
 async getHotelById(hotelId) {
@@ -171,7 +173,7 @@ async getHotelById(hotelId) {
 
 **Add new method to HotelService:**
 
-In [`resources/js/Services/HotelService.js`](resources/js/Services/HotelService.js), add after `getHotelById()`:
+In `[resources/js/Services/HotelService.js](resources/js/Services/HotelService.js)`, add after `getHotelById()`:
 
 ```javascript
 async fetchAmadeusHotelDetails(rawHotelId, checkInDate, checkOutDate, adults = 2) {
@@ -224,7 +226,7 @@ transformAmadeusOfferToHotelObject(offerData) {
 
 **Update HotelDetailsPage to pass dates:**
 
-In [`resources/js/Pages/Common/hotels/HotelDetailsPage.jsx`](resources/js/Pages/Common/hotels/HotelDetailsPage.jsx), modify fetch logic (lines 44-73):
+In `[resources/js/Pages/Common/hotels/HotelDetailsPage.jsx](resources/js/Pages/Common/hotels/HotelDetailsPage.jsx)`, modify fetch logic (lines 44-73):
 
 ```javascript
 const fetchHotel = async () => {
@@ -270,9 +272,9 @@ const fetchHotel = async () => {
 
 **Update vercel.json routing:**
 
-Current [`vercel.json`](vercel.json) routes `/api/:path*` to serverless functions. The issue is the serverless handler expects query params.
+Current `[vercel.json](vercel.json)` routes `/api/:path*` to serverless functions. The issue is the serverless handler expects query params.
 
-Add specific hotel routes in [`vercel.json`](vercel.json):
+Add specific hotel routes in `[vercel.json](vercel.json)`:
 
 ```json
 {
@@ -298,7 +300,7 @@ Add specific hotel routes in [`vercel.json`](vercel.json):
 
 **Update city code mapping:**
 
-In [`resources/js/Services/HotelService.js`](resources/js/Services/HotelService.js), add Punjab cities to `getCityCode()` method (lines 210-296):
+In `[resources/js/Services/HotelService.js](resources/js/Services/HotelService.js)`, add Punjab cities to `getCityCode()` method (lines 210-296):
 
 ```javascript
 'chandigarh': 'IXC',
@@ -322,7 +324,7 @@ if (hotels.length === 0 && cityCode) {
 
 **Update HotelBookingSummary.jsx payment submission:**
 
-In [`resources/js/Pages/Common/hotels/HotelBookingSummary.jsx`](resources/js/Pages/Common/hotels/HotelBookingSummary.jsx), replace mock payment (around line 139):
+In `[resources/js/Pages/Common/hotels/HotelBookingSummary.jsx](resources/js/Pages/Common/hotels/HotelBookingSummary.jsx)`, replace mock payment (around line 139):
 
 ```javascript
 const handleSubmit = async () => {
@@ -387,17 +389,17 @@ VITE_AMADEUS_API_SECRET=onMEn9iLGPNYAAVE
 
 |------|---------|----------|
 
-| [`backend/controllers/hotel.controller.js`](backend/controllers/hotel.controller.js) | Add `amadeus-` prefix to hotel IDs | Critical |
+| `[backend/controllers/hotel.controller.js](backend/controllers/hotel.controller.js)` | Add `amadeus-` prefix to hotel IDs | Critical |
 
-| [`resources/js/Services/HotelService.js`](resources/js/Services/HotelService.js) | Add `fetchAmadeusHotelDetails()` method, update `getHotelById()` | Critical |
+| `[resources/js/Services/HotelService.js](resources/js/Services/HotelService.js)` | Add `fetchAmadeusHotelDetails()` method, update `getHotelById()` | Critical |
 
-| [`resources/js/Pages/Common/hotels/HotelDetailsPage.jsx`](resources/js/Pages/Common/hotels/HotelDetailsPage.jsx) | Pass dates to `getHotelById()` for Amadeus hotels | Critical |
+| `[resources/js/Pages/Common/hotels/HotelDetailsPage.jsx](resources/js/Pages/Common/hotels/HotelDetailsPage.jsx)` | Pass dates to `getHotelById()` for Amadeus hotels | Critical |
 
-| [`vercel.json`](vercel.json) | Add hotel endpoint rewrites | Critical |
+| `[vercel.json](vercel.json)` | Add hotel endpoint rewrites | Critical |
 
-| [`resources/js/Pages/Common/hotels/HotelBookingSummary.jsx`](resources/js/Pages/Common/hotels/HotelBookingSummary.jsx) | Wire to backend booking API | Medium |
+| `[resources/js/Pages/Common/hotels/HotelBookingSummary.jsx](resources/js/Pages/Common/hotels/HotelBookingSummary.jsx)` | Wire to backend booking API | Medium |
 
-| [`api/hotels.js`](api/hotels.js) | Already updated with better logging | Done |
+| `[api/hotels.js](api/hotels.js)` | Already updated with better logging | Done |
 
 ## Expected Outcome
 
@@ -415,3 +417,4 @@ After implementation:
 - [Amadeus Hotel APIs Tutorial](https://developers.amadeus.com/self-service/apis-docs/guides/developer-guides/resources/hotels/)
 - [Hotel Search API v3](https://developers.amadeus.com/self-service/category/hotel/api-doc/hotel-search/api-reference)
 - [Hotel Booking API v1](https://developers.amadeus.com/self-service/category/hotel/api-doc/hotel-booking/api-reference)
+

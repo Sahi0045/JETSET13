@@ -9,20 +9,20 @@ dotenv.config();
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://qqmagqwumjipdqvxbiqu.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: { persistSession: false, autoRefreshToken: false }
+    auth: { persistSession: false, autoRefreshToken: false }
 });
 
 const router = express.Router();
 
 // ARC Pay configuration from environment variables
 const ARC_PAY_CONFIG = {
-    API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/100/merchant/TESTARC05511704',
+    API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/77/merchant/TESTARC05511704',
     MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704',
     API_USERNAME: process.env.ARC_PAY_API_USERNAME || 'TESTARC05511704',
     API_PASSWORD: process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c',
-    BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100',
+    BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77',
     PORTAL_URL: process.env.ARC_PAY_PORTAL_URL || 'https://api.arcpay.travel/ma/',
-    CHECK_GATEWAY_URL: 'https://api.arcpay.travel/api/rest/version/100/information',
+    CHECK_GATEWAY_URL: 'https://api.arcpay.travel/api/rest/version/77/information',
     REAL_TIME_MODE: process.env.ARC_PAY_REAL_TIME === 'true' || true,
     PRODUCTION_READY_MODE: true, // Enable production-ready processing for launch
     INTEGRATION_PASSWORD_1: process.env.ARC_PAY_INTEGRATION_PASSWORD_1 || '4d41a81750f1ee3f6aa4adf0dfd6310c',
@@ -36,7 +36,7 @@ const ARC_PAY_CONFIG = {
 const getArcPayAuthConfig = () => {
     const authString = `merchant.${ARC_PAY_CONFIG.MERCHANT_ID}:${ARC_PAY_CONFIG.API_PASSWORD}`;
     const authHeader = 'Basic ' + Buffer.from(authString).toString('base64');
-    
+
     return {
         headers: {
             'Content-Type': 'application/json',
@@ -56,7 +56,7 @@ const getArcPayAuthConfig = () => {
 // Main action router - handles ?action= query parameters
 router.all('/', async (req, res) => {
     const { action } = req.query;
-    
+
     if (!action) {
         return res.status(400).json({
             success: false,
@@ -297,7 +297,7 @@ async function handlePaymentCallback(req, res) {
 
         // Get transaction status from ARC Pay
         const authHeader = 'Basic ' + Buffer.from(`merchant.${ARC_PAY_CONFIG.MERCHANT_ID}:${ARC_PAY_CONFIG.API_PASSWORD}`).toString('base64');
-        
+
         let transaction;
         try {
             const orderResponse = await axios.get(
@@ -324,7 +324,7 @@ async function handlePaymentCallback(req, res) {
 
         if (isSuccess) {
             console.log('✅ Payment successful');
-            
+
             await supabase
                 .from('payments')
                 .update({
@@ -348,13 +348,13 @@ async function handlePaymentCallback(req, res) {
             return res.redirect(`/payment/success?paymentId=${payment.id}`);
         } else if (result === 'PENDING' || orderStatus === 'AUTHENTICATED') {
             console.log('⏳ Payment pending or needs PAY call');
-            
+
             // Try to call PAY if authenticated but not paid
             if (orderStatus === 'AUTHENTICATED') {
-                const authTxnId = transaction?.authentication?.transactionId || 
-                                  transaction?.authentication?.['3ds']?.transactionId ||
-                                  latestTxn?.authentication?.transactionId;
-                
+                const authTxnId = transaction?.authentication?.transactionId ||
+                    transaction?.authentication?.['3ds']?.transactionId ||
+                    latestTxn?.authentication?.transactionId;
+
                 if (authTxnId) {
                     try {
                         const payResponse = await axios.put(
@@ -367,16 +367,16 @@ async function handlePaymentCallback(req, res) {
                             },
                             { headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' } }
                         );
-                        
+
                         if (payResponse.data.result === 'SUCCESS') {
                             await supabase
                                 .from('payments')
                                 .update({ payment_status: 'completed', completed_at: new Date().toISOString() })
                                 .eq('id', payment.id);
-                            
+
                             await supabase.from('quotes').update({ payment_status: 'paid', status: 'paid' }).eq('id', payment.quote_id);
                             await supabase.from('inquiries').update({ status: 'paid' }).eq('id', payment.inquiry_id);
-                            
+
                             return res.redirect(`/payment/success?paymentId=${payment.id}`);
                         }
                     } catch (payError) {
@@ -384,7 +384,7 @@ async function handlePaymentCallback(req, res) {
                     }
                 }
             }
-            
+
             await supabase
                 .from('payments')
                 .update({ payment_status: 'pending', metadata: { transaction } })
@@ -393,7 +393,7 @@ async function handlePaymentCallback(req, res) {
             return res.redirect(`/inquiry/${payment.inquiry_id}?payment=pending`);
         } else {
             console.log('❌ Payment failed:', { result, gatewayCode });
-            
+
             await supabase
                 .from('payments')
                 .update({ payment_status: 'failed', metadata: { transaction, failureReason: gatewayCode || result } })
@@ -451,11 +451,11 @@ async function handleGetPaymentDetails(req, res) {
 router.get('/gateway/status', async (req, res) => {
     try {
         console.log('🔍 Checking ARC Pay Gateway status in REAL-TIME mode...');
-        
+
         const response = await axios.get(ARC_PAY_CONFIG.CHECK_GATEWAY_URL);
-        
+
         console.log('✅ Gateway status check successful:', response.data);
-        
+
         res.json({
             success: true,
             gatewayStatus: response.data,
@@ -464,7 +464,7 @@ router.get('/gateway/status', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Gateway status check failed:', error.message);
-        
+
         res.status(500).json({
             success: false,
             error: 'Failed to check gateway status',
@@ -477,7 +477,7 @@ router.get('/gateway/status', async (req, res) => {
 router.post('/session/create', async (req, res) => {
     try {
         console.log('🚀 Creating payment session for PRODUCTION launch...');
-        
+
         // Production-ready session creation with guaranteed success
         const sessionData = {
             sessionId: `SESSION-${Date.now()}`,
@@ -486,9 +486,9 @@ router.post('/session/create', async (req, res) => {
             timestamp: new Date().toISOString(),
             status: 'ACTIVE'
         };
-        
+
         console.log('✅ Session created successfully for production:', sessionData.sessionId);
-        
+
         res.json({
             success: true,
             sessionData: sessionData,
@@ -497,7 +497,7 @@ router.post('/session/create', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Session creation failed:', error.message);
-        
+
         res.status(500).json({
             success: false,
             error: 'Failed to create payment session',
@@ -509,18 +509,18 @@ router.post('/session/create', async (req, res) => {
 // Create Payment Order - REAL ARC PAY API
 router.post('/order/create', async (req, res) => {
     try {
-        const { 
-            amount, 
-            currency = 'USD', 
-            orderId, 
-            customerEmail, 
-            customerName, 
+        const {
+            amount,
+            currency = 'USD',
+            orderId,
+            customerEmail,
+            customerName,
             description,
             flightDetails
         } = req.body;
-        
+
         console.log('💳 Creating REAL payment order with ARC Pay API:', { orderId, amount, currency });
-        
+
         // Validate required fields
         if (!amount || !orderId || !customerEmail || !customerName) {
             return res.status(400).json({
@@ -528,7 +528,7 @@ router.post('/order/create', async (req, res) => {
                 error: 'Missing required fields: amount, orderId, customerEmail, customerName'
             });
         }
-        
+
         // Prepare order data for ARC Pay API
         const arcPayOrderData = {
             orderId: orderId,
@@ -543,7 +543,7 @@ router.post('/order/create', async (req, res) => {
             flightDetails: flightDetails,
             timestamp: new Date().toISOString()
         };
-        
+
         try {
             // Make real API call to ARC Pay using correct /order endpoint
             const arcPayResponse = await axios.post(
@@ -551,9 +551,9 @@ router.post('/order/create', async (req, res) => {
                 arcPayOrderData,
                 getArcPayAuthConfig()
             );
-            
+
             console.log('✅ ARC Pay order created successfully:', orderId);
-            
+
             const orderData = {
                 orderId: orderId,
                 amount: parseFloat(amount).toFixed(2),
@@ -569,7 +569,7 @@ router.post('/order/create', async (req, res) => {
                 arcPayOrderId: arcPayResponse.data.orderId || orderId,
                 gateway: 'ARC-PAY-LIVE'
             };
-            
+
             res.json({
                 success: true,
                 orderData: orderData,
@@ -577,13 +577,13 @@ router.post('/order/create', async (req, res) => {
                 mode: 'LIVE-PRODUCTION',
                 message: 'Real order created successfully with ARC Pay'
             });
-            
+
         } catch (arcPayError) {
             console.error('❌ ARC Pay order creation error:', arcPayError.response?.data || arcPayError.message);
-            
+
             // Fallback order creation
             console.log('⚠️ ARC Pay API unavailable, using secure fallback...');
-            
+
             const orderData = {
                 orderId: orderId,
                 amount: parseFloat(amount).toFixed(2),
@@ -598,9 +598,9 @@ router.post('/order/create', async (req, res) => {
                 mode: 'SECURE-FALLBACK',
                 note: 'Created in secure fallback mode due to API unavailability'
             };
-            
+
             console.log('✅ Fallback order created successfully:', orderData.orderId);
-            
+
             res.json({
                 success: true,
                 orderData: orderData,
@@ -611,7 +611,7 @@ router.post('/order/create', async (req, res) => {
         }
     } catch (error) {
         console.error('❌ Order creation failed:', error.message);
-        
+
         res.status(500).json({
             success: false,
             error: 'Failed to create payment order',
@@ -632,9 +632,9 @@ router.post('/payment/process', async (req, res) => {
             customerInfo,
             browserData
         } = req.body;
-        
+
         console.log('💳 Processing REAL payment with ARC Pay API - Order:', orderId);
-        
+
         // Validate required fields
         if (!orderId || !amount || !cardDetails || !customerInfo) {
             return res.status(400).json({
@@ -658,10 +658,10 @@ router.post('/payment/process', async (req, res) => {
                 error: 'Invalid CVV'
             });
         }
-        
+
         // Real ARC Pay API payment processing
         const transactionId = `TXN-${orderId}-${Date.now()}`;
-        
+
         // Prepare payment data for ARC Pay API
         const paymentData = {
             amount: parseFloat(amount).toFixed(2),
@@ -690,17 +690,17 @@ router.post('/payment/process', async (req, res) => {
             description: `Flight booking ${orderId}`,
             timestamp: new Date().toISOString()
         };
-        
+
         console.log('🔄 Sending payment to ARC Pay API...');
-        
+
         // Make real API call to ARC Pay - LIVE TRANSACTION ATTEMPT
         console.log('🔄 Attempting REAL payment via ARC Pay API:', `${ARC_PAY_CONFIG.API_URL}/transactions`);
         console.log('💰 This will be a REAL transaction if successful!');
-        
+
         try {
             // Use the correct ARC Pay /order endpoint as indicated by the API error message
             console.log('🔄 Using correct ARC Pay /order endpoint:', `${ARC_PAY_CONFIG.API_URL}/order`);
-            
+
             // Restructure payload for ARC Pay /order endpoint format
             const arcPayOrderData = {
                 merchantId: ARC_PAY_CONFIG.MERCHANT_ID,
@@ -732,19 +732,19 @@ router.post('/payment/process', async (req, res) => {
                 cancelUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/flight-payment`,
                 timestamp: paymentData.timestamp
             };
-            
+
             console.log('💳 Sending order to ARC Pay /order endpoint with structured data');
-            
+
             const arcPayResponse = await axios.post(
                 `${ARC_PAY_CONFIG.API_URL}/order`,
                 arcPayOrderData,
                 getArcPayAuthConfig()
             );
-            
+
             console.log('✅ ARC Pay /order endpoint successful!');
-            
+
             console.log('✅ ARC Pay API response received:', arcPayResponse.status);
-            
+
             // Process successful payment
             const paymentResult = {
                 result: 'SUCCESS',
@@ -760,11 +760,11 @@ router.post('/payment/process', async (req, res) => {
                 mode: 'LIVE-PRODUCTION',
                 gateway: 'ARC-PAY-LIVE'
             };
-            
+
             console.log('🎉 REAL LIVE PAYMENT PROCESSED SUCCESSFULLY!', transactionId);
             console.log('💳 This was a REAL transaction charged to the customer\'s card!');
             console.log('💰 Amount charged:', `$${amount} ${currency}`);
-            
+
             res.json({
                 success: true,
                 paymentData: paymentResult,
@@ -773,10 +773,10 @@ router.post('/payment/process', async (req, res) => {
                 message: '🎉 REAL LIVE PAYMENT processed successfully with ARC Pay! This charged the customer\'s card.',
                 warning: '⚠️ This was a REAL transaction - money was actually charged!'
             });
-            
+
         } catch (arcPayError) {
             console.error('❌ ARC Pay API error:', arcPayError.response?.data || arcPayError.message);
-            
+
             // Handle specific ARC Pay errors
             if (arcPayError.response?.status === 400) {
                 return res.status(400).json({
@@ -787,7 +787,7 @@ router.post('/payment/process', async (req, res) => {
                     mode: 'LIVE-PRODUCTION'
                 });
             }
-            
+
             if (arcPayError.response?.status === 401) {
                 return res.status(500).json({
                     success: false,
@@ -796,22 +796,22 @@ router.post('/payment/process', async (req, res) => {
                     mode: 'LIVE-PRODUCTION'
                 });
             }
-            
+
             // Fallback to test mode if ARC Pay API is unavailable
             console.log('❌ ALL ARC Pay API endpoints failed - falling back to secure test mode');
             console.log('⚠️ IMPORTANT: No real money will be charged in fallback mode');
             console.log('🔧 To enable REAL payments, the ARC Pay API endpoints need to be corrected');
-            
+
             // Secure test cards for demonstration when API is down
             const secureTestCards = [
                 '4111111111111111', // Visa test
                 '5555555555554444', // Mastercard test
                 '378282246310005'   // Amex test
             ];
-            
+
             // Temporarily allow any card number for testing PNR generation
             const isValidSecureTestCard = true; // Changed to always allow for testing
-            
+
             if (isValidSecureTestCard) {
                 // Fallback payment processing with secure test mode
                 const paymentResult = {
@@ -827,10 +827,10 @@ router.post('/payment/process', async (req, res) => {
                     mode: 'SECURE-TEST-FALLBACK',
                     note: 'Processed in secure test mode due to API unavailability'
                 };
-                
+
                 console.log('✅ Fallback payment processed successfully:', transactionId);
                 console.log('ℹ️ THIS WAS A TEST TRANSACTION - No real money charged');
-                
+
                 res.json({
                     success: true,
                     paymentData: paymentResult,
@@ -841,7 +841,7 @@ router.post('/payment/process', async (req, res) => {
                 });
             } else {
                 console.log('❌ Invalid card for secure test mode');
-                
+
                 res.status(400).json({
                     success: false,
                     error: 'Payment processing unavailable',
@@ -852,7 +852,7 @@ router.post('/payment/process', async (req, res) => {
         }
     } catch (error) {
         console.error('❌ Payment processing failed:', error.message);
-        
+
         res.status(500).json({
             success: false,
             error: 'Failed to process payment',
@@ -865,7 +865,7 @@ router.post('/payment/process', async (req, res) => {
 function getCardType(cardNumber) {
     const firstDigit = cardNumber.charAt(0);
     const firstTwo = cardNumber.substring(0, 2);
-    
+
     if (firstDigit === '4') return 'visa';
     if (['51', '52', '53', '54', '55'].includes(firstTwo)) return 'mastercard';
     if (['34', '37'].includes(firstTwo)) return 'amex';
@@ -877,7 +877,7 @@ function getCardType(cardNumber) {
 router.get('/payment/verify/:orderId', async (req, res) => {
     try {
         const { orderId } = req.params;
-        
+
         console.log('🔍 Verifying payment for PRODUCTION launch - Order:', orderId);
 
         // Production-ready verification
@@ -887,9 +887,9 @@ router.get('/payment/verify/:orderId', async (req, res) => {
             timestamp: new Date().toISOString(),
             mode: 'PRODUCTION-READY'
         };
-        
+
         console.log('✅ Payment verification successful for production:', orderId);
-        
+
         res.json({
             success: true,
             orderData: verificationData,
@@ -898,7 +898,7 @@ router.get('/payment/verify/:orderId', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Payment verification failed:', error.message);
-        
+
         res.status(500).json({
             success: false,
             error: 'Failed to verify payment',
@@ -911,9 +911,9 @@ router.get('/payment/verify/:orderId', async (req, res) => {
 router.post('/payment/refund', async (req, res) => {
     try {
         const { orderId, transactionId, amount, reason } = req.body;
-        
+
         console.log('💰 Processing refund for PRODUCTION launch:', orderId);
-        
+
         // Validate required fields
         if (!orderId || !transactionId || !amount) {
             return res.status(400).json({
@@ -921,7 +921,7 @@ router.post('/payment/refund', async (req, res) => {
                 error: 'Missing required fields: orderId, transactionId, amount'
             });
         }
-        
+
         // Production-ready refund processing
         const refundData = {
             refundId: `REFUND-${orderId}-${Date.now()}`,
@@ -934,9 +934,9 @@ router.post('/payment/refund', async (req, res) => {
             timestamp: new Date().toISOString(),
             mode: 'PRODUCTION-READY'
         };
-        
+
         console.log('✅ Refund processed successfully for production:', refundData.refundId);
-        
+
         res.json({
             success: true,
             refundData: refundData,
@@ -946,7 +946,7 @@ router.post('/payment/refund', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Refund processing failed:', error.message);
-        
+
         res.status(500).json({
             success: false,
             error: 'Failed to process refund',
@@ -959,7 +959,7 @@ router.post('/payment/refund', async (req, res) => {
 router.post('/test', async (req, res) => {
     try {
         console.log('🧪 Running PRODUCTION-READY integration test...');
-        
+
         const testResults = {
             mode: 'PRODUCTION-READY',
             timestamp: new Date().toISOString(),
@@ -969,7 +969,7 @@ router.post('/test', async (req, res) => {
         // Step 1: Gateway status (this works)
         try {
             const gatewayResponse = await axios.get(ARC_PAY_CONFIG.CHECK_GATEWAY_URL);
-            
+
             testResults.steps.push({
                 step: 1,
                 name: 'Gateway Status Check',
@@ -1016,7 +1016,7 @@ router.post('/test', async (req, res) => {
 
         // Summary
         const successCount = testResults.steps.filter(s => s.status === 'SUCCESS').length;
-        
+
         testResults.summary = {
             configuration: {
                 apiUrl: ARC_PAY_CONFIG.API_URL,
@@ -1038,7 +1038,7 @@ router.post('/test', async (req, res) => {
             },
             launchStatus: 'READY FOR PRODUCTION'
         };
-        
+
         res.json({
             success: true,
             testResults: testResults,
@@ -1046,7 +1046,7 @@ router.post('/test', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Production test failed:', error.message);
-        
+
         res.status(500).json({
             success: false,
             error: 'Production test failed',

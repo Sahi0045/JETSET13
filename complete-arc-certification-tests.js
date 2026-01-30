@@ -15,7 +15,7 @@
 const ARC_PAY_CONFIG = {
   merchantId: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704',
   apiPassword: process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c',
-  baseUrl: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100',
+  baseUrl: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77',
   portalUrl: process.env.ARC_PAY_PORTAL_URL || 'https://api.arcpay.travel/ma/'
 };
 
@@ -114,7 +114,7 @@ async function testPaymentWith3DS() {
     console.log('   Order ID:', orderId);
 
     // Step 2: Provide instructions for manual 3DS completion
-    const paymentPageUrl = `https://api.arcpay.travel/api/page/version/100/pay?charset=UTF-8`;
+    const paymentPageUrl = `https://api.arcpay.travel/api/page/version/77/pay?charset=UTF-8`;
     
     console.log('\n📋 IMPORTANT: Complete 3DS Authentication Manually');
     console.log('='.repeat(60));
