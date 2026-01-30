@@ -176,7 +176,7 @@ async function handleInitiatePayment(req, res) {
                 returnUrl: finalReturnUrl,
                 cancelUrl: finalCancelUrl,
                 merchant: { name: 'JetSet Travel' },
-                displayControl: { billingAddress: 'OPTIONAL', customerEmail: 'OPTIONAL' },
+                displayControl: { billingAddress: 'MANDATORY', customerEmail: 'MANDATORY' },  // Required for 3DS2
                 action: {
                     '3DSecure': 'MANDATORY'
                 },

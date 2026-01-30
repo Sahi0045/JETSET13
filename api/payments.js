@@ -284,8 +284,8 @@ async function handlePaymentInitiation(req, res) {
           name: 'JetSet Travel'
         },
         displayControl: {
-          billingAddress: 'OPTIONAL',
-          customerEmail: 'OPTIONAL'
+          billingAddress: 'MANDATORY',  // Required for 3DS2 - ensures billing data is collected
+          customerEmail: 'MANDATORY'    // Required for 3DS2 risk assessment
         },
         action: {
           '3DSecure': 'MANDATORY'
