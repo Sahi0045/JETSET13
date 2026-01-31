@@ -134,16 +134,68 @@ const HotelDetailsPage = () => {
         e.preventDefault();
         setFormSubmitting(true);
 
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        try {
+            // Import supabase dynamically to avoid issues
+            const supabaseModule = await import('../../../lib/supabase');
+            const supabase = supabaseModule.default;
 
-        setFormSubmitting(false);
-        setFormSuccess(true);
+            // Save quote request to Supabase
+            const { error } = await supabase.from('hotel_quotes').insert([{
+                hotel_id: hotelId,
+                hotel_name: hotel?.name || 'Unknown Hotel',
+                name: formData.name,
+                email: formData.email,
+                phone: formData.phone || null,
+                check_in: formData.checkIn || null,
+                check_out: formData.checkOut || null,
+                guests: parseInt(formData.guests) || 2,
+                special_requests: formData.specialRequests || null,
+                room_type: selectedRoom?.type || null,
+                price_estimate: selectedRoom?.price || hotel?.price || null,
+                status: 'pending'
+            }]);
 
-        setTimeout(() => {
-            setFormSuccess(false);
-            setShowQuoteModal(false);
-        }, 3000);
+            if (error) {
+                console.error('Error saving quote:', error);
+                throw error;
+            }
+
+            console.log('✅ Hotel quote saved to Supabase');
+
+            // TODO: Re-enable email notifications after Vercel Pro upgrade
+            // try {
+            //     await fetch('/api/email', {
+            //         method: 'POST',
+            //         headers: { 'Content-Type': 'application/json' },
+            //         body: JSON.stringify({
+            //             type: 'quote',
+            //             name: formData.name,
+            //             email: formData.email,
+            //             phone: formData.phone,
+            //             hotel_name: hotel?.name,
+            //             check_in: formData.checkIn,
+            //             check_out: formData.checkOut,
+            //             guests: formData.guests,
+            //             special_requests: formData.specialRequests
+            //         })
+            //     });
+            //     console.log('Quote email notifications sent');
+            // } catch (emailError) {
+            //     console.error('Email notification error:', emailError);
+            // }
+
+            setFormSubmitting(false);
+            setFormSuccess(true);
+
+            setTimeout(() => {
+                setFormSuccess(false);
+                setShowQuoteModal(false);
+            }, 3000);
+        } catch (err) {
+            console.error('Quote submission error:', err);
+            setFormSubmitting(false);
+            alert('Failed to submit quote request. Please try again.');
+        }
     };
 
     // Navigate to booking
@@ -385,8 +437,8 @@ const HotelDetailsPage = () => {
                                         key={idx}
                                         onClick={() => setSelectedRoom(room)}
                                         className={`border rounded-xl p-4 cursor-pointer transition-all ${selectedRoom?.type === room.type
-                                                ? 'border-[#055B75] bg-[#F0FAFC]'
-                                                : 'border-gray-200 hover:border-[#65B3CF]'
+                                            ? 'border-[#055B75] bg-[#F0FAFC]'
+                                            : 'border-gray-200 hover:border-[#65B3CF]'
                                             }`}
                                     >
                                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
