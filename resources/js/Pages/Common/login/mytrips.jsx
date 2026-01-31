@@ -19,7 +19,7 @@ const EmptyState = ({ icon, title, description, actionLabel, onAction }) => (
       {actionLabel && onAction && (
         <button
           onClick={onAction}
-          className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+          className="px-6 py-3 bg-gradient-to-r from-[#055B75] to-[#034457] text-white font-semibold rounded-lg hover:from-[#034457] hover:to-[#022a38] transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
         >
           {actionLabel}
         </button>
@@ -637,12 +637,12 @@ export default function TravelDashboard() {
       <div key={booking.orderId || booking.bookingReference || booking.quoteId}
         className="group bg-white border border-gray-200 rounded-xl p-6 hover:shadow-xl hover:border-blue-300 transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
         {/* Gradient accent bar */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#055B75] to-[#65B3CF]"></div>
 
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg font-semibold ${isFlightBooking ? 'bg-gradient-to-br from-blue-500 to-blue-600' : isCruiseBooking ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-green-500 to-green-600'}
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg font-semibold ${isFlightBooking ? 'bg-gradient-to-br from-[#055B75] to-[#034457]' : isCruiseBooking ? 'bg-gradient-to-br from-[#65B3CF] to-[#055B75]' : 'bg-gradient-to-br from-[#055B75] to-[#65B3CF]'}
               `}>
                 {getBookingIcon()}
               </div>
@@ -688,7 +688,7 @@ export default function TravelDashboard() {
           <div className="flex flex-col items-start sm:items-end gap-2">
             <span className={`inline-flex items-center px-4 py-2 text-xs font-bold rounded-full shadow-sm ${booking.status === 'CONFIRMED' || booking.status === 'paid' ? 'bg-gradient-to-r from-green-500 to-green-600 text-white' :
               booking.status === 'CANCELLED' ? 'bg-gradient-to-r from-red-500 to-red-600 text-white' :
-                'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+                'bg-gradient-to-r from-[#055B75] to-[#034457] text-white'
               }`}>
               <span className="w-2 h-2 bg-white bg-opacity-50 rounded-full mr-2"></span>
               {booking.status === 'paid' ? 'Paid' : (booking.status || 'Confirmed')}
@@ -928,7 +928,7 @@ export default function TravelDashboard() {
                   }
                 }
               }}
-              className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+              className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-[#055B75] to-[#034457] text-white text-sm font-semibold rounded-lg hover:from-[#034457] hover:to-[#022a38] transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
             >
               <span className="flex items-center justify-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -941,7 +941,7 @@ export default function TravelDashboard() {
           ) : (
             <button
               onClick={() => navigate('/booking-confirmation', { state: { bookingData: booking } })}
-              className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+              className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-[#055B75] to-[#034457] text-white text-sm font-semibold rounded-lg hover:from-[#034457] hover:to-[#022a38] transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
             >
               <span className="flex items-center justify-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1022,7 +1022,7 @@ export default function TravelDashboard() {
       <div key={request.id}
         className="group bg-white border border-gray-200 rounded-xl p-6 hover:shadow-xl hover:border-blue-300 transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
         {/* Gradient accent bar */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#055B75] to-[#65B3CF]"></div>
 
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
           <div className="flex-1">
@@ -1193,7 +1193,7 @@ export default function TravelDashboard() {
         <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
           <button
             onClick={() => navigate(`/inquiry/${request.id}`)}
-            className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+            className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-[#055B75] to-[#034457] text-white text-sm font-semibold rounded-lg hover:from-[#034457] hover:to-[#022a38] transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
           >
             <span className="flex items-center justify-center gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1250,7 +1250,7 @@ export default function TravelDashboard() {
                 key={tab}
                 onClick={() => handleTabChange(tab)}
                 className={`px-5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab
-                  ? "bg-blue-600 text-white shadow-sm"
+                  ? "bg-[#055B75] text-white shadow-sm"
                   : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                   }`}
               >
@@ -1295,7 +1295,7 @@ export default function TravelDashboard() {
                         key={item.key}
                         onClick={() => handleSidebarItemChange(item.key)}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeSidebarItem === item.key
-                          ? "bg-blue-50 text-blue-700"
+                          ? "bg-[#B9D0DC] text-[#055B75]"
                           : "text-gray-700 hover:bg-gray-50"
                           }`}
                       >
@@ -1305,7 +1305,7 @@ export default function TravelDashboard() {
                         </span>
                         {item.count > 0 && (
                           <span className={`text-xs px-2 py-0.5 rounded-full ${activeSidebarItem === item.key
-                            ? "bg-blue-100 text-blue-700"
+                            ? "bg-[#B9D0DC] text-[#055B75]"
                             : "bg-gray-100 text-gray-600"
                             }`}>
                             {item.count}
@@ -1319,7 +1319,7 @@ export default function TravelDashboard() {
                     <button
                       onClick={() => handleSidebarItemChange("Requests")}
                       className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeSidebarItem === "Requests"
-                        ? "bg-purple-50 text-purple-700"
+                        ? "bg-[#B9D0DC] text-[#055B75]"
                         : "text-gray-700 hover:bg-gray-50"
                         }`}
                     >
@@ -1329,7 +1329,7 @@ export default function TravelDashboard() {
                       </span>
                       {requests.length > 0 && (
                         <span className={`text-xs px-2 py-0.5 rounded-full ${activeSidebarItem === "Requests"
-                          ? "bg-purple-100 text-purple-700"
+                          ? "bg-[#B9D0DC] text-[#055B75]"
                           : "bg-gray-100 text-gray-600"
                           }`}>
                           {requests.length}
@@ -1463,8 +1463,8 @@ export default function TravelDashboard() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
             <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-16 h-16 bg-[#B9D0DC] rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-[#055B75]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               </div>
@@ -1475,7 +1475,7 @@ export default function TravelDashboard() {
               <div className="space-y-3">
                 <button
                   onClick={handleLoginClick}
-                  className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  className="w-full py-3 bg-[#055B75] text-white font-medium rounded-lg hover:bg-[#034457] transition-colors"
                 >
                   Sign In
                 </button>
