@@ -55,7 +55,7 @@ export const sendEmail = async ({ to, subject, template, data, html, text }) => 
     }
 
     const response = await resend.emails.send({
-      from: 'JetSetGo <onboarding@resend.dev>',
+      from: 'JetSetters <noreply@jetsetterss.com>',
       to: [to],
       subject,
       html,
@@ -1070,12 +1070,10 @@ export const sendSubscriberWelcomeEmail = async (email, source = 'website') => {
   `;
 
   try {
-    // For Resend free tier, send to registered email
-    const registeredEmail = process.env.COMPANY_EMAIL || 'jetsetters721@gmail.com';
-
+    // Send directly to subscriber using verified domain
     const response = await resend.emails.send({
-      from: 'JetSetters <onboarding@resend.dev>',
-      to: [registeredEmail], // In production with verified domain, use: [email]
+      from: 'JetSetters <noreply@jetsetterss.com>',
+      to: [email],
       subject: '🎉 Welcome to JetSetters Newsletter!',
       html,
       text: stripHtml(html)
@@ -1172,7 +1170,7 @@ export const sendAdminSubscriptionNotification = async (email, source = 'website
     const adminEmail = process.env.COMPANY_EMAIL || 'jetsetters721@gmail.com';
 
     const response = await resend.emails.send({
-      from: 'JetSetters <onboarding@resend.dev>',
+      from: 'JetSetters <noreply@jetsetterss.com>',
       to: [adminEmail],
       subject: `📬 New Subscriber: ${email}`,
       html,
