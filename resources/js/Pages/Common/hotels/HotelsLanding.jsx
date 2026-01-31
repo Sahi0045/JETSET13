@@ -184,10 +184,10 @@ const HotelsLanding = () => {
 
             // Send email notifications (subscriber welcome + admin notification)
             try {
-                await fetch('/api/email/subscription-notification', {
+                await fetch('/api/email', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: subscriptionEmail, source: 'hotels' })
+                    body: JSON.stringify({ type: 'subscription', email: subscriptionEmail, source: 'hotels' })
                 });
                 console.log('Email notifications sent successfully');
             } catch (emailError) {

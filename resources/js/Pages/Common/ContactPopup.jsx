@@ -39,10 +39,10 @@ const ContactPopup = () => {
 
       // Send email notification
       try {
-        await fetch('/api/email/contact-notification', {
+        await fetch('/api/email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, message })
+          body: JSON.stringify({ type: 'contact', name, email, message })
         });
         console.log('Contact email notifications sent');
       } catch (emailError) {

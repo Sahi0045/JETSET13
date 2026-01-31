@@ -99,10 +99,10 @@ export default function SubscribeSection() {
 
       // Send email notifications (subscriber welcome + admin notification)
       try {
-        await fetch('/api/email/subscription-notification', {
+        await fetch('/api/email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email, source: 'flights' })
+          body: JSON.stringify({ type: 'subscription', email: email, source: 'flights' })
         });
         console.log('Email notifications sent successfully');
       } catch (emailError) {
