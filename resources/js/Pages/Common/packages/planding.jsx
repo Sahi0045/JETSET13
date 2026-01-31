@@ -504,7 +504,7 @@ const TravelPackages = () => {
                     value={searchQuery}
                     onChange={handleSearchInputChange}
                     onFocus={() => setShowSuggestions(true)}
-                    className="w-full p-3 pl-10 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] transition-all text-base"
+                    className="w-full p-3 pl-11 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#055B75] focus:border-[#055B75] transition-all text-base"
                   />
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-[#055B75]" size={20} />
 

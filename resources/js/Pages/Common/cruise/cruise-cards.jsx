@@ -158,63 +158,103 @@ const CruiseCards = () => {
               <p className="text-gray-500">Try adjusting your search criteria</p>
             </div>
           ) : (
-            <div className="space-y-12">
+            <div className="space-y-10">
               {filteredCruises.map((cruise) => (
                 <div
                   key={cruise.id}
-                  className="bg-white rounded-[24px] overflow-hidden flex flex-col md:flex-row shadow-xl relative transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl"
+                  className="bg-white rounded-[20px] overflow-hidden flex flex-col md:flex-row shadow-[0_8px_30px_rgb(0,0,0,0.12)] relative transform transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,102,178,0.2)] group"
+                  style={{ minHeight: '380px' }}
                 >
-                  <div className="w-full md:w-2/5 h-[300px] md:h-[450px]">
+                  {/* Image Section with Overlay */}
+                  <div className="w-full md:w-[42%] h-[280px] md:h-auto relative overflow-hidden">
                     <img
                       src={cruise.image}
                       alt={cruise.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     />
-                    <div className="absolute top-4 left-4 bg-[#0066b2]/90 text-white py-1 px-3 rounded-full text-sm font-medium">
+                    {/* Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a2540]/90 via-[#0a2540]/40 to-transparent"></div>
+
+                    {/* Cruise Line Badge */}
+                    <div className="absolute top-5 left-5 bg-[#0066b2] text-white py-1.5 px-4 rounded-full text-sm font-semibold shadow-lg backdrop-blur-sm">
                       {cruise.name}
+                    </div>
+
+                    {/* Overlay Text */}
+                    <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                      <h3 className="text-2xl md:text-2xl font-bold mb-1 drop-shadow-lg">
+                        {cruise.description}
+                      </h3>
+                      <p className="text-white/90 text-sm font-medium flex items-center gap-2">
+                        <FaShip className="text-[#4dc3ff]" />
+                        {cruise.name} • {cruise.duration}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="w-full md:w-3/5 p-6 md:p-10 flex flex-col justify-center">
-                    <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-3">
-                      {cruise.duration} {cruise.description}
-                    </h2>
-                    <div className="flex items-center text-gray-500 mb-6">
-                      <FaShip className="mr-2" />
-                      <span className="text-lg">{cruise.name}</span>
-                    </div>
-
-                    <div className="space-y-6 md:space-y-6 mb-8">
-                      <div className="flex items-start">
-                        <div className="w-8 h-8 mr-4 mt-1 text-[#0066b2] bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
-                          <FaMapMarkerAlt />
-                        </div>
-                        <div>
-                          <span className="block text-gray-800 font-semibold mb-1">Destinations</span>
-                          <span className="text-gray-600">{cruise.destinations.join(', ')}</span>
-                        </div>
+                  {/* Content Section */}
+                  <div className="w-full md:w-[58%] p-6 md:p-8 lg:p-10 flex flex-col justify-between bg-gradient-to-br from-white to-slate-50">
+                    <div>
+                      <h2 className="text-xl md:text-2xl lg:text-[1.65rem] font-bold text-gray-800 mb-2 leading-tight">
+                        {cruise.duration} {cruise.description}
+                      </h2>
+                      <div className="flex items-center text-gray-500 mb-5 pb-4 border-b border-gray-100">
+                        <FaShip className="mr-2 text-[#0066b2]" />
+                        <span className="text-base font-medium">{cruise.name}</span>
                       </div>
 
-                      <div className="flex items-start">
-                        <div className="w-8 h-8 mr-4 mt-1 text-[#0066b2] bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
-                          <FaCalendar />
+                      <div className="space-y-4 mb-6">
+                        <div className="flex items-start group/item">
+                          <div className="w-9 h-9 mr-4 text-[#0066b2] bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm transition-all duration-300 group-hover/item:scale-110 group-hover/item:shadow-md">
+                            <FaMapMarkerAlt className="text-sm" />
+                          </div>
+                          <div>
+                            <span className="block text-gray-800 font-semibold text-sm mb-0.5">Destinations</span>
+                            <span className="text-gray-600 text-sm leading-relaxed">
+                              {cruise.destinations.slice(0, 4).map((dest, idx, arr) => (
+                                <span key={dest}>
+                                  <span className="text-[#0066b2] font-medium">{dest}</span>
+                                  {idx < arr.length - 1 && <span className="text-gray-400">, </span>}
+                                </span>
+                              ))}
+                            </span>
+                          </div>
                         </div>
-                        <div>
-                          <span className="block text-gray-800 font-semibold mb-1">Departure Ports</span>
-                          <span className="text-gray-600">{cruise.departurePorts.join(', ')}</span>
+
+                        <div className="flex items-start group/item">
+                          <div className="w-9 h-9 mr-4 text-[#0066b2] bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm transition-all duration-300 group-hover/item:scale-110 group-hover/item:shadow-md">
+                            <FaCalendar className="text-sm" />
+                          </div>
+                          <div>
+                            <span className="block text-gray-800 font-semibold text-sm mb-0.5">Departure Ports</span>
+                            <span className="text-gray-600 text-sm leading-relaxed">
+                              {cruise.departurePorts.slice(0, 2).map((port, idx, arr) => (
+                                <span key={port}>
+                                  <span className="text-[#0066b2] font-medium">{port}</span>
+                                  {idx < arr.length - 1 && <span className="text-gray-400">, </span>}
+                                </span>
+                              ))}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between mt-auto">
-                      <div className="text-2xl font-bold text-blue-600">
-                        <Price amount={cruise.priceValue} showCode={true} />
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                      <div>
+                        <div className="text-sm text-gray-500 mb-0.5">Starting from</div>
+                        <div className="text-2xl md:text-[1.75rem] font-bold bg-gradient-to-r from-[#0066b2] to-[#0099ff] bg-clip-text text-transparent">
+                          <Price amount={cruise.priceValue} showCode={true} />
+                        </div>
                       </div>
                       <Link
                         to={`/itinerary?cruiseId=${cruise.id}`}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+                        className="bg-gradient-to-r from-[#0066b2] to-[#0088dd] hover:from-[#005599] hover:to-[#0077cc] text-white px-6 py-3.5 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center gap-2"
                       >
                         View Details
+                        <svg className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
                       </Link>
                     </div>
                   </div>
