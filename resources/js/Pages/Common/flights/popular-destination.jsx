@@ -115,7 +115,7 @@ export default function PopularDestinations({ onSelectDestination }) {
                     />
                   </svg>
                   <span className="text-white">
-                    {index % 2 === 0 ? '70' : '50'} properties available
+                    {/* {index % 2 === 0 ? '70' : '50'} properties available */}
                   </span>
                 </div>
 

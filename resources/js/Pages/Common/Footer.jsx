@@ -15,7 +15,7 @@ const Footer = () => {
           <div className="footer-column">
             <Link to="/" className="footer-logo-link">
               <div className="footer-logo">
-                <img src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png" alt="JET SETTERS" className="logo-icon" />
+                <img src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png" alt="Jetsetterss" className="logo-icon" />
               </div>
             </Link>
             <p className="column-description">
@@ -110,7 +110,7 @@ const Footer = () => {
           </div>
         </div>
         <div className="footer-bottom">
-          <p className="copyright">© {currentYear} JET SETTERS. All rights reserved.</p>
+          <p className="copyright">© {currentYear} Jetsetterss. All rights reserved.</p>
           <div className="social-links">
             <a
               href="https://www.facebook.com/people/Jetsetters/61557536332731/?ref=pl_edit_xav_ig_profile_page_web"

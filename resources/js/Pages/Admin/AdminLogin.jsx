@@ -110,18 +110,18 @@ const AdminLogin = () => {
           <div className="branding-content">
             <div className="brand-logo">
               <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="40" cy="40" r="35" fill="url(#logoGradient)" stroke="#fff" strokeWidth="2"/>
-                <path d="M40 15L65 30V50L40 65L15 50V30L40 15Z" fill="white"/>
-                <path d="M40 25V55M25 32L55 32M25 48L55 48" stroke="#0ea5e9" strokeWidth="3"/>
+                <circle cx="40" cy="40" r="35" fill="url(#logoGradient)" stroke="#fff" strokeWidth="2" />
+                <path d="M40 15L65 30V50L40 65L15 50V30L40 15Z" fill="white" />
+                <path d="M40 25V55M25 32L55 32M25 48L55 48" stroke="#0ea5e9" strokeWidth="3" />
                 <defs>
                   <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style={{stopColor:'#0ea5e9',stopOpacity:1}} />
-                    <stop offset="100%" style={{stopColor:'#3b82f6',stopOpacity:1}} />
+                    <stop offset="0%" style={{ stopColor: '#0ea5e9', stopOpacity: 1 }} />
+                    <stop offset="100%" style={{ stopColor: '#3b82f6', stopOpacity: 1 }} />
                   </linearGradient>
                 </defs>
               </svg>
             </div>
-            <h1>JET SETTERS</h1>
+            <h1>Jetsetterss</h1>
             <p>Premium Travel Management System</p>
             <div className="brand-features">
               <div className="feature-item">
@@ -157,7 +157,7 @@ const AdminLogin = () => {
                 <div className="error-alert">
                   <div className="error-icon">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/>
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                     </svg>
                   </div>
                   <div className="error-content">
@@ -171,8 +171,8 @@ const AdminLogin = () => {
                 <label htmlFor="email">Email Address</label>
                 <div className="input-with-icon">
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>
-                    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
+                    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
                   </svg>
                   <input
                     type="email"
@@ -191,7 +191,7 @@ const AdminLogin = () => {
                 <label htmlFor="password">Password</label>
                 <div className="input-with-icon">
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd"/>
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                   </svg>
                   <input
                     type="password"
@@ -222,14 +222,14 @@ const AdminLogin = () => {
                 {loading ? (
                   <span className="loading-spinner">
                     <svg className="spinner" width="20" height="20" viewBox="0 0 50 50">
-                      <circle className="path" cx="25" cy="25" r="20" fill="none" strokeWidth="3"/>
+                      <circle className="path" cx="25" cy="25" r="20" fill="none" strokeWidth="3" />
                     </svg>
                     Authenticating...
                   </span>
                 ) : (
                   <>
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L9.414 9.5l4.293-4.293z" clipRule="evenodd"/>
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L9.414 9.5l4.293-4.293z" clipRule="evenodd" />
                     </svg>
                     Sign In to Dashboard
                   </>
@@ -240,13 +240,13 @@ const AdminLogin = () => {
             <div className="form-footer">
               <div className="security-notice">
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd"/>
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                 </svg>
                 <span>Secure SSL Encrypted Connection</span>
               </div>
               <a href="/" className="back-to-site">
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd"/>
+                  <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
                 </svg>
                 Back to Website
               </a>

@@ -1,4 +1,4 @@
-# Complete Workflow Guide - JET SETTERS Travel Management System
+# Complete Workflow Guide - Jetsetterss Travel Management System
 
 ## 🔄 End-to-End Booking Workflow
 

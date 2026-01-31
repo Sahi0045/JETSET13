@@ -30,7 +30,7 @@ export const checkQuoteExpiration = async () => {
       console.error('Error fetching expiring quotes:', expiringError);
     } else if (expiringQuotes && expiringQuotes.length > 0) {
       console.log(`⚠️  Found ${expiringQuotes.length} quotes expiring soon`);
-      
+
       // Send warning emails
       for (const quote of expiringQuotes) {
         try {
@@ -48,7 +48,7 @@ export const checkQuoteExpiration = async () => {
               <p><strong>Quote Amount:</strong> ${quote.currency} ${quote.total_amount}</p>
               <p><strong>Expires on:</strong> ${new Date(quote.expires_at).toLocaleDateString()}</p>
               <p>To secure this rate, please accept the quote before it expires.</p>
-              <p>Best regards,<br>The JET SETTERS Team</p>
+              <p>Best regards,<br>The Jetsetterss Team</p>
             `
           });
 
@@ -102,7 +102,7 @@ export const checkQuoteExpiration = async () => {
                 <p><strong>Quote Amount:</strong> ${quote.currency} ${quote.total_amount}</p>
                 <p><strong>Expired on:</strong> ${new Date(quote.expires_at).toLocaleDateString()}</p>
                 <p>If you're still interested in this travel plan, please contact us and we'll be happy to provide you with a new quote.</p>
-                <p>Best regards,<br>The JET SETTERS Team</p>
+                <p>Best regards,<br>The Jetsetterss Team</p>
               `
             });
 
@@ -115,7 +115,7 @@ export const checkQuoteExpiration = async () => {
     }
 
     console.log('✅ Quote expiration check completed');
-    
+
     return {
       success: true,
       expiringSoon: expiringQuotes?.length || 0,
