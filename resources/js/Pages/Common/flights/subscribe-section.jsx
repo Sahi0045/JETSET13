@@ -97,6 +97,19 @@ export default function SubscribeSection() {
         return;
       }
 
+      // Send email notifications (subscriber welcome + admin notification)
+      try {
+        await fetch('/api/email/subscription-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email, source: 'flights' })
+        });
+        console.log('Email notifications sent successfully');
+      } catch (emailError) {
+        // Don't block subscription if email fails
+        console.error('Email notification error:', emailError);
+      }
+
       setSuccess(true);
       setEmail('');
       setConsent(false);

@@ -84,7 +84,7 @@ const emailService = {
     try {
       // Different email templates based on callback type
       let subject, html;
-      
+
       switch (type) {
         case 'cruise':
           subject = 'Your Cruise Callback Request Confirmation';
@@ -102,11 +102,11 @@ const emailService = {
           subject = 'Callback Request Confirmation';
           html = generateDefaultCallbackTemplate(data);
       }
-      
+
       // For Resend free tier, we must use the registered email address
       // Original requester's email from data is shown in the template
       const registeredEmail = 'jetsetters721@gmail.com';
-      
+
       // Send the email using Resend
       const response = await resend.emails.send({
         from: 'JetSetGo <onboarding@resend.dev>',
@@ -115,7 +115,7 @@ const emailService = {
         html,
         text: stripHtml(html)
       });
-      
+
       console.log('Email sent successfully:', response);
       return response;
     } catch (error) {
@@ -376,7 +376,7 @@ function stripHtml(html) {
  */
 export function generateInquiryReceivedTemplate(data) {
   const { customerName, inquiryType, inquiryId, customerEmail } = data;
-  
+
   return `
     <!DOCTYPE html>
     <html>
@@ -571,7 +571,7 @@ export function generateInquiryReceivedTemplate(data) {
  */
 export function generateAdminInquiryNotificationTemplate(data) {
   const { customerName, customerEmail, inquiryType, inquiryId, travelDetails } = data;
-  
+
   return `
     <!DOCTYPE html>
     <html>
@@ -737,14 +737,14 @@ export function generateAdminInquiryNotificationTemplate(data) {
  */
 export function generateQuoteSentTemplate(data) {
   const { customerName, quoteNumber, totalAmount, currency, expiresAt, quoteLink, breakdown } = data;
-  
-  const expiryDate = new Date(expiresAt).toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+
+  const expiryDate = new Date(expiresAt).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   });
-  
+
   return `
     <!DOCTYPE html>
     <html>
@@ -923,5 +923,292 @@ export function generateQuoteSentTemplate(data) {
     </html>
   `;
 }
+
+/**
+ * Send newsletter subscription welcome email to subscriber
+ * @param {string} email - Subscriber email
+ * @param {string} source - Source page (flights, hotels, packages, etc.)
+ * @returns {Promise} - Email send response
+ */
+export const sendSubscriberWelcomeEmail = async (email, source = 'website') => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { 
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+          line-height: 1.6; 
+          color: #333; 
+          max-width: 600px; 
+          margin: 0 auto; 
+          background-color: #f4f4f4;
+        }
+        .container { 
+          background-color: white; 
+          margin: 20px auto; 
+          border-radius: 10px; 
+          overflow: hidden; 
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header { 
+          background: linear-gradient(135deg, #055B75 0%, #033d4f 100%); 
+          padding: 40px 20px; 
+          text-align: center; 
+          color: white; 
+        }
+        .header h1 { 
+          margin: 0; 
+          font-size: 28px; 
+          font-weight: 600;
+        }
+        .header p { 
+          margin: 15px 0 0; 
+          font-size: 16px; 
+          opacity: 0.9;
+        }
+        .content { 
+          padding: 30px 25px; 
+        }
+        .welcome-box {
+          background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+          padding: 20px;
+          border-radius: 8px;
+          text-align: center;
+          margin: 20px 0;
+        }
+        .welcome-box h2 {
+          color: #2e7d32;
+          margin: 0 0 10px;
+        }
+        .benefits {
+          background-color: #f8f9fa;
+          padding: 20px;
+          margin: 20px 0;
+          border-radius: 8px;
+        }
+        .benefits h3 {
+          color: #055B75;
+          margin: 0 0 15px;
+        }
+        .benefit-item {
+          padding: 10px 0;
+          border-bottom: 1px solid #e0e0e0;
+        }
+        .benefit-item:last-child {
+          border-bottom: none;
+        }
+        .cta-button { 
+          display: inline-block; 
+          background-color: #055B75; 
+          color: white !important; 
+          padding: 14px 30px; 
+          text-decoration: none; 
+          border-radius: 6px; 
+          margin: 20px 0; 
+          font-weight: 600;
+        }
+        .footer { 
+          background-color: #f8f9fa; 
+          padding: 25px; 
+          text-align: center; 
+          font-size: 13px; 
+          color: #666; 
+          border-top: 1px solid #e0e0e0;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>✈️ Welcome to JetSetters!</h1>
+          <p>You're now part of our travel community</p>
+        </div>
+        
+        <div class="content">
+          <div class="welcome-box">
+            <h2>🎉 Subscription Confirmed!</h2>
+            <p>Thank you for subscribing to our newsletter. Get ready for exclusive deals and travel inspiration!</p>
+          </div>
+          
+          <p>Dear Traveler,</p>
+          
+          <p>Welcome aboard! You've successfully subscribed to the JetSetters newsletter. We're excited to have you join our community of travel enthusiasts.</p>
+          
+          <div class="benefits">
+            <h3>🎁 What You'll Receive:</h3>
+            <div class="benefit-item">✨ <strong>Exclusive Deals</strong> - Up to 50% off on flights, hotels & packages</div>
+            <div class="benefit-item">🌍 <strong>Travel Inspiration</strong> - Curated destination guides and tips</div>
+            <div class="benefit-item">⏰ <strong>Early Access</strong> - Be first to know about flash sales</div>
+            <div class="benefit-item">🎫 <strong>Member Perks</strong> - Special offers just for subscribers</div>
+          </div>
+          
+          <div style="text-align: center;">
+            <a href="${process.env.FRONTEND_URL || 'https://jetsetterss.com'}" class="cta-button">
+              Start Exploring
+            </a>
+          </div>
+          
+          <p style="color: #666; font-size: 14px;">
+            You subscribed from our ${source} page. If you didn't subscribe, please ignore this email.
+          </p>
+        </div>
+        
+        <div class="footer">
+          <p><strong>JetSetters Travel</strong></p>
+          <p>Your journey to extraordinary destinations starts here</p>
+          <p style="margin-top: 15px;">
+            <a href="${process.env.FRONTEND_URL || 'https://jetsetterss.com'}/unsubscribe?email=${email}" style="color: #999;">Unsubscribe</a>
+          </p>
+          <p>&copy; 2025 JetSetters. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    // For Resend free tier, send to registered email
+    const registeredEmail = process.env.COMPANY_EMAIL || 'jetsetters721@gmail.com';
+
+    const response = await resend.emails.send({
+      from: 'JetSetters <onboarding@resend.dev>',
+      to: [registeredEmail], // In production with verified domain, use: [email]
+      subject: '🎉 Welcome to JetSetters Newsletter!',
+      html,
+      text: stripHtml(html)
+    });
+
+    console.log('Subscriber welcome email sent:', response);
+    return response;
+  } catch (error) {
+    console.error('Error sending subscriber welcome email:', error);
+    throw error;
+  }
+};
+
+/**
+ * Send admin notification email when someone subscribes
+ * @param {string} email - Subscriber email
+ * @param {string} source - Source page
+ * @returns {Promise} - Email send response
+ */
+export const sendAdminSubscriptionNotification = async (email, source = 'website') => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { 
+          font-family: Arial, sans-serif; 
+          line-height: 1.6; 
+          color: #333; 
+          max-width: 600px; 
+          margin: 0 auto;
+        }
+        .container { 
+          background-color: white; 
+          border-radius: 10px; 
+          overflow: hidden; 
+          border: 1px solid #e0e0e0;
+        }
+        .header { 
+          background: linear-gradient(135deg, #28a745 0%, #20873a 100%); 
+          padding: 25px; 
+          text-align: center; 
+          color: white; 
+        }
+        .content { 
+          padding: 25px; 
+        }
+        .subscriber-info {
+          background-color: #e8f5e9;
+          padding: 15px;
+          border-radius: 8px;
+          border-left: 4px solid #28a745;
+          margin: 15px 0;
+        }
+        .footer { 
+          background-color: #f8f9fa; 
+          padding: 15px; 
+          text-align: center; 
+          font-size: 12px; 
+          color: #666;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h2>📬 New Newsletter Subscriber!</h2>
+        </div>
+        
+        <div class="content">
+          <p>Great news! Someone just subscribed to your newsletter.</p>
+          
+          <div class="subscriber-info">
+            <p><strong>📧 Email:</strong> ${email}</p>
+            <p><strong>📍 Source:</strong> ${source} page</p>
+            <p><strong>🕐 Time:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+          
+          <p style="color: #666; font-size: 14px;">
+            This subscriber has been added to your mailing list and will receive future newsletters and promotions.
+          </p>
+        </div>
+        
+        <div class="footer">
+          <p>JetSetters Admin Notification</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const adminEmail = process.env.COMPANY_EMAIL || 'jetsetters721@gmail.com';
+
+    const response = await resend.emails.send({
+      from: 'JetSetters <onboarding@resend.dev>',
+      to: [adminEmail],
+      subject: `📬 New Subscriber: ${email}`,
+      html,
+      text: stripHtml(html)
+    });
+
+    console.log('Admin notification email sent:', response);
+    return response;
+  } catch (error) {
+    console.error('Error sending admin notification email:', error);
+    throw error;
+  }
+};
+
+/**
+ * Send both subscriber welcome and admin notification emails
+ * @param {string} email - Subscriber email
+ * @param {string} source - Source page
+ * @returns {Promise} - Combined email send response
+ */
+export const sendSubscriptionEmails = async (email, source = 'website') => {
+  try {
+    const [subscriberResult, adminResult] = await Promise.all([
+      sendSubscriberWelcomeEmail(email, source),
+      sendAdminSubscriptionNotification(email, source)
+    ]);
+
+    return {
+      success: true,
+      subscriberEmail: subscriberResult,
+      adminNotification: adminResult
+    };
+  } catch (error) {
+    console.error('Error sending subscription emails:', error);
+    throw error;
+  }
+};
 
 export default emailService;
