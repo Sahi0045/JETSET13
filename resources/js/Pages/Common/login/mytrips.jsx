@@ -91,7 +91,7 @@ export default function TravelDashboard() {
     return () => {
       window.removeEventListener('focus', handleFocus)
     }
-  }, [navigate])
+  }, []) // Run once on mount
 
   // Polling effect for real-time request updates
   useEffect(() => {
@@ -251,102 +251,85 @@ export default function TravelDashboard() {
               }
             }
 
-            // Also check for quotes with payment
+            // Process quotes that are already embedded in inquiry objects (no extra API calls needed)
             for (const inquiry of inquiries) {
-              try {
-                // Fetch quotes for this inquiry
-                const quotesResponse = await fetch(getApiUrl(`quotes?inquiryId=${inquiry.id}`), {
-                  method: 'GET',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                  },
-                  credentials: 'include'
-                })
+              // Use quotes directly from inquiry object (fetched via Supabase join)
+              const quotes = Array.isArray(inquiry.quotes) ? inquiry.quotes : []
 
-                if (quotesResponse.ok) {
-                  const quotesResult = await quotesResponse.json()
+              // Find paid quotes
+              const paidQuotes = quotes.filter(q =>
+                q.payment_status === 'paid' ||
+                q.status === 'paid' ||
+                q.status === 'accepted'
+              )
 
-                  if (quotesResult.success) {
-                    const quotes = Array.isArray(quotesResult.data) ? quotesResult.data : []
+              if (paidQuotes.length > 0) {
+                console.log(`📄 Inquiry ${inquiry.id?.slice(-8)}: ${paidQuotes.length} paid/accepted quote(s)`)
+              }
 
-                    // Find paid quotes
-                    const paidQuotes = quotes.filter(q =>
-                      q.payment_status === 'paid' ||
-                      q.status === 'paid' ||
-                      q.status === 'accepted'
-                    )
-
-                    console.log(`📄 Inquiry ${inquiry.id?.slice(-8)}: ${paidQuotes.length} paid/accepted quote(s)`)
-
-                    // Convert paid quotes to booking format
-                    for (const quote of paidQuotes) {
-                      const typeMap = {
-                        'flight': 'flight',
-                        'cruise': 'cruise',
-                        'hotel': 'hotel',
-                        'package': 'package',
-                        'general': 'package'
-                      }
-
-                      const bookingType = typeMap[inquiry.inquiry_type] || 'package'
-
-                      // Check if already exists
-                      const existingIndex = allBookings.findIndex(b =>
-                        b.quoteId === quote.id || b.inquiryId === inquiry.id
-                      )
-
-                      if (existingIndex === -1) {
-                        const booking = {
-                          orderId: quote.quote_number || quote.id?.slice(-8),
-                          bookingReference: quote.quote_number || quote.id,
-                          type: bookingType,
-                          status: quote.payment_status === 'paid' ? 'paid' : 'CONFIRMED',
-                          bookingDate: quote.paid_at || quote.created_at || new Date().toISOString(),
-                          amount: parseFloat(quote.total_amount || 0),
-                          currency: quote.currency || 'USD',
-                          title: quote.title || `${inquiry.inquiry_type} Booking`,
-                          description: quote.description || '',
-                          inquiryId: inquiry.id,
-                          quoteId: quote.id,
-                          inquiryType: inquiry.inquiry_type,
-                          customerName: inquiry.customer_name,
-                          customerEmail: inquiry.customer_email,
-                          // Flight travel details
-                          origin: inquiry.flight_origin,
-                          destination: inquiry.flight_destination,
-                          departureDate: inquiry.flight_departure_date,
-                          returnDate: inquiry.flight_return_date,
-                          passengers: inquiry.flight_passengers,
-                          travelClass: inquiry.flight_class,
-                          // Hotel travel details
-                          hotelDestination: inquiry.hotel_destination,
-                          checkinDate: inquiry.hotel_checkin_date,
-                          checkoutDate: inquiry.hotel_checkout_date,
-                          hotelRooms: inquiry.hotel_rooms,
-                          hotelGuests: inquiry.hotel_guests,
-                          // Cruise travel details
-                          cruiseDestination: inquiry.cruise_destination,
-                          cruiseDepartureDate: inquiry.cruise_departure_date,
-                          cruiseDuration: inquiry.cruise_duration,
-                          cruisePassengers: inquiry.cruise_passengers,
-                          cruiseCabinType: inquiry.cruise_cabin_type,
-                          // Package travel details
-                          packageDestination: inquiry.package_destination,
-                          packageStartDate: inquiry.package_start_date,
-                          packageEndDate: inquiry.package_end_date,
-                          packageTravelers: inquiry.package_travelers,
-                          packageBudgetRange: inquiry.package_budget_range
-                        }
-
-                        allBookings.push(booking)
-                        console.log(`✅ Added paid quote: ${booking.orderId} (${bookingType})`)
-                      }
-                    }
-                  }
+              // Convert paid quotes to booking format
+              for (const quote of paidQuotes) {
+                const typeMap = {
+                  'flight': 'flight',
+                  'cruise': 'cruise',
+                  'hotel': 'hotel',
+                  'package': 'package',
+                  'general': 'package'
                 }
-              } catch (quoteError) {
-                console.error(`Error loading quotes for inquiry ${inquiry.id}:`, quoteError)
+
+                const bookingType = typeMap[inquiry.inquiry_type] || 'package'
+
+                // Check if already exists
+                const existingIndex = allBookings.findIndex(b =>
+                  b.quoteId === quote.id || b.inquiryId === inquiry.id
+                )
+
+                if (existingIndex === -1) {
+                  const booking = {
+                    orderId: quote.quote_number || quote.id?.slice(-8),
+                    bookingReference: quote.quote_number || quote.id,
+                    type: bookingType,
+                    status: quote.payment_status === 'paid' ? 'paid' : 'CONFIRMED',
+                    bookingDate: quote.paid_at || quote.created_at || new Date().toISOString(),
+                    amount: parseFloat(quote.total_amount || 0),
+                    currency: quote.currency || 'USD',
+                    title: quote.title || `${inquiry.inquiry_type} Booking`,
+                    description: quote.description || '',
+                    inquiryId: inquiry.id,
+                    quoteId: quote.id,
+                    inquiryType: inquiry.inquiry_type,
+                    customerName: inquiry.customer_name,
+                    customerEmail: inquiry.customer_email,
+                    // Flight travel details
+                    origin: inquiry.flight_origin,
+                    destination: inquiry.flight_destination,
+                    departureDate: inquiry.flight_departure_date,
+                    returnDate: inquiry.flight_return_date,
+                    passengers: inquiry.flight_passengers,
+                    travelClass: inquiry.flight_class,
+                    // Hotel travel details
+                    hotelDestination: inquiry.hotel_destination,
+                    checkinDate: inquiry.hotel_checkin_date,
+                    checkoutDate: inquiry.hotel_checkout_date,
+                    hotelRooms: inquiry.hotel_rooms,
+                    hotelGuests: inquiry.hotel_guests,
+                    // Cruise travel details
+                    cruiseDestination: inquiry.cruise_destination,
+                    cruiseDepartureDate: inquiry.cruise_departure_date,
+                    cruiseDuration: inquiry.cruise_duration,
+                    cruisePassengers: inquiry.cruise_passengers,
+                    cruiseCabinType: inquiry.cruise_cabin_type,
+                    // Package travel details
+                    packageDestination: inquiry.package_destination,
+                    packageStartDate: inquiry.package_start_date,
+                    packageEndDate: inquiry.package_end_date,
+                    packageTravelers: inquiry.package_travelers,
+                    packageBudgetRange: inquiry.package_budget_range
+                  }
+
+                  allBookings.push(booking)
+                  console.log(`✅ Added paid quote: ${booking.orderId} (${bookingType})`)
+                }
               }
             }
           }
