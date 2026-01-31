@@ -37,18 +37,17 @@ const ContactPopup = () => {
         return;
       }
 
-      // Send email notification
-      try {
-        await fetch('/api/email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'contact', name, email, message })
-        });
-        console.log('Contact email notifications sent');
-      } catch (emailError) {
-        console.error('Email notification error:', emailError);
-        // Don't block form submission if email fails
-      }
+      // TODO: Re-enable email notifications after Vercel Pro upgrade
+      // try {
+      //   await fetch('/api/email', {
+      //     method: 'POST',
+      //     headers: { 'Content-Type': 'application/json' },
+      //     body: JSON.stringify({ type: 'contact', name, email, message })
+      //   });
+      //   console.log('Contact email notifications sent');
+      // } catch (emailError) {
+      //   console.error('Email notification error:', emailError);
+      // }
 
       // Show success message
       setSubmitted(true);

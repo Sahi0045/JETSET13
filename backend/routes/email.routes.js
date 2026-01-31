@@ -3,6 +3,39 @@ import emailService, { sendSubscriptionEmails, sendContactNotificationEmails } f
 
 const router = express.Router();
 
+// Consolidated email endpoint (matches Vercel /api/email)
+router.post('/', async (req, res) => {
+  const { type, email, name, message, source } = req.body;
+  console.log(`📧 Email API called with type: ${type}`);
+
+  try {
+    if (type === 'subscription') {
+      if (!email) {
+        return res.status(400).json({ success: false, error: 'Email is required' });
+      }
+      console.log(`📧 Sending subscription emails for: ${email} from ${source}`);
+      const result = await sendSubscriptionEmails(email, source || 'website');
+      console.log('📧 Subscription emails sent successfully:', result);
+      return res.status(200).json({ success: true, message: 'Subscription emails sent', data: result });
+
+    } else if (type === 'contact') {
+      if (!name || !email || !message) {
+        return res.status(400).json({ success: false, error: 'Name, email, and message are required' });
+      }
+      console.log(`📩 Sending contact emails for: ${name} (${email})`);
+      const result = await sendContactNotificationEmails(name, email, message);
+      console.log('📩 Contact emails sent successfully:', result);
+      return res.status(200).json({ success: true, message: 'Contact emails sent', data: result });
+
+    } else {
+      return res.status(400).json({ success: false, error: 'Invalid type. Use "subscription" or "contact"' });
+    }
+  } catch (error) {
+    console.error('📧 Email API error:', error);
+    return res.status(200).json({ success: true, message: 'Request processed, but email failed', error: error.message });
+  }
+});
+
 // Send callback confirmation email
 router.post('/send-callback-confirmation', async (req, res) => {
   console.log('🔶 Email route hit: /send-callback-confirmation');

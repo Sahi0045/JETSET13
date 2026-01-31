@@ -97,18 +97,17 @@ export default function SubscribeSection() {
         return;
       }
 
-      // Send email notifications (subscriber welcome + admin notification)
-      try {
-        await fetch('/api/email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'subscription', email: email, source: 'flights' })
-        });
-        console.log('Email notifications sent successfully');
-      } catch (emailError) {
-        // Don't block subscription if email fails
-        console.error('Email notification error:', emailError);
-      }
+      // TODO: Re-enable email notifications after Vercel Pro upgrade
+      // try {
+      //   await fetch('/api/email', {
+      //     method: 'POST',
+      //     headers: { 'Content-Type': 'application/json' },
+      //     body: JSON.stringify({ type: 'subscription', email: email, source: 'flights' })
+      //   });
+      //   console.log('Email notifications sent successfully');
+      // } catch (emailError) {
+      //   console.error('Email notification error:', emailError);
+      // }
 
       setSuccess(true);
       setEmail('');
