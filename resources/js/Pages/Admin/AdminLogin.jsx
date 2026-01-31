@@ -112,11 +112,11 @@ const AdminLogin = () => {
               <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="40" cy="40" r="35" fill="url(#logoGradient)" stroke="#fff" strokeWidth="2" />
                 <path d="M40 15L65 30V50L40 65L15 50V30L40 15Z" fill="white" />
-                <path d="M40 25V55M25 32L55 32M25 48L55 48" stroke="#0ea5e9" strokeWidth="3" />
+                <path d="M40 25V55M25 32L55 32M25 48L55 48" stroke="#055B75" strokeWidth="3" />
                 <defs>
                   <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style={{ stopColor: '#0ea5e9', stopOpacity: 1 }} />
-                    <stop offset="100%" style={{ stopColor: '#3b82f6', stopOpacity: 1 }} />
+                    <stop offset="0%" style={{ stopColor: '#055B75', stopOpacity: 1 }} />
+                    <stop offset="100%" style={{ stopColor: '#65B3CF', stopOpacity: 1 }} />
                   </linearGradient>
                 </defs>
               </svg>

@@ -150,7 +150,7 @@ export default function SupabaseLogin() {
                 <div className="login-content">
                     <h2 className="login-title">
                         <FaLock className="inline mr-2" />
-                        Login with Supabase
+                        Let's travel with Jetsetters
                     </h2>
 
                     {authError && (

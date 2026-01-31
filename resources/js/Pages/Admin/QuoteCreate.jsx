@@ -36,10 +36,10 @@ const QuoteCreate = () => {
   const fetchInquiryDetails = async () => {
     try {
       setLoading(true);
-      
+
       // Get token from localStorage
       const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      
+
       if (!token) {
         console.error('No authentication token found');
         alert('Authentication required. Please log in again.');
@@ -230,7 +230,7 @@ const QuoteCreate = () => {
     try {
       // Get token from localStorage
       const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      
+
       if (!token) {
         alert('Authentication required. Please log in again.');
         return;
@@ -294,7 +294,7 @@ const QuoteCreate = () => {
     try {
       // Get token from localStorage
       const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      
+
       if (!token) {
         alert('Authentication required. Please log in again.');
         return;
@@ -394,11 +394,11 @@ const QuoteCreate = () => {
 
   const getInquiryTypeIcon = (type) => {
     switch (type) {
-      case 'flight': return '✈️';
-      case 'hotel': return '🏨';
-      case 'cruise': return '🚢';
-      case 'package': return '🎒';
-      default: return '💬';
+      case 'flight': return 'FL';
+      case 'hotel': return 'HT';
+      case 'cruise': return 'CR';
+      case 'package': return 'PK';
+      default: return 'GN';
     }
   };
 
@@ -422,7 +422,7 @@ const QuoteCreate = () => {
     return (
       <div className="quote-create">
         <div className="error-state">
-          <div className="error-icon">❌</div>
+          <div className="error-icon">X</div>
           <h3>Inquiry Not Found</h3>
           <p>The inquiry you're trying to quote for doesn't exist.</p>
           <Link to="/admin/inquiries" className="error-action">
@@ -458,14 +458,14 @@ const QuoteCreate = () => {
             className="action-button secondary"
           >
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
-              <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
+              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+              <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
             </svg>
             {showPreview ? 'Hide Preview' : 'Show Preview'}
           </button>
           <Link to={`/admin/inquiries/${inquiryId}`} className="action-button secondary">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd"/>
+              <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
             </svg>
             Back to Inquiry
           </Link>
@@ -479,14 +479,14 @@ const QuoteCreate = () => {
             className={`nav-item ${activeSection === 'basic' ? 'active' : ''}`}
             onClick={() => setActiveSection('basic')}
           >
-            <span className="nav-icon">📝</span>
+            <span className="nav-icon">1</span>
             <span>Basic Info</span>
           </button>
           <button
             className={`nav-item ${activeSection === 'breakdown' ? 'active' : ''}`}
             onClick={() => setActiveSection('breakdown')}
           >
-            <span className="nav-icon">💰</span>
+            <span className="nav-icon">2</span>
             <span>Cost Breakdown</span>
             {quoteData.breakdown.length > 0 && (
               <span className="nav-badge">{quoteData.breakdown.length}</span>
@@ -496,7 +496,7 @@ const QuoteCreate = () => {
             className={`nav-item ${activeSection === 'terms' ? 'active' : ''}`}
             onClick={() => setActiveSection('terms')}
           >
-            <span className="nav-icon">📋</span>
+            <span className="nav-icon">3</span>
             <span>Terms & Notes</span>
           </button>
         </div>
@@ -603,7 +603,7 @@ const QuoteCreate = () => {
 
                 {errors.breakdown && (
                   <div className="error-message">
-                    <span className="error-icon">⚠️</span>
+                    <span className="error-icon">!</span>
                     {errors.breakdown}
                   </div>
                 )}
@@ -678,7 +678,7 @@ const QuoteCreate = () => {
                         className="add-item-button"
                       >
                         <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"/>
+                          <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                         </svg>
                         Add Item
                       </button>
@@ -697,7 +697,7 @@ const QuoteCreate = () => {
                         className="calculate-total-btn"
                       >
                         <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd"/>
+                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
                         </svg>
                         Calculate Total
                       </button>
@@ -726,7 +726,7 @@ const QuoteCreate = () => {
                             className="remove-item-btn"
                           >
                             <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/>
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                             </svg>
                           </button>
                         </div>
@@ -877,8 +877,8 @@ const QuoteCreate = () => {
             ) : (
               <>
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 101.414-1.414L11 11.586V6a1 1 0 10-2 0v5.586l-2.293-2.293z"/>
-                  <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm0 2h12v8H4V6z" clipRule="evenodd"/>
+                  <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 101.414-1.414L11 11.586V6a1 1 0 10-2 0v5.586l-2.293-2.293z" />
+                  <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm0 2h12v8H4V6z" clipRule="evenodd" />
                 </svg>
                 Save as Draft
               </>
@@ -899,8 +899,8 @@ const QuoteCreate = () => {
             ) : (
               <>
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>
-                  <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
+                  <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                  <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
                 </svg>
                 Create & Send to Customer
               </>

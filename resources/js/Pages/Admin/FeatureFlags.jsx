@@ -12,45 +12,45 @@ const FeatureFlags = () => {
   const inquiryTypes = [
     {
       key: 'enable_flight_inquiries',
-      label: '✈️ Flight Inquiries',
+      label: 'Flight Inquiries',
       description: 'Allow users to submit flight booking inquiries and search for flights',
-      icon: '✈️',
+      icon: 'FL',
       category: 'Transportation',
       impact: 'High',
       users: 'Business travelers, vacationers'
     },
     {
       key: 'enable_hotel_inquiries',
-      label: '🏨 Hotel Inquiries',
+      label: 'Hotel Inquiries',
       description: 'Allow users to submit hotel booking inquiries with destination preferences',
-      icon: '🏨',
+      icon: 'HT',
       category: 'Accommodation',
       impact: 'High',
       users: 'All travelers'
     },
     {
       key: 'enable_cruise_inquiries',
-      label: '🚢 Cruise Inquiries',
+      label: 'Cruise Inquiries',
       description: 'Allow users to submit cruise vacation inquiries with itinerary details',
-      icon: '🚢',
+      icon: 'CR',
       category: 'Vacation',
       impact: 'Medium',
       users: 'Luxury travelers, families'
     },
     {
       key: 'enable_package_inquiries',
-      label: '🎒 Vacation Packages',
+      label: 'Vacation Packages',
       description: 'Allow users to submit comprehensive vacation package inquiries',
-      icon: '🎒',
+      icon: 'PK',
       category: 'Packages',
       impact: 'Medium',
       users: 'First-time travelers, groups'
     },
     {
       key: 'enable_general_inquiries',
-      label: '💬 General Inquiries',
+      label: 'General Inquiries',
       description: 'Allow users to submit general travel questions and consultations',
-      icon: '💬',
+      icon: 'GN',
       category: 'Support',
       impact: 'Low',
       users: 'All users'
@@ -64,10 +64,10 @@ const FeatureFlags = () => {
   const fetchFeatureFlags = async () => {
     try {
       setLoading(true);
-      
+
       // Get token from localStorage
       const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      
+
       if (!token) {
         console.error('No authentication token found');
         return;
@@ -138,10 +138,10 @@ const FeatureFlags = () => {
 
       const flag = flags.find(f => f.flag_key === flagKey);
       const newEnabledState = !flag.enabled;
-      
+
       // Get token from localStorage
       const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      
+
       if (!token) {
         console.error('No authentication token found');
         setUpdateError('Authentication required. Please log in again.');
@@ -236,14 +236,14 @@ const FeatureFlags = () => {
       {/* Success/Error Messages */}
       {updateSuccess && (
         <div className="success-banner">
-          <div className="success-icon">✅</div>
+          <div className="success-icon">OK</div>
           <span>{updateSuccess}</span>
         </div>
       )}
 
       {updateError && (
         <div className="error-banner">
-          <div className="error-icon">⚠️</div>
+          <div className="error-icon">!</div>
           <span>{updateError}</span>
         </div>
       )}
@@ -252,7 +252,7 @@ const FeatureFlags = () => {
       <div className="feature-overview">
         <div className="overview-card">
           <div className="overview-header">
-            <div className="overview-icon">🎛️</div>
+            <div className="overview-icon">CFG</div>
             <h3>Inquiry Types Control</h3>
           </div>
           <div className="overview-content">
@@ -348,34 +348,34 @@ const FeatureFlags = () => {
       <div className="information-section">
         <div className="info-card">
           <div className="info-header">
-            <div className="info-icon">ℹ️</div>
+            <div className="info-icon">i</div>
             <h3>How Feature Flags Work</h3>
           </div>
           <div className="info-content">
             <div className="info-points">
               <div className="info-point">
-                <div className="point-icon">⚡</div>
+                <div className="point-icon">1</div>
                 <div className="point-content">
                   <h5>Real-time Updates</h5>
                   <p>Changes take effect immediately for all users visiting your site</p>
                 </div>
               </div>
               <div className="info-point">
-                <div className="point-icon">🔧</div>
+                <div className="point-icon">2</div>
                 <div className="point-content">
                   <h5>Maintenance Mode</h5>
                   <p>Disable inquiry types during system maintenance or updates</p>
                 </div>
               </div>
               <div className="info-point">
-                <div className="point-icon">📊</div>
+                <div className="point-icon">3</div>
                 <div className="point-content">
                   <h5>Business Control</h5>
                   <p>Focus on specific services based on your business strategy</p>
                 </div>
               </div>
               <div className="info-point">
-                <div className="point-icon">🔄</div>
+                <div className="point-icon">4</div>
                 <div className="point-content">
                   <h5>Flexible Configuration</h5>
                   <p>Easily enable/disable features as your business evolves</p>
@@ -387,7 +387,7 @@ const FeatureFlags = () => {
 
         <div className="info-card">
           <div className="info-header">
-            <div className="info-icon">🚨</div>
+            <div className="info-icon">!</div>
             <h3>Important Notes</h3>
           </div>
           <div className="info-content">
