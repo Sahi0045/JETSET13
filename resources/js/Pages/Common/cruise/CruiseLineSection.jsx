@@ -2,14 +2,14 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import './CruiseLineSection.css';
 import cruiseLineData from './data/cruiselines.json';
-import { FaStar } from 'react-icons/fa';
+import { FaStar, FaShip } from 'react-icons/fa';
 import Price from '../../../Components/Price';
 
 const CruiseLineSection = () => {
   return (
     <section className="cruise-line-section">
-      <div className="cruise-line-header">
-        <img src="/images/cruise-icon.svg" alt="Cruise Icon" className="cruise-icon" />
+      <div className="cruise-line-header flex flex-col items-center gap-2">
+        <FaShip className="text-4xl text-[#0d99ff]" />
         <h2 className="section-title">EXPLORE BY CRUISE LINE</h2>
       </div>
 

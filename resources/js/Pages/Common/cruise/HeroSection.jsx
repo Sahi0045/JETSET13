@@ -248,16 +248,15 @@ const HeroSection = () => {
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1548574505-5e239809ee19?q=80&w=2064&auto=format&fit=crop')",
+          backgroundImage: "url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=2073&auto=format&fit=crop')",
         }}
       >
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/60"></div>
       </div>
 
       {/* Content Container */}
-      <div className="container relative z-10 mx-auto px-4 pt-32 pb-16 sm:px-6 lg:px-8 w-full flex flex-col items-center justify-center">
+      <div className="container relative z-10 mx-auto px-4 pt-4 pb-16 sm:px-6 lg:px-8 w-full flex flex-col items-center justify-center">
         {/* Hero Text */}
-        <div className="text-center mb-12 space-y-6 w-full max-w-6xl mx-auto">
+        <div className="text-center mb-8 space-y-4 w-full max-w-6xl mx-auto">
 
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white tracking-tight drop-shadow-2xl">
             Discover Your Perfect
