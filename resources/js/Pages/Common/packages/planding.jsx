@@ -1,4 +1,4 @@
-import { Search, ChevronDown, MapPin, Users, Star, ArrowRight, DollarSign, Tag, Heart, Plane, Sunrise, Coffee, X, Clock, Sparkles } from "lucide-react"
+import { Search, ChevronDown, MapPin, Users, Star, ArrowRight, DollarSign, Tag, Heart, Plane, Sunrise, Coffee, X, Clock, Sparkles, CheckCircle } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import packagesData from '../../../data/packages.json'
 import { Link } from "react-router-dom"
@@ -9,6 +9,7 @@ import Price from '../../../Components/Price'
 import currencyService from '../../../Services/CurrencyService'
 import DatePicker from "react-datepicker"
 import "react-datepicker/dist/react-datepicker.css"
+import supabase from '../../../lib/supabase'
 
 const TravelPackages = () => {
   const [selectedPackageType, setSelectedPackageType] = useState("All Inclusive")
@@ -24,6 +25,47 @@ const TravelPackages = () => {
   // Date range picker state
   const [startDate, setStartDate] = useState(null)
   const [endDate, setEndDate] = useState(null)
+
+  // Newsletter subscription state
+  const [subscriptionEmail, setSubscriptionEmail] = useState('')
+  const [subscriptionSubmitted, setSubscriptionSubmitted] = useState(false)
+  const [subscriptionError, setSubscriptionError] = useState('')
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false)
+
+  // Handle newsletter subscription
+  const handleSubscription = async (e) => {
+    e.preventDefault()
+    setSubscriptionError('')
+    setSubscriptionLoading(true)
+
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .insert([
+          { email: subscriptionEmail, status: 'active' }
+        ])
+
+      if (error) {
+        if (error.code === '23505') {
+          setSubscriptionError('This email is already subscribed.')
+        } else {
+          setSubscriptionError('An error occurred. Please try again.')
+        }
+        return
+      }
+
+      setSubscriptionSubmitted(true)
+      setSubscriptionEmail('')
+
+      setTimeout(() => {
+        setSubscriptionSubmitted(false)
+      }, 3000)
+    } catch (error) {
+      setSubscriptionError('An unexpected error occurred. Please try again.')
+    } finally {
+      setSubscriptionLoading(false)
+    }
+  }
 
   useEffect(() => {
     const handleResize = () => {
@@ -1190,16 +1232,37 @@ const TravelPackages = () => {
           <div className="max-w-3xl mx-auto text-center">
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Get Exclusive Travel Deals</h2>
             <p className="text-xl text-[#F0FAFC] mb-8">Subscribe to our newsletter and receive up to 50% off on your next adventure!</p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto">
-              <input
-                type="email"
-                placeholder="Enter your email"
-                className="px-6 py-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#65B3CF] flex-1 text-lg shadow-lg"
-              />
-              <button className="bg-white text-[#055B75] px-8 py-4 rounded-lg font-semibold text-lg shadow-lg">
-                Subscribe Now
-              </button>
-            </div>
+            {subscriptionSubmitted ? (
+              <div className="bg-green-500/20 backdrop-blur-sm rounded-xl p-6 max-w-xl mx-auto">
+                <div className="flex items-center justify-center gap-3 text-white">
+                  <CheckCircle className="text-green-400" size={24} />
+                  <span className="text-lg">Successfully subscribed! Thank you.</span>
+                </div>
+              </div>
+            ) : (
+              <>
+                <form onSubmit={handleSubscription} className="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto">
+                  <input
+                    type="email"
+                    placeholder="Enter your email"
+                    value={subscriptionEmail}
+                    onChange={(e) => setSubscriptionEmail(e.target.value)}
+                    className="px-6 py-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#65B3CF] flex-1 text-lg shadow-lg"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={subscriptionLoading}
+                    className="bg-white text-[#055B75] px-8 py-4 rounded-lg font-semibold text-lg shadow-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  >
+                    {subscriptionLoading ? 'Subscribing...' : 'Subscribe Now'}
+                  </button>
+                </form>
+                {subscriptionError && (
+                  <p className="text-red-300 mt-3 text-sm">{subscriptionError}</p>
+                )}
+              </>
+            )}
             <p className="text-[#F0FAFC]/70 mt-4 text-sm">*By subscribing, you agree to receive marketing emails from us.</p>
           </div>
         </div>

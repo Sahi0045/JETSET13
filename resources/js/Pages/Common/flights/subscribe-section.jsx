@@ -1,9 +1,9 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { Mail, Check, AlertCircle } from 'lucide-react';
 import { subscriptionAirplane } from "./data.js"
+import supabase from '../../../lib/supabase';
 
 export default function SubscribeSection() {
   const [email, setEmail] = useState('');
@@ -80,32 +80,23 @@ export default function SubscribeSection() {
     setLoading(true);
 
     try {
-      // Use mocked success for now, or connect to real API
-      // In production, you would uncomment this code to call the real API
-      /*
-      const response = await axios.post('/api/subscriptions/subscribe', {
-        email,
-        consent,
-        source: 'flight_page'
-      });
-      
-      if (response.data && response.data.success) {
-        setSuccess(true);
-        setEmail('');
-        setConsent(false);
-        // Update the subscriber count
-        setStats(prev => ({
-          ...prev,
-          totalSubscribers: prev.totalSubscribers + 1,
-          subscribersToday: prev.subscribersToday + 1
-        }));
-      } else {
-        setError(response.data?.message || 'Failed to subscribe. Please try again.');
-      }
-      */
+      // Save to Supabase subscriptions table
+      const { data, error: supabaseError } = await supabase
+        .from('subscriptions')
+        .insert([
+          { email: email, status: 'active' }
+        ]);
 
-      // For demo purposes, simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (supabaseError) {
+        if (supabaseError.code === '23505') { // Unique violation - duplicate email
+          setError('This email is already subscribed.');
+        } else {
+          setError('Failed to subscribe. Please try again.');
+          console.error('Supabase error:', supabaseError);
+        }
+        return;
+      }
+
       setSuccess(true);
       setEmail('');
       setConsent(false);
@@ -115,9 +106,14 @@ export default function SubscribeSection() {
         totalSubscribers: prev.totalSubscribers + 1,
         subscribersToday: prev.subscribersToday + 1
       }));
+
+      // Reset success message after 3 seconds
+      setTimeout(() => {
+        setSuccess(false);
+      }, 3000);
     } catch (err) {
       console.error('Subscription error:', err);
-      setError(err.response?.data?.message || 'Failed to subscribe. Please try again.');
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -254,7 +250,7 @@ export default function SubscribeSection() {
                       </div>
                       <div className="ml-2 text-xs">
                         <label htmlFor="consent" className="font-medium text-gray-600">
-                          I agree to emails. View <a href="#" className="text-[#055B75] hover:underline">Terms</a> & <a href="#" className="text-[#055B75] hover:underline">Privacy</a>.
+                          I agree to receive emails. View <a href="#" className="text-[#055B75] hover:underline">Terms</a> & <a href="#" className="text-[#055B75] hover:underline">Privacy</a>.
                         </label>
                       </div>
                     </div>
