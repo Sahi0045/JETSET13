@@ -9,6 +9,7 @@ const InquiryDetail = () => {
   const navigate = useNavigate();
   const [inquiry, setInquiry] = useState(null);
   const [quotes, setQuotes] = useState([]);
+  const [bookingInfo, setBookingInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
@@ -24,9 +25,9 @@ const InquiryDetail = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token');
-      
+
       if (!token) {
         setError('Authentication required. Please log in.');
         setLoading(false);
@@ -59,10 +60,13 @@ const InquiryDetail = () => {
 
       if (inquiryData.success) {
         setInquiry(inquiryData.data);
-        
+        const inquiryStatus = inquiryData.data.status;
+
         // Quotes might be included in the inquiry response
+        let fetchedQuotes = [];
         if (inquiryData.data.quotes && Array.isArray(inquiryData.data.quotes)) {
-          setQuotes(inquiryData.data.quotes);
+          fetchedQuotes = inquiryData.data.quotes;
+          setQuotes(fetchedQuotes);
         } else {
           // Fetch quotes separately if not included
           const quotesResponse = await fetch(`/api/quotes?inquiryId=${id}`, {
@@ -72,11 +76,36 @@ const InquiryDetail = () => {
             },
             credentials: 'include'
           });
-          
+
           if (quotesResponse.ok) {
             const quotesData = await quotesResponse.json();
             if (quotesData.success) {
-              setQuotes(Array.isArray(quotesData.data) ? quotesData.data : []);
+              fetchedQuotes = Array.isArray(quotesData.data) ? quotesData.data : [];
+              setQuotes(fetchedQuotes);
+            }
+          }
+        }
+
+        // If inquiry is booked/paid, fetch booking info for the accepted/paid quote
+        if ((inquiryStatus === 'booked' || inquiryStatus === 'paid') && fetchedQuotes.length > 0) {
+          const paidQuote = fetchedQuotes.find(q => q.status === 'paid' || q.status === 'accepted');
+          if (paidQuote) {
+            try {
+              const bookingInfoResponse = await fetch(`/api/quotes?id=${paidQuote.id}&endpoint=booking-info`, {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+              });
+              if (bookingInfoResponse.ok) {
+                const bookingData = await bookingInfoResponse.json();
+                if (bookingData.success && bookingData.data) {
+                  setBookingInfo(bookingData.data);
+                }
+              }
+            } catch (bookingErr) {
+              console.error('Error fetching booking info:', bookingErr);
             }
           }
         }
@@ -164,7 +193,7 @@ const InquiryDetail = () => {
             if (inquiry?.inquiry_type === 'flight' && (!bookingInfo.passport_number || !bookingInfo.passport_expiry_date)) {
               missingFields.push('passport information');
             }
-            const message = missingFields.length > 0 
+            const message = missingFields.length > 0
               ? `Please complete your booking information: ${missingFields.join(', ')}. Click "Fill Booking Information" to continue.`
               : 'Please complete your booking information before proceeding to payment. Make sure all required fields are filled and terms are accepted. Click "Fill Booking Information" to continue.';
             alert(message);
@@ -194,7 +223,7 @@ const InquiryDetail = () => {
 
     try {
       const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token');
-      
+
       if (!token) {
         alert('Please log in to proceed with payment.');
         navigate('/login');
@@ -204,7 +233,7 @@ const InquiryDetail = () => {
       console.log('💳 Initiating payment for quote:', quote.id);
       console.log('   Amount:', quote.total_amount, quote.currency);
       console.log('   Quote Number:', quote.quote_number);
-      
+
       // 1. Initiate payment session with ARC Pay
       const response = await fetch('/api/payments?action=initiate-payment', {
         method: 'POST',
@@ -229,24 +258,24 @@ const InquiryDetail = () => {
             errorData = JSON.parse(responseText);
           } catch (jsonErr) {
             console.error('Response is not JSON:', responseText);
-            errorData = { 
+            errorData = {
               error: `Server error (${response.status})`,
               details: responseText || 'Unable to connect to payment server'
             };
           }
         } catch (parseError) {
           console.error('Failed to read error response:', parseError);
-          errorData = { 
+          errorData = {
             error: `Network error (${response.status})`,
             details: 'Unable to connect to payment server'
           };
         }
-        
+
         console.error('Payment API error:', {
           status: response.status,
           error: errorData
         });
-        
+
         // Build error message with fallbacks
         let errorMsg = 'Payment failed';
         if (errorData) {
@@ -332,7 +361,7 @@ const InquiryDetail = () => {
       // This is a simple GET redirect - no form POST needed
       console.log('🔄 Redirecting to ARC Pay Hosted Payment Page...');
       console.log('   Payment URL:', finalPaymentUrl);
-      
+
       // Simple redirect to the payment page
       window.location.href = finalPaymentUrl;
 
@@ -341,16 +370,16 @@ const InquiryDetail = () => {
 
     } catch (error) {
       console.error('Payment initiation failed:', error);
-      
+
       // Reset loading state on error
       setPaymentLoading(false);
-      
+
       // Show user-friendly error message
       let errorMessage = 'An unexpected error occurred. Please try again.';
-      
+
       // Safely extract error message
       const errMsg = error?.message || '';
-      
+
       if (errMsg && errMsg !== 'undefined') {
         if (errMsg.includes('401') || errMsg.includes('403')) {
           errorMessage = 'Authentication required. Please log in and try again.';
@@ -364,9 +393,9 @@ const InquiryDetail = () => {
       } else if (error instanceof TypeError) {
         errorMessage = 'Network error. Please check your internet connection and try again.';
       }
-      
+
       alert(`Payment Error: ${errorMessage}`);
-      
+
       // Log detailed error for debugging
       console.error('Full error details:', {
         message: error.message,
@@ -428,10 +457,10 @@ const InquiryDetail = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col">
         <Navbar />
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex-1 bg-white rounded-xl shadow-lg border border-gray-200/50 p-8 text-center">
+        <div className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-8 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-600 font-medium">Loading inquiry details...</p>
           </div>
@@ -443,15 +472,15 @@ const InquiryDetail = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col">
         <Navbar />
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
           <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-8">
             <div className="text-center">
               <p className="text-red-600 mb-4 font-semibold">{error}</p>
               <button
                 onClick={() => navigate('/my-trips')}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                className="px-6 py-3 bg-[#055B75] text-white rounded-lg hover:bg-[#034457] transition-colors"
               >
                 Back to My Trips
               </button>
@@ -465,14 +494,14 @@ const InquiryDetail = () => {
 
   if (!inquiry) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col">
         <Navbar />
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
           <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-8 text-center">
             <p className="text-gray-600 mb-4 font-semibold">Inquiry not found</p>
             <button
               onClick={() => navigate('/my-trips')}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+              className="px-6 py-3 bg-[#055B75] text-white rounded-lg hover:bg-[#034457] transition-colors"
             >
               Back to My Trips
             </button>
@@ -486,16 +515,16 @@ const InquiryDetail = () => {
   const sentQuotes = quotes.filter(q => q.status === 'sent' || q.status === 'accepted');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col">
       <Navbar />
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
           <button
             onClick={() => navigate('/my-trips')}
-            className="text-blue-600 hover:text-blue-800 flex items-center gap-2 font-semibold transition-colors duration-200 p-2 rounded-lg hover:bg-blue-50 group"
+            className="text-[#055B75] hover:text-[#034457] flex items-center gap-2 font-semibold transition-colors duration-200 p-2 rounded-lg hover:bg-[#B9D0DC]/30 group"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:-translate-x-1 transition-transform duration-200">
-              <path d="M19 12H5M12 19l-7-7 7-7"/>
+              <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
             Back to My Trips
           </button>
@@ -504,7 +533,7 @@ const InquiryDetail = () => {
         <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6 lg:p-8 mb-6 relative overflow-hidden">
           {/* Gradient accent bar */}
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600"></div>
-          
+
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-8 pt-4">
             <div className="flex-1">
               <div className="flex items-center gap-4 mb-2">
@@ -536,7 +565,7 @@ const InquiryDetail = () => {
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Submitted</p>
               </div>
               <p className="font-bold text-gray-900 text-lg">{new Date(inquiry.created_at).toLocaleDateString()}</p>
-              <p className="text-xs text-gray-400 font-medium">{new Date(inquiry.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+              <p className="text-xs text-gray-400 font-medium">{new Date(inquiry.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
             </div>
             <div className="bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-md transition-all duration-200 border border-gray-100 group">
               <div className="flex items-center gap-3 mb-2">
@@ -546,7 +575,7 @@ const InquiryDetail = () => {
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Updated</p>
               </div>
               <p className="font-bold text-gray-900 text-lg">{new Date(inquiry.updated_at).toLocaleDateString()}</p>
-              <p className="text-xs text-gray-400 font-medium">{new Date(inquiry.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+              <p className="text-xs text-gray-400 font-medium">{new Date(inquiry.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
             </div>
             {inquiry.expires_at && (
               <div className="bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-md transition-all duration-200 border border-gray-100 group">
@@ -557,7 +586,7 @@ const InquiryDetail = () => {
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Expires</p>
                 </div>
                 <p className="font-bold text-gray-900 text-lg">{new Date(inquiry.expires_at).toLocaleDateString()}</p>
-                <p className="text-xs text-gray-400 font-medium">{new Date(inquiry.expires_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                <p className="text-xs text-gray-400 font-medium">{new Date(inquiry.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
               </div>
             )}
             <div className="bg-gray-50 rounded-xl p-4 hover:bg-white hover:shadow-md transition-all duration-200 border border-gray-100 group">
@@ -572,6 +601,134 @@ const InquiryDetail = () => {
             </div>
           </div>
 
+          {/* Booking Details Section - Shows when inquiry is booked/paid */}
+          {(inquiry.status === 'booked' || inquiry.status === 'paid') && (() => {
+            const paidQuote = quotes.find(q => q.status === 'paid' || q.status === 'accepted');
+            if (!paidQuote) return null;
+
+            return (
+              <div className="border-t border-gray-200 pt-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Booking Confirmation
+                </h2>
+
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-5 border border-green-200 mb-6">
+                  {/* Confirmation Header */}
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">{paidQuote.title || 'Travel Booking'}</h3>
+                      <p className="text-sm text-gray-600 mt-1">Quote #{paidQuote.quote_number}</p>
+                      {paidQuote.paid_at && (
+                        <p className="text-xs text-green-600 mt-2 font-semibold">
+                          ✓ Paid on {new Date(paidQuote.paid_at).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-left sm:text-right">
+                      <p className="text-2xl font-bold text-green-700">
+                        ${parseFloat(paidQuote.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <span className="text-sm text-gray-500 font-normal ml-1">{paidQuote.currency || 'USD'}</span>
+                      </p>
+                      <span className="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 border border-green-200 mt-2">
+                        ✓ {paidQuote.status === 'paid' ? 'Paid' : 'Confirmed'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Booking Breakdown */}
+                  {paidQuote.breakdown && Array.isArray(paidQuote.breakdown) && paidQuote.breakdown.length > 0 && (
+                    <div className="border-t border-green-200 pt-4 mb-4">
+                      <p className="text-sm font-bold text-gray-700 mb-3">Booking Breakdown:</p>
+                      <div className="space-y-2">
+                        {paidQuote.breakdown.map((item, idx) => (
+                          <div key={idx} className="flex justify-between items-center text-sm bg-white rounded-lg px-3 py-2">
+                            <span className="text-gray-700">{item.description || item.label}</span>
+                            <span className="font-semibold text-gray-900">
+                              ${parseFloat(item.amount || item.value || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Description/Notes */}
+                  {paidQuote.description && (
+                    <div className="border-t border-green-200 pt-4">
+                      <p className="text-sm font-bold text-gray-700 mb-2">Booking Details:</p>
+                      <p className="text-sm text-gray-600 whitespace-pre-wrap">{paidQuote.description}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Passenger Information */}
+                {bookingInfo && (
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-5 border border-blue-200">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      Passenger Information
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {bookingInfo.full_name && (
+                        <div>
+                          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Full Name</p>
+                          <p className="text-sm font-bold text-gray-900">{bookingInfo.full_name}</p>
+                        </div>
+                      )}
+                      {bookingInfo.email && (
+                        <div>
+                          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Email</p>
+                          <p className="text-sm font-bold text-gray-900">{bookingInfo.email}</p>
+                        </div>
+                      )}
+                      {bookingInfo.phone && (
+                        <div>
+                          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Phone</p>
+                          <p className="text-sm font-bold text-gray-900">{bookingInfo.phone}</p>
+                        </div>
+                      )}
+                      {bookingInfo.date_of_birth && (
+                        <div>
+                          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Date of Birth</p>
+                          <p className="text-sm font-bold text-gray-900">{new Date(bookingInfo.date_of_birth).toLocaleDateString()}</p>
+                        </div>
+                      )}
+                      {bookingInfo.nationality && (
+                        <div>
+                          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Nationality</p>
+                          <p className="text-sm font-bold text-gray-900">{bookingInfo.nationality}</p>
+                        </div>
+                      )}
+                      {bookingInfo.passport_number && (
+                        <div>
+                          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Passport Number</p>
+                          <p className="text-sm font-bold text-gray-900">{bookingInfo.passport_number}</p>
+                        </div>
+                      )}
+                      {bookingInfo.passport_expiry_date && (
+                        <div>
+                          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Passport Expiry</p>
+                          <p className="text-sm font-bold text-gray-900">{new Date(bookingInfo.passport_expiry_date).toLocaleDateString()}</p>
+                        </div>
+                      )}
+                    </div>
+                    {bookingInfo.special_requests && (
+                      <div className="mt-4 pt-4 border-t border-blue-200">
+                        <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Special Requests</p>
+                        <p className="text-sm text-gray-700">{bookingInfo.special_requests}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="border-t border-gray-200 pt-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
               <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -579,182 +736,182 @@ const InquiryDetail = () => {
               </svg>
               Inquiry Details
             </h2>
-            
+
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-5 border border-blue-100">
-            {inquiry.inquiry_type === 'flight' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Route</p>
-                  <p className="text-sm font-bold text-gray-900">{inquiry.flight_origin} → {inquiry.flight_destination}</p>
+              {inquiry.inquiry_type === 'flight' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Route</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.flight_origin} → {inquiry.flight_destination}</p>
+                  </div>
+                  {inquiry.flight_departure_date && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Departure</p>
+                      <p className="text-sm font-bold text-gray-900">{new Date(inquiry.flight_departure_date).toLocaleDateString()}</p>
+                    </div>
+                  )}
+                  {inquiry.flight_return_date && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Return</p>
+                      <p className="text-sm font-bold text-gray-900">{new Date(inquiry.flight_return_date).toLocaleDateString()}</p>
+                    </div>
+                  )}
+                  {inquiry.flight_passengers && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Passengers</p>
+                      <p className="text-sm font-bold text-gray-900">{inquiry.flight_passengers}</p>
+                    </div>
+                  )}
+                  {inquiry.flight_class && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Class</p>
+                      <p className="text-sm font-bold text-gray-900 capitalize">{inquiry.flight_class}</p>
+                    </div>
+                  )}
                 </div>
-                {inquiry.flight_departure_date && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Departure</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.flight_departure_date).toLocaleDateString()}</p>
-                  </div>
-                )}
-                {inquiry.flight_return_date && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Return</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.flight_return_date).toLocaleDateString()}</p>
-                  </div>
-                )}
-                {inquiry.flight_passengers && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Passengers</p>
-                    <p className="text-sm font-bold text-gray-900">{inquiry.flight_passengers}</p>
-                  </div>
-                )}
-                {inquiry.flight_class && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Class</p>
-                    <p className="text-sm font-bold text-gray-900 capitalize">{inquiry.flight_class}</p>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
 
-            {inquiry.inquiry_type === 'hotel' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Destination</p>
-                  <p className="text-sm font-bold text-gray-900">{inquiry.hotel_destination}</p>
+              {inquiry.inquiry_type === 'hotel' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Destination</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.hotel_destination}</p>
+                  </div>
+                  {inquiry.hotel_checkin_date && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Check-in</p>
+                      <p className="text-sm font-bold text-gray-900">{new Date(inquiry.hotel_checkin_date).toLocaleDateString()}</p>
+                    </div>
+                  )}
+                  {inquiry.hotel_checkout_date && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Check-out</p>
+                      <p className="text-sm font-bold text-gray-900">{new Date(inquiry.hotel_checkout_date).toLocaleDateString()}</p>
+                    </div>
+                  )}
+                  {inquiry.hotel_rooms && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Rooms</p>
+                      <p className="text-sm font-bold text-gray-900">{inquiry.hotel_rooms}</p>
+                    </div>
+                  )}
+                  {inquiry.hotel_guests && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Guests</p>
+                      <p className="text-sm font-bold text-gray-900">{inquiry.hotel_guests}</p>
+                    </div>
+                  )}
+                  {inquiry.hotel_room_type && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Room Type</p>
+                      <p className="text-sm font-bold text-gray-900">{inquiry.hotel_room_type}</p>
+                    </div>
+                  )}
                 </div>
-                {inquiry.hotel_checkin_date && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Check-in</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.hotel_checkin_date).toLocaleDateString()}</p>
-                  </div>
-                )}
-                {inquiry.hotel_checkout_date && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Check-out</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.hotel_checkout_date).toLocaleDateString()}</p>
-                  </div>
-                )}
-                {inquiry.hotel_rooms && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Rooms</p>
-                    <p className="text-sm font-bold text-gray-900">{inquiry.hotel_rooms}</p>
-                  </div>
-                )}
-                {inquiry.hotel_guests && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Guests</p>
-                    <p className="text-sm font-bold text-gray-900">{inquiry.hotel_guests}</p>
-                  </div>
-                )}
-                {inquiry.hotel_room_type && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Room Type</p>
-                    <p className="text-sm font-bold text-gray-900">{inquiry.hotel_room_type}</p>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
 
-            {inquiry.inquiry_type === 'cruise' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Destination</p>
-                  <p className="text-sm font-bold text-gray-900">{inquiry.cruise_destination}</p>
+              {inquiry.inquiry_type === 'cruise' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Destination</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.cruise_destination}</p>
+                  </div>
+                  {inquiry.cruise_departure_date && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Departure</p>
+                      <p className="text-sm font-bold text-gray-900">{new Date(inquiry.cruise_departure_date).toLocaleDateString()}</p>
+                    </div>
+                  )}
+                  {inquiry.cruise_duration && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Duration</p>
+                      <p className="text-sm font-bold text-gray-900">{inquiry.cruise_duration} days</p>
+                    </div>
+                  )}
+                  {inquiry.cruise_passengers && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Passengers</p>
+                      <p className="text-sm font-bold text-gray-900">{inquiry.cruise_passengers}</p>
+                    </div>
+                  )}
+                  {inquiry.cruise_cabin_type && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Cabin Type</p>
+                      <p className="text-sm font-bold text-gray-900">{inquiry.cruise_cabin_type}</p>
+                    </div>
+                  )}
                 </div>
-                {inquiry.cruise_departure_date && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Departure</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.cruise_departure_date).toLocaleDateString()}</p>
-                  </div>
-                )}
-                {inquiry.cruise_duration && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Duration</p>
-                    <p className="text-sm font-bold text-gray-900">{inquiry.cruise_duration} days</p>
-                  </div>
-                )}
-                {inquiry.cruise_passengers && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Passengers</p>
-                    <p className="text-sm font-bold text-gray-900">{inquiry.cruise_passengers}</p>
-                  </div>
-                )}
-                {inquiry.cruise_cabin_type && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Cabin Type</p>
-                    <p className="text-sm font-bold text-gray-900">{inquiry.cruise_cabin_type}</p>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
 
-            {inquiry.inquiry_type === 'package' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Destination</p>
-                  <p className="text-sm font-bold text-gray-900">{inquiry.package_destination}</p>
+              {inquiry.inquiry_type === 'package' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Destination</p>
+                    <p className="text-sm font-bold text-gray-900">{inquiry.package_destination}</p>
+                  </div>
+                  {inquiry.package_start_date && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Start Date</p>
+                      <p className="text-sm font-bold text-gray-900">{new Date(inquiry.package_start_date).toLocaleDateString()}</p>
+                    </div>
+                  )}
+                  {inquiry.package_end_date && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">End Date</p>
+                      <p className="text-sm font-bold text-gray-900">{new Date(inquiry.package_end_date).toLocaleDateString()}</p>
+                    </div>
+                  )}
+                  {inquiry.package_travelers && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Travelers</p>
+                      <p className="text-sm font-bold text-gray-900">{inquiry.package_travelers}</p>
+                    </div>
+                  )}
+                  {inquiry.package_budget_range && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Budget</p>
+                      <p className="text-sm font-bold text-gray-900">{inquiry.package_budget_range}</p>
+                    </div>
+                  )}
+                  {inquiry.package_interests && inquiry.package_interests.length > 0 && (
+                    <div className="sm:col-span-2">
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Interests</p>
+                      <p className="text-sm font-bold text-gray-900">{Array.isArray(inquiry.package_interests) ? inquiry.package_interests.join(', ') : inquiry.package_interests}</p>
+                    </div>
+                  )}
                 </div>
-                {inquiry.package_start_date && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Start Date</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.package_start_date).toLocaleDateString()}</p>
-                  </div>
-                )}
-                {inquiry.package_end_date && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">End Date</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(inquiry.package_end_date).toLocaleDateString()}</p>
-                  </div>
-                )}
-                {inquiry.package_travelers && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Travelers</p>
-                    <p className="text-sm font-bold text-gray-900">{inquiry.package_travelers}</p>
-                  </div>
-                )}
-                {inquiry.package_budget_range && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Budget</p>
-                    <p className="text-sm font-bold text-gray-900">{inquiry.package_budget_range}</p>
-                  </div>
-                )}
-                {inquiry.package_interests && inquiry.package_interests.length > 0 && (
-                  <div className="sm:col-span-2">
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Interests</p>
-                    <p className="text-sm font-bold text-gray-900">{Array.isArray(inquiry.package_interests) ? inquiry.package_interests.join(', ') : inquiry.package_interests}</p>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
 
-            {inquiry.inquiry_type === 'general' && (
-              <div className="space-y-4">
-                {inquiry.inquiry_subject && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Subject</p>
-                    <p className="text-sm font-bold text-gray-900">{inquiry.inquiry_subject}</p>
-                  </div>
-                )}
-                {inquiry.inquiry_message && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Message</p>
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{inquiry.inquiry_message}</p>
-                  </div>
-                )}
-              </div>
-            )}
+              {inquiry.inquiry_type === 'general' && (
+                <div className="space-y-4">
+                  {inquiry.inquiry_subject && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Subject</p>
+                      <p className="text-sm font-bold text-gray-900">{inquiry.inquiry_subject}</p>
+                    </div>
+                  )}
+                  {inquiry.inquiry_message && (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Message</p>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{inquiry.inquiry_message}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {inquiry.special_requirements && (
-              <div className="mt-4 pt-4 border-t border-blue-200">
-                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Special Requirements</p>
-                <p className="text-sm text-gray-700">{inquiry.special_requirements}</p>
-              </div>
-            )}
+              {inquiry.special_requirements && (
+                <div className="mt-4 pt-4 border-t border-blue-200">
+                  <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Special Requirements</p>
+                  <p className="text-sm text-gray-700">{inquiry.special_requirements}</p>
+                </div>
+              )}
 
-            {inquiry.budget_range && (
-              <div className="mt-4 pt-4 border-t border-blue-200">
-                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Budget Range</p>
-                <p className="text-sm font-bold text-gray-900">{inquiry.budget_range}</p>
-              </div>
-            )}
+              {inquiry.budget_range && (
+                <div className="mt-4 pt-4 border-t border-blue-200">
+                  <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Budget Range</p>
+                  <p className="text-sm font-bold text-gray-900">{inquiry.budget_range}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -792,7 +949,7 @@ const InquiryDetail = () => {
                       </p>
                     </div>
                   </div>
-                  
+
                   {quote.breakdown && Array.isArray(quote.breakdown) && quote.breakdown.length > 0 && (
                     <div className="mt-4 mb-4 p-4 bg-white rounded-lg border border-green-200">
                       <p className="text-sm font-bold text-gray-700 mb-3">Breakdown:</p>
@@ -852,8 +1009,8 @@ const InquiryDetail = () => {
                         disabled={paymentLoading || loading}
                         className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:transform-none"
                         title={
-                          paymentLoading 
-                            ? 'Processing payment...' 
+                          paymentLoading
+                            ? 'Processing payment...'
                             : `Click to pay $${parseFloat(quote.total_amount || 0).toFixed(2)} ${quote.currency || 'USD'}`
                         }
                         aria-label={`Pay ${parseFloat(quote.total_amount || 0).toFixed(2)} ${quote.currency || 'USD'}`}
@@ -862,23 +1019,23 @@ const InquiryDetail = () => {
                       >
                         {paymentLoading ? (
                           <span className="flex items-center gap-2">
-                            <svg 
-                              className="animate-spin h-4 w-4" 
-                              viewBox="0 0 24 24" 
+                            <svg
+                              className="animate-spin h-4 w-4"
+                              viewBox="0 0 24 24"
                               fill="none"
                               aria-hidden="true"
                             >
-                              <circle 
-                                className="opacity-25" 
-                                cx="12" 
-                                cy="12" 
-                                r="10" 
-                                stroke="currentColor" 
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
                                 strokeWidth="4"
                               ></circle>
-                              <path 
-                                className="opacity-75" 
-                                fill="currentColor" 
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
                                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                               ></path>
                             </svg>
@@ -938,7 +1095,7 @@ const InquiryDetail = () => {
         )}
       </div>
       <Footer />
-    </div>
+    </div >
   );
 };
 

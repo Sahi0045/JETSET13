@@ -17,6 +17,27 @@ import {
   RefreshCw
 } from 'lucide-react';
 
+// Reusable Input Component - MUST be outside the main component to prevent re-mounting on every state change
+const InputField = ({ label, name, type = "text", required = false, placeholder, error, className = "", value, onChange, min }) => (
+  <div className={`space-y-1 ${className}`}>
+    <label htmlFor={name} className="block text-sm font-semibold text-gray-700">
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    <input
+      type={type}
+      id={name}
+      name={name}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      min={min}
+      className={`w-full px-4 py-3 rounded-lg border bg-white focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] transition-colors outline-none
+        ${error ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'}`}
+    />
+    {error && <span className="text-sm text-red-500 font-medium">{error}</span>}
+  </div>
+);
+
 const RequestPage = () => {
   const [activeTab, setActiveTab] = useState('inquiry');
   const [selectedInquiryType, setSelectedInquiryType] = useState('general');
@@ -306,27 +327,6 @@ const RequestPage = () => {
     setErrors({});
   };
 
-  // Reusable Input Component
-  const InputField = ({ label, name, type = "text", required = false, placeholder, error, className = "" }) => (
-    <div className={`space-y-1 ${className}`}>
-      <label htmlFor={name} className="block text-sm font-semibold text-gray-700">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <input
-        type={type}
-        id={name}
-        name={name}
-        value={formData[name]}
-        onChange={handleChange}
-        placeholder={placeholder}
-        className={`w-full px-4 py-3 rounded-lg border bg-white focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] transition-colors outline-none
-          ${error ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'}`}
-        {...((type === 'date') && { min: new Date().toISOString().split('T')[0] })}
-      />
-      {error && <span className="text-sm text-red-500 font-medium">{error}</span>}
-    </div>
-  );
-
   const renderCommonFields = () => (
     <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-8">
       <h3 className="text-xl font-bold text-[#055B75] mb-6 flex items-center gap-2">
@@ -339,6 +339,8 @@ const RequestPage = () => {
           required
           placeholder="Enter your full name"
           error={errors.customer_name}
+          value={formData.customer_name}
+          onChange={handleChange}
         />
         <InputField
           label="Email Address"
@@ -347,6 +349,8 @@ const RequestPage = () => {
           required
           placeholder="your.email@example.com"
           error={errors.customer_email}
+          value={formData.customer_email}
+          onChange={handleChange}
         />
         <InputField
           label="Phone Number"
@@ -355,11 +359,15 @@ const RequestPage = () => {
           required
           placeholder="+1 (555) 123-4567"
           error={errors.customer_phone}
+          value={formData.customer_phone}
+          onChange={handleChange}
         />
         <InputField
           label="Country"
           name="customer_country"
           placeholder="Your country"
+          value={formData.customer_country}
+          onChange={handleChange}
         />
       </div>
     </div>
@@ -371,9 +379,9 @@ const RequestPage = () => {
         <Plane className="w-5 h-5" /> Flight Details
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <InputField label="From (Origin)" name="flight_origin" required placeholder="e.g., New York (JFK)" error={errors.flight_origin} />
-        <InputField label="To (Destination)" name="flight_destination" required placeholder="e.g., London (LHR)" error={errors.flight_destination} />
-        <InputField label="Departure Date" name="flight_departure_date" type="date" required error={errors.flight_departure_date} />
+        <InputField label="From (Origin)" name="flight_origin" required placeholder="e.g., New York (JFK)" error={errors.flight_origin} value={formData.flight_origin} onChange={handleChange} />
+        <InputField label="To (Destination)" name="flight_destination" required placeholder="e.g., London (LHR)" error={errors.flight_destination} value={formData.flight_destination} onChange={handleChange} />
+        <InputField label="Departure Date" name="flight_departure_date" type="date" required error={errors.flight_departure_date} value={formData.flight_departure_date} onChange={handleChange} min={new Date().toISOString().split('T')[0]} />
 
         <div className="space-y-1">
           <label className="block text-sm font-semibold text-gray-700">Return Date</label>
@@ -427,9 +435,9 @@ const RequestPage = () => {
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div className="md:col-span-2">
-          <InputField label="Destination City" name="hotel_destination" required placeholder="e.g., Paris, France" error={errors.hotel_destination} />
+          <InputField label="Destination City" name="hotel_destination" required placeholder="e.g., Paris, France" error={errors.hotel_destination} value={formData.hotel_destination} onChange={handleChange} />
         </div>
-        <InputField label="Check-in Date" name="hotel_checkin_date" type="date" required error={errors.hotel_checkin_date} />
+        <InputField label="Check-in Date" name="hotel_checkin_date" type="date" required error={errors.hotel_checkin_date} value={formData.hotel_checkin_date} onChange={handleChange} min={new Date().toISOString().split('T')[0]} />
 
         <div className="space-y-1">
           <label className="block text-sm font-semibold text-gray-700">Check-out Date *</label>
@@ -498,9 +506,9 @@ const RequestPage = () => {
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div className="md:col-span-2">
-          <InputField label="Cruise Destination/Region" name="cruise_destination" required placeholder="e.g., Caribbean, Mediterranean" error={errors.cruise_destination} />
+          <InputField label="Cruise Destination/Region" name="cruise_destination" required placeholder="e.g., Caribbean, Mediterranean" error={errors.cruise_destination} value={formData.cruise_destination} onChange={handleChange} />
         </div>
-        <InputField label="Departure Date" name="cruise_departure_date" type="date" required error={errors.cruise_departure_date} />
+        <InputField label="Departure Date" name="cruise_departure_date" type="date" required error={errors.cruise_departure_date} value={formData.cruise_departure_date} onChange={handleChange} min={new Date().toISOString().split('T')[0]} />
 
         <div className="space-y-1">
           <label className="block text-sm font-semibold text-gray-700">Duration (Days) *</label>
@@ -557,9 +565,10 @@ const RequestPage = () => {
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div className="md:col-span-2">
-          <InputField label="Destination" name="package_destination" required placeholder="e.g., Hawaii, Europe" error={errors.package_destination} />
+          <InputField label="Destination" name="package_destination" required placeholder="e.g., Hawaii, Europe" error={errors.package_destination} value={formData.package_destination} onChange={handleChange} />
         </div>
-        <InputField label="Start Date" name="package_start_date" type="date" required error={errors.package_start_date} />
+        <InputField label="Start Date" name="package_start_date" type="date" required error={errors.package_start_date} value={formData.package_start_date} onChange={handleChange} min={new Date().toISOString().split('T')[0]} />
+
         <div className="space-y-1">
           <label className="block text-sm font-semibold text-gray-700">End Date *</label>
           <input
@@ -632,7 +641,7 @@ const RequestPage = () => {
       <h3 className="text-xl font-bold text-[#055B75] mb-6 flex items-center gap-2">
         <MessageSquare className="w-5 h-5" /> General Inquiry
       </h3>
-      <InputField label="Subject" name="inquiry_subject" required placeholder="Brief subject" error={errors.inquiry_subject} className="mb-6" />
+      <InputField label="Subject" name="inquiry_subject" required placeholder="Brief subject" error={errors.inquiry_subject} className="mb-6" value={formData.inquiry_subject} onChange={handleChange} />
 
       <div className="space-y-1">
         <label htmlFor="inquiry_message" className="block text-sm font-semibold text-gray-700">
@@ -714,7 +723,7 @@ const RequestPage = () => {
       <div className="flex-grow">
         {/* Header Section */}
         <div className="bg-gradient-to-r from-[#055B75] to-[#034457] py-16 md:py-20 px-4 text-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2000')] bg-cover bg-center opacity-10 mix-blend-overlay"></div>
+          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2000')] bg-cover bg-center opacity-10 mix-blend-overlay pointer-events-none"></div>
           <div className="relative z-10 max-w-4xl mx-auto">
             <h1 className="text-3xl md:text-5xl font-bold text-white mb-4 tracking-tight">
               Start Your Journey
