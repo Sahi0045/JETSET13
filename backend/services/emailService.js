@@ -1209,4 +1209,171 @@ export const sendSubscriptionEmails = async (email, source = 'website') => {
   }
 };
 
+/**
+ * Send contact form confirmation email to customer
+ * @param {string} name - Customer name
+ * @param {string} email - Customer email
+ * @param {string} message - Customer message
+ * @returns {Promise} - Email send response
+ */
+export const sendContactConfirmationEmail = async (name, email, message) => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
+        .container { background-color: white; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; }
+        .header { background: linear-gradient(135deg, #055B75 0%, #033d4f 100%); padding: 30px; text-align: center; color: white; }
+        .content { padding: 25px; }
+        .message-box { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #055B75; }
+        .footer { background-color: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #666; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h2>✉️ We've Received Your Message!</h2>
+        </div>
+        
+        <div class="content">
+          <p>Dear ${name},</p>
+          
+          <p>Thank you for contacting JetSetters! We've received your message and our team will get back to you within 24-48 hours.</p>
+          
+          <div class="message-box">
+            <p><strong>Your Message:</strong></p>
+            <p>${message}</p>
+          </div>
+          
+          <p>In the meantime, feel free to explore our latest travel deals on our website!</p>
+          
+          <p>Best regards,<br>The JetSetters Team</p>
+        </div>
+        
+        <div class="footer">
+          <p><strong>JetSetters Travel</strong></p>
+          <p>© 2025 JetSetters. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const response = await resend.emails.send({
+      from: 'JetSetters <noreply@jetsetterss.com>',
+      to: [email],
+      subject: '✉️ We\'ve Received Your Message - JetSetters',
+      html,
+      text: stripHtml(html)
+    });
+
+    console.log('Contact confirmation email sent:', response);
+    return response;
+  } catch (error) {
+    console.error('Error sending contact confirmation email:', error);
+    throw error;
+  }
+};
+
+/**
+ * Send contact form notification to admin
+ * @param {string} name - Customer name
+ * @param {string} email - Customer email
+ * @param {string} message - Customer message
+ * @returns {Promise} - Email send response
+ */
+export const sendContactAdminNotification = async (name, email, message) => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
+        .container { background-color: white; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; }
+        .header { background: linear-gradient(135deg, #ff6b35 0%, #e85d26 100%); padding: 20px; text-align: center; color: white; }
+        .content { padding: 25px; }
+        .info-box { background-color: #fff3e0; padding: 15px; border-radius: 8px; border-left: 4px solid #ff6b35; margin: 15px 0; }
+        .message-box { background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        .footer { background-color: #f8f9fa; padding: 15px; text-align: center; font-size: 12px; color: #666; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h2>📩 New Contact Form Submission</h2>
+        </div>
+        
+        <div class="content">
+          <p>You've received a new contact form submission!</p>
+          
+          <div class="info-box">
+            <p><strong>👤 Name:</strong> ${name}</p>
+            <p><strong>📧 Email:</strong> ${email}</p>
+            <p><strong>🕐 Time:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+          
+          <div class="message-box">
+            <p><strong>💬 Message:</strong></p>
+            <p>${message}</p>
+          </div>
+          
+          <p style="color: #666; font-size: 14px;">Please respond to this inquiry within 24-48 hours.</p>
+        </div>
+        
+        <div class="footer">
+          <p>JetSetters Admin Notification</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const adminEmail = process.env.COMPANY_EMAIL || 'jetsetters721@gmail.com';
+
+    const response = await resend.emails.send({
+      from: 'JetSetters <noreply@jetsetterss.com>',
+      to: [adminEmail],
+      subject: `📩 New Contact: ${name} - ${email}`,
+      html,
+      text: stripHtml(html)
+    });
+
+    console.log('Contact admin notification sent:', response);
+    return response;
+  } catch (error) {
+    console.error('Error sending contact admin notification:', error);
+    throw error;
+  }
+};
+
+/**
+ * Send both contact confirmation and admin notification emails
+ * @param {string} name - Customer name
+ * @param {string} email - Customer email
+ * @param {string} message - Customer message
+ * @returns {Promise} - Combined email send response
+ */
+export const sendContactNotificationEmails = async (name, email, message) => {
+  try {
+    const [customerResult, adminResult] = await Promise.all([
+      sendContactConfirmationEmail(name, email, message),
+      sendContactAdminNotification(name, email, message)
+    ]);
+
+    return {
+      success: true,
+      customerEmail: customerResult,
+      adminNotification: adminResult
+    };
+  } catch (error) {
+    console.error('Error sending contact notification emails:', error);
+    throw error;
+  }
+};
+
 export default emailService;

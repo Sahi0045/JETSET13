@@ -1,5 +1,5 @@
 import express from 'express';
-import emailService, { sendSubscriptionEmails } from '../services/emailService.js';
+import emailService, { sendSubscriptionEmails, sendContactNotificationEmails } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -68,6 +68,42 @@ router.post('/subscription-notification', async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Subscription saved, but email notification failed',
+      error: error.message
+    });
+  }
+});
+
+// Send contact form notification emails (customer confirmation + admin notification)
+router.post('/contact-notification', async (req, res) => {
+  console.log('📩 Contact notification route hit');
+  console.log('📩 Request body:', req.body);
+
+  try {
+    const { name, email, message } = req.body;
+
+    if (!name || !email || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name, email, and message are required'
+      });
+    }
+
+    console.log(`📩 Sending contact emails for: ${name} (${email})`);
+    const result = await sendContactNotificationEmails(name, email, message);
+    console.log('📩 Contact emails sent successfully:', result);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Contact notification emails sent successfully',
+      data: result
+    });
+  } catch (error) {
+    console.error('📩 Error sending contact emails:', error);
+
+    // Return success anyway to not block the form submission
+    return res.status(200).json({
+      success: true,
+      message: 'Contact form saved, but email notification failed',
       error: error.message
     });
   }
