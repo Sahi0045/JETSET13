@@ -3,6 +3,9 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { getApiUrl } from '../../../utils/apiHelper'
+import Navbar from '../Navbar'
+import Footer from '../Footer'
+import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext'
 
 // Empty State Component
 const EmptyState = ({ icon, title, description, actionLabel, onAction }) => (
@@ -677,9 +680,9 @@ export default function TravelDashboard() {
             {/* Travel Date Countdown Badge */}
             {daysUntilTrip !== null && daysUntilTrip >= 0 && (
               <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-2 ${daysUntilTrip === 0 ? 'bg-green-100 text-green-800' :
-                  daysUntilTrip <= 3 ? 'bg-orange-100 text-orange-800' :
-                    daysUntilTrip <= 7 ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-blue-100 text-blue-800'
+                daysUntilTrip <= 3 ? 'bg-orange-100 text-orange-800' :
+                  daysUntilTrip <= 7 ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-blue-100 text-blue-800'
                 }`}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1239,188 +1242,205 @@ export default function TravelDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Clean Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate('/')}
-                className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-colors p-2 -ml-2 rounded-lg hover:bg-gray-100"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                <span className="font-medium hidden sm:inline">Back</span>
-              </button>
-              <div className="h-6 w-px bg-gray-300 hidden sm:block"></div>
-              <h1 className="text-xl font-bold text-gray-900">My Trips</h1>
-            </div>
+    <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+      <Navbar />
 
-            <div className="flex items-center gap-3">
-              {isGuest && (
+      {isGuest && (
+        <div className="bg-amber-50 border-b border-amber-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+            <p className="text-sm text-amber-800 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              Viewing as guest. Sign in to see your bookings.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-grow">
+
+        {/* Tab Navigation */}
+        <div className="bg-white border-b border-gray-200 sticky top-16 z-40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex gap-1 py-3 overflow-x-auto hide-scrollbar">
+              {["Upcoming", "Past", "Cancelled", "Failed"].map((tab) => (
                 <button
-                  onClick={handleLoginClick}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  key={tab}
+                  onClick={() => handleTabChange(tab)}
+                  className={`px-5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    }`}
                 >
-                  Sign In
+                  {tab}
                 </button>
-              )}
-              <button
-                onClick={toggleMobileMenu}
-                className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
+              ))}
             </div>
           </div>
         </div>
 
-        {isGuest && (
-          <div className="bg-amber-50 border-b border-amber-200">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
-              <p className="text-sm text-amber-800 flex items-center gap-2">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                Viewing as guest. Sign in to see your bookings.
-              </p>
-            </div>
-          </div>
-        )}
-      </header>
-
-      {/* Tab Navigation */}
-      <div className="bg-white border-b border-gray-200 sticky top-16 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-1 py-3 overflow-x-auto hide-scrollbar">
-            {["Upcoming", "Past", "Cancelled", "Failed"].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => handleTabChange(tab)}
-                className={`px-5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                  }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex gap-6">
-          {/* Sidebar */}
-          <aside className={`
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex gap-6">
+            {/* Sidebar */}
+            <aside className={`
             fixed lg:relative inset-y-0 left-0 z-40 w-72 bg-white lg:bg-transparent
             transform transition-transform duration-300 lg:transform-none
             ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
             lg:block flex-shrink-0
           `}>
-            <div className="h-full lg:h-auto overflow-y-auto lg:overflow-visible p-4 lg:p-0">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:sticky lg:top-36">
-                <div className="flex items-center justify-between mb-4 lg:hidden">
-                  <h2 className="font-semibold text-gray-900">Categories</h2>
-                  <button onClick={toggleMobileMenu} className="p-1 hover:bg-gray-100 rounded">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+              <div className="h-full lg:h-auto overflow-y-auto lg:overflow-visible p-4 lg:p-0">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:sticky lg:top-36">
+                  <div className="flex items-center justify-between mb-4 lg:hidden">
+                    <h2 className="font-semibold text-gray-900">Categories</h2>
+                    <button onClick={toggleMobileMenu} className="p-1 hover:bg-gray-100 rounded">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
 
-                <nav className="space-y-1">
-                  {[
-                    { key: "All Bookings", icon: "📋", count: bookings.length },
-                    { key: "Flights", icon: "✈️", count: bookings.filter(b => b.type === 'flight').length },
-                    { key: "Hotels", icon: "🏨", count: bookings.filter(b => b.type === 'hotel').length },
-                    { key: "Cruise", icon: "🚢", count: bookings.filter(b => b.type === 'cruise').length },
-                    { key: "Packages", icon: "🎒", count: bookings.filter(b => b.type === 'package').length },
-                  ].map((item) => (
+                  <nav className="space-y-1">
+                    {[
+                      { key: "All Bookings", icon: "📋", count: bookings.length },
+                      { key: "Flights", icon: "✈️", count: bookings.filter(b => b.type === 'flight').length },
+                      { key: "Hotels", icon: "🏨", count: bookings.filter(b => b.type === 'hotel').length },
+                      { key: "Cruise", icon: "🚢", count: bookings.filter(b => b.type === 'cruise').length },
+                      { key: "Packages", icon: "🎒", count: bookings.filter(b => b.type === 'package').length },
+                    ].map((item) => (
+                      <button
+                        key={item.key}
+                        onClick={() => handleSidebarItemChange(item.key)}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeSidebarItem === item.key
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-gray-700 hover:bg-gray-50"
+                          }`}
+                      >
+                        <span className="flex items-center gap-3">
+                          <span className="text-lg">{item.icon}</span>
+                          <span className="font-medium text-sm">{item.key}</span>
+                        </span>
+                        {item.count > 0 && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${activeSidebarItem === item.key
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-gray-100 text-gray-600"
+                            }`}>
+                            {item.count}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+
+                    <div className="border-t border-gray-200 my-3"></div>
+
                     <button
-                      key={item.key}
-                      onClick={() => handleSidebarItemChange(item.key)}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeSidebarItem === item.key
-                        ? "bg-blue-50 text-blue-700"
+                      onClick={() => handleSidebarItemChange("Requests")}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeSidebarItem === "Requests"
+                        ? "bg-purple-50 text-purple-700"
                         : "text-gray-700 hover:bg-gray-50"
                         }`}
                     >
                       <span className="flex items-center gap-3">
-                        <span className="text-lg">{item.icon}</span>
-                        <span className="font-medium text-sm">{item.key}</span>
+                        <span className="text-lg">💬</span>
+                        <span className="font-medium text-sm">My Requests</span>
                       </span>
-                      {item.count > 0 && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${activeSidebarItem === item.key
-                          ? "bg-blue-100 text-blue-700"
+                      {requests.length > 0 && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${activeSidebarItem === "Requests"
+                          ? "bg-purple-100 text-purple-700"
                           : "bg-gray-100 text-gray-600"
                           }`}>
-                          {item.count}
+                          {requests.length}
                         </span>
                       )}
                     </button>
-                  ))}
-
-                  <div className="border-t border-gray-200 my-3"></div>
-
-                  <button
-                    onClick={() => handleSidebarItemChange("Requests")}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeSidebarItem === "Requests"
-                      ? "bg-purple-50 text-purple-700"
-                      : "text-gray-700 hover:bg-gray-50"
-                      }`}
-                  >
-                    <span className="flex items-center gap-3">
-                      <span className="text-lg">💬</span>
-                      <span className="font-medium text-sm">My Requests</span>
-                    </span>
-                    {requests.length > 0 && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${activeSidebarItem === "Requests"
-                        ? "bg-purple-100 text-purple-700"
-                        : "bg-gray-100 text-gray-600"
-                        }`}>
-                        {requests.length}
-                      </span>
-                    )}
-                  </button>
-                </nav>
+                  </nav>
+                </div>
               </div>
-            </div>
-          </aside>
+            </aside>
 
-          {/* Overlay for mobile */}
-          {isMobileMenuOpen && (
-            <div
-              className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-              onClick={toggleMobileMenu}
-            />
-          )}
+            {/* Overlay for mobile */}
+            {isMobileMenuOpen && (
+              <div
+                className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+                onClick={toggleMobileMenu}
+              />
+            )}
 
-          {/* Main Content */}
-          <main className="flex-1 min-w-0">
-            {activeSidebarItem === "Requests" ? (
-              /* Requests Section */
-              isAuthenticated ? (
-                isLoadingRequests ? (
+            {/* Main Content */}
+            <main className="flex-1 min-w-0">
+              {activeSidebarItem === "Requests" ? (
+                /* Requests Section */
+                isAuthenticated ? (
+                  isLoadingRequests ? (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                        <p className="mt-4 text-gray-600">Loading requests...</p>
+                      </div>
+                    </div>
+                  ) : filteredRequests.length > 0 ? (
+                    <div className="space-y-4">
+                      {/* Header */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-lg font-semibold text-gray-900">{activeTab} Requests</h2>
+                          <p className="text-sm text-gray-500">{filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''}</p>
+                        </div>
+                        <button
+                          onClick={loadRequests}
+                          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                          title="Refresh"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {/* Request Cards */}
+                      <div className="grid gap-4">
+                        {filteredRequests.map(renderRequestCard)}
+                      </div>
+                    </div>
+                  ) : (
+                    <EmptyState
+                      icon="💬"
+                      title={`No ${activeTab} Requests`}
+                      description="When you submit a travel inquiry, it will appear here."
+                      actionLabel="Submit New Request"
+                      onAction={() => navigate('/request')}
+                    />
+                  )
+                ) : (
+                  <EmptyState
+                    icon="🔒"
+                    title="Login Required"
+                    description="Please sign in to view your travel requests."
+                    actionLabel="Sign In"
+                    onAction={handleLoginClick}
+                  />
+                )
+              ) : (
+                /* Bookings Section */
+                isLoadingBookings ? (
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                      <p className="mt-4 text-gray-600">Loading requests...</p>
+                      <p className="mt-4 text-gray-600">Loading bookings...</p>
                     </div>
                   </div>
-                ) : filteredRequests.length > 0 ? (
+                ) : filteredBookings.length > 0 ? (
                   <div className="space-y-4">
                     {/* Header */}
                     <div className="flex items-center justify-between">
                       <div>
-                        <h2 className="text-lg font-semibold text-gray-900">{activeTab} Requests</h2>
-                        <p className="text-sm text-gray-500">{filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''}</p>
+                        <h2 className="text-lg font-semibold text-gray-900">
+                          {activeTab} {activeSidebarItem === "All Bookings" ? "Bookings" : activeSidebarItem}
+                        </h2>
+                        <p className="text-sm text-gray-500">{filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''}</p>
                       </div>
                       <button
-                        onClick={loadRequests}
+                        onClick={loadBookings}
                         className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                         title="Refresh"
                       >
@@ -1430,80 +1450,30 @@ export default function TravelDashboard() {
                       </button>
                     </div>
 
-                    {/* Request Cards */}
+                    {/* Booking Cards */}
                     <div className="grid gap-4">
-                      {filteredRequests.map(renderRequestCard)}
+                      {filteredBookings.map(renderBookingCard)}
                     </div>
                   </div>
                 ) : (
                   <EmptyState
-                    icon="💬"
-                    title={`No ${activeTab} Requests`}
-                    description="When you submit a travel inquiry, it will appear here."
-                    actionLabel="Submit New Request"
-                    onAction={() => navigate('/request')}
+                    icon={isGuest ? "🔒" : "✈️"}
+                    title={isGuest ? "Sign In to View Bookings" : `No ${activeTab} Bookings`}
+                    description={isGuest
+                      ? "Sign in to view your trips and bookings."
+                      : "When you book a trip, it will appear here."
+                    }
+                    actionLabel={isGuest ? "Sign In" : "Book a Trip"}
+                    onAction={isGuest ? handleLoginClick : () => navigate('/')}
                   />
                 )
-              ) : (
-                <EmptyState
-                  icon="🔒"
-                  title="Login Required"
-                  description="Please sign in to view your travel requests."
-                  actionLabel="Sign In"
-                  onAction={handleLoginClick}
-                />
-              )
-            ) : (
-              /* Bookings Section */
-              isLoadingBookings ? (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                    <p className="mt-4 text-gray-600">Loading bookings...</p>
-                  </div>
-                </div>
-              ) : filteredBookings.length > 0 ? (
-                <div className="space-y-4">
-                  {/* Header */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold text-gray-900">
-                        {activeTab} {activeSidebarItem === "All Bookings" ? "Bookings" : activeSidebarItem}
-                      </h2>
-                      <p className="text-sm text-gray-500">{filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''}</p>
-                    </div>
-                    <button
-                      onClick={loadBookings}
-                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                      title="Refresh"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {/* Booking Cards */}
-                  <div className="grid gap-4">
-                    {filteredBookings.map(renderBookingCard)}
-                  </div>
-                </div>
-              ) : (
-                <EmptyState
-                  icon={isGuest ? "🔒" : "✈️"}
-                  title={isGuest ? "Sign In to View Bookings" : `No ${activeTab} Bookings`}
-                  description={isGuest
-                    ? "Sign in to view your trips and bookings."
-                    : "When you book a trip, it will appear here."
-                  }
-                  actionLabel={isGuest ? "Sign In" : "Book a Trip"}
-                  onAction={isGuest ? handleLoginClick : () => navigate('/')}
-                />
-              )
-            )}
-          </main>
+              )}
+            </main>
+          </div>
         </div>
       </div>
+
+      <Footer />
 
       {/* Login Popup */}
       {showLoginPopup && (

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import './RequestPage.css';
 import Navbar from '../Common/Navbar';
 import Footer from '../Common/Footer';
 import withPageElements from '../Common/PageWrapper';
@@ -12,14 +11,10 @@ import {
   User,
   Mail,
   Phone,
-  Globe,
-  Calendar,
-  Users,
-  CreditCard,
-  MapPin,
   CheckCircle,
-  RefreshCw,
-  Send
+  Send,
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 
 const RequestPage = () => {
@@ -311,156 +306,109 @@ const RequestPage = () => {
     setErrors({});
   };
 
+  // Reusable Input Component
+  const InputField = ({ label, name, type = "text", required = false, placeholder, error, className = "" }) => (
+    <div className={`space-y-1 ${className}`}>
+      <label htmlFor={name} className="block text-sm font-semibold text-gray-700">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <input
+        type={type}
+        id={name}
+        name={name}
+        value={formData[name]}
+        onChange={handleChange}
+        placeholder={placeholder}
+        className={`w-full px-4 py-3 rounded-lg border bg-white focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] transition-colors outline-none
+          ${error ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'}`}
+        {...((type === 'date') && { min: new Date().toISOString().split('T')[0] })}
+      />
+      {error && <span className="text-sm text-red-500 font-medium">{error}</span>}
+    </div>
+  );
+
   const renderCommonFields = () => (
-    <>
-      <div className="form-section">
-        <h3>Contact Information</h3>
-        <div className="form-row">
-          <div className="form-group">
-            <label htmlFor="customer_name">Full Name *</label>
-            <input
-              type="text"
-              id="customer_name"
-              name="customer_name"
-              value={formData.customer_name}
-              onChange={handleChange}
-              className={errors.customer_name ? 'error' : ''}
-              placeholder="Enter your full name"
-            />
-            {errors.customer_name && <span className="error-message">{errors.customer_name}</span>}
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="customer_email">Email Address *</label>
-            <input
-              type="email"
-              id="customer_email"
-              name="customer_email"
-              value={formData.customer_email}
-              onChange={handleChange}
-              className={errors.customer_email ? 'error' : ''}
-              placeholder="your.email@example.com"
-            />
-            {errors.customer_email && <span className="error-message">{errors.customer_email}</span>}
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label htmlFor="customer_phone">Phone Number *</label>
-            <input
-              type="tel"
-              id="customer_phone"
-              name="customer_phone"
-              value={formData.customer_phone}
-              onChange={handleChange}
-              className={errors.customer_phone ? 'error' : ''}
-              placeholder="+1 (555) 123-4567"
-            />
-            {errors.customer_phone && <span className="error-message">{errors.customer_phone}</span>}
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="customer_country">Country</label>
-            <input
-              type="text"
-              id="customer_country"
-              name="customer_country"
-              value={formData.customer_country}
-              onChange={handleChange}
-              placeholder="Your country"
-            />
-          </div>
-        </div>
+    <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-8">
+      <h3 className="text-xl font-bold text-[#055B75] mb-6 flex items-center gap-2">
+        <User className="w-5 h-5" /> Contact Information
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <InputField
+          label="Full Name"
+          name="customer_name"
+          required
+          placeholder="Enter your full name"
+          error={errors.customer_name}
+        />
+        <InputField
+          label="Email Address"
+          name="customer_email"
+          type="email"
+          required
+          placeholder="your.email@example.com"
+          error={errors.customer_email}
+        />
+        <InputField
+          label="Phone Number"
+          name="customer_phone"
+          type="tel"
+          required
+          placeholder="+1 (555) 123-4567"
+          error={errors.customer_phone}
+        />
+        <InputField
+          label="Country"
+          name="customer_country"
+          placeholder="Your country"
+        />
       </div>
-    </>
+    </div>
   );
 
   const renderFlightForm = () => (
-    <div className="form-section">
-      <h3>Flight Details</h3>
-      <div className="form-row">
-        <div className="form-group">
-          <label htmlFor="flight_origin">From (Origin City) *</label>
-          <input
-            type="text"
-            id="flight_origin"
-            name="flight_origin"
-            value={formData.flight_origin}
-            onChange={handleChange}
-            className={errors.flight_origin ? 'error' : ''}
-            placeholder="e.g., New York (NYC)"
-          />
-          {errors.flight_origin && <span className="error-message">{errors.flight_origin}</span>}
-        </div>
+    <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-8 animate-fadeIn">
+      <h3 className="text-xl font-bold text-[#055B75] mb-6 flex items-center gap-2">
+        <Plane className="w-5 h-5" /> Flight Details
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <InputField label="From (Origin)" name="flight_origin" required placeholder="e.g., New York (JFK)" error={errors.flight_origin} />
+        <InputField label="To (Destination)" name="flight_destination" required placeholder="e.g., London (LHR)" error={errors.flight_destination} />
+        <InputField label="Departure Date" name="flight_departure_date" type="date" required error={errors.flight_departure_date} />
 
-        <div className="form-group">
-          <label htmlFor="flight_destination">To (Destination City) *</label>
-          <input
-            type="text"
-            id="flight_destination"
-            name="flight_destination"
-            value={formData.flight_destination}
-            onChange={handleChange}
-            className={errors.flight_destination ? 'error' : ''}
-            placeholder="e.g., London (LHR)"
-          />
-          {errors.flight_destination && <span className="error-message">{errors.flight_destination}</span>}
-        </div>
-      </div>
-
-      <div className="form-row">
-        <div className="form-group">
-          <label htmlFor="flight_departure_date">Departure Date *</label>
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Return Date</label>
           <input
             type="date"
-            id="flight_departure_date"
-            name="flight_departure_date"
-            value={formData.flight_departure_date}
-            onChange={handleChange}
-            className={errors.flight_departure_date ? 'error' : ''}
-            min={new Date().toISOString().split('T')[0]}
-          />
-          {errors.flight_departure_date && <span className="error-message">{errors.flight_departure_date}</span>}
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="flight_return_date">Return Date (Optional)</label>
-          <input
-            type="date"
-            id="flight_return_date"
             name="flight_return_date"
             value={formData.flight_return_date}
             onChange={handleChange}
             min={formData.flight_departure_date || new Date().toISOString().split('T')[0]}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] transition-colors outline-none"
           />
         </div>
       </div>
 
-      <div className="form-row">
-        <div className="form-group">
-          <label htmlFor="flight_passengers">Number of Passengers *</label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Passengers *</label>
           <select
-            id="flight_passengers"
             name="flight_passengers"
             value={formData.flight_passengers}
             onChange={handleChange}
-            className={errors.flight_passengers ? 'error' : ''}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           >
             {[...Array(10)].map((_, i) => (
               <option key={i + 1} value={i + 1}>{i + 1} Passenger{i !== 0 ? 's' : ''}</option>
             ))}
           </select>
-          {errors.flight_passengers && <span className="error-message">{errors.flight_passengers}</span>}
         </div>
-
-        <div className="form-group">
-          <label htmlFor="flight_class">Preferred Class</label>
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Class</label>
           <select
-            id="flight_class"
             name="flight_class"
             value={formData.flight_class}
             onChange={handleChange}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           >
             <option value="economy">Economy</option>
             <option value="premium_economy">Premium Economy</option>
@@ -473,185 +421,129 @@ const RequestPage = () => {
   );
 
   const renderHotelForm = () => (
-    <div className="form-section">
-      <h3>Hotel Details</h3>
-      <div className="form-group">
-        <label htmlFor="hotel_destination">Destination City *</label>
-        <input
-          type="text"
-          id="hotel_destination"
-          name="hotel_destination"
-          value={formData.hotel_destination}
-          onChange={handleChange}
-          className={errors.hotel_destination ? 'error' : ''}
-          placeholder="e.g., Paris, France"
-        />
-        {errors.hotel_destination && <span className="error-message">{errors.hotel_destination}</span>}
-      </div>
-
-      <div className="form-row">
-        <div className="form-group">
-          <label htmlFor="hotel_checkin_date">Check-in Date *</label>
-          <input
-            type="date"
-            id="hotel_checkin_date"
-            name="hotel_checkin_date"
-            value={formData.hotel_checkin_date}
-            onChange={handleChange}
-            className={errors.hotel_checkin_date ? 'error' : ''}
-            min={new Date().toISOString().split('T')[0]}
-          />
-          {errors.hotel_checkin_date && <span className="error-message">{errors.hotel_checkin_date}</span>}
+    <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-8 animate-fadeIn">
+      <h3 className="text-xl font-bold text-[#055B75] mb-6 flex items-center gap-2">
+        <Hotel className="w-5 h-5" /> Hotel Details
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="md:col-span-2">
+          <InputField label="Destination City" name="hotel_destination" required placeholder="e.g., Paris, France" error={errors.hotel_destination} />
         </div>
+        <InputField label="Check-in Date" name="hotel_checkin_date" type="date" required error={errors.hotel_checkin_date} />
 
-        <div className="form-group">
-          <label htmlFor="hotel_checkout_date">Check-out Date *</label>
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Check-out Date *</label>
           <input
             type="date"
-            id="hotel_checkout_date"
             name="hotel_checkout_date"
             value={formData.hotel_checkout_date}
             onChange={handleChange}
-            className={errors.hotel_checkout_date ? 'error' : ''}
             min={formData.hotel_checkin_date || new Date().toISOString().split('T')[0]}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           />
-          {errors.hotel_checkout_date && <span className="error-message">{errors.hotel_checkout_date}</span>}
+          {errors.hotel_checkout_date && <span className="text-sm text-red-500 font-medium">{errors.hotel_checkout_date}</span>}
         </div>
       </div>
 
-      <div className="form-row">
-        <div className="form-group">
-          <label htmlFor="hotel_rooms">Number of Rooms *</label>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Rooms *</label>
           <select
-            id="hotel_rooms"
             name="hotel_rooms"
             value={formData.hotel_rooms}
             onChange={handleChange}
-            className={errors.hotel_rooms ? 'error' : ''}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           >
             {[...Array(5)].map((_, i) => (
               <option key={i + 1} value={i + 1}>{i + 1} Room{i !== 0 ? 's' : ''}</option>
             ))}
           </select>
-          {errors.hotel_rooms && <span className="error-message">{errors.hotel_rooms}</span>}
         </div>
-
-        <div className="form-group">
-          <label htmlFor="hotel_guests">Number of Guests *</label>
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Guests *</label>
           <select
-            id="hotel_guests"
             name="hotel_guests"
             value={formData.hotel_guests}
             onChange={handleChange}
-            className={errors.hotel_guests ? 'error' : ''}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           >
-            {[...Array(20)].map((_, i) => (
+            {[...Array(10)].map((_, i) => (
               <option key={i + 1} value={i + 1}>{i + 1} Guest{i !== 0 ? 's' : ''}</option>
             ))}
           </select>
-          {errors.hotel_guests && <span className="error-message">{errors.hotel_guests}</span>}
         </div>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="hotel_room_type">Preferred Room Type</label>
-        <select
-          id="hotel_room_type"
-          name="hotel_room_type"
-          value={formData.hotel_room_type}
-          onChange={handleChange}
-        >
-          <option value="">Any Room Type</option>
-          <option value="standard">Standard Room</option>
-          <option value="deluxe">Deluxe Room</option>
-          <option value="suite">Suite</option>
-          <option value="executive">Executive Room</option>
-          <option value="presidential">Presidential Suite</option>
-        </select>
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Room Type</label>
+          <select
+            name="hotel_room_type"
+            value={formData.hotel_room_type}
+            onChange={handleChange}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+          >
+            <option value="">Any Room Type</option>
+            <option value="standard">Standard Room</option>
+            <option value="deluxe">Deluxe Room</option>
+            <option value="suite">Suite</option>
+            <option value="executive">Executive</option>
+          </select>
+        </div>
       </div>
     </div>
   );
 
   const renderCruiseForm = () => (
-    <div className="form-section">
-      <h3>Cruise Details</h3>
-      <div className="form-group">
-        <label htmlFor="cruise_destination">Cruise Destination/Region *</label>
-        <input
-          type="text"
-          id="cruise_destination"
-          name="cruise_destination"
-          value={formData.cruise_destination}
-          onChange={handleChange}
-          className={errors.cruise_destination ? 'error' : ''}
-          placeholder="e.g., Caribbean, Mediterranean, Alaska"
-        />
-        {errors.cruise_destination && <span className="error-message">{errors.cruise_destination}</span>}
-      </div>
-
-      <div className="form-row">
-        <div className="form-group">
-          <label htmlFor="cruise_departure_date">Preferred Departure Date *</label>
-          <input
-            type="date"
-            id="cruise_departure_date"
-            name="cruise_departure_date"
-            value={formData.cruise_departure_date}
-            onChange={handleChange}
-            className={errors.cruise_departure_date ? 'error' : ''}
-            min={new Date().toISOString().split('T')[0]}
-          />
-          {errors.cruise_departure_date && <span className="error-message">{errors.cruise_departure_date}</span>}
+    <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-8 animate-fadeIn">
+      <h3 className="text-xl font-bold text-[#055B75] mb-6 flex items-center gap-2">
+        <Ship className="w-5 h-5" /> Cruise Details
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="md:col-span-2">
+          <InputField label="Cruise Destination/Region" name="cruise_destination" required placeholder="e.g., Caribbean, Mediterranean" error={errors.cruise_destination} />
         </div>
+        <InputField label="Departure Date" name="cruise_departure_date" type="date" required error={errors.cruise_departure_date} />
 
-        <div className="form-group">
-          <label htmlFor="cruise_duration">Cruise Duration (Days) *</label>
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Duration (Days) *</label>
           <select
-            id="cruise_duration"
             name="cruise_duration"
             value={formData.cruise_duration}
             onChange={handleChange}
-            className={errors.cruise_duration ? 'error' : ''}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           >
-            {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].map(days => (
-              <option key={days} value={days}>{days} Days</option>
+            {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 21].map(d => (
+              <option key={d} value={d}>{d} Days</option>
             ))}
           </select>
-          {errors.cruise_duration && <span className="error-message">{errors.cruise_duration}</span>}
         </div>
       </div>
 
-      <div className="form-row">
-        <div className="form-group">
-          <label htmlFor="cruise_passengers">Number of Passengers *</label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Passengers *</label>
           <select
-            id="cruise_passengers"
             name="cruise_passengers"
             value={formData.cruise_passengers}
             onChange={handleChange}
-            className={errors.cruise_passengers ? 'error' : ''}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           >
-            {[...Array(8)].map((_, i) => (
+            {[...Array(6)].map((_, i) => (
               <option key={i + 1} value={i + 1}>{i + 1} Passenger{i !== 0 ? 's' : ''}</option>
             ))}
           </select>
-          {errors.cruise_passengers && <span className="error-message">{errors.cruise_passengers}</span>}
         </div>
-
-        <div className="form-group">
-          <label htmlFor="cruise_cabin_type">Preferred Cabin Type</label>
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Cabin Type</label>
           <select
-            id="cruise_cabin_type"
             name="cruise_cabin_type"
             value={formData.cruise_cabin_type}
             onChange={handleChange}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           >
             <option value="">Any Cabin Type</option>
             <option value="inside">Inside Cabin</option>
             <option value="oceanview">Ocean View</option>
             <option value="balcony">Balcony</option>
             <option value="suite">Suite</option>
-            <option value="penthouse">Penthouse Suite</option>
           </select>
         </div>
       </div>
@@ -659,99 +551,75 @@ const RequestPage = () => {
   );
 
   const renderPackageForm = () => (
-    <div className="form-section">
-      <h3>Vacation Package Details</h3>
-      <div className="form-group">
-        <label htmlFor="package_destination">Destination *</label>
-        <input
-          type="text"
-          id="package_destination"
-          name="package_destination"
-          value={formData.package_destination}
-          onChange={handleChange}
-          className={errors.package_destination ? 'error' : ''}
-          placeholder="e.g., Hawaii, Europe, Dubai"
-        />
-        {errors.package_destination && <span className="error-message">{errors.package_destination}</span>}
-      </div>
-
-      <div className="form-row">
-        <div className="form-group">
-          <label htmlFor="package_start_date">Start Date *</label>
-          <input
-            type="date"
-            id="package_start_date"
-            name="package_start_date"
-            value={formData.package_start_date}
-            onChange={handleChange}
-            className={errors.package_start_date ? 'error' : ''}
-            min={new Date().toISOString().split('T')[0]}
-          />
-          {errors.package_start_date && <span className="error-message">{errors.package_start_date}</span>}
+    <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-8 animate-fadeIn">
+      <h3 className="text-xl font-bold text-[#055B75] mb-6 flex items-center gap-2">
+        <Package className="w-5 h-5" /> Vacation Package
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="md:col-span-2">
+          <InputField label="Destination" name="package_destination" required placeholder="e.g., Hawaii, Europe" error={errors.package_destination} />
         </div>
-
-        <div className="form-group">
-          <label htmlFor="package_end_date">End Date *</label>
+        <InputField label="Start Date" name="package_start_date" type="date" required error={errors.package_start_date} />
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">End Date *</label>
           <input
             type="date"
-            id="package_end_date"
             name="package_end_date"
             value={formData.package_end_date}
             onChange={handleChange}
-            className={errors.package_end_date ? 'error' : ''}
             min={formData.package_start_date || new Date().toISOString().split('T')[0]}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           />
-          {errors.package_end_date && <span className="error-message">{errors.package_end_date}</span>}
+          {errors.package_end_date && <span className="text-sm text-red-500 font-medium">{errors.package_end_date}</span>}
         </div>
       </div>
 
-      <div className="form-row">
-        <div className="form-group">
-          <label htmlFor="package_travelers">Number of Travelers *</label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Travelers *</label>
           <select
-            id="package_travelers"
             name="package_travelers"
             value={formData.package_travelers}
             onChange={handleChange}
-            className={errors.package_travelers ? 'error' : ''}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           >
-            {[...Array(20)].map((_, i) => (
+            {[...Array(10)].map((_, i) => (
               <option key={i + 1} value={i + 1}>{i + 1} Traveler{i !== 0 ? 's' : ''}</option>
             ))}
           </select>
-          {errors.package_travelers && <span className="error-message">{errors.package_travelers}</span>}
         </div>
-
-        <div className="form-group">
-          <label htmlFor="package_budget_range">Budget Range</label>
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Budget Range</label>
           <select
-            id="package_budget_range"
             name="package_budget_range"
             value={formData.package_budget_range}
             onChange={handleChange}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           >
-            <option value="">Select Budget Range</option>
+            <option value="">Select Range</option>
             <option value="budget">$1,000 - $2,500</option>
             <option value="moderate">$2,500 - $5,000</option>
             <option value="luxury">$5,000 - $10,000</option>
-            <option value="ultra_luxury">$10,000+</option>
+            <option value="ultra">$10,000+</option>
           </select>
         </div>
       </div>
 
-      <div className="form-group">
-        <label>Interests & Activities</label>
-        <div className="checkbox-group">
-          {['Adventure', 'Culture', 'Relaxation', 'Food & Wine', 'Shopping', 'Wildlife', 'History', 'Beach', 'Mountains', 'City Exploration'].map(interest => (
-            <label key={interest} className="checkbox-label">
+      <div className="space-y-3">
+        <label className="block text-sm font-semibold text-gray-700">Interests & Activities</label>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {['Adventure', 'Culture', 'Relaxation', 'Food & Wine', 'Shopping', 'Wildlife', 'History', 'Beach'].map(interest => (
+            <label key={interest} className={`flex items-center p-3 rounded-lg border cursor-pointer transition-all
+              ${formData.package_interests.includes(interest) ? 'border-[#0066b2] bg-blue-50 text-[#0066b2]' : 'border-gray-200 hover:bg-gray-50'}`}>
               <input
                 type="checkbox"
                 name="package_interests"
                 value={interest}
                 checked={formData.package_interests.includes(interest)}
                 onChange={handleChange}
+                className="hidden"
               />
-              <span className="checkbox-text">{interest}</span>
+              <span className="text-sm font-medium">{interest}</span>
             </label>
           ))}
         </div>
@@ -760,195 +628,209 @@ const RequestPage = () => {
   );
 
   const renderGeneralForm = () => (
-    <div className="form-section">
-      <h3>General Inquiry</h3>
-      <div className="form-group">
-        <label htmlFor="inquiry_subject">Subject *</label>
-        <input
-          type="text"
-          id="inquiry_subject"
-          name="inquiry_subject"
-          value={formData.inquiry_subject}
-          onChange={handleChange}
-          className={errors.inquiry_subject ? 'error' : ''}
-          placeholder="Brief description of your inquiry"
-        />
-        {errors.inquiry_subject && <span className="error-message">{errors.inquiry_subject}</span>}
-      </div>
+    <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-8 animate-fadeIn">
+      <h3 className="text-xl font-bold text-[#055B75] mb-6 flex items-center gap-2">
+        <MessageSquare className="w-5 h-5" /> General Inquiry
+      </h3>
+      <InputField label="Subject" name="inquiry_subject" required placeholder="Brief subject" error={errors.inquiry_subject} className="mb-6" />
 
-      <div className="form-group">
-        <label htmlFor="inquiry_message">Message *</label>
+      <div className="space-y-1">
+        <label htmlFor="inquiry_message" className="block text-sm font-semibold text-gray-700">
+          Message *
+        </label>
         <textarea
           id="inquiry_message"
           name="inquiry_message"
           value={formData.inquiry_message}
           onChange={handleChange}
-          className={errors.inquiry_message ? 'error' : ''}
-          placeholder="Please provide details about your inquiry..."
+          placeholder="How can we help you?"
           rows="6"
+          className={`w-full px-4 py-3 rounded-lg border bg-white focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] transition-colors outline-none resize-none
+             ${errors.inquiry_message ? 'border-red-500' : 'border-gray-200'}`}
         />
-        {errors.inquiry_message && <span className="error-message">{errors.inquiry_message}</span>}
+        {errors.inquiry_message && <span className="text-sm text-red-500 font-medium">{errors.inquiry_message}</span>}
       </div>
     </div>
   );
 
   const renderAdditionalFields = () => (
-    <div className="form-section">
-      <h3>Additional Information</h3>
-      <div className="form-group">
-        <label htmlFor="budget_range">Budget Range</label>
-        <select
-          id="budget_range"
-          name="budget_range"
-          value={formData.budget_range}
-          onChange={handleChange}
-        >
-          <option value="">Select Budget Range</option>
-          <option value="budget">$1,000 - $2,500</option>
-          <option value="moderate">$2,500 - $5,000</option>
-          <option value="luxury">$5,000 - $10,000</option>
-          <option value="ultra_luxury">$10,000+</option>
-        </select>
+    <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-8">
+      <h3 className="text-xl font-bold text-[#055B75] mb-6">Additional Information</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Budget Range (Overall)</label>
+          <select
+            name="budget_range"
+            value={formData.budget_range}
+            onChange={handleChange}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
+          >
+            <option value="">Select Budget Range</option>
+            <option value="budget">$1,000 - $2,500</option>
+            <option value="moderate">$2,500 - $5,000</option>
+            <option value="luxury">$5,000 - $10,000</option>
+            <option value="ultra_luxury">$10,000+</option>
+          </select>
+        </div>
+
+        <div className="space-y-1">
+          <label className="block text-sm font-semibold text-gray-700">Preferred Contact Method</label>
+          <div className="flex gap-4 pt-2">
+            {['email', 'phone', 'whatsapp'].map(method => (
+              <label key={method} className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="preferred_contact_method"
+                  value={method}
+                  checked={formData.preferred_contact_method === method}
+                  onChange={handleChange}
+                  className="w-4 h-4 text-[#0066b2] border-gray-300 focus:ring-[#0066b2]"
+                />
+                <span className="ml-2 text-sm capitalize">{method}</span>
+              </label>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="form-group">
-        <label htmlFor="preferred_contact_method">Preferred Contact Method</label>
-        <select
-          id="preferred_contact_method"
-          name="preferred_contact_method"
-          value={formData.preferred_contact_method}
-          onChange={handleChange}
-        >
-          <option value="email">Email</option>
-          <option value="phone">Phone</option>
-          <option value="whatsapp">WhatsApp</option>
-        </select>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="special_requirements">Special Requirements or Preferences</label>
+      <div className="space-y-1">
+        <label className="block text-sm font-semibold text-gray-700">Special Requirements</label>
         <textarea
-          id="special_requirements"
           name="special_requirements"
           value={formData.special_requirements}
           onChange={handleChange}
-          placeholder="Any special requirements, dietary restrictions, accessibility needs, etc."
-          rows="4"
+          placeholder="Any dietary restrictions, accessibility needs, etc."
+          rows="3"
+          className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none resize-none"
         />
       </div>
     </div>
   );
 
   return (
-    <>
+    <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       <Navbar />
-      <div className="request-page">
-        <div className="request-container">
-          <div className="request-header">
-            <h1>Get Your Personalized Travel Quote</h1>
-            <p>Fill out the form below and our travel experts will create a customized itinerary just for you</p>
+
+      <div className="flex-grow">
+        {/* Header Section */}
+        <div className="bg-gradient-to-r from-[#055B75] to-[#034457] py-16 md:py-20 px-4 text-center relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2000')] bg-cover bg-center opacity-10 mix-blend-overlay"></div>
+          <div className="relative z-10 max-w-4xl mx-auto">
+            <h1 className="text-3xl md:text-5xl font-bold text-white mb-4 tracking-tight">
+              Start Your Journey
+            </h1>
+            <p className="text-lg md:text-xl text-blue-100 font-light max-w-2xl mx-auto">
+              Tell us about your dream trip, and our travel experts will curate the perfect itinerary for you.
+            </p>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 -mt-10 relative z-20 pb-20">
+          {/* Tabs */}
+          <div className="flex overflow-x-auto bg-white rounded-t-2xl shadow-sm border-b border-gray-100 hide-scrollbar">
+            {[
+              { id: 'inquiry', label: 'New Inquiry', icon: Send },
+              { id: 'modify', label: 'Modify Booking', icon: RefreshCw },
+              { id: 'cancel', label: 'Cancel Booking', icon: CheckCircle }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-8 py-5 text-sm font-semibold transition-all whitespace-nowrap
+                            ${activeTab === tab.id
+                    ? 'text-[#0066b2] border-b-2 border-[#0066b2] bg-blue-50/30'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+              >
+                <tab.icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          <div className="request-tabs">
-            <button
-              className={`tab-btn ${activeTab === 'inquiry' ? 'active' : ''}`}
-              onClick={() => setActiveTab('inquiry')}
-            >
-              Travel Inquiry
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'modify' ? 'active' : ''}`}
-              onClick={() => setActiveTab('modify')}
-            >
-              Modify Booking
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'cancel' ? 'active' : ''}`}
-              onClick={() => setActiveTab('cancel')}
-            >
-              Cancel Booking
-            </button>
-          </div>
-
-          <div className="request-content">
+          <div className="bg-white shadow-xl rounded-b-2xl rounded-tr-2xl min-h-[500px]">
             {activeTab === 'inquiry' && (
-              <form onSubmit={handleSubmit} className="request-form">
-                {/* Inquiry Type Selection */}
-                <div className="form-section">
-                  <h3>What type of travel are you interested in?</h3>
-                  {/* Enhanced Inquiry Type Cards */}
-                  <div className="inquiry-type-selector">
-                    {[
-                      { value: 'flight', label: 'Flight Tickets', desc: 'Domestic & International', icon: Plane, color: 'text-blue-500', bg: 'bg-blue-50' },
-                      { value: 'hotel', label: 'Hotel Stays', desc: 'Luxury & Budget', icon: Hotel, color: 'text-indigo-500', bg: 'bg-indigo-50' },
-                      { value: 'cruise', label: 'Cruises', desc: 'Ocean & River', icon: Ship, color: 'text-cyan-500', bg: 'bg-cyan-50' },
-                      { value: 'package', label: 'Packages', desc: 'All-inclusive Tours', icon: Package, color: 'text-rose-500', bg: 'bg-rose-50' },
-                      { value: 'general', label: 'General', desc: 'Custom Requests', icon: MessageSquare, color: 'text-violet-500', bg: 'bg-violet-50' }
-                    ].map((type) => {
-                      const Icon = type.icon;
-                      return (
+              <div className="p-6 md:p-10">
+                <form onSubmit={handleSubmit}>
+                  {/* Inquiry Type Cards */}
+                  <div className="mb-10">
+                    <h3 className="text-xl font-bold text-gray-800 mb-6">What are you looking for?</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                      {[
+                        { value: 'flight', label: 'Flights', icon: Plane },
+                        { value: 'hotel', label: 'Hotels', icon: Hotel },
+                        { value: 'cruise', label: 'Cruises', icon: Ship },
+                        { value: 'package', label: 'Packages', icon: Package },
+                        { value: 'general', label: 'General', icon: MessageSquare }
+                      ].map((type) => (
                         <div
                           key={type.value}
-                          className={`inquiry-type-card ${selectedInquiryType === type.value ? 'selected' : ''}`}
                           onClick={() => setSelectedInquiryType(type.value)}
+                          className={`flex flex-col items-center justify-center p-4 rounded-xl cursor-pointer border-2 transition-all duration-200
+                                                ${selectedInquiryType === type.value
+                              ? 'border-[#0066b2] bg-blue-50 text-[#0066b2] shadow-md transform scale-105'
+                              : 'border-transparent bg-gray-50 text-gray-600 hover:bg-gray-100 hover:border-gray-200'}`}
                         >
-                          <div className={`icon-wrapper ${type.bg} ${type.color} p-3 rounded-full mr-4`}>
-                            <Icon size={24} strokeWidth={1.5} />
-                          </div>
-                          <div className="card-content">
-                            <h4>{type.label}</h4>
-                            <p>{type.desc}</p>
-                          </div>
-                          <div className="card-radio">
-                            <div className={`radio-indicator ${selectedInquiryType === type.value ? 'active' : ''}`}>
-                              {selectedInquiryType === type.value && <CheckCircle size={16} className="text-white" />}
-                            </div>
-                          </div>
+                          <type.icon className={`w-8 h-8 mb-3 ${selectedInquiryType === type.value ? 'text-[#0066b2]' : 'text-gray-400'}`} />
+                          <span className="font-semibold text-sm">{type.label}</span>
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {renderCommonFields()}
+                  <hr className="border-gray-100 my-8" />
 
-                {selectedInquiryType === 'flight' && renderFlightForm()}
-                {selectedInquiryType === 'hotel' && renderHotelForm()}
-                {selectedInquiryType === 'cruise' && renderCruiseForm()}
-                {selectedInquiryType === 'package' && renderPackageForm()}
-                {selectedInquiryType === 'general' && renderGeneralForm()}
+                  {renderCommonFields()}
 
-                {renderAdditionalFields()}
+                  {selectedInquiryType === 'flight' && renderFlightForm()}
+                  {selectedInquiryType === 'hotel' && renderHotelForm()}
+                  {selectedInquiryType === 'cruise' && renderCruiseForm()}
+                  {selectedInquiryType === 'package' && renderPackageForm()}
+                  {selectedInquiryType === 'general' && renderGeneralForm()}
 
-                <div className="form-actions">
-                  <button type="submit" className="submit-btn" disabled={isSubmitting}>
-                    {isSubmitting ? 'Submitting...' : 'Submit Inquiry'}
-                  </button>
-                  <button type="button" className="clear-btn" onClick={handleClear}>
-                    Clear Form
-                  </button>
-                </div>
-              </form>
-            )}
+                  {renderAdditionalFields()}
 
-            {activeTab === 'modify' && (
-              <div className="tab-content">
-                <h3>Modify Existing Booking</h3>
-                <p>Feature coming soon! Please contact our support team for booking modifications.</p>
+                  <div className="flex flex-col md:flex-row items-center gap-4 mt-8 pt-6 border-t border-gray-100">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full md:w-auto px-8 py-4 bg-[#0066b2] hover:bg-[#005091] text-white text-lg font-bold rounded-xl shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-1 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                      {isSubmitting ? 'Submitting...' : 'Submit Request'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClear}
+                      className="w-full md:w-auto px-8 py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold rounded-xl transition-colors"
+                    >
+                      Clear Form
+                    </button>
+                  </div>
+                </form>
               </div>
             )}
 
-            {activeTab === 'cancel' && (
-              <div className="tab-content">
-                <h3>Cancel Booking</h3>
-                <p>Feature coming soon! Please contact our support team for booking cancellations.</p>
+            {activeTab !== 'inquiry' && (
+              <div className="flex flex-col items-center justify-center text-center p-20 text-gray-500">
+                <div className="bg-gray-100 p-6 rounded-full mb-6">
+                  <RefreshCw className="w-12 h-12 text-gray-400" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">Coming Soon</h3>
+                <p className="max-w-md">
+                  This feature is currently under development. To modify or cancel an existing booking, please contact our support team directly.
+                </p>
+                <button className="mt-8 px-6 py-3 bg-[#055B75] text-white font-semibold rounded-lg hover:bg-[#034457] transition-colors">
+                  Contact Support
+                </button>
               </div>
             )}
           </div>
         </div>
       </div>
+
       <Footer />
-    </>
+    </div>
   );
 };
 
