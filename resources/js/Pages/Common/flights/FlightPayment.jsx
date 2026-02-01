@@ -17,6 +17,7 @@ function FlightPayment() {
   const navigate = useNavigate();
   const [paymentData, setPaymentData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activePaymentMethod, setActivePaymentMethod] = useState("creditCard");
   const [cardDetails, setCardDetails] = useState({
     cardNumber: "",
@@ -54,8 +55,12 @@ function FlightPayment() {
     return () => clearInterval(timerId);
   }, [timeLeft]);
 
-  // Auto-redirect to ARC Pay hosted checkout when page loads
+  // Clear stale session flags and load payment data
   useEffect(() => {
+    // Always clear session flags on fresh page load to allow new payment attempts
+    sessionStorage.removeItem('arcPayRedirectInitiated');
+    sessionStorage.removeItem('arcPayFailedAttempts');
+    
     if (location.state) {
       setPaymentData(location.state);
       setLoading(false);
@@ -69,30 +74,18 @@ function FlightPayment() {
     const redirectToArcPay = async () => {
       if (!paymentData || processingPayment) return;
 
-      // Prevent multiple redirects - check both session and local storage
-      const redirectAttempted = sessionStorage.getItem('arcPayRedirectInitiated');
-      const failedAttempts = parseInt(sessionStorage.getItem('arcPayFailedAttempts') || '0');
-      
-      if (redirectAttempted || failedAttempts >= 1) {
-        console.log('⚠️ Redirect already attempted or failed, showing manual form');
+      // Check if already redirecting
+      const redirecting = sessionStorage.getItem('arcPayRedirecting');
+      if (redirecting === 'true') {
+        console.log('⚠️ Redirect already in progress');
         return;
       }
 
       try {
         setProcessingPayment(true);
-        sessionStorage.setItem('arcPayRedirectInitiated', 'true');
+        sessionStorage.setItem('arcPayRedirecting', 'true');
 
-        console.log('🔍 Auto-redirecting to ARC Pay...');
-        console.log('Payment data:', paymentData);
-
-        // Check gateway status first
-        const gatewayStatus = await ArcPayService.checkGatewayStatus();
-        if (!gatewayStatus.success || !gatewayStatus.gatewayOperational) {
-          console.warn('Gateway not available, showing manual form');
-          sessionStorage.setItem('arcPayFailedAttempts', '1');
-          setProcessingPayment(false);
-          return; // Fall back to showing the manual form
-        }
+        console.log('🔍 Redirecting to ARC Pay Hosted Checkout...');
 
         // Calculate amount
         const amount = paymentData?.calculatedFare?.totalAmount ||
@@ -127,7 +120,7 @@ function FlightPayment() {
           customerPhone: paymentData?.passengerData?.[0]?.phone,
           description: `Flight Booking - ${paymentData?.bookingDetails?.flight?.flightNumber || orderId}`,
           returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=flight`,
-          cancelUrl: `${window.location.origin}/flight-payment?cancelled=true`,
+          cancelUrl: `${window.location.origin}/flights?cancelled=true`,
           // Pass flight data for ARC Pay certification (airline data elements)
           flightData: paymentData?.selectedFlight?.originalOffer || paymentData?.selectedFlight,
           bookingData: bookingData
@@ -141,24 +134,26 @@ function FlightPayment() {
             bookingType: 'flight',
             amount: amount
           }));
+          // Redirect to ARC Pay hosted checkout page
           window.location.href = checkoutResponse.checkoutUrl;
         } else {
-          console.warn('Checkout creation failed, showing manual form');
-          sessionStorage.setItem('arcPayFailedAttempts', '1');
+          console.error('❌ Checkout creation failed:', checkoutResponse.error);
+          sessionStorage.removeItem('arcPayRedirecting');
           setProcessingPayment(false);
+          setError('Failed to create payment session. Please try again.');
         }
       } catch (error) {
-        console.error('Auto-redirect failed:', error);
-        sessionStorage.setItem('arcPayFailedAttempts', '1');
+        console.error('❌ Redirect failed:', error);
+        sessionStorage.removeItem('arcPayRedirecting');
         setProcessingPayment(false);
-        // Fall back to showing the manual form
+        setError('Payment service temporarily unavailable. Please try again.');
       }
     };
 
     // Small delay to ensure data is ready
-    const timer = setTimeout(redirectToArcPay, 500);
+    const timer = setTimeout(redirectToArcPay, 300);
     return () => clearTimeout(timer);
-  }, [paymentData, processingPayment, navigate]);
+  }, [paymentData, processingPayment]);
 
   useEffect(() => {
     const timer = setTimeout(() => setPageLoaded(true), 100);
@@ -368,9 +363,54 @@ function FlightPayment() {
     return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
   };
 
-  if (loading) {
+  // Show loading screen while redirecting to ARC Pay
+  if (loading || processingPayment) {
     return (
-      <LoadingSpinner text="Loading Secure Payment Gateway..." fullScreen={true} />
+      <div className="bg-gradient-to-b from-blue-50 via-white to-gray-100 min-h-screen flex items-center justify-center">
+        <div className="text-center p-8 bg-white rounded-2xl shadow-xl max-w-md mx-4">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mx-auto mb-6"></div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Redirecting to Secure Payment</h2>
+          <p className="text-gray-600 mb-4">Please wait while we connect you to our secure payment gateway...</p>
+          <div className="flex items-center justify-center gap-2 text-green-600">
+            <ShieldCheck className="h-5 w-5" />
+            <span className="text-sm font-medium">256-bit SSL Encrypted</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error screen if payment creation failed
+  if (error) {
+    return (
+      <div className="bg-gradient-to-b from-blue-50 via-white to-gray-100 min-h-screen flex items-center justify-center">
+        <div className="text-center p-8 bg-white rounded-2xl shadow-xl max-w-md mx-4">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="h-8 w-8 text-red-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Payment Error</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => {
+                setError(null);
+                setProcessingPayment(false);
+                sessionStorage.removeItem('arcPayRedirecting');
+                window.location.reload();
+              }}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => navigate('/flights')}
+              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors"
+            >
+              Back to Flights
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 
