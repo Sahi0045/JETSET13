@@ -130,7 +130,7 @@ const Navbar = ({ forceScrolled }) => {
           <div className="logo">
             <img
               src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png"
-              alt="JET SETTERS"
+              alt="Jetsetterss"
               className="h-16 w-auto object-contain"
             />
           </div>

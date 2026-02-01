@@ -22,7 +22,7 @@ const QuoteDetail = () => {
       setError(null);
 
       const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      
+
       if (!token) {
         setError('Authentication required. Please log in again.');
         setLoading(false);
@@ -281,8 +281,8 @@ const QuoteDetail = () => {
         {/* Inquiry Information */}
         {inquiry && (
           <div className="quote-card" style={{ marginBottom: '20px' }}>
-            <div className="payment-header" style={{ backgroundColor: '#0ea5e9', color: 'white' }}>
-              📋 Inquiry Information
+            <div className="payment-header" style={{ backgroundColor: '#055B75', color: 'white' }}>
+              Inquiry Information
             </div>
             <div className="payment-info">
               <div className="payment-row">
@@ -331,7 +331,7 @@ const QuoteDetail = () => {
         {bookingInfo ? (
           <div className="quote-card" style={{ marginBottom: '20px' }}>
             <div className="payment-header" style={{ backgroundColor: '#10b981', color: 'white' }}>
-              👤 Booking Information
+              Booking Information
               <span style={{ float: 'right', fontSize: '14px', fontWeight: 'normal' }}>
                 Status: {bookingInfo.status || 'N/A'}
               </span>
@@ -408,7 +408,7 @@ const QuoteDetail = () => {
               {/* Passport Information (Only for flights) */}
               {(bookingInfo.passport_number || bookingInfo.passport_expiry_date || bookingInfo.passport_issue_date || bookingInfo.passport_issuing_country) && (
                 <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #e2e8f0' }}>
-                  <h3 style={{ marginBottom: '15px', color: '#1e293b' }}>🛂 Passport Information</h3>
+                  <h3 style={{ marginBottom: '15px', color: '#1e293b' }}>Passport Information</h3>
                   {bookingInfo.passport_number && (
                     <div className="payment-row">
                       <span className="payment-label">Passport Number:</span>
@@ -439,7 +439,7 @@ const QuoteDetail = () => {
               {/* Emergency Contact */}
               {(bookingInfo.emergency_contact_name || bookingInfo.emergency_contact_phone || bookingInfo.emergency_contact_relationship) && (
                 <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #e2e8f0' }}>
-                  <h3 style={{ marginBottom: '15px', color: '#1e293b' }}>🚨 Emergency Contact</h3>
+                  <h3 style={{ marginBottom: '15px', color: '#1e293b' }}>Emergency Contact</h3>
                   {bookingInfo.emergency_contact_name && (
                     <div className="payment-row">
                       <span className="payment-label">Name:</span>
@@ -464,7 +464,7 @@ const QuoteDetail = () => {
               {/* Additional Booking Details */}
               {bookingInfo.booking_details && Object.keys(bookingInfo.booking_details).length > 0 && (
                 <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #e2e8f0' }}>
-                  <h3 style={{ marginBottom: '15px', color: '#1e293b' }}>📝 Additional Details</h3>
+                  <h3 style={{ marginBottom: '15px', color: '#1e293b' }}>Additional Details</h3>
                   <div className="payment-row">
                     <span className="payment-label">Details:</span>
                     <span className="payment-value" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
@@ -476,12 +476,12 @@ const QuoteDetail = () => {
 
               {/* Terms and Privacy */}
               <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #e2e8f0' }}>
-                <h3 style={{ marginBottom: '15px', color: '#1e293b' }}>✅ Acceptances</h3>
+                <h3 style={{ marginBottom: '15px', color: '#1e293b' }}>Acceptances</h3>
                 {bookingInfo.terms_accepted && (
                   <div className="payment-row">
                     <span className="payment-label">Terms Accepted:</span>
                     <span className="payment-value">
-                      ✅ Yes {bookingInfo.terms_accepted_at ? `(${formatDateTime(bookingInfo.terms_accepted_at)})` : ''}
+                      Yes {bookingInfo.terms_accepted_at ? `(${formatDateTime(bookingInfo.terms_accepted_at)})` : ''}
                     </span>
                   </div>
                 )}
@@ -497,7 +497,7 @@ const QuoteDetail = () => {
 
               {/* Timestamps */}
               <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #e2e8f0' }}>
-                <h3 style={{ marginBottom: '15px', color: '#1e293b' }}>⏰ Timestamps</h3>
+                <h3 style={{ marginBottom: '15px', color: '#1e293b' }}>Timestamps</h3>
                 {bookingInfo.submitted_at && (
                   <div className="payment-row">
                     <span className="payment-label">Submitted:</span>
@@ -528,7 +528,7 @@ const QuoteDetail = () => {
         ) : (
           <div className="quote-card" style={{ marginBottom: '20px' }}>
             <div className="payment-header" style={{ backgroundColor: '#f59e0b', color: 'white' }}>
-              👤 Booking Information
+              Booking Information
             </div>
             <div className="payment-info" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
               No booking information submitted yet.
@@ -539,8 +539,8 @@ const QuoteDetail = () => {
         {/* Payment Information */}
         {payment ? (
           <div className="quote-card" style={{ marginBottom: '20px' }}>
-            <div className="payment-header" style={{ backgroundColor: '#8b5cf6', color: 'white' }}>
-              💳 Payment Information
+            <div className="payment-header" style={{ backgroundColor: '#65B3CF', color: 'white' }}>
+              Payment Information
             </div>
             <div className="payment-info">
               <div className="payment-row">
@@ -582,7 +582,7 @@ const QuoteDetail = () => {
         ) : (
           <div className="quote-card" style={{ marginBottom: '20px' }}>
             <div className="payment-header" style={{ backgroundColor: '#6b7280', color: 'white' }}>
-              💳 Payment Information
+              Payment Information
             </div>
             <div className="payment-info" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
               No payment information available.

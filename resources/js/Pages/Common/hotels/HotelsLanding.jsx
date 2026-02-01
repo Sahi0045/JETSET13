@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Users, Star, ArrowRight, Sparkles, Shield, Clock, Award, Loader2 } from 'lucide-react';
+import { Search, MapPin, Calendar, Users, Star, ArrowRight, Sparkles, Shield, Clock, Award, Loader2, CheckCircle } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
+import supabase from '../../../lib/supabase';
 
 const HotelsLanding = () => {
     const navigate = useNavigate();
@@ -17,7 +18,13 @@ const HotelsLanding = () => {
     const [guests, setGuests] = useState({ rooms: 1, adults: 2, children: 0 });
     const [showGuestDropdown, setShowGuestDropdown] = useState(false);
     const [showDestinationSuggestions, setShowDestinationSuggestions] = useState(false);
-    
+
+    // Newsletter subscription state
+    const [subscriptionEmail, setSubscriptionEmail] = useState('');
+    const [subscriptionSubmitted, setSubscriptionSubmitted] = useState(false);
+    const [subscriptionError, setSubscriptionError] = useState('');
+    const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+
     // API-based suggestions
     const [suggestions, setSuggestions] = useState([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
@@ -50,12 +57,12 @@ const HotelsLanding = () => {
     // Handle destination input change with debounce
     const handleDestinationChange = (value) => {
         setDestination(value);
-        
+
         // Clear existing timer
         if (debounceTimer.current) {
             clearTimeout(debounceTimer.current);
         }
-        
+
         // Set new timer for debounced search
         debounceTimer.current = setTimeout(() => {
             searchLocations(value);
@@ -151,6 +158,54 @@ const HotelsLanding = () => {
 
         // Navigate to search results
         navigate(`/hotels/search?${params.toString()}`);
+    };
+
+    // Handle newsletter subscription
+    const handleSubscription = async (e) => {
+        e.preventDefault();
+        setSubscriptionError('');
+        setSubscriptionLoading(true);
+
+        try {
+            const { data, error } = await supabase
+                .from('subscriptions')
+                .insert([
+                    { email: subscriptionEmail, status: 'active' }
+                ]);
+
+            if (error) {
+                if (error.code === '23505') { // Unique violation
+                    setSubscriptionError('This email is already subscribed.');
+                } else {
+                    setSubscriptionError('An error occurred. Please try again.');
+                }
+                return;
+            }
+
+            // TODO: Re-enable email notifications after Vercel Pro upgrade
+            // try {
+            //     await fetch('/api/email', {
+            //         method: 'POST',
+            //         headers: { 'Content-Type': 'application/json' },
+            //         body: JSON.stringify({ type: 'subscription', email: subscriptionEmail, source: 'hotels' })
+            //     });
+            //     console.log('Email notifications sent successfully');
+            // } catch (emailError) {
+            //     console.error('Email notification error:', emailError);
+            // }
+
+            setSubscriptionSubmitted(true);
+            setSubscriptionEmail('');
+
+            // Reset the success message after 3 seconds
+            setTimeout(() => {
+                setSubscriptionSubmitted(false);
+            }, 3000);
+        } catch (error) {
+            setSubscriptionError('An unexpected error occurred. Please try again.');
+        } finally {
+            setSubscriptionLoading(false);
+        }
     };
 
     return (
@@ -460,19 +515,42 @@ const HotelsLanding = () => {
                         </div>
 
                         <div className="w-full lg:w-auto flex-shrink-0">
-                            <form className="flex flex-col sm:flex-row gap-3">
-                                <input
-                                    type="email"
-                                    placeholder="Enter your email address"
-                                    className="px-5 py-3 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-yellow-400 bg-white/95 w-full sm:w-72 shadow-inner"
-                                />
-                                <button className="bg-yellow-400 text-[#055B75] px-6 py-3 rounded-xl font-bold hover:bg-yellow-300 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 whitespace-nowrap">
-                                    Claim Offer
-                                </button>
-                            </form>
-                            <p className="text-blue-200 text-xs mt-3 text-center sm:text-left">
-                                No spam, unsubscribe anytime.
-                            </p>
+                            {subscriptionSubmitted ? (
+                                <div className="bg-green-500/20 backdrop-blur-sm rounded-xl p-4 text-white">
+                                    <div className="flex items-center justify-center gap-2">
+                                        <CheckCircle className="text-green-400" size={20} />
+                                        <span>Successfully subscribed! Thank you.</span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <form onSubmit={handleSubscription} className="flex flex-col sm:flex-row gap-3">
+                                        <input
+                                            type="email"
+                                            placeholder="Enter your email address"
+                                            value={subscriptionEmail}
+                                            onChange={(e) => setSubscriptionEmail(e.target.value)}
+                                            className="px-5 py-3 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-yellow-400 bg-white/95 w-full sm:w-72 shadow-inner"
+                                            required
+                                        />
+                                        <button
+                                            type="submit"
+                                            disabled={subscriptionLoading}
+                                            className="bg-yellow-400 text-[#055B75] px-6 py-3 rounded-xl font-bold hover:bg-yellow-300 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 whitespace-nowrap disabled:opacity-50"
+                                        >
+                                            {subscriptionLoading ? 'Subscribing...' : 'Claim Offer'}
+                                        </button>
+                                    </form>
+                                    {subscriptionError && (
+                                        <p className="text-red-300 text-xs mt-2 text-center sm:text-left">
+                                            {subscriptionError}
+                                        </p>
+                                    )}
+                                    <p className="text-blue-200 text-xs mt-3 text-center sm:text-left">
+                                        No spam, unsubscribe anytime.
+                                    </p>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

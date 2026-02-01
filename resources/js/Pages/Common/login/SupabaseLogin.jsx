@@ -31,10 +31,10 @@ export default function SupabaseLogin() {
         try {
             setProcessing(true);
             setErrors({});
-            
+
             // Store intended destination for after auth
             sessionStorage.setItem('auth_redirect', '/my-trips');
-            
+
             const { error } = await signInWithOAuth('google', {
                 queryParams: {
                     access_type: 'offline',
@@ -50,8 +50,8 @@ export default function SupabaseLogin() {
         } catch (error) {
             console.error('Google login error:', error);
             setProcessing(false);
-            setErrors({ 
-                login: error.message || 'Failed to sign in with Google. Please try again.' 
+            setErrors({
+                login: error.message || 'Failed to sign in with Google. Please try again.'
             });
         }
     };
@@ -70,31 +70,31 @@ export default function SupabaseLogin() {
 
     const validateForm = () => {
         const newErrors = {};
-        
+
         if (!data.email.trim()) {
             newErrors.email = 'Email is required';
         } else if (!/\S+@\S+\.\S+/.test(data.email)) {
             newErrors.email = 'Email is invalid';
         }
-        
+
         if (!data.password) {
             newErrors.password = 'Password is required';
         }
-        
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
     const submit = async (e) => {
         e.preventDefault();
-        
+
         if (!validateForm()) {
             return;
         }
-        
+
         setProcessing(true);
         setErrors({});
-        
+
         try {
             const { data: authData, error } = await signIn(data.email, data.password);
 
@@ -105,20 +105,20 @@ export default function SupabaseLogin() {
             }
 
             console.log('Login successful:', authData);
-            
+
             // Check if user has completed profile
             if (authData.user) {
                 const userMetadata = authData.user.user_metadata || {};
                 const profileCompleted = userMetadata.profile_completed;
-                
+
                 // Check if user exists in database with complete info
                 const { data: dbUser } = await supabase.from('users')
                     .select('first_name, last_name')
                     .eq('id', authData.user.id)
                     .single();
-                
+
                 const hasCompleteProfile = dbUser && dbUser.first_name && dbUser.last_name;
-                
+
                 // Wait a moment for auth state to update, then navigate
                 setTimeout(() => {
                     if (profileCompleted || hasCompleteProfile) {
@@ -150,9 +150,9 @@ export default function SupabaseLogin() {
                 <div className="login-content">
                     <h2 className="login-title">
                         <FaLock className="inline mr-2" />
-                        Login with Supabase
+                        Let's travel with Jetsetters
                     </h2>
-                    
+
                     {authError && (
                         <div className="error-message mb-4">
                             {authError}
@@ -177,7 +177,7 @@ export default function SupabaseLogin() {
                             />
                             {errors.email && <div className="error-message">{errors.email}</div>}
                         </div>
-                        
+
                         <div className="form-group">
                             <label htmlFor="password">
                                 <FaLock className="inline mr-2" />
@@ -205,11 +205,11 @@ export default function SupabaseLogin() {
                             </div>
                             {errors.password && <div className="error-message">{errors.password}</div>}
                         </div>
-                        
+
                         <div className="form-options">
                             <label className="remember-me">
-                                <input 
-                                    type="checkbox" 
+                                <input
+                                    type="checkbox"
                                     name="rememberMe"
                                     checked={data.rememberMe}
                                     onChange={handleChange}
@@ -221,9 +221,9 @@ export default function SupabaseLogin() {
                                 Forgot Password?
                             </Link>
                         </div>
-                        
-                        <button 
-                            className="login-button" 
+
+                        <button
+                            className="login-button"
                             disabled={processing || authLoading}
                         >
                             {processing || authLoading ? (
@@ -235,15 +235,15 @@ export default function SupabaseLogin() {
                                 'Login'
                             )}
                         </button>
-                        
+
                         {errors.login && <div className="error-message">{errors.login}</div>}
-                        
+
                         <div className="login-divider">or continue with</div>
-                        
+
                         <div className="social-login">
-                            <button 
-                                type="button" 
-                                className="social-button google" 
+                            <button
+                                type="button"
+                                className="social-button google"
                                 onClick={handleGoogleSignIn}
                                 disabled={processing || authLoading}
                                 title="Sign in with Google"
@@ -252,12 +252,12 @@ export default function SupabaseLogin() {
                                 <span>Google</span>
                             </button>
                         </div>
-                        
+
                         <div className="signup-link">
                             Don't have an account? <Link to="/supabase-signup" className="text-link">Sign Up</Link>
                         </div>
                     </form>
-                    
+
                     <p className="login-footer">
                         By proceeding, you agree to our <Link to="/privacy" className="text-link">Privacy Policy</Link> and <Link to="/terms" className="text-link">Terms of Service</Link>.
                     </p>

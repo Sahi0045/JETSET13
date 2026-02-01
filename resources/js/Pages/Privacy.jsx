@@ -9,10 +9,10 @@ const Privacy = () => {
   return (
     <>
       <Helmet>
-        <title>Privacy Policy - JET SETTERS</title>
-        <meta name="description" content="JET SETTERS privacy policy, data protection practices, and your rights." />
+        <title>Privacy Policy - Jetsetterss</title>
+        <meta name="description" content="Jetsetterss privacy policy, data protection practices, and your rights." />
       </Helmet>
-      
+
       <Container className="py-5">
         <Row className="justify-content-center mb-4">
           <Col md={10}>
@@ -24,8 +24,8 @@ const Privacy = () => {
                     <h2>Introduction</h2>
                     <p>Last Updated: {new Date().toLocaleDateString()}</p>
                     <p>
-                      At JET SETTERS, we value your privacy and are committed to protecting your personal data. 
-                      This Privacy Policy will inform you about how we look after your personal data when you 
+                      At Jetsetterss, we value your privacy and are committed to protecting your personal data.
+                      This Privacy Policy will inform you about how we look after your personal data when you
                       visit our website and tell you about your privacy rights and how the law protects you.
                     </p>
                   </section>
@@ -33,7 +33,7 @@ const Privacy = () => {
                   <section className="mb-4">
                     <h2>The Data We Collect About You</h2>
                     <p>
-                      Personal data means any information about an individual from which that person can be identified. 
+                      Personal data means any information about an individual from which that person can be identified.
                       We may collect, use, store and transfer different kinds of personal data about you which we have grouped as follows:
                     </p>
                     <ul>
@@ -64,8 +64,8 @@ const Privacy = () => {
                   <section className="mb-4">
                     <h2>Cookies</h2>
                     <p>
-                      Our website uses cookies to distinguish you from other users of our website. This helps us to provide 
-                      you with a good experience when you browse our website and also allows us to improve our site. 
+                      Our website uses cookies to distinguish you from other users of our website. This helps us to provide
+                      you with a good experience when you browse our website and also allows us to improve our site.
                       For detailed information on the cookies we use and the purposes for which we use them, see our Cookie Policy.
                     </p>
                   </section>
@@ -73,9 +73,9 @@ const Privacy = () => {
                   <section className="mb-4">
                     <h2>Data Security</h2>
                     <p>
-                      We have put in place appropriate security measures to prevent your personal data from being 
-                      accidentally lost, used, or accessed in an unauthorized way, altered, or disclosed. In addition, 
-                      we limit access to your personal data to those employees, agents, contractors, and other third 
+                      We have put in place appropriate security measures to prevent your personal data from being
+                      accidentally lost, used, or accessed in an unauthorized way, altered, or disclosed. In addition,
+                      we limit access to your personal data to those employees, agents, contractors, and other third
                       parties who have a business need to know.
                     </p>
                   </section>
@@ -93,7 +93,7 @@ const Privacy = () => {
                       <li>Right to withdraw consent.</li>
                     </ul>
                     <p>
-                      You will not have to pay a fee to access your personal data (or to exercise any of the other rights). 
+                      You will not have to pay a fee to access your personal data (or to exercise any of the other rights).
                       However, we may charge a reasonable fee if your request is clearly unfounded, repetitive, or excessive.
                     </p>
                   </section>
@@ -101,7 +101,7 @@ const Privacy = () => {
                   <section className="mb-4">
                     <h2>Contact Us</h2>
                     <p>
-                      If you have any questions about this Privacy Policy, including any requests to exercise your 
+                      If you have any questions about this Privacy Policy, including any requests to exercise your
                       legal rights, please contact us at:
                     </p>
                     <p>

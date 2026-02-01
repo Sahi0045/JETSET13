@@ -38,7 +38,7 @@ const AdminDashboard = () => {
 
       // Get token from localStorage
       const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      
+
       if (!token) {
         console.error('No authentication token found');
         return;
@@ -79,19 +79,19 @@ const AdminDashboard = () => {
         headers,
         credentials: 'include'
       });
-      
+
       if (!inquiriesResponse.ok) {
         console.warn('Failed to fetch inquiries:', inquiriesResponse.status, inquiriesResponse.statusText);
         setRecentInquiries([]);
         return;
       }
-      
+
       const inquiriesData = await inquiriesResponse.json();
       console.log('Inquiries API response:', inquiriesData);
 
       // Handle different response structures
       let inquiries = [];
-      
+
       if (inquiriesData && inquiriesData.success) {
         if (Array.isArray(inquiriesData.data)) {
           // Direct array response: { success: true, data: [...] }
@@ -107,13 +107,13 @@ const AdminDashboard = () => {
           inquiries = inquiriesData.inquiries;
         }
       }
-      
+
       // Final safety check - ensure it's always an array
       if (!Array.isArray(inquiries)) {
         console.warn('Inquiries is not an array, received:', typeof inquiries, inquiries);
         inquiries = [];
       }
-      
+
       setRecentInquiries(inquiries);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -138,11 +138,11 @@ const AdminDashboard = () => {
 
   const getInquiryTypeIcon = (type) => {
     switch (type) {
-      case 'flight': return '✈️';
-      case 'hotel': return '🏨';
-      case 'cruise': return '🚢';
-      case 'package': return '🎒';
-      default: return '💬';
+      case 'flight': return 'FL';
+      case 'hotel': return 'HT';
+      case 'cruise': return 'CR';
+      case 'package': return 'PK';
+      default: return 'GN';
     }
   };
 
@@ -261,7 +261,7 @@ const AdminDashboard = () => {
       {/* Statistics Grid */}
       <div className="stats-grid">
         <StatCard
-          icon="📊"
+          icon="#"
           title="Total Inquiries"
           value={stats.totalInquiries}
           change={12}
@@ -269,7 +269,7 @@ const AdminDashboard = () => {
           color="blue"
         />
         <StatCard
-          icon="⏳"
+          icon="P"
           title="Pending"
           value={stats.pendingInquiries}
           change={-5}
@@ -277,7 +277,7 @@ const AdminDashboard = () => {
           color="yellow"
         />
         <StatCard
-          icon="⚙️"
+          icon="W"
           title="Processing"
           value={stats.processingInquiries}
           change={8}
@@ -285,7 +285,7 @@ const AdminDashboard = () => {
           color="purple"
         />
         <StatCard
-          icon="💰"
+          icon="Q"
           title="Quoted"
           value={stats.quotedInquiries}
           change={15}
@@ -293,7 +293,7 @@ const AdminDashboard = () => {
           color="green"
         />
         <StatCard
-          icon="✅"
+          icon="B"
           title="Booked"
           value={stats.bookedInquiries}
           change={22}
@@ -301,7 +301,7 @@ const AdminDashboard = () => {
           color="success"
         />
         <StatCard
-          icon="💵"
+          icon="$"
           title="Revenue"
           value={formatCurrency(stats.totalRevenue)}
           change={18}
@@ -380,7 +380,7 @@ const AdminDashboard = () => {
             {(() => {
               // Defensive check - ensure recentInquiries is always an array
               const safeInquiries = Array.isArray(recentInquiries) ? recentInquiries : [];
-              
+
               if (safeInquiries.length === 0) {
                 return (
                   <div className="empty-state">
@@ -390,7 +390,7 @@ const AdminDashboard = () => {
                   </div>
                 );
               }
-              
+
               return safeInquiries.map(inquiry => (
                 <div key={inquiry.id} className="activity-item">
                   <div className="activity-icon">

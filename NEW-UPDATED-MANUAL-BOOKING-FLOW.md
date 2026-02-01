@@ -1,6 +1,6 @@
 # 📋 **NEW UPDATED MANUAL BOOKING FLOW - COMPLETE SYSTEM DOCUMENTATION**
 
-**Project:** JET SETTERS Travel Management System  
+**Project:** Jetsetterss Travel Management System  
 **Date:** November 6, 2024  
 **Version:** 2.0 - Complete Manual Booking System  
 **Status:** Production-Ready Core Features  
@@ -9,7 +9,7 @@
 
 ## 🎯 **EXECUTIVE SUMMARY**
 
-This document provides comprehensive technical documentation for the **JET SETTERS Travel Management System** - a complete manual booking workflow from customer inquiry to confirmed booking. The system handles travel inquiries, admin management, quote generation, and provides a foundation for payment integration.
+This document provides comprehensive technical documentation for the **Jetsetterss Travel Management System** - a complete manual booking workflow from customer inquiry to confirmed booking. The system handles travel inquiries, admin management, quote generation, and provides a foundation for payment integration.
 
 ### **System Architecture:**
 - **Frontend:** React + Vite (Port 5173)

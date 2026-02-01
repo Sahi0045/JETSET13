@@ -586,142 +586,142 @@ const HomePage = () => {
       <div className="home-page-wrapper" style={styles.homePageWrapper}>
 
 
-      {/* Special Offer Banner - positioned with absolute for better placement */}
-      <div className="relative">
-        <div className={`w-full text-center bg-gradient-to-r from-blue-900/90 via-blue-800/90 to-blue-900/90 py-3 backdrop-blur-sm z-20 border-y border-blue-500/30 ${isMobileView ? 'px-3' : ''}`}>
-          <div className="container mx-auto px-2 flex justify-center items-center flex-wrap">
-            <Sparkles className="h-5 w-5 text-yellow-300 mr-2 flex-shrink-0" />
-            <p className={`text-white ${isMobileView ? 'text-xs' : 'text-base'} font-medium tracking-wide`}>
-              <span className="font-bold">Self-Service Portal will be available very soon...</span> Meanwhile please Call <span className="text-yellow-300 font-bold whitespace-nowrap">((877) 538-7380)</span> or Email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a> for all your travel needs. Team Jetsetters!
-            </p>
+        {/* Special Offer Banner - positioned with absolute for better placement */}
+        <div className="relative">
+          <div className={`w-full text-center bg-gradient-to-r from-[#055B75] to-[#034457] py-2 backdrop-blur-sm z-20 border-y border-white/10 ${isMobileView ? 'px-3' : ''}`}>
+            <div className="container mx-auto px-2 flex justify-center items-center flex-wrap">
+              <Sparkles className="h-5 w-5 text-yellow-300 mr-2 flex-shrink-0" />
+              <p className={`text-white ${isMobileView ? 'text-xs' : 'text-sm'} font-medium tracking-wide whitespace-nowrap overflow-hidden text-ellipsis`}>
+                <span className="font-bold">Self-Service Portal Coming Soon!</span> For bookings, call <span className="text-yellow-300 font-bold">(877) 538-7380</span> or email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Main content */}
-      <main style={styles.main}>
-        {/* Hero Section - immediately below navbar */}
-        <section id="hero" style={{ ...styles.section, ...styles.firstSection }}>
-          <HeroSection />
-        </section>
+        {/* Main content */}
+        <main style={styles.main}>
+          {/* Hero Section - immediately below navbar */}
+          <section id="hero" style={{ ...styles.section, ...styles.firstSection }}>
+            <HeroSection />
+          </section>
 
-        {/* Primary Content Sections */}
-        <section id="destinations" style={styles.section}>
-          <DestinationSection />
-        </section>
+          {/* Primary Content Sections */}
+          <section id="destinations" style={styles.section}>
+            <DestinationSection />
+          </section>
 
-        <section id="cruise-lines" style={styles.section}>
-          <CruiseLineSection />
-        </section>
+          <section id="cruise-lines" style={styles.section}>
+            <CruiseLineSection />
+          </section>
 
-        {/* Promotional and Partners */}
-        <section id="promo" className="mb-0">
-          <PromoSection />
-        </section>
+          {/* Promotional and Partners */}
+          <section id="promo" className="mb-0">
+            <PromoSection />
+          </section>
 
-        {/* Unified Trust & Testimonials Section */}
-        <section className="bg-white">
-          <TrustIndicators />
-        </section>
+          {/* Unified Trust & Testimonials Section */}
+          <section className="bg-white">
+            <TrustIndicators />
+          </section>
 
-        <section className="bg-gradient-to-r from-[#055B75] to-[#034457]">
-          <TestimonialBanner />
-        </section>
+          <section className="bg-gradient-to-r from-[#055B75] to-[#034457]">
+            <TestimonialBanner />
+          </section>
 
 
-        {/* Simple Email Subscription Section */}
-        <section className="subscription-section py-4 relative" style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1599640842225-85d111c60e6b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1974&q=80')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat"
-        }}>
-          {/* Overlay with matched gradient */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#055B75] to-[#034457] opacity-95"></div>
+          {/* Simple Email Subscription Section */}
+          <section className="subscription-section py-4 relative" style={{
+            backgroundImage: "url('https://images.unsplash.com/photo-1599640842225-85d111c60e6b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1974&q=80')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat"
+          }}>
+            {/* Overlay with matched gradient */}
+            <div className="absolute inset-0 bg-gradient-to-r from-[#055B75] to-[#034457] opacity-95"></div>
 
-          <div className="container mx-auto px-4 md:px-6 relative z-10 py-2">
-            <div className="max-w-md mx-auto bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-3 md:p-4 border border-white border-opacity-20 shadow-lg">
-              <div className="flex flex-col items-center text-center">
-                <div className="mb-1">
-                  <FaEnvelope className="text-white text-lg" />
-                </div>
-                <h3 className="text-lg md:text-xl font-bold text-white mb-1">Stay Updated</h3>
-                <p className="text-white text-opacity-90 mb-3 text-xs md:text-sm">Subscribe to receive the latest cruise deals and travel tips.</p>
-
-                <div className="flex items-center gap-2 mb-3 hidden md:flex">
-                  <div className="flex -space-x-2">
-                    <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1491528323818-fdd1faba62cc?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                    <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1550525811-e5869dd03032?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                    <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2.25&w=256&h=256&q=80" alt="" />
+            <div className="container mx-auto px-4 md:px-6 relative z-10 py-2">
+              <div className="max-w-md mx-auto bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-3 md:p-4 border border-white border-opacity-20 shadow-lg">
+                <div className="flex flex-col items-center text-center">
+                  <div className="mb-1">
+                    <FaEnvelope className="text-white text-lg" />
                   </div>
-                  <span className="text-xs text-white">Join 25,000+ subscribers</span>
-                </div>
+                  <h3 className="text-lg md:text-xl font-bold text-white mb-1">Stay Updated</h3>
+                  <p className="text-white text-opacity-90 mb-3 text-xs md:text-sm">Subscribe to receive the latest cruise deals and travel tips.</p>
 
-                {subscriptionSubmitted ? (
-                  <div className="w-full bg-green-500 bg-opacity-20 backdrop-blur-sm rounded-lg p-3 text-white animate-fadeIn">
-                    <div className="flex items-center justify-center text-sm">
-                      <FaCheckCircle className="text-green-400 mr-2" />
-                      <span>Successfully subscribed! Thank you.</span>
+                  <div className="flex items-center gap-2 mb-3 hidden md:flex">
+                    <div className="flex -space-x-2">
+                      <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1491528323818-fdd1faba62cc?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
+                      <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1550525811-e5869dd03032?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
+                      <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2.25&w=256&h=256&q=80" alt="" />
                     </div>
+                    <span className="text-xs text-white">Join 25,000+ subscribers</span>
                   </div>
-                ) : (
-                  <form onSubmit={handleSubscriptionSubmit} className="w-full">
-                    <div className="flex flex-col md:flex-row md:items-center gap-2">
-                      <input
-                        type="email"
-                        value={subscriptionEmail}
-                        onChange={(e) => setSubscriptionEmail(e.target.value)}
-                        placeholder="Enter your email"
-                        className="w-full md:flex-1 px-3 py-2 text-sm rounded-lg md:rounded-l-lg md:rounded-r-none bg-white border-0 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                        required
-                      />
-                      <button
-                        type="submit"
-                        className="w-full md:w-auto mt-1 md:mt-0 px-3 py-2 text-sm bg-[#65B3CF] hover:bg-[#5aa3be] text-white font-semibold rounded-lg md:rounded-l-none md:rounded-r-lg flex items-center justify-center md:justify-start transition-colors"
-                      >
-                        Subscribe
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 ml-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                        </svg>
-                      </button>
-                    </div>
-                    {subscriptionError && (
-                      <div className="mt-2 text-red-400 text-sm text-center">
-                        {subscriptionError}
+
+                  {subscriptionSubmitted ? (
+                    <div className="w-full bg-green-500 bg-opacity-20 backdrop-blur-sm rounded-lg p-3 text-white animate-fadeIn">
+                      <div className="flex items-center justify-center text-sm">
+                        <FaCheckCircle className="text-green-400 mr-2" />
+                        <span>Successfully subscribed! Thank you.</span>
                       </div>
-                    )}
-                  </form>
-                )}
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSubscriptionSubmit} className="w-full">
+                      <div className="flex flex-col md:flex-row md:items-center gap-2">
+                        <input
+                          type="email"
+                          value={subscriptionEmail}
+                          onChange={(e) => setSubscriptionEmail(e.target.value)}
+                          placeholder="Enter your email"
+                          className="w-full md:flex-1 px-3 py-2 text-sm rounded-lg md:rounded-l-lg md:rounded-r-none bg-white border-0 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          required
+                        />
+                        <button
+                          type="submit"
+                          className="w-full md:w-auto mt-1 md:mt-0 px-3 py-2 text-sm bg-[#65B3CF] hover:bg-[#5aa3be] text-white font-semibold rounded-lg md:rounded-l-none md:rounded-r-lg flex items-center justify-center md:justify-start transition-colors"
+                        >
+                          Subscribe
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 ml-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                          </svg>
+                        </button>
+                      </div>
+                      {subscriptionError && (
+                        <div className="mt-2 text-red-400 text-sm text-center">
+                          {subscriptionError}
+                        </div>
+                      )}
+                    </form>
+                  )}
 
-                <div className="mt-2">
-                  <p className="text-white text-opacity-80 text-xs">By subscribing, you agree to our <a href="#" className="underline hover:text-white">Privacy Policy</a></p>
+                  <div className="mt-2">
+                    <p className="text-white text-opacity-80 text-xs">By subscribing, you agree to our <a href="#" className="underline hover:text-white">Privacy Policy</a></p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-      </main>
+          </section>
+        </main>
 
-      {/* <PopularPorts /> */}
+        {/* <PopularPorts /> */}
 
-      {/* <NewsletterSection /> */}
+        {/* <NewsletterSection /> */}
 
-      {/* <ContactSection /> */}
-
+        {/* <ContactSection /> */}
 
 
-      {/* Mobile scroll to top button - only visible on small screens */}
-      <button
-        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-        className="fixed bottom-6 right-6 bg-blue-600 text-white p-3 rounded-full shadow-lg z-50 hover:bg-blue-700 transition-colors md:hidden"
-        aria-label="Scroll to top"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-        </svg>
-      </button>
-    </div>
-    <Footer />
+
+        {/* Mobile scroll to top button - only visible on small screens */}
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-6 right-6 bg-blue-600 text-white p-3 rounded-full shadow-lg z-50 hover:bg-blue-700 transition-colors md:hidden"
+          aria-label="Scroll to top"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+          </svg>
+        </button>
+      </div>
+      <Footer />
     </>
   );
 };

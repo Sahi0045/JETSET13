@@ -6,7 +6,7 @@ const AIChatbot = () => {
   const [messages, setMessages] = useState([
     {
       type: 'bot',
-      content: 'Hi there! I\'m the JET SETTERS AI assistant. How can I help you today?',
+      content: 'Hi there! I\'m the Jetsetterss AI assistant. How can I help you today?',
     }
   ]);
   const [inputValue, setInputValue] = useState('');
@@ -39,24 +39,24 @@ const AIChatbot = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     if (!inputValue.trim()) return;
-    
+
     // Add user message
     const userMessage = { type: 'user', content: inputValue };
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
-    
+
     // Show typing indicator
     setIsTyping(true);
-    
+
     // Simulate AI response based on authentication status
     setTimeout(() => {
       let botResponse;
-      
+
       // Very basic AI logic - in a real app this would call an API or more sophisticated logic
       const input = inputValue.toLowerCase();
-      
+
       if (input.includes('flight') || input.includes('fly')) {
         botResponse = {
           type: 'bot',
@@ -94,7 +94,7 @@ const AIChatbot = () => {
         if (isAuthenticated) {
           botResponse = {
             type: 'bot',
-            content: 'You\'re currently logged in to your JET SETTERS account. Would you like me to help you manage your profile or view your trip history?'
+            content: 'You\'re currently logged in to your Jetsetterss account. Would you like me to help you manage your profile or view your trip history?'
           };
         } else {
           botResponse = {
@@ -106,12 +106,12 @@ const AIChatbot = () => {
         // Default response
         botResponse = {
           type: 'bot',
-          content: isAuthenticated ? 
-            'Thank you for your question. As a logged-in customer, I can provide personalized assistance. How else can I help with your travel plans?' : 
+          content: isAuthenticated ?
+            'Thank you for your question. As a logged-in customer, I can provide personalized assistance. How else can I help with your travel plans?' :
             'Thanks for your question. For more personalized assistance, consider logging in or creating an account. How else can I help you today?'
         };
       }
-      
+
       setIsTyping(false);
       setMessages(prev => [...prev, botResponse]);
     }, 1500);
@@ -120,8 +120,8 @@ const AIChatbot = () => {
   return (
     <div className="ai-chatbot-container">
       {/* Chat toggle button */}
-      <button 
-        className={`chat-toggle-button ${isOpen ? 'open' : ''}`} 
+      <button
+        className={`chat-toggle-button ${isOpen ? 'open' : ''}`}
         onClick={toggleChat}
       >
         {isOpen ? (
@@ -135,7 +135,7 @@ const AIChatbot = () => {
           </svg>
         )}
       </button>
-      
+
       {/* Chat window */}
       {isOpen && (
         <div className="chatbot-window">
@@ -146,14 +146,14 @@ const AIChatbot = () => {
                 <path d="M2 12h20"></path>
                 <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
               </svg>
-              <span>JET SETTERS Assistant</span>
+              <span>Jetsetterss Assistant</span>
             </div>
           </div>
-          
+
           <div className="chatbot-messages">
             {messages.map((message, index) => (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 className={`message ${message.type === 'bot' ? 'bot-message' : 'user-message'}`}
               >
                 {message.type === 'bot' && (
@@ -168,7 +168,7 @@ const AIChatbot = () => {
                 <div className="message-content">{message.content}</div>
               </div>
             ))}
-            
+
             {isTyping && (
               <div className="message bot-message">
                 <div className="bot-avatar">
@@ -185,10 +185,10 @@ const AIChatbot = () => {
                 </div>
               </div>
             )}
-            
+
             <div ref={messagesEndRef} />
           </div>
-          
+
           <form className="chatbot-input" onSubmit={handleSubmit}>
             <input
               type="text"

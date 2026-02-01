@@ -1,25 +1,62 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { destinations } from "./data.js"
 
-// Preload images immediately when module loads
-const preloadImages = () => {
-  destinations.forEach((destination) => {
-    if (destination.image) {
-      const img = new Image();
-      img.src = destination.image;
+// Preload images with Promise tracking
+const preloadImage = (src) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = src;
+    // If already cached, resolve immediately
+    if (img.complete) {
+      resolve(true);
     }
   });
 };
 
-// Start preloading immediately
-preloadImages();
+// Start preloading immediately when module loads
+destinations.forEach((destination) => {
+  if (destination.image) {
+    preloadImage(destination.image);
+  }
+});
 
 export default function PopularDestinations({ onSelectDestination }) {
   const [selectedDestination, setSelectedDestination] = useState(null);
+  const [loadedImages, setLoadedImages] = useState({});
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // Also preload on component mount as a backup
+  // Preload images on component mount (handles SPA navigation)
   useEffect(() => {
-    preloadImages();
+    let isMounted = true;
+
+    const loadImages = async () => {
+      // Preload all images in parallel
+      const loadPromises = destinations.map(async (destination) => {
+        if (destination.image) {
+          await preloadImage(destination.image);
+          if (isMounted) {
+            setLoadedImages(prev => ({ ...prev, [destination.id]: true }));
+          }
+        }
+      });
+
+      await Promise.all(loadPromises);
+      if (isMounted) {
+        setIsInitialLoad(false);
+      }
+    };
+
+    loadImages();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleImageLoad = useCallback((destinationId) => {
+    setLoadedImages(prev => ({ ...prev, [destinationId]: true }));
   }, []);
 
   const handleDestinationClick = (destination) => {
@@ -38,15 +75,30 @@ export default function PopularDestinations({ onSelectDestination }) {
             }`}
           onClick={() => handleDestinationClick(destination)}
         >
+          {/* Skeleton loader - shows while image is loading */}
+          {!loadedImages[destination.id] && (
+            <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-gray-200 via-gray-300 to-gray-200 animate-pulse z-5">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/20 to-transparent"></div>
+              <div className="absolute bottom-5 left-5 right-5">
+                <div className="h-7 bg-gray-400/50 rounded w-32 mb-2"></div>
+                <div className="h-4 bg-gray-400/30 rounded w-24"></div>
+              </div>
+            </div>
+          )}
+
           {/* Full bleed image with slight zoom on hover */}
-          <div className="absolute inset-0 w-full h-full">
+          <div className={`absolute inset-0 w-full h-full transition-opacity duration-300 ${loadedImages[destination.id] ? 'opacity-100' : 'opacity-0'}`}>
             <img
               src={destination.image || "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=2070&auto=format&fit=crop"}
               alt={destination.name}
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              loading="eager"
+              fetchPriority={index < 4 ? "high" : "auto"}
+              onLoad={() => handleImageLoad(destination.id)}
               onError={(e) => {
                 e.target.onerror = null;
                 e.target.src = "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=2070&auto=format&fit=crop";
+                handleImageLoad(destination.id);
               }}
             />
             {/* Gradient overlay */}
@@ -115,7 +167,7 @@ export default function PopularDestinations({ onSelectDestination }) {
                     />
                   </svg>
                   <span className="text-white">
-                    {index % 2 === 0 ? '70' : '50'} properties available
+                    {/* {index % 2 === 0 ? '70' : '50'} properties available */}
                   </span>
                 </div>
 

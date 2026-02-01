@@ -23,7 +23,7 @@ export default function handler(req, res) {
         departure_date: "2024-07-15",
         return_date: "2024-07-22",
         price_per_person: 899,
-        image: "/images/cruises/caribbean-paradise.svg",
+        image: "https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&q=80",
         description: "Experience the ultimate Caribbean adventure with stops at pristine beaches and vibrant cultures.",
         amenities: ["Pool deck", "Spa", "Casino", "Multiple restaurants", "Entertainment shows"],
         cabin_types: [
@@ -44,7 +44,7 @@ export default function handler(req, res) {
         departure_date: "2024-08-10",
         return_date: "2024-08-20",
         price_per_person: 1299,
-        image: "/images/cruises/mediterranean-explorer.svg",
+        image: "https://images.unsplash.com/photo-1599640842225-85d111c60e6b?w=800&q=80",
         description: "Discover ancient history and stunning Mediterranean coastlines on this unforgettable journey.",
         amenities: ["Multiple pools", "Rock climbing wall", "Broadway shows", "Specialty dining"],
         cabin_types: [
@@ -65,7 +65,7 @@ export default function handler(req, res) {
         departure_date: "2024-06-20",
         return_date: "2024-06-28",
         price_per_person: 1599,
-        image: "/images/cruises/alaska-wilderness.svg",
+        image: "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&q=80",
         description: "Witness breathtaking glaciers and wildlife in America's last frontier.",
         amenities: ["Observation deck", "Naturalist programs", "Fine dining", "Spa services"],
         cabin_types: [

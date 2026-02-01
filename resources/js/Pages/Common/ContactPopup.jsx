@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './ContactPopup.css';
+import supabase from '../../lib/supabase';
 
 const ContactPopup = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -7,48 +8,90 @@ const ContactPopup = () => {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Here you would handle the form submission, such as an API call
+    setLoading(true);
+    setError('');
+
     console.log('Contact form submitted:', { name, email, message });
-    
-    // Show success message
-    setSubmitted(true);
-    
-    // Reset form after 3 seconds and close popup
-    setTimeout(() => {
-      setName('');
-      setEmail('');
-      setMessage('');
-      setSubmitted(false);
-      setIsOpen(false);
-    }, 3000);
+
+    try {
+      // Store in Supabase contact_inquiries table
+      const { data, error: supabaseError } = await supabase
+        .from('contact_inquiries')
+        .insert([
+          {
+            name: name,
+            email: email,
+            message: message,
+            status: 'new'
+          }
+        ]);
+
+      if (supabaseError) {
+        console.error('Supabase error:', supabaseError);
+        setError('Failed to submit. Please try again.');
+        return;
+      }
+
+      // TODO: Re-enable email notifications after Vercel Pro upgrade
+      // try {
+      //   await fetch('/api/email', {
+      //     method: 'POST',
+      //     headers: { 'Content-Type': 'application/json' },
+      //     body: JSON.stringify({ type: 'contact', name, email, message })
+      //   });
+      //   console.log('Contact email notifications sent');
+      // } catch (emailError) {
+      //   console.error('Email notification error:', emailError);
+      // }
+
+      // Show success message
+      setSubmitted(true);
+
+      // Reset form after 3 seconds and close popup
+      setTimeout(() => {
+        setName('');
+        setEmail('');
+        setMessage('');
+        setSubmitted(false);
+        setIsOpen(false);
+      }, 3000);
+    } catch (err) {
+      console.error('Contact form error:', err);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const togglePopup = () => {
     setIsOpen(!isOpen);
+    setError('');
   };
 
   return (
     <div className="contact-us-container">
-      <button 
+      <button
         className="contact-us-button"
         onClick={togglePopup}
       >
         Contact Us
       </button>
-      
+
       {isOpen && (
         <div className="contact-popup-overlay">
           <div className="contact-popup">
             <button className="close-button" onClick={togglePopup}>×</button>
-            
+
             {!submitted ? (
               <>
                 <h2>Contact Us</h2>
                 <p>Have questions? We'd love to hear from you!</p>
-                
+
                 <form onSubmit={handleSubmit}>
                   <div className="form-group">
                     <label htmlFor="name">Name</label>
@@ -58,9 +101,10 @@ const ContactPopup = () => {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       required
+                      disabled={loading}
                     />
                   </div>
-                  
+
                   <div className="form-group">
                     <label htmlFor="email">Email</label>
                     <input
@@ -69,9 +113,10 @@ const ContactPopup = () => {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
+                      disabled={loading}
                     />
                   </div>
-                  
+
                   <div className="form-group">
                     <label htmlFor="message">Message</label>
                     <textarea
@@ -80,10 +125,15 @@ const ContactPopup = () => {
                       onChange={(e) => setMessage(e.target.value)}
                       rows="4"
                       required
+                      disabled={loading}
                     ></textarea>
                   </div>
-                  
-                  <button type="submit" className="submit-button">Send Message</button>
+
+                  {error && <p className="error-message" style={{ color: 'red', fontSize: '14px', marginBottom: '10px' }}>{error}</p>}
+
+                  <button type="submit" className="submit-button" disabled={loading}>
+                    {loading ? 'Sending...' : 'Send Message'}
+                  </button>
                 </form>
               </>
             ) : (

@@ -547,15 +547,15 @@ const Itinerary = () => {
       {/* Hero Header Image */}
       <div className="relative w-full">
         <img
-          src={cruiseData?.image || "/images/Rectangle 1434 (1).png"}
+          src="https://images.unsplash.com/photo-1548574505-5e239809ee19?w=1920&q=80"
           alt="Cruise Itinerary"
-          className="w-full h-[400px] object-cover object-center brightness-75"
+          className="w-full h-[400px] object-cover object-center"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/30 to-black/60 flex flex-col items-center justify-center px-4">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0a2540]/40 via-[#0a2540]/60 to-[#0a2540]/80 flex flex-col items-center justify-center px-4">
           <h1 className="text-4xl md:text-6xl text-white font-bold text-center mb-4 drop-shadow-lg">
-            {cruiseData?.name || `${cruiseLine || 'Royal Caribbean'} Itinerary`}
+            {cruiseData?.name || `${cruiseLine || 'Celebrity Cruises'}`}
           </h1>
-          <p className="text-xl md:text-2xl text-white text-center max-w-3xl mx-auto font-light drop-shadow-md">
+          <p className="text-xl md:text-2xl text-white/90 text-center max-w-3xl mx-auto font-light drop-shadow-md">
             {cruiseData?.description || 'Explore your upcoming cruise adventure day by day'}
           </p>
         </div>
