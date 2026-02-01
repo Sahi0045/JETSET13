@@ -219,8 +219,8 @@ const PackageBookingSummary = () => {
       localStorage.setItem('pendingPackageBooking', JSON.stringify(bookingData));
 
       // Create hosted checkout session
-      // ARC Pay requires alphanumeric order IDs under 16 characters
-      const orderId = `P${Date.now().toString(36).toUpperCase()}`;
+      // ARC Pay requires order IDs: alphanumeric, 11-40 characters
+      const orderId = `PKG${Date.now().toString(36).toUpperCase()}`;
       console.log('🚀 Creating ArcPay hosted checkout session...');
 
       const checkoutResponse = await ArcPayService.createHostedCheckout({
