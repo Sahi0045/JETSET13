@@ -1877,15 +1877,11 @@ async function handleHostedCheckout(req, res) {
       }
     };
 
-    // NOTE: Airline data is optional for Hosted Checkout - disabled for now to fix checkout flow
-    // Can be re-enabled after confirming the correct field formats with ARC Pay support
-    /*
     // Add airline data for flight bookings (Required for ARC Pay Certification)
+    // Format based on official ARC Pay documentation: https://api.arcpay.travel/api/documentation/integrationGuidelines/supportedFeatures/pickAdditionalFunctionality/airlineData.html
     if (bookingType === 'flight') {
       try {
         console.log('🔍 Processing airline data...');
-        console.log('   flightData:', JSON.stringify(flightData, null, 2));
-        console.log('   bookingData:', JSON.stringify(bookingData, null, 2));
         
         // Extract flight details from flightData or bookingData
         const flight = flightData || bookingData?.selectedFlight || bookingData?.flightData || {};
@@ -1897,110 +1893,64 @@ async function handleHostedCheckout(req, res) {
         
         console.log('   segments count:', segments.length);
 
-      // Get passenger info
-      const passengers = bookingData?.passengerData || [];
-      const primaryPassenger = passengers[0] || {};
+        // Get passenger info - format as array per ARC Pay docs
+        const passengers = bookingData?.passengerData || [];
+        const passengerList = passengers.length > 0 
+          ? passengers.map(p => ({
+              firstName: (p.firstName || '').toUpperCase(),
+              lastName: (p.lastName || '').toUpperCase()
+            }))
+          : [{
+              firstName: (firstName || 'GUEST').toUpperCase(),
+              lastName: (lastName || 'PASSENGER').toUpperCase()
+            }];
 
-      // Build airline object with required fields for certification
-      requestBody.airline = {
-        // Document Type - must be a valid ARC Pay document type
-        documentType: 'PASSENGER_TICKET',
-
-        // Ticket Number (will be assigned after booking confirmation)
-        ticket: {
-          ticketNumber: orderId, // Use order ID as placeholder, update after Amadeus confirmation
-          issue: {
-            date: new Date().toISOString().split('T')[0], // Today's date
-            travelAgentCode: travelAgentCode,
-            travelAgentName: travelAgentName
-          }
-        },
-
-        // Booking Reference / PNR
-        bookingReference: flight?.pnr || flight?.bookingReference || orderId,
-
-        // Passenger Information
-        passenger: {
-          firstName: primaryPassenger?.firstName || firstName,
-          lastName: primaryPassenger?.lastName || lastName
-        },
-
-        // Travel Agent Information (provided by ARC)
-        travelAgentCode: travelAgentCode,
-        travelAgentName: travelAgentName,
-
-        // Flight Itinerary - simplified to required fields only
-        itinerary: {
-          leg: segments.map((segment, index) => {
-            return {
-              // Carrier Code - ARC requires "889" or "XD"
-              carrierCode: '889',
-              // Departure date in YYYY-MM-DD format
-              departureDate: segment?.departure?.at?.split('T')[0] ||
-                firstSegment?.departure?.at?.split('T')[0] ||
-                new Date().toISOString().split('T')[0],
-              // Airport codes
-              departureAirport: segment?.departure?.iataCode ||
-                firstSegment?.departure?.iataCode ||
-                flight?.origin || 'XXX',
-              destinationAirport: segment?.arrival?.iataCode ||
-                lastSegment?.arrival?.iataCode ||
-                flight?.destination || 'XXX',
-              // Class of Service
-              classOfService: 'Y'
-            };
-          })
-        }
-      };
-
-      // If no segments found, create a basic leg entry
-      if (requestBody.airline.itinerary.leg.length === 0) {
-        requestBody.airline.itinerary.leg = [{
-          carrierCode: '889',
-          departureDate: new Date().toISOString().split('T')[0],
-          departureAirport: flight?.origin || bookingData?.origin || 'XXX',
-          destinationAirport: flight?.destination || bookingData?.destination || 'XXX',
-          classOfService: 'Y'
-        }];
-      }
-
-      console.log('✈️ Airline data for ARC Pay:', JSON.stringify(requestBody.airline, null, 2));
-      
-      } catch (airlineError) {
-        console.error('⚠️ Error constructing airline data:', airlineError);
-        console.error('   Falling back to basic airline structure');
-        
-        // Fallback to minimal airline data if construction fails
-        requestBody.airline = {
-          documentType: 'PASSENGER_TICKET',
-          ticket: {
-            ticketNumber: orderId,
-            issue: {
-              date: new Date().toISOString().split('T')[0],
-              travelAgentCode: travelAgentCode,
-              travelAgentName: travelAgentName
-            }
-          },
-          bookingReference: orderId,
-          passenger: {
-            firstName: firstName,
-            lastName: lastName
-          },
-          travelAgentCode: travelAgentCode,
-          travelAgentName: travelAgentName,
-          itinerary: {
-            leg: [{
-              carrierCode: '889',
+        // Build leg array - only required fields per ARC Pay docs (NO departureTime!)
+        const legArray = segments.length > 0 
+          ? segments.map((segment) => ({
+              carrierCode: (segment?.carrierCode || segment?.operating?.carrierCode || 'XX').substring(0, 2),
+              departureAirport: segment?.departure?.iataCode || 'XXX',
+              departureDate: (segment?.departure?.at || new Date().toISOString()).split('T')[0],
+              destinationAirport: segment?.arrival?.iataCode || 'XXX'
+            }))
+          : [{
+              carrierCode: 'XX',
+              departureAirport: flight?.origin || bookingData?.origin || 'XXX',
               departureDate: new Date().toISOString().split('T')[0],
-              departureAirport: 'XXX',
-              destinationAirport: 'XXX',
-              classOfService: 'Y'
-            }]
+              destinationAirport: flight?.destination || bookingData?.destination || 'XXX'
+            }];
+
+        // Build airline object matching official ARC Pay documentation format exactly
+        requestBody.airline = {
+          bookingReference: (flight?.pnr || flight?.bookingReference || orderId).substring(0, 6).toUpperCase(),
+          documentType: 'PASSENGER_TICKET',
+          itinerary: {
+            leg: legArray,
+            numberInParty: String(passengerList.length)
+          },
+          passenger: passengerList,
+          ticket: {
+            issue: {
+              carrierCode: legArray[0]?.carrierCode || 'XX',
+              carrierName: flight?.carrierName || 'Airline',
+              city: 'Online',
+              country: 'USA',
+              date: new Date().toISOString().split('T')[0]
+            },
+            ticketNumber: `T${orderId}`.substring(0, 14),
+            totalFare: parseFloat(amount).toFixed(2),
+            totalFees: '0.00',
+            totalTaxes: '0.00'
           }
         };
+
+        console.log('✈️ Airline data for ARC Pay:', JSON.stringify(requestBody.airline, null, 2));
+        
+      } catch (airlineError) {
+        console.error('⚠️ Error constructing airline data:', airlineError);
+        // Don't add airline data if construction fails - it's optional for hosted checkout
       }
     }
-    */ // End of airline data block - disabled for now
 
     // Add customer info if available
     if (customerEmail) {
