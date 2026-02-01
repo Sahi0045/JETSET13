@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { 
-  CreditCard, Calendar, Lock, CheckCircle, ArrowLeft, 
+import {
+  CreditCard, Calendar, Lock, CheckCircle, ArrowLeft,
   Ticket, ShieldCheck, Loader, AlertCircle, Check,
   Plane
 } from 'lucide-react';
@@ -51,15 +51,16 @@ function FlightCreateOrders() {
       // First verify the payment with ARC Pay
       if (orderData.arcPayPaymentId) {
         const paymentVerification = await ArcPayService.verifyPayment(orderData.arcPayPaymentId);
-        
+
         if (!paymentVerification.success) {
           throw new Error('Payment verification failed');
         }
       }
 
       // Proceed with creating the flight order
+      // Prioritize originalOffer (full Amadeus API data) over transformed flight data
       const flightBookingData = {
-        flightOffer: orderData.selectedFlight || orderData.flightData || {
+        flightOffer: orderData.originalOffer || orderData.selectedFlight?.originalOffer || orderData.selectedFlight || orderData.flightData || {
           type: "flight-offer",
           id: "test-flight",
           source: "GDS",
@@ -69,21 +70,21 @@ function FlightCreateOrders() {
             total: orderData.amount || "100.00"
           }
         },
-        travelers: orderData.passengerData && orderData.passengerData.length > 0 
+        travelers: orderData.passengerData && orderData.passengerData.length > 0
           ? orderData.passengerData.map((passenger, index) => ({
-              id: `${index + 1}`,
-              firstName: passenger.firstName || orderData.paymentDetails?.cardHolder?.split(' ')[0] || "Test",
-              lastName: passenger.lastName || orderData.paymentDetails?.cardHolder?.split(' ').slice(1).join(' ') || "User",
-              dateOfBirth: passenger.dateOfBirth || "1990-01-01",
-              gender: passenger.gender || "MALE"
-            }))
+            id: `${index + 1}`,
+            firstName: passenger.firstName || orderData.paymentDetails?.cardHolder?.split(' ')[0] || "Test",
+            lastName: passenger.lastName || orderData.paymentDetails?.cardHolder?.split(' ').slice(1).join(' ') || "User",
+            dateOfBirth: passenger.dateOfBirth || "1990-01-01",
+            gender: passenger.gender || "MALE"
+          }))
           : [{
-              id: "1",
-              firstName: orderData.paymentDetails?.cardHolder?.split(' ')[0] || "Test",
-              lastName: orderData.paymentDetails?.cardHolder?.split(' ').slice(1).join(' ') || "User",
-              dateOfBirth: "1990-01-01",
-              gender: "MALE"
-            }],
+            id: "1",
+            firstName: orderData.paymentDetails?.cardHolder?.split(' ')[0] || "Test",
+            lastName: orderData.paymentDetails?.cardHolder?.split(' ').slice(1).join(' ') || "User",
+            dateOfBirth: "1990-01-01",
+            gender: "MALE"
+          }],
         contactInfo: {
           email: orderData.customerEmail || "test@jetsetgo.com",
           countryCode: "1",
@@ -99,7 +100,7 @@ function FlightCreateOrders() {
         setOrderSuccess(true);
         setBookingReference(response.data.data.bookingReference || response.data.data.id);
         setPnr(response.data.data.pnr || response.data.data.associatedRecords?.[0]?.reference);
-        
+
         // Extract additional booking information if available
         const orderDetails = {
           reference: response.data.data.bookingReference || response.data.data.id,
@@ -108,10 +109,10 @@ function FlightCreateOrders() {
           createdAt: response.data.data.createdAt || new Date().toISOString(),
           travelers: response.data.data.travelers || orderData.passengerData || []
         };
-        
+
         // Clear any old booking data and store fresh flight booking with PNR
         localStorage.removeItem('completedBooking'); // Clear old cruise bookings
-        
+
         const completedFlightBooking = {
           type: 'flight',
           orderId: orderDetails.reference,
@@ -123,9 +124,9 @@ function FlightCreateOrders() {
           status: orderDetails.status,
           travelers: orderDetails.travelers
         };
-        
+
         localStorage.setItem('completedFlightBooking', JSON.stringify(completedFlightBooking));
-        
+
         // Navigate to booking confirmation page after a delay
         setTimeout(() => {
           navigate('/booking-confirmation');
@@ -137,7 +138,7 @@ function FlightCreateOrders() {
       console.error('Order processing error:', error);
       console.error('Error response data:', error.response?.data);
       console.error('Error status:', error.response?.status);
-      
+
       // Extract more detailed error message
       let errorMessage = 'Failed to process order';
       if (error.response?.data?.error) {
@@ -147,7 +148,7 @@ function FlightCreateOrders() {
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       setError(errorMessage);
     } finally {
       setProcessingOrder(false);
@@ -159,7 +160,7 @@ function FlightCreateOrders() {
     // Check if it's an Amadeus API error response
     if (err.response?.data?.errors) {
       const amadeusError = err.response.data.errors[0];
-      
+
       // Handle specific error codes
       switch (amadeusError.code) {
         case 477:
@@ -196,7 +197,7 @@ function FlightCreateOrders() {
   return (
     <div className="bg-gradient-to-b from-blue-50 via-white to-gray-100 min-h-screen">
       <Navbar forceScrolled={true} />
-      
+
       {/* Content Container - Starting after navbar */}
       <div className="pt-20 animate-fadeIn">
         {/* Order Processing Title */}
@@ -211,7 +212,7 @@ function FlightCreateOrders() {
             </div>
           </div>
         </div>
-        
+
         {/* Progress Bar */}
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 overflow-x-auto">
           <div className={`transition-opacity duration-500 ${pageLoaded ? 'opacity-100' : 'opacity-0'}`}>
@@ -225,9 +226,9 @@ function FlightCreateOrders() {
                 <React.Fragment key={step.label}>
                   <div className="flex flex-col items-center">
                     <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 
-                      ${step.completed ? 'bg-green-100 text-green-600 border-green-500' : 
-                        step.active ? 'bg-blue-600 text-white border-blue-600 animate-pulse shadow-md shadow-blue-300' : 
-                        'bg-gray-100 text-gray-400 border-gray-300'}`}>
+                      ${step.completed ? 'bg-green-100 text-green-600 border-green-500' :
+                        step.active ? 'bg-blue-600 text-white border-blue-600 animate-pulse shadow-md shadow-blue-300' :
+                          'bg-gray-100 text-gray-400 border-gray-300'}`}>
                       {step.icon}
                     </div>
                     <span className={`text-xs mt-2 font-medium ${step.active ? 'text-blue-600' : step.completed ? 'text-green-600' : 'text-gray-600'}`}>
@@ -275,7 +276,7 @@ function FlightCreateOrders() {
                     <p className="text-gray-600">
                       Your flight has been successfully booked. You'll be redirected to the confirmation page shortly.
                     </p>
-                    
+
                     <div className="py-3">
                       <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                         <div className="flex justify-between text-sm">
@@ -288,7 +289,7 @@ function FlightCreateOrders() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="animate-pulse">
                       <p className="text-sm text-gray-600">
                         Redirecting to your booking confirmation...

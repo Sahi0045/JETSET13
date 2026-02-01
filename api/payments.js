@@ -57,6 +57,8 @@ export default async function handler(req, res) {
         return handleSessionCreate(req, res);
       case 'order-create':
         return handleOrderCreate(req, res);
+      case 'hosted-checkout':
+        return handleHostedCheckout(req, res);
       case 'payment-process':
         return handlePaymentProcess(req, res);
       case 'payment-verify':
@@ -78,7 +80,7 @@ export default async function handler(req, res) {
       default:
         return res.status(400).json({
           success: false,
-          error: 'Invalid action. Supported actions: initiate-payment, payment-callback, get-payment-details, gateway-status, session-create, order-create, payment-process, payment-verify, payment-refund, payment-void, payment-capture, payment-retrieve, test, health, debug'
+          error: 'Invalid action. Supported actions: initiate-payment, payment-callback, get-payment-details, gateway-status, session-create, order-create, hosted-checkout, payment-process, payment-verify, payment-refund, payment-void, payment-capture, payment-retrieve, test, health, debug'
         });
     }
   } catch (error) {
@@ -1773,6 +1775,183 @@ async function handleOrderCreate(req, res) {
     orderData,
     message: 'Order created successfully'
   });
+}
+
+// ============================================
+// HOSTED CHECKOUT FOR DIRECT BOOKINGS
+// (Flights, Hotels, Cruises, Packages)
+// ============================================
+async function handleHostedCheckout(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    console.log('🚀 handleHostedCheckout called for direct booking');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+
+    const {
+      amount,
+      currency = 'USD',
+      orderId,
+      bookingType = 'flight', // flight, hotel, cruise, package
+      customerEmail,
+      customerName,
+      customerPhone,
+      description,
+      returnUrl,
+      cancelUrl,
+      // Additional booking data
+      bookingData
+    } = req.body;
+
+    // Validate required fields
+    if (!amount || !orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: amount and orderId are required'
+      });
+    }
+
+    console.log('💳 Creating ARC Pay hosted checkout session...');
+    console.log('   Order ID:', orderId);
+    console.log('   Amount:', amount, currency);
+    console.log('   Booking Type:', bookingType);
+
+    // ARC Pay credentials
+    const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
+    const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
+
+    // ARC Pay uses merchant.MERCHANT_ID:password format for authentication
+    const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
+
+    // Construct URLs for redirect
+    const finalReturnUrl = returnUrl || `${frontendBaseUrl}/payment/callback?orderId=${orderId}&bookingType=${bookingType}`;
+    const finalCancelUrl = cancelUrl || `${frontendBaseUrl}/${bookingType}-payment?cancelled=true`;
+
+    // Create session with ARC Pay
+    const cleanBaseUrl = arcBaseUrl.replace(/\/$/, '');
+    const sessionUrl = `${cleanBaseUrl}/merchant/${arcMerchantId}/session`;
+
+    const requestBody = {
+      apiOperation: 'INITIATE_CHECKOUT',
+      interaction: {
+        operation: 'PURCHASE',
+        returnUrl: finalReturnUrl,
+        cancelUrl: finalCancelUrl,
+        merchant: {
+          name: 'JetSet Travel'
+        },
+        displayControl: {
+          billingAddress: 'MANDATORY',
+          customerEmail: 'MANDATORY'
+        },
+        action: {
+          '3DSecure': 'MANDATORY'
+        },
+        timeout: 900
+      },
+      order: {
+        id: orderId,
+        reference: orderId,
+        amount: parseFloat(amount).toFixed(2),
+        currency: currency,
+        description: description || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking - ${orderId}`
+      },
+      authentication: {
+        challengePreference: 'CHALLENGE_MANDATED'
+      }
+    };
+
+    // Add customer info if available
+    if (customerEmail) {
+      requestBody.customer = {
+        email: customerEmail
+      };
+      if (customerPhone) {
+        const cleanPhone = customerPhone.replace(/\D/g, '');
+        if (cleanPhone) {
+          requestBody.customer.mobilePhone = cleanPhone;
+        }
+      }
+    }
+
+    console.log('📤 ARC Pay Request:', JSON.stringify(requestBody, null, 2));
+
+    const arcResponse = await fetch(sessionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    const responseText = await arcResponse.text();
+    console.log('📥 ARC Pay Response Status:', arcResponse.status);
+    console.log('📥 ARC Pay Response:', responseText);
+
+    if (!arcResponse.ok) {
+      let errorDetails;
+      try {
+        errorDetails = JSON.parse(responseText);
+      } catch {
+        errorDetails = { message: responseText };
+      }
+
+      console.error('❌ ARC Pay API Error:', errorDetails);
+
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to create payment session',
+        details: errorDetails.error?.explanation || errorDetails.message || 'Unknown error'
+      });
+    }
+
+    const session = JSON.parse(responseText);
+    const sessionId = session.session?.id || session.sessionId || session.id;
+    const successIndicator = session.successIndicator;
+
+    if (!sessionId) {
+      console.error('❌ Session ID not found in response');
+      return res.status(500).json({
+        success: false,
+        error: 'Invalid response from payment gateway',
+        details: 'Session ID not found'
+      });
+    }
+
+    console.log('✅ ARC Pay session created:', sessionId);
+
+    // Construct hosted payment page URL
+    const gatewayDomain = 'https://na.gateway.mastercard.com';
+    const paymentPageUrl = `${gatewayDomain}/checkout/pay/${sessionId}`;
+
+    console.log('🔗 Payment Page URL:', paymentPageUrl);
+
+    return res.status(200).json({
+      success: true,
+      sessionId: sessionId,
+      successIndicator: successIndicator,
+      merchantId: arcMerchantId,
+      orderId: orderId,
+      paymentPageUrl: paymentPageUrl,
+      checkoutUrl: paymentPageUrl,
+      redirectMethod: 'GET',
+      message: 'Hosted checkout session created successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Hosted checkout error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to create hosted checkout',
+      details: error.message
+    });
+  }
 }
 
 // Payment Processing

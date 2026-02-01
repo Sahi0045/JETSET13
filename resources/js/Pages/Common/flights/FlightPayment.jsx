@@ -158,10 +158,6 @@ function FlightPayment() {
       return;
     }
 
-    if (!validateForm()) {
-      return;
-    }
-
     setProcessingPayment(true);
 
     try {
@@ -174,153 +170,53 @@ function FlightPayment() {
         throw new Error('Payment gateway is currently unavailable. Please try again later.');
       }
 
-      // Prepare payment data
-      const orderData = {
+      // Store booking data in localStorage before redirect
+      const bookingData = {
+        selectedFlight: paymentData?.selectedFlight,
+        originalOffer: paymentData?.selectedFlight?.originalOffer || paymentData?.bookingDetails?.originalOffer,
+        passengerData: paymentData?.passengerData,
+        bookingDetails: paymentData?.bookingDetails,
+        calculatedFare: paymentData?.calculatedFare,
+        amount: finalAmount
+      };
+      localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingData));
+
+      // Create hosted checkout session - redirects to ARC Pay payment page
+      const orderId = `FLIGHT-${Date.now()}`;
+      console.log('🚀 Creating ARC Pay hosted checkout session...');
+
+      const checkoutResponse = await ArcPayService.createHostedCheckout({
         amount: finalAmount,
         currency: 'USD',
-        orderId: `FLIGHT-${Date.now()}`,
-        customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com',
-        customerName: paymentData?.passengerData?.[0] ?
-          `${paymentData.passengerData[0].firstName} ${paymentData.passengerData[0].lastName}` :
-          'Test User',
-        description: `Flight booking - ${paymentData?.bookingDetails?.flight?.flightNumber || 'Unknown'}`,
-        returnUrl: `${window.location.origin}/flight-create-orders`,
-        cancelUrl: `${window.location.origin}/flight-payment`
-      };
+        orderId: orderId,
+        bookingType: 'flight',
+        customerEmail: paymentData?.passengerData?.[0]?.email || 'customer@jetsetgo.com',
+        customerName: paymentData?.passengerData?.[0]
+          ? `${paymentData.passengerData[0].firstName} ${paymentData.passengerData[0].lastName}`
+          : 'Guest User',
+        customerPhone: paymentData?.passengerData?.[0]?.phone,
+        description: `Flight Booking - ${paymentData?.bookingDetails?.flight?.flightNumber || orderId}`,
+        returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=flight`,
+        cancelUrl: `${window.location.origin}/flight-payment?cancelled=true`
+      });
 
-      console.log('💳 Initializing payment with ARC Pay...');
-      const initResponse = await ArcPayService.initializePayment(orderData);
-
-      if (!initResponse.success) {
-        throw new Error(initResponse.error?.error || 'Failed to initialize payment');
+      if (!checkoutResponse.success || !checkoutResponse.checkoutUrl) {
+        throw new Error(checkoutResponse.error?.error || 'Failed to create checkout session');
       }
 
-      // Only process payment if using credit card
-      if (activePaymentMethod === "creditCard") {
-        console.log('💳 Processing credit card payment...');
+      console.log('✅ Hosted checkout session created:', checkoutResponse.sessionId);
+      console.log('🔗 Redirecting to ARC Pay payment page:', checkoutResponse.checkoutUrl);
 
-        // Validate card details
-        const cardValidation = ArcPayService.validateCardDetails(cardDetails);
-        if (!cardValidation.isValid) {
-          throw new Error(`Card validation failed: ${cardValidation.errors.join(', ')}`);
-        }
+      // Store session info for verification after payment
+      localStorage.setItem('pendingPaymentSession', JSON.stringify({
+        sessionId: checkoutResponse.sessionId,
+        orderId: orderId,
+        bookingType: 'flight',
+        amount: finalAmount
+      }));
 
-        const processData = {
-          amount: finalAmount,
-          cardDetails: {
-            cardNumber: cardDetails.cardNumber,
-            cardHolder: cardDetails.cardHolder,
-            expiryDate: cardDetails.expiryDate,
-            cvv: cardDetails.cvv
-          },
-          customerInfo: {
-            firstName: paymentData?.passengerData?.[0]?.firstName || cardDetails.cardHolder.split(' ')[0] || 'Test',
-            lastName: paymentData?.passengerData?.[0]?.lastName || cardDetails.cardHolder.split(' ').slice(1).join(' ') || 'User',
-            email: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com',
-            phone: paymentData?.passengerData?.[0]?.phone || '1234567890'
-          },
-          billingAddress: {
-            street: "123 Test Street",
-            city: "Test City",
-            state: "Test State",
-            countryCode: "US",
-            postalCode: "12345"
-          }
-        };
-
-        const processResponse = await ArcPayService.processPayment(
-          initResponse.orderId,
-          processData
-        );
-
-        if (!processResponse.success) {
-          throw new Error(processResponse.error?.error || 'Payment processing failed');
-        }
-
-        console.log('✅ Payment processed successfully');
-        setPaymentSuccess(true);
-        setShowPaymentResult(true);
-
-        console.log('🔍 Payment successful - preparing navigation to FlightCreateOrders');
-        console.log('📝 Payment data to pass:', {
-          transactionId: processResponse.transactionId,
-          amount: finalAmount || paymentData?.calculatedFare?.totalPrice || 0,
-          orderId: initResponse.orderId,
-          selectedFlight: paymentData?.selectedFlight,
-          passengerData: paymentData?.passengerData,
-          customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com'
-        });
-
-        // Navigate to flight order creation instead of directly to confirmation
-        setTimeout(() => {
-          console.log('🚀 Navigating to FlightCreateOrders...');
-          navigate("/flight-create-orders", {
-            state: {
-              // Payment data
-              transactionId: processResponse.transactionId,
-              amount: finalAmount || paymentData?.calculatedFare?.totalPrice || 0,
-              orderId: initResponse.orderId,
-
-              // Flight data
-              selectedFlight: paymentData?.selectedFlight,
-              flightData: paymentData?.selectedFlight,
-
-              // Passenger data
-              passengerData: paymentData?.passengerData,
-
-              // Contact info
-              customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com',
-
-              // Payment details
-              paymentDetails: {
-                ...cardDetails,
-                cardNumber: `**** **** **** ${cardDetails.cardNumber.slice(-4)}`
-              }
-            }
-          });
-        }, 2000);
-      } else {
-        // For UPI and other payment methods, just simulate success for now
-        console.log(`💳 Processing ${activePaymentMethod} payment...`);
-        setPaymentSuccess(true);
-        setShowPaymentResult(true);
-
-        console.log('🔍 Payment successful - preparing navigation to FlightCreateOrders');
-        console.log('📝 Payment data to pass:', {
-          transactionId: `TXN-${Date.now()}`,
-          amount: finalAmount || paymentData?.calculatedFare?.totalPrice || 0,
-          orderId: initResponse.orderId,
-          selectedFlight: paymentData?.selectedFlight,
-          passengerData: paymentData?.passengerData,
-          customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com'
-        });
-
-        // Navigate to flight order creation instead of directly to confirmation
-        setTimeout(() => {
-          console.log('🚀 Navigating to FlightCreateOrders...');
-          navigate("/flight-create-orders", {
-            state: {
-              // Payment data
-              transactionId: `TXN-${Date.now()}`,
-              amount: finalAmount || paymentData?.calculatedFare?.totalPrice || 0,
-              orderId: initResponse.orderId,
-
-              // Flight data
-              selectedFlight: paymentData?.selectedFlight,
-              flightData: paymentData?.selectedFlight,
-
-              // Passenger data
-              passengerData: paymentData?.passengerData,
-
-              // Contact info
-              customerEmail: paymentData?.passengerData?.[0]?.email || 'test@jetsetgo.com',
-
-              // Payment details
-              paymentDetails: activePaymentMethod === "upi" ? { upiId } : {}
-            }
-          });
-        }, 2000);
-      }
+      // Redirect to ARC Pay hosted payment page
+      window.location.href = checkoutResponse.checkoutUrl;
 
     } catch (error) {
       console.error("❌ Payment processing error:", error);
