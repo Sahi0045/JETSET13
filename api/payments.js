@@ -1986,35 +1986,59 @@ async function handleHostedCheckout(req, res) {
     }
 
     console.log('📤 ARC Pay Request:', JSON.stringify(requestBody, null, 2));
+    console.log('📤 Session URL:', sessionUrl);
+    console.log('📤 Auth Header:', authHeader ? 'Present' : 'Missing');
 
-    const arcResponse = await fetch(sessionUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader,
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    });
+    let arcResponse;
+    let responseText;
+    
+    try {
+      arcResponse = await fetch(sessionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
 
-    const responseText = await arcResponse.text();
-    console.log('📥 ARC Pay Response Status:', arcResponse.status);
-    console.log('📥 ARC Pay Response:', responseText);
+      responseText = await arcResponse.text();
+      console.log('📥 ARC Pay Response Status:', arcResponse.status);
+      console.log('📥 ARC Pay Response:', responseText.substring(0, 500));
 
-    if (!arcResponse.ok) {
-      let errorDetails;
-      try {
-        errorDetails = JSON.parse(responseText);
-      } catch {
-        errorDetails = { message: responseText };
+      if (!arcResponse.ok) {
+        let errorDetails;
+        try {
+          errorDetails = JSON.parse(responseText);
+        } catch {
+          errorDetails = { message: responseText };
+        }
+
+        console.error('❌ ARC Pay API Error:', errorDetails);
+
+        // Enhanced error details for debugging
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to create payment session',
+          details: errorDetails.error?.explanation || errorDetails.message || 'Unknown error',
+          arcPayStatus: arcResponse.status,
+          merchantId: arcMerchantId,
+          debugInfo: {
+            sessionUrl: sessionUrl,
+            hasAuth: !!authHeader,
+            requestBodyKeys: Object.keys(requestBody)
+          }
+        });
       }
-
-      console.error('❌ ARC Pay API Error:', errorDetails);
-
+    } catch (fetchError) {
+      console.error('❌ Fetch error calling ARC Pay:', fetchError);
       return res.status(500).json({
         success: false,
-        error: 'Failed to create payment session',
-        details: errorDetails.error?.explanation || errorDetails.message || 'Unknown error'
+        error: 'Failed to connect to payment gateway',
+        details: fetchError.message,
+        merchantId: arcMerchantId,
+        sessionUrl: sessionUrl
       });
     }
 
