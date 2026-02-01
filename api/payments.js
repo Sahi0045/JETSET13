@@ -1879,12 +1879,20 @@ async function handleHostedCheckout(req, res) {
 
     // Add airline data for flight bookings (Required for ARC Pay Certification)
     if (bookingType === 'flight') {
-      // Extract flight details from flightData or bookingData
-      const flight = flightData || bookingData?.selectedFlight || bookingData?.flightData || {};
-      const itinerary = flight?.itineraries?.[0] || flight?.itinerary || {};
-      const segments = itinerary?.segments || flight?.segments || [];
-      const firstSegment = segments[0] || {};
-      const lastSegment = segments[segments.length - 1] || firstSegment;
+      try {
+        console.log('🔍 Processing airline data...');
+        console.log('   flightData:', JSON.stringify(flightData, null, 2));
+        console.log('   bookingData:', JSON.stringify(bookingData, null, 2));
+        
+        // Extract flight details from flightData or bookingData
+        const flight = flightData || bookingData?.selectedFlight || bookingData?.flightData || {};
+        const itinerary = flight?.itineraries?.[0] || flight?.itinerary || {};
+        const segments = Array.isArray(itinerary?.segments) ? itinerary.segments : 
+                        Array.isArray(flight?.segments) ? flight.segments : [];
+        const firstSegment = segments[0] || {};
+        const lastSegment = segments[segments.length - 1] || firstSegment;
+        
+        console.log('   segments count:', segments.length);
 
       // Get passenger info
       const passengers = bookingData?.passengerData || [];
@@ -1968,6 +1976,43 @@ async function handleHostedCheckout(req, res) {
       }
 
       console.log('✈️ Airline data for ARC Pay:', JSON.stringify(requestBody.airline, null, 2));
+      
+      } catch (airlineError) {
+        console.error('⚠️ Error constructing airline data:', airlineError);
+        console.error('   Falling back to basic airline structure');
+        
+        // Fallback to minimal airline data if construction fails
+        requestBody.airline = {
+          documentType: 'MCO',
+          ticket: {
+            ticketNumber: orderId,
+            issue: {
+              date: new Date().toISOString().split('T')[0],
+              travelAgentCode: travelAgentCode,
+              travelAgentName: travelAgentName
+            }
+          },
+          bookingReference: orderId,
+          passenger: {
+            firstName: firstName,
+            lastName: lastName
+          },
+          travelAgentCode: travelAgentCode,
+          travelAgentName: travelAgentName,
+          itinerary: {
+            leg: [{
+              carrierCode: '889',
+              departureDate: new Date().toISOString().split('T')[0],
+              departureTime: '00:00',
+              departureAirport: 'XXX',
+              destinationAirport: 'XXX',
+              flightNumber: orderId.substring(7, 11) || '0000',
+              classOfService: 'Y',
+              fareBasis: 'ECONOMY'
+            }]
+          }
+        };
+      }
     }
 
     // Add customer info if available
@@ -2076,11 +2121,21 @@ async function handleHostedCheckout(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Hosted checkout error:', error);
+    console.error('='.repeat(80));
+    console.error('❌ HOSTED CHECKOUT ERROR - Full Stack Trace');
+    console.error('='.repeat(80));
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Request body:', JSON.stringify(req.body, null, 2));
+    console.error('='.repeat(80));
+    
     return res.status(500).json({
       success: false,
       error: 'Failed to create hosted checkout',
-      details: error.message
+      details: error.message,
+      errorType: error.name,
+      timestamp: new Date().toISOString()
     });
   }
 }
