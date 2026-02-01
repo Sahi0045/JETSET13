@@ -1928,7 +1928,13 @@ async function handleHostedCheckout(req, res) {
 
         // Flight Itinerary
         itinerary: {
-          leg: segments.map((segment, index) => ({
+          leg: segments.map((segment, index) => {
+            // Extract time in HHmm format (no colon)
+            const depTime = segment?.departure?.at?.split('T')[1]?.substring(0, 5)?.replace(':', '') ||
+              firstSegment?.departure?.at?.split('T')[1]?.substring(0, 5)?.replace(':', '') ||
+              '1200';
+            
+            return {
             // Carrier Code - ARC requires "889" or "XD"
             carrierCode: '889', // ARC designated carrier code
 
@@ -1936,9 +1942,7 @@ async function handleHostedCheckout(req, res) {
             departureDate: segment?.departure?.at?.split('T')[0] ||
               firstSegment?.departure?.at?.split('T')[0] ||
               new Date().toISOString().split('T')[0],
-            departureTime: segment?.departure?.at?.split('T')[1]?.substring(0, 5) ||
-              firstSegment?.departure?.at?.split('T')[1]?.substring(0, 5) ||
-              '00:00',
+            departureTime: depTime,
             departureAirport: segment?.departure?.iataCode ||
               firstSegment?.departure?.iataCode ||
               flight?.origin || 'XXX',
@@ -1958,7 +1962,8 @@ async function handleHostedCheckout(req, res) {
 
             // Fare basis (optional)
             fareBasis: segment?.fareBasis || 'ECONOMY'
-          }))
+            };
+          })
         }
       };
 
@@ -1967,7 +1972,7 @@ async function handleHostedCheckout(req, res) {
         requestBody.airline.itinerary.leg = [{
           carrierCode: '889',
           departureDate: new Date().toISOString().split('T')[0],
-          departureTime: '00:00',
+          departureTime: '1200',
           departureAirport: flight?.origin || bookingData?.origin || 'XXX',
           destinationAirport: flight?.destination || bookingData?.destination || 'XXX',
           flightNumber: flight?.flightNumber || orderId.substring(0, 4),
@@ -2003,7 +2008,7 @@ async function handleHostedCheckout(req, res) {
             leg: [{
               carrierCode: '889',
               departureDate: new Date().toISOString().split('T')[0],
-              departureTime: '00:00',
+              departureTime: '1200',
               departureAirport: 'XXX',
               destinationAirport: 'XXX',
               flightNumber: orderId.substring(1, 5) || '0000',
