@@ -1857,11 +1857,8 @@ async function handleHostedCheckout(req, res) {
           name: 'JetSet Travel'
         },
         displayControl: {
-          billingAddress: 'MANDATORY',
-          customerEmail: 'MANDATORY'
-        },
-        action: {
-          '3DSecure': 'MANDATORY'
+          billingAddress: 'OPTIONAL',
+          customerEmail: 'OPTIONAL'
         },
         timeout: 900
       },
@@ -1871,9 +1868,6 @@ async function handleHostedCheckout(req, res) {
         amount: parseFloat(amount).toFixed(2),
         currency: currency,
         description: description || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking - ${orderId}`
-      },
-      authentication: {
-        challengePreference: 'CHALLENGE_MANDATED'
       }
     };
 
