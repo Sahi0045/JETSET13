@@ -1858,7 +1858,7 @@ async function handleHostedCheckout(req, res) {
     const firstName = nameParts[0] || 'Guest';
     const lastName = nameParts.slice(1).join(' ') || 'User';
 
-    // Build the request body - simplified for better compatibility
+    // Build the request body - using same settings as working inquiry payment flow
     const requestBody = {
       apiOperation: 'INITIATE_CHECKOUT',
       interaction: {
@@ -1869,8 +1869,11 @@ async function handleHostedCheckout(req, res) {
           name: 'JetSet Travel'
         },
         displayControl: {
-          billingAddress: 'OPTIONAL',
-          customerEmail: 'OPTIONAL'
+          billingAddress: 'MANDATORY',  // Required for 3DS2 - ensures billing data is collected
+          customerEmail: 'MANDATORY'    // Required for 3DS2 risk assessment
+        },
+        action: {
+          '3DSecure': 'MANDATORY'
         },
         timeout: 900
       },
@@ -1880,6 +1883,10 @@ async function handleHostedCheckout(req, res) {
         amount: parseFloat(amount).toFixed(2),
         currency: currency,
         description: description || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking - ${orderId}`
+      },
+      // Force 3DS challenge (OTP) - required for ARC Pay to trigger authentication
+      authentication: {
+        challengePreference: 'CHALLENGE_MANDATED'
       }
     };
 
