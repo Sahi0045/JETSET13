@@ -1820,10 +1820,10 @@ async function handleHostedCheckout(req, res) {
     console.log('   Amount:', amount, currency);
     console.log('   Booking Type:', bookingType);
 
-    // ARC Pay credentials
+    // ARC Pay credentials - Using API version 100 (latest)
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
     const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
-    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
+    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
     const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
 
     // Travel Agent Info provided by ARC
@@ -1846,7 +1846,7 @@ async function handleHostedCheckout(req, res) {
     const firstName = nameParts[0] || 'Guest';
     const lastName = nameParts.slice(1).join(' ') || 'User';
 
-    // Build the request body
+    // Build the request body - simplified for better compatibility
     const requestBody = {
       apiOperation: 'INITIATE_CHECKOUT',
       interaction: {
