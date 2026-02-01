@@ -459,20 +459,18 @@ async function handlePaymentInitiation(req, res) {
     }
 
     // 6. Construct payment page URL for Hosted Payment Page (HPP) redirect
-    // There are TWO methods for Hosted Checkout:
-    // Method 1 (HPP - Redirect): GET https://na.gateway.mastercard.com/checkout/pay/{sessionId}
-    // Method 2 (Embedded): POST to /api/page/version/100/pay with session.id form field
+    // ARC Pay uses their own hosted checkout page
+    // Correct format: https://api.arcpay.travel/checkout/pay/{sessionId}
     // 
-    // We use Method 1 (HPP Redirect) as it's simpler and more reliable
-    // Reference: https://documenter.getpostman.com/view/9012210/2s935sp37U
+    // Reference: ARC Pay documentation
 
-    const gatewayDomain = 'https://na.gateway.mastercard.com';
+    const gatewayDomain = 'https://api.arcpay.travel';
 
-    console.log('🔧 Using gateway domain for payment page:', gatewayDomain);
+    console.log('🔧 Using ARC Pay gateway domain for payment page:', gatewayDomain);
     console.log('   API base URL was:', arcBaseUrl);
 
-    // Hosted Payment Page URL - simple redirect with session ID in path
-    // Format: https://na.gateway.mastercard.com/checkout/pay/{sessionId}
+    // ARC Pay Hosted Payment Page URL - simple redirect with session ID in path
+    // Format: https://api.arcpay.travel/checkout/pay/{sessionId}
     const paymentPageUrl = `${gatewayDomain}/checkout/pay/${sessionId}`;
 
     console.log('✅ Payment page URL (HPP Redirect):', paymentPageUrl);
@@ -2047,8 +2045,9 @@ async function handleHostedCheckout(req, res) {
 
     console.log('✅ ARC Pay session created:', sessionId);
 
-    // Construct hosted payment page URL
-    const gatewayDomain = 'https://na.gateway.mastercard.com';
+    // Construct ARC Pay hosted payment page URL
+    // Correct format: https://api.arcpay.travel/checkout/pay/{sessionId}
+    const gatewayDomain = 'https://api.arcpay.travel';
     const paymentPageUrl = `${gatewayDomain}/checkout/pay/${sessionId}`;
 
     console.log('🔗 Payment Page URL:', paymentPageUrl);

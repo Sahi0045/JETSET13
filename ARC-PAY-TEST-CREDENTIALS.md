@@ -1,25 +1,50 @@
 # ARC Pay Test Credentials
 
 ## Official Test Card Numbers
-From ARC Pay Documentation: https://api.arcpay.travel/api/documentation/integrationGuidelines/supportedFeatures/testAndGoLive.html#h2_Card_transaction_test_details
+From ARC Pay Documentation: https://api.arcpay.travel/api/documentation/integrationGuidelines/supportedFeatures/testAndGoLive.html
 
-### ✅ Approved Test Cards
+**IMPORTANT: Use ONLY these official ARC Pay test cards. Other test cards will NOT work!**
+
+### ✅ Approved Test Cards (NO 3DS - Recommended for Testing)
+
+Use these cards for straightforward testing without 3DS challenge:
 
 | Card Type | Card Number | CVV | Expiry Date | Expected Result |
 |-----------|-------------|-----|-------------|-----------------|
-| **Visa** | 4111111111111111 | 123 | 12/25 (any future date) | ✅ Approved |
-| **Mastercard** | 5555555555554444 | 456 | 11/26 (any future date) | ✅ Approved |
-| **American Express** | 378282246310005 | 7897 | 10/27 (any future date) | ✅ Approved |
+| **Mastercard (No 3DS)** | 5111111111111118 | 100 | 01/39 | ✅ APPROVED (No 3DS) |
+| **Mastercard (No 3DS)** | 2223000000000023 | 100 | 01/39 | ✅ APPROVED (No 3DS) |
+| **Visa (No 3DS)** | 4005550000000001 | 100 | 01/39 | ✅ APPROVED (No 3DS) |
+
+### ✅ 3DS Frictionless Test Cards (Auto-Approved with 3DS)
+
+These cards trigger 3DS but auto-approve without user challenge:
+
+| Card Type | Card Number | CVV | Expiry Date | Expected Result |
+|-----------|-------------|-----|-------------|-----------------|
+| **Mastercard Frictionless** | 5123456789012346 | 100 | 01/39 | ✅ APPROVED (3DS Frictionless) |
+| **Mastercard Frictionless** | 5555555555000018 | 100 | 01/39 | ✅ APPROVED (3DS Frictionless) |
+| **Visa Frictionless** | 4440000042200014 | 100 | 01/39 | ✅ APPROVED (3DS Frictionless) |
+| **Visa Standard** | 4508750015741019 | 100 | 01/39 | ✅ APPROVED |
+
+### 🔐 3DS Challenge Test Cards (Requires User Interaction)
+
+These cards trigger a 3DS challenge popup requiring user to select "Successful authentication":
+
+| Card Type | Card Number | CVV | Expiry Date | Expected Result |
+|-----------|-------------|-----|-------------|-----------------|
+| **Mastercard Challenge** | 5123450000000008 | 100 | 01/39 | 🔐 Challenge (Select "Successful") |
+| **Mastercard Challenge** | 2223000000000007 | 100 | 01/39 | 🔐 Challenge (Select "Successful") |
+| **Visa Challenge** | 4440000009900010 | 100 | 01/39 | 🔐 Challenge (Select "Successful") |
+
+**Note:** When 3DS Challenge appears, select "Successful authentication" from the dropdown menu to complete the payment.
 
 ### ❌ Declined Test Cards
 
 | Card Type | Card Number | CVV | Expiry Date | Expected Result |
 |-----------|-------------|-----|-------------|-----------------|
-| **Visa** | 4000000000000002 | 123 | 12/25 (any future date) | ❌ Declined |
-
-### 🔐 3D Secure (3DS) Testing
-
-Some test cards may trigger 3D Secure authentication. Follow the on-screen prompts during the transaction process to complete the authentication.
+| **Any card** | Any test card | 100 | 05/39 | ❌ DECLINED |
+| **Any card** | Any test card | 100 | 04/27 | ❌ EXPIRED_CARD |
+| **Any card** | Any test card | 100 | 08/28 | ❌ TIMED_OUT |
 
 ## Test Environment Details
 
@@ -27,37 +52,40 @@ Some test cards may trigger 3D Secure authentication. Follow the on-screen promp
 - **API Base URL:** https://api.arcpay.travel/api/rest/version/100
 - **Payment Page URL:** https://api.arcpay.travel/api/page/version/100/pay
 
-## Notes
+## Critical Testing Notes
 
-1. **Cardholder Name:** Use any name (e.g., "Test Customer", "John Doe")
-2. **Billing Address:** Can be any valid address format
-3. **Email:** Use any valid email format (e.g., test@example.com)
-4. **Amount:** Any amount (no real money will be charged)
-5. **Currency:** USD (or other supported currencies)
+1. **ALWAYS use expiry date 01/39** for approved transactions
+2. **ALWAYS use CVV 100** for CVV match response
+3. **Cardholder Name:** Use "Test User" for best results
+4. **Billing Street:** Use "Alpha St" for AVS ADDRESS_MATCH response
+5. **Email:** Use any valid email format (e.g., test@example.com)
+6. **Currency:** USD (or other supported currencies)
 
 ## Test Scenarios
 
-### Scenario 1: Successful Payment
-- Use: **4111111111111111** (Visa)
-- CVV: **123**
-- Expiry: **12/25**
-- Expected: Payment completes successfully, status updates to "completed"
+### Scenario 1: Quick Test (No 3DS) - RECOMMENDED
+- Use: **5111111111111118** (Mastercard No 3DS)
+- CVV: **100**
+- Expiry: **01/39**
+- Cardholder: **Test User**
+- Expected: Payment completes immediately without 3DS challenge
 
-### Scenario 2: Successful Payment with Mastercard
-- Use: **5555555555554444** (Mastercard)
-- CVV: **456**
-- Expiry: **11/26**
-- Expected: Payment completes successfully
+### Scenario 2: 3DS Frictionless Test
+- Use: **5123456789012346** (Mastercard Frictionless)
+- CVV: **100**
+- Expiry: **01/39**
+- Expected: Payment completes with auto-approved 3DS
 
-### Scenario 3: Successful Payment with Amex
-- Use: **378282246310005** (American Express)
-- CVV: **7897**
-- Expiry: **10/27**
-- Expected: Payment completes successfully
+### Scenario 3: 3DS Challenge Test
+- Use: **5123450000000008** (Mastercard Challenge)
+- CVV: **100**
+- Expiry: **01/39**
+- Expected: 3DS popup appears, select "Successful authentication"
 
 ### Scenario 4: Declined Payment
-- Use: **4000000000000002** (Visa)
-- CVV: **123**
+- Use: **5111111111111118** (Any test card)
+- CVV: **100**
+- Expiry: **05/39** (NOT 01/39)
 - Expiry: **12/25**
 - Expected: Payment is declined, error message shown
 
