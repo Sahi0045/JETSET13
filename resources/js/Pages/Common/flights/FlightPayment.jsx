@@ -54,6 +54,7 @@ function FlightPayment() {
     return () => clearInterval(timerId);
   }, [timeLeft]);
 
+  // Auto-redirect to ARC Pay hosted checkout when page loads
   useEffect(() => {
     if (location.state) {
       setPaymentData(location.state);
@@ -62,6 +63,94 @@ function FlightPayment() {
       navigate("/flights");
     }
   }, [location, navigate]);
+
+  // Auto-redirect to ARC Pay when payment data is ready
+  useEffect(() => {
+    const redirectToArcPay = async () => {
+      if (!paymentData || processingPayment) return;
+
+      // Prevent multiple redirects
+      if (sessionStorage.getItem('arcPayRedirectInitiated')) {
+        return;
+      }
+
+      try {
+        setProcessingPayment(true);
+        sessionStorage.setItem('arcPayRedirectInitiated', 'true');
+
+        console.log('🔍 Auto-redirecting to ARC Pay...');
+        console.log('Payment data:', paymentData);
+
+        // Check gateway status first
+        const gatewayStatus = await ArcPayService.checkGatewayStatus();
+        if (!gatewayStatus.success || !gatewayStatus.gatewayOperational) {
+          console.warn('Gateway not available, showing manual form');
+          sessionStorage.removeItem('arcPayRedirectInitiated');
+          setProcessingPayment(false);
+          return; // Fall back to showing the manual form
+        }
+
+        // Calculate amount
+        const amount = paymentData?.calculatedFare?.totalAmount ||
+          paymentData?.calculatedFare?.totalPrice ||
+          paymentData?.selectedFlight?.price?.total ||
+          paymentData?.selectedFlight?.price?.amount ||
+          paymentData?.amount || 100;
+
+        // Store booking data in localStorage before redirect
+        const bookingData = {
+          selectedFlight: paymentData?.selectedFlight,
+          originalOffer: paymentData?.selectedFlight?.originalOffer || paymentData?.bookingDetails?.originalOffer,
+          passengerData: paymentData?.passengerData,
+          bookingDetails: paymentData?.bookingDetails,
+          calculatedFare: paymentData?.calculatedFare,
+          amount: amount
+        };
+        localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingData));
+
+        const orderId = `FLIGHT-${Date.now()}`;
+
+        const checkoutResponse = await ArcPayService.createHostedCheckout({
+          amount: amount,
+          currency: 'USD',
+          orderId: orderId,
+          bookingType: 'flight',
+          customerEmail: paymentData?.passengerData?.[0]?.email || 'customer@jetsetgo.com',
+          customerName: paymentData?.passengerData?.[0]
+            ? `${paymentData.passengerData[0].firstName} ${paymentData.passengerData[0].lastName}`
+            : 'Guest User',
+          customerPhone: paymentData?.passengerData?.[0]?.phone,
+          description: `Flight Booking - ${paymentData?.bookingDetails?.flight?.flightNumber || orderId}`,
+          returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=flight`,
+          cancelUrl: `${window.location.origin}/flight-payment?cancelled=true`
+        });
+
+        if (checkoutResponse.success && checkoutResponse.checkoutUrl) {
+          console.log('✅ Redirecting to ARC Pay:', checkoutResponse.checkoutUrl);
+          localStorage.setItem('pendingPaymentSession', JSON.stringify({
+            sessionId: checkoutResponse.sessionId,
+            orderId: orderId,
+            bookingType: 'flight',
+            amount: amount
+          }));
+          window.location.href = checkoutResponse.checkoutUrl;
+        } else {
+          console.warn('Checkout creation failed, showing manual form');
+          sessionStorage.removeItem('arcPayRedirectInitiated');
+          setProcessingPayment(false);
+        }
+      } catch (error) {
+        console.error('Auto-redirect failed:', error);
+        sessionStorage.removeItem('arcPayRedirectInitiated');
+        setProcessingPayment(false);
+        // Fall back to showing the manual form
+      }
+    };
+
+    // Small delay to ensure data is ready
+    const timer = setTimeout(redirectToArcPay, 500);
+    return () => clearTimeout(timer);
+  }, [paymentData, processingPayment, navigate]);
 
   useEffect(() => {
     const timer = setTimeout(() => setPageLoaded(true), 100);
