@@ -1823,12 +1823,26 @@ async function handleHostedCheckout(req, res) {
     // ARC Pay credentials - Using API version 100 (latest)
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
     const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
-    const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+    // Check for ARC_PAY_API_URL first (full URL), then ARC_PAY_BASE_URL, then fallback to v100
+    let arcApiUrl = process.env.ARC_PAY_API_URL || process.env.ARC_PAY_BASE_URL;
+    // If URL contains version/77, upgrade to version/100
+    if (arcApiUrl && arcApiUrl.includes('version/77')) {
+      arcApiUrl = arcApiUrl.replace('version/77', 'version/100');
+      console.log('   ⚠️ Upgraded ARC Pay API from v77 to v100');
+    }
+    // If URL includes merchant ID, extract just the base URL
+    if (arcApiUrl && arcApiUrl.includes('/merchant/')) {
+      arcApiUrl = arcApiUrl.split('/merchant/')[0];
+    }
+    const arcBaseUrl = arcApiUrl || 'https://api.arcpay.travel/api/rest/version/100';
     const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
 
     // Travel Agent Info provided by ARC
     const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || 'JETSET001';
     const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'JetSet Travel LLC';
+
+    console.log('   ARC Pay Base URL:', arcBaseUrl);
+    console.log('   ARC Pay Merchant ID:', arcMerchantId);
 
     // ARC Pay uses merchant.MERCHANT_ID:password format for authentication
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
