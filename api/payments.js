@@ -1900,8 +1900,8 @@ async function handleHostedCheckout(req, res) {
 
       // Build airline object with required fields for certification
       requestBody.airline = {
-        // Document Type - MCO (Miscellaneous Charge Order) recommended
-        documentType: 'MCO',
+        // Document Type - must be a valid ARC Pay document type
+        documentType: 'PASSENGER_TICKET',
 
         // Ticket Number (will be assigned after booking confirmation)
         ticket: {
@@ -1983,7 +1983,7 @@ async function handleHostedCheckout(req, res) {
         
         // Fallback to minimal airline data if construction fails
         requestBody.airline = {
-          documentType: 'MCO',
+          documentType: 'PASSENGER_TICKET',
           ticket: {
             ticketNumber: orderId,
             issue: {
@@ -2006,7 +2006,7 @@ async function handleHostedCheckout(req, res) {
               departureTime: '00:00',
               departureAirport: 'XXX',
               destinationAirport: 'XXX',
-              flightNumber: orderId.substring(7, 11) || '0000',
+              flightNumber: orderId.substring(1, 5) || '0000',
               classOfService: 'Y',
               fareBasis: 'ECONOMY'
             }]
