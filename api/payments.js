@@ -1877,6 +1877,9 @@ async function handleHostedCheckout(req, res) {
       }
     };
 
+    // NOTE: Airline data is optional for Hosted Checkout - disabled for now to fix checkout flow
+    // Can be re-enabled after confirming the correct field formats with ARC Pay support
+    /*
     // Add airline data for flight bookings (Required for ARC Pay Certification)
     if (bookingType === 'flight') {
       try {
@@ -1997,6 +2000,7 @@ async function handleHostedCheckout(req, res) {
         };
       }
     }
+    */ // End of airline data block - disabled for now
 
     // Add customer info if available
     if (customerEmail) {
