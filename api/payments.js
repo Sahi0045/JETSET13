@@ -1926,42 +1926,25 @@ async function handleHostedCheckout(req, res) {
         travelAgentCode: travelAgentCode,
         travelAgentName: travelAgentName,
 
-        // Flight Itinerary
+        // Flight Itinerary - simplified to required fields only
         itinerary: {
           leg: segments.map((segment, index) => {
-            // Extract time in HHmm format (no colon)
-            const depTime = segment?.departure?.at?.split('T')[1]?.substring(0, 5)?.replace(':', '') ||
-              firstSegment?.departure?.at?.split('T')[1]?.substring(0, 5)?.replace(':', '') ||
-              '1200';
-            
             return {
-            // Carrier Code - ARC requires "889" or "XD"
-            carrierCode: '889', // ARC designated carrier code
-
-            // Departure Information
-            departureDate: segment?.departure?.at?.split('T')[0] ||
-              firstSegment?.departure?.at?.split('T')[0] ||
-              new Date().toISOString().split('T')[0],
-            departureTime: depTime,
-            departureAirport: segment?.departure?.iataCode ||
-              firstSegment?.departure?.iataCode ||
-              flight?.origin || 'XXX',
-
-            // Destination Information
-            destinationAirport: segment?.arrival?.iataCode ||
-              lastSegment?.arrival?.iataCode ||
-              flight?.destination || 'XXX',
-
-            // Flight Number / PNR
-            flightNumber: segment?.number || segment?.flightNumber ||
-              firstSegment?.number || 'XXX',
-
-            // Class of Service: Y = Economy, W = Premium Economy
-            classOfService: segment?.cabin === 'BUSINESS' ? 'W' :
-              segment?.cabin === 'FIRST' ? 'W' : 'Y',
-
-            // Fare basis (optional)
-            fareBasis: segment?.fareBasis || 'ECONOMY'
+              // Carrier Code - ARC requires "889" or "XD"
+              carrierCode: '889',
+              // Departure date in YYYY-MM-DD format
+              departureDate: segment?.departure?.at?.split('T')[0] ||
+                firstSegment?.departure?.at?.split('T')[0] ||
+                new Date().toISOString().split('T')[0],
+              // Airport codes
+              departureAirport: segment?.departure?.iataCode ||
+                firstSegment?.departure?.iataCode ||
+                flight?.origin || 'XXX',
+              destinationAirport: segment?.arrival?.iataCode ||
+                lastSegment?.arrival?.iataCode ||
+                flight?.destination || 'XXX',
+              // Class of Service
+              classOfService: 'Y'
             };
           })
         }
@@ -1972,10 +1955,8 @@ async function handleHostedCheckout(req, res) {
         requestBody.airline.itinerary.leg = [{
           carrierCode: '889',
           departureDate: new Date().toISOString().split('T')[0],
-          departureTime: '1200',
           departureAirport: flight?.origin || bookingData?.origin || 'XXX',
           destinationAirport: flight?.destination || bookingData?.destination || 'XXX',
-          flightNumber: flight?.flightNumber || orderId.substring(0, 4),
           classOfService: 'Y'
         }];
       }
@@ -2008,12 +1989,9 @@ async function handleHostedCheckout(req, res) {
             leg: [{
               carrierCode: '889',
               departureDate: new Date().toISOString().split('T')[0],
-              departureTime: '1200',
               departureAirport: 'XXX',
               destinationAirport: 'XXX',
-              flightNumber: orderId.substring(1, 5) || '0000',
-              classOfService: 'Y',
-              fareBasis: 'ECONOMY'
+              classOfService: 'Y'
             }]
           }
         };
