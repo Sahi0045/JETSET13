@@ -69,8 +69,12 @@ function FlightPayment() {
     const redirectToArcPay = async () => {
       if (!paymentData || processingPayment) return;
 
-      // Prevent multiple redirects
-      if (sessionStorage.getItem('arcPayRedirectInitiated')) {
+      // Prevent multiple redirects - check both session and local storage
+      const redirectAttempted = sessionStorage.getItem('arcPayRedirectInitiated');
+      const failedAttempts = parseInt(sessionStorage.getItem('arcPayFailedAttempts') || '0');
+      
+      if (redirectAttempted || failedAttempts >= 1) {
+        console.log('⚠️ Redirect already attempted or failed, showing manual form');
         return;
       }
 
@@ -85,7 +89,7 @@ function FlightPayment() {
         const gatewayStatus = await ArcPayService.checkGatewayStatus();
         if (!gatewayStatus.success || !gatewayStatus.gatewayOperational) {
           console.warn('Gateway not available, showing manual form');
-          sessionStorage.removeItem('arcPayRedirectInitiated');
+          sessionStorage.setItem('arcPayFailedAttempts', '1');
           setProcessingPayment(false);
           return; // Fall back to showing the manual form
         }
@@ -108,7 +112,8 @@ function FlightPayment() {
         };
         localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingData));
 
-        const orderId = `FLIGHT-${Date.now()}`;
+        // ARC Pay requires alphanumeric order IDs (no hyphens)
+        const orderId = `FLT${Date.now()}`;
 
         const checkoutResponse = await ArcPayService.createHostedCheckout({
           amount: amount,
@@ -139,12 +144,12 @@ function FlightPayment() {
           window.location.href = checkoutResponse.checkoutUrl;
         } else {
           console.warn('Checkout creation failed, showing manual form');
-          sessionStorage.removeItem('arcPayRedirectInitiated');
+          sessionStorage.setItem('arcPayFailedAttempts', '1');
           setProcessingPayment(false);
         }
       } catch (error) {
         console.error('Auto-redirect failed:', error);
-        sessionStorage.removeItem('arcPayRedirectInitiated');
+        sessionStorage.setItem('arcPayFailedAttempts', '1');
         setProcessingPayment(false);
         // Fall back to showing the manual form
       }
@@ -285,7 +290,8 @@ function FlightPayment() {
       localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingData));
 
       // Create hosted checkout session - redirects to ARC Pay payment page
-      const orderId = `FLIGHT-${Date.now()}`;
+      // ARC Pay requires alphanumeric order IDs (no hyphens)
+      const orderId = `FLT${Date.now()}`;
       console.log('🚀 Creating ARC Pay hosted checkout session...');
 
       const checkoutResponse = await ArcPayService.createHostedCheckout({

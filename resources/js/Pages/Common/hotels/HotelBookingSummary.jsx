@@ -173,7 +173,8 @@ const HotelBookingSummary = () => {
             localStorage.setItem('pendingHotelBooking', JSON.stringify(bookingData));
 
             // Create hosted checkout session
-            const orderId = `HOTEL-${Date.now()}`;
+            // ARC Pay requires alphanumeric order IDs (no hyphens)
+            const orderId = `HTL${Date.now()}`;
             console.log('🚀 Creating ArcPay hosted checkout session...');
 
             const checkoutResponse = await ArcPayService.createHostedCheckout({
