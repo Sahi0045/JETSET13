@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Calendar, Users, MapPin, CreditCard, User, Mail, Phone, Check, Shield, ChevronLeft, Clock, AlertCircle } from 'lucide-react';
+import { Calendar, Users, MapPin, CreditCard, User, Mail, Phone, Check, Shield, ChevronLeft, Clock, AlertCircle, Lock } from 'lucide-react';
 import axios from 'axios';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
@@ -8,6 +8,7 @@ import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
 import currencyService from '../../../Services/CurrencyService';
 import Price from '../../../Components/Price';
+import ArcPayService from '../../../Services/ArcPayService';
 
 const HotelBookingSummary = () => {
     const navigate = useNavigate();
@@ -134,42 +135,90 @@ const HotelBookingSummary = () => {
         }
     };
 
-    // Handle booking submission
+    // Handle booking submission - Redirect to ArcPay gateway
     const handleSubmitBooking = async () => {
         if (!validatePaymentInfo()) return;
 
         setFormSubmitting(true);
 
         try {
-            // Step 1: create a backend booking record (mock Amadeus booking)
-            const bookingPayload = {
+            console.log('🔍 Checking ArcPay Gateway status...');
+            const gatewayStatus = await ArcPayService.checkGatewayStatus();
+
+            if (!gatewayStatus.success || !gatewayStatus.gatewayOperational) {
+                console.warn('Gateway status check failed:', gatewayStatus);
+                throw new Error('Payment gateway is currently unavailable. Please try again later.');
+            }
+
+            // Store booking data in localStorage before redirect
+            const bookingData = {
                 hotelId,
                 roomType,
                 checkInDate: checkIn,
                 checkOutDate: checkOut,
+                nights,
+                guests,
+                pricePerNight,
+                subtotal,
+                taxes,
+                serviceFee,
                 totalPrice: total,
-                currency: 'USD',
-                guestDetails: guestInfo
+                guestInfo,
+                hotel: {
+                    name: hotel.name,
+                    location: hotel.location || hotel.destinationName,
+                    image: hotel.image
+                }
             };
+            localStorage.setItem('pendingHotelBooking', JSON.stringify(bookingData));
 
-            const bookingResponse = await axios.post(`${API_BASE_URL}/hotels`, {
-                action: 'bookHotel',
-                ...bookingPayload
+            // Create hosted checkout session
+            const orderId = `HOTEL-${Date.now()}`;
+            console.log('🚀 Creating ArcPay hosted checkout session...');
+
+            const checkoutResponse = await ArcPayService.createHostedCheckout({
+                amount: total,
+                currency: 'USD',
+                orderId: orderId,
+                bookingType: 'hotel',
+                customerEmail: guestInfo.email || 'customer@jetsetgo.com',
+                customerName: `${guestInfo.firstName} ${guestInfo.lastName}`,
+                customerPhone: guestInfo.phone,
+                description: `Hotel Booking - ${hotel.name} (${nights} night${nights > 1 ? 's' : ''})`,
+                returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=hotel`,
+                cancelUrl: `${window.location.origin}/hotels/booking-summary${location.search}`,
+                bookingData: bookingData
             });
 
-            if (!bookingResponse.data?.success) {
-                throw new Error(bookingResponse.data?.error || 'Booking failed');
+            if (!checkoutResponse.success || !checkoutResponse.checkoutUrl) {
+                throw new Error(checkoutResponse.error?.error || 'Failed to create checkout session');
             }
 
-            const ref = bookingResponse.data.booking?.bookingReference || bookingResponse.data.bookingReference ||
-                'JET' + Date.now().toString(36).toUpperCase();
+            console.log('✅ Hosted checkout session created:', checkoutResponse.sessionId);
+            console.log('🔗 Redirecting to ArcPay payment page:', checkoutResponse.checkoutUrl);
 
-            setBookingReference(ref);
-            setBookingComplete(true);
-            setStep(3);
+            // Store session info for verification after payment
+            localStorage.setItem('pendingPaymentSession', JSON.stringify({
+                sessionId: checkoutResponse.sessionId,
+                orderId: orderId,
+                bookingType: 'hotel',
+                amount: total
+            }));
+
+            // Redirect to ArcPay hosted payment page
+            window.location.href = checkoutResponse.checkoutUrl;
+
         } catch (error) {
-            console.error('Booking error:', error);
-            alert('Booking failed. Please try again.');
+            console.error('❌ Payment processing error:', error);
+            
+            let errorMessage = 'Payment processing failed. Please try again.';
+            if (error.message.includes('gateway')) {
+                errorMessage = 'Payment gateway is temporarily unavailable. Please try again in a few minutes.';
+            } else if (error.message.includes('network') || error.message.includes('timeout')) {
+                errorMessage = 'Network connection issue. Please check your internet connection and try again.';
+            }
+
+            alert(`Payment failed: ${errorMessage}`);
         } finally {
             setFormSubmitting(false);
         }
@@ -545,15 +594,18 @@ const HotelBookingSummary = () => {
                                 <button
                                     onClick={handleSubmitBooking}
                                     disabled={formSubmitting}
-                                    className="w-full mt-6 bg-[#055B75] text-white py-3 rounded-xl font-bold hover:bg-[#034457] transition-all disabled:opacity-50"
+                                    className="w-full mt-6 bg-[#055B75] text-white py-3 rounded-xl font-bold hover:bg-[#034457] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
                                     {formSubmitting ? (
                                         <span className="flex items-center justify-center gap-2">
                                             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                            Processing...
+                                            Redirecting to Payment...
                                         </span>
                                     ) : (
-                                        `Pay $${total.toLocaleString()}`
+                                        <>
+                                            <Lock size={20} />
+                                            Proceed to Secure Payment - ${total.toLocaleString()}
+                                        </>
                                     )}
                                 </button>
                             </div>

@@ -6,6 +6,7 @@ import Footer from '../Footer';
 import withPageElements from "../PageWrapper";
 import currencyService from '../../../Services/CurrencyService';
 import Price from '../../../Components/Price';
+import ArcPayService from '../../../Services/ArcPayService';
 
 const PackageBookingSummary = () => {
   const navigate = useNavigate();
@@ -193,60 +194,79 @@ const PackageBookingSummary = () => {
     try {
       validateForm();
 
-      // Combine booking details with traveler details
-      const completeBookingData = {
+      console.log('🔍 Checking ArcPay Gateway status...');
+      const gatewayStatus = await ArcPayService.checkGatewayStatus();
+
+      if (!gatewayStatus.success || !gatewayStatus.gatewayOperational) {
+        console.warn('Gateway status check failed:', gatewayStatus);
+        throw new Error('Payment gateway is currently unavailable. Please try again later.');
+      }
+
+      const totalAmount = bookingDetails.pricing.total;
+
+      // Store booking data in localStorage before redirect
+      const bookingData = {
         packageDetails: bookingDetails,
         travelers: {
           primary: travelerDetails.primaryTraveler,
           additional: travelerDetails.additionalTravelers
         },
         specialRequests: travelerDetails.specialRequests,
-        paymentMethod: 'credit-card', // example value
-        bookingDate: new Date().toISOString()
+        paymentMethod: 'credit-card',
+        bookingDate: new Date().toISOString(),
+        totalAmount
       };
+      localStorage.setItem('pendingPackageBooking', JSON.stringify(bookingData));
 
-      // Here you would typically send the data to your backend
-      // const response = await fetch('/api/bookings', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(completeBookingData)
-      // });
-      
-      // if (!response.ok) throw new Error('Booking failed');
+      // Create hosted checkout session
+      const orderId = `PACKAGE-${Date.now()}`;
+      console.log('🚀 Creating ArcPay hosted checkout session...');
 
-      // For now, we simulate a payment gateway redirect
-      // Prepare payment data
-      const paymentData = {
-        amount: bookingDetails.pricing.total, 
+      const checkoutResponse = await ArcPayService.createHostedCheckout({
+        amount: totalAmount,
         currency: 'USD',
-        card: {
-          number: paymentDetails.cardNumber.replace(/\s/g, ''),
-          exp_month: paymentDetails.expiryDate.split('/')[0],
-          exp_year: `20${paymentDetails.expiryDate.split('/')[1]}`,
-          cvv: paymentDetails.cvv,
-          holder_name: paymentDetails.cardHolder
-        }
-      };
-
-      // Redirect to payment gateway
-      const arcGatewayUrl = 'https://secure.arcpayments.com/payment';
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = arcGatewayUrl;
-
-      // Add payment data as hidden fields
-      Object.entries(paymentData).forEach(([key, value]) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = typeof value === 'object' ? JSON.stringify(value) : value;
-        form.appendChild(input);
+        orderId: orderId,
+        bookingType: 'package',
+        customerEmail: travelerDetails.primaryTraveler.email || 'customer@jetsetgo.com',
+        customerName: `${travelerDetails.primaryTraveler.firstName} ${travelerDetails.primaryTraveler.lastName}`,
+        customerPhone: travelerDetails.primaryTraveler.phone,
+        description: `Package Booking - ${bookingDetails.name || 'Travel Package'}`,
+        returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=package`,
+        cancelUrl: `${window.location.origin}/packages/booking-summary`,
+        bookingData: bookingData
       });
 
-      document.body.appendChild(form);
-      form.submit();
+      if (!checkoutResponse.success || !checkoutResponse.checkoutUrl) {
+        throw new Error(checkoutResponse.error?.error || 'Failed to create checkout session');
+      }
+
+      console.log('✅ Hosted checkout session created:', checkoutResponse.sessionId);
+      console.log('🔗 Redirecting to ArcPay payment page:', checkoutResponse.checkoutUrl);
+
+      // Store session info for verification after payment
+      localStorage.setItem('pendingPaymentSession', JSON.stringify({
+        sessionId: checkoutResponse.sessionId,
+        orderId: orderId,
+        bookingType: 'package',
+        amount: totalAmount
+      }));
+
+      // Redirect to ArcPay hosted payment page
+      window.location.href = checkoutResponse.checkoutUrl;
+
     } catch (error) {
-      setError(error.message);
+      console.error('❌ Payment processing error:', error);
+      
+      let errorMessage = 'Payment processing failed. Please try again.';
+      if (error.message.includes('gateway')) {
+        errorMessage = 'Payment gateway is temporarily unavailable. Please try again in a few minutes.';
+      } else if (error.message.includes('network') || error.message.includes('timeout')) {
+        errorMessage = 'Network connection issue. Please check your internet connection and try again.';
+      } else {
+        errorMessage = error.message;
+      }
+
+      setError(errorMessage);
     } finally {
       setIsProcessing(false);
     }

@@ -7,6 +7,7 @@ import withPageElements from '../PageWrapper';
 import cruiseLineData from './data/cruiselines.json';
 import Price from '../../../Components/Price';
 import currencyService from '../../../Services/CurrencyService';
+import ArcPayService from '../../../Services/ArcPayService';
 
 function CruiseBookingSummary() {
   const navigate = useNavigate();
@@ -153,96 +154,88 @@ function CruiseBookingSummary() {
       // Validate form
       validateForm();
 
+      console.log('🔍 Checking ArcPay Gateway status...');
+      const gatewayStatus = await ArcPayService.checkGatewayStatus();
+
+      if (!gatewayStatus.success || !gatewayStatus.gatewayOperational) {
+        console.warn('Gateway status check failed:', gatewayStatus);
+        throw new Error('Payment gateway is currently unavailable. Please try again later.');
+      }
+
       // Calculate total amount including taxes and fees
       const basePrice = parseFloat(cruiseData.price.replace(/[^0-9.]/g, ''));
       const taxesAndFees = 150;
       const portCharges = 200;
       const totalAmount = basePrice + taxesAndFees + portCharges;
 
-      // Get the current currency code for payment metadata
-      const userCurrency = currencyService.getCurrency();
-      const convertedTotalAmount = currencyService.convertPrice(totalAmount, userCurrency);
+      // Store booking data in localStorage before redirect
+      const bookingData = {
+        cruiseId: cruiseData.id,
+        cruiseName: cruiseData.name,
+        cruiseImage: cruiseData.image,
+        duration: cruiseData.duration,
+        departure: cruiseData.departure,
+        arrival: cruiseData.arrival,
+        departureDate: cruiseData.departureDate,
+        returnDate: cruiseData.returnDate,
+        basePrice,
+        taxesAndFees,
+        portCharges,
+        totalAmount,
+        passengerDetails,
+        cardHolder: paymentDetails.cardHolder
+      };
+      localStorage.setItem('pendingCruiseBooking', JSON.stringify(bookingData));
 
-      // First create an order, then process payment
+      // Create hosted checkout session
       const orderId = `CRUISE-${Date.now()}`;
+      console.log('🚀 Creating ArcPay hosted checkout session...');
 
-      // Step 1: Create order
-      const orderData = {
-        amount: convertedTotalAmount,
-        currency: userCurrency,
-        booking_type: 'cruise',
-        booking_details: {
-          cruise_id: cruiseData.id,
-          cruise_name: cruiseData.name,
-          passengers: passengerDetails,
-          customer_name: paymentDetails.cardHolder,
-          customer_email: 'customer@example.com'
-        },
-        orderId: orderId
-      };
-
-      const orderResponse = await fetch('/api/payments/order/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(orderData)
-      });
-
-      const orderResult = await orderResponse.json();
-
-      if (!orderResult.success) {
-        throw new Error(orderResult.error || 'Failed to create order');
-      }
-
-      // Step 2: Process payment
-      const paymentData = {
+      const checkoutResponse = await ArcPayService.createHostedCheckout({
+        amount: totalAmount,
+        currency: 'USD',
         orderId: orderId,
-        amount: convertedTotalAmount,
-        currency: userCurrency,
-        cardDetails: {
-          cardNumber: paymentDetails.cardNumber,
-          expiryDate: paymentDetails.expiryDate,
-          cvv: paymentDetails.cvv
-        },
-        billingAddress: {
-          firstName: paymentDetails.cardHolder.split(' ')[0],
-          lastName: paymentDetails.cardHolder.split(' ').slice(1).join(' ') || paymentDetails.cardHolder.split(' ')[0]
-        }
-      };
-
-      // Process payment through our ARC Pay backend
-      const response = await fetch('/api/payments/payment/process', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(paymentData)
+        bookingType: 'cruise',
+        customerEmail: 'customer@jetsetgo.com', // You can add email field to passenger form
+        customerName: paymentDetails.cardHolder,
+        customerPhone: '', // You can add phone field to passenger form
+        description: `Cruise Booking - ${cruiseData.name} (${cruiseData.duration})`,
+        returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=cruise`,
+        cancelUrl: `${window.location.origin}/cruise/booking-summary${location.search}`,
+        bookingData: bookingData
       });
 
-      const result = await response.json();
-
-      if (result.success) {
-        setIsPaymentSuccess(true);
-        // Store booking details
-        localStorage.setItem('completedBooking', JSON.stringify({
-          cruiseData,
-          passengers: passengerDetails,
-          totalAmount,
-          orderId: orderId,
-          transactionId: result.transactionId
-        }));
-        // Redirect to booking confirmation page
-        setTimeout(() => {
-          window.location.href = '/booking-confirmation';
-        }, 2000);
-      } else {
-        throw new Error(result.error || 'Payment processing failed');
+      if (!checkoutResponse.success || !checkoutResponse.checkoutUrl) {
+        throw new Error(checkoutResponse.error?.error || 'Failed to create checkout session');
       }
 
+      console.log('✅ Hosted checkout session created:', checkoutResponse.sessionId);
+      console.log('🔗 Redirecting to ArcPay payment page:', checkoutResponse.checkoutUrl);
+
+      // Store session info for verification after payment
+      localStorage.setItem('pendingPaymentSession', JSON.stringify({
+        sessionId: checkoutResponse.sessionId,
+        orderId: orderId,
+        bookingType: 'cruise',
+        amount: totalAmount
+      }));
+
+      // Redirect to ArcPay hosted payment page
+      window.location.href = checkoutResponse.checkoutUrl;
 
     } catch (error) {
-      setError(error.message);
+      console.error('❌ Payment processing error:', error);
+      
+      let errorMessage = 'Payment processing failed. Please try again.';
+      if (error.message.includes('gateway')) {
+        errorMessage = 'Payment gateway is temporarily unavailable. Please try again in a few minutes.';
+      } else if (error.message.includes('network') || error.message.includes('timeout')) {
+        errorMessage = 'Network connection issue. Please check your internet connection and try again.';
+      } else {
+        errorMessage = error.message;
+      }
+
+      setError(errorMessage);
     } finally {
       setIsProcessing(false);
     }
