@@ -112,8 +112,8 @@ function FlightPayment() {
         };
         localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingData));
 
-        // ARC Pay requires alphanumeric order IDs (no hyphens)
-        const orderId = `FLT${Date.now()}`;
+        // ARC Pay requires alphanumeric order IDs under 16 characters
+        const orderId = `F${Date.now().toString(36).toUpperCase()}`;
 
         const checkoutResponse = await ArcPayService.createHostedCheckout({
           amount: amount,
@@ -290,8 +290,8 @@ function FlightPayment() {
       localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingData));
 
       // Create hosted checkout session - redirects to ARC Pay payment page
-      // ARC Pay requires alphanumeric order IDs (no hyphens)
-      const orderId = `FLT${Date.now()}`;
+      // ARC Pay requires alphanumeric order IDs under 16 characters
+      const orderId = `F${Date.now().toString(36).toUpperCase()}`;
       console.log('🚀 Creating ARC Pay hosted checkout session...');
 
       const checkoutResponse = await ArcPayService.createHostedCheckout({

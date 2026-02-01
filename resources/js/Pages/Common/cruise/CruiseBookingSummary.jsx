@@ -188,8 +188,8 @@ function CruiseBookingSummary() {
       localStorage.setItem('pendingCruiseBooking', JSON.stringify(bookingData));
 
       // Create hosted checkout session
-      // ARC Pay requires alphanumeric order IDs (no hyphens)
-      const orderId = `CRZ${Date.now()}`;
+      // ARC Pay requires alphanumeric order IDs under 16 characters
+      const orderId = `C${Date.now().toString(36).toUpperCase()}`;
       console.log('🚀 Creating ArcPay hosted checkout session...');
 
       const checkoutResponse = await ArcPayService.createHostedCheckout({
