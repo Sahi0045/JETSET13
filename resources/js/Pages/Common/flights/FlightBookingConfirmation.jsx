@@ -7,7 +7,7 @@ import withPageElements from "../PageWrapper";
 import Price from "../../../Components/Price";
 import currencyService from "../../../Services/CurrencyService";
 import { flightBookingData } from "./data";
-import supabase from "../../../supabaseClient";
+import supabase from "../../../lib/supabase";
 
 // CONFIGURATION: Set this to true when Amadeus API is available
 const USE_AMADEUS_API = false;
