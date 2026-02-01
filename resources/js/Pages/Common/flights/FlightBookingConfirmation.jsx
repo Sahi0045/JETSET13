@@ -7,6 +7,7 @@ import withPageElements from "../PageWrapper";
 import Price from "../../../Components/Price";
 import currencyService from "../../../Services/CurrencyService";
 import { flightBookingData } from "./data";
+import supabase from "../../../supabaseClient";
 
 // CONFIGURATION: Set this to true when Amadeus API is available
 const USE_AMADEUS_API = false;
@@ -52,8 +53,18 @@ function FlightBookingConfirmation() {
 
   // Check authentication status on component mount
   useEffect(() => {
-    const authStatus = localStorage.getItem('isAuthenticated');
-    setIsLoggedIn(authStatus === 'true');
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setIsLoggedIn(!!session);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        // Fallback to localStorage check
+        const authStatus = localStorage.getItem('isAuthenticated');
+        setIsLoggedIn(authStatus === 'true');
+      }
+    };
+    checkAuth();
   }, []);
 
   // Authenticate with Amadeus API (if enabled)
@@ -70,7 +81,7 @@ function FlightBookingConfirmation() {
       // });
       // const data = await response.json();
       // setApiToken(data.access_token);
-      
+
       // For now, we'll just set a mock token
       console.log("Authenticated with Amadeus API (mock)");
       setApiToken("mock_amadeus_token");
@@ -100,15 +111,15 @@ function FlightBookingConfirmation() {
       // });
       // const data = await response.json();
       // return transformBookingData(data);
-      
+
       // For now, simulate API call with a delay
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // Return mock booking data
-      const mockBooking = flightBookingData.bookings.find(b => b.bookingId === id) || 
-                         flightBookingData.internationalBookings.find(b => b.bookingId === id) ||
-                         flightBookingData.bookings[0];
-      
+      const mockBooking = flightBookingData.bookings.find(b => b.bookingId === id) ||
+        flightBookingData.internationalBookings.find(b => b.bookingId === id) ||
+        flightBookingData.bookings[0];
+
       return mockBooking;
     } catch (error) {
       console.error("Error fetching booking from API:", error);
@@ -130,10 +141,10 @@ function FlightBookingConfirmation() {
 
     // Calculate base price - try multiple sources
     const basePrice = parseFloat(
-      flightData.price?.base || 
-      flightData.originalOffer?.price?.base || 
-      flightData.price?.total || 
-      flightData.price?.amount || 
+      flightData.price?.base ||
+      flightData.originalOffer?.price?.base ||
+      flightData.price?.total ||
+      flightData.price?.amount ||
       0
     );
 
@@ -253,11 +264,11 @@ function FlightBookingConfirmation() {
   // Fetch booking details
   useEffect(() => {
     setLoading(true);
-    
+
     const getBookingDetails = async () => {
       try {
         let bookingData;
-        
+
         // Check if flight data was passed from search page
         if (location.state?.flightData) {
           console.log("Using flight data from search page", location.state.flightData);
@@ -266,7 +277,7 @@ function FlightBookingConfirmation() {
           setError("No flight data available. Please return to the search page and try again.");
           return;
         }
-        
+
         if (!bookingData) {
           throw new Error("Failed to process flight data");
         }
@@ -282,7 +293,7 @@ function FlightBookingConfirmation() {
         setLoading(false);
       }
     };
-    
+
     getBookingDetails();
   }, [location.state, bookingId]);
 
@@ -320,12 +331,12 @@ function FlightBookingConfirmation() {
 
     // Get base fare from flight data
     const baseFare = parseFloat(bookingData.flight.price.base) || 0;
-    
+
     // Get taxes and platform fee
     const countryTax = bookingData.flight.price.countryTax || 0;
     const platformFee = bookingData.flight.price.platformFee || 0;
     const totalTaxes = bookingData.flight.price.totalTaxes || 0;
-    
+
     // Calculate add-ons total
     const addonsTotal = selectedAddons.reduce((sum, addonId) => {
       const addon = bookingData.addOns.find(a => a.id === addonId);
@@ -334,7 +345,7 @@ function FlightBookingConfirmation() {
 
     // Calculate VIP service fee if selected
     const vipServiceFee = vipService ? (bookingData.vipServiceFee || 0) : 0;
-    
+
     // Calculate per passenger costs (minimum 1 passenger)
     const effectivePassengerCount = Math.max(1, passengerCount);
     const totalBaseFare = baseFare * effectivePassengerCount;
@@ -431,13 +442,13 @@ function FlightBookingConfirmation() {
     setPassengerData(updatedPassengers);
     updateFareSummary(updatedPassengers.length);
   };
-  
+
   const handleRemovePassenger = (id) => {
     if (passengerData.length <= 1) {
       alert("Cannot remove the last passenger");
       return;
     }
-    
+
     const updatedPassengers = passengerData.filter(passenger => passenger.id !== id);
     setPassengerData(updatedPassengers);
     updateFareSummary(updatedPassengers.length);
@@ -465,12 +476,12 @@ function FlightBookingConfirmation() {
       newSelectedAddons = [...selectedAddons, addonId];
     }
     setSelectedAddons(newSelectedAddons);
-    
+
     // Update fare summary after toggling addon
     const passengerCount = passengerData.length || 1;
     updateFareSummary(passengerCount, bookingDetails);
   };
-  
+
   // Toggle VIP service
   const toggleVipService = () => {
     setVipService(!vipService);
@@ -479,30 +490,30 @@ function FlightBookingConfirmation() {
   // Handle proceeding to payment page
   const handleProceedToPayment = () => {
     // Validate passenger data
-    const isPassengerDataValid = passengerData.every(p => 
+    const isPassengerDataValid = passengerData.every(p =>
       p.firstName && p.lastName && p.mobile
     );
-    
+
     if (!isPassengerDataValid) {
       alert("Please fill in all required passenger details before proceeding.");
       return;
     }
-    
+
     if (USE_AMADEUS_API) {
       // In a real app, you would make an API call to prepare the booking for payment
       console.log("Preparing booking for payment with Amadeus API");
     }
-    
+
     // Navigate to payment page with all the booking details
-    navigate('/flight-payment', { 
-      state: { 
+    navigate('/flight-payment', {
+      state: {
         bookingDetails,
         passengerData,
         selectedAddons,
         vipService,
         calculatedFare,
         selectedFlight: location.state?.flightData // Pass the original flight data
-      } 
+      }
     });
   };
 
@@ -529,7 +540,7 @@ function FlightBookingConfirmation() {
         <div className="text-gray-600 text-sm">
           {calculatedFare.currency} {addon.price.toFixed(2)}
         </div>
-        <button 
+        <button
           onClick={() => toggleAddon(addon.id)}
           className={`mt-2 ${selectedAddons.includes(addon.id) ? 'bg-green-600' : 'bg-blue-600'} text-white px-4 py-1 rounded hover:opacity-90 transition-colors text-sm`}
         >
@@ -552,7 +563,7 @@ function FlightBookingConfirmation() {
             <Price amount={calculatedFare.baseFare} />
           </span>
         </div>
-        
+
         {/* Taxes & Charges */}
         <div className="py-3 border-b mb-3">
           <div className="flex justify-between mb-2">
@@ -574,7 +585,7 @@ function FlightBookingConfirmation() {
             </span>
           </div>
         </div>
-        
+
         {/* Add-ons */}
         <div className={`${selectedAddons.length > 0 || vipService ? 'py-3 border-b mb-3' : 'hidden'}`}>
           <div className="flex justify-between mb-2">
@@ -583,7 +594,7 @@ function FlightBookingConfirmation() {
               <Price amount={calculatedFare.addonsTotal + calculatedFare.vipServiceFee} />
             </span>
           </div>
-          
+
           {selectedAddons.map(addonId => {
             const addon = bookingDetails.addOns.find(a => a.id === addonId);
             if (!addon) return null;
@@ -596,7 +607,7 @@ function FlightBookingConfirmation() {
               </div>
             );
           })}
-          
+
           {vipService && (
             <div className="flex justify-between text-sm text-gray-500 pl-4">
               <span>VIP Fast Track Service</span>
@@ -606,7 +617,7 @@ function FlightBookingConfirmation() {
             </div>
           )}
         </div>
-        
+
         {/* Total */}
         <div className="pt-3">
           <div className="flex justify-between">
@@ -618,7 +629,7 @@ function FlightBookingConfirmation() {
         </div>
 
         {/* Payment Button */}
-        <button 
+        <button
           onClick={handleProceedToPayment}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors mt-6 flex justify-center items-center"
         >
@@ -649,7 +660,7 @@ function FlightBookingConfirmation() {
   return (
     <div className="bg-gray-50 min-h-screen">
       <Navbar forceScrolled={true} />
-      
+
       <div className="container mx-auto px-4 pt-24 pb-10">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Fare Summary */}
@@ -659,15 +670,15 @@ function FlightBookingConfirmation() {
                 <h2 className="text-xl font-semibold text-gray-800">Fare Summary</h2>
                 <div className="text-sm text-gray-500">{passengerData.length} Traveller</div>
               </div>
-              
+
               <div className="p-8 border-t border-gray-300">
                 <h3 className="font-bold text-xl mb-4">Fare Summary</h3>
-                
+
                 {renderFareSummary()}
               </div>
             </div>
           </div>
-          
+
           {/* Right Column - Flight & Traveler Details */}
           <div className="lg:col-span-2">
             {/* Flight Section */}
@@ -686,12 +697,12 @@ function FlightBookingConfirmation() {
                 </div>
                 <div className="flex items-center text-sm text-gray-600 mt-1">
                   <span className="mr-2">
-                    {bookingDetails?.flight?.stops === "0" ? "Non Stop" : `${bookingDetails?.flight?.stops || 1} stop`} · 
+                    {bookingDetails?.flight?.stops === "0" ? "Non Stop" : `${bookingDetails?.flight?.stops || 1} stop`} ·
                     {formatDuration(bookingDetails?.flight?.duration)}
                   </span>
                 </div>
               </div>
-              
+
               <div className="p-4">
                 <div className="flex items-center mb-4">
                   <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center mr-2">
@@ -712,7 +723,7 @@ function FlightBookingConfirmation() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-12 gap-4 mb-4">
                   {/* Departure */}
                   <div className="col-span-5">
@@ -722,13 +733,13 @@ function FlightBookingConfirmation() {
                       <div className="text-gray-700">{bookingDetails?.flight?.departureCity || 'Departure City'}</div>
                     </div>
                     <div className="text-sm text-gray-600 mt-1">
-                      {bookingDetails?.flight?.departureAirport?.name || 
-                       (typeof bookingDetails?.flight?.departureAirport === 'string' ? 
-                         bookingDetails.flight.departureAirport.split('(')[0] : 
-                         'Departure Airport')}
+                      {bookingDetails?.flight?.departureAirport?.name ||
+                        (typeof bookingDetails?.flight?.departureAirport === 'string' ?
+                          bookingDetails.flight.departureAirport.split('(')[0] :
+                          'Departure Airport')}
                     </div>
                   </div>
-                  
+
                   {/* Flight Duration */}
                   <div className="col-span-2 flex flex-col items-center justify-center">
                     <div className="text-sm text-gray-600">{bookingDetails?.flight?.duration || 'Duration'}</div>
@@ -737,11 +748,11 @@ function FlightBookingConfirmation() {
                       <div className="absolute h-2 w-2 rounded-full bg-gray-400 -top-1 right-0"></div>
                     </div>
                     <div className="text-xs text-gray-500">
-                      {bookingDetails?.flight?.stops === "0" ? "Nonstop" : 
-                       `${bookingDetails?.flight?.stops || "0"} ${parseInt(bookingDetails?.flight?.stops || "0") === 1 ? "stop" : "stops"}`}
+                      {bookingDetails?.flight?.stops === "0" ? "Nonstop" :
+                        `${bookingDetails?.flight?.stops || "0"} ${parseInt(bookingDetails?.flight?.stops || "0") === 1 ? "stop" : "stops"}`}
                     </div>
                   </div>
-                  
+
                   {/* Arrival */}
                   <div className="col-span-5">
                     <div className="text-2xl font-bold">{bookingDetails?.flight?.arrivalTime || 'Arrival Time'}</div>
@@ -750,19 +761,19 @@ function FlightBookingConfirmation() {
                       <div className="text-gray-700">{bookingDetails?.flight?.arrivalCity || 'Arrival City'}</div>
                     </div>
                     <div className="text-sm text-gray-600 mt-1">
-                      {bookingDetails?.flight?.arrivalAirport?.name || 
-                       (typeof bookingDetails?.flight?.arrivalAirport === 'string' ? 
-                         bookingDetails.flight.arrivalAirport.split('(')[0] : 
-                         'Arrival Airport')}
+                      {bookingDetails?.flight?.arrivalAirport?.name ||
+                        (typeof bookingDetails?.flight?.arrivalAirport === 'string' ?
+                          bookingDetails.flight.arrivalAirport.split('(')[0] :
+                          'Arrival Airport')}
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Baggage Information */}
                 <div className="mt-4">
                   <div className="text-sm">
                     <span className="font-medium">Cabin Baggage:</span>{" "}
-                    {typeof bookingDetails?.baggage?.cabin === 'object' 
+                    {typeof bookingDetails?.baggage?.cabin === 'object'
                       ? `${bookingDetails.baggage.cabin.weight} ${bookingDetails.baggage.cabin.weightUnit}`
                       : `${bookingDetails?.baggage?.cabin || "0 KG"}`}
                   </div>
@@ -775,18 +786,17 @@ function FlightBookingConfirmation() {
                 </div>
               </div>
             </div>
-            
+
             {/* Traveller Details Section */}
             <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 mb-6">
               <div className="p-4 bg-white border-b border-gray-200 flex justify-between items-center">
                 <h2 className="text-xl font-semibold">Traveller Details</h2>
-                <button 
+                <button
                   onClick={editMode ? savePassengerDetails : toggleEditMode}
-                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
-                    editMode 
-                      ? 'bg-green-600 hover:bg-green-700 text-white' 
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  }`}
+                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${editMode
+                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    }`}
                 >
                   {editMode ? (
                     <>
@@ -801,7 +811,7 @@ function FlightBookingConfirmation() {
                   )}
                 </button>
               </div>
-              
+
               <div className="p-4">
                 {editMode && (
                   <div className="bg-green-50 p-4 mb-4 rounded-md border border-green-200">
@@ -814,23 +824,25 @@ function FlightBookingConfirmation() {
                     </div>
                   </div>
                 )}
-                
-                <div className="bg-blue-50 p-4 mb-4 flex justify-between items-center rounded-md">
-                  <div className="flex items-center text-sm text-gray-700">
-                    <svg className="w-5 h-5 mr-2 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                      <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                    Log in to view your saved traveller list, unlock amazing deals & much more!
+
+                {!isLoggedIn && (
+                  <div className="bg-blue-50 p-4 mb-4 flex justify-between items-center rounded-md">
+                    <div className="flex items-center text-sm text-gray-700">
+                      <svg className="w-5 h-5 mr-2 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                      </svg>
+                      Log in to view your saved traveller list, unlock amazing deals & much more!
+                    </div>
+                    <button
+                      onClick={handleLogin}
+                      className="text-blue-600 font-medium flex items-center mt-2 hover:underline"
+                    >
+                      LOGIN NOW
+                    </button>
                   </div>
-                  <button 
-                    onClick={handleLogin}
-                    className="text-blue-600 font-medium flex items-center mt-2 hover:underline"
-                  >
-                    LOGIN NOW
-                  </button>
-                </div>
-                
+                )}
+
                 {passengerData.map((passenger, index) => (
                   <div key={passenger.id} className="mb-6 pb-4 border-b border-gray-200 last:border-0 last:mb-0 last:pb-0">
                     <div className="flex items-center justify-between mb-3">
@@ -853,29 +865,28 @@ function FlightBookingConfirmation() {
                         </button>
                       )}
                     </div>
-                    
+
                     <div className="flex items-center mb-3">
-                      <input 
-                        type="checkbox" 
-                        className="w-4 h-4 mr-2 text-blue-600 border-gray-300 rounded" 
-                        checked 
-                        readOnly 
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 mr-2 text-blue-600 border-gray-300 rounded"
+                        checked
+                        readOnly
                       />
                       <div className="font-medium">{passenger.firstName} {passenger.lastName}</div>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           First Name *
                         </label>
-                        <input 
-                          type="text" 
-                          className={`w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            editMode 
-                              ? 'border-gray-300 bg-white' 
-                              : 'border-gray-200 bg-gray-50'
-                          }`}
+                        <input
+                          type="text"
+                          className={`w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${editMode
+                            ? 'border-gray-300 bg-white'
+                            : 'border-gray-200 bg-gray-50'
+                            }`}
                           placeholder="Enter first name"
                           value={passenger.firstName}
                           onChange={(e) => handlePassengerChange(passenger.id, 'firstName', e.target.value)}
@@ -887,13 +898,12 @@ function FlightBookingConfirmation() {
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Last Name *
                         </label>
-                        <input 
-                          type="text" 
-                          className={`w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            editMode 
-                              ? 'border-gray-300 bg-white' 
-                              : 'border-gray-200 bg-gray-50'
-                          }`}
+                        <input
+                          type="text"
+                          className={`w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${editMode
+                            ? 'border-gray-300 bg-white'
+                            : 'border-gray-200 bg-gray-50'
+                            }`}
                           placeholder="Enter last name"
                           value={passenger.lastName}
                           onChange={(e) => handlePassengerChange(passenger.id, 'lastName', e.target.value)}
@@ -902,13 +912,13 @@ function FlightBookingConfirmation() {
                         />
                       </div>
                       <div className="flex gap-2">
-                        <button 
+                        <button
                           onClick={() => handlePassengerChange(passenger.id, 'gender', 'male')}
                           className={`flex-1 p-2 border ${passenger.gender === 'male' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white'} rounded text-center transition-colors`}
                         >
                           MALE
                         </button>
-                        <button 
+                        <button
                           onClick={() => handlePassengerChange(passenger.id, 'gender', 'female')}
                           className={`flex-1 p-2 border ${passenger.gender === 'female' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white'} rounded text-center transition-colors`}
                         >
@@ -916,12 +926,12 @@ function FlightBookingConfirmation() {
                         </button>
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                       <div>
                         <div className="text-sm text-gray-600 mb-1">Country Code</div>
                         <div className="relative">
-                          <select 
+                          <select
                             className="w-full p-2 border border-gray-300 rounded appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             disabled={!editMode}
                           >
@@ -936,13 +946,12 @@ function FlightBookingConfirmation() {
                       </div>
                       <div>
                         <div className="text-sm font-medium text-gray-700 mb-1">Mobile No *</div>
-                        <input 
-                          type="text" 
-                          className={`w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            editMode 
-                              ? 'border-gray-300 bg-white' 
-                              : 'border-gray-200 bg-gray-50'
-                          }`}
+                        <input
+                          type="text"
+                          className={`w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${editMode
+                            ? 'border-gray-300 bg-white'
+                            : 'border-gray-200 bg-gray-50'
+                            }`}
                           placeholder="Enter mobile number"
                           value={passenger.mobile}
                           onChange={(e) => handlePassengerChange(passenger.id, 'mobile', e.target.value)}
@@ -952,9 +961,9 @@ function FlightBookingConfirmation() {
                       </div>
                       <div>
                         <div className="text-sm text-gray-600 mb-1">Email</div>
-                        <input 
-                          type="email" 
-                          className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                        <input
+                          type="email"
+                          className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="Email(Optional)"
                           value={passenger.email}
                           onChange={(e) => handlePassengerChange(passenger.id, 'email', e.target.value)}
@@ -962,12 +971,12 @@ function FlightBookingConfirmation() {
                         />
                       </div>
                     </div>
-                    
+
                     <div className="mt-4">
                       <label className="flex items-center">
-                        <input 
-                          type="checkbox" 
-                          className="w-4 h-4 mr-2 text-blue-600 border-gray-300 rounded" 
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 mr-2 text-blue-600 border-gray-300 rounded"
                           checked={passenger.requiresWheelchair}
                           onChange={(e) => handlePassengerChange(passenger.id, 'requiresWheelchair', e.target.checked)}
                           disabled={!editMode}
@@ -977,9 +986,9 @@ function FlightBookingConfirmation() {
                     </div>
                   </div>
                 ))}
-                
+
                 {editMode && (
-                  <button 
+                  <button
                     onClick={handleAddPassenger}
                     className="text-blue-600 font-medium flex items-center mt-2 hover:underline"
                   >
@@ -988,7 +997,7 @@ function FlightBookingConfirmation() {
                 )}
               </div>
             </div>
-            
+
             {/* Booking details */}
             <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 mb-6">
               <div className="p-4">
@@ -1010,25 +1019,25 @@ function FlightBookingConfirmation() {
                     </div>
                     <div>
                       <div className="text-sm text-gray-600 mb-1">Mobile No</div>
-                      <input 
-                        type="text" 
-                        className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                      <input
+                        type="text"
+                        className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                         value={bookingDetails?.contact?.phone}
                         readOnly
                       />
                     </div>
                     <div>
                       <div className="text-sm text-gray-600 mb-1">Email</div>
-                      <input 
-                        type="email" 
-                        className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                      <input
+                        type="email"
+                        className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                         value={bookingDetails?.contact?.email}
                         readOnly
                       />
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="text-sm text-blue-600 mb-4">
                   {passengerData.length > 0 ? (
                     `Booking details & alerts will also be sent to ${passengerData[0].firstName} ${passengerData[0].lastName}`
@@ -1036,7 +1045,7 @@ function FlightBookingConfirmation() {
                     "Please add passenger details to receive booking alerts"
                   )}
                 </div>
-                
+
                 <div>
                   <label className="flex items-center">
                     <input type="checkbox" className="w-4 h-4 mr-2 text-blue-600 border-gray-300 rounded" />
@@ -1045,13 +1054,13 @@ function FlightBookingConfirmation() {
                 </div>
               </div>
             </div>
-            
+
             {/* Add-on Selection */}
             <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 mb-6">
               <div className="p-4">
                 <h2 className="text-lg font-semibold mb-2">Not sure of your travel?</h2>
                 <p className="text-sm text-gray-600 mb-4">Get full flexibility with add-ons</p>
-                
+
                 {/* Add-on Options */}
                 {bookingDetails?.addOns && bookingDetails.addOns.length > 0 ? (
                   bookingDetails.addOns.map((addon) => renderAddon(addon))
@@ -1062,7 +1071,7 @@ function FlightBookingConfirmation() {
                 )}
               </div>
             </div>
-            
+
             {/* Fly Like a VIP */}
             <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 mb-6">
               <div className="p-4">
@@ -1082,14 +1091,14 @@ function FlightBookingConfirmation() {
                         : bookingDetails?.flight?.airline?.name || 'JetSetters Airlines'} Priority Check-in & Bag Services.</p>
                     </div>
                   </div>
-                  <button 
+                  <button
                     onClick={toggleVipService}
                     className={`text-blue-600 font-medium px-3 py-1 border border-blue-300 rounded hover:bg-blue-50 transition-colors ${vipService ? 'bg-blue-50' : ''}`}
                   >
                     {vipService ? 'ADDED' : '+ADD'}
                   </button>
                 </div>
-                
+
                 <div className="flex items-center justify-center mt-3 space-x-2 text-sm">
                   <div className="flex items-center">
                     <span className="inline-block w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mr-1 text-xs">
@@ -1113,12 +1122,12 @@ function FlightBookingConfirmation() {
                 </div>
               </div>
             </div>
-            
+
             {/* Visa Requirements Section - Only shown for international flights */}
             {bookingDetails?.isInternational && bookingDetails?.visaRequirements && (
               <div className="bg-white rounded-lg shadow-md mb-6">
-                <div 
-                  className="p-4 border-b flex justify-between items-center cursor-pointer" 
+                <div
+                  className="p-4 border-b flex justify-between items-center cursor-pointer"
                   onClick={() => toggleSection('visaRequirements')}
                 >
                   <h2 className="text-xl font-semibold text-gray-800">Visa & Travel Documents</h2>
@@ -1148,7 +1157,7 @@ function FlightBookingConfirmation() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <h3 className="text-lg font-semibold mb-3">Visa Information</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                       <div>
@@ -1164,18 +1173,18 @@ function FlightBookingConfirmation() {
                         <p className="font-semibold">{bookingDetails?.visaRequirements?.processingTime}</p>
                       </div>
                     </div>
-                    
+
                     <h3 className="text-lg font-semibold mb-3">Required Documents</h3>
                     <ul className="list-disc pl-5 space-y-2 mb-6">
                       {bookingDetails?.visaRequirements?.requirements && bookingDetails.visaRequirements.requirements.map((req, index) => (
                         <li key={index} className="text-gray-700">{req}</li>
                       ))}
                     </ul>
-                    
+
                     <div className="mt-4">
-                      <a 
-                        href={bookingDetails?.visaRequirements?.officialWebsite} 
-                        target="_blank" 
+                      <a
+                        href={bookingDetails?.visaRequirements?.officialWebsite}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary hover:text-primary-dark font-semibold flex items-center"
                       >
@@ -1192,7 +1201,7 @@ function FlightBookingConfirmation() {
           </div>
         </div>
       </div>
-      
+
       <Footer />
     </div>
   );
