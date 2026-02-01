@@ -122,7 +122,10 @@ function FlightPayment() {
           customerPhone: paymentData?.passengerData?.[0]?.phone,
           description: `Flight Booking - ${paymentData?.bookingDetails?.flight?.flightNumber || orderId}`,
           returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=flight`,
-          cancelUrl: `${window.location.origin}/flight-payment?cancelled=true`
+          cancelUrl: `${window.location.origin}/flight-payment?cancelled=true`,
+          // Pass flight data for ARC Pay certification (airline data elements)
+          flightData: paymentData?.selectedFlight?.originalOffer || paymentData?.selectedFlight,
+          bookingData: bookingData
         });
 
         if (checkoutResponse.success && checkoutResponse.checkoutUrl) {

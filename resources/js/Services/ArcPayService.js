@@ -67,7 +67,8 @@ class ArcPayService {
                 description: checkoutData.description,
                 returnUrl: checkoutData.returnUrl,
                 cancelUrl: checkoutData.cancelUrl,
-                bookingData: checkoutData.bookingData
+                bookingData: checkoutData.bookingData,
+                flightData: checkoutData.flightData
             });
 
             return {

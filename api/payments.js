@@ -1801,8 +1801,10 @@ async function handleHostedCheckout(req, res) {
       description,
       returnUrl,
       cancelUrl,
-      // Additional booking data
-      bookingData
+      // Additional booking data for airline transactions
+      bookingData,
+      // Flight-specific data for ARC Pay certification
+      flightData
     } = req.body;
 
     // Validate required fields
@@ -1824,6 +1826,10 @@ async function handleHostedCheckout(req, res) {
     const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
     const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
 
+    // Travel Agent Info provided by ARC
+    const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || 'JETSET001';
+    const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'JetSet Travel LLC';
+
     // ARC Pay uses merchant.MERCHANT_ID:password format for authentication
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
@@ -1835,6 +1841,12 @@ async function handleHostedCheckout(req, res) {
     const cleanBaseUrl = arcBaseUrl.replace(/\/$/, '');
     const sessionUrl = `${cleanBaseUrl}/merchant/${arcMerchantId}/session`;
 
+    // Parse passenger name
+    const nameParts = (customerName || 'Guest User').split(' ');
+    const firstName = nameParts[0] || 'Guest';
+    const lastName = nameParts.slice(1).join(' ') || 'User';
+
+    // Build the request body
     const requestBody = {
       apiOperation: 'INITIATE_CHECKOUT',
       interaction: {
@@ -1865,10 +1877,105 @@ async function handleHostedCheckout(req, res) {
       }
     };
 
+    // Add airline data for flight bookings (Required for ARC Pay Certification)
+    if (bookingType === 'flight') {
+      // Extract flight details from flightData or bookingData
+      const flight = flightData || bookingData?.selectedFlight || bookingData?.flightData || {};
+      const itinerary = flight?.itineraries?.[0] || flight?.itinerary || {};
+      const segments = itinerary?.segments || flight?.segments || [];
+      const firstSegment = segments[0] || {};
+      const lastSegment = segments[segments.length - 1] || firstSegment;
+
+      // Get passenger info
+      const passengers = bookingData?.passengerData || [];
+      const primaryPassenger = passengers[0] || {};
+
+      // Build airline object with required fields for certification
+      requestBody.airline = {
+        // Document Type - MCO (Miscellaneous Charge Order) recommended
+        documentType: 'MCO',
+
+        // Ticket Number (will be assigned after booking confirmation)
+        ticket: {
+          ticketNumber: orderId, // Use order ID as placeholder, update after Amadeus confirmation
+          issue: {
+            date: new Date().toISOString().split('T')[0], // Today's date
+            travelAgentCode: travelAgentCode,
+            travelAgentName: travelAgentName
+          }
+        },
+
+        // Booking Reference / PNR
+        bookingReference: flight?.pnr || flight?.bookingReference || orderId,
+
+        // Passenger Information
+        passenger: {
+          firstName: primaryPassenger?.firstName || firstName,
+          lastName: primaryPassenger?.lastName || lastName
+        },
+
+        // Travel Agent Information (provided by ARC)
+        travelAgentCode: travelAgentCode,
+        travelAgentName: travelAgentName,
+
+        // Flight Itinerary
+        itinerary: {
+          leg: segments.map((segment, index) => ({
+            // Carrier Code - ARC requires "889" or "XD"
+            carrierCode: '889', // ARC designated carrier code
+
+            // Departure Information
+            departureDate: segment?.departure?.at?.split('T')[0] ||
+              firstSegment?.departure?.at?.split('T')[0] ||
+              new Date().toISOString().split('T')[0],
+            departureTime: segment?.departure?.at?.split('T')[1]?.substring(0, 5) ||
+              firstSegment?.departure?.at?.split('T')[1]?.substring(0, 5) ||
+              '00:00',
+            departureAirport: segment?.departure?.iataCode ||
+              firstSegment?.departure?.iataCode ||
+              flight?.origin || 'XXX',
+
+            // Destination Information
+            destinationAirport: segment?.arrival?.iataCode ||
+              lastSegment?.arrival?.iataCode ||
+              flight?.destination || 'XXX',
+
+            // Flight Number / PNR
+            flightNumber: segment?.number || segment?.flightNumber ||
+              firstSegment?.number || 'XXX',
+
+            // Class of Service: Y = Economy, W = Premium Economy
+            classOfService: segment?.cabin === 'BUSINESS' ? 'W' :
+              segment?.cabin === 'FIRST' ? 'W' : 'Y',
+
+            // Fare basis (optional)
+            fareBasis: segment?.fareBasis || 'ECONOMY'
+          }))
+        }
+      };
+
+      // If no segments found, create a basic leg entry
+      if (requestBody.airline.itinerary.leg.length === 0) {
+        requestBody.airline.itinerary.leg = [{
+          carrierCode: '889',
+          departureDate: new Date().toISOString().split('T')[0],
+          departureTime: '00:00',
+          departureAirport: flight?.origin || bookingData?.origin || 'XXX',
+          destinationAirport: flight?.destination || bookingData?.destination || 'XXX',
+          flightNumber: flight?.flightNumber || orderId.substring(0, 4),
+          classOfService: 'Y'
+        }];
+      }
+
+      console.log('✈️ Airline data for ARC Pay:', JSON.stringify(requestBody.airline, null, 2));
+    }
+
     // Add customer info if available
     if (customerEmail) {
       requestBody.customer = {
-        email: customerEmail
+        email: customerEmail,
+        firstName: firstName,
+        lastName: lastName
       };
       if (customerPhone) {
         const cleanPhone = customerPhone.replace(/\D/g, '');
