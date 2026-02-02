@@ -77,10 +77,15 @@ router.all('/', async (req, res) => {
                 return handleGetPaymentDetails(req, res);
             case 'gateway-status':
                 return res.json({ success: true, status: 'OPERATING' });
+            case 'hosted-checkout':
+                return handleHostedCheckout(req, res);
+            case 'session-create':
+                return handleSessionCreate(req, res);
             default:
                 return res.status(400).json({
                     success: false,
-                    error: `Unknown action: ${action}`
+                    error: `Unknown action: ${action}`,
+                    supportedActions: ['initiate-payment', 'payment-callback', 'get-payment-details', 'gateway-status', 'hosted-checkout', 'session-create']
                 });
         }
     } catch (error) {
@@ -254,6 +259,254 @@ async function handleInitiatePayment(req, res) {
         return res.status(500).json({
             success: false,
             error: 'Payment initiation failed',
+            details: error.response?.data?.error?.explanation || error.message
+        });
+    }
+}
+
+// Hosted Checkout - Create ARC Pay Hosted Checkout session for direct bookings
+async function handleHostedCheckout(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        console.log('🚀 handleHostedCheckout called for direct booking');
+        console.log('Request body:', JSON.stringify(req.body, null, 2));
+
+        const {
+            amount,
+            currency = 'USD',
+            orderId,
+            bookingType = 'flight',
+            customerEmail,
+            customerName,
+            customerPhone,
+            description,
+            returnUrl,
+            cancelUrl,
+            bookingData,
+            flightData
+        } = req.body;
+
+        // Validate required fields
+        if (!amount || !orderId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: amount and orderId are required'
+            });
+        }
+
+        console.log('💳 Creating ARC Pay hosted checkout session...');
+        console.log('   Order ID:', orderId);
+        console.log('   Amount:', amount, currency);
+        console.log('   Booking Type:', bookingType);
+
+        // ARC Pay credentials
+        const arcMerchantId = ARC_PAY_CONFIG.MERCHANT_ID;
+        const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
+        let arcBaseUrl = ARC_PAY_CONFIG.BASE_URL;
+        
+        // Upgrade to v100 if using v77
+        if (arcBaseUrl && arcBaseUrl.includes('version/77')) {
+            arcBaseUrl = arcBaseUrl.replace('version/77', 'version/100');
+        }
+        if (arcBaseUrl && arcBaseUrl.includes('/merchant/')) {
+            arcBaseUrl = arcBaseUrl.split('/merchant/')[0];
+        }
+        arcBaseUrl = arcBaseUrl || 'https://api.arcpay.travel/api/rest/version/100';
+        
+        const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
+        const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
+
+        // Construct URLs
+        const finalReturnUrl = returnUrl || `${frontendBaseUrl}/payment/callback?orderId=${orderId}&bookingType=${bookingType}`;
+        const finalCancelUrl = cancelUrl || `${frontendBaseUrl}/${bookingType}-payment?cancelled=true`;
+
+        const cleanBaseUrl = arcBaseUrl.replace(/\/$/, '');
+        const sessionUrl = `${cleanBaseUrl}/merchant/${arcMerchantId}/session`;
+
+        // Parse customer name
+        const nameParts = (customerName || 'Guest User').split(' ');
+        const firstName = nameParts[0] || 'Guest';
+        const lastName = nameParts.slice(1).join(' ') || 'User';
+
+        // Build request
+        const requestBody = {
+            apiOperation: 'INITIATE_CHECKOUT',
+            interaction: {
+                operation: 'PURCHASE',
+                returnUrl: finalReturnUrl,
+                cancelUrl: finalCancelUrl,
+                merchant: { name: 'JetSet Travel' },
+                displayControl: {
+                    billingAddress: 'MANDATORY',
+                    customerEmail: 'MANDATORY'
+                },
+                action: { '3DSecure': 'MANDATORY' },
+                timeout: 900
+            },
+            order: {
+                id: orderId,
+                reference: orderId,
+                amount: parseFloat(amount).toFixed(2),
+                currency: currency,
+                description: description || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking - ${orderId}`
+            },
+            authentication: { challengePreference: 'CHALLENGE_MANDATED' }
+        };
+
+        // Add airline data for flight bookings
+        if (bookingType === 'flight') {
+            try {
+                const flight = flightData || bookingData?.selectedFlight || bookingData?.flightData || {};
+                const itinerary = flight?.itineraries?.[0] || flight?.itinerary || {};
+                const segments = Array.isArray(itinerary?.segments) ? itinerary.segments : 
+                                Array.isArray(flight?.segments) ? flight.segments : [];
+                const firstSegment = segments[0] || {};
+
+                const passengers = bookingData?.passengerData || [];
+                const passengerList = passengers.length > 0 
+                    ? passengers.map(p => ({
+                        firstName: (p.firstName || '').toUpperCase(),
+                        lastName: (p.lastName || '').toUpperCase()
+                    }))
+                    : [{ firstName: (firstName || 'GUEST').toUpperCase(), lastName: (lastName || 'PASSENGER').toUpperCase() }];
+
+                const legArray = segments.length > 0 
+                    ? segments.map((segment) => ({
+                        carrierCode: (segment?.carrierCode || segment?.operating?.carrierCode || 'XX').substring(0, 2),
+                        departureAirport: segment?.departure?.iataCode || 'XXX',
+                        departureDate: (segment?.departure?.at || new Date().toISOString()).split('T')[0],
+                        destinationAirport: segment?.arrival?.iataCode || 'XXX'
+                    }))
+                    : [{
+                        carrierCode: 'XX',
+                        departureAirport: flight?.origin || bookingData?.origin || 'XXX',
+                        departureDate: new Date().toISOString().split('T')[0],
+                        destinationAirport: flight?.destination || bookingData?.destination || 'XXX'
+                    }];
+
+                requestBody.airline = {
+                    bookingReference: (flight?.pnr || flight?.bookingReference || orderId).substring(0, 6).toUpperCase(),
+                    documentType: 'PASSENGER_TICKET',
+                    itinerary: { leg: legArray, numberInParty: String(passengerList.length) },
+                    passenger: passengerList,
+                    ticket: {
+                        issue: {
+                            carrierCode: legArray[0]?.carrierCode || 'XX',
+                            carrierName: flight?.carrierName || 'Airline',
+                            city: 'Online',
+                            country: 'USA',
+                            date: new Date().toISOString().split('T')[0]
+                        },
+                        ticketNumber: `T${orderId}`.substring(0, 14),
+                        totalFare: parseFloat(amount).toFixed(2),
+                        totalFees: '0.00',
+                        totalTaxes: '0.00'
+                    }
+                };
+            } catch (airlineError) {
+                console.error('⚠️ Error constructing airline data:', airlineError);
+            }
+        }
+
+        // Add customer info
+        if (customerEmail) {
+            requestBody.customer = { email: customerEmail, firstName, lastName };
+            if (customerPhone) {
+                const cleanPhone = customerPhone.replace(/\D/g, '');
+                if (cleanPhone) requestBody.customer.mobilePhone = cleanPhone;
+            }
+        }
+
+        console.log('📤 ARC Pay Request to:', sessionUrl);
+
+        const response = await axios.post(sessionUrl, requestBody, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': authHeader,
+                'Accept': 'application/json'
+            },
+            timeout: 30000
+        });
+
+        const session = response.data;
+        const sessionId = session.session?.id || session.sessionId || session.id;
+        const successIndicator = session.successIndicator;
+
+        if (!sessionId) {
+            console.error('❌ Session ID not found in response');
+            return res.status(500).json({
+                success: false,
+                error: 'Invalid response from payment gateway',
+                details: 'Session ID not found'
+            });
+        }
+
+        console.log('✅ ARC Pay session created:', sessionId);
+
+        const paymentPageUrl = `https://api.arcpay.travel/checkout/pay/${sessionId}`;
+
+        return res.status(200).json({
+            success: true,
+            sessionId,
+            successIndicator,
+            merchantId: arcMerchantId,
+            orderId,
+            paymentPageUrl,
+            checkoutUrl: paymentPageUrl,
+            redirectMethod: 'GET',
+            message: 'Hosted checkout session created successfully'
+        });
+
+    } catch (error) {
+        console.error('❌ Hosted checkout error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to create hosted checkout',
+            details: error.response?.data?.error?.explanation || error.message
+        });
+    }
+}
+
+// Session Create - Create ARC Pay session
+async function handleSessionCreate(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const arcMerchantId = ARC_PAY_CONFIG.MERCHANT_ID;
+        const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
+        let arcBaseUrl = ARC_PAY_CONFIG.BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
+        
+        if (arcBaseUrl.includes('/merchant/')) {
+            arcBaseUrl = arcBaseUrl.split('/merchant/')[0];
+        }
+
+        const sessionUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/session`;
+        const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
+
+        const response = await axios.post(sessionUrl, {}, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': authHeader
+            },
+            timeout: 30000
+        });
+
+        return res.json({
+            success: true,
+            sessionData: response.data,
+            message: 'Session created successfully'
+        });
+
+    } catch (error) {
+        console.error('❌ Session create error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to create session',
             details: error.response?.data?.error?.explanation || error.message
         });
     }
