@@ -14,8 +14,11 @@ const Footer = () => {
         <div className="footer-grid">
           <div className="footer-column">
             <Link to="/" className="footer-logo-link">
-              <div className="footer-logo">
-                <img src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png" alt="Jetsetterss" className="logo-icon" />
+              <div className="footer-logo-container">
+                <div className="footer-logo">
+                  <img src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png" alt="Jetsetterss" className="logo-icon" />
+                </div>
+                <div className="footer-tagline">Jet set g0</div>
               </div>
             </Link>
             <p className="column-description">

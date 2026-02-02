@@ -127,12 +127,15 @@ const Navbar = ({ forceScrolled }) => {
     <nav className={`navbar ${isScrolled || forceScrolled ? 'scrolled' : ''}`}>
       <div className="navbar-left">
         <Link to="/" className="logo-link">
-          <div className="logo">
-            <img
-              src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png"
-              alt="Jetsetterss"
-              className="h-16 w-auto object-contain"
-            />
+          <div className="logo-container">
+            <div className="logo">
+              <img
+                src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png"
+                alt="Jetsetterss"
+                className="h-16 w-auto object-contain"
+              />
+            </div>
+            <div className="navbar-tagline">Jet set g0</div>
           </div>
         </Link>
       </div>
