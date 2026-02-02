@@ -111,9 +111,6 @@ importers:
       concurrently:
         specifier: ^9.0.1
         version: 9.2.1
-      laravel-vite-plugin:
-        specifier: ^1.2.0
-        version: 1.3.0(vite@6.4.1(@types/node@25.0.10)(jiti@1.21.7)(lightningcss@1.30.2)(yaml@2.8.2))
       node-fetch:
         specifier: ^3.3.2
         version: 3.3.2
@@ -1950,13 +1947,6 @@ packages:
   klaw-sync@6.0.0:
     resolution: {integrity: sha512-nIeuVSzdCCs6TDPTqI8w1Yre34sSq7AkZ4B3sfOBbI2CgVSB4Du4aLQijFU2+lhAFCwt9+42Hel6lQNIv6AntQ==}
 
-  laravel-vite-plugin@1.3.0:
-    resolution: {integrity: sha512-P5qyG56YbYxM8OuYmK2OkhcKe0AksNVJUjq9LUZ5tOekU9fBn9LujYyctI4t9XoLjuMvHJXXpCoPntY1oKltuA==}
-    engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
-    hasBin: true
-    peerDependencies:
-      vite: ^5.0.0 || ^6.0.0
-
   leac@0.6.0:
     resolution: {integrity: sha512-y+SqErxb8h7nE/fiEX07jsbuhrpO9lL8eca7/Y1nuWV2moNlXhyd59iDGcRf6moVyDMbmTNzL40SUyrFU/yDpg==}
 
@@ -2766,9 +2756,6 @@ packages:
   vary@1.1.2:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
-
-  vite-plugin-full-reload@1.2.0:
-    resolution: {integrity: sha512-kz18NW79x0IHbxRSHm0jttP4zoO9P9gXh+n6UTwlNKnviTTEpOlum6oS9SmecrTtSr+muHEn5TUuC75UovQzcA==}
 
   vite@6.4.1:
     resolution: {integrity: sha512-+Oxm7q9hDoLMyJOYfUYBuHQo+dkAloi33apOPP56pzj+vsdJDzr+j1NISE5pyaAuKL4A3UD34qd0lx5+kfKp2g==}
@@ -4785,12 +4772,6 @@ snapshots:
     dependencies:
       graceful-fs: 4.2.11
 
-  laravel-vite-plugin@1.3.0(vite@6.4.1(@types/node@25.0.10)(jiti@1.21.7)(lightningcss@1.30.2)(yaml@2.8.2)):
-    dependencies:
-      picocolors: 1.1.1
-      vite: 6.4.1(@types/node@25.0.10)(jiti@1.21.7)(lightningcss@1.30.2)(yaml@2.8.2)
-      vite-plugin-full-reload: 1.2.0
-
   leac@0.6.0: {}
 
   lightningcss-android-arm64@1.30.2:
@@ -5682,11 +5663,6 @@ snapshots:
   utils-merge@1.0.1: {}
 
   vary@1.1.2: {}
-
-  vite-plugin-full-reload@1.2.0:
-    dependencies:
-      picocolors: 1.1.1
-      picomatch: 2.3.1
 
   vite@6.4.1(@types/node@25.0.10)(jiti@1.21.7)(lightningcss@1.30.2)(yaml@2.8.2):
     dependencies:
