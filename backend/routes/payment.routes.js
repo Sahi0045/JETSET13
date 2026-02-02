@@ -76,7 +76,11 @@ router.all('/', async (req, res) => {
             case 'get-payment-details':
                 return handleGetPaymentDetails(req, res);
             case 'gateway-status':
-                return res.json({ success: true, status: 'OPERATING' });
+                return res.json({ 
+                    success: true, 
+                    gatewayStatus: { status: 'OPERATING' },
+                    status: 'OPERATING'
+                });
             case 'hosted-checkout':
                 return handleHostedCheckout(req, res);
             case 'session-create':
