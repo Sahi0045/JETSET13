@@ -23,7 +23,7 @@ Payment Page URL: https://api.arcpay.travel/api/page/version/100/pay
 
 **Result:** Form submission goes to wrong domain → No payment page loads → No 3DS challenge
 
-### What's Fixed
+### What's Fixed    ff
 
 ```bash
 # ✅ CORRECT - Updated configuration

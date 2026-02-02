@@ -40,7 +40,6 @@
     "autoprefixer": "^10.4.12",
     "axios": "^1.9.0",
     "concurrently": "^9.0.1",
-    "laravel-vite-plugin": "^1.2.0",
     "node-fetch": "^3.3.2",
     "nodemon": "^3.1.0",
     "patch-package": "^8.0.0",

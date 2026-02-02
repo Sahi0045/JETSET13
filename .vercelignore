@@ -1,3 +1,15 @@
+# Ignore individual API files - we use api/index.js as single entry point
+api/auth.js
+api/cruises.js
+api/hotels.js
+api/inquiries.js
+api/payments.js
+api/quotes.js
+api/flights/
+api/inquiries/
+api/payments/
+api/utils/
+
 # Development files
 node_modules
 .env.local

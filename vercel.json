@@ -1,42 +1,16 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/index.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
   "rewrites": [
     {
-      "source": "/api/hotels/search",
-      "destination": "/api/hotels?endpoint=search"
-    },
-    {
-      "source": "/api/hotels/locations",
-      "destination": "/api/hotels?endpoint=locations"
-    },
-    {
-      "source": "/api/hotels/destinations",
-      "destination": "/api/hotels?endpoint=destinations"
-    },
-    {
-      "source": "/api/hotels/offers/:id",
-      "destination": "/api/hotels?endpoint=offers&hotelId=:id"
-    },
-    {
-      "source": "/api/auth/login",
-      "destination": "/api/auth"
-    },
-    {
-      "source": "/api/auth/register",
-      "destination": "/api/auth"
-    },
-    {
-      "source": "/api/inquiries/:id",
-      "destination": "/api/inquiries?id=:id"
-    },
-    {
-      "source": "/api/inquiries/my",
-      "destination": "/api/inquiries?endpoint=my"
-    },
-    {
       "source": "/api/:path*",
-      "destination": "/api/:path*"
+      "destination": "/api"
     },
     {
       "source": "/((?!api/).*)",
