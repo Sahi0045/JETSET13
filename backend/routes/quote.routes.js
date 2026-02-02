@@ -15,6 +15,57 @@ import { protect, admin } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
+// ============================================
+// ACTION-BASED ROUTE HANDLER
+// Handles requests with ?action= or ?id= query parameters
+// This bridges the Vercel serverless function pattern with Express
+// ============================================
+
+// Query-param based action router (for frontend compatibility)
+router.all('/', async (req, res, next) => {
+    const { action, id } = req.query;
+    
+    // If no query params that need special handling, continue to next handler
+    if (!action && !id) {
+        return next();
+    }
+    
+    console.log(`📥 Quote API: method=${req.method}, action=${action}, id=${id}`);
+    
+    // Handle action-based routing
+    if (action === 'send' && id && req.method === 'PUT') {
+        // Simulate path param for sendQuote handler
+        req.params = { id };
+        return protect(req, res, () => admin(req, res, () => sendQuote(req, res)));
+    }
+    
+    if (action === 'accept' && id && req.method === 'PUT') {
+        req.params = { id };
+        return protect(req, res, () => acceptQuote(req, res));
+    }
+    
+    // Handle GET with id query param
+    if (id && req.method === 'GET' && !action) {
+        req.params = { id };
+        return protect(req, res, () => getQuoteById(req, res));
+    }
+    
+    // Handle PUT with id query param (update quote)
+    if (id && req.method === 'PUT' && !action) {
+        req.params = { id };
+        return protect(req, res, () => admin(req, res, () => updateQuote(req, res)));
+    }
+    
+    // Handle DELETE with id query param
+    if (id && req.method === 'DELETE') {
+        req.params = { id };
+        return protect(req, res, () => admin(req, res, () => deleteQuote(req, res)));
+    }
+    
+    // Continue to standard routes if no match
+    next();
+});
+
 // Admin only routes
 router.get('/expired', protect, admin, getExpiredQuotes);
 router.get('/expiring-soon', protect, admin, getExpiringSoonQuotes);
