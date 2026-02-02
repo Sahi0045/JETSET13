@@ -14,6 +14,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
   const [showToSuggestions, setShowToSuggestions] = useState(false);
   const [fromSuggestions, setFromSuggestions] = useState([]);
   const [toSuggestions, setToSuggestions] = useState([]);
+  const [selectedFare, setSelectedFare] = useState(null);
 
   // Create a map of city names to their codes
   const cityCodeMap = allDestinations.reduce((acc, city) => {
@@ -314,7 +315,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
                 name="departDate"
                 value={formData.departDate || ""}
                 onChange={handleInputChange}
-                className="w-full p-3 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-3 pr-10 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                 placeholder="Select date"
               />
               <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
@@ -334,7 +335,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
                   name="returnDate"
                   value={formData.returnDate || ""}
                   onChange={handleInputChange}
-                  className="w-full p-3 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-3 pr-10 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                   placeholder="Select date"
                 />
                 <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
@@ -353,14 +354,14 @@ export default function FlightSearchForm({ initialData, onSearch }) {
                 name="travelers"
                 value={formData.travelers || "2"}
                 onChange={handleInputChange}
-                className="w-full p-3 appearance-none border border-gray-200 rounded-md text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-3 pr-10 appearance-none border border-gray-200 rounded-md text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
               >
                 <option value="1">1 Traveler</option>
                 <option value="2">2 Travelers</option>
                 <option value="3">3 Travelers</option>
                 <option value="4">4+ Travelers</option>
               </select>
-              <Users className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <Users className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
             </div>
           </div>
 
@@ -381,13 +382,31 @@ export default function FlightSearchForm({ initialData, onSearch }) {
       <div className="flex flex-wrap items-center gap-3 mt-2 justify-center lg:justify-start">
         <span className="text-[#055B75] font-medium drop-shadow-sm">Special Fares:</span>
         <div className="flex flex-wrap gap-2 lg:gap-3">
-          <button className="px-4 lg:px-6 py-2 bg-white text-[#055B75] hover:bg-[#055B75] hover:text-white rounded-full border border-[#055B75] font-medium shadow-sm transition-all text-sm lg:text-base">
+          <button
+            onClick={() => setSelectedFare(selectedFare === 'student' ? null : 'student')}
+            className={`px-4 lg:px-6 py-2 rounded-full border border-[#055B75] font-medium shadow-sm transition-all text-sm lg:text-base ${selectedFare === 'student'
+              ? 'bg-[#055B75] text-white'
+              : 'bg-white text-[#055B75] hover:bg-[#055B75] hover:text-white'
+              }`}
+          >
             Student
           </button>
-          <button className="px-4 lg:px-6 py-2 bg-white text-[#055B75] hover:bg-[#055B75] hover:text-white rounded-full border border-[#055B75] font-medium shadow-sm transition-all text-sm lg:text-base">
+          <button
+            onClick={() => setSelectedFare(selectedFare === 'senior' ? null : 'senior')}
+            className={`px-4 lg:px-6 py-2 rounded-full border border-[#055B75] font-medium shadow-sm transition-all text-sm lg:text-base ${selectedFare === 'senior'
+              ? 'bg-[#055B75] text-white'
+              : 'bg-white text-[#055B75] hover:bg-[#055B75] hover:text-white'
+              }`}
+          >
             Senior Citizen
           </button>
-          <button className="px-4 lg:px-6 py-2 bg-white text-[#055B75] hover:bg-[#055B75] hover:text-white rounded-full border border-[#055B75] font-medium shadow-sm transition-all text-sm lg:text-base">
+          <button
+            onClick={() => setSelectedFare(selectedFare === 'armed' ? null : 'armed')}
+            className={`px-4 lg:px-6 py-2 rounded-full border border-[#055B75] font-medium shadow-sm transition-all text-sm lg:text-base ${selectedFare === 'armed'
+              ? 'bg-[#055B75] text-white'
+              : 'bg-white text-[#055B75] hover:bg-[#055B75] hover:text-white'
+              }`}
+          >
             Armed Forces
           </button>
         </div>
