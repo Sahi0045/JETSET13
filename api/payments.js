@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { normalizeCountryCode, normalizeBillingAddress } from './utils/countryCodeNormalizer.js';
 
 // Initialize Supabase client with proper error handling
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -1977,6 +1978,29 @@ async function handleHostedCheckout(req, res) {
         if (cleanPhone) {
           requestBody.customer.mobilePhone = cleanPhone;
         }
+      }
+    }
+
+    // Normalize billing address if provided (for direct API integration)
+    // Note: For hosted checkout, ARC Pay collects billing address on their form
+    // But if billing address is provided in the request, normalize it
+    if (req.body.billingAddress) {
+      try {
+        const normalizedAddress = normalizeBillingAddress(req.body.billingAddress);
+        console.log('✅ Billing address normalized:', normalizedAddress);
+        // Store normalized address for later use if needed
+        requestBody.billing = {
+          address: {
+            street: normalizedAddress.street,
+            city: normalizedAddress.city,
+            stateProvince: normalizedAddress.state,
+            postcodeZip: normalizedAddress.postalCode,
+            country: normalizedAddress.country
+          }
+        };
+      } catch (normalizationError) {
+        console.error('⚠️ Billing address normalization failed:', normalizationError.message);
+        // Don't fail the request - hosted checkout will collect billing address
       }
     }
 
