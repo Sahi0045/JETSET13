@@ -32,7 +32,7 @@ app.use(cors({
   credentials: true
 }));
 
-// Mount API routes
+// Mount API routes - use both /api/* and /* patterns for flexibility
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/email', emailRoutes);
@@ -44,8 +44,23 @@ app.use('/api/quotes', quoteRoutes);
 app.use('/api/cruises', cruiseRoutes);
 app.use('/api/supabase-auth', supabaseAuthRoutes);
 
+// Also mount without /api prefix for rewrite compatibility
+app.use('/auth', authRoutes);
+app.use('/users', userRoutes);
+app.use('/email', emailRoutes);
+app.use('/flights', flightRoutes);
+app.use('/hotels', hotelRoutes);
+app.use('/payments', paymentRoutes);
+app.use('/inquiries', inquiryRoutes);
+app.use('/quotes', quoteRoutes);
+app.use('/cruises', cruiseRoutes);
+app.use('/supabase-auth', supabaseAuthRoutes);
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
@@ -60,7 +75,8 @@ app.use((err, req, res, next) => {
 
 // Handle 404
 app.use((req, res) => {
-  res.status(404).json({ error: 'API endpoint not found' });
+  console.log('404 Not Found:', req.method, req.url);
+  res.status(404).json({ error: 'API endpoint not found', path: req.url });
 });
 
 // Export for Vercel serverless
