@@ -8,6 +8,8 @@ import Price from "../../../Components/Price";
 import currencyService from "../../../Services/CurrencyService";
 import { flightBookingData } from "./data";
 import supabase from "../../../lib/supabase";
+import ArcPayService from "../../../Services/ArcPayService";
+
 
 // CONFIGURATION: Set this to true when Amadeus API is available
 const USE_AMADEUS_API = false;
@@ -487,8 +489,8 @@ function FlightBookingConfirmation() {
     setVipService(!vipService);
   };
 
-  // Handle proceeding to payment page
-  const handleProceedToPayment = () => {
+  // Handle proceeding to payment - DIRECT to ARC Pay (bypass FlightPayment.jsx)
+  const handleProceedToPayment = async () => {
     // Validate passenger data
     const isPassengerDataValid = passengerData.every(p =>
       p.firstName && p.lastName && p.mobile
@@ -499,24 +501,108 @@ function FlightBookingConfirmation() {
       return;
     }
 
-    if (USE_AMADEUS_API) {
-      // In a real app, you would make an API call to prepare the booking for payment
-      console.log("Preparing booking for payment with Amadeus API");
-    }
+    try {
+      console.log('🚀 Initiating direct ARC Pay checkout...');
 
-    // Navigate to payment page with all the booking details
-    navigate('/flight-payment', {
-      state: {
-        bookingDetails,
-        passengerData,
-        selectedAddons,
-        vipService,
-        calculatedFare,
-        selectedFlight: location.state?.flightData, // Pass the original flight data
-        originalOffer: location.state?.flightData?.originalOffer, // ✅ CRITICAL: Full Amadeus API response
-        flightData: location.state?.flightData // ✅ Complete flight details
+      // Prepare flight data for ARC Pay
+      const flightData = location.state?.flightData;
+      const amount = calculatedFare.totalAmount;
+
+      // Get flight details
+      const flightNumber = `${flightData?.airline?.code || 'XX'} ${flightData?.id || '000'}`;
+      const carrierCode = flightData?.airline?.code || 'XX';
+      const departureAirport = flightData?.departure?.airport || 'XXX';
+      const arrivalAirport = flightData?.arrival?.airport || 'XXX';
+      const departureDate = flightData?.departure?.date || new Date().toISOString().split('T')[0];
+      const segments = flightData?.segments || [];
+
+      // Build flight data for ARC Pay
+      const flightDataForArcPay = {
+        flightNumber: flightNumber,
+        carrierCode: carrierCode,
+        origin: departureAirport,
+        destination: arrivalAirport,
+        departureDate: departureDate,
+        segments: segments.map(seg => ({
+          carrierCode: seg.carrier || carrierCode,
+          flightNumber: seg.number || flightNumber.split(' ')[1] || '000',
+          departure: {
+            iataCode: seg.departure?.airport || departureAirport,
+            at: seg.departure?.time || departureDate
+          },
+          arrival: {
+            iataCode: seg.arrival?.airport || arrivalAirport,
+            at: seg.arrival?.time || ''
+          }
+        })),
+        originalOffer: flightData?.originalOffer || flightData,
+        itineraries: flightData?.itineraries || [{
+          segments: segments.map(seg => ({
+            carrierCode: seg.carrier || carrierCode,
+            number: seg.number || flightNumber.split(' ')[1] || '000',
+            departure: { iataCode: seg.departure?.airport || departureAirport, at: seg.departure?.time || departureDate },
+            arrival: { iataCode: seg.arrival?.airport || arrivalAirport, at: seg.arrival?.time || '' }
+          }))
+        }]
+      };
+
+      // Store ALL booking data in localStorage before redirect
+      const bookingDataForStorage = {
+        selectedFlight: flightData,
+        originalOffer: flightData?.originalOffer,
+        passengerData: passengerData,
+        bookingDetails: bookingDetails,
+        calculatedFare: calculatedFare,
+        amount: amount,
+        flightData: flightDataForArcPay
+      };
+
+      console.log('💾 Storing booking data in localStorage:', bookingDataForStorage);
+      localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingDataForStorage));
+
+      // Generate order ID
+      const orderId = `FLT${Date.now().toString(36).toUpperCase()}`;
+      const description = `Flight ${flightNumber} - ${departureAirport} to ${arrivalAirport}`;
+
+      // Create ARC Pay checkout session
+      console.log('📞 Creating ARC Pay checkout session...');
+      const checkoutResponse = await ArcPayService.createHostedCheckout({
+        amount: amount,
+        currency: calculatedFare.currency || 'USD',
+        orderId: orderId,
+        bookingType: 'flight',
+        customerEmail: passengerData?.[0]?.email || 'customer@jetsetgo.com',
+        customerName: passengerData?.[0]
+          ? `${passengerData[0].firstName} ${passengerData[0].lastName}`
+          : 'Guest User',
+        customerPhone: passengerData?.[0]?.phone || passengerData?.[0]?.mobile,
+        description: description,
+        returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=flight`,
+        cancelUrl: `${window.location.origin}/flights?cancelled=true`,
+      });
+
+      if (checkoutResponse.success && checkoutResponse.checkoutUrl) {
+        console.log('✅ Checkout session created successfully');
+        console.log('🔗 Redirecting to:', checkoutResponse.checkoutUrl);
+
+        // Store payment session info
+        localStorage.setItem('pendingPaymentSession', JSON.stringify({
+          sessionId: checkoutResponse.sessionId,
+          orderId: orderId,
+          bookingType: 'flight',
+          amount: amount
+        }));
+
+        // Direct redirect to ARC Pay
+        window.location.href = checkoutResponse.checkoutUrl;
+      } else {
+        console.error('❌ Checkout creation failed:', checkoutResponse.error);
+        alert('Failed to create payment session. Please try again.');
       }
-    });
+    } catch (error) {
+      console.error('❌ Payment initiation error:', error);
+      alert('Payment service temporarily unavailable. Please try again.');
+    }
   };
 
   const renderAddon = (addon) => (

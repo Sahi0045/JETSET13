@@ -66,34 +66,47 @@ export default function PaymentCallback() {
           // For flights, navigate to FlightCreateOrders to complete the booking
           if (bookingType === 'flight') {
             console.log('✈️ Navigating to flight order creation...');
+            console.log('📦 Full booking data retrieved:', bookingData);
+            console.log('🔍 Data breakdown:', {
+              hasSelectedFlight: !!bookingData?.selectedFlight,
+              hasOriginalOffer: !!bookingData?.originalOffer,
+              hasPassengerData: !!bookingData?.passengerData,
+              hasBookingDetails: !!bookingData?.bookingDetails,
+              hasFlightData: !!bookingData?.flightData,
+              hasCalculatedFare: !!bookingData?.calculatedFare,
+              amount: bookingData?.amount
+            });
+
             setStatus('Payment verified! Creating your flight booking...');
 
-            // Clean up localStorage
-            localStorage.removeItem(pendingBookingKey);
-            localStorage.removeItem('pendingPaymentSession');
+            // ⚠️ DO NOT clean up localStorage here - keep it until order is created successfully
+            // The FlightCreateOrders component will clean it up after successful order creation
+            // localStorage.removeItem(pendingBookingKey);
+            // localStorage.removeItem('pendingPaymentSession');
 
             // Navigate to FlightCreateOrders with the stored data
             setTimeout(() => {
-              navigate('/flight-create-orders', {
-                state: {
-                  // Payment data from ARC Pay callback
-                  transactionId: resultIndicator || sessionData?.sessionId || `TXN-${Date.now()}`,
-                  orderId: orderId,
-                  amount: bookingData?.amount || sessionData?.amount || 0,
-                  paymentVerified: true,
+              const navigationState = {
+                // Payment data from ARC Pay callback
+                transactionId: resultIndicator || sessionData?.sessionId || `TXN-${Date.now()}`,
+                orderId: orderId,
+                amount: bookingData?.amount || sessionData?.amount || 0,
+                paymentVerified: true,
 
-                  // Flight and passenger data from localStorage
-                  selectedFlight: bookingData?.selectedFlight,
-                  flightData: bookingData?.selectedFlight,
-                  originalOffer: bookingData?.originalOffer,
-                  passengerData: bookingData?.passengerData,
-                  bookingDetails: bookingData?.bookingDetails,
-                  calculatedFare: bookingData?.calculatedFare,
+                // Flight and passenger data from localStorage
+                selectedFlight: bookingData?.selectedFlight || bookingData?.flightData,
+                flightData: bookingData?.flightData || bookingData?.selectedFlight,
+                originalOffer: bookingData?.originalOffer,
+                passengerData: bookingData?.passengerData,
+                bookingDetails: bookingData?.bookingDetails,
+                calculatedFare: bookingData?.calculatedFare,
 
-                  // Contact info
-                  customerEmail: bookingData?.passengerData?.[0]?.email || 'customer@jetsetgo.com'
-                }
-              });
+                // Contact info
+                customerEmail: bookingData?.passengerData?.[0]?.email || 'customer@jetsetgo.com'
+              };
+
+              console.log('🚀 Navigating with state:', navigationState);
+              navigate('/flight-create-orders', { state: navigationState });
             }, 1500);
             return;
           }

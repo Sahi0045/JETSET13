@@ -1,6 +1,38 @@
 import { createClient } from '@supabase/supabase-js';
 import { normalizeCountryCode, normalizeBillingAddress } from './utils/countryCodeNormalizer.js';
 
+// Helper function to parse various date formats and return YYYY-MM-DD
+function parseToISODate(dateValue) {
+  if (!dateValue) return new Date().toISOString().split('T')[0];
+  
+  // Already in YYYY-MM-DD format (10 chars)
+  if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    return dateValue;
+  }
+  
+  // ISO datetime format "2026-02-03T18:10:00"
+  if (typeof dateValue === 'string' && dateValue.includes('T')) {
+    return dateValue.split('T')[0];
+  }
+  
+  // Try to parse human-readable formats like "Fri, Feb 6" or "Friday, February 6, 2026"
+  try {
+    const parsed = new Date(dateValue);
+    if (!isNaN(parsed.getTime())) {
+      // If the year is missing or very old, use current year
+      if (parsed.getFullYear() < 2000) {
+        parsed.setFullYear(new Date().getFullYear());
+      }
+      return parsed.toISOString().split('T')[0];
+    }
+  } catch (e) {
+    // Parsing failed
+  }
+  
+  // Fallback to today's date
+  return new Date().toISOString().split('T')[0];
+}
+
 // Initialize Supabase client with proper error handling
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
