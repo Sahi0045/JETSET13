@@ -1873,9 +1873,8 @@ async function handleHostedCheckout(req, res) {
           billingAddress: 'MANDATORY',  // Required for 3DS2 - ensures billing data is collected
           customerEmail: 'MANDATORY'    // Required for 3DS2 risk assessment
         },
-        action: {
-          '3DSecure': 'MANDATORY'
-        },
+        // Removed action.3DSecure: 'MANDATORY' - was causing payment failures
+        // Let gateway decide when to trigger 3DS based on transaction risk
         timeout: 900
       },
       order: {
@@ -1884,11 +1883,9 @@ async function handleHostedCheckout(req, res) {
         amount: parseFloat(amount).toFixed(2),
         currency: currency,
         description: `Flight Booking ${orderId}`
-      },
-      // Force 3DS challenge (OTP) - required for ARC Pay to trigger authentication
-      authentication: {
-        challengePreference: 'CHALLENGE_MANDATED'
       }
+      // Removed authentication.challengePreference - was forcing 3DS challenge
+      // Will re-enable after basic payment works
     };
 
     // TEMP DISABLED: Add airline data for flight bookings (Required for ARC Pay Certification)
