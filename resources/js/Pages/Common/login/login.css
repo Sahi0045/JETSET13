@@ -499,6 +499,18 @@
   border-color: #24292e;
 }
 
+/* Solana Button */
+.social-button.solana {
+  border-color: #9945FF;
+  color: #9945FF;
+}
+
+.social-button.solana:hover:not(:disabled) {
+  background: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
+  color: white;
+  border-color: #9945FF;
+}
+
 /* Signup Section */
 .signup-section {
   text-align: center;
