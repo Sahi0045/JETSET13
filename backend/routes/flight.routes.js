@@ -7,36 +7,36 @@ const router = express.Router();
 const getAmadeusCredentials = () => {
   const apiKey = process.env.AMADEUS_API_KEY || process.env.REACT_APP_AMADEUS_API_KEY;
   const apiSecret = process.env.AMADEUS_API_SECRET || process.env.REACT_APP_AMADEUS_API_SECRET;
-  
-  const keySource = process.env.AMADEUS_API_KEY ? 'AMADEUS_API_KEY' : 
+
+  const keySource = process.env.AMADEUS_API_KEY ? 'AMADEUS_API_KEY' :
     (process.env.REACT_APP_AMADEUS_API_KEY ? 'REACT_APP_AMADEUS_API_KEY' : 'None');
-  const secretSource = process.env.AMADEUS_API_SECRET ? 'AMADEUS_API_SECRET' : 
+  const secretSource = process.env.AMADEUS_API_SECRET ? 'AMADEUS_API_SECRET' :
     (process.env.REACT_APP_AMADEUS_API_SECRET ? 'REACT_APP_AMADEUS_API_SECRET' : 'None');
-  
+
   console.log('Amadeus credentials source:', { keySource, secretSource });
-  
+
   return { apiKey, apiSecret };
 };
 
 // Transform Amadeus API response to frontend format
 const transformAmadeusFlightData = (amadeusFlights, dictionaries = {}) => {
   if (!amadeusFlights || amadeusFlights.length === 0) return [];
-  
+
   const airlines = dictionaries?.carriers || {};
   const airports = dictionaries?.locations || {};
   const aircraft = dictionaries?.aircraft || {};
-  
+
   return amadeusFlights.map(flight => {
     try {
       const firstItinerary = flight.itineraries?.[0];
       const firstSegment = firstItinerary?.segments?.[0];
       const lastSegment = firstItinerary?.segments?.[firstItinerary.segments.length - 1];
-      
+
       if (!firstSegment || !lastSegment) {
         console.warn('Invalid flight segment data:', flight);
         return null;
       }
-      
+
       // Calculate total duration
       let totalDuration = 'Unknown';
       if (firstItinerary?.duration) {
@@ -47,49 +47,49 @@ const transformAmadeusFlightData = (amadeusFlights, dictionaries = {}) => {
           totalDuration = `${hours}h ${minutes}m`;
         }
       }
-      
+
       // Get airline name
       const carrierCode = firstSegment.carrierCode;
       const airlineName = airlines[carrierCode] || carrierCode;
-      
+
       // Format departure and arrival
       const departure = {
-        time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          hour12: false 
+        time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
         }),
         airport: firstSegment.departure.iataCode,
         terminal: firstSegment.departure.terminal || '',
         date: firstSegment.departure.at.split('T')[0]
       };
-      
+
       const arrival = {
-        time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          hour12: false 
+        time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
         }),
         airport: lastSegment.arrival.iataCode,
         terminal: lastSegment.arrival.terminal || '',
         date: lastSegment.arrival.at.split('T')[0]
       };
-      
+
       // Calculate stops
       const stops = Math.max(0, firstItinerary.segments.length - 1);
-      
+
       // Get pricing info
       const price = {
         total: flight.price?.total || '0',
         amount: parseFloat(flight.price?.total || 0),
         currency: flight.price?.currency || 'USD'
       };
-      
+
       // Get traveler pricing for cabin class
       const travelerPricing = flight.travelerPricings?.[0];
       const fareDetails = travelerPricing?.fareDetailsBySegment?.[0];
       const cabin = fareDetails?.cabin || 'ECONOMY';
-      
+
       return {
         id: flight.id,
         airline: airlineName,
@@ -106,7 +106,7 @@ const transformAmadeusFlightData = (amadeusFlights, dictionaries = {}) => {
         })) : [],
         aircraft: aircraft[firstSegment.aircraft?.code] || firstSegment.aircraft?.code || 'Unknown',
         cabin: cabin,
-        baggage: fareDetails?.includedCheckedBags?.weight 
+        baggage: fareDetails?.includedCheckedBags?.weight
           ? `${fareDetails.includedCheckedBags.weight}${fareDetails.includedCheckedBags.weightUnit || 'kg'}`
           : '23kg',
         refundable: travelerPricing?.price?.refundableTaxes ? true : false,
@@ -124,7 +124,7 @@ const transformAmadeusFlightData = (amadeusFlights, dictionaries = {}) => {
 router.post('/search', async (req, res) => {
   try {
     console.log('🔍 Flight search request received:', req.body);
-    
+
     const { from, to, departDate, returnDate, tripType, travelers } = req.body;
 
     // Validate required fields
@@ -141,7 +141,7 @@ router.post('/search', async (req, res) => {
       key: apiKey ? 'Available' : 'Missing',
       secret: apiSecret ? 'Available' : 'Missing'
     });
-    
+
     if (!apiKey || !apiSecret) {
       console.error('❌ Missing Amadeus API credentials');
       return res.status(500).json({
@@ -167,7 +167,7 @@ router.post('/search', async (req, res) => {
     try {
       // Call real Amadeus API
       const amadeusResponse = await AmadeusService.searchFlights(searchParams);
-      
+
       if (!amadeusResponse.success) {
         throw new Error(amadeusResponse.error);
       }
@@ -184,7 +184,7 @@ router.post('/search', async (req, res) => {
 
       // Transform Amadeus response to frontend format
       const transformedFlights = transformAmadeusFlightData(
-        amadeusResponse.data, 
+        amadeusResponse.data,
         amadeusResponse.dictionaries
       );
 
@@ -203,7 +203,7 @@ router.post('/search', async (req, res) => {
 
     } catch (amadeusError) {
       console.error('❌ Amadeus API error:', amadeusError);
-      
+
       // Return detailed error information
       return res.status(500).json({
         success: false,
@@ -225,9 +225,9 @@ router.post('/search', async (req, res) => {
 router.post('/price', async (req, res) => {
   try {
     console.log('💰 Flight pricing request received');
-    
+
     const { flightOffer } = req.body;
-    
+
     if (!flightOffer) {
       return res.status(400).json({
         success: false,
@@ -236,7 +236,7 @@ router.post('/price', async (req, res) => {
     }
 
     const pricingResponse = await AmadeusService.priceFlightOffer(flightOffer);
-    
+
     if (!pricingResponse.success) {
       throw new Error(pricingResponse.error);
     }
@@ -260,44 +260,72 @@ router.post('/price', async (req, res) => {
 router.post('/order', async (req, res) => {
   try {
     console.log('📋 Flight order creation request received');
-    
-    const { flightOffers, travelers, payments } = req.body;
-    
-    if (!flightOffers || !travelers) {
+    console.log('Request body keys:', Object.keys(req.body));
+
+    const { flightOffer, flightOffers, travelers, payments, contactInfo } = req.body;
+
+    // Accept both flightOffer (singular) and flightOffers (plural)
+    const offers = flightOffers || (flightOffer ? [flightOffer] : null);
+
+    if (!offers || !travelers) {
+      console.error('❌ Missing required fields:', {
+        hasOffers: !!offers,
+        hasTravelers: !!travelers,
+        receivedKeys: Object.keys(req.body)
+      });
       return res.status(400).json({
         success: false,
         error: 'Flight offers and travelers are required'
       });
     }
 
+    console.log('✅ Valid request - offers:', offers.length, 'travelers:', travelers.length);
+
     // Prepare flight order data for Amadeus
+    // The travelers from frontend are already in correct format: { id, firstName, lastName, dateOfBirth, gender }
+    // But Amadeus needs name.firstName and name.lastName
+    const amadeusTravelers = travelers.map((traveler, idx) => ({
+      id: traveler.id || `${idx + 1}`,
+      dateOfBirth: traveler.dateOfBirth || '1990-01-01',
+      gender: (traveler.gender || 'MALE').toUpperCase() === 'MALE' ? 'MALE' : 'FEMALE',
+      name: {
+        firstName: traveler.firstName || 'Test',
+        lastName: traveler.lastName || 'User'
+      },
+      contact: contactInfo ? {
+        emailAddress: contactInfo.email || travelers[0]?.email,
+        phones: [{
+          deviceType: 'MOBILE',
+          countryCallingCode: contactInfo.countryCode || '1',
+          number: contactInfo.phoneNumber || '1234567890'
+        }]
+      } : undefined
+    }));
+
     const flightOrderData = {
       data: {
         type: 'flight-order',
-        flightOffers: flightOffers,
-        travelers: travelers,
-        contacts: {
-          emailAddress: travelers[0]?.contact?.emailAddress || req.body.contactEmail,
-          phones: [{
-            deviceType: 'MOBILE',
-            countryCallingCode: '1',
-            number: travelers[0]?.contact?.phones?.[0]?.number || req.body.contactPhone
-          }]
-        }
+        flightOffers: offers,
+        travelers: amadeusTravelers
       }
     };
 
+    console.log('📤 Sending to Amadeus:', JSON.stringify(flightOrderData, null, 2));
+
     const orderResponse = await AmadeusService.createFlightOrder(flightOrderData);
-    
+
     if (!orderResponse.success) {
       throw new Error(orderResponse.error);
     }
+
+    console.log('✅ Flight order created successfully');
 
     res.json({
       success: true,
       data: orderResponse.data,
       pnr: orderResponse.pnr,
       orderId: orderResponse.orderId || orderResponse.data?.id,
+      bookingReference: orderResponse.data?.id || orderResponse.orderId,
       mode: orderResponse.mode,
       message: orderResponse.message || 'Flight order created successfully'
     });
@@ -315,11 +343,11 @@ router.post('/order', async (req, res) => {
 router.get('/order/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
-    
+
     // Try real Amadeus API first
     try {
       const orderDetails = await AmadeusService.getFlightOrderDetails(orderId);
-      
+
       if (orderDetails.success) {
         return res.json({
           success: true,
@@ -333,14 +361,14 @@ router.get('/order/:orderId', async (req, res) => {
     } catch (amadeusError) {
       console.log('⚠️ Amadeus API unavailable, using simulation:', amadeusError.message);
     }
-    
+
     // Fallback simulation for demonstration
     const simulatedOrderDetails = {
       id: orderId,
       status: "CONFIRMED",
       creationDate: "2025-06-19T19:05:00.000Z",
       bookingReference: `BOOK-${Date.now()}`,
-      
+
       // PNR is found in associatedRecords
       associatedRecords: [{
         reference: "PNR" + Math.random().toString(36).substr(2, 6).toUpperCase(),
@@ -348,7 +376,7 @@ router.get('/order/:orderId', async (req, res) => {
         originSystemCode: "GDS",
         flightNumber: "AI-9731"
       }],
-      
+
       flightOffers: [{
         id: "1",
         price: { total: "29.60", currency: "USD" },
@@ -361,13 +389,13 @@ router.get('/order/:orderId', async (req, res) => {
           }]
         }]
       }],
-      
+
       travelers: [{
         id: "1",
         name: { firstName: "John", lastName: "Doe" },
         dateOfBirth: "1990-01-01"
       }],
-      
+
       totalPrice: { amount: "29.60", currency: "USD" },
       bookingStatus: "CONFIRMED",
       paymentStatus: "COMPLETED"
@@ -396,7 +424,7 @@ router.get('/order/:orderId', async (req, res) => {
 router.get('/health', async (req, res) => {
   try {
     const { apiKey, apiSecret } = getAmadeusCredentials();
-    
+
     res.json({
       success: true,
       service: 'Flight API',
