@@ -60,7 +60,7 @@ function FlightPayment() {
     // Always clear session flags on fresh page load to allow new payment attempts
     sessionStorage.removeItem('arcPayRedirectInitiated');
     sessionStorage.removeItem('arcPayFailedAttempts');
-    
+
     if (location.state) {
       setPaymentData(location.state);
       setLoading(false);
@@ -100,31 +100,31 @@ function FlightPayment() {
         // Extract flight details from bookingDetails or selectedFlight
         const flightDetails = paymentData?.bookingDetails?.flight || {};
         const selectedFlight = paymentData?.selectedFlight || {};
-        
+
         // Get flight number from multiple sources
-        const flightNumber = flightDetails?.flightNumber || 
+        const flightNumber = flightDetails?.flightNumber ||
           `${selectedFlight?.airline?.code || 'XX'} ${selectedFlight?.id || '000'}`;
-        
+
         // Get carrier code
-        const carrierCode = flightDetails?.flightNumber?.split(' ')[0] || 
+        const carrierCode = flightDetails?.flightNumber?.split(' ')[0] ||
           selectedFlight?.airline?.code || 'XX';
-        
+
         // Get departure/arrival info
-        const departureAirport = flightDetails?.departureCity || 
+        const departureAirport = flightDetails?.departureCity ||
           selectedFlight?.departure?.airport || 'XXX';
-        const arrivalAirport = flightDetails?.arrivalCity || 
+        const arrivalAirport = flightDetails?.arrivalCity ||
           selectedFlight?.arrival?.airport || 'XXX';
-        const departureDate = flightDetails?.departureDate || 
+        const departureDate = flightDetails?.departureDate ||
           selectedFlight?.departure?.date || new Date().toISOString().split('T')[0];
-        
+
         // Get segments from bookingDetails or selectedFlight
         const segments = flightDetails?.segments || selectedFlight?.segments || [];
 
-        // Build comprehensive flight data for ARC Pay
+        // Build comprehensive flight data for ARC Pay (no carrierName - causes API errors with spaces)
         const flightDataForArcPay = {
           flightNumber: flightNumber,
           carrierCode: carrierCode,
-          carrierName: flightDetails?.airline || selectedFlight?.airline?.name || 'Airline',
+          // carrierName removed - ARC Pay rejects names with spaces like "AIR INDIA"
           origin: departureAirport,
           destination: arrivalAirport,
           departureDate: departureDate,
