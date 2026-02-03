@@ -1,7 +1,64 @@
 import express from 'express';
 import AmadeusService from '../services/amadeusService.js';
+import { createClient } from '@supabase/supabase-js';
 
 const router = express.Router();
+
+// Initialize Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://qqmagqwumjipdqvxbiqu.supabase.co';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+const supabase = supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+// Helper function to save booking to database
+async function saveBookingToDatabase(bookingData) {
+  if (!supabase) {
+    console.log('⚠️ Supabase not configured, skipping database save');
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('bookings')
+      .insert({
+        user_id: bookingData.userId || null,
+        booking_reference: bookingData.bookingReference,
+        travel_type: 'flight',
+        status: 'confirmed',
+        total_amount: parseFloat(bookingData.totalAmount) || 0,
+        payment_status: 'paid',
+        booking_details: {
+          pnr: bookingData.pnr,
+          order_id: bookingData.orderId,
+          transaction_id: bookingData.transactionId,
+          origin: bookingData.origin,
+          destination: bookingData.destination,
+          departure_date: bookingData.departureDate,
+          departure_time: bookingData.departureTime,
+          arrival_time: bookingData.arrivalTime,
+          airline: bookingData.airline,
+          airline_name: bookingData.airlineName,
+          flight_number: bookingData.flightNumber,
+          duration: bookingData.duration,
+          cabin_class: bookingData.cabinClass,
+          flight_offer: bookingData.flightOffer
+        },
+        passenger_details: bookingData.travelers
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Error saving booking to database:', error);
+      return null;
+    }
+
+    console.log('✅ Booking saved to database:', data.id);
+    return data;
+  } catch (err) {
+    console.error('❌ Database save error:', err);
+    return null;
+  }
+}
 
 // Helper function to generate mock PNR for demo/test bookings
 function generateMockPNR() {
@@ -324,7 +381,41 @@ router.post('/order', async (req, res) => {
       const totalAmount = firstOffer?.price?.total || firstOffer?.price?.amount || '100.00';
       const currency = firstOffer?.price?.currency || 'USD';
 
+      // Extract flight details for database
+      const firstSegment = firstOffer?.segments?.[0] || firstOffer?.itineraries?.[0]?.segments?.[0] || {};
+      const lastSegment = firstOffer?.segments?.[firstOffer?.segments?.length - 1] || firstSegment;
+
       console.log(`✅ Mock booking created: PNR=${mockPNR}, OrderID=${orderId}`);
+
+      // Save booking to database
+      const dbBooking = await saveBookingToDatabase({
+        bookingReference: bookingReference,
+        pnr: mockPNR,
+        orderId: orderId,
+        transactionId: req.body.transactionId || `TXN-${Date.now()}`,
+        totalAmount: totalAmount,
+        origin: firstSegment.departure?.airport || firstOffer?.origin || firstOffer?.departure?.airport || '',
+        destination: lastSegment.arrival?.airport || firstOffer?.destination || firstOffer?.arrival?.airport || '',
+        departureDate: firstSegment.departure?.date || firstOffer?.departureDate || '',
+        departureTime: firstSegment.departure?.time || firstOffer?.departureTime || '',
+        arrivalTime: lastSegment.arrival?.time || firstOffer?.arrivalTime || '',
+        airline: firstSegment.airline?.code || firstOffer?.airline?.code || '',
+        airlineName: firstSegment.airline?.name || firstOffer?.airline?.name || '',
+        flightNumber: firstOffer?.flightNumber || '',
+        duration: firstOffer?.duration || '',
+        cabinClass: firstOffer?.cabinClass || firstOffer?.travelClass || 'ECONOMY',
+        travelers: travelers.map((t, i) => ({
+          id: `${i + 1}`,
+          firstName: t.firstName || 'Guest',
+          lastName: t.lastName || 'User',
+          dateOfBirth: t.dateOfBirth,
+          gender: t.gender
+        })),
+        flightOffer: firstOffer,
+        userId: req.body.userId || null
+      });
+
+      console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
 
       return res.json({
         success: true,
@@ -340,12 +431,14 @@ router.post('/order', async (req, res) => {
             name: { firstName: t.firstName || 'Guest', lastName: t.lastName || 'User' }
           })),
           totalPrice: { amount: totalAmount, currency: currency },
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          databaseId: dbBooking?.id || null
         },
         pnr: mockPNR,
         orderId: orderId,
         bookingReference: bookingReference,
         mode: 'MOCK_DEMO_BOOKING',
+        savedToDatabase: !!dbBooking,
         message: 'Demo booking created successfully with mock PNR (real Amadeus booking requires original offer data)'
       });
     }
@@ -389,13 +482,51 @@ router.post('/order', async (req, res) => {
 
     console.log('✅ Flight order created successfully');
 
+    // Extract flight details for database from the first offer
+    const firstItinerary = firstOffer?.itineraries?.[0];
+    const firstSegment = firstItinerary?.segments?.[0] || {};
+    const lastSegment = firstItinerary?.segments?.[firstItinerary?.segments?.length - 1] || firstSegment;
+    const pnrValue = orderResponse.pnr || orderResponse.data?.associatedRecords?.[0]?.reference;
+    const orderIdValue = orderResponse.orderId || orderResponse.data?.id;
+
+    // Save real Amadeus booking to database
+    const dbBooking = await saveBookingToDatabase({
+      bookingReference: orderIdValue,
+      pnr: pnrValue,
+      orderId: orderIdValue,
+      transactionId: req.body.transactionId || `TXN-${Date.now()}`,
+      totalAmount: firstOffer?.price?.total || '0',
+      origin: firstSegment.departure?.iataCode || '',
+      destination: lastSegment.arrival?.iataCode || '',
+      departureDate: firstSegment.departure?.at?.split('T')[0] || '',
+      departureTime: firstSegment.departure?.at ? new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+      arrivalTime: lastSegment.arrival?.at ? new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+      airline: firstSegment.carrierCode || '',
+      airlineName: firstOffer?.validatingAirlineCodes?.[0] || firstSegment.carrierCode || '',
+      flightNumber: firstSegment.number ? `${firstSegment.carrierCode}${firstSegment.number}` : '',
+      duration: firstItinerary?.duration || '',
+      cabinClass: firstOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.cabin || 'ECONOMY',
+      travelers: amadeusTravelers.map((t) => ({
+        id: t.id,
+        firstName: t.name.firstName,
+        lastName: t.name.lastName,
+        dateOfBirth: t.dateOfBirth,
+        gender: t.gender
+      })),
+      flightOffer: firstOffer,
+      userId: req.body.userId || null
+    });
+
+    console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
+
     res.json({
       success: true,
       data: orderResponse.data,
-      pnr: orderResponse.pnr,
-      orderId: orderResponse.orderId || orderResponse.data?.id,
-      bookingReference: orderResponse.data?.id || orderResponse.orderId,
+      pnr: pnrValue,
+      orderId: orderIdValue,
+      bookingReference: orderIdValue,
       mode: orderResponse.mode,
+      savedToDatabase: !!dbBooking,
       message: orderResponse.message || 'Flight order created successfully'
     });
 
@@ -509,6 +640,86 @@ router.get('/health', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message
+    });
+  }
+});
+
+// Get all bookings from database (for My Trips page)
+router.get('/bookings', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured'
+      });
+    }
+
+    // Filter by travel type if provided
+    const { type, userId } = req.query;
+    
+    let query = supabase.from('bookings').select('*');
+    
+    if (type) {
+      query = query.eq('travel_type', type);
+    }
+    
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    
+    // Order by created_at descending (newest first)
+    query = query.order('created_at', { ascending: false });
+    
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('❌ Error fetching bookings:', error);
+      return res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+    
+    // Transform database format to frontend format
+    const transformedBookings = (data || []).map(booking => ({
+      id: booking.id,
+      type: booking.travel_type,
+      bookingReference: booking.booking_reference,
+      status: booking.status,
+      totalAmount: booking.total_amount,
+      paymentStatus: booking.payment_status,
+      bookingDate: booking.created_at,
+      // Spread booking_details
+      pnr: booking.booking_details?.pnr,
+      orderId: booking.booking_details?.order_id,
+      transactionId: booking.booking_details?.transaction_id,
+      origin: booking.booking_details?.origin,
+      destination: booking.booking_details?.destination,
+      departureDate: booking.booking_details?.departure_date,
+      departureTime: booking.booking_details?.departure_time,
+      arrivalTime: booking.booking_details?.arrival_time,
+      airline: booking.booking_details?.airline,
+      airlineName: booking.booking_details?.airline_name,
+      flightNumber: booking.booking_details?.flight_number,
+      duration: booking.booking_details?.duration,
+      cabinClass: booking.booking_details?.cabin_class,
+      // Travelers
+      travelers: booking.passenger_details
+    }));
+    
+    console.log(`✅ Fetched ${transformedBookings.length} bookings from database`);
+    
+    res.json({
+      success: true,
+      data: transformedBookings,
+      count: transformedBookings.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching bookings:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch bookings'
     });
   }
 });

@@ -118,7 +118,35 @@ export default function TravelDashboard() {
 
     console.log('🔍 Loading bookings...')
 
-    // Load flight bookings from localStorage
+    // First, try to load bookings from database
+    try {
+      console.log('🔍 Fetching bookings from database...')
+      const response = await fetch(getApiUrl('flights/bookings'), {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        console.log('📋 Database bookings response:', result)
+
+        if (result.success && result.data) {
+          result.data.forEach(booking => {
+            allBookings.push({
+              ...booking,
+              source: 'database'
+            })
+          })
+          console.log(`✅ Loaded ${result.data.length} bookings from database`)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching database bookings:', error)
+    }
+
+    // Load flight bookings from localStorage (as fallback/supplement)
     const flightBooking = localStorage.getItem('completedFlightBooking')
     console.log('Flight booking from localStorage:', flightBooking ? 'Found' : 'Not found')
 
@@ -126,11 +154,19 @@ export default function TravelDashboard() {
       try {
         const booking = JSON.parse(flightBooking)
         console.log('Parsed flight booking:', booking)
-        allBookings.push({
-          ...booking,
-          type: 'flight',
-          bookingDate: booking.orderCreatedAt || new Date().toISOString()
-        })
+        // Check if this booking already exists in database bookings
+        const exists = allBookings.some(b => 
+          b.bookingReference === booking.bookingReference || 
+          b.pnr === booking.pnr
+        )
+        if (!exists) {
+          allBookings.push({
+            ...booking,
+            type: 'flight',
+            bookingDate: booking.orderCreatedAt || new Date().toISOString(),
+            source: 'localStorage'
+          })
+        }
       } catch (error) {
         console.error('Error parsing flight booking:', error)
       }
@@ -144,11 +180,18 @@ export default function TravelDashboard() {
       try {
         const booking = JSON.parse(cruiseBooking)
         console.log('Parsed cruise booking:', booking)
-        allBookings.push({
-          ...booking,
-          type: 'cruise',
-          bookingDate: booking.orderCreatedAt || new Date().toISOString()
-        })
+        // Check if this booking already exists in database bookings
+        const exists = allBookings.some(b => 
+          b.bookingReference === booking.bookingReference
+        )
+        if (!exists) {
+          allBookings.push({
+            ...booking,
+            type: 'cruise',
+            bookingDate: booking.orderCreatedAt || new Date().toISOString(),
+            source: 'localStorage'
+          })
+        }
       } catch (error) {
         console.error('Error parsing cruise booking:', error)
       }
