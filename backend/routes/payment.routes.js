@@ -268,6 +268,38 @@ async function handleInitiatePayment(req, res) {
     }
 }
 
+// Helper function to parse various date formats and return YYYY-MM-DD
+function parseToISODate(dateValue) {
+    if (!dateValue) return new Date().toISOString().split('T')[0];
+    
+    // Already in YYYY-MM-DD format (10 chars)
+    if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+        return dateValue;
+    }
+    
+    // ISO datetime format "2026-02-03T18:10:00"
+    if (typeof dateValue === 'string' && dateValue.includes('T')) {
+        return dateValue.split('T')[0];
+    }
+    
+    // Try to parse human-readable formats like "Fri, Feb 6" or "Friday, February 6, 2026"
+    try {
+        const parsed = new Date(dateValue);
+        if (!isNaN(parsed.getTime())) {
+            // If the year is missing or very old, use current year
+            if (parsed.getFullYear() < 2000) {
+                parsed.setFullYear(new Date().getFullYear());
+            }
+            return parsed.toISOString().split('T')[0];
+        }
+    } catch (e) {
+        // Parsing failed
+    }
+    
+    // Fallback to today's date
+    return new Date().toISOString().split('T')[0];
+}
+
 // Hosted Checkout - Create ARC Pay Hosted Checkout session for direct bookings
 async function handleHostedCheckout(req, res) {
     if (req.method !== 'POST') {
@@ -375,7 +407,10 @@ async function handleHostedCheckout(req, res) {
                 // Get departure/arrival from flightData
                 const origin = flight?.origin || flight?.departureAirport || bookingData?.origin || 'XXX';
                 const destination = flight?.destination || flight?.arrivalAirport || bookingData?.destination || 'XXX';
-                const departureDate = flight?.departureDate || new Date().toISOString().split('T')[0];
+                // Parse departure date - handle formats like "Fri, Feb 6" or "2026-02-06"
+                const departureDate = parseToISODate(flight?.departureDate);
+                
+                console.log('   Parsed departure date:', departureDate, '(from:', flight?.departureDate, ')');
                 
                 // Get segments from multiple possible locations
                 const itinerary = flight?.itineraries?.[0] || flight?.itinerary || {};
@@ -407,22 +442,23 @@ async function handleHostedCheckout(req, res) {
                         const segDepartureAirport = segment?.departure?.iataCode || segment?.departure?.airport || origin;
                         const segDestinationAirport = segment?.arrival?.iataCode || segment?.arrival?.airport || destination;
                         
-                        // Get departure date - MUST be in YYYY-MM-DD format (10 chars)
+                        // Get departure date - use parseToISODate helper to handle all formats
                         // segment.departure.at is ISO format "2026-02-03T18:10:00"
                         // segment.departure.time is just time "18:10" - DO NOT USE for date
-                        // segment.departure.date could be "2026-02-03" or undefined
-                        let segDepartureDate = departureDate; // fallback to the main departure date
+                        // segment.departure.date could be "Fri, Feb 6" or "2026-02-03"
+                        let segDepartureDate = departureDate; // fallback to the main departure date (already parsed)
                         
                         if (segment?.departure?.at && segment.departure.at.includes('T')) {
                             // ISO format: "2026-02-03T18:10:00" -> "2026-02-03"
                             segDepartureDate = segment.departure.at.split('T')[0];
-                        } else if (segment?.departure?.date && segment.departure.date.length === 10) {
-                            // Already in YYYY-MM-DD format
-                            segDepartureDate = segment.departure.date;
-                        } else if (segment?.departureDate && segment.departureDate.length === 10) {
-                            segDepartureDate = segment.departureDate;
+                        } else if (segment?.departure?.date) {
+                            // Parse any date format (could be "Fri, Feb 6" or "2026-02-03")
+                            segDepartureDate = parseToISODate(segment.departure.date);
+                        } else if (segment?.departureDate) {
+                            segDepartureDate = parseToISODate(segment.departureDate);
                         }
-                        // Ensure date is always 10 characters (YYYY-MM-DD)
+                        
+                        // Final validation - ensure date is exactly 10 characters (YYYY-MM-DD)
                         if (!segDepartureDate || segDepartureDate.length !== 10) {
                             segDepartureDate = new Date().toISOString().split('T')[0];
                         }
@@ -437,7 +473,7 @@ async function handleHostedCheckout(req, res) {
                     : [{
                         carrierCode: carrierCode,
                         departureAirport: origin,
-                        departureDate: departureDate.length === 10 ? departureDate : new Date().toISOString().split('T')[0],
+                        departureDate: departureDate, // Already parsed by parseToISODate
                         destinationAirport: destination
                     }];
                 
