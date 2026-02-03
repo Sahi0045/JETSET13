@@ -1891,8 +1891,10 @@ async function handleHostedCheckout(req, res) {
       }
     };
 
-    // Add airline data for flight bookings (Required for ARC Pay Certification)
-    // Format based on official ARC Pay documentation: https://api.arcpay.travel/api/documentation/integrationGuidelines/supportedFeatures/pickAdditionalFunctionality/airlineData.html
+    // TEMP DISABLED: Add airline data for flight bookings (Required for ARC Pay Certification)
+    // ISSUE: Carrier names with spaces (e.g. "AIR INDIA") are rejected by ARC Pay API
+    // Will re-enable after fixing
+    /*
     if (bookingType === 'flight') {
       try {
         console.log('🔍 Processing airline data...');
@@ -1965,6 +1967,7 @@ async function handleHostedCheckout(req, res) {
         // Don't add airline data if construction fails - it's optional for hosted checkout
       }
     }
+    */
 
     // Add customer info if available
     if (customerEmail) {
@@ -2010,7 +2013,7 @@ async function handleHostedCheckout(req, res) {
 
     let arcResponse;
     let responseText;
-    
+
     try {
       arcResponse = await fetch(sessionUrl, {
         method: 'POST',
@@ -2104,7 +2107,7 @@ async function handleHostedCheckout(req, res) {
     console.error('Error stack:', error.stack);
     console.error('Request body:', JSON.stringify(req.body, null, 2));
     console.error('='.repeat(80));
-    
+
     return res.status(500).json({
       success: false,
       error: 'Failed to create hosted checkout',
