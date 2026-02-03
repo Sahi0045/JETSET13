@@ -896,7 +896,7 @@ export default function TravelDashboard() {
           <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Amount</p>
             <p className="text-lg font-bold text-green-600">
-              {booking.currency || 'USD'} {(booking.total_amount || booking.amount) ? parseFloat(booking.total_amount || booking.amount).toFixed(2) : 'N/A'}
+              {booking.currency || 'USD'} {(booking.totalAmount || booking.total_amount || booking.amount) ? parseFloat(booking.totalAmount || booking.total_amount || booking.amount).toFixed(2) : 'N/A'}
             </p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">

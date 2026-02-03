@@ -30,6 +30,8 @@ async function saveBookingToDatabase(bookingData) {
           pnr: bookingData.pnr,
           order_id: bookingData.orderId,
           transaction_id: bookingData.transactionId,
+          amount: parseFloat(bookingData.totalAmount) || 0, // Also store in booking_details for redundancy
+          currency: bookingData.currency || 'USD',
           origin: bookingData.origin,
           destination: bookingData.destination,
           departure_date: bookingData.departureDate,
@@ -333,7 +335,7 @@ router.post('/order', async (req, res) => {
     console.log('📋 Flight order creation request received');
     console.log('Request body keys:', Object.keys(req.body));
 
-    const { flightOffer, flightOffers, travelers, payments, contactInfo, totalAmount, transactionId } = req.body;
+    const { flightOffer, flightOffers, travelers, payments, contactInfo, totalAmount, transactionId, amount } = req.body;
 
     // Accept both flightOffer (singular) and flightOffers (plural)
     const offers = flightOffers || (flightOffer ? [flightOffer] : null);
@@ -378,12 +380,14 @@ router.post('/order', async (req, res) => {
       const bookingReference = `BOOK-${Date.now().toString(36).toUpperCase()}`;
 
       // Extract price - prioritize from destructured request body, then from flight offer
-      const finalAmount = totalAmount || firstOffer?.price?.total || firstOffer?.price?.amount || '100.00';
-      const currency = firstOffer?.price?.currency || 'USD';
+      const finalAmount = totalAmount || amount || firstOffer?.price?.total || firstOffer?.price?.amount || firstOffer?.totalPrice?.amount || '0';
+      const currency = firstOffer?.price?.currency || firstOffer?.totalPrice?.currency || 'USD';
 
       console.log('💰 Amount for booking:', {
-        fromRequestBody: totalAmount,
-        fromFlightOffer: firstOffer?.price?.total,
+        fromTotalAmount: totalAmount,
+        fromAmount: amount,
+        fromFlightOfferPriceTotal: firstOffer?.price?.total,
+        fromFlightOfferPriceAmount: firstOffer?.price?.amount,
         finalAmount: finalAmount
       });
 
@@ -687,31 +691,41 @@ router.get('/bookings', async (req, res) => {
     }
 
     // Transform database format to frontend format
-    const transformedBookings = (data || []).map(booking => ({
-      id: booking.id,
-      type: booking.travel_type,
-      bookingReference: booking.booking_reference,
-      status: booking.status,
-      totalAmount: booking.total_amount,
-      paymentStatus: booking.payment_status,
-      bookingDate: booking.created_at,
-      // Spread booking_details
-      pnr: booking.booking_details?.pnr,
-      orderId: booking.booking_details?.order_id,
-      transactionId: booking.booking_details?.transaction_id,
-      origin: booking.booking_details?.origin,
-      destination: booking.booking_details?.destination,
-      departureDate: booking.booking_details?.departure_date,
-      departureTime: booking.booking_details?.departure_time,
-      arrivalTime: booking.booking_details?.arrival_time,
-      airline: booking.booking_details?.airline,
-      airlineName: booking.booking_details?.airline_name,
-      flightNumber: booking.booking_details?.flight_number,
-      duration: booking.booking_details?.duration,
-      cabinClass: booking.booking_details?.cabin_class,
-      // Travelers
-      travelers: booking.passenger_details
-    }));
+    const transformedBookings = (data || []).map(booking => {
+      // Get amount from total_amount column or from booking_details or from flight_offer
+      const amount = booking.total_amount || 
+                     booking.booking_details?.amount ||
+                     booking.booking_details?.flight_offer?.price?.total ||
+                     0;
+      
+      return {
+        id: booking.id,
+        type: booking.travel_type,
+        bookingReference: booking.booking_reference,
+        status: booking.status,
+        totalAmount: parseFloat(amount) || 0,
+        amount: parseFloat(amount) || 0, // Add both for compatibility
+        currency: booking.booking_details?.currency || booking.booking_details?.flight_offer?.price?.currency || 'USD',
+        paymentStatus: booking.payment_status,
+        bookingDate: booking.created_at,
+        // Spread booking_details
+        pnr: booking.booking_details?.pnr,
+        orderId: booking.booking_details?.order_id,
+        transactionId: booking.booking_details?.transaction_id,
+        origin: booking.booking_details?.origin,
+        destination: booking.booking_details?.destination,
+        departureDate: booking.booking_details?.departure_date,
+        departureTime: booking.booking_details?.departure_time,
+        arrivalTime: booking.booking_details?.arrival_time,
+        airline: booking.booking_details?.airline,
+        airlineName: booking.booking_details?.airline_name,
+        flightNumber: booking.booking_details?.flight_number,
+        duration: booking.booking_details?.duration,
+        cabinClass: booking.booking_details?.cabin_class,
+        // Travelers
+        travelers: booking.passenger_details
+      };
+    });
 
     console.log(`✅ Fetched ${transformedBookings.length} bookings from database`);
 
