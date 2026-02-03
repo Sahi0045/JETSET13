@@ -391,112 +391,106 @@ async function handleHostedCheckout(req, res) {
             // NOTE: 3DS is handled automatically by ARC Pay's Hosted Checkout based on merchant profile settings
         };
 
-        // TEMP DISABLED: Add airline data for flight bookings (Required for ARC Pay Certification)
-        // ISSUE: Carrier names with spaces (e.g. "AIR INDIA") are rejected by ARC Pay API with 400 error
-        // Will re-enable after implementing proper data sanitization (use IATA codes, remove spaces)
-        /*
+        // ARC Pay Certification: Required Airline Data for Card Brand Interchange
+        // Reference: ARC Pay Certification Email Requirements
         if (bookingType === 'flight') {
             try {
-                console.log('🔍 Processing airline data for ARC Pay...');
-                console.log('   flightData received:', JSON.stringify(flightData, null, 2));
-                
+                console.log('🔍 Processing airline data for ARC Pay certification...');
+
                 const flight = flightData || bookingData?.selectedFlight || bookingData?.flightData || {};
-                
-                // Extract carrier code from multiple sources
-                const carrierCode = (flight?.carrierCode || flight?.flightNumber?.split(' ')[0] || 
-                                    flight?.segments?.[0]?.carrier || flight?.segments?.[0]?.carrierCode || 'XX').substring(0, 2);
-                
-                // Get departure/arrival from flightData
-                const origin = flight?.origin || flight?.departureAirport || bookingData?.origin || 'XXX';
-                const destination = flight?.destination || flight?.arrivalAirport || bookingData?.destination || 'XXX';
-                // Parse departure date - handle formats like "Fri, Feb 6" or "2026-02-06"
-                const departureDate = parseToISODate(flight?.departureDate);
-                
-                console.log('   Parsed departure date:', departureDate, '(from:', flight?.departureDate, ')');
-                
-                // Get segments from multiple possible locations
                 const itinerary = flight?.itineraries?.[0] || flight?.itinerary || {};
-                let segments = [];
-                
-                if (Array.isArray(itinerary?.segments) && itinerary.segments.length > 0) {
-                    segments = itinerary.segments;
-                } else if (Array.isArray(flight?.segments) && flight.segments.length > 0) {
-                    segments = flight.segments;
-                }
-                
-                console.log('   Carrier code:', carrierCode);
-                console.log('   Origin:', origin, '-> Destination:', destination);
-                console.log('   Segments found:', segments.length);
+                const segments = Array.isArray(itinerary?.segments) ? itinerary.segments :
+                    Array.isArray(flight?.segments) ? flight.segments : [];
 
-                const passengers = bookingData?.passengerData || [];
-                const passengerList = passengers.length > 0 
+                console.log('   Segments count:', segments.length);
+
+                // Travel Agent Info - Required by ARC Pay
+                const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || 'JETSET001';
+                const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'Jetsetters';
+
+                // Get passenger info
+                const passengers = bookingData?.passengerData || bookingData?.travelers || [];
+                const passengerList = passengers.length > 0
                     ? passengers.map(p => ({
-                        firstName: (p.firstName || '').toUpperCase(),
-                        lastName: (p.lastName || '').toUpperCase()
+                        firstName: (p.firstName || p.name?.firstName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
+                        lastName: (p.lastName || p.name?.lastName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
                     }))
-                    : [{ firstName: (firstName || 'GUEST').toUpperCase(), lastName: (lastName || 'PASSENGER').toUpperCase() }];
-
-                // Build leg array from segments or use default
-                const legArray = segments.length > 0 
-                    ? segments.map((segment) => {
-                        const segCarrierCode = (segment?.carrierCode || segment?.carrier || segment?.operating?.carrierCode || carrierCode).substring(0, 2);
-                        const segDepartureAirport = segment?.departure?.iataCode || segment?.departure?.airport || origin;
-                        const segDestinationAirport = segment?.arrival?.iataCode || segment?.arrival?.airport || destination;
-                        
-                        let segDepartureDate = departureDate;
-                        
-                        if (segment?.departure?.at && segment.departure.at.includes('T')) {
-                            segDepartureDate = segment.departure.at.split('T')[0];
-                        } else if (segment?.departure?.date) {
-                            segDepartureDate = parseToISODate(segment.departure.date);
-                        } else if (segment?.departureDate) {
-                            segDepartureDate = parseToISODate(segment.departureDate);
-                        }
-                        
-                        if (!segDepartureDate || segDepartureDate.length !== 10) {
-                            segDepartureDate = new Date().toISOString().split('T')[0];
-                        }
-                        
-                        return {
-                            carrierCode: segCarrierCode,
-                            departureAirport: segDepartureAirport,
-                            departureDate: segDepartureDate,
-                            destinationAirport: segDestinationAirport
-                        };
-                    })
                     : [{
-                        carrierCode: carrierCode,
-                        departureAirport: origin,
-                        departureDate: departureDate,
-                        destinationAirport: destination
+                        firstName: (firstName || 'GUEST').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
+                        lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
                     }];
-                
-                console.log('   Leg array built:', legArray);
+
+                // Helper functions
+                const extractTime = (isoString) => {
+                    if (!isoString) return '00:00';
+                    const timePart = isoString.split('T')[1];
+                    return timePart ? timePart.substring(0, 5) : '00:00';
+                };
+
+                const mapCabinClass = (cabinClass) => {
+                    if (!cabinClass) return 'Y';
+                    const classUpper = cabinClass.toUpperCase();
+                    if (classUpper.includes('PREMIUM') || classUpper.includes('BUSINESS') ||
+                        classUpper === 'W' || classUpper.includes('FIRST')) {
+                        return 'W';
+                    }
+                    return 'Y';
+                };
+
+                // Build leg array with ALL required fields per ARC Pay certification
+                const origin = flight?.origin || bookingData?.origin || 'XXX';
+                const destination = flight?.destination || bookingData?.destination || 'XXX';
+
+                const legArray = segments.length > 0
+                    ? segments.map((segment, index) => ({
+                        carrierCode: (segment?.carrierCode || segment?.operating?.carrierCode || 'XD').substring(0, 2),
+                        classOfService: mapCabinClass(segment?.cabin || flight?.cabin || bookingData?.cabinClass),
+                        departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3),
+                        departureDate: (segment?.departure?.at || new Date().toISOString()).split('T')[0],
+                        departureTime: extractTime(segment?.departure?.at),
+                        destinationAirport: (segment?.arrival?.iataCode || destination).substring(0, 3),
+                        flightNumber: String(segment?.number || segment?.flightNumber || index + 1).substring(0, 6)
+                    }))
+                    : [{
+                        carrierCode: 'XD',
+                        classOfService: 'Y',
+                        departureAirport: origin.substring(0, 3),
+                        departureDate: new Date().toISOString().split('T')[0],
+                        departureTime: '00:00',
+                        destinationAirport: destination.substring(0, 3),
+                        flightNumber: '001'
+                    }];
+
+                const ticketNumber = `889${Date.now().toString().slice(-10)}`.substring(0, 13);
+                const bookingRef = (flight?.pnr || flight?.bookingReference || orderId || '').toString().substring(0, 6).toUpperCase() || 'JETSET';
 
                 requestBody.airline = {
-                    bookingReference: (flight?.pnr || flight?.bookingReference || orderId).substring(0, 6).toUpperCase(),
-                    documentType: 'PASSENGER_TICKET',
+                    bookingReference: bookingRef,
+                    documentType: 'MCO',
                     itinerary: { leg: legArray, numberInParty: String(passengerList.length) },
                     passenger: passengerList,
                     ticket: {
                         issue: {
-                            carrierCode: legArray[0]?.carrierCode || 'XX',
-                            carrierName: flight?.carrierName || 'Airline',  // THIS WAS THE PROBLEM!
-                            city: 'Online',
+                            carrierCode: legArray[0]?.carrierCode || 'XD',
+                            carrierName: 'JETSETTERS',
+                            city: 'ONLINE',
                             country: 'USA',
-                            date: new Date().toISOString().split('T')[0]
+                            date: new Date().toISOString().split('T')[0],
+                            travelAgentCode: travelAgentCode,
+                            travelAgentName: travelAgentName.toUpperCase().replace(/[^A-Z0-9\s]/g, '').substring(0, 25)
                         },
-                        ticketNumber: `T${orderId}`.substring(0, 14),
+                        ticketNumber: ticketNumber,
                         totalFare: parseFloat(amount).toFixed(2),
                         totalFees: '0.00',
                         totalTaxes: '0.00'
                     }
                 };
+
+                console.log('✈️ ARC Pay Certification - Airline Data:', JSON.stringify(requestBody.airline, null, 2));
             } catch (airlineError) {
                 console.error('⚠️ Error constructing airline data:', airlineError);
             }
         }
-        */
 
         // Add customer info
         if (customerEmail) {
