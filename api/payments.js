@@ -1920,7 +1920,10 @@ async function handleHostedCheckout(req, res) {
 
     // ARC Pay Certification: Required Airline Data for Card Brand Interchange
     // Reference: ARC Pay Certification Email Requirements
-    if (bookingType === 'flight') {
+    // NOTE: Set ARC_ENABLE_AIRLINE_DATA=true in environment to enable airline data
+    const enableAirlineData = process.env.ARC_ENABLE_AIRLINE_DATA === 'true';
+
+    if (bookingType === 'flight' && enableAirlineData) {
       try {
         console.log('🔍 Processing airline data for ARC Pay certification...');
 
