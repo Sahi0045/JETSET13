@@ -295,6 +295,91 @@ router.post('/send', async (req, res) => {
         });
         break;
 
+      case 'login_notification':
+        // Send login notification email
+        result = await emailService.sendEmail({
+          to,
+          subject: `🔐 New Login to Your Jetsetters Account`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: linear-gradient(135deg, #055B75 0%, #0066b2 100%); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
+                <h1 style="color: white; margin: 0;">🔐 Security Alert</h1>
+                <p style="color: #B9D0DC; margin: 10px 0 0;">New Login Detected</p>
+              </div>
+              <div style="padding: 30px; background: #f8fafc; border-radius: 0 0 12px 12px;">
+                <p style="font-size: 16px; color: #333;">Hi ${data.customerName},</p>
+                <p style="font-size: 16px; color: #333;">A new login to your Jetsetters account was detected.</p>
+                <div style="background: #e0f2fe; border-left: 4px solid #0066b2; padding: 20px; margin: 20px 0;">
+                  <p style="margin: 5px 0;"><strong>📧 Email:</strong> ${data.email}</p>
+                  <p style="margin: 5px 0;"><strong>🕐 Time:</strong> ${data.loginTime}</p>
+                  <p style="margin: 5px 0;"><strong>📱 Device:</strong> ${data.deviceInfo}</p>
+                </div>
+                <div style="background: #dcfce7; border: 1px solid #22c55e; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                  <p style="margin: 0; color: #166534;">
+                    ✅ If this was you, no action is needed.
+                  </p>
+                </div>
+                <div style="background: #fef2f2; border: 1px solid #ef4444; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                  <p style="margin: 0; color: #991b1b;">
+                    ⚠️ If this wasn't you, please reset your password immediately.
+                  </p>
+                </div>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/my-trips" style="background: linear-gradient(135deg, #055B75 0%, #0066b2 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
+                    Go to My Account
+                  </a>
+                </div>
+                <p style="color: #666; font-size: 12px; text-align: center; margin-top: 30px;">
+                  This is an automated security notification from Jetsetters Travel.
+                </p>
+              </div>
+            </div>
+          `
+        });
+        break;
+
+      case 'logout_notification':
+        // Send logout notification email
+        result = await emailService.sendEmail({
+          to,
+          subject: `👋 You've Logged Out of Jetsetters`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: linear-gradient(135deg, #055B75 0%, #0066b2 100%); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
+                <h1 style="color: white; margin: 0;">👋 Signed Out</h1>
+                <p style="color: #B9D0DC; margin: 10px 0 0;">Session Ended Successfully</p>
+              </div>
+              <div style="padding: 30px; background: #f8fafc; border-radius: 0 0 12px 12px;">
+                <p style="font-size: 16px; color: #333;">Hi ${data.customerName},</p>
+                <p style="font-size: 16px; color: #333;">You have successfully logged out of your Jetsetters account.</p>
+                <div style="background: #f0fdf4; border-left: 4px solid #22c55e; padding: 20px; margin: 20px 0;">
+                  <p style="margin: 5px 0;"><strong>📧 Account:</strong> ${data.email}</p>
+                  <p style="margin: 5px 0;"><strong>🕐 Time:</strong> ${data.logoutTime}</p>
+                  <p style="margin: 5px 0;"><strong>📱 Device:</strong> ${data.deviceInfo}</p>
+                </div>
+                <div style="background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                  <p style="margin: 0; color: #333;">
+                    🔒 Your session has been securely terminated.
+                  </p>
+                </div>
+                <p style="font-size: 14px; color: #666; text-align: center;">
+                  We hope to see you again soon! <br/>
+                  Ready to plan your next adventure?
+                </p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}" style="background: linear-gradient(135deg, #055B75 0%, #0066b2 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
+                    Explore Travel Deals
+                  </a>
+                </div>
+                <p style="color: #666; font-size: 12px; text-align: center; margin-top: 30px;">
+                  This is an automated notification from Jetsetters Travel.
+                </p>
+              </div>
+            </div>
+          `
+        });
+        break;
+
       default:
         return res.status(400).json({
           success: false,

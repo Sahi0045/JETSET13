@@ -25,7 +25,7 @@ export const SupabaseAuthProvider = ({ children }) => {
     const initializeAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
-        
+
         if (error) {
           console.error('Error getting session:', error);
           setError(error.message);
@@ -79,7 +79,7 @@ export const SupabaseAuthProvider = ({ children }) => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session?.user?.email);
-      
+
       setSession(session);
       setUser(session?.user ?? null);
       setError(null);
@@ -107,6 +107,40 @@ export const SupabaseAuthProvider = ({ children }) => {
             localStorage.setItem('adminToken', session.access_token);
           } else {
             localStorage.removeItem('adminToken');
+          }
+        }
+
+        // 📧 Send login notification for OAuth (Google) sign-ins
+        if (event === 'SIGNED_IN') {
+          try {
+            const loginTime = new Date().toLocaleString('en-US', {
+              dateStyle: 'medium',
+              timeStyle: 'short'
+            });
+
+            // Determine login method
+            const provider = session.user.app_metadata?.provider || 'email';
+            const isOAuth = provider !== 'email';
+
+            await fetch('/api/email/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'login_notification',
+                to: session.user.email,
+                data: {
+                  customerName: serializedUser.firstName || 'Valued Customer',
+                  email: session.user.email,
+                  loginTime,
+                  ipAddress: 'Your device',
+                  deviceInfo: `${navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop'} - ${isOAuth ? `${provider.charAt(0).toUpperCase() + provider.slice(1)} Sign-In` : 'Email Login'}`
+                }
+              })
+            });
+            console.log(`📧 Login notification email sent for ${provider} user`);
+          } catch (emailError) {
+            console.warn('Failed to send OAuth login email:', emailError);
+            // Don't fail login if email fails
           }
         }
       } else {
@@ -166,7 +200,7 @@ export const SupabaseAuthProvider = ({ children }) => {
       if (data.session) {
         setSession(data.session);
         setUser(data.session.user);
-        
+
         // Sync with localStorage immediately
         const role = data.session.user.user_metadata?.role || 'user';
         const serializedUser = {
@@ -191,6 +225,34 @@ export const SupabaseAuthProvider = ({ children }) => {
             localStorage.removeItem('adminToken');
           }
         }
+
+        // 📧 Send login notification email
+        try {
+          const loginTime = new Date().toLocaleString('en-US', {
+            dateStyle: 'medium',
+            timeStyle: 'short'
+          });
+
+          await fetch('/api/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'login_notification',
+              to: data.session.user.email,
+              data: {
+                customerName: serializedUser.firstName || 'Valued Customer',
+                email: data.session.user.email,
+                loginTime,
+                ipAddress: 'Your device',
+                deviceInfo: navigator.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop Browser'
+              }
+            })
+          });
+          console.log('📧 Login notification email sent');
+        } catch (emailError) {
+          console.warn('Failed to send login email:', emailError);
+          // Don't fail login if email fails
+        }
       }
 
       return { data, error: null };
@@ -210,13 +272,13 @@ export const SupabaseAuthProvider = ({ children }) => {
       setError(null);
 
       // Determine the correct redirect URL based on environment
-      const isDevelopment = window.location.hostname === 'localhost' || 
-                           window.location.hostname === '127.0.0.1';
-      
-      const baseUrl = isDevelopment 
-        ? window.location.origin 
+      const isDevelopment = window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+
+      const baseUrl = isDevelopment
+        ? window.location.origin
         : 'https://www.jetsetterss.com';
-      
+
       const redirectUrl = options.redirectTo || `${baseUrl}/auth/callback`;
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -246,9 +308,42 @@ export const SupabaseAuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
+      // Get user email before signing out for the logout notification
+      const currentUserEmail = user?.email;
+      const currentUserName = user?.user_metadata?.first_name || user?.user_metadata?.full_name?.split(' ')[0] || '';
+
       const { error } = await supabase.auth.signOut();
 
       if (error) throw error;
+
+      // 📧 Send logout notification email
+      if (currentUserEmail) {
+        try {
+          const logoutTime = new Date().toLocaleString('en-US', {
+            dateStyle: 'medium',
+            timeStyle: 'short'
+          });
+
+          await fetch('/api/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'logout_notification',
+              to: currentUserEmail,
+              data: {
+                customerName: currentUserName || 'Valued Customer',
+                email: currentUserEmail,
+                logoutTime,
+                deviceInfo: navigator.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop Browser'
+              }
+            })
+          });
+          console.log('📧 Logout notification email sent');
+        } catch (emailError) {
+          console.warn('Failed to send logout email:', emailError);
+          // Don't fail logout if email fails
+        }
+      }
 
       // Clear localStorage
       localStorage.removeItem('isAuthenticated');
