@@ -387,20 +387,8 @@ async function handleHostedCheckout(req, res) {
                 amount: parseFloat(amount).toFixed(2),
                 currency: currency,
                 description: description || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking - ${orderId}`
-            },
-            // 3DS2 Authentication Configuration - Mastercard Gateway v77 format
-            authentication: {
-                acceptVersions: '3DS1,3DS2',  // Support both 3DS versions
-                channel: 'PAYER_BROWSER',     // Required: identifies this as a browser-based transaction
-                purpose: 'PAYMENT_TRANSACTION', // Required: indicates purchase flow
-                redirectResponseUrl: finalReturnUrl // Required for 3DS redirect
-            },
-            // Explicitly request 3DS for this transaction (Mastercard Gateway v77)
-            threeDSecure: {
-                authenticationRedirect: {
-                    responseUrl: finalReturnUrl
-                }
             }
+            // NOTE: 3DS is handled automatically by ARC Pay's Hosted Checkout based on merchant profile settings
         };
 
         // TEMP DISABLED: Add airline data for flight bookings (Required for ARC Pay Certification)
