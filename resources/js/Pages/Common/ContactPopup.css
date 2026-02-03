@@ -26,9 +26,42 @@
 /* Contact Us Button Container */
 .contact-us-container {
   position: fixed;
-  bottom: 90px; /* Position above the AI chatbot button */
+  bottom: 90px;
+  /* Position above the AI chatbot button */
   right: 20px;
   z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+/* WhatsApp Button */
+.whatsapp-button {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #25D366;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  color: white;
+  text-decoration: none;
+}
+
+.whatsapp-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(37, 211, 102, 0.4);
+  background: #20BD5C;
+}
+
+.whatsapp-button svg {
+  width: 28px;
+  height: 28px;
 }
 
 .contact-us-button {
@@ -150,8 +183,13 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideIn {
@@ -159,6 +197,7 @@
     transform: translateY(30px);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
@@ -170,4 +209,4 @@
     padding: 20px;
     width: 95%;
   }
-} 
+}
