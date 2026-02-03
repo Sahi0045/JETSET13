@@ -1883,7 +1883,7 @@ async function handleHostedCheckout(req, res) {
         reference: orderId,
         amount: parseFloat(amount).toFixed(2),
         currency: currency,
-        description: description || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking - ${orderId}`
+        description: `Flight Booking ${orderId}`
       },
       // Force 3DS challenge (OTP) - required for ARC Pay to trigger authentication
       authentication: {
