@@ -472,10 +472,81 @@ function FlightSearchPage() {
             flightNumber: `${segment.carrierCode} ${segment.number}`,
             aircraft: aircraftMap[segment.aircraft?.code] || segment.aircraft?.code || 'Unknown Aircraft',
             stops: 0
-          }))
+          })),
+          // IMPORTANT: Preserve original Amadeus offer for booking API
+          originalOffer: flight
+        };
+      } else if (flight.originalOffer) {
+        // Already has originalOffer from backend - preserve it
+        return {
+          id: flight.id,
+          airline: {
+            code: flight.airlineCode,
+            name: flight.airline,
+            logo: `/images/airlines/${flight.airlineCode?.toLowerCase()}.png`
+          },
+          departure: {
+            time: flight.departure.time,
+            date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            airport: flight.departure.airport,
+            terminal: flight.departure.terminal || 'T1',
+            cityName: cityMap[flight.departure.airport] || flight.departure.airport
+          },
+          arrival: {
+            time: flight.arrival.time,
+            date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            airport: flight.arrival.airport,
+            terminal: flight.arrival.terminal || 'T1',
+            cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
+          },
+          duration: flight.duration,
+          stops: flight.stops || 0,
+          price: {
+            amount: flight.price.amount,
+            total: flight.price.total,
+            currency: flight.price.currency || 'USD'
+          },
+          amenities: [],
+          baggage: {
+            checked: { weight: parseInt(flight.baggage) || 15, weightUnit: 'KG' },
+            cabin: { weight: 7, weightUnit: 'KG' }
+          },
+          cabin: flight.cabin || 'ECONOMY',
+          class: flight.cabin || 'ECONOMY',
+          aircraft: flight.aircraft || 'Unknown',
+          flightNumber: flight.flightNumber,
+          refundable: flight.refundable || false,
+          seats: flight.seats || 'Available',
+          segments: [{
+            departure: {
+              time: flight.departure.time,
+              airport: flight.departure.airport,
+              terminal: flight.departure.terminal || 'T1',
+              cityName: cityMap[flight.departure.airport] || flight.departure.airport,
+              at: `${flight.departure.date}T${flight.departure.time}:00`
+            },
+            arrival: {
+              time: flight.arrival.time,
+              airport: flight.arrival.airport,
+              terminal: flight.arrival.terminal || 'T1',
+              cityName: cityMap[flight.arrival.airport] || flight.arrival.airport,
+              at: `${flight.arrival.date}T${flight.arrival.time}:00`
+            },
+            airline: {
+              code: flight.airlineCode,
+              name: flight.airline,
+              logo: `/images/airlines/${flight.airlineCode?.toLowerCase()}.png`
+            },
+            duration: flight.duration,
+            flightNumber: flight.flightNumber,
+            aircraft: flight.aircraft || 'Unknown Aircraft',
+            stops: 0
+          }],
+          // IMPORTANT: Preserve original Amadeus offer for booking API
+          originalOffer: flight.originalOffer
         };
       } else {
-        // Handle our simple API format
+        // Handle our simple API format (no originalOffer available)
         return {
           id: flight.id,
           airline: {
