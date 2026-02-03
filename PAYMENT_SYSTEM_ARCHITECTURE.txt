@@ -1,0 +1,179 @@
+================================================================================
+                    PAYMENT SYSTEM ARCHITECTURE
+                          CRITICAL NOTES
+================================================================================
+
+⚠️  IMPORTANT: There are TWO payment backend files in this project!
+⚠️  Both are actively used in production. Keep them in sync!
+
+================================================================================
+FILE LOCATIONS & USAGE
+================================================================================
+
+1. /api/payments.js
+   -----------------------------------------------------------------------------
+   PURPOSE:
+   - Handles INQUIRY/QUOTE payments
+   - Original payment implementation
+   - Used by inquiry detail page when users pay for quotes
+   
+   USED BY:
+   - Inquiry payment flow
+   - Quote checkout
+   - Custom request payments
+   
+   ROUTES:
+   - Likely exposed as /api/payments/*
+
+
+2. /backend/routes/payment.routes.js  
+   -----------------------------------------------------------------------------
+   PURPOSE:
+   - Handles FLIGHT BOOKING payments
+   - New payment architecture
+   - Direct checkout for flight bookings
+   
+   USED BY:
+   - Flight booking checkout (FlightPayment.jsx)
+   - Direct flight purchases
+   - Real-time flight booking payments
+   
+   ROUTES:
+   - Exposed via Express router in backend
+
+
+================================================================================
+CRITICAL RULE: KEEP BOTH FILES IN SYNC!
+================================================================================
+
+When making payment-related changes, you MUST update BOTH files:
+
+✅ DO THIS:
+1. Make changes in /api/payments.js
+2. Apply THE SAME changes to /backend/routes/payment.routes.js
+3. Test both inquiry payments AND flight payments
+4. Verify both in production via Vercel logs
+
+❌ DON'T DO THIS:
+- Edit only one file
+- Assume they're the same
+- Skip testing both payment flows
+
+
+================================================================================
+COMMON PAYMENT CONFIGURATIONS (Keep Synced!)
+================================================================================
+
+1. ARC Pay Session Creation
+   - Both files create ARC Pay checkout sessions
+   - Same INITIATE_CHECKOUT structure
+   - Same merchant credentials
+
+2. Airline Data Handling
+   - Currently DISABLED in both (causes 400 errors with spaces)
+   - If re-enabling, sanitize carrier names in BOTH files
+   - Use IATA codes, remove spaces
+
+3. 3DS Authentication
+   - Currently OPTIONAL in both (was causing failures)
+   - If re-enabling, use same settings in BOTH files
+   - Don't force MANDATORY until tested
+
+4. Return URLs
+   - Different callback URLs for different flows
+   - Inquiry: /payment/callback?quote_id=...
+   - Flight: /payment/callback?orderId=...&bookingType=flight
+
+
+================================================================================
+DEBUGGING TIPS
+================================================================================
+
+1. Check Vercel Logs to See Which File is Running
+   - Look for file paths in stack traces
+   - Example: "at handleHostedCheckout (file:///var/task/backend/routes/...)"
+
+2. Test Both Payment Flows Separately
+   - Inquiry: Go to My Trips → Pay for a quote
+   - Flight: Search flights → Book → Pay
+
+3. Common Issues & Solutions
+   - 400 Error: Check airline data (spaces in carrier names)
+   - Payment fails silently: Check 3DS settings
+   - Wrong file edited: Verify in Vercel logs which file ran
+
+
+================================================================================
+DEPLOYMENT CHECKLIST
+================================================================================
+
+Before deploying payment changes:
+
+□ Both /api/payments.js AND /backend/routes/payment.routes.js updated
+□ Same ARC Pay configuration in both
+□ Same airline data handling in both  
+□ Same 3DS settings in both
+□ Test inquiry payment flow
+□ Test flight payment flow
+□ Check Vercel logs after deployment
+□ Verify both flows in production
+
+
+================================================================================
+HISTORY & CONTEXT
+================================================================================
+
+Date: February 3, 2026
+Issue: Flight payments were failing with 400 errors
+
+Root Cause:
+- We initially edited /api/payments.js thinking it handled all payments
+- But Vercel was using /backend/routes/payment.routes.js for flight payments
+- The "wrong file" still had airline data with spaces, causing failures
+- Spent hours debugging before checking Vercel logs
+
+Resolution:
+- Applied same fixes to BOTH files
+- Removed airline data (spaces in "AIR INDIA")
+- Removed mandatory 3DS authentication
+- Both payment flows now working
+
+Lesson Learned:
+- Always check deployment logs to see which files are actually running
+- Don't assume - verify which code is executing in production
+- Keep duplicate files in sync or refactor to single source
+
+
+================================================================================
+FUTURE REFACTORING RECOMMENDATION
+================================================================================
+
+Consider consolidating these into a single payment service:
+
+/services/paymentService.js
+- Single source of truth for payment logic
+- Used by both inquiry and flight routes
+- Easier to maintain, test, and debug
+- Reduces risk of files getting out of sync
+
+Until then: KEEP BOTH FILES IN SYNC!
+
+
+================================================================================
+CONTACT & SUPPORT
+================================================================================
+
+ARC Pay Documentation: https://api.arcpay.travel/api/documentation/
+Merchant ID: TESTARC05511704
+Test Environment: Yes (currently using test credentials)
+
+For questions or issues:
+- Check this file first
+- Review Vercel deployment logs
+- Test both payment flows before deploying
+
+
+================================================================================
+Last Updated: February 3, 2026
+Maintained by: Development Team
+================================================================================

@@ -512,7 +512,9 @@ function FlightBookingConfirmation() {
         selectedAddons,
         vipService,
         calculatedFare,
-        selectedFlight: location.state?.flightData // Pass the original flight data
+        selectedFlight: location.state?.flightData, // Pass the original flight data
+        originalOffer: location.state?.flightData?.originalOffer, // ✅ CRITICAL: Full Amadeus API response
+        flightData: location.state?.flightData // ✅ Complete flight details
       }
     });
   };
