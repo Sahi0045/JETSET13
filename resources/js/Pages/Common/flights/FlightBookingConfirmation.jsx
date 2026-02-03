@@ -176,80 +176,60 @@ function FlightBookingConfirmation() {
   const transformFlightData = (flightData) => {
     if (!flightData) return null;
 
-    // Get the authoritative total price from the search results
-    // We treat the price from search as the Final Total to ensure consistency
-    const searchTotalPrice = parseFloat(
+    // Calculate base price - try multiple sources
+    const basePrice = parseFloat(
+      flightData.price?.base ||
+      flightData.originalOffer?.price?.base ||
       flightData.price?.total ||
       flightData.price?.amount ||
-      flightData.originalOffer?.price?.total ||
       0
     );
 
-    // Get currency
-    const currency = flightData.price?.currency ||
-      flightData.originalOffer?.price?.currency ||
-      'USD';
+    // Calculate platform fee (10% of base price)
+    const platformFee = basePrice * 0.10;
 
-    // Back-calculate Base Fare and Taxes so the Total matches the Search Price
-    // Default tax structure: Base + 10% Platform + CountryTax (varies, default 5%)
-    // Total = Base * (1 + 0.10 + rate)
-
-    // Determine tax rate
+    // Calculate country-specific taxes based on departure country
+    // Default tax rate is 5% if country-specific rate is not available
     const countryTaxRates = {
       'US': 0.075,  // 7.5%
       'GB': 0.20,   // 20% VAT
       'FR': 0.20,   // 20% VAT
       'DE': 0.19,   // 19% VAT
       'IN': 0.18,   // 18% GST
+      // Add more countries as needed
     };
-    const departureCountry = flightData.departure?.country || 'IN';
+
+    // Get country code from departure airport or default to standard rate
+    const departureCountry = flightData.departure.country || 'IN';
     const taxRate = countryTaxRates[departureCountry] || 0.05;
-
-    // Platform fee rate (10%)
-    const platformFeeRate = 0.10;
-
-    // Calculate Base Fare from Total
-    // Total = Base * (1 + platformFeeRate + taxRate)
-    const totalRate = 1 + platformFeeRate + taxRate;
-    const basePrice = searchTotalPrice / totalRate;
-
-    // Calculate components
-    const platformFee = basePrice * platformFeeRate;
     const countryTax = basePrice * taxRate;
-    const totalTaxes = platformFee + countryTax;
 
-    // Verify math (handle rounding errors by adjusting base)
-    // We want specifically: Base + Taxes = SearchTotalPrice
-
-    // Determine Flight Number
-    const flightNumber =
-      flightData.flightNumber ||
-      flightData.segments?.[0]?.flightNumber ||
-      `${flightData.airline?.code || 'XX'} ${flightData.id || '000'}`;
+    // Calculate total taxes including country tax and platform fee
+    const totalTaxes = countryTax + platformFee;
 
     return {
       bookingId: bookingId || `BOOK-${Date.now()}`,
       flight: {
-        airline: flightData.airline?.name || 'Airline',
-        flightNumber: flightNumber,
-        departureCity: flightData.departure?.cityName || flightData.departure?.airport,
-        arrivalCity: flightData.arrival?.cityName || flightData.arrival?.airport,
-        departureTime: flightData.departure?.time,
-        arrivalTime: flightData.arrival?.time,
+        airline: flightData.airline.name,
+        flightNumber: `${flightData.airline.code} ${flightData.id}`,
+        departureCity: flightData.departure.airport,
+        arrivalCity: flightData.arrival.airport,
+        departureTime: flightData.departure.time,
+        arrivalTime: flightData.arrival.time,
         duration: flightData.duration,
-        departureDate: flightData.departure?.date,
-        arrivalDate: flightData.arrival?.date,
+        departureDate: flightData.departure.date,
+        arrivalDate: flightData.arrival.date,
         cabin: flightData.cabin,
         fareType: flightData.class,
         stops: flightData.stops,
-        basePrice: basePrice, // Calculated base
+        basePrice: basePrice,
         tax: totalTaxes,
         platformFee: platformFee,
         countryTax: countryTax,
-        totalPrice: searchTotalPrice, // Matches search result
-        departureAirport: `${flightData.departure?.airport} Terminal ${flightData.departure?.terminal || '1'}`,
-        arrivalAirport: `${flightData.arrival?.airport} Terminal ${flightData.arrival?.terminal || '1'}`,
-        segments: flightData.segments ? flightData.segments.map(segment => ({
+        totalPrice: basePrice + totalTaxes,
+        departureAirport: `${flightData.departure.airport} Terminal ${flightData.departure.terminal}`,
+        arrivalAirport: `${flightData.arrival.airport} Terminal ${flightData.arrival.terminal}`,
+        segments: flightData.segments.map(segment => ({
           departure: {
             airport: segment.departure.airport,
             terminal: segment.departure.terminal,
@@ -262,21 +242,21 @@ function FlightBookingConfirmation() {
           },
           duration: segment.duration,
           aircraft: segment.aircraft || 'Unknown',
-          carrier: flightData.airline?.code,
-          number: segment.flightNumber || flightNumber
-        })) : [],
+          carrier: flightData.airline.code,
+          number: segment.flightNumber
+        })),
         price: {
           base: basePrice,
           platformFee: platformFee,
           countryTax: countryTax,
           totalTaxes: totalTaxes,
-          total: searchTotalPrice, // This logic ensures the big number matches
-          currency: currency
+          total: basePrice + totalTaxes,
+          currency: flightData.price?.currency || flightData.originalOffer?.price?.currency || 'USD'
         }
       },
       baggage: {
-        cabin: flightData.baggage?.cabin?.weight ? `${flightData.baggage.cabin.weight} ${flightData.baggage.cabin.weightUnit}` : "7 KG",
-        checkIn: flightData.baggage?.checked?.weight ? `${flightData.baggage.checked.weight} ${flightData.baggage.checked.weightUnit}` : "15 KG"
+        cabin: flightData.baggage.cabin,
+        checkIn: flightData.baggage.checked
       },
       passengers: [],
       contact: {
@@ -314,7 +294,7 @@ function FlightBookingConfirmation() {
         }
       ],
       vipServiceFee: 30,
-      isInternational: flightData.departure?.airport !== flightData.arrival?.airport // Simple heuristic
+      isInternational: flightData.departure.airport !== flightData.arrival.airport
     };
   };
 
