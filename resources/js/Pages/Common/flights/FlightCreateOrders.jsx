@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   CreditCard, Calendar, Lock, CheckCircle, ArrowLeft,
@@ -23,34 +23,43 @@ function FlightCreateOrders() {
   const [pnr, setPnr] = useState('');
   const [pageLoaded, setPageLoaded] = useState(false);
 
+  // Ref guard to prevent duplicate order processing (React StrictMode can cause double renders)
+  const orderProcessedRef = useRef(false);
+
   console.log('🔍 FlightCreateOrders - Component loaded');
   console.log('📍 Location state:', location.state);
   console.log('📍 Navigation location:', location);
 
   useEffect(() => {
     console.log('🔍 FlightCreateOrders - useEffect triggered');
-    
+
+    // Guard: Prevent duplicate order processing (React StrictMode causes double renders)
+    if (orderProcessedRef.current) {
+      console.log('⚠️ Order already being processed, skipping duplicate call');
+      return;
+    }
+
     // Try to get data from location.state first, then fallback to localStorage
     let orderData = location.state;
-    
+
     // Check if location.state is missing critical data
     const hasCriticalData = orderData?.selectedFlight || orderData?.originalOffer || orderData?.passengerData;
-    
+
     if (!hasCriticalData) {
       console.log('⚠️ Location state missing critical data, checking localStorage...');
-      
+
       // Try to retrieve from localStorage as fallback
       try {
         const storedBookingData = localStorage.getItem('pendingFlightBooking');
         const storedSessionData = localStorage.getItem('pendingPaymentSession');
-        
+
         if (storedBookingData) {
           const bookingData = JSON.parse(storedBookingData);
           const sessionData = storedSessionData ? JSON.parse(storedSessionData) : {};
-          
+
           console.log('📦 Retrieved booking data from localStorage:', bookingData);
           console.log('📦 Retrieved session data from localStorage:', sessionData);
-          
+
           // Merge localStorage data with location.state (location.state takes priority for payment info)
           orderData = {
             // Payment info from location.state (comes from PaymentCallback)
@@ -58,7 +67,7 @@ function FlightCreateOrders() {
             orderId: orderData?.orderId || sessionData?.orderId || `FLT${Date.now().toString(36).toUpperCase()}`,
             amount: bookingData?.amount || orderData?.amount || sessionData?.amount || 0,
             paymentVerified: orderData?.paymentVerified || true,
-            
+
             // Flight data from localStorage
             selectedFlight: bookingData?.selectedFlight || bookingData?.flightData,
             flightData: bookingData?.flightData || bookingData?.selectedFlight,
@@ -66,23 +75,25 @@ function FlightCreateOrders() {
             passengerData: bookingData?.passengerData,
             bookingDetails: bookingData?.bookingDetails,
             calculatedFare: bookingData?.calculatedFare,
-            
+
             // Contact info
             customerEmail: bookingData?.passengerData?.[0]?.email || orderData?.customerEmail || 'customer@jetsetgo.com'
           };
-          
+
           console.log('✅ Merged order data:', orderData);
         }
       } catch (e) {
         console.error('❌ Error parsing localStorage data:', e);
       }
     }
-    
+
     // Final check - if we still don't have critical data, redirect
     const finalHasCriticalData = orderData?.selectedFlight || orderData?.originalOffer || orderData?.passengerData;
-    
+
     if (orderData && (orderData.paymentVerified || finalHasCriticalData)) {
       console.log('📝 Processing order with data:', orderData);
+      // Mark as processed to prevent duplicate calls (React StrictMode / re-renders)
+      orderProcessedRef.current = true;
       processFlightOrder(orderData);
     } else {
       console.log('❌ No valid order data found - redirecting to flights page');
@@ -171,7 +182,7 @@ function FlightCreateOrders() {
         const itinerary = flightData.itineraries?.[0] || orderData.originalOffer?.itineraries?.[0] || {};
         const firstSegment = itinerary.segments?.[0] || {};
         const lastSegment = itinerary.segments?.[itinerary.segments?.length - 1] || firstSegment;
-        
+
         // Format travelers properly for display
         const formattedTravelers = (orderDetails.travelers || orderData.passengerData || []).map(traveler => {
           if (typeof traveler === 'object') {
