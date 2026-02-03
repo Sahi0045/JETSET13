@@ -1,5 +1,63 @@
 import AmadeusService from '../../backend/services/amadeusService.js';
 import axios from 'axios';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client for database storage
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://qqmagqwumjipdqvxbiqu.supabase.co';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+const supabase = supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+// Helper function to save booking to database
+async function saveBookingToDatabase(bookingData) {
+    if (!supabase) {
+        console.log('⚠️ Supabase not configured, skipping database save');
+        return null;
+    }
+
+    try {
+        console.log('💾 Saving booking to database with amount:', bookingData.totalAmount);
+        const { data, error } = await supabase
+            .from('bookings')
+            .insert({
+                user_id: bookingData.userId || null,
+                booking_reference: bookingData.bookingReference,
+                travel_type: 'flight',
+                status: 'confirmed',
+                total_amount: parseFloat(bookingData.totalAmount) || 0,
+                payment_status: 'paid',
+                booking_details: {
+                    pnr: bookingData.pnr,
+                    order_id: bookingData.orderId,
+                    transaction_id: bookingData.transactionId,
+                    origin: bookingData.origin,
+                    destination: bookingData.destination,
+                    departure_date: bookingData.departureDate,
+                    departure_time: bookingData.departureTime,
+                    arrival_time: bookingData.arrivalTime,
+                    airline: bookingData.airline,
+                    airline_name: bookingData.airlineName,
+                    flight_number: bookingData.flightNumber,
+                    duration: bookingData.duration,
+                    cabin_class: bookingData.cabinClass,
+                    flight_offer: bookingData.flightOffer
+                },
+                passenger_details: bookingData.travelers
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('❌ Error saving booking to database:', error);
+            return null;
+        }
+
+        console.log('✅ Booking saved to database:', data.id, 'Amount:', bookingData.totalAmount);
+        return data;
+    } catch (err) {
+        console.error('❌ Database save error:', err);
+        return null;
+    }
+}
 
 // ARC Pay configuration
 const ARC_PAY_CONFIG = {
@@ -41,7 +99,7 @@ export default async function handler(req, res) {
     try {
         console.log('📋 Flight order API called:', req.method);
         console.log('📋 Request body:', JSON.stringify(req.body, null, 2));
-        
+
         if (req.method === 'POST') {
             return await createFlightOrder(req, res);
         } else if (req.method === 'GET') {
@@ -98,30 +156,34 @@ async function createFlightOrder(req, res) {
             travelers,
             contactInfo,
             paymentDetails,
-            arcPayOrderId
+            arcPayOrderId,
+            totalAmount: requestTotalAmount,
+            transactionId
         } = req.body;
 
         console.log('📋 Extracted data:', {
             hasFlightOffer: !!flightOffer,
             travelersCount: travelers?.length || 0,
             hasContactInfo: !!contactInfo,
-            arcPayOrderId: arcPayOrderId || 'none'
+            arcPayOrderId: arcPayOrderId || 'none',
+            totalAmountFromRequest: requestTotalAmount,
+            transactionId: transactionId
         });
 
         // Validate required fields - be more lenient
         if (!travelers || travelers.length === 0) {
             console.log('⚠️ No travelers provided, using default');
         }
-        
+
         if (!contactInfo) {
             console.log('⚠️ No contact info provided, using default');
         }
 
         // Ensure we have valid travelers and contact info
-        const finalTravelers = travelers && travelers.length > 0 
-            ? travelers 
+        const finalTravelers = travelers && travelers.length > 0
+            ? travelers
             : [{ firstName: 'Guest', lastName: 'User', dateOfBirth: '1990-01-01', gender: 'MALE' }];
-        
+
         const finalContactInfo = contactInfo || { email: 'guest@jetsetgo.com', phoneNumber: '0000000000' };
 
         // Check if flight offer is valid for Amadeus API
@@ -136,9 +198,51 @@ async function createFlightOrder(req, res) {
             const orderId = `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
             const bookingReference = `BOOK-${Date.now().toString(36).toUpperCase()}`;
 
-            // Extract amount from the flight offer if available
-            const totalAmount = flightOffer?.price?.total || flightOffer?.price?.amount || '100.00';
+            // Extract amount - PRIORITIZE from request body (sent by frontend), then from flight offer
+            const totalAmount = requestTotalAmount || flightOffer?.price?.total || flightOffer?.price?.amount || '100.00';
             const currency = flightOffer?.price?.currency || 'USD';
+
+            console.log('💰 Amount sources:', {
+                fromRequestBody: requestTotalAmount,
+                fromFlightOffer: flightOffer?.price?.total,
+                finalAmount: totalAmount
+            });
+
+            // Extract flight details for database
+            const firstItinerary = flightOffer?.itineraries?.[0];
+            const segments = firstItinerary?.segments || flightOffer?.segments || [];
+            const firstSegment = segments[0] || {};
+            const lastSegment = segments[segments.length - 1] || firstSegment;
+
+            // SAVE TO DATABASE with proper amount
+            const dbBooking = await saveBookingToDatabase({
+                bookingReference: bookingReference,
+                pnr: mockPNR,
+                orderId: orderId,
+                transactionId: transactionId || `TXN-${Date.now()}`,
+                totalAmount: totalAmount,
+                origin: firstSegment.departure?.iataCode || firstSegment.departure?.airport || flightOffer?.origin || '',
+                destination: lastSegment.arrival?.iataCode || lastSegment.arrival?.airport || flightOffer?.destination || '',
+                departureDate: firstSegment.departure?.at?.split('T')[0] || flightOffer?.departureDate || '',
+                departureTime: firstSegment.departure?.at ? new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+                arrivalTime: lastSegment.arrival?.at ? new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+                airline: firstSegment.carrierCode || flightOffer?.validatingAirlineCodes?.[0] || '',
+                airlineName: flightOffer?.airlineName || firstSegment.carrierCode || '',
+                flightNumber: firstSegment.number ? `${firstSegment.carrierCode}${firstSegment.number}` : '',
+                duration: firstItinerary?.duration || flightOffer?.duration || '',
+                cabinClass: flightOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.cabin || 'ECONOMY',
+                travelers: finalTravelers.map((t, i) => ({
+                    id: `${i + 1}`,
+                    firstName: t.firstName || 'Guest',
+                    lastName: t.lastName || 'User',
+                    dateOfBirth: t.dateOfBirth,
+                    gender: t.gender
+                })),
+                flightOffer: flightOffer,
+                userId: req.body.userId || null
+            });
+
+            console.log('📝 Database save result:', dbBooking ? `Success (ID: ${dbBooking.id})` : 'Skipped/Failed');
 
             const response = {
                 success: true,
@@ -150,6 +254,8 @@ async function createFlightOrder(req, res) {
                     paymentStatus: arcPayOrderId ? 'VERIFIED' : 'PAID',
                     arcPayOrderId: arcPayOrderId,
                     mode: 'MOCK_DEMO_BOOKING',
+                    savedToDatabase: !!dbBooking,
+                    databaseId: dbBooking?.id || null,
 
                     flightOffers: [flightOffer || { type: 'flight-offer' }],
                     travelers: finalTravelers.map((traveler, index) => ({
@@ -178,7 +284,7 @@ async function createFlightOrder(req, res) {
                 message: 'Demo booking created successfully with mock PNR'
             };
 
-            console.log(`✅ Mock booking created: PNR=${mockPNR}, OrderID=${orderId}`);
+            console.log(`✅ Mock booking created: PNR=${mockPNR}, OrderID=${orderId}, Amount=${totalAmount}`);
             return res.status(200).json(response);
         }
 
