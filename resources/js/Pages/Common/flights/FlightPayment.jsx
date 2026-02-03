@@ -86,13 +86,73 @@ function FlightPayment() {
         sessionStorage.setItem('arcPayRedirecting', 'true');
 
         console.log('🔍 Redirecting to ARC Pay Hosted Checkout...');
+        console.log('📋 Payment data received:', paymentData);
 
-        // Calculate amount
+        // Calculate amount from calculatedFare or selectedFlight
         const amount = paymentData?.calculatedFare?.totalAmount ||
           paymentData?.calculatedFare?.totalPrice ||
+          paymentData?.calculatedFare?.total ||
+          paymentData?.bookingDetails?.flight?.price?.total ||
           paymentData?.selectedFlight?.price?.total ||
           paymentData?.selectedFlight?.price?.amount ||
           paymentData?.amount || 100;
+
+        // Extract flight details from bookingDetails or selectedFlight
+        const flightDetails = paymentData?.bookingDetails?.flight || {};
+        const selectedFlight = paymentData?.selectedFlight || {};
+        
+        // Get flight number from multiple sources
+        const flightNumber = flightDetails?.flightNumber || 
+          `${selectedFlight?.airline?.code || 'XX'} ${selectedFlight?.id || '000'}`;
+        
+        // Get carrier code
+        const carrierCode = flightDetails?.flightNumber?.split(' ')[0] || 
+          selectedFlight?.airline?.code || 'XX';
+        
+        // Get departure/arrival info
+        const departureAirport = flightDetails?.departureCity || 
+          selectedFlight?.departure?.airport || 'XXX';
+        const arrivalAirport = flightDetails?.arrivalCity || 
+          selectedFlight?.arrival?.airport || 'XXX';
+        const departureDate = flightDetails?.departureDate || 
+          selectedFlight?.departure?.date || new Date().toISOString().split('T')[0];
+        
+        // Get segments from bookingDetails or selectedFlight
+        const segments = flightDetails?.segments || selectedFlight?.segments || [];
+
+        // Build comprehensive flight data for ARC Pay
+        const flightDataForArcPay = {
+          flightNumber: flightNumber,
+          carrierCode: carrierCode,
+          carrierName: flightDetails?.airline || selectedFlight?.airline?.name || 'Airline',
+          origin: departureAirport,
+          destination: arrivalAirport,
+          departureDate: departureDate,
+          segments: segments.map(seg => ({
+            carrierCode: seg.carrier || carrierCode,
+            flightNumber: seg.number || flightNumber.split(' ')[1] || '000',
+            departure: {
+              iataCode: seg.departure?.airport || departureAirport,
+              at: seg.departure?.time || departureDate
+            },
+            arrival: {
+              iataCode: seg.arrival?.airport || arrivalAirport,
+              at: seg.arrival?.time || ''
+            }
+          })),
+          // Include original offer if available (for Amadeus API compatibility)
+          originalOffer: selectedFlight?.originalOffer || selectedFlight,
+          itineraries: selectedFlight?.itineraries || [{
+            segments: segments.map(seg => ({
+              carrierCode: seg.carrier || carrierCode,
+              number: seg.number || flightNumber.split(' ')[1] || '000',
+              departure: { iataCode: seg.departure?.airport || departureAirport, at: seg.departure?.time || departureDate },
+              arrival: { iataCode: seg.arrival?.airport || arrivalAirport, at: seg.arrival?.time || '' }
+            }))
+          }]
+        };
+
+        console.log('✈️ Flight data for ARC Pay:', flightDataForArcPay);
 
         // Store booking data in localStorage before redirect
         const bookingData = {
@@ -101,28 +161,32 @@ function FlightPayment() {
           passengerData: paymentData?.passengerData,
           bookingDetails: paymentData?.bookingDetails,
           calculatedFare: paymentData?.calculatedFare,
-          amount: amount
+          amount: amount,
+          flightData: flightDataForArcPay
         };
         localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingData));
 
         // ARC Pay requires order IDs: alphanumeric, 11-40 characters
         const orderId = `FLT${Date.now().toString(36).toUpperCase()}`;
 
+        // Build description with actual flight info
+        const description = `Flight ${flightNumber} - ${departureAirport} to ${arrivalAirport}`;
+
         const checkoutResponse = await ArcPayService.createHostedCheckout({
           amount: amount,
-          currency: 'USD',
+          currency: paymentData?.calculatedFare?.currency || 'USD',
           orderId: orderId,
           bookingType: 'flight',
           customerEmail: paymentData?.passengerData?.[0]?.email || 'customer@jetsetgo.com',
           customerName: paymentData?.passengerData?.[0]
             ? `${paymentData.passengerData[0].firstName} ${paymentData.passengerData[0].lastName}`
             : 'Guest User',
-          customerPhone: paymentData?.passengerData?.[0]?.phone,
-          description: `Flight Booking - ${paymentData?.bookingDetails?.flight?.flightNumber || orderId}`,
+          customerPhone: paymentData?.passengerData?.[0]?.phone || paymentData?.passengerData?.[0]?.mobile,
+          description: description,
           returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=flight`,
           cancelUrl: `${window.location.origin}/flights?cancelled=true`,
-          // Pass flight data for ARC Pay certification (airline data elements)
-          flightData: paymentData?.selectedFlight?.originalOffer || paymentData?.selectedFlight,
+          // Pass comprehensive flight data for ARC Pay certification
+          flightData: flightDataForArcPay,
           bookingData: bookingData
         });
 

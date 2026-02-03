@@ -363,11 +363,33 @@ async function handleHostedCheckout(req, res) {
         // Add airline data for flight bookings
         if (bookingType === 'flight') {
             try {
+                console.log('🔍 Processing airline data for ARC Pay...');
+                console.log('   flightData received:', JSON.stringify(flightData, null, 2));
+                
                 const flight = flightData || bookingData?.selectedFlight || bookingData?.flightData || {};
+                
+                // Extract carrier code from multiple sources
+                const carrierCode = (flight?.carrierCode || flight?.flightNumber?.split(' ')[0] || 
+                                    flight?.segments?.[0]?.carrier || flight?.segments?.[0]?.carrierCode || 'XX').substring(0, 2);
+                
+                // Get departure/arrival from flightData
+                const origin = flight?.origin || flight?.departureAirport || bookingData?.origin || 'XXX';
+                const destination = flight?.destination || flight?.arrivalAirport || bookingData?.destination || 'XXX';
+                const departureDate = flight?.departureDate || new Date().toISOString().split('T')[0];
+                
+                // Get segments from multiple possible locations
                 const itinerary = flight?.itineraries?.[0] || flight?.itinerary || {};
-                const segments = Array.isArray(itinerary?.segments) ? itinerary.segments : 
-                                Array.isArray(flight?.segments) ? flight.segments : [];
-                const firstSegment = segments[0] || {};
+                let segments = [];
+                
+                if (Array.isArray(itinerary?.segments) && itinerary.segments.length > 0) {
+                    segments = itinerary.segments;
+                } else if (Array.isArray(flight?.segments) && flight.segments.length > 0) {
+                    segments = flight.segments;
+                }
+                
+                console.log('   Carrier code:', carrierCode);
+                console.log('   Origin:', origin, '-> Destination:', destination);
+                console.log('   Segments found:', segments.length);
 
                 const passengers = bookingData?.passengerData || [];
                 const passengerList = passengers.length > 0 
@@ -377,19 +399,23 @@ async function handleHostedCheckout(req, res) {
                     }))
                     : [{ firstName: (firstName || 'GUEST').toUpperCase(), lastName: (lastName || 'PASSENGER').toUpperCase() }];
 
+                // Build leg array from segments or use default
                 const legArray = segments.length > 0 
                     ? segments.map((segment) => ({
-                        carrierCode: (segment?.carrierCode || segment?.operating?.carrierCode || 'XX').substring(0, 2),
-                        departureAirport: segment?.departure?.iataCode || 'XXX',
-                        departureDate: (segment?.departure?.at || new Date().toISOString()).split('T')[0],
-                        destinationAirport: segment?.arrival?.iataCode || 'XXX'
+                        // Handle both Amadeus format (carrierCode) and our transformed format (carrier)
+                        carrierCode: (segment?.carrierCode || segment?.carrier || segment?.operating?.carrierCode || carrierCode).substring(0, 2),
+                        departureAirport: segment?.departure?.iataCode || segment?.departure?.airport || origin,
+                        departureDate: (segment?.departure?.at || segment?.departure?.time || departureDate).split('T')[0],
+                        destinationAirport: segment?.arrival?.iataCode || segment?.arrival?.airport || destination
                     }))
                     : [{
-                        carrierCode: 'XX',
-                        departureAirport: flight?.origin || bookingData?.origin || 'XXX',
-                        departureDate: new Date().toISOString().split('T')[0],
-                        destinationAirport: flight?.destination || bookingData?.destination || 'XXX'
+                        carrierCode: carrierCode,
+                        departureAirport: origin,
+                        departureDate: departureDate,
+                        destinationAirport: destination
                     }];
+                
+                console.log('   Leg array built:', legArray);
 
                 requestBody.airline = {
                     bookingReference: (flight?.pnr || flight?.bookingReference || orderId).substring(0, 6).toUpperCase(),
