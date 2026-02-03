@@ -1376,4 +1376,453 @@ export const sendContactNotificationEmails = async (name, email, message) => {
   }
 };
 
+/**
+ * Generate professional booking confirmation email template
+ * @param {Object} data - Booking data
+ * @returns {string} - HTML email content
+ */
+export function generateBookingConfirmationTemplate(data) {
+  const {
+    customerName,
+    bookingReference,
+    bookingType = 'travel',
+    paymentAmount,
+    currency = 'USD',
+    paymentStatus = 'Paid',
+    bookingDetails = {},
+    travelDate,
+    passengers = 1
+  } = data;
+
+  // Get type-specific details
+  const getBookingIcon = () => {
+    switch (bookingType.toLowerCase()) {
+      case 'flight': return '✈️';
+      case 'hotel': return '🏨';
+      case 'cruise': return '🚢';
+      case 'package': return '🎒';
+      default: return '🌍';
+    }
+  };
+
+  const getBookingTitle = () => {
+    switch (bookingType.toLowerCase()) {
+      case 'flight': return 'Flight Booking';
+      case 'hotel': return 'Hotel Reservation';
+      case 'cruise': return 'Cruise Booking';
+      case 'package': return 'Travel Package';
+      default: return 'Travel Booking';
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency
+    }).format(amount || 0);
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'TBD';
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { 
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+          line-height: 1.6; 
+          color: #333; 
+          max-width: 600px; 
+          margin: 0 auto; 
+          background-color: #f4f4f4;
+        }
+        .container { 
+          background-color: white; 
+          margin: 20px auto; 
+          border-radius: 12px; 
+          overflow: hidden; 
+          box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .header { 
+          background: linear-gradient(135deg, #055B75 0%, #033d4f 100%); 
+          padding: 40px 25px; 
+          text-align: center; 
+          color: white; 
+        }
+        .header h1 { 
+          margin: 0; 
+          font-size: 32px; 
+          font-weight: 700;
+        }
+        .header p { 
+          margin: 15px 0 0; 
+          font-size: 16px; 
+          opacity: 0.9;
+        }
+        .success-badge {
+          display: inline-block;
+          background: rgba(255,255,255,0.2);
+          padding: 8px 20px;
+          border-radius: 20px;
+          margin-top: 15px;
+          font-weight: 600;
+        }
+        .content { 
+          padding: 35px 30px; 
+        }
+        .booking-card {
+          background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+          border-radius: 12px;
+          padding: 25px;
+          margin: 25px 0;
+          text-align: center;
+          border: 2px solid #4caf50;
+        }
+        .booking-icon {
+          font-size: 48px;
+          margin-bottom: 10px;
+        }
+        .booking-ref {
+          font-size: 14px;
+          color: #666;
+          margin-bottom: 5px;
+        }
+        .booking-ref-value {
+          font-size: 24px;
+          font-weight: 700;
+          color: #2e7d32;
+          letter-spacing: 2px;
+        }
+        .amount-box {
+          background-color: #fff;
+          padding: 15px;
+          border-radius: 8px;
+          margin-top: 15px;
+        }
+        .amount-label {
+          font-size: 12px;
+          color: #666;
+          text-transform: uppercase;
+        }
+        .amount-value {
+          font-size: 28px;
+          font-weight: 700;
+          color: #055B75;
+        }
+        .details-section {
+          background-color: #f8f9fa;
+          padding: 20px;
+          border-radius: 8px;
+          margin: 20px 0;
+        }
+        .details-section h3 {
+          color: #055B75;
+          margin: 0 0 15px;
+          font-size: 16px;
+        }
+        .detail-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 10px 0;
+          border-bottom: 1px solid #e0e0e0;
+        }
+        .detail-row:last-child {
+          border-bottom: none;
+        }
+        .detail-label {
+          color: #666;
+          font-size: 14px;
+        }
+        .detail-value {
+          color: #333;
+          font-weight: 600;
+          font-size: 14px;
+        }
+        .cta-section {
+          text-align: center;
+          margin: 30px 0;
+        }
+        .cta-button {
+          display: inline-block;
+          background: linear-gradient(135deg, #055B75 0%, #033d4f 100%);
+          color: white !important;
+          padding: 16px 40px;
+          text-decoration: none;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 16px;
+          box-shadow: 0 4px 12px rgba(5, 91, 117, 0.3);
+        }
+        .important-info {
+          background-color: #fff3cd;
+          border-left: 4px solid #ffc107;
+          padding: 15px;
+          border-radius: 4px;
+          margin: 20px 0;
+        }
+        .contact-box {
+          background-color: #e3f2fd;
+          padding: 20px;
+          border-radius: 8px;
+          text-align: center;
+          margin: 25px 0;
+        }
+        .contact-box h4 {
+          color: #1565c0;
+          margin: 0 0 10px;
+        }
+        .footer { 
+          background-color: #055B75; 
+          padding: 25px; 
+          text-align: center; 
+          color: white;
+        }
+        .footer p {
+          margin: 5px 0;
+          font-size: 13px;
+        }
+        .footer a {
+          color: #B9D0DC;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>${getBookingIcon()} Booking Confirmed!</h1>
+          <p>Thank you for choosing Jetsetters</p>
+          <div class="success-badge">✓ ${paymentStatus}</div>
+        </div>
+        
+        <div class="content">
+          <p>Dear ${customerName},</p>
+          
+          <p>Great news! Your ${getBookingTitle().toLowerCase()} has been successfully confirmed. Below are your booking details:</p>
+          
+          <div class="booking-card">
+            <div class="booking-icon">${getBookingIcon()}</div>
+            <div class="booking-ref">Booking Reference</div>
+            <div class="booking-ref-value">${bookingReference}</div>
+            <div class="amount-box">
+              <div class="amount-label">Total Amount</div>
+              <div class="amount-value">${formatCurrency(paymentAmount)}</div>
+            </div>
+          </div>
+          
+          <div class="details-section">
+            <h3>📋 Booking Details</h3>
+            <div class="detail-row">
+              <span class="detail-label">Booking Type</span>
+              <span class="detail-value">${getBookingTitle()}</span>
+            </div>
+            ${travelDate ? `
+            <div class="detail-row">
+              <span class="detail-label">Travel Date</span>
+              <span class="detail-value">${formatDate(travelDate)}</span>
+            </div>
+            ` : ''}
+            <div class="detail-row">
+              <span class="detail-label">Travelers</span>
+              <span class="detail-value">${passengers} ${passengers === 1 ? 'Person' : 'People'}</span>
+            </div>
+            ${bookingDetails.origin && bookingDetails.destination ? `
+            <div class="detail-row">
+              <span class="detail-label">Route</span>
+              <span class="detail-value">${bookingDetails.origin} → ${bookingDetails.destination}</span>
+            </div>
+            ` : ''}
+            ${bookingDetails.hotelName ? `
+            <div class="detail-row">
+              <span class="detail-label">Hotel</span>
+              <span class="detail-value">${bookingDetails.hotelName}</span>
+            </div>
+            ` : ''}
+            ${bookingDetails.cruiseLine ? `
+            <div class="detail-row">
+              <span class="detail-label">Cruise Line</span>
+              <span class="detail-value">${bookingDetails.cruiseLine}</span>
+            </div>
+            ` : ''}
+            <div class="detail-row">
+              <span class="detail-label">Payment Status</span>
+              <span class="detail-value" style="color: #2e7d32;">✓ ${paymentStatus}</span>
+            </div>
+          </div>
+          
+          <div class="important-info">
+            <strong>⏰ Important Reminders:</strong>
+            <ul style="margin: 10px 0 0; padding-left: 20px;">
+              <li>Save this email for your records</li>
+              <li>Check-in opens 24-48 hours before departure</li>
+              <li>Carry a valid photo ID for verification</li>
+              <li>Arrive at least 2 hours early (3 hours for international)</li>
+            </ul>
+          </div>
+          
+          <div class="cta-section">
+            <a href="${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/my-trips" class="cta-button">
+              View My Trips
+            </a>
+          </div>
+          
+          <div class="contact-box">
+            <h4>Need Assistance?</h4>
+            <p>Our travel experts are here to help 24/7</p>
+            <p>📧 support@jetsetterss.com | 📞 (877) 538-7380</p>
+          </div>
+        </div>
+        
+        <div class="footer">
+          <p><strong>Jetsetters Travel</strong></p>
+          <p>Your trusted partner for unforgettable journeys</p>
+          <p style="margin-top: 15px; opacity: 0.8;">This is an automated confirmation. Please do not reply to this email.</p>
+          <p>© 2025 Jetsetters. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Send booking confirmation email to customer
+ * @param {Object} bookingData - Booking information
+ * @returns {Promise} - Email send response
+ */
+export const sendBookingConfirmationEmail = async (bookingData) => {
+  const {
+    customerEmail,
+    customerName,
+    bookingReference,
+    bookingType,
+    paymentAmount,
+    currency,
+    travelDate,
+    passengers,
+    bookingDetails
+  } = bookingData;
+
+  if (!customerEmail) {
+    console.warn('⚠️ No customer email provided for booking confirmation');
+    return { success: false, error: 'No email address' };
+  }
+
+  try {
+    const html = generateBookingConfirmationTemplate({
+      customerName: customerName || 'Valued Customer',
+      bookingReference,
+      bookingType,
+      paymentAmount,
+      currency,
+      paymentStatus: 'Paid',
+      travelDate,
+      passengers,
+      bookingDetails
+    });
+
+    const response = await resend.emails.send({
+      from: 'Jetsetters <noreply@jetsetterss.com>',
+      to: [customerEmail],
+      subject: `✅ Booking Confirmed - ${bookingReference} | Jetsetters`,
+      html,
+      text: stripHtml(html)
+    });
+
+    console.log('✅ Booking confirmation email sent to:', customerEmail);
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('❌ Error sending booking confirmation email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Send booking confirmation to both customer and admin
+ * @param {Object} bookingData - Booking information
+ * @returns {Promise} - Combined email send response
+ */
+export const sendBookingNotificationEmails = async (bookingData) => {
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL || 'jetsetters721@gmail.com';
+
+    // Send confirmation to customer
+    const customerResult = await sendBookingConfirmationEmail(bookingData);
+
+    // Send notification to admin
+    const adminHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 600px; margin: 0 auto; }
+          .header { background: #055B75; color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background: #f9f9f9; }
+          .info-row { padding: 10px 0; border-bottom: 1px solid #ddd; }
+          .label { color: #666; font-size: 12px; }
+          .value { font-weight: bold; color: #333; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h2>🎉 New Booking Received!</h2>
+        </div>
+        <div class="content">
+          <div class="info-row">
+            <div class="label">Customer</div>
+            <div class="value">${bookingData.customerName} (${bookingData.customerEmail})</div>
+          </div>
+          <div class="info-row">
+            <div class="label">Booking Reference</div>
+            <div class="value">${bookingData.bookingReference}</div>
+          </div>
+          <div class="info-row">
+            <div class="label">Type</div>
+            <div class="value">${bookingData.bookingType}</div>
+          </div>
+          <div class="info-row">
+            <div class="label">Amount</div>
+            <div class="value">${bookingData.currency || 'USD'} ${bookingData.paymentAmount}</div>
+          </div>
+          <div class="info-row">
+            <div class="label">Travel Date</div>
+            <div class="value">${bookingData.travelDate || 'TBD'}</div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const adminResult = await resend.emails.send({
+      from: 'Jetsetters <noreply@jetsetterss.com>',
+      to: [adminEmail],
+      subject: `🎉 New Booking: ${bookingData.bookingReference} - ${bookingData.customerName}`,
+      html: adminHtml,
+      text: stripHtml(adminHtml)
+    });
+
+    console.log('✅ Booking admin notification sent to:', adminEmail);
+
+    return {
+      success: true,
+      customerEmail: customerResult,
+      adminNotification: { success: true, data: adminResult }
+    };
+  } catch (error) {
+    console.error('❌ Error sending booking notification emails:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 export default emailService;
+

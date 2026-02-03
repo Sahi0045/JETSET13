@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '../Common/Navbar';
 import Footer from '../Common/Footer';
 import withPageElements from '../Common/PageWrapper';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import {
   Plane,
   Hotel,
@@ -88,6 +89,22 @@ const RequestPage = () => {
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Get user data from Supabase auth context
+  const { user, isAuthenticated } = useSupabaseAuth();
+
+  // Auto-fill user data when logged in
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      setFormData(prev => ({
+        ...prev,
+        customer_email: prev.customer_email || user.email || '',
+        customer_name: prev.customer_name || user.user_metadata?.full_name || user.user_metadata?.name || '',
+        customer_phone: prev.customer_phone || user.user_metadata?.phone || ''
+      }));
+      console.log('📧 Auto-filled contact info from logged-in user:', user.email);
+    }
+  }, [isAuthenticated, user]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;

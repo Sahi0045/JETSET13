@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { normalizeCountryCode, normalizeBillingAddress } from './utils/countryCodeNormalizer.js';
+import { sendBookingNotificationEmails } from '../backend/services/emailService.js';
 
 // Helper function to parse various date formats and return YYYY-MM-DD
 function parseToISODate(dateValue) {
@@ -1547,6 +1548,43 @@ async function handlePaymentCallback(req, res) {
         console.error('❌ Failed to update inquiry status:', inquiryUpdateError);
       } else {
         console.log('✅ Inquiry status updated to booked');
+      }
+
+      // 🎉 Send booking confirmation email
+      try {
+        console.log('📧 Sending booking confirmation email...');
+        const bookingEmailData = {
+          customerEmail: payment.customer_email || payment.inquiry?.customer_email,
+          customerName: payment.customer_name || payment.inquiry?.customer_name || 'Valued Customer',
+          bookingReference: payment.quote?.quote_number || payment.id.slice(-8).toUpperCase(),
+          bookingType: payment.inquiry?.inquiry_type || 'travel',
+          paymentAmount: payment.amount,
+          currency: payment.currency || 'USD',
+          travelDate: payment.inquiry?.flight_departure_date ||
+            payment.inquiry?.hotel_checkin_date ||
+            payment.inquiry?.cruise_departure_date ||
+            payment.inquiry?.package_start_date,
+          passengers: payment.inquiry?.flight_passengers ||
+            payment.inquiry?.hotel_guests ||
+            payment.inquiry?.cruise_passengers ||
+            payment.inquiry?.package_travelers || 1,
+          bookingDetails: {
+            origin: payment.inquiry?.flight_origin,
+            destination: payment.inquiry?.flight_destination,
+            hotelName: payment.inquiry?.hotel_destination,
+            cruiseLine: payment.inquiry?.cruise_destination
+          }
+        };
+
+        const emailResult = await sendBookingNotificationEmails(bookingEmailData);
+        if (emailResult.success) {
+          console.log('✅ Booking confirmation email sent successfully');
+        } else {
+          console.warn('⚠️ Booking email sent with issues:', emailResult.error);
+        }
+      } catch (emailError) {
+        console.error('❌ Failed to send booking confirmation email:', emailError.message);
+        // Don't fail the payment if email fails - booking is still successful
       }
 
       // Ensure paymentId is valid before redirecting
