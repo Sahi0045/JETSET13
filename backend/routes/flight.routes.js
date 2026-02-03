@@ -333,7 +333,7 @@ router.post('/order', async (req, res) => {
     console.log('📋 Flight order creation request received');
     console.log('Request body keys:', Object.keys(req.body));
 
-    const { flightOffer, flightOffers, travelers, payments, contactInfo } = req.body;
+    const { flightOffer, flightOffers, travelers, payments, contactInfo, totalAmount, transactionId } = req.body;
 
     // Accept both flightOffer (singular) and flightOffers (plural)
     const offers = flightOffers || (flightOffer ? [flightOffer] : null);
@@ -377,9 +377,15 @@ router.post('/order', async (req, res) => {
       const orderId = `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const bookingReference = `BOOK-${Date.now().toString(36).toUpperCase()}`;
 
-      // Extract price - prioritize from request body (sent by frontend), then from flight offer
-      const totalAmount = req.body.totalAmount || firstOffer?.price?.total || firstOffer?.price?.amount || '100.00';
+      // Extract price - prioritize from destructured request body, then from flight offer
+      const finalAmount = totalAmount || firstOffer?.price?.total || firstOffer?.price?.amount || '100.00';
       const currency = firstOffer?.price?.currency || 'USD';
+
+      console.log('💰 Amount for booking:', {
+        fromRequestBody: totalAmount,
+        fromFlightOffer: firstOffer?.price?.total,
+        finalAmount: finalAmount
+      });
 
       // Extract flight details for database
       const firstSegment = firstOffer?.segments?.[0] || firstOffer?.itineraries?.[0]?.segments?.[0] || {};
@@ -392,8 +398,8 @@ router.post('/order', async (req, res) => {
         bookingReference: bookingReference,
         pnr: mockPNR,
         orderId: orderId,
-        transactionId: req.body.transactionId || `TXN-${Date.now()}`,
-        totalAmount: totalAmount,
+        transactionId: transactionId || `TXN-${Date.now()}`,
+        totalAmount: finalAmount,
         origin: firstSegment.departure?.airport || firstOffer?.origin || firstOffer?.departure?.airport || '',
         destination: lastSegment.arrival?.airport || firstOffer?.destination || firstOffer?.arrival?.airport || '',
         departureDate: firstSegment.departure?.date || firstOffer?.departureDate || '',
