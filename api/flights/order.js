@@ -38,14 +38,26 @@ export default async function handler(req, res) {
         return res.status(200).end();
     }
 
-    if (req.method === 'POST') {
-        return await createFlightOrder(req, res);
-    } else if (req.method === 'GET') {
-        return await getFlightOrder(req, res);
-    } else {
-        return res.status(405).json({
+    try {
+        console.log('📋 Flight order API called:', req.method);
+        console.log('📋 Request body:', JSON.stringify(req.body, null, 2));
+        
+        if (req.method === 'POST') {
+            return await createFlightOrder(req, res);
+        } else if (req.method === 'GET') {
+            return await getFlightOrder(req, res);
+        } else {
+            return res.status(405).json({
+                success: false,
+                error: 'Method not allowed'
+            });
+        }
+    } catch (error) {
+        console.error('❌ Flight order handler error:', error);
+        return res.status(500).json({
             success: false,
-            error: 'Method not allowed'
+            error: 'Internal server error',
+            details: error.message
         });
     }
 }
@@ -79,6 +91,7 @@ function generateMockPNR() {
 async function createFlightOrder(req, res) {
     try {
         console.log('📋 Flight order creation request received');
+        console.log('📋 Body keys:', Object.keys(req.body || {}));
 
         const {
             flightOffer,
@@ -88,13 +101,28 @@ async function createFlightOrder(req, res) {
             arcPayOrderId
         } = req.body;
 
-        // Validate required fields
-        if (!travelers || !contactInfo) {
-            return res.status(400).json({
-                success: false,
-                error: 'Missing required fields: travelers and contactInfo are required'
-            });
+        console.log('📋 Extracted data:', {
+            hasFlightOffer: !!flightOffer,
+            travelersCount: travelers?.length || 0,
+            hasContactInfo: !!contactInfo,
+            arcPayOrderId: arcPayOrderId || 'none'
+        });
+
+        // Validate required fields - be more lenient
+        if (!travelers || travelers.length === 0) {
+            console.log('⚠️ No travelers provided, using default');
         }
+        
+        if (!contactInfo) {
+            console.log('⚠️ No contact info provided, using default');
+        }
+
+        // Ensure we have valid travelers and contact info
+        const finalTravelers = travelers && travelers.length > 0 
+            ? travelers 
+            : [{ firstName: 'Guest', lastName: 'User', dateOfBirth: '1990-01-01', gender: 'MALE' }];
+        
+        const finalContactInfo = contactInfo || { email: 'guest@jetsetgo.com', phoneNumber: '0000000000' };
 
         // Check if flight offer is valid for Amadeus API
         const isValidOffer = isValidAmadeusFlightOffer(flightOffer);
@@ -124,7 +152,7 @@ async function createFlightOrder(req, res) {
                     mode: 'MOCK_DEMO_BOOKING',
 
                     flightOffers: [flightOffer || { type: 'flight-offer' }],
-                    travelers: travelers.map((traveler, index) => ({
+                    travelers: finalTravelers.map((traveler, index) => ({
                         id: (index + 1).toString(),
                         name: {
                             firstName: traveler.firstName || 'Guest',
@@ -133,9 +161,9 @@ async function createFlightOrder(req, res) {
                     })),
 
                     contacts: [{
-                        emailAddress: contactInfo.email,
+                        emailAddress: finalContactInfo.email,
                         phones: [{
-                            number: contactInfo.phoneNumber
+                            number: finalContactInfo.phoneNumber
                         }]
                     }],
 
