@@ -4,17 +4,17 @@ import { normalizeCountryCode, normalizeBillingAddress } from './utils/countryCo
 // Helper function to parse various date formats and return YYYY-MM-DD
 function parseToISODate(dateValue) {
   if (!dateValue) return new Date().toISOString().split('T')[0];
-  
+
   // Already in YYYY-MM-DD format (10 chars)
   if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
     return dateValue;
   }
-  
+
   // ISO datetime format "2026-02-03T18:10:00"
   if (typeof dateValue === 'string' && dateValue.includes('T')) {
     return dateValue.split('T')[0];
   }
-  
+
   // Try to parse human-readable formats like "Fri, Feb 6" or "Friday, February 6, 2026"
   try {
     const parsed = new Date(dateValue);
@@ -28,7 +28,7 @@ function parseToISODate(dateValue) {
   } catch (e) {
     // Parsing failed
   }
-  
+
   // Fallback to today's date
   return new Date().toISOString().split('T')[0];
 }
@@ -1905,8 +1905,10 @@ async function handleHostedCheckout(req, res) {
           billingAddress: 'MANDATORY',  // Required for 3DS2 - ensures billing data is collected
           customerEmail: 'MANDATORY'    // Required for 3DS2 risk assessment
         },
-        // Removed action.3DSecure: 'MANDATORY' - was causing payment failures
-        // Let gateway decide when to trigger 3DS based on transaction risk
+        // 3DS Authentication - ENABLED for security compliance
+        action: {
+          '3DSecure': 'MANDATORY'
+        },
         timeout: 900
       },
       order: {
@@ -1915,9 +1917,11 @@ async function handleHostedCheckout(req, res) {
         amount: parseFloat(amount).toFixed(2),
         currency: currency,
         description: `Flight Booking ${orderId}`
+      },
+      // Force 3DS challenge (OTP) for enhanced security
+      authentication: {
+        challengePreference: 'CHALLENGE_MANDATED'
       }
-      // Removed authentication.challengePreference - was forcing 3DS challenge
-      // Will re-enable after basic payment works
     };
 
     // TEMP DISABLED: Add airline data for flight bookings (Required for ARC Pay Certification)
