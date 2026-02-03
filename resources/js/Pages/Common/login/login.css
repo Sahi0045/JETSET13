@@ -475,6 +475,30 @@
   border-color: #1877f2;
 }
 
+/* Apple Button */
+.social-button.apple {
+  border-color: #000000;
+  color: #000000;
+}
+
+.social-button.apple:hover:not(:disabled) {
+  background: linear-gradient(135deg, #000000 0%, #333333 100%);
+  color: white;
+  border-color: #000000;
+}
+
+/* GitHub Button */
+.social-button.github {
+  border-color: #333333;
+  color: #333333;
+}
+
+.social-button.github:hover:not(:disabled) {
+  background: linear-gradient(135deg, #24292e 0%, #40464b 100%);
+  color: white;
+  border-color: #24292e;
+}
+
 /* Signup Section */
 .signup-section {
   text-align: center;

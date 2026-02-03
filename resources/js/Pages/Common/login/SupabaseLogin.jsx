@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaGoogle, FaEye, FaEyeSlash, FaSpinner, FaLock, FaEnvelope } from 'react-icons/fa';
+import { FaGoogle, FaApple, FaGithub, FaEye, FaEyeSlash, FaSpinner, FaLock, FaEnvelope } from 'react-icons/fa';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import supabase from '../../../lib/supabase';
 import './login.css';
@@ -52,6 +52,56 @@ export default function SupabaseLogin() {
             setProcessing(false);
             setErrors({
                 login: error.message || 'Failed to sign in with Google. Please try again.'
+            });
+        }
+    };
+
+    // Handle Apple Sign-In
+    const handleAppleSignIn = async () => {
+        try {
+            setProcessing(true);
+            setErrors({});
+
+            sessionStorage.setItem('auth_redirect', '/my-trips');
+
+            const { error } = await signInWithOAuth('apple', {
+                queryParams: {
+                    response_mode: 'form_post'
+                }
+            });
+
+            if (error) {
+                setErrors({ login: error.message || 'Failed to sign in with Apple. Please try again.' });
+                setProcessing(false);
+            }
+        } catch (error) {
+            console.error('Apple login error:', error);
+            setProcessing(false);
+            setErrors({
+                login: error.message || 'Failed to sign in with Apple. Please try again.'
+            });
+        }
+    };
+
+    // Handle GitHub Sign-In
+    const handleGitHubSignIn = async () => {
+        try {
+            setProcessing(true);
+            setErrors({});
+
+            sessionStorage.setItem('auth_redirect', '/my-trips');
+
+            const { error } = await signInWithOAuth('github');
+
+            if (error) {
+                setErrors({ login: error.message || 'Failed to sign in with GitHub. Please try again.' });
+                setProcessing(false);
+            }
+        } catch (error) {
+            console.error('GitHub login error:', error);
+            setProcessing(false);
+            setErrors({
+                login: error.message || 'Failed to sign in with GitHub. Please try again.'
             });
         }
     };
@@ -248,8 +298,28 @@ export default function SupabaseLogin() {
                                 disabled={processing || authLoading}
                                 title="Sign in with Google"
                             >
-                                <FaGoogle size={24} color="#DB4437" />
+                                <FaGoogle size={22} color="#DB4437" />
                                 <span>Google</span>
+                            </button>
+                            <button
+                                type="button"
+                                className="social-button apple"
+                                onClick={handleAppleSignIn}
+                                disabled={processing || authLoading}
+                                title="Sign in with Apple"
+                            >
+                                <FaApple size={22} color="#000000" />
+                                <span>Apple</span>
+                            </button>
+                            <button
+                                type="button"
+                                className="social-button github"
+                                onClick={handleGitHubSignIn}
+                                disabled={processing || authLoading}
+                                title="Sign in with GitHub"
+                            >
+                                <FaGithub size={22} color="#333333" />
+                                <span>GitHub</span>
                             </button>
                         </div>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaGoogle, FaEye, FaEyeSlash, FaSpinner, FaUserPlus } from 'react-icons/fa';
+import { FaGoogle, FaApple, FaGithub, FaEye, FaEyeSlash, FaSpinner, FaUserPlus } from 'react-icons/fa';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import './login.css';
 
@@ -35,10 +35,10 @@ export default function SupabaseSignup() {
         try {
             setProcessing(true);
             setErrors({});
-            
+
             // Store intended destination for after auth
             sessionStorage.setItem('auth_redirect', '/my-trips');
-            
+
             const { error } = await signInWithOAuth('google', {
                 queryParams: {
                     access_type: 'offline',
@@ -54,8 +54,58 @@ export default function SupabaseSignup() {
         } catch (error) {
             console.error('Google signup error:', error);
             setProcessing(false);
-            setErrors({ 
-                signup: error.message || 'Failed to sign up with Google. Please try again.' 
+            setErrors({
+                signup: error.message || 'Failed to sign up with Google. Please try again.'
+            });
+        }
+    };
+
+    // Handle Apple Sign-Up
+    const handleAppleSignUp = async () => {
+        try {
+            setProcessing(true);
+            setErrors({});
+
+            sessionStorage.setItem('auth_redirect', '/my-trips');
+
+            const { error } = await signInWithOAuth('apple', {
+                queryParams: {
+                    response_mode: 'form_post'
+                }
+            });
+
+            if (error) {
+                setErrors({ signup: error.message || 'Failed to sign up with Apple. Please try again.' });
+                setProcessing(false);
+            }
+        } catch (error) {
+            console.error('Apple signup error:', error);
+            setProcessing(false);
+            setErrors({
+                signup: error.message || 'Failed to sign up with Apple. Please try again.'
+            });
+        }
+    };
+
+    // Handle GitHub Sign-Up
+    const handleGitHubSignUp = async () => {
+        try {
+            setProcessing(true);
+            setErrors({});
+
+            sessionStorage.setItem('auth_redirect', '/my-trips');
+
+            const { error } = await signInWithOAuth('github');
+
+            if (error) {
+                setErrors({ signup: error.message || 'Failed to sign up with GitHub. Please try again.' });
+                setProcessing(false);
+            }
+        } catch (error) {
+            console.error('GitHub signup error:', error);
+            setProcessing(false);
+            setErrors({
+                signup: error.message || 'Failed to sign up with GitHub. Please try again.'
             });
         }
     };
@@ -74,53 +124,53 @@ export default function SupabaseSignup() {
 
     const validateForm = () => {
         const newErrors = {};
-        
+
         if (!data.firstName.trim()) {
             newErrors.firstName = 'First name is required';
         }
-        
+
         if (!data.lastName.trim()) {
             newErrors.lastName = 'Last name is required';
         }
-        
+
         if (!data.email.trim()) {
             newErrors.email = 'Email is required';
         } else if (!/\S+@\S+\.\S+/.test(data.email)) {
             newErrors.email = 'Email is invalid';
         }
-        
+
         if (!data.password) {
             newErrors.password = 'Password is required';
         } else if (data.password.length < 8) {
             newErrors.password = 'Password must be at least 8 characters';
         }
-        
+
         if (data.password !== data.confirmPassword) {
             newErrors.confirmPassword = 'Passwords do not match';
         }
-        
+
         if (!data.agreeToTerms) {
             newErrors.agreeToTerms = 'You must agree to the terms and conditions';
         }
-        
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
     const submit = async (e) => {
         e.preventDefault();
-        
+
         if (!validateForm()) {
             return;
         }
-        
+
         setProcessing(true);
         setErrors({});
         setSuccessMessage('');
-        
+
         try {
             const { data: authData, error } = await signUp(
-                data.email, 
+                data.email,
                 data.password,
                 {
                     first_name: data.firstName,
@@ -136,15 +186,15 @@ export default function SupabaseSignup() {
             }
 
             console.log('Signup successful:', authData);
-            
+
             // Show success message
             setSuccessMessage('Account created successfully! Please check your email to verify your account.');
-            
+
             // Optionally redirect after a delay
             setTimeout(() => {
                 navigate('/supabase-login');
             }, 3000);
-            
+
         } catch (error) {
             setProcessing(false);
             console.error('Signup error:', error);
@@ -169,7 +219,7 @@ export default function SupabaseSignup() {
                         <FaUserPlus className="inline mr-2" />
                         Sign Up with Supabase
                     </h2>
-                    
+
                     {authError && (
                         <div className="error-message mb-4">
                             {authError}
@@ -197,7 +247,7 @@ export default function SupabaseSignup() {
                             />
                             {errors.firstName && <div className="error-message">{errors.firstName}</div>}
                         </div>
-                        
+
                         <div className="form-group">
                             <label htmlFor="lastName">Last Name</label>
                             <input
@@ -212,7 +262,7 @@ export default function SupabaseSignup() {
                             />
                             {errors.lastName && <div className="error-message">{errors.lastName}</div>}
                         </div>
-                        
+
                         <div className="form-group">
                             <label htmlFor="email">Email</label>
                             <input
@@ -227,7 +277,7 @@ export default function SupabaseSignup() {
                             />
                             {errors.email && <div className="error-message">{errors.email}</div>}
                         </div>
-                        
+
                         <div className="form-group">
                             <label htmlFor="password">Password</label>
                             <div className="password-input-wrapper">
@@ -252,7 +302,7 @@ export default function SupabaseSignup() {
                             </div>
                             {errors.password && <div className="error-message">{errors.password}</div>}
                         </div>
-                        
+
                         <div className="form-group">
                             <label htmlFor="confirmPassword">Confirm Password</label>
                             <div className="password-input-wrapper">
@@ -277,11 +327,11 @@ export default function SupabaseSignup() {
                             </div>
                             {errors.confirmPassword && <div className="error-message">{errors.confirmPassword}</div>}
                         </div>
-                        
+
                         <div className="form-options">
                             <label className="remember-me">
-                                <input 
-                                    type="checkbox" 
+                                <input
+                                    type="checkbox"
                                     name="agreeToTerms"
                                     checked={data.agreeToTerms}
                                     onChange={handleChange}
@@ -291,9 +341,9 @@ export default function SupabaseSignup() {
                             </label>
                         </div>
                         {errors.agreeToTerms && <div className="error-message">{errors.agreeToTerms}</div>}
-                        
-                        <button 
-                            className="login-button" 
+
+                        <button
+                            className="login-button"
                             disabled={processing || authLoading}
                         >
                             {processing || authLoading ? (
@@ -305,29 +355,49 @@ export default function SupabaseSignup() {
                                 'Create Account'
                             )}
                         </button>
-                        
+
                         {errors.signup && <div className="error-message">{errors.signup}</div>}
-                        
+
                         <div className="login-divider">or continue with</div>
-                        
+
                         <div className="social-login">
-                            <button 
-                                type="button" 
-                                className="social-button google" 
+                            <button
+                                type="button"
+                                className="social-button google"
                                 onClick={handleGoogleSignUp}
                                 disabled={processing || authLoading}
                                 title="Sign up with Google"
                             >
-                                <FaGoogle size={24} color="#DB4437" />
+                                <FaGoogle size={22} color="#DB4437" />
                                 <span>Google</span>
                             </button>
+                            <button
+                                type="button"
+                                className="social-button apple"
+                                onClick={handleAppleSignUp}
+                                disabled={processing || authLoading}
+                                title="Sign up with Apple"
+                            >
+                                <FaApple size={22} color="#000000" />
+                                <span>Apple</span>
+                            </button>
+                            <button
+                                type="button"
+                                className="social-button github"
+                                onClick={handleGitHubSignUp}
+                                disabled={processing || authLoading}
+                                title="Sign up with GitHub"
+                            >
+                                <FaGithub size={22} color="#333333" />
+                                <span>GitHub</span>
+                            </button>
                         </div>
-                        
+
                         <div className="signup-link">
                             Already have an account? <Link to="/supabase-login" className="text-link">Login</Link>
                         </div>
                     </form>
-                    
+
                     <p className="login-footer">
                         By proceeding, you agree to our <Link to="/privacy" className="text-link">Privacy Policy</Link> and <Link to="/terms" className="text-link">Terms of Service</Link>.
                     </p>
