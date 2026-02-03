@@ -166,6 +166,25 @@ function FlightCreateOrders() {
         // Clear any old booking data and store fresh flight booking with PNR
         localStorage.removeItem('completedBooking'); // Clear old cruise bookings
 
+        // Extract flight details from the selected flight data
+        const flightData = orderData.selectedFlight || orderData.flightData || {};
+        const itinerary = flightData.itineraries?.[0] || orderData.originalOffer?.itineraries?.[0] || {};
+        const firstSegment = itinerary.segments?.[0] || {};
+        const lastSegment = itinerary.segments?.[itinerary.segments?.length - 1] || firstSegment;
+        
+        // Format travelers properly for display
+        const formattedTravelers = (orderDetails.travelers || orderData.passengerData || []).map(traveler => {
+          if (typeof traveler === 'object') {
+            return {
+              firstName: traveler.firstName || traveler.name?.firstName || 'Guest',
+              lastName: traveler.lastName || traveler.name?.lastName || 'Traveler',
+              dateOfBirth: traveler.dateOfBirth,
+              gender: traveler.gender
+            };
+          }
+          return traveler;
+        });
+
         const completedFlightBooking = {
           type: 'flight',
           orderId: orderDetails.reference,
@@ -175,9 +194,28 @@ function FlightCreateOrders() {
           amount: orderData.amount || orderData.price?.total || "100.00",
           orderCreatedAt: orderDetails.createdAt,
           status: orderDetails.status,
-          travelers: orderDetails.travelers
+          // Include formatted travelers
+          travelers: formattedTravelers,
+          // Flight route details
+          origin: firstSegment.departure?.iataCode || flightData.origin || flightData.departure || '',
+          destination: lastSegment.arrival?.iataCode || flightData.destination || flightData.arrival || '',
+          originCity: flightData.originCity || flightData.departureCity || '',
+          destinationCity: flightData.destinationCity || flightData.arrivalCity || '',
+          // Flight times and dates
+          departureDate: firstSegment.departure?.at?.split('T')[0] || flightData.departureDate || '',
+          departureTime: firstSegment.departure?.at ? new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : flightData.departureTime || '',
+          arrivalTime: lastSegment.arrival?.at ? new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : flightData.arrivalTime || '',
+          duration: itinerary.duration || flightData.duration || '',
+          // Airline info
+          airline: firstSegment.carrierCode || flightData.airline || flightData.carrierCode || '',
+          airlineName: flightData.airlineName || flightData.carrier || '',
+          flightNumber: firstSegment.number ? `${firstSegment.carrierCode}${firstSegment.number}` : flightData.flightNumber || '',
+          // Additional details
+          cabinClass: flightData.cabinClass || flightData.travelClass || 'ECONOMY',
+          passengers: formattedTravelers.length || 1
         };
 
+        console.log('📝 Saving completed flight booking:', completedFlightBooking);
         localStorage.setItem('completedFlightBooking', JSON.stringify(completedFlightBooking));
 
         // Navigate to booking confirmation page after a delay

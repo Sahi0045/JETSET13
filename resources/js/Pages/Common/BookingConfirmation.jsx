@@ -269,10 +269,27 @@ function BookingConfirmation() {
                   <div className="bg-green-50 rounded-xl p-4 border border-green-100">
                     <p className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-1">Travelers</p>
                     <p className="text-sm font-bold text-gray-900">
-                      {typeof bookingData.passengers === 'object'
-                        ? `${(bookingData.passengers.adults?.length || 0) + (bookingData.passengers.children?.length || 0)} Passengers`
-                        : `${bookingData.passengers || bookingData.travelers || bookingData.guests} Travelers`
-                      }
+                      {(() => {
+                        const data = bookingData.passengers || bookingData.travelers || bookingData.guests;
+                        // If it's an array of traveler objects
+                        if (Array.isArray(data)) {
+                          if (data.length === 0) return '1 Traveler';
+                          // Show names if available
+                          if (typeof data[0] === 'object' && (data[0].firstName || data[0].name)) {
+                            return data.map(t => `${t.firstName || t.name?.firstName || ''} ${t.lastName || t.name?.lastName || ''}`.trim()).join(', ') || `${data.length} Traveler(s)`;
+                          }
+                          return `${data.length} Traveler(s)`;
+                        }
+                        // If it's an object with adults/children
+                        if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+                          return `${(data.adults?.length || 0) + (data.children?.length || 0)} Passengers`;
+                        }
+                        // If it's a number
+                        if (typeof data === 'number') {
+                          return `${data} Traveler(s)`;
+                        }
+                        return '1 Traveler';
+                      })()}
                     </p>
                   </div>
                 )}
