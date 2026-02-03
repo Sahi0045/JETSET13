@@ -76,8 +76,8 @@ router.all('/', async (req, res) => {
             case 'get-payment-details':
                 return handleGetPaymentDetails(req, res);
             case 'gateway-status':
-                return res.json({ 
-                    success: true, 
+                return res.json({
+                    success: true,
                     gatewayStatus: { status: 'OPERATING' },
                     status: 'OPERATING'
                 });
@@ -271,17 +271,17 @@ async function handleInitiatePayment(req, res) {
 // Helper function to parse various date formats and return YYYY-MM-DD
 function parseToISODate(dateValue) {
     if (!dateValue) return new Date().toISOString().split('T')[0];
-    
+
     // Already in YYYY-MM-DD format (10 chars)
     if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
         return dateValue;
     }
-    
+
     // ISO datetime format "2026-02-03T18:10:00"
     if (typeof dateValue === 'string' && dateValue.includes('T')) {
         return dateValue.split('T')[0];
     }
-    
+
     // Try to parse human-readable formats like "Fri, Feb 6" or "Friday, February 6, 2026"
     try {
         const parsed = new Date(dateValue);
@@ -295,7 +295,7 @@ function parseToISODate(dateValue) {
     } catch (e) {
         // Parsing failed
     }
-    
+
     // Fallback to today's date
     return new Date().toISOString().split('T')[0];
 }
@@ -342,7 +342,7 @@ async function handleHostedCheckout(req, res) {
         const arcMerchantId = ARC_PAY_CONFIG.MERCHANT_ID;
         const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
         let arcBaseUrl = ARC_PAY_CONFIG.BASE_URL;
-        
+
         // Upgrade to v100 if using v77
         if (arcBaseUrl && arcBaseUrl.includes('version/77')) {
             arcBaseUrl = arcBaseUrl.replace('version/77', 'version/100');
@@ -351,7 +351,7 @@ async function handleHostedCheckout(req, res) {
             arcBaseUrl = arcBaseUrl.split('/merchant/')[0];
         }
         arcBaseUrl = arcBaseUrl || 'https://api.arcpay.travel/api/rest/version/100';
-        
+
         const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
         const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
@@ -379,7 +379,8 @@ async function handleHostedCheckout(req, res) {
                     billingAddress: 'MANDATORY',
                     customerEmail: 'MANDATORY'
                 },
-                action: { '3DSecure': 'MANDATORY' },
+                // Removed action.3DSecure: 'MANDATORY' - was causing payment failures
+                // Let gateway decide when to trigger 3DS based on transaction risk
                 timeout: 900
             },
             order: {
@@ -388,11 +389,15 @@ async function handleHostedCheckout(req, res) {
                 amount: parseFloat(amount).toFixed(2),
                 currency: currency,
                 description: description || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking - ${orderId}`
-            },
-            authentication: { challengePreference: 'CHALLENGE_MANDATED' }
+            }
+            // Removed authentication.challengePreference - was forcing 3DS challenge
+            // Will re-enable after basic payment works
         };
 
-        // Add airline data for flight bookings
+        // TEMP DISABLED: Add airline data for flight bookings (Required for ARC Pay Certification)
+        // ISSUE: Carrier names with spaces (e.g. "AIR INDIA") are rejected by ARC Pay API with 400 error
+        // Will re-enable after implementing proper data sanitization (use IATA codes, remove spaces)
+        /*
         if (bookingType === 'flight') {
             try {
                 console.log('🔍 Processing airline data for ARC Pay...');
@@ -437,28 +442,20 @@ async function handleHostedCheckout(req, res) {
                 // Build leg array from segments or use default
                 const legArray = segments.length > 0 
                     ? segments.map((segment) => {
-                        // Handle both Amadeus format (carrierCode) and our transformed format (carrier)
                         const segCarrierCode = (segment?.carrierCode || segment?.carrier || segment?.operating?.carrierCode || carrierCode).substring(0, 2);
                         const segDepartureAirport = segment?.departure?.iataCode || segment?.departure?.airport || origin;
                         const segDestinationAirport = segment?.arrival?.iataCode || segment?.arrival?.airport || destination;
                         
-                        // Get departure date - use parseToISODate helper to handle all formats
-                        // segment.departure.at is ISO format "2026-02-03T18:10:00"
-                        // segment.departure.time is just time "18:10" - DO NOT USE for date
-                        // segment.departure.date could be "Fri, Feb 6" or "2026-02-03"
-                        let segDepartureDate = departureDate; // fallback to the main departure date (already parsed)
+                        let segDepartureDate = departureDate;
                         
                         if (segment?.departure?.at && segment.departure.at.includes('T')) {
-                            // ISO format: "2026-02-03T18:10:00" -> "2026-02-03"
                             segDepartureDate = segment.departure.at.split('T')[0];
                         } else if (segment?.departure?.date) {
-                            // Parse any date format (could be "Fri, Feb 6" or "2026-02-03")
                             segDepartureDate = parseToISODate(segment.departure.date);
                         } else if (segment?.departureDate) {
                             segDepartureDate = parseToISODate(segment.departureDate);
                         }
                         
-                        // Final validation - ensure date is exactly 10 characters (YYYY-MM-DD)
                         if (!segDepartureDate || segDepartureDate.length !== 10) {
                             segDepartureDate = new Date().toISOString().split('T')[0];
                         }
@@ -473,7 +470,7 @@ async function handleHostedCheckout(req, res) {
                     : [{
                         carrierCode: carrierCode,
                         departureAirport: origin,
-                        departureDate: departureDate, // Already parsed by parseToISODate
+                        departureDate: departureDate,
                         destinationAirport: destination
                     }];
                 
@@ -487,7 +484,7 @@ async function handleHostedCheckout(req, res) {
                     ticket: {
                         issue: {
                             carrierCode: legArray[0]?.carrierCode || 'XX',
-                            carrierName: flight?.carrierName || 'Airline',
+                            carrierName: flight?.carrierName || 'Airline',  // THIS WAS THE PROBLEM!
                             city: 'Online',
                             country: 'USA',
                             date: new Date().toISOString().split('T')[0]
@@ -502,6 +499,7 @@ async function handleHostedCheckout(req, res) {
                 console.error('⚠️ Error constructing airline data:', airlineError);
             }
         }
+        */
 
         // Add customer info
         if (customerEmail) {
@@ -572,7 +570,7 @@ async function handleSessionCreate(req, res) {
         const arcMerchantId = ARC_PAY_CONFIG.MERCHANT_ID;
         const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
         let arcBaseUrl = ARC_PAY_CONFIG.BASE_URL || 'https://api.arcpay.travel/api/rest/version/100';
-        
+
         if (arcBaseUrl.includes('/merchant/')) {
             arcBaseUrl = arcBaseUrl.split('/merchant/')[0];
         }
