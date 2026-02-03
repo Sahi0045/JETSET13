@@ -9,6 +9,7 @@ import currencyService from "../../../Services/CurrencyService";
 import { flightBookingData } from "./data";
 import supabase from "../../../lib/supabase";
 import ArcPayService from "../../../Services/ArcPayService";
+import "./booking-confirmation.css";
 
 
 // CONFIGURATION: Set this to true when Amadeus API is available
@@ -131,10 +132,44 @@ function FlightBookingConfirmation() {
 
   // Transform Amadeus API booking data to our format
   const transformBookingData = (apiData) => {
-    // In a real implementation, you would transform the API response data
-    // to match the structure expected by the UI
-    // For now, just return mock data
-    return flightBookingData.bookings[0];
+    // Check if it's already in our format (has flight.price)
+    if (apiData.flight?.price) return apiData;
+
+    // Transform from data.js format to UI format
+    const basePrice = apiData.payment?.amount || 0;
+    const platformFee = basePrice * 0.10; // Mock calculation
+    const countryTax = basePrice * 0.05;
+    const totalTaxes = platformFee + countryTax;
+
+    return {
+      bookingId: apiData.bookingId,
+      flight: {
+        ...apiData.flight,
+        departureDate: apiData.flight.departureTime, // Use time string as date base
+        arrivalDate: apiData.flight.arrivalTime,
+        stops: "0", // Default to direct if not specified
+        fareType: "Economy", // Default
+        cabin: "Economy",
+        departureAirport: `${apiData.flight.departureCity} Airport`,
+        arrivalAirport: `${apiData.flight.arrivalCity} Airport`,
+        price: {
+          base: basePrice,
+          platformFee: platformFee,
+          countryTax: countryTax,
+          totalTaxes: totalTaxes,
+          total: basePrice + totalTaxes,
+          currency: apiData.payment?.currency || "USD"
+        }
+      },
+      baggage: {
+        checkIn: "23 KG"
+      },
+      passengers: apiData.passengers,
+      contact: { email: "", phone: "" },
+      addOns: [], // Initialize empty
+      vipServiceFee: 30,
+      isInternational: false
+    };
   };
 
   // Transform flight data from search page to booking format
@@ -276,8 +311,16 @@ function FlightBookingConfirmation() {
           console.log("Using flight data from search page", location.state.flightData);
           bookingData = transformFlightData(location.state.flightData);
         } else {
-          setError("No flight data available. Please return to the search page and try again.");
-          return;
+          // Fallback: Fetch from API (or mock) using the ID
+          const targetId = bookingId || "TEST_BOOKING_123";
+          console.log("No state data, fetching from API for ID:", targetId);
+          const apiData = await fetchBookingFromApi(targetId);
+          if (apiData) {
+            bookingData = transformBookingData(apiData);
+          } else {
+            setError("No flight data available. Please return to the search page and try again.");
+            return;
+          }
         }
 
         if (!bookingData) {
@@ -638,107 +681,17 @@ function FlightBookingConfirmation() {
     </div>
   );
 
-  // Update the JSX where fare summary is displayed
-  const renderFareSummary = () => (
-    <div className="bg-white rounded-lg shadow-lg">
-      <div className="p-6">
-        <h3 className="text-xl font-semibold text-gray-800 mb-4">Fare Summary</h3>
 
-        {/* Base Fare */}
-        <div className="flex justify-between pb-3 border-b mb-3">
-          <span className="text-gray-600">Base Fare ({passengerData.length} Passenger)</span>
-          <span className="font-semibold text-gray-800">
-            <Price amount={calculatedFare.baseFare} />
-          </span>
-        </div>
-
-        {/* Taxes & Charges */}
-        <div className="py-3 border-b mb-3">
-          <div className="flex justify-between mb-2">
-            <span className="text-gray-600">Taxes & Charges</span>
-            <span className="font-semibold text-gray-800">
-              <Price amount={calculatedFare.totalTax} />
-            </span>
-          </div>
-          <div className="flex justify-between text-sm text-gray-500 pl-4">
-            <span>Platform Fee</span>
-            <span>
-              <Price amount={calculatedFare.platformFee} />
-            </span>
-          </div>
-          <div className="flex justify-between text-sm text-gray-500 pl-4">
-            <span>Country Tax</span>
-            <span>
-              <Price amount={calculatedFare.countryTax} />
-            </span>
-          </div>
-        </div>
-
-        {/* Add-ons */}
-        <div className={`${selectedAddons.length > 0 || vipService ? 'py-3 border-b mb-3' : 'hidden'}`}>
-          <div className="flex justify-between mb-2">
-            <span className="text-gray-600">Additional Services</span>
-            <span className="font-semibold text-gray-800">
-              <Price amount={calculatedFare.addonsTotal + calculatedFare.vipServiceFee} />
-            </span>
-          </div>
-
-          {selectedAddons.map(addonId => {
-            const addon = bookingDetails.addOns.find(a => a.id === addonId);
-            if (!addon) return null;
-            return (
-              <div key={addon.id} className="flex justify-between text-sm text-gray-500 pl-4">
-                <span>{addon.name}</span>
-                <span>
-                  <Price amount={addon.price} />
-                </span>
-              </div>
-            );
-          })}
-
-          {vipService && (
-            <div className="flex justify-between text-sm text-gray-500 pl-4">
-              <span>VIP Fast Track Service</span>
-              <span>
-                <Price amount={calculatedFare.vipServiceFee} />
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Total */}
-        <div className="pt-3">
-          <div className="flex justify-between">
-            <span className="text-gray-800 font-bold">Total Amount</span>
-            <span className="text-xl font-bold text-blue-600">
-              <Price amount={calculatedFare.totalAmount} showCode={true} />
-            </span>
-          </div>
-        </div>
-
-        {/* Payment Button */}
-        <button
-          onClick={handleProceedToPayment}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors mt-6 flex justify-center items-center"
-        >
-          <span>Proceed to Payment</span>
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="booking-confirmation-page">
         <Navbar forceScrolled={true} />
-        <div className="container mx-auto px-4 py-24">
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+        <div className="booking-confirmation-container flex justify-center items-center h-[60vh]">
+          <div className="flex flex-col items-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#055B75] mb-4"></div>
+            <p className="text-[#626363]">Loading your booking details...</p>
           </div>
-          <p className="text-center text-gray-500">Loading your booking details...</p>
         </div>
         <Footer />
       </div>
@@ -746,145 +699,100 @@ function FlightBookingConfirmation() {
   }
 
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className="booking-confirmation-page">
+      <div className="booking-background-decor"></div>
       <Navbar forceScrolled={true} />
 
-      <div className="container mx-auto px-4 pt-24 pb-10">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Fare Summary */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
-              <div className="p-4 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-800">Fare Summary</h2>
-                <div className="text-sm text-gray-500">{passengerData.length} Traveller</div>
-              </div>
+      <div className="booking-confirmation-container pt-24">
+        {/* Header Banner */}
+        <div className="booking-header-banner">
+          <h1 className="text-3xl font-bold">Your Journey Begins Here</h1>
+          <p className="opacity-90">Confirm your details below and get ready for takeoff ✈️</p>
+        </div>
 
-              <div className="p-8 border-t border-gray-300">
-                <h3 className="font-bold text-xl mb-4">Fare Summary</h3>
-
-                {renderFareSummary()}
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column - Flight & Traveler Details */}
+        <div className="booking-layout grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Flight & Passenger Details */}
           <div className="lg:col-span-2">
-            {/* Flight Section */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 mb-6">
-              <div className="p-4 bg-gray-50 border-b border-gray-200">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="text-lg font-semibold">
-                    {bookingDetails?.flight?.departureCity || 'Unknown'} → {bookingDetails?.flight?.arrivalCity || 'Unknown'}
-                  </div>
-                  <div className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
-                    CANCELLATION FEES APPLY
-                  </div>
-                </div>
-                <div className="text-sm text-gray-600">
-                  {formatDate(bookingDetails?.flight?.departureDate)}
-                </div>
-                <div className="flex items-center text-sm text-gray-600 mt-1">
-                  <span className="mr-2">
-                    {bookingDetails?.flight?.stops === "0" ? "Non Stop" : `${bookingDetails?.flight?.stops || 1} stop`} ·
-                    {formatDuration(bookingDetails?.flight?.duration)}
+
+            {/* Flight Details Card (Boarding Pass Style) */}
+            <div className="booking-card flight-card mb-8">
+              <div className="booking-card-header">
+                <h2>
+                  <span className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold">
+                      {bookingDetails?.flight?.airline?.substring(0, 2).toUpperCase() || "JS"}
+                    </div>
+                    {bookingDetails?.flight?.airline || 'JetSetters Airlines'}
+                    <span className="text-sm font-normal opacity-80 border-l pl-2 ml-2 border-white/30 hidden sm:inline-block">
+                      Flight {bookingDetails?.flight?.flightNumber}
+                    </span>
                   </span>
-                </div>
+                </h2>
+                <span className="bg-[#e6f2f7] px-4 py-1.5 rounded-full text-xs font-bold text-[#055B75] tracking-wide">
+                  {bookingDetails?.flight?.cabin || 'Economy Class'}
+                </span>
               </div>
 
-              <div className="p-4">
-                <div className="flex items-center mb-4">
-                  <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center mr-2">
-                    <span className="text-white font-medium text-xs">
-                      {(bookingDetails?.flight?.airline || 'Unknown Airline').split(' ').map(word => word[0]).join('')}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="flex items-center">
-                      <div className="font-medium">
-                        {bookingDetails?.flight?.airline || 'Unknown Airline'}
-                      </div>
-                      <div className="text-sm text-gray-600 ml-2">{bookingDetails?.flight?.flightNumber || 'QR 4771'}</div>
+              <div className="booking-card-body p-0">
+                <div className="flight-route">
+                  <div className="flight-endpoint text-left">
+                    <div className="city-code">{bookingDetails?.flight?.departureCity?.substring(0, 3).toUpperCase()}</div>
+                    <div className="city-name text-sm">{bookingDetails?.flight?.departureCity}</div>
+                    <div className="text-xl font-bold mt-1 text-[#626363]">{bookingDetails?.flight?.departureTime}</div>
+                    <div className="text-xs text-[#7F8073] mt-1 line-clamp-1 max-w-[120px]" title={bookingDetails?.flight?.departureAirport}>
+                      {typeof bookingDetails?.flight?.departureAirport === 'string' ? bookingDetails.flight.departureAirport.split('(')[0] : 'Departure Airport'}
                     </div>
-                    <div className="flex items-center text-sm">
-                      <div className="text-gray-600">{bookingDetails?.flight?.cabin || 'Economy'}</div>
-                      <div className="text-green-600 ml-2">→ {bookingDetails?.flight?.fareType || 'Standard'}</div>
+                  </div>
+
+                  <div className="flight-path">
+                    <div className="text-xs font-medium text-[#7F8073] mb-2 tracking-widest uppercase">
+                      {formatDuration(bookingDetails?.flight?.duration)}
+                    </div>
+                    <div className="path-line">
+                      <div className="plane-icon">✈</div>
+                    </div>
+                    <div className="text-xs font-semibold text-[#65B3CF] mt-2">
+                      {bookingDetails?.flight?.stops === "0" ? "Direct Flight" : `${bookingDetails?.flight?.stops} Stopover(s)`}
+                    </div>
+                  </div>
+
+                  <div className="flight-endpoint text-right">
+                    <div className="city-code">{bookingDetails?.flight?.arrivalCity?.substring(0, 3).toUpperCase()}</div>
+                    <div className="city-name text-sm">{bookingDetails?.flight?.arrivalCity}</div>
+                    <div className="text-xl font-bold mt-1 text-[#626363]">{bookingDetails?.flight?.arrivalTime}</div>
+                    <div className="text-xs text-[#7F8073] mt-1 line-clamp-1 max-w-[120px] ml-auto" title={bookingDetails?.flight?.arrivalAirport}>
+                      {typeof bookingDetails?.flight?.arrivalAirport === 'string' ? bookingDetails.flight.arrivalAirport.split('(')[0] : 'Arrival Airport'}
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-12 gap-4 mb-4">
-                  {/* Departure */}
-                  <div className="col-span-5">
-                    <div className="text-2xl font-bold">{bookingDetails?.flight?.departureTime || 'Departure Time'}</div>
-                    <div className="flex items-center">
-                      <div className="w-2 h-2 bg-gray-600 rounded-full mr-2"></div>
-                      <div className="text-gray-700">{bookingDetails?.flight?.departureCity || 'Departure City'}</div>
-                    </div>
-                    <div className="text-sm text-gray-600 mt-1">
-                      {bookingDetails?.flight?.departureAirport?.name ||
-                        (typeof bookingDetails?.flight?.departureAirport === 'string' ?
-                          bookingDetails.flight.departureAirport.split('(')[0] :
-                          'Departure Airport')}
-                    </div>
+                <div className="flight-info-grid">
+                  <div className="info-box">
+                    <span className="label">Date</span>
+                    <span className="value">{formatShortDate(bookingDetails?.flight?.departureDate)}</span>
                   </div>
-
-                  {/* Flight Duration */}
-                  <div className="col-span-2 flex flex-col items-center justify-center">
-                    <div className="text-sm text-gray-600">{bookingDetails?.flight?.duration || 'Duration'}</div>
-                    <div className="h-px w-full bg-gray-300 relative my-2">
-                      <div className="absolute h-2 w-2 rounded-full bg-gray-400 -top-1 left-0"></div>
-                      <div className="absolute h-2 w-2 rounded-full bg-gray-400 -top-1 right-0"></div>
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {bookingDetails?.flight?.stops === "0" ? "Nonstop" :
-                        `${bookingDetails?.flight?.stops || "0"} ${parseInt(bookingDetails?.flight?.stops || "0") === 1 ? "stop" : "stops"}`}
-                    </div>
+                  <div className="info-box">
+                    <span className="label">Flight No</span>
+                    <span className="value">{bookingDetails?.flight?.flightNumber}</span>
                   </div>
-
-                  {/* Arrival */}
-                  <div className="col-span-5">
-                    <div className="text-2xl font-bold">{bookingDetails?.flight?.arrivalTime || 'Arrival Time'}</div>
-                    <div className="flex items-center">
-                      <div className="w-2 h-2 bg-gray-600 rounded-full mr-2"></div>
-                      <div className="text-gray-700">{bookingDetails?.flight?.arrivalCity || 'Arrival City'}</div>
-                    </div>
-                    <div className="text-sm text-gray-600 mt-1">
-                      {bookingDetails?.flight?.arrivalAirport?.name ||
-                        (typeof bookingDetails?.flight?.arrivalAirport === 'string' ?
-                          bookingDetails.flight.arrivalAirport.split('(')[0] :
-                          'Arrival Airport')}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Baggage Information */}
-                <div className="mt-4">
-                  <div className="text-sm">
-                    <span className="font-medium">Cabin Baggage:</span>{" "}
-                    {typeof bookingDetails?.baggage?.cabin === 'object'
-                      ? `${bookingDetails.baggage.cabin.weight} ${bookingDetails.baggage.cabin.weightUnit}`
-                      : `${bookingDetails?.baggage?.cabin || "0 KG"}`}
-                  </div>
-                  <div className="text-sm mt-1">
-                    <span className="font-medium">Check-In Baggage:</span>{" "}
-                    {typeof bookingDetails?.baggage?.checkIn === 'object'
-                      ? `${bookingDetails.baggage.checkIn.weight} ${bookingDetails.baggage.checkIn.weightUnit}`
-                      : `${bookingDetails?.baggage?.checkIn || "1 piece, 23 kg"}`}
+                  <div className="info-box">
+                    <span className="label">Baggage</span>
+                    <span className="value">{typeof bookingDetails?.baggage?.checkIn === 'object' ? `${bookingDetails.baggage.checkIn.weight} ${bookingDetails.baggage.checkIn.weightUnit}` : (bookingDetails?.baggage?.checkIn || "23 KG")}</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Traveller Details Section */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 mb-6">
-              <div className="p-4 bg-white border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Traveller Details</h2>
+            <div className="booking-card passenger-form-card mb-8">
+              <div className="booking-card-header">
+                <h2>
+                  <UserCircle className="h-5 w-5" />
+                  Traveller Details
+                </h2>
                 <button
                   onClick={editMode ? savePassengerDetails : toggleEditMode}
-                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${editMode
-                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
+                  className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center backdrop-blur-sm"
                 >
                   {editMode ? (
                     <>
@@ -900,31 +808,25 @@ function FlightBookingConfirmation() {
                 </button>
               </div>
 
-              <div className="p-4">
+              <div className="booking-card-body">
                 {editMode && (
-                  <div className="bg-green-50 p-4 mb-4 rounded-md border border-green-200">
-                    <div className="flex items-center text-sm text-green-700">
-                      <svg className="w-5 h-5 mr-2 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M9 12l2 2 4-4" />
-                        <circle cx="12" cy="12" r="10" />
-                      </svg>
-                      Please fill in all passenger details below. Fields marked with * are required.
+                  <div className="alert-info">
+                    <div className="icon">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     </div>
+                    <div className="message">Please fill in all passenger details below. Fields marked with * are required.</div>
                   </div>
                 )}
 
                 {!isLoggedIn && (
-                  <div className="bg-blue-50 p-4 mb-4 flex justify-between items-center rounded-md">
-                    <div className="flex items-center text-sm text-gray-700">
-                      <svg className="w-5 h-5 mr-2 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
-                      </svg>
-                      Log in to view your saved traveller list, unlock amazing deals & much more!
+                  <div className="bg-[#f0f9ff] border border-[#bae6fd] p-4 mb-6 rounded-xl flex justify-between items-center">
+                    <div className="flex items-center text-sm text-[#0369a1]">
+                      <UserCircle className="w-5 h-5 mr-3" />
+                      Log in to view your saved traveller list and unlock exclusive deals!
                     </div>
                     <button
                       onClick={handleLogin}
-                      className="text-blue-600 font-medium flex items-center mt-2 hover:underline"
+                      className="text-[#0284c7] font-bold text-sm hover:underline"
                     >
                       LOGIN NOW
                     </button>
@@ -932,145 +834,108 @@ function FlightBookingConfirmation() {
                 )}
 
                 {passengerData.map((passenger, index) => (
-                  <div key={passenger.id} className="mb-6 pb-4 border-b border-gray-200 last:border-0 last:mb-0 last:pb-0">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center">
-                        <svg className="w-5 h-5 mr-2 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                          <circle cx="12" cy="7" r="4"></circle>
-                        </svg>
-                        <div>
-                          <div className="font-medium">ADULT (12 yrs+) {index + 1}/{passengerData.length}</div>
-                          <div className="text-xs text-gray-500">added</div>
-                        </div>
+                  <div key={passenger.id} className="passenger-item">
+                    <div className="passenger-header">
+                      <div className="flex items-center gap-3">
+                        <span className="passenger-badge">
+                          Adult {index + 1}
+                        </span>
+                        {editMode && passengerData.length > 1 && (
+                          <button
+                            onClick={() => handleRemovePassenger(passenger.id)}
+                            className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 rounded hover:bg-red-50"
+                          >
+                            REMOVE
+                          </button>
+                        )}
                       </div>
-                      {editMode && passengerData.length > 1 && (
-                        <button
-                          onClick={() => handleRemovePassenger(passenger.id)}
-                          className="text-red-600 hover:text-red-800 text-sm"
-                        >
-                          REMOVE
-                        </button>
-                      )}
+                      <div className="flex items-center text-sm font-medium text-[#055B75]">
+                        <CheckCircle className="w-4 h-4 mr-1 text-[#10b981]" />
+                        {passenger.firstName} {passenger.lastName}
+                      </div>
                     </div>
 
-                    <div className="flex items-center mb-3">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 mr-2 text-blue-600 border-gray-300 rounded"
-                        checked
-                        readOnly
-                      />
-                      <div className="font-medium">{passenger.firstName} {passenger.lastName}</div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          First Name *
-                        </label>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label>First Name <span className="required">*</span></label>
                         <input
                           type="text"
-                          className={`w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${editMode
-                            ? 'border-gray-300 bg-white'
-                            : 'border-gray-200 bg-gray-50'
-                            }`}
-                          placeholder="Enter first name"
+                          className="form-input"
+                          placeholder="Given Name"
                           value={passenger.firstName}
                           onChange={(e) => handlePassengerChange(passenger.id, 'firstName', e.target.value)}
                           readOnly={!editMode}
                           required
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Last Name *
-                        </label>
+                      <div className="form-group">
+                        <label>Last Name <span className="required">*</span></label>
                         <input
                           type="text"
-                          className={`w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${editMode
-                            ? 'border-gray-300 bg-white'
-                            : 'border-gray-200 bg-gray-50'
-                            }`}
-                          placeholder="Enter last name"
+                          className="form-input"
+                          placeholder="Surname"
                           value={passenger.lastName}
                           onChange={(e) => handlePassengerChange(passenger.id, 'lastName', e.target.value)}
                           readOnly={!editMode}
                           required
                         />
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handlePassengerChange(passenger.id, 'gender', 'male')}
-                          className={`flex-1 p-2 border ${passenger.gender === 'male' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white'} rounded text-center transition-colors`}
-                        >
-                          MALE
-                        </button>
-                        <button
-                          onClick={() => handlePassengerChange(passenger.id, 'gender', 'female')}
-                          className={`flex-1 p-2 border ${passenger.gender === 'female' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white'} rounded text-center transition-colors`}
-                        >
-                          FEMALE
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                      <div>
-                        <div className="text-sm text-gray-600 mb-1">Country Code</div>
-                        <div className="relative">
-                          <select
-                            className="w-full p-2 border border-gray-300 rounded appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      <div className="form-group">
+                        <label>Gender <span className="required">*</span></label>
+                        <div className="gender-toggle">
+                          <button
+                            onClick={() => handlePassengerChange(passenger.id, 'gender', 'male')}
+                            className={`gender-btn ${passenger.gender === 'male' ? 'active' : ''}`}
                             disabled={!editMode}
                           >
-                            <option>India(91)</option>
-                          </select>
-                          <div className="absolute right-3 top-3 pointer-events-none">
-                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                          </div>
+                            Male
+                          </button>
+                          <button
+                            onClick={() => handlePassengerChange(passenger.id, 'gender', 'female')}
+                            className={`gender-btn ${passenger.gender === 'female' ? 'active' : ''}`}
+                            disabled={!editMode}
+                          >
+                            Female
+                          </button>
                         </div>
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-700 mb-1">Mobile No *</div>
+
+                      {/* New Row */}
+                      <div className="form-group">
+                        <label>Mobile No <span className="required">*</span></label>
                         <input
-                          type="text"
-                          className={`w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${editMode
-                            ? 'border-gray-300 bg-white'
-                            : 'border-gray-200 bg-gray-50'
-                            }`}
-                          placeholder="Enter mobile number"
+                          type="tel"
+                          className="form-input"
+                          placeholder="+91 9876543210"
                           value={passenger.mobile}
                           onChange={(e) => handlePassengerChange(passenger.id, 'mobile', e.target.value)}
                           readOnly={!editMode}
                           required
                         />
                       </div>
-                      <div>
-                        <div className="text-sm text-gray-600 mb-1">Email</div>
+                      <div className="form-group">
+                        <label>Email (Optional)</label>
                         <input
                           type="email"
-                          className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="Email(Optional)"
+                          className="form-input"
+                          placeholder="email@example.com"
                           value={passenger.email}
                           onChange={(e) => handlePassengerChange(passenger.id, 'email', e.target.value)}
                           readOnly={!editMode}
                         />
                       </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 mr-2 text-blue-600 border-gray-300 rounded"
-                          checked={passenger.requiresWheelchair}
-                          onChange={(e) => handlePassengerChange(passenger.id, 'requiresWheelchair', e.target.checked)}
-                          disabled={!editMode}
-                        />
-                        <span className="text-sm text-gray-700">I require wheelchair (Optional)</span>
-                      </label>
+                      <div className="form-group flex justify-center items-end pb-2">
+                        <label className="flex items-center cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 mr-2 accent-[#055B75]"
+                            checked={passenger.requiresWheelchair}
+                            onChange={(e) => handlePassengerChange(passenger.id, 'requiresWheelchair', e.target.checked)}
+                            disabled={!editMode}
+                          />
+                          <span className="text-sm font-medium text-[#626363]">Request Wheelchair</span>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1078,220 +943,244 @@ function FlightBookingConfirmation() {
                 {editMode && (
                   <button
                     onClick={handleAddPassenger}
-                    className="text-blue-600 font-medium flex items-center mt-2 hover:underline"
+                    className="btn-add w-full justify-center mt-4"
                   >
-                    <Plus className="h-4 w-4 mr-1" /> ADD NEW ADULT
+                    <Plus className="h-5 w-5" /> Add Another Traveller
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Booking details */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 mb-6">
-              <div className="p-4">
-                <div className="mb-4">
-                  <h3 className="font-medium mb-2">Booking details will be sent to</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">Country Code</div>
-                      <div className="relative">
-                        <select className="w-full p-2 border border-gray-300 rounded appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                          <option>India(91)</option>
-                        </select>
-                        <div className="absolute right-3 top-3 pointer-events-none">
-                          <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                          </svg>
-                        </div>
-                      </div>
+            {/* Booking Contact Details */}
+            <div className="booking-card mb-8">
+              <div className="booking-card-header">
+                <h2>
+                  <div className="bg-white/20 p-1.5 rounded-lg backdrop-blur-sm">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                  </div>
+                  Contact Information
+                </h2>
+              </div>
+              <div className="booking-card-body">
+                <p className="text-[#626363] text-sm mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100 flex items-center">
+                  <span className="bg-[#65B3CF] text-white text-xs px-2 py-0.5 rounded mr-2">INFO</span>
+                  Your booking confirmation & ticket will be sent to the contact details below.
+                </p>
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Country Code</label>
+                    <div className="relative">
+                      <select className="form-input appearance-none bg-white">
+                        <option>India (+91)</option>
+                      </select>
+                      <ChevronDown className="absolute right-3 top-3.5 h-4 w-4 text-gray-500 pointer-events-none" />
                     </div>
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">Mobile No</div>
-                      <input
-                        type="text"
-                        className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={bookingDetails?.contact?.phone}
-                        readOnly
-                      />
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">Email</div>
-                      <input
-                        type="email"
-                        className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={bookingDetails?.contact?.email}
-                        readOnly
-                      />
-                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Mobile Number</label>
+                    <input
+                      type="text"
+                      className="form-input bg-gray-50"
+                      value={bookingDetails?.contact?.phone || ""}
+                      readOnly
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Email Address</label>
+                    <input
+                      type="text"
+                      className="form-input bg-gray-50"
+                      value={bookingDetails?.contact?.email || ""}
+                      readOnly
+                    />
                   </div>
                 </div>
 
-                <div className="text-sm text-blue-600 mb-4">
-                  {passengerData.length > 0 ? (
-                    `Booking details & alerts will also be sent to ${passengerData[0].firstName} ${passengerData[0].lastName}`
+                <div className="mt-6 flex items-center gap-3 p-4 bg-[#f0fdf4] border border-[#dcfce7] rounded-xl">
+                  <div className="bg-[#10b981] p-1 rounded-full">
+                    <Check className="h-4 w-4 text-white" />
+                  </div>
+                  <span className="text-sm font-medium text-[#166534]">
+                    {passengerData.length > 0 ?
+                      `Booking alerts enabled for ${passengerData[0].firstName} ${passengerData[0].lastName}` :
+                      "Add passenger details to enable alerts"
+                    }
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Add-ons Section */}
+            <div className="booking-card mb-8">
+              <div className="booking-card-header">
+                <h2>
+                  <span className="flex items-center gap-2">
+                    <Plus className="h-5 w-5" />
+                    Flight Add-ons
+                  </span>
+                </h2>
+              </div>
+              <div className="booking-card-body">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {bookingDetails?.addOns && bookingDetails.addOns.length > 0 ? (
+                    bookingDetails.addOns.map((addon) => (
+                      <div key={addon.id} className={`addon-card ${selectedAddons.includes(addon.id) ? 'selected' : ''}`}>
+                        <div className="addon-header">
+                          <h3 className="addon-title">{addon.name}</h3>
+                          <div className="addon-price">€{addon.price}</div>
+                        </div>
+                        <p className="text-sm text-[#7F8073] mb-3">{addon.description}</p>
+                        <ul className="addon-benefits">
+                          {addon.benefits.map((benefit, i) => (
+                            <li key={i}>{benefit}</li>
+                          ))}
+                        </ul>
+                        <button
+                          onClick={() => toggleAddon(addon.id)}
+                          className={`w-full mt-4 py-2 rounded-lg font-semibold text-sm transition-colors ${selectedAddons.includes(addon.id)
+                            ? 'bg-[#10b981] text-white border-transparent'
+                            : 'border-2 border-[#65B3CF] text-[#055B75] hover:bg-[#65B3CF]/10'
+                            }`}
+                        >
+                          {selectedAddons.includes(addon.id) ? (
+                            <span className="flex items-center justify-center gap-2"><Check className="h-4 w-4" /> Added</span>
+                          ) : '+ Add to Trip'}
+                        </button>
+                      </div>
+                    ))
                   ) : (
-                    "Please add passenger details to receive booking alerts"
+                    <p className="text-gray-500 col-span-2 text-center py-4">No add-ons available.</p>
                   )}
                 </div>
-
-                <div>
-                  <label className="flex items-center">
-                    <input type="checkbox" className="w-4 h-4 mr-2 text-blue-600 border-gray-300 rounded" />
-                    <span className="text-sm text-gray-700">Confirm and save billing details to your profile</span>
-                  </label>
-                </div>
               </div>
             </div>
 
-            {/* Add-on Selection */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 mb-6">
-              <div className="p-4">
-                <h2 className="text-lg font-semibold mb-2">Not sure of your travel?</h2>
-                <p className="text-sm text-gray-600 mb-4">Get full flexibility with add-ons</p>
-
-                {/* Add-on Options */}
-                {bookingDetails?.addOns && bookingDetails.addOns.length > 0 ? (
-                  bookingDetails.addOns.map((addon) => renderAddon(addon))
-                ) : (
-                  <div className="p-4 rounded-lg mb-3 bg-gray-50 border border-gray-200">
-                    <p className="text-gray-500 text-center">No add-ons available for this flight</p>
+            {/* VIP Service */}
+            <div className="booking-card mb-8">
+              <div className="booking-card-body flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg text-white font-bold text-lg">
+                    VIP
                   </div>
-                )}
+                  <div>
+                    <h3 className="text-lg font-bold text-[#055B75] mb-1">Fly Like a VIP</h3>
+                    <p className="text-sm text-[#626363] max-w-md">
+                      Get Priority Check-in, Priority Boarding, and Priority Baggage Handling for just <span className="font-bold text-[#055B75]">{calculatedFare.currency} {(bookingDetails?.vipServiceFee || 0).toFixed(2)}</span>.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={toggleVipService}
+                  className={`px-6 py-3 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 whitespace-nowrap ${vipService
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-white text-amber-600 border-2 border-amber-500 hover:bg-amber-50'
+                    }`}
+                >
+                  {vipService ? <><CheckCircle className="h-5 w-5" /> VIP Added</> : 'Upgrade to VIP'}
+                </button>
               </div>
             </div>
 
-            {/* Fly Like a VIP */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 mb-6">
-              <div className="p-4">
-                <div className="flex justify-between">
-                  <div className="flex items-center">
-                    <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center mr-3">
-                      <span className="text-white font-medium text-xs">
-                        {typeof bookingDetails?.flight?.airline === 'string'
-                          ? bookingDetails?.flight?.airline?.split(' ').map(word => word[0]).join('')
-                          : bookingDetails?.flight?.airline?.name?.split(' ').map(word => word[0]).join('') || 'JS'}
-                      </span>
-                    </div>
-                    <div>
-                      <h3 className="font-medium">Fly Like a VIP @ Just {calculatedFare.currency} {bookingDetails?.vipServiceFee.toFixed(2)}</h3>
-                      <p className="text-sm text-gray-600">Be amongst the first to check-in and get your bags tagged with priority status with {typeof bookingDetails?.flight?.airline === 'string'
-                        ? bookingDetails?.flight?.airline
-                        : bookingDetails?.flight?.airline?.name || 'JetSetters Airlines'} Priority Check-in & Bag Services.</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={toggleVipService}
-                    className={`text-blue-600 font-medium px-3 py-1 border border-blue-300 rounded hover:bg-blue-50 transition-colors ${vipService ? 'bg-blue-50' : ''}`}
-                  >
-                    {vipService ? 'ADDED' : '+ADD'}
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-center mt-3 space-x-2 text-sm">
-                  <div className="flex items-center">
-                    <span className="inline-block w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mr-1 text-xs">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                      </svg>
-                    </span>
-                    Priority Check-in
-                  </div>
-                  <span>+</span>
-                  <div className="flex items-center">
-                    <span className="inline-block w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mr-1 text-xs">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                      </svg>
-                    </span>
-                    Priority Bag Service
-                  </div>
-                  <span>=</span>
-                  <span className="font-medium">{calculatedFare.currency} {bookingDetails?.vipServiceFee.toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Visa Requirements Section - Only shown for international flights */}
+            {/* Visa Requirements (International) */}
             {bookingDetails?.isInternational && bookingDetails?.visaRequirements && (
-              <div className="bg-white rounded-lg shadow-md mb-6">
+              <div className="booking-card mb-8">
                 <div
-                  className="p-4 border-b flex justify-between items-center cursor-pointer"
+                  className="booking-card-header cursor-pointer"
                   onClick={() => toggleSection('visaRequirements')}
                 >
-                  <h2 className="text-xl font-semibold text-gray-800">Visa & Travel Documents</h2>
-                  <div>
-                    {expandedSections.visaRequirements ? (
-                      <ChevronUp className="h-5 w-5 text-gray-600" />
-                    ) : (
-                      <ChevronDown className="h-5 w-5 text-gray-600" />
-                    )}
-                  </div>
+                  <h2>Visa & Travel Documents</h2>
+                  {expandedSections.visaRequirements ? <ChevronUp /> : <ChevronDown />}
                 </div>
+
                 {expandedSections.visaRequirements && (
-                  <div className="p-6">
-                    <div className="mb-4">
-                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-                        <div className="flex">
-                          <div className="flex-shrink-0">
-                            <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                          <div className="ml-3">
-                            <p className="text-sm text-yellow-700">
-                              This is an international flight to {bookingDetails?.visaRequirements?.destination}. Please ensure you have all required travel documents before your journey.
-                            </p>
-                          </div>
-                        </div>
+                  <div className="booking-card-body">
+                    <div className="alert-warning bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r mb-6 flex gap-3">
+                      <div className="text-amber-500 mt-1">⚠️</div>
+                      <div>
+                        <h4 className="font-bold text-amber-800 text-sm">International Travel Requirement</h4>
+                        <p className="text-sm text-amber-700">Ensure you have valid visas for {bookingDetails?.visaRequirements?.destination}.</p>
                       </div>
                     </div>
-
-                    <h3 className="text-lg font-semibold mb-3">Visa Information</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                      <div>
-                        <p className="text-gray-600">Destination</p>
-                        <p className="font-semibold">{bookingDetails?.visaRequirements?.destination}</p>
+                    <div className="grid md:grid-cols-3 gap-6 mb-6">
+                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                        <div className="text-xs text-[#7F8073] uppercase mb-1">Destination</div>
+                        <div className="font-bold text-[#055B75]">{bookingDetails?.visaRequirements?.destination}</div>
                       </div>
-                      <div>
-                        <p className="text-gray-600">Visa Type</p>
-                        <p className="font-semibold">{bookingDetails?.visaRequirements?.visaType}</p>
+                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                        <div className="text-xs text-[#7F8073] uppercase mb-1">Visa Type</div>
+                        <div className="font-bold text-[#055B75]">{bookingDetails?.visaRequirements?.visaType}</div>
                       </div>
-                      <div>
-                        <p className="text-gray-600">Typical Processing Time</p>
-                        <p className="font-semibold">{bookingDetails?.visaRequirements?.processingTime}</p>
+                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                        <div className="text-xs text-[#7F8073] uppercase mb-1">Processing</div>
+                        <div className="font-bold text-[#055B75]">{bookingDetails?.visaRequirements?.processingTime}</div>
                       </div>
                     </div>
-
-                    <h3 className="text-lg font-semibold mb-3">Required Documents</h3>
-                    <ul className="list-disc pl-5 space-y-2 mb-6">
-                      {bookingDetails?.visaRequirements?.requirements && bookingDetails.visaRequirements.requirements.map((req, index) => (
-                        <li key={index} className="text-gray-700">{req}</li>
-                      ))}
-                    </ul>
-
-                    <div className="mt-4">
-                      <a
-                        href={bookingDetails?.visaRequirements?.officialWebsite}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:text-primary-dark font-semibold flex items-center"
-                      >
-                        Visit Official Website
-                        <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                      </a>
-                    </div>
+                    <a href={bookingDetails?.visaRequirements?.officialWebsite} target="_blank" rel="noreferrer" className="text-[#055B75] font-semibold hover:underline flex items-center gap-1">
+                      Check Official Requirements <Share2 className="h-4 w-4" />
+                    </a>
                   </div>
                 )}
               </div>
             )}
+
+            <div className="lg:hidden mt-8">
+              {/* Mobile Place for Fare Summary if needed, or stick to bottom */}
+            </div>
+
+          </div> {/* End of Left Column */}
+
+          {/* Right Column - Fare Summary (Sticky) */}
+          <div className="lg:col-span-1">
+            <div className="booking-card fare-summary-card">
+              <div className="booking-card-header">
+                <h2>Receipt Summary</h2>
+              </div>
+              <div className="booking-card-body">
+                <div className="fare-row">
+                  <span className="label">Base Fare ({passengerData.length}x)</span>
+                  <span className="value"><Price amount={calculatedFare.baseFare} /></span>
+                </div>
+                <div className="fare-row">
+                  <span className="label">Taxes & Fees</span>
+                  <span className="value"><Price amount={calculatedFare.totalTax} /></span>
+                </div>
+                {calculatedFare.addonsTotal > 0 && (
+                  <div className="fare-row">
+                    <span className="label">Add-ons</span>
+                    <span className="value"><Price amount={calculatedFare.addonsTotal} /></span>
+                  </div>
+                )}
+                {vipService && (
+                  <div className="fare-row">
+                    <span className="label">VIP Services</span>
+                    <span className="value"><Price amount={calculatedFare.vipServiceFee} /></span>
+                  </div>
+                )}
+
+                <div className="fare-row total">
+                  <span className="label">Total to Pay</span>
+                  <span className="value"><Price amount={calculatedFare.totalAmount} showCode={true} /></span>
+                </div>
+
+                <button
+                  onClick={handleProceedToPayment}
+                  className="btn-primary mt-4"
+                >
+                  Proceed to Payment <CheckCircle className="h-5 w-5" />
+                </button>
+
+                <div className="mt-4 flex items-center justify-center gap-2 text-xs text-[#7F8073]">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                  Secure Payment via ARC Pay
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <Footer />
-    </div>
+    </div >
   );
 }
 
