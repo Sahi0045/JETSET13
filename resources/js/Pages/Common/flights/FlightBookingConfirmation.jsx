@@ -176,20 +176,18 @@ function FlightBookingConfirmation() {
   const transformFlightData = (flightData) => {
     if (!flightData) return null;
 
-    // Calculate base price - try multiple sources
+    // The price from search page is the BASE FARE
+    // We add taxes on top of this base fare
     const basePrice = parseFloat(
       flightData.price?.base ||
-      flightData.originalOffer?.price?.base ||
       flightData.price?.total ||
       flightData.price?.amount ||
+      flightData.originalOffer?.price?.base ||
+      flightData.originalOffer?.price?.total ||
       0
     );
 
-    // Calculate platform fee (10% of base price)
-    const platformFee = basePrice * 0.10;
-
-    // Calculate country-specific taxes based on departure country
-    // Default tax rate is 5% if country-specific rate is not available
+    // Country-specific tax rates
     const countryTaxRates = {
       'US': 0.075,  // 7.5%
       'GB': 0.20,   // 20% VAT
@@ -200,11 +198,16 @@ function FlightBookingConfirmation() {
     };
 
     // Get country code from departure airport or default to standard rate
-    const departureCountry = flightData.departure.country || 'IN';
+    const departureCountry = flightData.departure?.country || 'IN';
     const taxRate = countryTaxRates[departureCountry] || 0.05;
+
+    // Calculate platform fee (10% of base price)
+    const platformFee = basePrice * 0.10;
+
+    // Calculate country tax
     const countryTax = basePrice * taxRate;
 
-    // Calculate total taxes including country tax and platform fee
+    // Total taxes = platform fee + country tax
     const totalTaxes = countryTax + platformFee;
 
     return {
@@ -226,7 +229,7 @@ function FlightBookingConfirmation() {
         tax: totalTaxes,
         platformFee: platformFee,
         countryTax: countryTax,
-        totalPrice: basePrice + totalTaxes,
+        totalPrice: basePrice + totalTaxes, // Base fare + taxes
         departureAirport: `${flightData.departure.airport} Terminal ${flightData.departure.terminal}`,
         arrivalAirport: `${flightData.arrival.airport} Terminal ${flightData.arrival.terminal}`,
         segments: flightData.segments.map(segment => ({
@@ -250,7 +253,7 @@ function FlightBookingConfirmation() {
           platformFee: platformFee,
           countryTax: countryTax,
           totalTaxes: totalTaxes,
-          total: basePrice + totalTaxes,
+          total: basePrice + totalTaxes, // Base fare + taxes
           currency: flightData.price?.currency || flightData.originalOffer?.price?.currency || 'USD'
         }
       },
