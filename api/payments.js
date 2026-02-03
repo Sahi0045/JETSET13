@@ -1905,10 +1905,6 @@ async function handleHostedCheckout(req, res) {
           billingAddress: 'MANDATORY',  // Required for 3DS2 - ensures billing data is collected
           customerEmail: 'MANDATORY'    // Required for 3DS2 risk assessment
         },
-        // 3DS Authentication - ENABLED for security compliance
-        action: {
-          '3DSecure': 'MANDATORY'
-        },
         timeout: 900
       },
       order: {
@@ -1918,9 +1914,18 @@ async function handleHostedCheckout(req, res) {
         currency: currency,
         description: `Flight Booking ${orderId}`
       },
-      // Force 3DS challenge (OTP) for enhanced security
+      // 3DS2 Authentication Configuration - Mastercard Gateway v77 format
       authentication: {
-        challengePreference: 'CHALLENGE_MANDATED'
+        acceptVersions: '3DS1,3DS2',  // Support both 3DS versions
+        channel: 'PAYER_BROWSER',     // Required: identifies this as a browser-based transaction
+        purpose: 'PAYMENT_TRANSACTION', // Required: indicates purchase flow
+        redirectResponseUrl: finalReturnUrl // Required for 3DS redirect
+      },
+      // Explicitly request 3DS for this transaction (Mastercard Gateway v77)
+      threeDSecure: {
+        authenticationRedirect: {
+          responseUrl: finalReturnUrl
+        }
       }
     };
 
