@@ -2004,6 +2004,14 @@ async function handleHostedCheckout(req, res) {
       }
     }
 
+    // Log critical payment details for debugging
+    console.log('💰 Payment Details:');
+    console.log('   Amount:', amount, '→ Formatted:', parseFloat(amount).toFixed(2));
+    console.log('   Currency:', currency);
+    console.log('   Order ID:', orderId);
+    console.log('   Booking Type:', bookingType);
+    console.log('   Customer:', customerName, '-', customerEmail);
+
     console.log('📤 ARC Pay Request:', JSON.stringify(requestBody, null, 2));
     console.log('📤 Session URL:', sessionUrl);
     console.log('📤 Auth Header:', authHeader ? 'Present' : 'Missing');
