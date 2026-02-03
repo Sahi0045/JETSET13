@@ -150,7 +150,7 @@ export default function SubscribeSection() {
             {/* Left side - promotional content */}
             <div className="md:w-1/2 text-white">
               <div className="inline-block mb-4 bg-[#65B3CF] text-white px-3 py-0.5 rounded-full font-bold text-xs shadow-lg transform -rotate-2">
-                EXCLUSIVE OFFER
+                EXCLUSIVE OFFERS
               </div>
 
               <h2 className="text-3xl md:text-4xl font-extrabold mb-4 leading-tight drop-shadow-md">
