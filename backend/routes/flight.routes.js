@@ -356,10 +356,10 @@ router.post('/order', async (req, res) => {
     // Our transformed UI format has: segments, airline.code, departure.time
     // Amadeus format needs: itineraries, source, validatingAirlineCodes, travelerPricings
     const firstOffer = offers[0];
-    const isValidAmadeusOffer = firstOffer && 
-      firstOffer.itineraries && 
-      Array.isArray(firstOffer.itineraries) && 
-      firstOffer.source && 
+    const isValidAmadeusOffer = firstOffer &&
+      firstOffer.itineraries &&
+      Array.isArray(firstOffer.itineraries) &&
+      firstOffer.source &&
       firstOffer.travelerPricings;
 
     console.log('📋 Offer validation:', {
@@ -372,13 +372,13 @@ router.post('/order', async (req, res) => {
     // If not a valid Amadeus offer, generate mock booking
     if (!isValidAmadeusOffer) {
       console.log('🧪 Flight offer is in UI format (not Amadeus format), generating mock booking...');
-      
+
       const mockPNR = generateMockPNR();
       const orderId = `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const bookingReference = `BOOK-${Date.now().toString(36).toUpperCase()}`;
-      
-      // Extract price from UI format
-      const totalAmount = firstOffer?.price?.total || firstOffer?.price?.amount || '100.00';
+
+      // Extract price - prioritize from request body (sent by frontend), then from flight offer
+      const totalAmount = req.body.totalAmount || firstOffer?.price?.total || firstOffer?.price?.amount || '100.00';
       const currency = firstOffer?.price?.currency || 'USD';
 
       // Extract flight details for database
@@ -656,22 +656,22 @@ router.get('/bookings', async (req, res) => {
 
     // Filter by travel type if provided
     const { type, userId } = req.query;
-    
+
     let query = supabase.from('bookings').select('*');
-    
+
     if (type) {
       query = query.eq('travel_type', type);
     }
-    
+
     if (userId) {
       query = query.eq('user_id', userId);
     }
-    
+
     // Order by created_at descending (newest first)
     query = query.order('created_at', { ascending: false });
-    
+
     const { data, error } = await query;
-    
+
     if (error) {
       console.error('❌ Error fetching bookings:', error);
       return res.status(500).json({
@@ -679,7 +679,7 @@ router.get('/bookings', async (req, res) => {
         error: error.message
       });
     }
-    
+
     // Transform database format to frontend format
     const transformedBookings = (data || []).map(booking => ({
       id: booking.id,
@@ -706,15 +706,15 @@ router.get('/bookings', async (req, res) => {
       // Travelers
       travelers: booking.passenger_details
     }));
-    
+
     console.log(`✅ Fetched ${transformedBookings.length} bookings from database`);
-    
+
     res.json({
       success: true,
       data: transformedBookings,
       count: transformedBookings.length
     });
-    
+
   } catch (error) {
     console.error('❌ Error fetching bookings:', error);
     res.status(500).json({
