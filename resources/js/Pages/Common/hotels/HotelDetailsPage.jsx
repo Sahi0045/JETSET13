@@ -162,27 +162,27 @@ const HotelDetailsPage = () => {
 
             console.log('✅ Hotel quote saved to Supabase');
 
-            // TODO: Re-enable email notifications after Vercel Pro upgrade
-            // try {
-            //     await fetch('/api/email', {
-            //         method: 'POST',
-            //         headers: { 'Content-Type': 'application/json' },
-            //         body: JSON.stringify({
-            //             type: 'quote',
-            //             name: formData.name,
-            //             email: formData.email,
-            //             phone: formData.phone,
-            //             hotel_name: hotel?.name,
-            //             check_in: formData.checkIn,
-            //             check_out: formData.checkOut,
-            //             guests: formData.guests,
-            //             special_requests: formData.specialRequests
-            //         })
-            //     });
-            //     console.log('Quote email notifications sent');
-            // } catch (emailError) {
-            //     console.error('Email notification error:', emailError);
-            // }
+            // Send email notifications via Resend
+            try {
+                await fetch('/api/email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'quote',
+                        name: formData.name,
+                        email: formData.email,
+                        phone: formData.phone,
+                        hotel_name: hotel?.name,
+                        check_in: formData.checkIn,
+                        check_out: formData.checkOut,
+                        guests: formData.guests,
+                        special_requests: formData.specialRequests
+                    })
+                });
+                console.log('Quote email notifications sent');
+            } catch (emailError) {
+                console.error('Email notification error:', emailError);
+            }
 
             setFormSubmitting(false);
             setFormSuccess(true);

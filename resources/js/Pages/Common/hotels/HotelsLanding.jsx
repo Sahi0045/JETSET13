@@ -182,17 +182,17 @@ const HotelsLanding = () => {
                 return;
             }
 
-            // TODO: Re-enable email notifications after Vercel Pro upgrade
-            // try {
-            //     await fetch('/api/email', {
-            //         method: 'POST',
-            //         headers: { 'Content-Type': 'application/json' },
-            //         body: JSON.stringify({ type: 'subscription', email: subscriptionEmail, source: 'hotels' })
-            //     });
-            //     console.log('Email notifications sent successfully');
-            // } catch (emailError) {
-            //     console.error('Email notification error:', emailError);
-            // }
+            // Send email notifications via Resend
+            try {
+                await fetch('/api/email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'subscription', email: subscriptionEmail, source: 'hotels' })
+                });
+                console.log('Email notifications sent successfully');
+            } catch (emailError) {
+                console.error('Email notification error:', emailError);
+            }
 
             setSubscriptionSubmitted(true);
             setSubscriptionEmail('');
