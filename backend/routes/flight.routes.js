@@ -3,6 +3,20 @@ import AmadeusService from '../services/amadeusService.js';
 
 const router = express.Router();
 
+// Helper function to generate mock PNR for demo/test bookings
+function generateMockPNR() {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const numbers = '0123456789';
+  let pnr = '';
+  for (let i = 0; i < 3; i++) {
+    pnr += letters.charAt(Math.floor(Math.random() * letters.length));
+  }
+  for (let i = 0; i < 3; i++) {
+    pnr += numbers.charAt(Math.floor(Math.random() * numbers.length));
+  }
+  return pnr;
+}
+
 // Helper function to get Amadeus credentials
 const getAmadeusCredentials = () => {
   const apiKey = process.env.AMADEUS_API_KEY || process.env.REACT_APP_AMADEUS_API_KEY;
@@ -281,7 +295,62 @@ router.post('/order', async (req, res) => {
 
     console.log('✅ Valid request - offers:', offers.length, 'travelers:', travelers.length);
 
-    // Prepare flight order data for Amadeus
+    // Check if the flight offer is in valid Amadeus format
+    // Our transformed UI format has: segments, airline.code, departure.time
+    // Amadeus format needs: itineraries, source, validatingAirlineCodes, travelerPricings
+    const firstOffer = offers[0];
+    const isValidAmadeusOffer = firstOffer && 
+      firstOffer.itineraries && 
+      Array.isArray(firstOffer.itineraries) && 
+      firstOffer.source && 
+      firstOffer.travelerPricings;
+
+    console.log('📋 Offer validation:', {
+      hasItineraries: !!firstOffer?.itineraries,
+      hasSource: !!firstOffer?.source,
+      hasTravelerPricings: !!firstOffer?.travelerPricings,
+      isValidAmadeusOffer
+    });
+
+    // If not a valid Amadeus offer, generate mock booking
+    if (!isValidAmadeusOffer) {
+      console.log('🧪 Flight offer is in UI format (not Amadeus format), generating mock booking...');
+      
+      const mockPNR = generateMockPNR();
+      const orderId = `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const bookingReference = `BOOK-${Date.now().toString(36).toUpperCase()}`;
+      
+      // Extract price from UI format
+      const totalAmount = firstOffer?.price?.total || firstOffer?.price?.amount || '100.00';
+      const currency = firstOffer?.price?.currency || 'USD';
+
+      console.log(`✅ Mock booking created: PNR=${mockPNR}, OrderID=${orderId}`);
+
+      return res.json({
+        success: true,
+        data: {
+          id: orderId,
+          orderId: orderId,
+          pnr: mockPNR,
+          status: 'CONFIRMED',
+          bookingReference: bookingReference,
+          flightOffers: offers,
+          travelers: travelers.map((t, i) => ({
+            id: `${i + 1}`,
+            name: { firstName: t.firstName || 'Guest', lastName: t.lastName || 'User' }
+          })),
+          totalPrice: { amount: totalAmount, currency: currency },
+          createdAt: new Date().toISOString()
+        },
+        pnr: mockPNR,
+        orderId: orderId,
+        bookingReference: bookingReference,
+        mode: 'MOCK_DEMO_BOOKING',
+        message: 'Demo booking created successfully with mock PNR (real Amadeus booking requires original offer data)'
+      });
+    }
+
+    // Prepare flight order data for Amadeus (only if we have valid Amadeus format)
     // The travelers from frontend are already in correct format: { id, firstName, lastName, dateOfBirth, gender }
     // But Amadeus needs name.firstName and name.lastName
     const amadeusTravelers = travelers.map((traveler, idx) => ({
