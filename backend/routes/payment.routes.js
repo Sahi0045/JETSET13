@@ -401,17 +401,43 @@ async function handleHostedCheckout(req, res) {
 
                 // Build leg array from segments or use default
                 const legArray = segments.length > 0 
-                    ? segments.map((segment) => ({
+                    ? segments.map((segment) => {
                         // Handle both Amadeus format (carrierCode) and our transformed format (carrier)
-                        carrierCode: (segment?.carrierCode || segment?.carrier || segment?.operating?.carrierCode || carrierCode).substring(0, 2),
-                        departureAirport: segment?.departure?.iataCode || segment?.departure?.airport || origin,
-                        departureDate: (segment?.departure?.at || segment?.departure?.time || departureDate).split('T')[0],
-                        destinationAirport: segment?.arrival?.iataCode || segment?.arrival?.airport || destination
-                    }))
+                        const segCarrierCode = (segment?.carrierCode || segment?.carrier || segment?.operating?.carrierCode || carrierCode).substring(0, 2);
+                        const segDepartureAirport = segment?.departure?.iataCode || segment?.departure?.airport || origin;
+                        const segDestinationAirport = segment?.arrival?.iataCode || segment?.arrival?.airport || destination;
+                        
+                        // Get departure date - MUST be in YYYY-MM-DD format (10 chars)
+                        // segment.departure.at is ISO format "2026-02-03T18:10:00"
+                        // segment.departure.time is just time "18:10" - DO NOT USE for date
+                        // segment.departure.date could be "2026-02-03" or undefined
+                        let segDepartureDate = departureDate; // fallback to the main departure date
+                        
+                        if (segment?.departure?.at && segment.departure.at.includes('T')) {
+                            // ISO format: "2026-02-03T18:10:00" -> "2026-02-03"
+                            segDepartureDate = segment.departure.at.split('T')[0];
+                        } else if (segment?.departure?.date && segment.departure.date.length === 10) {
+                            // Already in YYYY-MM-DD format
+                            segDepartureDate = segment.departure.date;
+                        } else if (segment?.departureDate && segment.departureDate.length === 10) {
+                            segDepartureDate = segment.departureDate;
+                        }
+                        // Ensure date is always 10 characters (YYYY-MM-DD)
+                        if (!segDepartureDate || segDepartureDate.length !== 10) {
+                            segDepartureDate = new Date().toISOString().split('T')[0];
+                        }
+                        
+                        return {
+                            carrierCode: segCarrierCode,
+                            departureAirport: segDepartureAirport,
+                            departureDate: segDepartureDate,
+                            destinationAirport: segDestinationAirport
+                        };
+                    })
                     : [{
                         carrierCode: carrierCode,
                         departureAirport: origin,
-                        departureDate: departureDate,
+                        departureDate: departureDate.length === 10 ? departureDate : new Date().toISOString().split('T')[0],
                         destinationAirport: destination
                     }];
                 
