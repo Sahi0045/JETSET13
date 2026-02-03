@@ -29,12 +29,65 @@ function FlightCreateOrders() {
 
   useEffect(() => {
     console.log('🔍 FlightCreateOrders - useEffect triggered');
-    if (location.state) {
-      console.log('📝 Processing order with data:', location.state);
-      processFlightOrder(location.state);
+    
+    // Try to get data from location.state first, then fallback to localStorage
+    let orderData = location.state;
+    
+    // Check if location.state is missing critical data
+    const hasCriticalData = orderData?.selectedFlight || orderData?.originalOffer || orderData?.passengerData;
+    
+    if (!hasCriticalData) {
+      console.log('⚠️ Location state missing critical data, checking localStorage...');
+      
+      // Try to retrieve from localStorage as fallback
+      try {
+        const storedBookingData = localStorage.getItem('pendingFlightBooking');
+        const storedSessionData = localStorage.getItem('pendingPaymentSession');
+        
+        if (storedBookingData) {
+          const bookingData = JSON.parse(storedBookingData);
+          const sessionData = storedSessionData ? JSON.parse(storedSessionData) : {};
+          
+          console.log('📦 Retrieved booking data from localStorage:', bookingData);
+          console.log('📦 Retrieved session data from localStorage:', sessionData);
+          
+          // Merge localStorage data with location.state (location.state takes priority for payment info)
+          orderData = {
+            // Payment info from location.state (comes from PaymentCallback)
+            transactionId: orderData?.transactionId || sessionData?.sessionId || `TXN-${Date.now()}`,
+            orderId: orderData?.orderId || sessionData?.orderId || `FLT${Date.now().toString(36).toUpperCase()}`,
+            amount: bookingData?.amount || orderData?.amount || sessionData?.amount || 0,
+            paymentVerified: orderData?.paymentVerified || true,
+            
+            // Flight data from localStorage
+            selectedFlight: bookingData?.selectedFlight || bookingData?.flightData,
+            flightData: bookingData?.flightData || bookingData?.selectedFlight,
+            originalOffer: bookingData?.originalOffer || bookingData?.selectedFlight?.originalOffer,
+            passengerData: bookingData?.passengerData,
+            bookingDetails: bookingData?.bookingDetails,
+            calculatedFare: bookingData?.calculatedFare,
+            
+            // Contact info
+            customerEmail: bookingData?.passengerData?.[0]?.email || orderData?.customerEmail || 'customer@jetsetgo.com'
+          };
+          
+          console.log('✅ Merged order data:', orderData);
+        }
+      } catch (e) {
+        console.error('❌ Error parsing localStorage data:', e);
+      }
+    }
+    
+    // Final check - if we still don't have critical data, redirect
+    const finalHasCriticalData = orderData?.selectedFlight || orderData?.originalOffer || orderData?.passengerData;
+    
+    if (orderData && (orderData.paymentVerified || finalHasCriticalData)) {
+      console.log('📝 Processing order with data:', orderData);
+      processFlightOrder(orderData);
     } else {
-      console.log('❌ No location.state found - redirecting to payment');
-      navigate('/flight-payment');
+      console.log('❌ No valid order data found - redirecting to flights page');
+      setError('Booking data not found. Please start your booking again.');
+      setTimeout(() => navigate('/flights'), 3000);
     }
     setLoading(false);
     const timer = setTimeout(() => setPageLoaded(true), 100);

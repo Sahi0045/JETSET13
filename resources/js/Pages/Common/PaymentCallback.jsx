@@ -47,7 +47,15 @@ export default function PaymentCallback() {
           const storedBookingData = localStorage.getItem(pendingBookingKey);
           const pendingSession = localStorage.getItem('pendingPaymentSession');
 
-          console.log('📦 Retrieved booking data:', storedBookingData ? 'Found' : 'Not found');
+          console.log('📦 Looking for localStorage key:', pendingBookingKey);
+          console.log('📦 All localStorage keys:', Object.keys(localStorage));
+          console.log('📦 Retrieved booking data:', storedBookingData ? `Found (${storedBookingData.length} chars)` : 'Not found');
+          console.log('📦 Retrieved session data:', pendingSession ? 'Found' : 'Not found');
+          
+          // Debug: Log raw localStorage values
+          if (storedBookingData) {
+            console.log('📦 Raw booking data preview:', storedBookingData.substring(0, 200) + '...');
+          }
 
           let bookingData = {};
           let sessionData = {};
