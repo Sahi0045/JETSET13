@@ -446,7 +446,7 @@ async function handleHostedCheckout(req, res) {
 
                 const legArray = segments.length > 0
                     ? segments.map((segment, index) => ({
-                        carrierCode: (segment?.carrierCode || segment?.operating?.carrierCode || 'XD').substring(0, 2),
+                        carrierCode: 'XD', // ARC Pay requires "889 or XD" - using XD
                         classOfService: mapCabinClass(segment?.cabin || flight?.cabin || bookingData?.cabinClass),
                         departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3),
                         departureDate: (segment?.departure?.at || new Date().toISOString()).split('T')[0],
