@@ -126,50 +126,96 @@ const emailService = {
 };
 
 /**
- * Generate HTML email template for cruise callback confirmation
+ * Generate HTML email template for cruise callback confirmation - Airbnb Style
  * @param {Object} data - Callback data
  * @returns {string} - HTML email content
  */
 function generateCruiseCallbackTemplate(data) {
   const { name, phone, preferredTime = 'Not specified', message = 'None' } = data;
+  const firstName = name ? name.split(' ')[0] : 'there';
 
   return `
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
-        .header { background-color: #0066b2; padding: 20px; text-align: center; color: white; }
-        .content { padding: 20px; background-color: #f9f9f9; }
-        .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; background-color: #f1f1f1; }
-        .details { background-color: white; padding: 15px; margin: 15px 0; border-radius: 5px; }
+        body, html { margin: 0; padding: 0; font-family: 'Circular', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; color: #222222; background-color: #f7f7f7; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { padding: 32px 48px 24px; }
+        .logo { font-size: 24px; font-weight: 600; color: #055B75; text-decoration: none; }
+        .hero { padding: 24px 48px 32px; }
+        .hero-emoji { font-size: 48px; margin-bottom: 16px; }
+        .hero-title { font-size: 26px; font-weight: 600; color: #222222; margin: 0 0 8px; line-height: 1.3; }
+        .hero-subtitle { font-size: 17px; color: #717171; margin: 0; }
+        .content { padding: 0 48px 32px; }
+        .text { font-size: 16px; color: #484848; margin: 0 0 20px; line-height: 1.6; }
+        .details-card { background-color: #f7f7f7; border-radius: 12px; padding: 24px; margin: 24px 0; }
+        .details-title { font-size: 14px; font-weight: 600; color: #222222; margin: 0 0 16px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #ebebeb; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { font-size: 14px; color: #717171; }
+        .detail-value { font-size: 14px; color: #222222; font-weight: 500; }
+        .highlight-box { background-color: #f0fdf4; border-left: 3px solid #22c55e; padding: 16px 20px; margin: 24px 0; border-radius: 0 8px 8px 0; }
+        .highlight-text { font-size: 15px; color: #166534; margin: 0; }
+        .footer { padding: 32px 48px; text-align: center; border-top: 1px solid #ebebeb; }
+        .footer-text { font-size: 12px; color: #717171; margin: 0 0 8px; }
+        @media (max-width: 600px) { .header, .hero, .content, .footer { padding-left: 24px; padding-right: 24px; } }
       </style>
     </head>
     <body>
-      <div class="header">
-        <h1>Cruise Callback Request Confirmation</h1>
-      </div>
-      <div class="content">
-        <p>Dear ${name},</p>
-        <p>Thank you for requesting a callback about our cruise offerings. We have received your request and a member of our team will call you at <strong>${phone}</strong> during your preferred time: <strong>${preferredTime}</strong>.</p>
-        
-        <div class="details">
-          <h3>Your Request Details:</h3>
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Phone:</strong> ${phone}</p>
-          <p><strong>Preferred Time:</strong> ${preferredTime}</p>
-          <p><strong>Message:</strong> ${message}</p>
+      <div class="container">
+        <div class="header">
+          <a href="#" class="logo">jetsetters</a>
         </div>
         
-        <p>If you need to make any changes to your request or have any questions before we call, please contact us at support@jetsetterss.com or call us at +(877) 538-7380.</p>
+        <div class="hero">
+          <div class="hero-emoji">🛳️</div>
+          <h1 class="hero-title">We'll call you soon, ${firstName}!</h1>
+          <p class="hero-subtitle">Your cruise consultation is confirmed</p>
+        </div>
         
-        <p>We look forward to helping you plan your perfect cruise!</p>
+        <div class="content">
+          <p class="text">
+            Thanks for your interest in exploring the world by sea! Our cruise specialists have received your request and will reach out to discuss your dream voyage.
+          </p>
+          
+          <div class="highlight-box">
+            <p class="highlight-text">📞 Expect a call at <strong>${phone}</strong> during <strong>${preferredTime}</strong></p>
+          </div>
+          
+          <div class="details-card">
+            <p class="details-title">Your request details</p>
+            <div class="detail-row">
+              <span class="detail-label">Name</span>
+              <span class="detail-value">${name}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Phone</span>
+              <span class="detail-value">${phone}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Preferred time</span>
+              <span class="detail-value">${preferredTime}</span>
+            </div>
+            ${message !== 'None' ? `
+            <div class="detail-row">
+              <span class="detail-label">Your message</span>
+              <span class="detail-value">${message}</span>
+            </div>
+            ` : ''}
+          </div>
+          
+          <p class="text">
+            Have questions before we call? Reach us anytime at <strong>support@jetsetterss.com</strong> or <strong>(877) 538-7380</strong>.
+          </p>
+        </div>
         
-        <p>Best regards,<br>The JetSetGo Team</p>
-      </div>
-      <div class="footer">
-        <p>This is an automated message, please do not reply to this email.</p>
-        <p>&copy; 2025 JetSetGo. All rights reserved.</p>
+        <div class="footer">
+          <p class="footer-text">Sent with ❤️ from jetsetters</p>
+          <p class="footer-text">© 2026 jetsetters. All rights reserved.</p>
+        </div>
       </div>
     </body>
     </html>
@@ -178,6 +224,11 @@ function generateCruiseCallbackTemplate(data) {
 
 /**
  * Generate HTML email template for package callback confirmation
+ * @param {Object} data - Callback data
+ * @returns {string} - HTML email content
+ */
+/**
+ * Generate HTML email template for package callback confirmation - Airbnb Style
  * @param {Object} data - Callback data
  * @returns {string} - HTML email content
  */
@@ -193,49 +244,88 @@ function generatePackageCallbackTemplate(data) {
     guests = 'Not specified'
   } = data;
 
+  const firstName = name ? name.split(' ')[0] : 'there';
+
   return `
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
-        .header { background-color: #2B4D6F; padding: 20px; text-align: center; color: white; }
-        .content { padding: 20px; background-color: #f9f9f9; }
-        .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; background-color: #f1f1f1; }
-        .details { background-color: white; padding: 15px; margin: 15px 0; border-radius: 5px; }
+        body, html { margin: 0; padding: 0; font-family: 'Circular', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; color: #222222; background-color: #f7f7f7; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { padding: 32px 48px 24px; }
+        .logo { font-size: 24px; font-weight: 600; color: #055B75; text-decoration: none; }
+        .hero { padding: 24px 48px 32px; }
+        .hero-emoji { font-size: 48px; margin-bottom: 16px; }
+        .hero-title { font-size: 26px; font-weight: 600; color: #222222; margin: 0 0 8px; line-height: 1.3; }
+        .hero-subtitle { font-size: 17px; color: #717171; margin: 0; }
+        .content { padding: 0 48px 32px; }
+        .text { font-size: 16px; color: #484848; margin: 0 0 20px; line-height: 1.6; }
+        .details-card { background-color: #f7f7f7; border-radius: 12px; padding: 24px; margin: 24px 0; }
+        .details-title { font-size: 14px; font-weight: 600; color: #222222; margin: 0 0 16px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #ebebeb; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { font-size: 14px; color: #717171; }
+        .detail-value { font-size: 14px; color: #222222; font-weight: 500; text-align: right; max-width: 60%; }
+        .footer { padding: 32px 48px; text-align: center; border-top: 1px solid #ebebeb; }
+        .footer-text { font-size: 12px; color: #717171; margin: 0 0 8px; }
+        @media (max-width: 600px) { .header, .hero, .content, .footer { padding-left: 24px; padding-right: 24px; } }
       </style>
     </head>
     <body>
-      <div class="header">
-        <h1>Travel Package Quote Request</h1>
-      </div>
-      <div class="content">
-        <p>Dear ${name},</p>
-        <p>Thank you for requesting a quote for our <strong>${packageName}</strong>. We have received your request and will prepare a customized quote based on your requirements.</p>
-        
-        <div class="details">
-          <h3>Your Request Details:</h3>
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Phone:</strong> ${phone}</p>
-          <p><strong>Package:</strong> ${packageName}</p>
-          <p><strong>Travel Date:</strong> ${travelDate}</p>
-          <p><strong>Guests:</strong> ${guests}</p>
-          <p><strong>Budget Range:</strong> ${budget}</p>
-          <p><strong>Special Requests:</strong> ${request}</p>
+      <div class="container">
+        <div class="header">
+          <a href="#" class="logo">jetsetters</a>
         </div>
         
-        <p>A travel expert will contact you within 24 hours to discuss your requirements and provide you with a detailed quote.</p>
+        <div class="hero">
+          <div class="hero-emoji">🌴</div>
+          <h1 class="hero-title">Quote request received!</h1>
+          <p class="hero-subtitle">We're crafting your perfect getaway, ${firstName}</p>
+        </div>
         
-        <p>If you have any questions in the meantime, please feel free to contact us at support@jetsetterss.com or call us at +(877) 538-7380.</p>
+        <div class="content">
+          <p class="text">
+            Thanks for asking about our <strong>${packageName}</strong>. Our travel experts are already looking into the best options for your trip and will send you a personalized quote shortly.
+          </p>
+          
+          <div class="details-card">
+            <p class="details-title">Your trip details</p>
+            <div class="detail-row">
+              <span class="detail-label">Package</span>
+              <span class="detail-value">${packageName}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Dates</span>
+              <span class="detail-value">${travelDate}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Travelers</span>
+              <span class="detail-value">${guests}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Budget</span>
+              <span class="detail-value">${budget}</span>
+            </div>
+            ${request !== 'None' ? `
+            <div class="detail-row">
+              <span class="detail-label">Special requests</span>
+              <span class="detail-value">${request}</span>
+            </div>
+            ` : ''}
+          </div>
+          
+          <p class="text">
+            Sit tight! We'll be in touch within 24 hours. If you need anything else, just reply to this email.
+          </p>
+        </div>
         
-        <p>We look forward to helping you plan your perfect getaway!</p>
-        
-        <p>Best regards,<br>The JetSetGo Team</p>
-      </div>
-      <div class="footer">
-        <p>This is an automated message, please do not reply to this email.</p>
-        <p>&copy; 2025 JetSetGo. All rights reserved.</p>
+        <div class="footer">
+          <p class="footer-text">Sent with ❤️ from jetsetters</p>
+          <p class="footer-text">© 2026 jetsetters. All rights reserved.</p>
+        </div>
       </div>
     </body>
     </html>
@@ -244,6 +334,11 @@ function generatePackageCallbackTemplate(data) {
 
 /**
  * Generate HTML email template for rental callback confirmation
+ * @param {Object} data - Callback data
+ * @returns {string} - HTML email content
+ */
+/**
+ * Generate HTML email template for rental callback confirmation - Airbnb Style
  * @param {Object} data - Callback data
  * @returns {string} - HTML email content
  */
@@ -261,54 +356,92 @@ function generateRentalCallbackTemplate(data) {
     totalPrice = 'Not specified'
   } = data;
 
+  const firstName = name ? name.split(' ')[0] : 'there';
+
   return `
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
-        .header { background-color: #0061ff; padding: 20px; text-align: center; color: white; }
-        .content { padding: 20px; background-color: #f9f9f9; }
-        .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; background-color: #f1f1f1; }
-        .details { background-color: white; padding: 15px; margin: 15px 0; border-radius: 5px; }
-        .price { font-size: 24px; color: #0061ff; font-weight: bold; }
+        body, html { margin: 0; padding: 0; font-family: 'Circular', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; color: #222222; background-color: #f7f7f7; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { padding: 32px 48px 24px; }
+        .logo { font-size: 24px; font-weight: 600; color: #055B75; text-decoration: none; }
+        .hero { padding: 24px 48px 32px; }
+        .hero-emoji { font-size: 48px; margin-bottom: 16px; }
+        .hero-title { font-size: 26px; font-weight: 600; color: #222222; margin: 0 0 8px; line-height: 1.3; }
+        .hero-subtitle { font-size: 17px; color: #717171; margin: 0; }
+        .content { padding: 0 48px 32px; }
+        .text { font-size: 16px; color: #484848; margin: 0 0 20px; line-height: 1.6; }
+        .details-card { background-color: #f7f7f7; border-radius: 12px; padding: 24px; margin: 24px 0; }
+        .details-title { font-size: 14px; font-weight: 600; color: #222222; margin: 0 0 16px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #ebebeb; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { font-size: 14px; color: #717171; }
+        .detail-value { font-size: 14px; color: #222222; font-weight: 500; text-align: right; }
+        .highlight-box { background-color: #f0fdf4; border-left: 3px solid #22c55e; padding: 16px 20px; margin: 24px 0; border-radius: 0 8px 8px 0; }
+        .highlight-text { font-size: 15px; color: #166534; margin: 0; }
+        .footer { padding: 32px 48px; text-align: center; border-top: 1px solid #ebebeb; }
+        .footer-text { font-size: 12px; color: #717171; margin: 0 0 8px; }
+        @media (max-width: 600px) { .header, .hero, .content, .footer { padding-left: 24px; padding-right: 24px; } }
       </style>
     </head>
     <body>
-      <div class="header">
-        <h1>Hotel Booking Request Confirmation</h1>
-      </div>
-      <div class="content">
-        <p>Dear ${name},</p>
-        <p>Thank you for your interest in booking at <strong>${hotelName}</strong>. We have received your callback request and a member of our team will call you at <strong>${phone}</strong> during your preferred time: <strong>${preferredTime}</strong>.</p>
-        
-        <div class="details">
-          <h3>Your Booking Details:</h3>
-          <p><strong>Hotel:</strong> ${hotelName}</p>
-          <p><strong>Check-in Date:</strong> ${checkIn}</p>
-          <p><strong>Check-out Date:</strong> ${checkOut}</p>
-          <p><strong>Guests:</strong> ${guests}</p>
-          <p><strong>Room Type:</strong> ${roomType}</p>
-          <p><strong>Total Price:</strong> <span class="price">$${totalPrice}</span></p>
+      <div class="container">
+        <div class="header">
+          <a href="#" class="logo">jetsetters</a>
         </div>
         
-        <div class="details">
-          <h3>Your Contact Information:</h3>
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Phone:</strong> ${phone}</p>
-          <p><strong>Preferred Callback Time:</strong> ${preferredTime}</p>
-          <p><strong>Message:</strong> ${message}</p>
+        <div class="hero">
+          <div class="hero-emoji">🏨</div>
+          <h1 class="hero-title">Booking request received!</h1>
+          <p class="hero-subtitle">We're confirming your stay at ${hotelName}</p>
         </div>
         
-        <p>If you need to make any changes to your request or have any questions before we call, please contact us at support@jetsetterss.com or call us at +(877) 538-7380.</p>
+        <div class="content">
+          <p class="text">
+            Great choice, ${firstName}! We've received your request and our hotel team is working to secure your reservation.
+          </p>
+          
+          <div class="highlight-box">
+            <p class="highlight-text">📞 We'll call you at <strong>${phone}</strong> during <strong>${preferredTime}</strong></p>
+          </div>
+          
+          <div class="details-card">
+            <p class="details-title">Stay details</p>
+            <div class="detail-row">
+              <span class="detail-label">Property</span>
+              <span class="detail-value">${hotelName}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Check-in</span>
+              <span class="detail-value">${checkIn}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Check-out</span>
+              <span class="detail-value">${checkOut}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Guests</span>
+              <span class="detail-value">${guests}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Room type</span>
+              <span class="detail-value">${roomType}</span>
+            </div>
+          </div>
+          
+          <p class="text">
+             We'll be in touch shortly to finalize the booking. If you have any questions, feel free to reply to this email.
+          </p>
+        </div>
         
-        <p>We look forward to confirming your booking and ensuring you have a wonderful stay at ${hotelName}!</p>
-        
-        <p>Best regards,<br>The JetSetGo Team</p>
-      </div>
-      <div class="footer">
-        <p>This is an automated message, please do not reply to this email.</p>
-        <p>&copy; 2025 JetSetGo. All rights reserved.</p>
+        <div class="footer">
+          <p class="footer-text">Sent with ❤️ from jetsetters</p>
+          <p class="footer-text">© 2026 jetsetters. All rights reserved.</p>
+        </div>
       </div>
     </body>
     </html>
@@ -320,38 +453,85 @@ function generateRentalCallbackTemplate(data) {
  * @param {Object} data - Callback data
  * @returns {string} - HTML email content
  */
+/**
+ * Generate default HTML email template for callback confirmation - Airbnb Style
+ * @param {Object} data - Callback data
+ * @returns {string} - HTML email content
+ */
 function generateDefaultCallbackTemplate(data) {
   const { name, phone, email = 'Not provided' } = data;
+  const firstName = name ? name.split(' ')[0] : 'there';
 
   return `
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
-        .header { background-color: #333; padding: 20px; text-align: center; color: white; }
-        .content { padding: 20px; background-color: #f9f9f9; }
-        .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; background-color: #f1f1f1; }
+        body, html { margin: 0; padding: 0; font-family: 'Circular', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; color: #222222; background-color: #f7f7f7; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { padding: 32px 48px 24px; }
+        .logo { font-size: 24px; font-weight: 600; color: #055B75; text-decoration: none; }
+        .hero { padding: 24px 48px 32px; }
+        .hero-emoji { font-size: 48px; margin-bottom: 16px; }
+        .hero-title { font-size: 26px; font-weight: 600; color: #222222; margin: 0 0 8px; line-height: 1.3; }
+        .hero-subtitle { font-size: 17px; color: #717171; margin: 0; }
+        .content { padding: 0 48px 32px; }
+        .text { font-size: 16px; color: #484848; margin: 0 0 20px; line-height: 1.6; }
+        .details-card { background-color: #f7f7f7; border-radius: 12px; padding: 24px; margin: 24px 0; }
+        .details-title { font-size: 14px; font-weight: 600; color: #222222; margin: 0 0 16px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #ebebeb; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { font-size: 14px; color: #717171; }
+        .detail-value { font-size: 14px; color: #222222; font-weight: 500; text-align: right; }
+        .footer { padding: 32px 48px; text-align: center; border-top: 1px solid #ebebeb; }
+        .footer-text { font-size: 12px; color: #717171; margin: 0 0 8px; }
+        @media (max-width: 600px) { .header, .hero, .content, .footer { padding-left: 24px; padding-right: 24px; } }
       </style>
     </head>
     <body>
-      <div class="header">
-        <h1>Request Confirmation</h1>
-      </div>
-      <div class="content">
-        <p>Dear ${name},</p>
-        <p>Thank you for contacting JetSetGo. We have received your request and a member of our team will contact you shortly.</p>
+      <div class="container">
+        <div class="header">
+          <a href="#" class="logo">jetsetters</a>
+        </div>
         
-        <p>Your contact information:</p>
-        <p>Name: ${name}</p>
-        <p>Phone: ${phone}</p>
-        <p>Email: ${email}</p>
+        <div class="hero">
+          <div class="hero-emoji">✨</div>
+          <h1 class="hero-title">We received your request, ${firstName}!</h1>
+          <p class="hero-subtitle">Thanks for contacting jetsetters</p>
+        </div>
         
-        <p>Best regards,<br>The JetSetGo Team</p>
-      </div>
-      <div class="footer">
-        <p>This is an automated message, please do not reply to this email.</p>
-        <p>&copy; 2025 JetSetGo. All rights reserved.</p>
+        <div class="content">
+          <p class="text">
+            We've got your details and one of our team members will be in touch shortly to help you out.
+          </p>
+          
+          <div class="details-card">
+            <p class="details-title">Contact info provided</p>
+            <div class="detail-row">
+              <span class="detail-label">Name</span>
+              <span class="detail-value">${name}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Phone</span>
+              <span class="detail-value">${phone}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Email</span>
+              <span class="detail-value">${email}</span>
+            </div>
+          </div>
+          
+          <p class="text">
+            In the meantime, feel free to browse our <a href="https://jetsetterss.com" style="color: #055B75; text-decoration: none;">latest deals</a>.
+          </p>
+        </div>
+        
+        <div class="footer">
+          <p class="footer-text">Sent with ❤️ from jetsetters</p>
+          <p class="footer-text">© 2026 jetsetters. All rights reserved.</p>
+        </div>
       </div>
     </body>
     </html>
@@ -374,8 +554,14 @@ function stripHtml(html) {
  * @param {Object} data - Inquiry data
  * @returns {string} - HTML email content
  */
+/**
+ * Generate professional inquiry received email template for customers - Airbnb Style
+ * @param {Object} data - Inquiry data
+ * @returns {string} - HTML email content
+ */
 export function generateInquiryReceivedTemplate(data) {
   const { customerName, inquiryType, inquiryId, customerEmail } = data;
+  const firstName = customerName ? customerName.split(' ')[0] : 'there';
 
   return `
     <!DOCTYPE html>
@@ -384,179 +570,81 @@ export function generateInquiryReceivedTemplate(data) {
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
-        body { 
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-          line-height: 1.6; 
-          color: #333; 
-          max-width: 600px; 
-          margin: 0 auto; 
-          background-color: #f4f4f4;
-        }
-        .container { 
-          background-color: white; 
-          margin: 20px auto; 
-          border-radius: 10px; 
-          overflow: hidden; 
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .header { 
-          background: linear-gradient(135deg, #0066b2 0%, #004d8a 100%); 
-          padding: 30px 20px; 
-          text-align: center; 
-          color: white; 
-        }
-        .header h1 { 
-          margin: 0; 
-          font-size: 28px; 
-          font-weight: 600;
-        }
-        .header p { 
-          margin: 10px 0 0; 
-          font-size: 14px; 
-          opacity: 0.9;
-        }
-        .content { 
-          padding: 30px 25px; 
-        }
-        .content p { 
-          margin: 15px 0; 
-          font-size: 15px;
-        }
-        .info-box { 
-          background-color: #f8f9fa; 
-          padding: 20px; 
-          margin: 20px 0; 
-          border-radius: 8px; 
-          border-left: 4px solid #0066b2;
-        }
-        .info-box h3 { 
-          margin: 0 0 15px; 
-          color: #0066b2; 
-          font-size: 18px;
-        }
-        .info-row { 
-          display: flex; 
-          padding: 8px 0; 
-          border-bottom: 1px solid #e0e0e0;
-        }
-        .info-row:last-child { 
-          border-bottom: none;
-        }
-        .info-label { 
-          font-weight: 600; 
-          min-width: 140px; 
-          color: #555;
-        }
-        .info-value { 
-          color: #333;
-        }
-        .cta-button { 
-          display: inline-block; 
-          background-color: #0066b2; 
-          color: white !important; 
-          padding: 14px 30px; 
-          text-decoration: none; 
-          border-radius: 6px; 
-          margin: 20px 0; 
-          font-weight: 600;
-          transition: background-color 0.3s;
-        }
-        .cta-button:hover { 
-          background-color: #004d8a;
-        }
-        .highlight { 
-          background-color: #fff3cd; 
-          padding: 15px; 
-          border-left: 4px solid #ffc107; 
-          margin: 20px 0; 
-          border-radius: 4px;
-        }
-        .footer { 
-          background-color: #f8f9fa; 
-          padding: 25px; 
-          text-align: center; 
-          font-size: 13px; 
-          color: #666; 
-          border-top: 1px solid #e0e0e0;
-        }
-        .footer p { 
-          margin: 8px 0;
-        }
-        .contact-info { 
-          margin: 15px 0;
-        }
-        .contact-info a { 
-          color: #0066b2; 
-          text-decoration: none;
-        }
-        @media only screen and (max-width: 600px) {
-          .info-row { 
-            flex-direction: column;
-          }
-          .info-label { 
-            margin-bottom: 5px;
-          }
-        }
+        body, html { margin: 0; padding: 0; font-family: 'Circular', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; color: #222222; background-color: #f7f7f7; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { padding: 32px 48px 24px; }
+        .logo { font-size: 24px; font-weight: 600; color: #055B75; text-decoration: none; }
+        .hero { padding: 24px 48px 32px; }
+        .hero-emoji { font-size: 48px; margin-bottom: 16px; }
+        .hero-title { font-size: 26px; font-weight: 600; color: #222222; margin: 0 0 8px; line-height: 1.3; }
+        .hero-subtitle { font-size: 17px; color: #717171; margin: 0; }
+        .content { padding: 0 48px 32px; }
+        .text { font-size: 16px; color: #484848; margin: 0 0 20px; line-height: 1.6; }
+        .details-card { background-color: #f7f7f7; border-radius: 12px; padding: 24px; margin: 24px 0; }
+        .details-title { font-size: 14px; font-weight: 600; color: #222222; margin: 0 0 16px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #ebebeb; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { font-size: 14px; color: #717171; }
+        .detail-value { font-size: 14px; color: #222222; font-weight: 500; text-align: right; }
+        .status-badge { display: inline-block; background-color: #fff8f6; color: #c13515; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 4px; }
+        .cta-section { padding: 0 48px 40px; text-align: center; }
+        .cta-button { display: inline-block; background-color: #055B75; color: #ffffff !important; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; }
+        .footer { padding: 32px 48px; text-align: center; border-top: 1px solid #ebebeb; }
+        .footer-text { font-size: 12px; color: #717171; margin: 0 0 8px; }
+        @media (max-width: 600px) { .header, .hero, .content, .cta-section, .footer { padding-left: 24px; padding-right: 24px; } }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="header">
-          <h1>✈️ Inquiry Received!</h1>
-          <p>Thank you for choosing JetSet</p>
+          <a href="#" class="logo">jetsetters</a>
+        </div>
+        
+        <div class="hero">
+          <div class="hero-emoji">✈️</div>
+          <h1 class="hero-title">Inquiry received!</h1>
+          <p class="hero-subtitle">We're reviewing your request, ${firstName}</p>
         </div>
         
         <div class="content">
-          <p>Dear ${customerName},</p>
+          <p class="text">
+            Thanks for reaching out! We've received your inquiry and our travel experts are already on it. We'll get back to you with a personalized plan soon.
+          </p>
           
-          <p>We have successfully received your travel inquiry and our expert team is reviewing your request. We're excited to help you plan your perfect journey!</p>
-          
-          <div class="info-box">
-            <h3>📋 Your Inquiry Details</h3>
-            <div class="info-row">
-              <div class="info-label">Inquiry Type:</div>
-              <div class="info-value">${inquiryType.charAt(0).toUpperCase() + inquiryType.slice(1)}</div>
+          <div class="details-card">
+            <p class="details-title">Inquiry details</p>
+            <div class="detail-row">
+              <span class="detail-label">Status</span>
+              <span class="detail-value"><span class="status-badge">Pending Review</span></span>
             </div>
-            <div class="info-row">
-              <div class="info-label">Inquiry ID:</div>
-              <div class="info-value">#${inquiryId}</div>
+            <div class="detail-row">
+              <span class="detail-label">Inquiry ID</span>
+              <span class="detail-value">#${inquiryId}</span>
             </div>
-            <div class="info-row">
-              <div class="info-label">Email:</div>
-              <div class="info-value">${customerEmail}</div>
+            <div class="detail-row">
+              <span class="detail-label">Type</span>
+              <span class="detail-value">${inquiryType.charAt(0).toUpperCase() + inquiryType.slice(1)}</span>
             </div>
-            <div class="info-row">
-              <div class="info-label">Status:</div>
-              <div class="info-value">Pending Review</div>
+            <div class="detail-row">
+              <span class="detail-label">Email</span>
+              <span class="detail-value">${customerEmail}</span>
             </div>
           </div>
           
-          <div class="highlight">
-            <strong>⏰ What happens next?</strong>
-            <p style="margin: 10px 0 0;">Our travel experts will review your inquiry and send you a personalized quote within <strong>24 hours</strong>. You'll receive an email notification as soon as your quote is ready.</p>
-          </div>
-          
-          <p>In the meantime, feel free to explore more travel options on our website or contact us if you have any questions.</p>
-          
-          <div style="text-align: center;">
-            <a href="${process.env.FRONTEND_URL || 'https://jetset-app.com'}/my-trips" class="cta-button">
-              View My Trips
-            </a>
-          </div>
-          
-          <div class="contact-info">
-            <p><strong>Need immediate assistance?</strong></p>
-            <p>📧 Email: <a href="mailto:support@jetset.com">support@jetset.com</a></p>
-            <p>📞 Phone: +(877) 538-7380</p>
-            <p>💬 Live Chat: Available on our website</p>
-          </div>
+          <p class="text">
+            For now, just sit back and relax. We'll notify you as soon as we have an update.
+          </p>
+        </div>
+        
+        <div class="cta-section">
+          <a href="${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/my-trips" class="cta-button">
+            View My Inquiries
+          </a>
         </div>
         
         <div class="footer">
-          <p><strong>JetSet Travel Agency</strong></p>
-          <p>Your trusted partner for unforgettable journeys</p>
-          <p style="margin-top: 15px; color: #999;">This is an automated confirmation. Please do not reply to this email.</p>
-          <p>&copy; 2025 JetSet. All rights reserved.</p>
+          <p class="footer-text">Sent with ❤️ from jetsetters</p>
+          <p class="footer-text">© 2026 jetsetters. All rights reserved.</p>
         </div>
       </div>
     </body>
@@ -735,15 +823,26 @@ export function generateAdminInquiryNotificationTemplate(data) {
  * @param {Object} data - Quote data
  * @returns {string} - HTML email content
  */
+/**
+ * Generate professional quote sent email template for customers - Airbnb Style
+ * @param {Object} data - Quote data
+ * @returns {string} - HTML email content
+ */
 export function generateQuoteSentTemplate(data) {
   const { customerName, quoteNumber, totalAmount, currency, expiresAt, quoteLink, breakdown } = data;
+  const firstName = customerName ? customerName.split(' ')[0] : 'there';
 
   const expiryDate = new Date(expiresAt).toLocaleDateString('en-US', {
-    weekday: 'long',
+    weekday: 'short',
     year: 'numeric',
-    month: 'long',
+    month: 'short',
     day: 'numeric'
   });
+
+  const formattedAmount = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD'
+  }).format(totalAmount || 0);
 
   return `
     <!DOCTYPE html>
@@ -752,171 +851,91 @@ export function generateQuoteSentTemplate(data) {
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
-        body { 
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-          line-height: 1.6; 
-          color: #333; 
-          max-width: 600px; 
-          margin: 0 auto; 
-          background-color: #f4f4f4;
-        }
-        .container { 
-          background-color: white; 
-          margin: 20px auto; 
-          border-radius: 10px; 
-          overflow: hidden; 
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .header { 
-          background: linear-gradient(135deg, #28a745 0%, #20873a 100%); 
-          padding: 30px 20px; 
-          text-align: center; 
-          color: white; 
-        }
-        .header h1 { 
-          margin: 0; 
-          font-size: 28px; 
-          font-weight: 600;
-        }
-        .header p { 
-          margin: 10px 0 0; 
-          font-size: 14px; 
-          opacity: 0.9;
-        }
-        .content { 
-          padding: 30px 25px; 
-        }
-        .quote-summary { 
-          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); 
-          padding: 25px; 
-          margin: 25px 0; 
-          border-radius: 10px; 
-          text-align: center; 
-          border: 2px solid #28a745;
-        }
-        .quote-number { 
-          font-size: 14px; 
-          color: #666; 
-          margin-bottom: 10px;
-        }
-        .total-amount { 
-          font-size: 42px; 
-          font-weight: 700; 
-          color: #28a745; 
-          margin: 15px 0;
-        }
-        .currency { 
-          font-size: 24px; 
-          vertical-align: super;
-        }
-        .expiry-notice { 
-          background-color: #fff3cd; 
-          border-left: 4px solid #ffc107; 
-          padding: 15px; 
-          margin: 20px 0; 
-          border-radius: 4px;
-        }
-        .breakdown { 
-          margin: 20px 0;
-        }
-        .breakdown-item { 
-          display: flex; 
-          justify-content: space-between; 
-          padding: 12px 15px; 
-          background-color: #f8f9fa; 
-          margin: 8px 0; 
-          border-radius: 6px;
-        }
-        .cta-button { 
-          display: inline-block; 
-          background-color: #28a745; 
-          color: white !important; 
-          padding: 16px 40px; 
-          text-decoration: none; 
-          border-radius: 8px; 
-          margin: 25px 0; 
-          font-weight: 600; 
-          font-size: 16px;
-          box-shadow: 0 4px 6px rgba(40, 167, 69, 0.3);
-        }
-        .footer { 
-          background-color: #f8f9fa; 
-          padding: 25px; 
-          text-align: center; 
-          font-size: 13px; 
-          color: #666; 
-          border-top: 1px solid #e0e0e0;
-        }
-        .contact-info { 
-          margin: 20px 0; 
-          padding: 15px; 
-          background-color: #f8f9fa; 
-          border-radius: 8px;
-        }
+        body, html { margin: 0; padding: 0; font-family: 'Circular', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; color: #222222; background-color: #f7f7f7; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { padding: 32px 48px 24px; }
+        .logo { font-size: 24px; font-weight: 600; color: #055B75; text-decoration: none; }
+        .hero { padding: 24px 48px 32px; }
+        .hero-emoji { font-size: 48px; margin-bottom: 16px; }
+        .hero-title { font-size: 26px; font-weight: 600; color: #222222; margin: 0 0 8px; line-height: 1.3; }
+        .hero-subtitle { font-size: 17px; color: #717171; margin: 0; }
+        .content { padding: 0 48px 32px; }
+        .text { font-size: 16px; color: #484848; margin: 0 0 20px; line-height: 1.6; }
+        .quote-card { border: 1px solid #dddddd; border-radius: 12px; padding: 24px; margin: 24px 0; box-shadow: 0 6px 16px rgba(0,0,0,0.06); }
+        .quote-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #ebebeb; }
+        .amt-label { font-size: 14px; color: #717171; display: block; }
+        .amt-value { font-size: 24px; font-weight: 700; color: #222222; display: block; }
+        .quote-id { font-size: 14px; color: #717171; }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f7f7f7; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { font-size: 14px; color: #717171; }
+        .detail-value { font-size: 14px; color: #222222; font-weight: 500; }
+        .expiry-banner { background-color: #fff8f6; border-radius: 8px; padding: 16px; margin: 24px 0; display: flex; align-items: center; }
+        .expiry-icon { font-size: 20px; margin-right: 12px; }
+        .expiry-text { font-size: 14px; color: #c13515; font-weight: 500; }
+        .cta-section { padding: 0 48px 40px; text-align: center; }
+        .cta-button { display: inline-block; background-color: #055B75; color: #ffffff !important; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; }
+        .footer { padding: 32px 48px; text-align: center; border-top: 1px solid #ebebeb; }
+        .footer-text { font-size: 12px; color: #717171; margin: 0 0 8px; }
+        @media (max-width: 600px) { .header, .hero, .content, .cta-section, .footer { padding-left: 24px; padding-right: 24px; } }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="header">
-          <h1>🎉 Your Travel Quote is Ready!</h1>
-          <p>We've prepared a personalized quote just for you</p>
+          <a href="#" class="logo">jetsetters</a>
+        </div>
+        
+        <div class="hero">
+          <div class="hero-emoji">🎉</div>
+          <h1 class="hero-title">Your quote is ready!</h1>
+          <p class="hero-subtitle">We've personalized this just for you, ${firstName}</p>
         </div>
         
         <div class="content">
-          <p>Dear ${customerName},</p>
+          <p class="text">
+            Good news! Our travel team has put together a custom plan for your upcoming trip. Review the details below to see what we've arranged for you.
+          </p>
           
-          <p>Great news! Our travel experts have prepared your personalized quote. We've carefully selected the best options for your journey.</p>
-          
-          <div class="quote-summary">
-            <div class="quote-number">Quote Number: <strong>${quoteNumber}</strong></div>
-            <div class="total-amount">
-              <span class="currency">${currency}</span> ${totalAmount.toLocaleString()}
-            </div>
-            <p style="margin: 10px 0 0; color: #666;">Total Estimated Cost</p>
-          </div>
-          
-          ${breakdown && breakdown.length > 0 ? `
-          <div class="breakdown">
-            <h3 style="color: #28a745; margin-bottom: 15px;">💰 Cost Breakdown</h3>
-            ${breakdown.map(item => `
-              <div class="breakdown-item">
-                <span>${item.description || item.name}</span>
-                <strong>${currency} ${(item.amount || item.price || 0).toLocaleString()}</strong>
+          <div class="quote-card">
+            <div class="quote-header">
+              <div>
+                <span class="amt-label">Total Estimate</span>
+                <span class="amt-value">${formattedAmount}</span>
               </div>
-            `).join('')}
-          </div>
-          ` : ''}
-          
-          <div class="expiry-notice">
-            <strong>⏰ Important:</strong> This quote is valid until <strong>${expiryDate}</strong>. 
-            Book before this date to secure these prices and availability!
-          </div>
-          
-          <div style="text-align: center;">
-            <a href="${quoteLink}" class="cta-button">
-              View Full Quote & Book Now
-            </a>
-          </div>
-          
-          <div class="contact-info">
-            <p><strong>Have questions about your quote?</strong></p>
-            <p>Our travel experts are here to help!</p>
-            <p>📧 Email: support@jetset.com | 📞 Phone: +(877) 538-7380</p>
+              <span class="quote-id">#${quoteNumber}</span>
+            </div>
+            
+            ${breakdown && breakdown.length > 0 ? `
+              <p style="margin: 0 0 12px; font-weight: 600; font-size: 14px;">Breakdown</p>
+              ${breakdown.map(item => `
+              <div class="detail-row">
+                <span class="detail-label">${item.description || item.name}</span>
+                <span class="detail-value">${new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(item.amount || item.price || 0)}</span>
+              </div>
+              `).join('')}
+            ` : ''}
           </div>
           
-          <p style="color: #666; font-size: 14px; margin-top: 20px;">
-            <strong>Next Steps:</strong><br>
-            1. Review your quote details<br>
-            2. Contact us if you have any questions<br>
-            3. Book your trip before the quote expires
+          <div class="expiry-banner">
+            <span class="expiry-icon">⏰</span>
+            <span class="expiry-text">This quote expires on ${expiryDate}. Book soon to lock in this price!</span>
+          </div>
+          
+          <p class="text">
+            Ready to go? Click below to finalize your booking. If you have questions, just reply to this email.
           </p>
         </div>
         
+        <div class="cta-section">
+          <a href="${quoteLink}" class="cta-button">
+            View Quote & Book
+          </a>
+        </div>
+        
         <div class="footer">
-          <p><strong>JetSet Travel Agency</strong></p>
-          <p>Creating unforgettable travel experiences since 2020</p>
-          <p style="margin-top: 15px; color: #999;">This quote was generated based on your inquiry. Prices subject to availability.</p>
-          <p>&copy; 2025 JetSet. All rights reserved.</p>
+          <p class="footer-text">Sent with ❤️ from jetsetters</p>
+          <p class="footer-text">© 2026 jetsetters. All rights reserved.</p>
         </div>
       </div>
     </body>
