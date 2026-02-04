@@ -416,7 +416,7 @@ function FlightSearchPage() {
           airline: {
             code: firstSegment.carrierCode,
             name: airlineMap[firstSegment.carrierCode] || firstSegment.carrierCode,
-            logo: `/images/airlines/${firstSegment.carrierCode.toLowerCase()}.png`
+            logo: `https://pics.avs.io/200/200/${firstSegment.carrierCode.toUpperCase()}.png`
           },
           departure: {
             time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
@@ -466,7 +466,7 @@ function FlightSearchPage() {
             airline: {
               code: segment.carrierCode,
               name: airlineMap[segment.carrierCode] || segment.carrierCode,
-              logo: `/images/airlines/${segment.carrierCode.toLowerCase()}.png`
+              logo: `https://pics.avs.io/200/200/${segment.carrierCode.toUpperCase()}.png`
             },
             duration: segment.duration,
             flightNumber: `${segment.carrierCode} ${segment.number}`,
@@ -483,7 +483,7 @@ function FlightSearchPage() {
           airline: {
             code: flight.airlineCode,
             name: flight.airline,
-            logo: `/images/airlines/${flight.airlineCode?.toLowerCase()}.png`
+            logo: `https://pics.avs.io/200/200/${flight.airlineCode?.toUpperCase()}.png`
           },
           departure: {
             time: flight.departure.time,
@@ -535,7 +535,7 @@ function FlightSearchPage() {
             airline: {
               code: flight.airlineCode,
               name: flight.airline,
-              logo: `/images/airlines/${flight.airlineCode?.toLowerCase()}.png`
+              logo: `https://pics.avs.io/200/200/${flight.airlineCode?.toUpperCase()}.png`
             },
             duration: flight.duration,
             flightNumber: flight.flightNumber,
@@ -552,7 +552,7 @@ function FlightSearchPage() {
           airline: {
             code: flight.airlineCode,
             name: flight.airline,
-            logo: `/images/airlines/${flight.airlineCode.toLowerCase()}.png`
+            logo: `https://pics.avs.io/200/200/${flight.airlineCode.toUpperCase()}.png`
           },
           departure: {
             time: flight.departure.time,
