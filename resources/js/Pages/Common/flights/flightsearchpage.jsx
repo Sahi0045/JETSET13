@@ -1659,12 +1659,65 @@ function FlightSearchPage() {
       travelers: initialData.travelers || 1,
       tripType: initialData.tripType || 'one-way'
     });
+    const [activeField, setActiveField] = useState(null);
 
     const handleInputChange = (field, value) => {
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         [field]: value
-      });
+      }));
+    };
+
+    const handleSelectCity = (field, code) => {
+      setFormData(prev => ({
+        ...prev,
+        [field]: code
+      }));
+      setActiveField(null);
+    };
+
+    const renderSuggestions = (field) => {
+      if (activeField !== field) return null;
+
+      const input = formData[field];
+      if (!input) return null;
+
+      const searchTerm = input.toLowerCase();
+      // Simple filtering based on cityMap access from parent scope
+      const suggestions = Object.entries(cityMap)
+        .filter(([code, name]) =>
+          name.toLowerCase().includes(searchTerm) ||
+          code.toLowerCase().includes(searchTerm)
+        )
+        .map(([code, name]) => ({
+          code,
+          name,
+          country: getCountryByCode(code)
+        }))
+        .slice(0, 8); // Limit to 8 suggestions
+
+      if (suggestions.length === 0) return null;
+
+      return (
+        <div className="absolute z-50 w-full mt-1 bg-white rounded-lg shadow-xl max-h-60 overflow-y-auto border border-gray-200">
+          {suggestions.map((s) => (
+            <div
+              key={s.code}
+              className="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-50 last:border-0"
+              onMouseDown={(e) => {
+                e.preventDefault(); // Prevent blur
+                handleSelectCity(field, s.code);
+              }}
+            >
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-[#055B75]">{s.code}</span>
+                <span className="text-xs text-gray-400">{s.country}</span>
+              </div>
+              <div className="text-sm text-gray-600 truncate">{s.name}</div>
+            </div>
+          ))}
+        </div>
+      );
     };
 
     const handleSubmit = (e) => {
@@ -1672,33 +1725,48 @@ function FlightSearchPage() {
       onSearch(formData);
     };
 
+    // Close suggestions on click outside
+    useEffect(() => {
+      const handleClickOutside = (e) => {
+        if (!e.target.closest('.search-field-container')) {
+          setActiveField(null);
+        }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     return (
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3">
+        <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3 search-field-container relative">
           <label className="block text-sm font-medium text-white mb-1">From</label>
           <div className="relative">
             <input
               type="text"
               value={formData.from}
               onChange={(e) => handleInputChange('from', e.target.value)}
-              className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-              placeholder="Enter city or airport"
+              onFocus={() => setActiveField('from')}
+              className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent uppercase"
+              placeholder="City or Airport"
             />
             <Plane className="absolute left-3 top-3 h-4 w-4 text-white/70" />
+            {renderSuggestions('from')}
           </div>
         </div>
 
-        <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3">
+        <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3 search-field-container relative">
           <label className="block text-sm font-medium text-white mb-1">To</label>
           <div className="relative">
             <input
               type="text"
               value={formData.to}
               onChange={(e) => handleInputChange('to', e.target.value)}
-              className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-              placeholder="Enter city or airport"
+              onFocus={() => setActiveField('to')}
+              className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent uppercase"
+              placeholder="City or Airport"
             />
             <Plane className="absolute left-3 top-3 h-4 w-4 text-white/70 transform rotate-90" />
+            {renderSuggestions('to')}
           </div>
         </div>
 
@@ -1724,7 +1792,7 @@ function FlightSearchPage() {
               className="w-full p-2.5 pl-10 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent appearance-none"
             >
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-                <option key={num} value={num}>{num} Traveler{num !== 1 ? 's' : ''}</option>
+                <option key={num} value={num} className="text-gray-800">{num} Traveler{num !== 1 ? 's' : ''}</option>
               ))}
             </select>
             <Users className="absolute left-3 top-3 h-4 w-4 text-white/70" />
