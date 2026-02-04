@@ -468,7 +468,7 @@ function ManageBooking() {
           <div className="bg-[#055B75] text-white p-8 flex justify-between items-center rounded-t-lg">
             <div className="flex items-center gap-4">
               <img
-                src="/Logo-jet.svg"
+                src="/images/jetset.jpeg"
                 alt="JetSetters"
                 className="w-16 h-16 object-contain bg-white rounded-lg p-1"
                 crossOrigin="anonymous"
