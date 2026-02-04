@@ -463,7 +463,128 @@ function ManageBooking() {
 
       {/* Hidden E-Ticket Template for PDF Generation */}
       <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
-        <FlightETicket ref={ticketRef} bookingData={bookingData} />
+        <div ref={ticketRef} className="w-[800px] bg-white text-gray-800 font-sans relative" style={{ width: '800px' }}>
+          {/* Ticket Header */}
+          <div className="bg-[#055B75] text-white p-8 flex justify-between items-center rounded-t-lg">
+            <div>
+              <h1 className="text-4xl font-bold tracking-tight mb-2">JetSetters</h1>
+              <p className="text-sm uppercase tracking-widest opacity-80">Electronic Ticket Receipt</p>
+            </div>
+            <div className="text-right">
+              <div className="text-xs uppercase opacity-70 mb-1">Booking Reference</div>
+              <div className="text-3xl font-mono font-bold tracking-wider">{bookingData?.orderId || bookingData?.bookingReference || 'PENDING'}</div>
+            </div>
+          </div>
+
+          <div className="p-8 border-x border-b border-gray-200 rounded-b-lg">
+            {/* Flight Info */}
+            <div className="flex justify-between items-start mb-10 pb-8 border-b border-dashed border-gray-300">
+              <div className="flex-1">
+                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Flight</div>
+                <div className="text-xl font-bold text-[#055B75]">{bookingData?.airlineName || bookingData?.airline || 'JetSetters Air'} {bookingData?.flightNumber || 'JS-001'}</div>
+                <div className="text-sm text-gray-600 mt-1">{bookingData?.cabinClass?.replace('_', ' ') || 'Economy'} Class</div>
+              </div>
+              <div className="flex-1 text-center">
+                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Date</div>
+                <div className="text-xl font-bold">{bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Date N/A'}</div>
+              </div>
+              <div className="flex-1 text-right">
+                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Status</div>
+                <div className="text-xl font-bold text-green-600 uppercase">{bookingData?.status || 'Confirmed'}</div>
+              </div>
+            </div>
+
+            {/* PNR and Reference Row */}
+            <div className="flex justify-between items-center mb-8 pb-6 border-b border-gray-200">
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">PNR Number</div>
+                <div className="text-2xl font-bold font-mono text-[#055B75]">{bookingData?.pnr || 'N/A'}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Transaction ID</div>
+                <div className="text-lg font-mono text-gray-700">{bookingData?.transactionId || 'N/A'}</div>
+              </div>
+            </div>
+
+            {/* Route */}
+            <div className="flex items-center justify-between mb-12">
+              <div>
+                <div className="text-4xl font-bold text-[#055B75] mb-1">{bookingData?.origin || 'DEP'}</div>
+                <div className="text-sm text-gray-500 font-medium">{bookingData?.originCity || 'Departure City'}</div>
+                <div className="text-lg font-bold mt-2">{bookingData?.departureTime || '--:--'}</div>
+                <div className="text-xs text-gray-400">{bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''}</div>
+              </div>
+
+              <div className="flex-1 px-8 text-center relative">
+                <div className="border-t-2 border-dashed border-gray-300 w-full absolute top-1/2 left-0"></div>
+                <div className="bg-white px-2 inline-block relative">
+                  <Plane className="w-6 h-6 text-[#055B75] transform rotate-90" />
+                </div>
+                <div className="text-xs text-gray-400 mt-2">{bookingData?.duration || 'Direct'}</div>
+              </div>
+
+              <div className="text-right">
+                <div className="text-4xl font-bold text-[#055B75] mb-1">{bookingData?.destination || 'ARR'}</div>
+                <div className="text-sm text-gray-500 font-medium">{bookingData?.destinationCity || 'Arrival City'}</div>
+                <div className="text-lg font-bold mt-2">{bookingData?.arrivalTime || '--:--'}</div>
+                <div className="text-xs text-gray-400">{bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''}</div>
+              </div>
+            </div>
+
+            {/* Passenger Grid */}
+            <div className="mb-10">
+              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">Passenger Information</h3>
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-xs text-gray-400">
+                    <th className="pb-2 font-normal">Passenger Name</th>
+                    <th className="pb-2 font-normal">Ticket Number</th>
+                    <th className="pb-2 font-normal text-right">Baggage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bookingData?.travelers?.map((p, i) => (
+                    <tr key={i} className="border-b border-gray-100 last:border-0">
+                      <td className="py-3 font-semibold text-gray-700">{p.firstName} {p.lastName}</td>
+                      <td className="py-3 font-mono text-gray-600">JS-{Math.random().toString(36).substr(2, 9).toUpperCase()}</td>
+                      <td className="py-3 text-right text-gray-600">23 KG</td>
+                    </tr>
+                  )) || (
+                      <tr>
+                        <td className="py-3 font-semibold text-gray-700">{bookingData?.username || 'Guest'}</td>
+                        <td className="py-3 font-mono text-gray-600">JS-TICKET-001</td>
+                        <td className="py-3 text-right text-gray-600">23 KG</td>
+                      </tr>
+                    )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Payment Summary */}
+            <div className="bg-gray-50 p-6 rounded-lg mb-8">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600 text-sm">Base Fare</span>
+                <span className="font-semibold">{bookingData?.currency || 'USD'} {(parseFloat(bookingData?.amount || 0) * 0.85).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-200">
+                <span className="text-gray-600 text-sm">Taxes & Fees</span>
+                <span className="font-semibold">{bookingData?.currency || 'USD'} {(parseFloat(bookingData?.amount || 0) * 0.15).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center text-lg">
+                <span className="font-bold text-[#055B75]">Total Paid</span>
+                <span className="font-bold text-[#055B75]">{bookingData?.currency || 'USD'} {parseFloat(bookingData?.amount || 0).toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="text-center text-xs text-gray-400 mt-12">
+              <p className="mb-1">This is an electronic ticket. Please carry this along with a valid photo ID.</p>
+              <p>© 2026 JetSetters Airlines. All rights reserved.</p>
+            </div>
+          </div>
+          {/* Decorative bottom edge */}
+          <div className="bg-[#055B75] h-2 rounded-b-lg mt-0"></div>
+        </div>
       </div>
     </div>
   );
