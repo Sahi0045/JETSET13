@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Plane, Calendar, Clock, User, CreditCard,
   AlertCircle, CheckCircle, Info, Phone, Mail, Edit3,
-  Download, X, Wifi, Utensils, Luggage, Flame, Zap, Ban, Skull, Battery, Scissors, Droplet
+  Download, X, Wifi, Utensils, Luggage, Flame, Zap, Ban, Skull, Battery, Scissors, Droplet, Briefcase
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
