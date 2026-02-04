@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Plane, Calendar, Clock, User, CreditCard,
   AlertCircle, CheckCircle, Info, Phone, Mail, Edit3,
-  Download, X, Wifi, Utensils, Luggage
+  Download, X, Wifi, Utensils, Luggage, Flame, Zap, Ban, Skull, Battery, Scissors, Droplet
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -463,139 +463,272 @@ function ManageBooking() {
 
       {/* Hidden E-Ticket Template for PDF Generation */}
       <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
-        <div ref={ticketRef} className="w-[800px] bg-white text-gray-800 font-sans relative" style={{ width: '800px' }}>
-          {/* Ticket Header */}
-          <div className="bg-[#055B75] text-white p-8 flex justify-between items-center rounded-t-lg">
-            <div className="flex items-center gap-4">
-              <img
-                src="/images/jetset.jpeg"
-                alt="JetSetters"
-                className="w-16 h-16 object-contain bg-white rounded-lg p-1"
-                crossOrigin="anonymous"
-              />
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight">JetSetters</h1>
-                <p className="text-sm uppercase tracking-widest opacity-80">Electronic Ticket Receipt</p>
-              </div>
-            </div>
+        <div ref={ticketRef} className="w-[850px] bg-white text-gray-800 font-sans relative pb-8" style={{ width: '850px' }}>
+
+          {/* 1. Header with Logo and Booking ID */}
+          <div className="flex justify-between items-center p-6 border-b border-gray-200">
+            <img src="/images/jetset.jpeg" alt="JetSetters" className="h-12 object-contain" crossOrigin="anonymous" />
             <div className="text-right">
-              <div className="text-xs uppercase opacity-70 mb-1">Booking Reference</div>
-              <div className="text-3xl font-mono font-bold tracking-wider">{bookingData?.orderId || bookingData?.bookingReference || 'PENDING'}</div>
+              <div className="text-sm font-bold text-gray-700">Booking ID: {bookingData?.orderId || bookingData?.bookingDetails?.bookingId || 'PENDING'}</div>
+              <div className="text-xs text-gray-500">Booked on {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
             </div>
           </div>
 
-          <div className="p-8 border-x border-b border-gray-200 rounded-b-lg">
-            {/* Flight Info */}
-            <div className="flex justify-between items-start mb-10 pb-8 border-b border-dashed border-gray-300">
-              <div className="flex-1">
-                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Flight</div>
-                <div className="text-xl font-bold text-[#055B75]">{bookingData?.airlineName || bookingData?.airline || 'JetSetters Air'} {bookingData?.flightNumber || 'JS-001'}</div>
-                <div className="text-sm text-gray-600 mt-1">{bookingData?.cabinClass?.replace('_', ' ') || 'Economy'} Class</div>
-              </div>
-              <div className="flex-1 text-center">
-                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Date</div>
-                <div className="text-xl font-bold">{bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Date N/A'}</div>
-              </div>
-              <div className="flex-1 text-right">
-                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Status</div>
-                <div className="text-xl font-bold text-green-600 uppercase">{bookingData?.status || 'Confirmed'}</div>
-              </div>
+          <div className="px-6 py-4">
+
+            {/* 2. Top Barcode Information */}
+            <div className="bg-blue-50 rounded-t-lg border border-blue-100 p-4 mb-0">
+              <p className="text-sm text-blue-800">
+                Barcode(s) for your journey <span className="font-bold">{bookingData?.originCity || bookingData?.bookingDetails?.flight?.departureCity || 'Origin'}-{bookingData?.destinationCity || bookingData?.bookingDetails?.flight?.arrivalCity || 'Dest'}</span> on <span className="font-bold">{bookingData?.airlineName || bookingData?.bookingDetails?.flight?.airline || 'JetSetters Air'}</span>
+              </p>
             </div>
 
-            {/* PNR and Reference Row */}
-            <div className="flex justify-between items-center mb-8 pb-6 border-b border-gray-200">
-              <div>
-                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">PNR Number</div>
-                <div className="text-2xl font-bold font-mono text-[#055B75]">{bookingData?.pnr || 'N/A'}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Transaction ID</div>
-                <div className="text-lg font-mono text-gray-700">{bookingData?.transactionId || 'N/A'}</div>
-              </div>
-            </div>
-
-            {/* Route */}
-            <div className="flex items-center justify-between mb-12">
-              <div>
-                <div className="text-4xl font-bold text-[#055B75] mb-1">{bookingData?.origin || 'DEP'}</div>
-                <div className="text-sm text-gray-500 font-medium">{bookingData?.originCity || 'Departure City'}</div>
-                <div className="text-lg font-bold mt-2">{bookingData?.departureTime || '--:--'}</div>
-                <div className="text-xs text-gray-400">{bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''}</div>
-              </div>
-
-              <div className="flex-1 px-8 text-center relative">
-                <div className="border-t-2 border-dashed border-gray-300 w-full absolute top-1/2 left-0"></div>
-                <div className="bg-white px-2 inline-block relative">
-                  <Plane className="w-6 h-6 text-[#055B75] transform rotate-90" />
+            <div className="border-x border-b border-blue-100 rounded-b-lg mb-6 p-4">
+              {(bookingData?.travelers || bookingData?.passengerData)?.map((traveler, idx) => (
+                <div key={idx} className="flex justify-between items-center mb-4 last:mb-0">
+                  <div className="font-medium text-gray-700">{traveler.firstName} {traveler.lastName}</div>
+                  {/* Fake Barcode Visual */}
+                  <div className="h-12 w-48 bg-gray-100 flex items-center justify-center overflow-hidden relative">
+                    <div className="absolute inset-0" style={{
+                      backgroundImage: 'repeating-linear-gradient(90deg, #333 0px, #333 1px, transparent 1px, transparent 3px, #333 3px, #333 4px, transparent 4px, transparent 6px)'
+                    }}></div>
+                  </div>
                 </div>
-                <div className="text-xs text-gray-400 mt-2">{bookingData?.duration || 'Direct'}</div>
-              </div>
+              )) || (
+                  <div className="flex justify-between items-center">
+                    <div className="font-medium text-gray-700">{bookingData?.username || 'Guest Traveler'}</div>
+                    <div className="h-12 w-48 bg-gray-100 flex items-center justify-center overflow-hidden relative">
+                      <div className="absolute inset-0" style={{
+                        backgroundImage: 'repeating-linear-gradient(90deg, #333 0px, #333 1px, transparent 1px, transparent 3px, #333 3px, #333 4px, transparent 4px, transparent 6px)'
+                      }}></div>
+                    </div>
+                  </div>
+                )}
+            </div>
 
-              <div className="text-right">
-                <div className="text-4xl font-bold text-[#055B75] mb-1">{bookingData?.destination || 'ARR'}</div>
-                <div className="text-sm text-gray-500 font-medium">{bookingData?.destinationCity || 'Arrival City'}</div>
-                <div className="text-lg font-bold mt-2">{bookingData?.arrivalTime || '--:--'}</div>
-                <div className="text-xs text-gray-400">{bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''}</div>
+            {/* 3. Green Status Banner */}
+            <div className="bg-green-600 text-white rounded-lg p-5 mb-6 flex items-start shadow-sm">
+              <div className="bg-white/20 p-2 rounded-full mr-4">
+                <Plane className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold mb-1">
+                  Your {bookingData?.originCity || bookingData?.bookingDetails?.flight?.departureCity || 'Origin'} - {bookingData?.destinationCity || bookingData?.bookingDetails?.flight?.arrivalCity || 'Dest'} flight is booked for travel on {bookingData?.departureDate || bookingData?.bookingDetails?.flight?.departureDate ? new Date(bookingData?.departureDate || bookingData?.bookingDetails?.flight?.departureDate).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'long' }) : ''}
+                </h2>
+                <p className="opacity-90 text-sm">Thank you for booking with us. We wish you a pleasant journey!</p>
               </div>
             </div>
 
-            {/* Passenger Grid */}
-            <div className="mb-10">
-              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">Passenger Information</h3>
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="text-xs text-gray-400">
-                    <th className="pb-2 font-normal">Passenger Name</th>
-                    <th className="pb-2 font-normal">Ticket Number</th>
-                    <th className="pb-2 font-normal text-right">Baggage</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bookingData?.travelers?.map((p, i) => (
-                    <tr key={i} className="border-b border-gray-100 last:border-0">
-                      <td className="py-3 font-semibold text-gray-700">{p.firstName} {p.lastName}</td>
-                      <td className="py-3 font-mono text-gray-600">JS-{Math.random().toString(36).substr(2, 9).toUpperCase()}</td>
-                      <td className="py-3 text-right text-gray-600">23 KG</td>
-                    </tr>
-                  )) || (
+            {/* 4. Action Buttons (Visual Only) */}
+            <div className="flex gap-4 mb-6">
+              <div className="flex-1 bg-gradient-to-r from-orange-400 to-orange-500 text-white text-center py-3 rounded-lg font-bold shadow-sm uppercase text-sm tracking-wide">
+                Web Check-in
+              </div>
+              <div className="flex-1 border-2 border-orange-400 text-orange-500 text-center py-3 rounded-lg font-bold uppercase text-sm tracking-wide bg-white">
+                Manage Booking
+              </div>
+            </div>
+
+            {/* 5. Trip Details Card */}
+            <div className="border border-gray-200 rounded-lg overflow-hidden mb-6 shadow-sm">
+              <div className="bg-blue-600 px-4 py-3">
+                <h3 className="text-white font-bold text-lg">Your trip details</h3>
+              </div>
+
+              <div className="p-5">
+                <div className="mb-4">
+                  <h4 className="text-xl font-bold text-gray-800">{bookingData?.originCity || bookingData?.bookingDetails?.flight?.departureCity} - {bookingData?.destinationCity || bookingData?.bookingDetails?.flight?.arrivalCity}</h4>
+                  <p className="text-gray-500 text-sm">
+                    {bookingData?.departureDate || bookingData?.bookingDetails?.flight?.departureDate ? new Date(bookingData?.departureDate || bookingData?.bookingDetails?.flight?.departureDate).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : ''} • {bookingData?.stops === 0 ? 'Nonstop' : `${bookingData?.stops} Stop(s)`} • {bookingData?.duration || bookingData?.bookingDetails?.flight?.duration || 'Duration N/A'}
+                  </p>
+                </div>
+
+                <div className="border-t border-gray-100 py-4 flex flex-wrap md:flex-nowrap items-center">
+                  <div className="flex items-center w-1/4">
+                    <div className="mr-3">
+                      <img src="/images/jetset.jpeg" alt="Airline" className="w-10 h-10 object-contain" crossOrigin="anonymous" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-sm text-gray-700">{bookingData?.airlineName || bookingData?.bookingDetails?.flight?.airline || 'JetSetters Air'}</div>
+                      <div className="text-xs text-gray-500">{bookingData?.flightNumber || bookingData?.bookingDetails?.flight?.flightNumber || 'JS-001'}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 flex justify-between items-center px-4">
+                    <div className="text-left">
+                      <div className="font-bold text-gray-700">{bookingData?.origin || bookingData?.bookingDetails?.flight?.departureAirport || 'ORIGIN'}</div>
+                      <div className="text-xl font-bold text-gray-900">{bookingData?.departureTime || bookingData?.bookingDetails?.flight?.departureTime || '--:--'}</div>
+                      <div className="text-xs text-gray-500 mt-1">{bookingData?.departureDate || bookingData?.bookingDetails?.flight?.departureDate ? new Date(bookingData?.departureDate || bookingData?.bookingDetails?.flight?.departureDate).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) : ''}</div>
+                      <div className="text-xs text-gray-500 mt-1">{bookingData?.departureTerminal ? `Terminal ${bookingData.departureTerminal}` : 'Terminal 1'}</div>
+                    </div>
+
+                    <div className="flex flex-col items-center px-4">
+                      <Clock className="w-4 h-4 text-gray-400 mb-1" />
+                      <div className="text-xs text-gray-500">{bookingData?.duration || bookingData?.bookingDetails?.flight?.duration || '--'}</div>
+                      <div className="w-24 h-[1px] bg-gray-300 my-1 relative">
+                        <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-1 h-1 bg-gray-400 rounded-full"></div>
+                        <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-1 bg-gray-400 rounded-full"></div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="font-bold text-gray-700">{bookingData?.destination || bookingData?.bookingDetails?.flight?.arrivalAirport || 'DEST'}</div>
+                      <div className="text-xl font-bold text-gray-900">{bookingData?.arrivalTime || bookingData?.bookingDetails?.flight?.arrivalTime || '--:--'}</div>
+                      <div className="text-xs text-gray-500 mt-1">{bookingData?.arrivalDate || bookingData?.bookingDetails?.flight?.arrivalDate ? new Date(bookingData?.arrivalDate || bookingData?.bookingDetails?.flight?.arrivalDate).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) : ''}</div>
+                      <div className="text-xs text-gray-500 mt-1">{bookingData?.arrivalTerminal ? `Terminal ${bookingData.arrivalTerminal}` : 'Terminal 2'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded p-3 mt-4 flex justify-between items-center text-sm border border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-gray-600 bg-gray-200 px-2 py-0.5 rounded text-xs uppercase">PNR</span>
+                    <span className="font-mono font-bold text-gray-800">{bookingData?.pnr || bookingData?.bookingDetails?.pnr || 'CONFIRMED'}</span>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-1.5">
+                      <Luggage className="w-4 h-4 text-green-600" />
+                      <span className="text-gray-600 text-xs">Check-in: <span className="font-bold text-gray-800">25 Kgs</span> (1 piece only)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Briefcase className="w-4 h-4 text-green-600" />
+                      <span className="text-gray-600 text-xs">Cabin: <span className="font-bold text-gray-800">7 Kgs</span> (1 piece only)</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold uppercase">{bookingData?.cabinClass || bookingData?.bookingDetails?.flight?.cabin || 'Economy'}</span>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-100">
                       <tr>
-                        <td className="py-3 font-semibold text-gray-700">{bookingData?.username || 'Guest'}</td>
-                        <td className="py-3 font-mono text-gray-600">JS-TICKET-001</td>
-                        <td className="py-3 text-right text-gray-600">23 KG</td>
+                        <th className="px-4 py-2 font-medium">Traveller</th>
+                        <th className="px-4 py-2 font-medium">Seat</th>
+                        <th className="px-4 py-2 font-medium">Meal</th>
+                        <th className="px-4 py-2 font-medium text-right">E-Ticket No</th>
                       </tr>
-                    )}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {(bookingData?.travelers || bookingData?.passengerData)?.map((t, i) => (
+                        <tr key={i}>
+                          <td className="px-4 py-2 font-medium text-gray-800">{t.firstName} {t.lastName}</td>
+                          <td className="px-4 py-2 text-gray-600">--</td>
+                          <td className="px-4 py-2 text-gray-600">Standard</td>
+                          <td className="px-4 py-2 text-gray-600 text-right font-mono">328{bookingData?.pnr || 'TKT'}{i + 45}</td>
+                        </tr>
+                      )) || (
+                          <tr>
+                            <td className="px-4 py-2 font-medium text-gray-800">{bookingData?.username || 'Guest'}</td>
+                            <td className="px-4 py-2 text-gray-600">--</td>
+                            <td className="px-4 py-2 text-gray-600">Standard</td>
+                            <td className="px-4 py-2 text-gray-600 text-right font-mono">328{bookingData?.pnr || 'TKT'}01</td>
+                          </tr>
+                        )}
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
             </div>
 
-            {/* Payment Summary */}
-            <div className="bg-gray-50 p-6 rounded-lg mb-8">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-gray-600 text-sm">Base Fare</span>
-                <span className="font-semibold">{bookingData?.currency || 'USD'} {(parseFloat(bookingData?.amount || 0) * 0.85).toFixed(2)}</span>
+            {/* 6. Dangerous Goods Warning */}
+            <div className="border border-red-200 rounded-lg overflow-hidden mb-6">
+              <div className="bg-red-600 text-white px-4 py-2 font-bold flex justify-between items-center">
+                <span>Items not allowed in the aircraft</span>
+                <span className="text-xs bg-yellow-400 text-red-900 px-2 py-0.5 rounded font-bold">SAFETY FIRST</span>
               </div>
-              <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-200">
-                <span className="text-gray-600 text-sm">Taxes & Fees</span>
-                <span className="font-semibold">{bookingData?.currency || 'USD'} {(parseFloat(bookingData?.amount || 0) * 0.15).toFixed(2)}</span>
+              <div className="p-4 bg-red-50">
+                <div className="grid grid-cols-4 gap-4 text-center">
+                  <div className="flex flex-col items-center">
+                    <div className="w-10 h-10 rounded-full border-2 border-red-500 flex items-center justify-center mb-1 bg-white">
+                      <Flame className="w-5 h-5 text-red-500" />
+                    </div>
+                    <span className="text-[10px] uppercase font-bold text-gray-700">Lighters</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div className="w-10 h-10 rounded-full border-2 border-red-500 flex items-center justify-center mb-1 bg-white">
+                      <Droplet className="w-5 h-5 text-red-500" />
+                    </div>
+                    <span className="text-[10px] uppercase font-bold text-gray-700">Liquids</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div className="w-10 h-10 rounded-full border-2 border-red-500 flex items-center justify-center mb-1 bg-white">
+                      <Skull className="w-5 h-5 text-red-500" />
+                    </div>
+                    <span className="text-[10px] uppercase font-bold text-gray-700">Toxic</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div className="w-10 h-10 rounded-full border-2 border-red-500 flex items-center justify-center mb-1 bg-white">
+                      <Scissors className="w-5 h-5 text-red-500" />
+                    </div>
+                    <span className="text-[10px] uppercase font-bold text-gray-700">Sharp Objects</span>
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-between items-center text-lg">
-                <span className="font-bold text-[#055B75]">Total Paid</span>
-                <span className="font-bold text-[#055B75]">{bookingData?.currency || 'USD'} {parseFloat(bookingData?.amount || 0).toFixed(2)}</span>
+            </div>
+
+            {/* 7. Guidelines */}
+            <div className="bg-blue-50 rounded-lg p-5 mb-6 border border-blue-100">
+              <h4 className="font-bold text-gray-800 mb-3 flex items-center">
+                <Info className="w-4 h-4 mr-2 text-blue-600" />
+                For convenient travel, follow these guidelines
+              </h4>
+              <ul className="text-xs text-gray-600 space-y-2">
+                <li className="flex items-start">
+                  <CheckCircle className="w-3 h-3 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span><span className="font-bold text-gray-700">Web Check-in:</span> Web Check-in is now a mandatory step for your air travel. Please check in online to avoid queues.</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle className="w-3 h-3 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span><span className="font-bold text-gray-700">ID Proof:</span> Please carry a valid photo identification proof (Driver Licence, Aadhar Card, Pan Card or any other Government recognised photo identification).</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle className="w-3 h-3 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span><span className="font-bold text-gray-700">Check-in Time:</span> We advise you to reach the airport at least 2 hours before scheduled departure. Check-in counters close 45 minutes prior to departure.</span>
+                </li>
+                <li className="flex items-start">
+                  <CheckCircle className="w-3 h-3 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <span><span className="font-bold text-gray-700">Baggage:</span> Check-in baggage allowance is 15kg/25kg per passenger as per your fare class. Hand baggage should not exceed 7kg.</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* 8. Payment Information */}
+            <div className="border border-gray-200 rounded-lg p-5 mb-6">
+              <h4 className="font-bold text-gray-800 mb-3 text-sm uppercase tracking-wide">Payment Information</h4>
+              <div className="flex justify-between items-center text-sm mb-2">
+                <span className="text-gray-600">Total Base Fare</span>
+                <span className="font-medium">{bookingData?.currency || 'USD'} {(parseFloat(bookingData?.amount || bookingData?.calculatedFare?.totalAmount || 0) * 0.85).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm mb-3">
+                <span className="text-gray-600">Taxes & Fees</span>
+                <span className="font-medium">{bookingData?.currency || 'USD'} {(parseFloat(bookingData?.amount || bookingData?.calculatedFare?.totalAmount || 0) * 0.15).toFixed(2)}</span>
+              </div>
+              <div className="border-t border-dashed border-gray-200 pt-3 flex justify-between items-center">
+                <span className="font-bold text-gray-800">Total Paid</span>
+                <span className="font-bold text-xl text-green-600">{bookingData?.currency || 'USD'} {parseFloat(bookingData?.amount || bookingData?.calculatedFare?.totalAmount || 0).toFixed(2)}</span>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="text-center text-xs text-gray-400 mt-12">
-              <p className="mb-1">This is an electronic ticket. Please carry this along with a valid photo ID.</p>
-              <p>© 2026 JetSetters Airlines. All rights reserved.</p>
+            <div className="flex justify-between items-end border-t border-gray-200 pt-6">
+              <div className="text-xs text-gray-500">
+                <p className="font-bold text-gray-700 mb-1">JetSetters Support</p>
+                <p>Tel: +1 (555) 123-4567</p>
+                <p>Email: help@jetsetters.com</p>
+              </div>
+              <div className="text-right">
+                <img src="/images/jetset.jpeg" alt="JetSetters" className="h-8 object-contain opacity-50 ml-auto" crossOrigin="anonymous" />
+                <p className="text-[10px] text-gray-400 mt-1">© 2026 JetSetters Inc.</p>
+              </div>
             </div>
+
           </div>
-          {/* Decorative bottom edge */}
-          <div className="bg-[#055B75] h-2 rounded-b-lg mt-0"></div>
         </div>
       </div>
-    </div>
-  );
+      );
 }
 
-export default ManageBooking; 
+      export default ManageBooking;
