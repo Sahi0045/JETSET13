@@ -1837,7 +1837,7 @@ function FlightSearchPage() {
     }, []);
 
     return (
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3 search-field-container relative">
           <label className="block text-sm font-medium text-white mb-1">From</label>
           <div className="relative">
@@ -1900,7 +1900,24 @@ function FlightSearchPage() {
           </div>
         </div>
 
-        <div className="col-span-1 md:col-span-4 flex justify-center">
+        <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-3">
+          <label className="block text-sm font-medium text-white mb-1">Class</label>
+          <div className="relative">
+            <select
+              value={formData.travelClass}
+              onChange={(e) => handleInputChange('travelClass', e.target.value)}
+              className="w-full p-2.5 pl-3 bg-white/20 border border-white/30 text-white placeholder-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent appearance-none"
+            >
+              <option value="ECONOMY" className="text-gray-800">Economy</option>
+              <option value="PREMIUM_ECONOMY" className="text-gray-800">Premium Economy</option>
+              <option value="BUSINESS" className="text-gray-800">Business</option>
+              <option value="FIRST" className="text-gray-800">First Class</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-white/70" />
+          </div>
+        </div>
+
+        <div className="col-span-1 md:col-span-5 flex justify-center">
           <button
             type="submit"
             className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg transition-colors duration-200 flex items-center"
