@@ -76,6 +76,7 @@ export default async function handler(req, res) {
     }
 
     console.log('✅ Validation passed. Searching flights with Amadeus API...');
+    console.log('🎫 Travel Class requested:', travelClass || 'ECONOMY (default)');
 
     // Prepare search parameters for Amadeus API
     const searchParams = {
