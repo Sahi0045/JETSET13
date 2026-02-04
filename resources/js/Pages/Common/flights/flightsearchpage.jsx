@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useSearchParams, useNavigate, useLocation } from "react-router-dom";
-import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, Filter, ArrowUpDown } from "lucide-react";
+import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, Filter, ArrowUpDown, MapPin } from "lucide-react";
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
