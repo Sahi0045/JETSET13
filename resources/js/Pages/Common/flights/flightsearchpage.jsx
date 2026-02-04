@@ -723,6 +723,7 @@ function FlightSearchPage() {
         departDate: formData.departDate,
         returnDate: formData.returnDate,
         travelers: parseInt(formData.travelers) || 1,
+        travelClass: formData.travelClass || 'ECONOMY',
         max: 10
       };
 
