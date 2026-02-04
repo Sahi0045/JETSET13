@@ -68,24 +68,34 @@ function ManageBooking() {
   const ticketRef = React.useRef(null);
 
   const downloadETicket = async () => {
-    if (!ticketRef.current) return;
+    if (!ticketRef.current) {
+      alert("Ticket template not ready. Please wait and try again.");
+      return;
+    }
     const input = ticketRef.current;
 
     try {
+      // Wait a bit for any images to fully load
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       const canvas = await html2canvas(input, {
         scale: 2,
         logging: false,
         useCORS: true,
-        backgroundColor: '#ffffff'
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        imageTimeout: 0,
+        removeContainer: true
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      // Use JPEG format to avoid PNG signature issues
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`JetSetters_Ticket_${bookingData?.orderId || 'Booking'}.pdf`);
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`JetSetters_Ticket_${bookingData?.orderId || bookingData?.bookingReference || 'Booking'}.pdf`);
     } catch (err) {
       console.error("Error generating ticket:", err);
       alert("Failed to generate ticket. Please try again.");

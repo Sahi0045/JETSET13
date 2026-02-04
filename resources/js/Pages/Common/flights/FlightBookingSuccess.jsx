@@ -32,28 +32,38 @@ export default function FlightBookingSuccess() {
   };
 
   const handleDownloadTicket = async () => {
-    if (!ticketRef.current) return;
+    if (!ticketRef.current) {
+      alert("Ticket template not ready. Please wait and try again.");
+      return;
+    }
 
     setIsGenerating(true);
     try {
       const element = ticketRef.current;
+
+      // Wait for images to fully load
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       const canvas = await html2canvas(element, {
-        scale: 2, // Higher quality
+        scale: 2,
         useCORS: true,
+        allowTaint: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        imageTimeout: 0,
+        removeContainer: true
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      // Use JPEG format to avoid PNG signature issues
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
 
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
-      pdf.save(`JetSetters_Ticket_${bookingData.bookingDetails.bookingId}.pdf`);
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+      pdf.save(`JetSetters_Ticket_${bookingData.bookingDetails?.bookingId || 'Booking'}.pdf`);
     } catch (error) {
       console.error('Error generating ticket:', error);
       alert('Failed to generate ticket. Please try again.');
