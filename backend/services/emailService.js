@@ -161,7 +161,7 @@ function generateCruiseCallbackTemplate(data) {
           <p><strong>Message:</strong> ${message}</p>
         </div>
         
-        <p>If you need to make any changes to your request or have any questions before we call, please contact us at support@jetsetgo.com or call us at +1 (555) 123-4567.</p>
+        <p>If you need to make any changes to your request or have any questions before we call, please contact us at support@jetsetterss.com or call us at +(877) 538-7380.</p>
         
         <p>We look forward to helping you plan your perfect cruise!</p>
         
@@ -227,7 +227,7 @@ function generatePackageCallbackTemplate(data) {
         
         <p>A travel expert will contact you within 24 hours to discuss your requirements and provide you with a detailed quote.</p>
         
-        <p>If you have any questions in the meantime, please feel free to contact us at support@jetsetgo.com or call us at +1 (555) 123-4567.</p>
+        <p>If you have any questions in the meantime, please feel free to contact us at support@jetsetterss.com or call us at +(877) 538-7380.</p>
         
         <p>We look forward to helping you plan your perfect getaway!</p>
         
@@ -300,7 +300,7 @@ function generateRentalCallbackTemplate(data) {
           <p><strong>Message:</strong> ${message}</p>
         </div>
         
-        <p>If you need to make any changes to your request or have any questions before we call, please contact us at support@jetsetgo.com or call us at +1 (555) 123-4567.</p>
+        <p>If you need to make any changes to your request or have any questions before we call, please contact us at support@jetsetterss.com or call us at +(877) 538-7380.</p>
         
         <p>We look forward to confirming your booking and ensuring you have a wonderful stay at ${hotelName}!</p>
         
@@ -547,7 +547,7 @@ export function generateInquiryReceivedTemplate(data) {
           <div class="contact-info">
             <p><strong>Need immediate assistance?</strong></p>
             <p>📧 Email: <a href="mailto:support@jetset.com">support@jetset.com</a></p>
-            <p>📞 Phone: +1 (555) 123-4567</p>
+            <p>📞 Phone: +(877) 538-7380</p>
             <p>💬 Live Chat: Available on our website</p>
           </div>
         </div>
@@ -901,7 +901,7 @@ export function generateQuoteSentTemplate(data) {
           <div class="contact-info">
             <p><strong>Have questions about your quote?</strong></p>
             <p>Our travel experts are here to help!</p>
-            <p>📧 Email: support@jetset.com | 📞 Phone: +1 (555) 123-4567</p>
+            <p>📧 Email: support@jetset.com | 📞 Phone: +(877) 538-7380</p>
           </div>
           
           <p style="color: #666; font-size: 14px; margin-top: 20px;">

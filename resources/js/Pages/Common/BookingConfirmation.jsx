@@ -308,20 +308,20 @@ function BookingConfirmation() {
               </div>
 
               {/* Booking Reference Section */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-xl">
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Booking Reference</p>
-                  <p className="text-lg font-bold text-gray-900">{bookingData.orderId || bookingData.bookingReference || 'N/A'}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-6 p-5 bg-gray-50 rounded-xl">
+                <div className="border-r-0 sm:border-r border-gray-200 pr-0 sm:pr-6">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Booking Reference</p>
+                  <p className="text-lg font-bold text-gray-900 font-mono">{bookingData.orderId || bookingData.bookingReference || 'N/A'}</p>
                 </div>
                 {bookingData.pnr && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">PNR Number</p>
-                    <p className="text-lg font-bold text-blue-600">{bookingData.pnr}</p>
+                  <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-6">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">PNR Number</p>
+                    <p className="text-lg font-bold text-blue-600 font-mono">{bookingData.pnr}</p>
                   </div>
                 )}
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Transaction ID</p>
-                  <p className="text-lg font-bold text-gray-900">{bookingData.transactionId || 'N/A'}</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Transaction ID</p>
+                  <p className="text-lg font-bold text-gray-900 font-mono break-all">{bookingData.transactionId || 'N/A'}</p>
                 </div>
               </div>
 

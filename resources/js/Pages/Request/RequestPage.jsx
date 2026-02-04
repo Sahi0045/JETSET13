@@ -374,7 +374,7 @@ const RequestPage = () => {
           name="customer_phone"
           type="tel"
           required
-          placeholder="+1 (555) 123-4567"
+          placeholder="+(877) 538-7380"
           error={errors.customer_phone}
           value={formData.customer_phone}
           onChange={handleChange}

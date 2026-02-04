@@ -527,7 +527,7 @@ const Itinerary = () => {
       setFormSubmitting(false);
       // Display a more user-friendly error message
       setFormSubmitError(
-        'We encountered an issue saving your request. Please try again or contact us directly at support@jetsetgo.com'
+        'We encountered an issue saving your request. Please try again or contact us directly at support@jetsetterss.com'
       );
     }
   };

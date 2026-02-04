@@ -152,9 +152,9 @@ function ManageBooking() {
 
           {/* Status Banner */}
           <div className={`p-4 rounded-lg mb-6 ${bookingData?.status === 'CONFIRMED' ? 'bg-green-50 border border-green-200' :
-              bookingData?.status === 'CANCELLED' ? 'bg-red-50 border border-red-200' :
-                bookingData?.status === 'FAILED' ? 'bg-red-50 border border-red-200' :
-                  'bg-blue-50 border border-blue-200'
+            bookingData?.status === 'CANCELLED' ? 'bg-red-50 border border-red-200' :
+              bookingData?.status === 'FAILED' ? 'bg-red-50 border border-red-200' :
+                'bg-blue-50 border border-blue-200'
             }`}>
             <div className="flex items-center">
               {bookingData?.status === 'CONFIRMED' ? (
@@ -165,8 +165,8 @@ function ManageBooking() {
                 <Info className="w-5 h-5 text-blue-600 mr-2" />
               )}
               <span className={`font-medium ${bookingData?.status === 'CONFIRMED' ? 'text-green-800' :
-                  bookingData?.status === 'CANCELLED' ? 'text-red-800' :
-                    'text-blue-800'
+                bookingData?.status === 'CANCELLED' ? 'text-red-800' :
+                  'text-blue-800'
                 }`}>
                 Booking Status: {bookingData?.status || 'Confirmed'}
               </span>
@@ -215,8 +215,8 @@ function ManageBooking() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                 >
                   <tab.icon className="w-4 h-4 mr-2" />
@@ -232,41 +232,95 @@ function ManageBooking() {
               <div>
                 <h3 className="text-lg font-semibold mb-4">Flight Information</h3>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">PNR Number</label>
-                      <p className="text-lg font-semibold">{bookingData?.pnr || 'Not Available'}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                    <div className="border-r-0 sm:border-r border-gray-200 pr-0 sm:pr-4">
+                      <label className="text-sm font-medium text-gray-500 block mb-1">PNR Number</label>
+                      <p className="text-lg font-semibold font-mono text-blue-600">{bookingData?.pnr || 'Not Available'}</p>
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Booking Reference</label>
-                      <p className="text-lg font-semibold">{bookingData?.orderId || bookingData?.bookingReference}</p>
+                    <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-4">
+                      <label className="text-sm font-medium text-gray-500 block mb-1">Booking Reference</label>
+                      <p className="text-lg font-semibold font-mono">{bookingData?.orderId || bookingData?.bookingReference}</p>
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Amount Paid</label>
+                    <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-4">
+                      <label className="text-sm font-medium text-gray-500 block mb-1">Amount Paid</label>
                       <p className="text-lg font-semibold">${bookingData?.amount || 'N/A'}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-500">Transaction ID</label>
-                      <p className="text-lg font-semibold">{bookingData?.transactionId || 'N/A'}</p>
+                      <label className="text-sm font-medium text-gray-500 block mb-1">Transaction ID</label>
+                      <p className="text-lg font-semibold font-mono break-all">{bookingData?.transactionId || 'N/A'}</p>
                     </div>
                   </div>
 
                   {/* Flight Route Information */}
-                  <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-semibold mb-3">Flight Route</h4>
-                    <div className="flex items-center space-x-4">
-                      <div className="text-center">
-                        <div className="text-sm text-gray-500">From</div>
-                        <div className="font-semibold">Flight Details</div>
-                        <div className="text-sm text-gray-500">Available in flight data</div>
+                  <div className="mt-6 p-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
+                    <h4 className="font-semibold mb-4 text-gray-700">Flight Route</h4>
+                    <div className="flex items-center justify-between">
+                      {/* Departure */}
+                      <div className="text-center flex-1">
+                        <div className="text-3xl font-bold text-blue-600 mb-1">
+                          {bookingData?.origin || bookingData?.flight?.departureCity?.substring(0, 3)?.toUpperCase() || 'DEP'}
+                        </div>
+                        <div className="text-sm text-gray-600 font-medium">
+                          {bookingData?.originCity || bookingData?.flight?.departureCity || 'Departure City'}
+                        </div>
+                        <div className="text-lg font-semibold text-gray-800 mt-2">
+                          {bookingData?.departureTime || bookingData?.flight?.departureTime || '--:--'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date N/A'}
+                        </div>
                       </div>
-                      <Plane className="w-5 h-5 text-blue-500" />
-                      <div className="text-center">
-                        <div className="text-sm text-gray-500">To</div>
-                        <div className="font-semibold">Check confirmation</div>
-                        <div className="text-sm text-gray-500">for full details</div>
+
+                      {/* Flight Path */}
+                      <div className="flex-1 px-4 text-center">
+                        <div className="relative">
+                          <div className="border-t-2 border-dashed border-gray-300 w-full"></div>
+                          <Plane className="w-6 h-6 text-blue-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rotate-90" />
+                        </div>
+                        <div className="text-xs text-gray-500 mt-3">
+                          {bookingData?.duration || bookingData?.flight?.duration || 'Duration N/A'}
+                        </div>
+                        {(bookingData?.airline || bookingData?.flightNumber) && (
+                          <div className="text-sm font-medium text-gray-700 mt-1">
+                            {bookingData?.airlineName || bookingData?.airline || ''} {bookingData?.flightNumber || ''}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Arrival */}
+                      <div className="text-center flex-1">
+                        <div className="text-3xl font-bold text-blue-600 mb-1">
+                          {bookingData?.destination || bookingData?.flight?.arrivalCity?.substring(0, 3)?.toUpperCase() || 'ARR'}
+                        </div>
+                        <div className="text-sm text-gray-600 font-medium">
+                          {bookingData?.destinationCity || bookingData?.flight?.arrivalCity || 'Arrival City'}
+                        </div>
+                        <div className="text-lg font-semibold text-gray-800 mt-2">
+                          {bookingData?.arrivalTime || bookingData?.flight?.arrivalTime || '--:--'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date N/A'}
+                        </div>
                       </div>
                     </div>
+
+                    {/* Additional Flight Info */}
+                    {(bookingData?.cabinClass || bookingData?.passengers) && (
+                      <div className="flex justify-center gap-6 mt-4 pt-4 border-t border-gray-200">
+                        {bookingData?.cabinClass && (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500 block">Class</span>
+                            <span className="text-sm font-medium text-gray-700 capitalize">{bookingData.cabinClass.toLowerCase().replace('_', ' ')}</span>
+                          </div>
+                        )}
+                        {bookingData?.passengers && (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500 block">Passengers</span>
+                            <span className="text-sm font-medium text-gray-700">{bookingData.passengers}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -353,13 +407,13 @@ function ManageBooking() {
             <h4 className="font-semibold text-blue-800 mb-2">Need Help?</h4>
             <p className="text-blue-700 text-sm mb-3">Our customer support team is here to assist you with any questions about your booking.</p>
             <div className="flex flex-wrap gap-4">
-              <a href="tel:+1-800-123-4567" className="flex items-center text-blue-600 hover:text-blue-700">
+              <a href="tel:(877) 538-7380" className="flex items-center text-blue-600 hover:text-blue-700">
                 <Phone className="w-4 h-4 mr-1" />
-                +1-800-123-4567
+                (877) 538-7380
               </a>
-              <a href="mailto:support@jetsetgo.com" className="flex items-center text-blue-600 hover:text-blue-700">
+              <a href="mailto:support@jetsetterss.com" className="flex items-center text-blue-600 hover:text-blue-700">
                 <Mail className="w-4 h-4 mr-1" />
-                support@jetsetgo.com
+                support@jetsetterss.com
               </a>
             </div>
           </div>
@@ -414,12 +468,12 @@ function ManageBooking() {
             <div className="flex justify-between items-start mb-10 pb-8 border-b border-dashed border-gray-300">
               <div className="flex-1">
                 <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Flight</div>
-                <div className="text-xl font-bold text-[#055B75]">{bookingData?.flight?.airline || 'JetSetters Air'} {bookingData?.flight?.flightNumber || 'JS-001'}</div>
-                <div className="text-sm text-gray-600 mt-1">{bookingData?.flight?.cabin || 'Economy'} Class</div>
+                <div className="text-xl font-bold text-[#055B75]">{bookingData?.airlineName || bookingData?.airline || 'JetSetters Air'} {bookingData?.flightNumber || 'JS-001'}</div>
+                <div className="text-sm text-gray-600 mt-1">{bookingData?.cabinClass?.replace('_', ' ') || 'Economy'} Class</div>
               </div>
               <div className="flex-1 text-center">
                 <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Date</div>
-                <div className="text-xl font-bold">{new Date(bookingData?.flight?.departureDate || Date.now()).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                <div className="text-xl font-bold">{bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Date N/A'}</div>
               </div>
               <div className="flex-1 text-right">
                 <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Status</div>
@@ -427,13 +481,25 @@ function ManageBooking() {
               </div>
             </div>
 
+            {/* PNR and Reference Row */}
+            <div className="flex justify-between items-center mb-8 pb-6 border-b border-gray-200">
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">PNR Number</div>
+                <div className="text-2xl font-bold font-mono text-[#055B75]">{bookingData?.pnr || 'N/A'}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Transaction ID</div>
+                <div className="text-lg font-mono text-gray-700">{bookingData?.transactionId || 'N/A'}</div>
+              </div>
+            </div>
+
             {/* Route */}
             <div className="flex items-center justify-between mb-12">
               <div>
-                <div className="text-4xl font-bold text-[#055B75] mb-1">{bookingData?.flight?.departureCity?.substring(0, 3).toUpperCase() || 'DEP'}</div>
-                <div className="text-sm text-gray-500 font-medium">{bookingData?.flight?.departureCity || 'Departure City'}</div>
-                <div className="text-lg font-bold mt-2">{bookingData?.flight?.departureTime || '00:00'}</div>
-                <div className="text-xs text-gray-400">{bookingData?.flight?.departureAirport || 'Airport'}</div>
+                <div className="text-4xl font-bold text-[#055B75] mb-1">{bookingData?.origin || 'DEP'}</div>
+                <div className="text-sm text-gray-500 font-medium">{bookingData?.originCity || 'Departure City'}</div>
+                <div className="text-lg font-bold mt-2">{bookingData?.departureTime || '--:--'}</div>
+                <div className="text-xs text-gray-400">{bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''}</div>
               </div>
 
               <div className="flex-1 px-8 text-center relative">
@@ -441,14 +507,14 @@ function ManageBooking() {
                 <div className="bg-white px-2 inline-block">
                   <Plane className="w-6 h-6 text-[#055B75] transform rotate-90" />
                 </div>
-                <div className="text-xs text-gray-400 mt-2">{bookingData?.flight?.duration || 'Duration'}</div>
+                <div className="text-xs text-gray-400 mt-2">{bookingData?.duration || 'Direct'}</div>
               </div>
 
               <div className="text-right">
-                <div className="text-4xl font-bold text-[#055B75] mb-1">{bookingData?.flight?.arrivalCity?.substring(0, 3).toUpperCase() || 'ARR'}</div>
-                <div className="text-sm text-gray-500 font-medium">{bookingData?.flight?.arrivalCity || 'Arrival City'}</div>
-                <div className="text-lg font-bold mt-2">{bookingData?.flight?.arrivalTime || '00:00'}</div>
-                <div className="text-xs text-gray-400">{bookingData?.flight?.arrivalAirport || 'Airport'}</div>
+                <div className="text-4xl font-bold text-[#055B75] mb-1">{bookingData?.destination || 'ARR'}</div>
+                <div className="text-sm text-gray-500 font-medium">{bookingData?.destinationCity || 'Arrival City'}</div>
+                <div className="text-lg font-bold mt-2">{bookingData?.arrivalTime || '--:--'}</div>
+                <div className="text-xs text-gray-400">{bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''}</div>
               </div>
             </div>
 

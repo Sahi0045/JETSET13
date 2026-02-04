@@ -262,7 +262,7 @@ const ContactUs = () => {
                           value={formData.phone}
                           onChange={handleChange}
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#055B75] focus:border-transparent transition-all"
-                          placeholder="+1 (555) 123-4567"
+                          placeholder="+(877) 538-7380"
                         />
                       </div>
 
