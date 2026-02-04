@@ -4,8 +4,39 @@ import { Plane, Calendar, Clock, MapPin, User, Briefcase, Phone, Mail } from 'lu
 const FlightETicket = forwardRef(({ bookingData }, ref) => {
     if (!bookingData) return null;
 
-    const { bookingDetails, passengerData, calculatedFare } = bookingData;
-    const { flight } = bookingDetails;
+    // Support both nested structure (from success page) and flat structure (from manage booking)
+    const bookingDetails = bookingData.bookingDetails || bookingData;
+    const passengerData = bookingData.passengerData || bookingData.travelers || [];
+    const calculatedFare = bookingData.calculatedFare || {
+        totalAmount: bookingData.amount || bookingData.totalPrice || '0'
+    };
+
+    // Get flight data - handle both nested and direct structures
+    const flight = bookingDetails?.flight || bookingData.flight || {
+        airline: bookingData.airlineName || bookingData.airline || 'JetSetters Air',
+        flightNumber: bookingData.flightNumber || 'JS-001',
+        stops: bookingData.stops || 0,
+        cabin: bookingData.cabinClass || bookingData.cabin || 'Economy',
+        duration: bookingData.duration || 'Direct',
+        departureTime: bookingData.departureTime || '--:--',
+        departureCity: bookingData.originCity || bookingData.origin || 'Departure',
+        departureAirport: bookingData.origin || 'DEP',
+        departureDate: bookingData.departureDate || new Date().toISOString(),
+        departureTerminal: bookingData.departureTerminal || null,
+        arrivalTime: bookingData.arrivalTime || '--:--',
+        arrivalCity: bookingData.destinationCity || bookingData.destination || 'Arrival',
+        arrivalAirport: bookingData.destination || 'ARR',
+        arrivalDate: bookingData.arrivalDate || bookingData.departureDate || new Date().toISOString(),
+        arrivalTerminal: bookingData.arrivalTerminal || null
+    };
+
+    // Ensure bookingDetails has required fields
+    const safeBookingDetails = {
+        bookingId: bookingDetails?.bookingId || bookingData.orderId || bookingData.bookingReference || 'N/A',
+        status: bookingDetails?.status || bookingData.status || 'CONFIRMED',
+        pnr: bookingDetails?.pnr || bookingData.pnr || 'N/A',
+        baggage: bookingDetails?.baggage || { checkIn: '23KG' }
+    };
 
     // Format helpers
     const formatDate = (dateString) => {
@@ -33,14 +64,14 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                     </div>
                     <div className="text-right">
                         <h2 className="text-2xl font-bold uppercase tracking-widest">E-Ticket</h2>
-                        <p className="text-blue-200 mt-1">Booking Reference: <span className="text-white font-mono text-xl font-bold">{bookingDetails.bookingId}</span></p>
+                        <p className="text-blue-200 mt-1">Booking Reference: <span className="text-white font-mono text-xl font-bold">{safeBookingDetails.bookingId}</span></p>
                     </div>
                 </div>
 
                 {/* Status Strip */}
                 <div className="bg-[#034457] text-white px-8 py-2 flex justify-between items-center text-sm">
                     <span>Date of Issue: {new Date().toLocaleDateString()}</span>
-                    <span className="font-bold uppercase px-3 py-1 bg-green-500 rounded text-xs">{bookingDetails.status}</span>
+                    <span className="font-bold uppercase px-3 py-1 bg-green-500 rounded text-xs">{safeBookingDetails.status}</span>
                 </div>
 
                 <div className="p-8">
@@ -51,7 +82,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                 <Plane className="w-5 h-5 text-[#055B75]" />
                                 <span className="font-bold text-gray-700">Flight Details</span>
                             </div>
-                            <span className="text-sm text-gray-500 font-mono">PNR: {bookingDetails.pnr}</span>
+                            <span className="text-sm text-gray-500 font-mono">PNR: {safeBookingDetails.pnr}</span>
                         </div>
 
                         <div className="p-6">
@@ -128,7 +159,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                         </div>
                                         <div className="text-right">
                                             <span className="block text-xs text-gray-400 uppercase">Baggage</span>
-                                            <span className="font-medium text-gray-800">{bookingDetails.baggage.checkIn}</span>
+                                            <span className="font-medium text-gray-800">{safeBookingDetails.baggage.checkIn}</span>
                                         </div>
                                     </div>
                                 </div>
