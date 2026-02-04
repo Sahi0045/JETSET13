@@ -27,7 +27,7 @@ export default function HotelBookingSuccess() {
     const fetchBookingDetails = async () => {
       try {
         setLoading(true);
-        
+
         // Mock booking data - replace with actual API call
         const mockBookingData = {
           bookingReference: bookingReference,
@@ -38,7 +38,7 @@ export default function HotelBookingSuccess() {
             address: '123 Main Street, City Center',
             location: 'New York, NY',
             rating: 4.5,
-            phone: '+1 (555) 123-4567',
+            phone: '+(877) 538-7380',
             email: 'reservations@grandluxury.com',
             image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80'
           },
@@ -178,7 +178,7 @@ Booking Date: ${new Date(bookingDetails.bookingDate).toLocaleDateString()}
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar forceScrolled={true} />
-      
+
       <div className="pt-20 pb-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Success Header */}
@@ -250,7 +250,7 @@ Booking Date: ${new Date(bookingDetails.bookingDate).toLocaleDateString()}
             {/* Booking Summary */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="text-xl font-bold text-gray-900 mb-4">Booking Summary</h3>
-              
+
               {/* Stay Details */}
               <div className="mb-6">
                 <h4 className="font-medium text-gray-900 mb-3">Stay Details</h4>

@@ -235,41 +235,95 @@ function ManageBooking() {
               <div>
                 <h3 className="text-lg font-semibold mb-4">Flight Information</h3>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">PNR Number</label>
-                      <p className="text-lg font-semibold">{bookingData?.pnr || 'Not Available'}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                    <div className="border-r-0 sm:border-r border-gray-200 pr-0 sm:pr-4">
+                      <label className="text-sm font-medium text-gray-500 block mb-1">PNR Number</label>
+                      <p className="text-lg font-semibold font-mono text-blue-600">{bookingData?.pnr || 'Not Available'}</p>
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Booking Reference</label>
-                      <p className="text-lg font-semibold">{bookingData?.orderId || bookingData?.bookingReference}</p>
+                    <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-4">
+                      <label className="text-sm font-medium text-gray-500 block mb-1">Booking Reference</label>
+                      <p className="text-lg font-semibold font-mono">{bookingData?.orderId || bookingData?.bookingReference}</p>
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Amount Paid</label>
+                    <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-4">
+                      <label className="text-sm font-medium text-gray-500 block mb-1">Amount Paid</label>
                       <p className="text-lg font-semibold">${bookingData?.amount || 'N/A'}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-500">Transaction ID</label>
-                      <p className="text-lg font-semibold">{bookingData?.transactionId || 'N/A'}</p>
+                      <label className="text-sm font-medium text-gray-500 block mb-1">Transaction ID</label>
+                      <p className="text-lg font-semibold font-mono break-all">{bookingData?.transactionId || 'N/A'}</p>
                     </div>
                   </div>
 
                   {/* Flight Route Information */}
-                  <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-semibold mb-3">Flight Route</h4>
-                    <div className="flex items-center space-x-4">
-                      <div className="text-center">
-                        <div className="text-sm text-gray-500">From</div>
-                        <div className="font-semibold">Flight Details</div>
-                        <div className="text-sm text-gray-500">Available in flight data</div>
+                  <div className="mt-6 p-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
+                    <h4 className="font-semibold mb-4 text-gray-700">Flight Route</h4>
+                    <div className="flex items-center justify-between">
+                      {/* Departure */}
+                      <div className="text-center flex-1">
+                        <div className="text-3xl font-bold text-blue-600 mb-1">
+                          {bookingData?.origin || bookingData?.flight?.departureCity?.substring(0, 3)?.toUpperCase() || 'DEP'}
+                        </div>
+                        <div className="text-sm text-gray-600 font-medium">
+                          {bookingData?.originCity || bookingData?.flight?.departureCity || 'Departure City'}
+                        </div>
+                        <div className="text-lg font-semibold text-gray-800 mt-2">
+                          {bookingData?.departureTime || bookingData?.flight?.departureTime || '--:--'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date N/A'}
+                        </div>
                       </div>
-                      <Plane className="w-5 h-5 text-blue-500" />
-                      <div className="text-center">
-                        <div className="text-sm text-gray-500">To</div>
-                        <div className="font-semibold">Check confirmation</div>
-                        <div className="text-sm text-gray-500">for full details</div>
+
+                      {/* Flight Path */}
+                      <div className="flex-1 px-4 text-center">
+                        <div className="relative">
+                          <div className="border-t-2 border-dashed border-gray-300 w-full"></div>
+                          <Plane className="w-6 h-6 text-blue-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rotate-90" />
+                        </div>
+                        <div className="text-xs text-gray-500 mt-3">
+                          {bookingData?.duration || bookingData?.flight?.duration || 'Duration N/A'}
+                        </div>
+                        {(bookingData?.airline || bookingData?.flightNumber) && (
+                          <div className="text-sm font-medium text-gray-700 mt-1">
+                            {bookingData?.airlineName || bookingData?.airline || ''} {bookingData?.flightNumber || ''}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Arrival */}
+                      <div className="text-center flex-1">
+                        <div className="text-3xl font-bold text-blue-600 mb-1">
+                          {bookingData?.destination || bookingData?.flight?.arrivalCity?.substring(0, 3)?.toUpperCase() || 'ARR'}
+                        </div>
+                        <div className="text-sm text-gray-600 font-medium">
+                          {bookingData?.destinationCity || bookingData?.flight?.arrivalCity || 'Arrival City'}
+                        </div>
+                        <div className="text-lg font-semibold text-gray-800 mt-2">
+                          {bookingData?.arrivalTime || bookingData?.flight?.arrivalTime || '--:--'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date N/A'}
+                        </div>
                       </div>
                     </div>
+
+                    {/* Additional Flight Info */}
+                    {(bookingData?.cabinClass || bookingData?.passengers) && (
+                      <div className="flex justify-center gap-6 mt-4 pt-4 border-t border-gray-200">
+                        {bookingData?.cabinClass && (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500 block">Class</span>
+                            <span className="text-sm font-medium text-gray-700 capitalize">{bookingData.cabinClass.toLowerCase().replace('_', ' ')}</span>
+                          </div>
+                        )}
+                        {bookingData?.passengers && (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500 block">Passengers</span>
+                            <span className="text-sm font-medium text-gray-700">{bookingData.passengers}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -356,13 +410,13 @@ function ManageBooking() {
             <h4 className="font-semibold text-blue-800 mb-2">Need Help?</h4>
             <p className="text-blue-700 text-sm mb-3">Our customer support team is here to assist you with any questions about your booking.</p>
             <div className="flex flex-wrap gap-4">
-              <a href="tel:+1-800-123-4567" className="flex items-center text-blue-600 hover:text-blue-700">
+              <a href="tel:(877) 538-7380" className="flex items-center text-blue-600 hover:text-blue-700">
                 <Phone className="w-4 h-4 mr-1" />
-                +1-800-123-4567
+                (877) 538-7380
               </a>
-              <a href="mailto:support@jetsetgo.com" className="flex items-center text-blue-600 hover:text-blue-700">
+              <a href="mailto:support@jetsetterss.com" className="flex items-center text-blue-600 hover:text-blue-700">
                 <Mail className="w-4 h-4 mr-1" />
-                support@jetsetgo.com
+                support@jetsetterss.com
               </a>
             </div>
           </div>
