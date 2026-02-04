@@ -95,7 +95,7 @@ function FlightPayment() {
           paymentData?.bookingDetails?.flight?.price?.total ||
           paymentData?.selectedFlight?.price?.total ||
           paymentData?.selectedFlight?.price?.amount ||
-          paymentData?.amount;
+          paymentData?.amount || 100;
 
         // Extract flight details from bookingDetails or selectedFlight
         const flightDetails = paymentData?.bookingDetails?.flight || {};

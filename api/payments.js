@@ -2,38 +2,6 @@ import { createClient } from '@supabase/supabase-js';
 import { normalizeCountryCode, normalizeBillingAddress } from './utils/countryCodeNormalizer.js';
 import { sendBookingNotificationEmails } from '../backend/services/emailService.js';
 
-// Helper function to parse various date formats and return YYYY-MM-DD
-function parseToISODate(dateValue) {
-  if (!dateValue) return new Date().toISOString().split('T')[0];
-
-  // Already in YYYY-MM-DD format (10 chars)
-  if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-    return dateValue;
-  }
-
-  // ISO datetime format "2026-02-03T18:10:00"
-  if (typeof dateValue === 'string' && dateValue.includes('T')) {
-    return dateValue.split('T')[0];
-  }
-
-  // Try to parse human-readable formats like "Fri, Feb 6" or "Friday, February 6, 2026"
-  try {
-    const parsed = new Date(dateValue);
-    if (!isNaN(parsed.getTime())) {
-      // If the year is missing or very old, use current year
-      if (parsed.getFullYear() < 2000) {
-        parsed.setFullYear(new Date().getFullYear());
-      }
-      return parsed.toISOString().split('T')[0];
-    }
-  } catch (e) {
-    // Parsing failed
-  }
-
-  // Fallback to today's date
-  return new Date().toISOString().split('T')[0];
-}
-
 // Initialize Supabase client with proper error handling
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
@@ -1943,6 +1911,8 @@ async function handleHostedCheckout(req, res) {
           billingAddress: 'MANDATORY',  // Required for 3DS2 - ensures billing data is collected
           customerEmail: 'MANDATORY'    // Required for 3DS2 risk assessment
         },
+        // Removed action.3DSecure: 'MANDATORY' - was causing payment failures
+        // Let gateway decide when to trigger 3DS based on transaction risk
         timeout: 900
       },
       order: {
@@ -1952,97 +1922,59 @@ async function handleHostedCheckout(req, res) {
         currency: currency,
         description: `Flight Booking ${orderId}`
       }
-      // NOTE: 3DS is handled automatically by ARC Pay's Hosted Checkout based on merchant profile settings
-      // No explicit 3DS parameters needed for INITIATE_CHECKOUT operation
+      // Removed authentication.challengePreference - was forcing 3DS challenge
+      // Will re-enable after basic payment works
     };
 
-    // ARC Pay Certification: Required Airline Data for Card Brand Interchange
-    // Reference: ARC Pay Certification Email Requirements
-    // NOTE: Set ARC_ENABLE_AIRLINE_DATA=true in environment to enable airline data
-    const enableAirlineData = process.env.ARC_ENABLE_AIRLINE_DATA === 'true';
-
-    if (bookingType === 'flight' && enableAirlineData) {
+    // TEMP DISABLED: Add airline data for flight bookings (Required for ARC Pay Certification)
+    // ISSUE: Carrier names with spaces (e.g. "AIR INDIA") are rejected by ARC Pay API
+    // Will re-enable after fixing
+    /*
+    if (bookingType === 'flight') {
       try {
-        console.log('🔍 Processing airline data for ARC Pay certification...');
-
+        console.log('🔍 Processing airline data...');
+        
         // Extract flight details from flightData or bookingData
         const flight = flightData || bookingData?.selectedFlight || bookingData?.flightData || {};
         const itinerary = flight?.itineraries?.[0] || flight?.itinerary || {};
-        const segments = Array.isArray(itinerary?.segments) ? itinerary.segments :
-          Array.isArray(flight?.segments) ? flight.segments : [];
+        const segments = Array.isArray(itinerary?.segments) ? itinerary.segments : 
+                        Array.isArray(flight?.segments) ? flight.segments : [];
         const firstSegment = segments[0] || {};
         const lastSegment = segments[segments.length - 1] || firstSegment;
-
-        console.log('   Segments count:', segments.length);
-
-        // Travel Agent Info - Required by ARC Pay
-        const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || 'JETSET001';
-        const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'Jetsetters';
+        
+        console.log('   segments count:', segments.length);
 
         // Get passenger info - format as array per ARC Pay docs
-        const passengers = bookingData?.passengerData || bookingData?.travelers || [];
-        const passengerList = passengers.length > 0
+        const passengers = bookingData?.passengerData || [];
+        const passengerList = passengers.length > 0 
           ? passengers.map(p => ({
-            firstName: (p.firstName || p.name?.firstName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
-            lastName: (p.lastName || p.name?.lastName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
-          }))
+              firstName: (p.firstName || '').toUpperCase(),
+              lastName: (p.lastName || '').toUpperCase()
+            }))
           : [{
-            firstName: (firstName || 'GUEST').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
-            lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
-          }];
+              firstName: (firstName || 'GUEST').toUpperCase(),
+              lastName: (lastName || 'PASSENGER').toUpperCase()
+            }];
 
-        // Helper function to extract time from ISO string
-        const extractTime = (isoString) => {
-          if (!isoString) return '00:00';
-          const timePart = isoString.split('T')[1];
-          return timePart ? timePart.substring(0, 5) : '00:00';
-        };
-
-        // Map cabin class to ARC Pay class of service
-        const mapCabinClass = (cabinClass) => {
-          if (!cabinClass) return 'Y'; // Default to Economy
-          const classUpper = cabinClass.toUpperCase();
-          if (classUpper.includes('PREMIUM') || classUpper.includes('BUSINESS') || classUpper === 'W' ||
-            classUpper.includes('FIRST')) {
-            return 'W'; // Premium Economy / Business / First
-          }
-          return 'Y'; // Economy
-        };
-
-        // Build leg array with ALL required fields per ARC Pay certification
-        const legArray = segments.length > 0
-          ? segments.map((segment, index) => {
-            // Get carrier code - ONLY 2 characters, IATA code
-            const carrierCode = (segment?.carrierCode || segment?.operating?.carrierCode || 'XD').substring(0, 2);
-
-            return {
-              carrierCode: carrierCode,
-              classOfService: mapCabinClass(segment?.cabin || flight?.cabin || bookingData?.cabinClass),
-              departureAirport: (segment?.departure?.iataCode || 'XXX').substring(0, 3),
+        // Build leg array - only required fields per ARC Pay docs (NO departureTime!)
+        const legArray = segments.length > 0 
+          ? segments.map((segment) => ({
+              carrierCode: (segment?.carrierCode || segment?.operating?.carrierCode || 'XX').substring(0, 2),
+              departureAirport: segment?.departure?.iataCode || 'XXX',
               departureDate: (segment?.departure?.at || new Date().toISOString()).split('T')[0],
-              departureTime: extractTime(segment?.departure?.at),
-              destinationAirport: (segment?.arrival?.iataCode || 'XXX').substring(0, 3),
-              flightNumber: String(segment?.number || segment?.flightNumber || index + 1).substring(0, 6)
-            };
-          })
+              destinationAirport: segment?.arrival?.iataCode || 'XXX'
+            }))
           : [{
-            carrierCode: 'XD', // Default carrier code as per ARC Pay requirement "889 or XD"
-            classOfService: 'Y',
-            departureAirport: (flight?.origin || bookingData?.origin || 'XXX').substring(0, 3),
-            departureDate: new Date().toISOString().split('T')[0],
-            departureTime: '00:00',
-            destinationAirport: (flight?.destination || bookingData?.destination || 'XXX').substring(0, 3),
-            flightNumber: '001'
-          }];
+              carrierCode: 'XX',
+              departureAirport: flight?.origin || bookingData?.origin || 'XXX',
+              departureDate: new Date().toISOString().split('T')[0],
+              destinationAirport: flight?.destination || bookingData?.destination || 'XXX'
+            }];
 
-        // Generate ticket number and booking reference
-        const ticketNumber = `889${Date.now().toString().slice(-10)}`.substring(0, 13);
-        const bookingReference = (flight?.pnr || flight?.bookingReference || orderId || '').toString().substring(0, 6).toUpperCase() || 'JETSET';
-
-        // Build airline object matching ARC Pay certification requirements exactly
+        // Build airline object matching official ARC Pay documentation format exactly
         requestBody.airline = {
-          bookingReference: bookingReference,
-          documentType: 'MCO', // MCO recommended per ARC Pay certification email
+          bookingReference: (flight?.pnr || flight?.bookingReference || orderId).substring(0, 6).toUpperCase(),
+          documentType: 'PASSENGER_TICKET',
           itinerary: {
             leg: legArray,
             numberInParty: String(passengerList.length)
@@ -2050,28 +1982,27 @@ async function handleHostedCheckout(req, res) {
           passenger: passengerList,
           ticket: {
             issue: {
-              carrierCode: legArray[0]?.carrierCode || 'XD',
-              carrierName: 'JETSETTERS', // Use DBA name, no spaces in airline-style format
-              city: 'ONLINE',
+              carrierCode: legArray[0]?.carrierCode || 'XX',
+              carrierName: flight?.carrierName || 'Airline',
+              city: 'Online',
               country: 'USA',
-              date: new Date().toISOString().split('T')[0],
-              travelAgentCode: travelAgentCode,
-              travelAgentName: travelAgentName.toUpperCase().replace(/[^A-Z0-9\s]/g, '').substring(0, 25)
+              date: new Date().toISOString().split('T')[0]
             },
-            ticketNumber: ticketNumber,
+            ticketNumber: `T${orderId}`.substring(0, 14),
             totalFare: parseFloat(amount).toFixed(2),
             totalFees: '0.00',
             totalTaxes: '0.00'
           }
         };
 
-        console.log('✈️ ARC Pay Certification - Airline Data:', JSON.stringify(requestBody.airline, null, 2));
-
+        console.log('✈️ Airline data for ARC Pay:', JSON.stringify(requestBody.airline, null, 2));
+        
       } catch (airlineError) {
         console.error('⚠️ Error constructing airline data:', airlineError);
-        // Don't fail the request - airline data is for interchange optimization but not blocking
+        // Don't add airline data if construction fails - it's optional for hosted checkout
       }
     }
+    */
 
     // Add customer info if available
     if (customerEmail) {
