@@ -361,6 +361,7 @@ function FlightBookingConfirmation() {
         title: "Mr",
         firstName: "",
         lastName: "",
+        dateOfBirth: "",
         seatNumber: "",
         meal: "Regular",
         baggage: "15 Kg",
@@ -478,6 +479,7 @@ function FlightBookingConfirmation() {
       title: "Mr",
       firstName: "",
       lastName: "",
+      dateOfBirth: "",
       seatNumber: "",
       meal: "Regular",
       baggage: "15 Kg",
@@ -539,7 +541,7 @@ function FlightBookingConfirmation() {
   const handleProceedToPayment = async () => {
     // Validate passenger data
     const isPassengerDataValid = passengerData.every(p =>
-      p.firstName && p.lastName && p.mobile
+      p.firstName && p.lastName && p.mobile && p.dateOfBirth
     );
 
     if (!isPassengerDataValid) {
@@ -708,9 +710,10 @@ function FlightBookingConfirmation() {
 
       <div className="booking-confirmation-container pt-24">
         {/* Header Banner */}
+        {/* Header Banner */}
         <div className="booking-header-banner">
-          <h1 className="text-3xl font-bold">Your Journey Begins Here</h1>
-          <p className="opacity-90">Confirm your details below and get ready for takeoff ✈️</p>
+          <h1>Your Journey Begins Here</h1>
+          <p>Confirm your details below and get ready for takeoff ✈️</p>
         </div>
 
         <div className="booking-layout grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -718,52 +721,50 @@ function FlightBookingConfirmation() {
           <div className="lg:col-span-2">
 
             {/* Flight Details Card (Boarding Pass Style) */}
-            <div className="booking-card flight-card mb-8">
+            <div className="booking-card flight-card">
               <div className="booking-card-header">
                 <h2>
-                  <span className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold">
-                      {bookingDetails?.flight?.airline?.substring(0, 2).toUpperCase() || "JS"}
-                    </div>
-                    {bookingDetails?.flight?.airline || 'JetSetters Airlines'}
-                    <span className="text-sm font-normal opacity-80 border-l pl-2 ml-2 border-white/30 hidden sm:inline-block">
-                      Flight {bookingDetails?.flight?.flightNumber}
-                    </span>
+                  <div className="airline-logo-placeholder">
+                    {bookingDetails?.flight?.airline?.substring(0, 2).toUpperCase() || "JS"}
+                  </div>
+                  {bookingDetails?.flight?.airline || 'JetSetters Airlines'}
+                  <span className="opacity-70 font-normal ml-2 text-sm">
+                    #{bookingDetails?.flight?.flightNumber}
                   </span>
                 </h2>
-                <span className="bg-[#e6f2f7] px-4 py-1.5 rounded-full text-xs font-bold text-[#055B75] tracking-wide">
+                <span className="cabin-class-badge">
                   {bookingDetails?.flight?.cabin || 'Economy Class'}
                 </span>
               </div>
 
-              <div className="booking-card-body p-0">
+              <div className="booking-card-body">
                 <div className="flight-route">
-                  <div className="flight-endpoint text-left">
+                  <div className="flight-endpoint">
                     <div className="city-code">{bookingDetails?.flight?.departureCity?.substring(0, 3).toUpperCase()}</div>
-                    <div className="city-name text-sm">{bookingDetails?.flight?.departureCity}</div>
-                    <div className="text-xl font-bold mt-1 text-[#626363]">{bookingDetails?.flight?.departureTime}</div>
-                    <div className="text-xs text-[#7F8073] mt-1 line-clamp-1 max-w-[120px]" title={bookingDetails?.flight?.departureAirport}>
+                    <div className="city-name">{bookingDetails?.flight?.departureCity}</div>
+                    <div className="time">{bookingDetails?.flight?.departureTime}</div>
+                    <div className="airport" title={bookingDetails?.flight?.departureAirport}>
                       {typeof bookingDetails?.flight?.departureAirport === 'string' ? bookingDetails.flight.departureAirport.split('(')[0] : 'Departure Airport'}
                     </div>
                   </div>
 
                   <div className="flight-path">
-                    <div className="text-xs font-medium text-[#7F8073] mb-2 tracking-widest uppercase">
+                    <div className="duration">
                       {formatDuration(bookingDetails?.flight?.duration)}
                     </div>
                     <div className="path-line">
                       <div className="plane-icon">✈</div>
                     </div>
-                    <div className="text-xs font-semibold text-[#65B3CF] mt-2">
+                    <div className="stops-label">
                       {bookingDetails?.flight?.stops === "0" ? "Direct Flight" : `${bookingDetails?.flight?.stops} Stopover(s)`}
                     </div>
                   </div>
 
-                  <div className="flight-endpoint text-right">
+                  <div className="flight-endpoint">
                     <div className="city-code">{bookingDetails?.flight?.arrivalCity?.substring(0, 3).toUpperCase()}</div>
-                    <div className="city-name text-sm">{bookingDetails?.flight?.arrivalCity}</div>
-                    <div className="text-xl font-bold mt-1 text-[#626363]">{bookingDetails?.flight?.arrivalTime}</div>
-                    <div className="text-xs text-[#7F8073] mt-1 line-clamp-1 max-w-[120px] ml-auto" title={bookingDetails?.flight?.arrivalAirport}>
+                    <div className="city-name">{bookingDetails?.flight?.arrivalCity}</div>
+                    <div className="time">{bookingDetails?.flight?.arrivalTime}</div>
+                    <div className="airport" title={bookingDetails?.flight?.arrivalAirport}>
                       {typeof bookingDetails?.flight?.arrivalAirport === 'string' ? bookingDetails.flight.arrivalAirport.split('(')[0] : 'Arrival Airport'}
                     </div>
                   </div>
@@ -879,6 +880,17 @@ function FlightBookingConfirmation() {
                           placeholder="Surname"
                           value={passenger.lastName}
                           onChange={(e) => handlePassengerChange(passenger.id, 'lastName', e.target.value)}
+                          readOnly={!editMode}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Date of Birth <span className="required">*</span></label>
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={passenger.dateOfBirth}
+                          onChange={(e) => handlePassengerChange(passenger.id, 'dateOfBirth', e.target.value)}
                           readOnly={!editMode}
                           required
                         />
@@ -1172,9 +1184,11 @@ function FlightBookingConfirmation() {
                   Proceed to Payment <CheckCircle className="h-5 w-5" />
                 </button>
 
-                <div className="mt-4 flex items-center justify-center gap-2 text-xs text-[#7F8073]">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                  Secure Payment via ARC Pay
+                <div className="secure-payment-badge">
+                  <span className="flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    Secure Payment via ARC Pay
+                  </span>
                 </div>
               </div>
             </div>

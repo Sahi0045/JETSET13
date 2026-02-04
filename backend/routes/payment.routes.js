@@ -416,11 +416,13 @@ async function handleHostedCheckout(req, res) {
                 const passengerList = passengers.length > 0
                     ? passengers.map(p => ({
                         firstName: (p.firstName || p.name?.firstName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
-                        lastName: (p.lastName || p.name?.lastName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
+                        lastName: (p.lastName || p.name?.lastName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
+                        dateOfBirth: p.dateOfBirth || p.dob || null
                     }))
                     : [{
                         firstName: (firstName || 'GUEST').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
-                        lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
+                        lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
+                        dateOfBirth: null
                     }];
 
                 // Helper functions
