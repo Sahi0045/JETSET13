@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Check, Download, Printer, Share2, Copy, ArrowLeft } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
+import FlightETicket from './FlightETicket';
 
 export default function FlightBookingSuccess() {
   const location = useLocation();
@@ -10,6 +13,8 @@ export default function FlightBookingSuccess() {
   const [bookingData, setBookingData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showCopiedMsg, setShowCopiedMsg] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const ticketRef = React.useRef(null);
 
   useEffect(() => {
     // Get booking data from location state
@@ -26,9 +31,35 @@ export default function FlightBookingSuccess() {
     window.print();
   };
 
-  const handleDownloadTicket = () => {
-    // In a real app, this would generate and download a PDF
-    alert('Ticket would be downloaded as PDF in a real application');
+  const handleDownloadTicket = async () => {
+    if (!ticketRef.current) return;
+
+    setIsGenerating(true);
+    try {
+      const element = ticketRef.current;
+      const canvas = await html2canvas(element, {
+        scale: 2, // Higher quality
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      const imgProps = pdf.getImageProperties(imgData);
+      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+      pdf.save(`JetSetters_Ticket_${bookingData.bookingDetails.bookingId}.pdf`);
+    } catch (error) {
+      console.error('Error generating ticket:', error);
+      alert('Failed to generate ticket. Please try again.');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleShareTicket = () => {
@@ -70,18 +101,18 @@ export default function FlightBookingSuccess() {
   return (
     <div className="bg-gray-50 min-h-screen">
       <Navbar />
-      
+
       <div className="container mx-auto px-4 pt-24 pb-10">
         <div className="flex items-center mb-6">
-          <button 
-            onClick={() => navigate(-1)} 
+          <button
+            onClick={() => navigate(-1)}
             className="flex items-center text-gray-600 hover:text-blue-600"
           >
             <ArrowLeft className="w-4 h-4 mr-1" />
             <span>Back</span>
           </button>
         </div>
-        
+
         {/* Booking Success Banner */}
         <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
           <div className="flex flex-col md:flex-row items-center">
@@ -96,8 +127,8 @@ export default function FlightBookingSuccess() {
               <div className="flex items-center justify-center md:justify-start">
                 <div className="font-medium text-gray-700 mr-2">Booking ID:</div>
                 <div className="font-bold">{bookingData.bookingDetails.bookingId}</div>
-                <button 
-                  onClick={copyBookingId} 
+                <button
+                  onClick={copyBookingId}
                   className="text-blue-600 ml-2 p-1 hover:bg-blue-50 rounded transition-colors"
                 >
                   <Copy className="w-4 h-4" />
@@ -109,7 +140,7 @@ export default function FlightBookingSuccess() {
             </div>
           </div>
         </div>
-        
+
         <div className="flex flex-wrap -mx-3">
           {/* Left Column - Ticket Details */}
           <div className="w-full lg:w-2/3 px-3 mb-6">
@@ -117,19 +148,24 @@ export default function FlightBookingSuccess() {
               <div className="px-6 py-4 bg-blue-600 flex justify-between items-center">
                 <h2 className="text-xl font-bold text-white">E-Ticket</h2>
                 <div className="flex space-x-2">
-                  <button 
+                  <button
                     onClick={handlePrintTicket}
                     className="bg-white text-blue-600 p-2 rounded hover:bg-blue-50 transition-colors"
                   >
                     <Printer className="w-5 h-5" />
                   </button>
-                  <button 
+                  <button
                     onClick={handleDownloadTicket}
-                    className="bg-white text-blue-600 p-2 rounded hover:bg-blue-50 transition-colors"
+                    disabled={isGenerating}
+                    className="bg-white text-blue-600 p-2 rounded hover:bg-blue-50 transition-colors disabled:opacity-50"
                   >
-                    <Download className="w-5 h-5" />
+                    {isGenerating ? (
+                      <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <Download className="w-5 h-5" />
+                    )}
                   </button>
-                  <button 
+                  <button
                     onClick={handleShareTicket}
                     className="bg-white text-blue-600 p-2 rounded hover:bg-blue-50 transition-colors"
                   >
@@ -137,7 +173,7 @@ export default function FlightBookingSuccess() {
                   </button>
                 </div>
               </div>
-              
+
               <div className="p-6">
                 {/* Flight Information */}
                 <div className="mb-6 pb-6 border-b border-gray-200">
@@ -149,11 +185,11 @@ export default function FlightBookingSuccess() {
                       {bookingData.bookingDetails.status.toUpperCase()}
                     </div>
                   </div>
-                  
+
                   <div className="text-sm text-gray-600 mb-4">
                     {formatDate(bookingData.bookingDetails.flight.departureDate)}
                   </div>
-                  
+
                   <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
                     <div className="flex items-center mb-4 md:mb-0">
                       <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center mr-3">
@@ -166,12 +202,12 @@ export default function FlightBookingSuccess() {
                         <div className="text-sm text-gray-600">{bookingData.bookingDetails.flight.flightNumber}</div>
                       </div>
                     </div>
-                    
+
                     <div className="text-sm">
                       <span className="font-medium">PNR:</span> {bookingData.bookingDetails.pnr}
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-12 gap-4">
                     {/* Departure */}
                     <div className="col-span-5">
@@ -179,7 +215,7 @@ export default function FlightBookingSuccess() {
                       <div className="text-gray-700">{bookingData.bookingDetails.flight.departureCity}</div>
                       <div className="text-sm text-gray-600">{bookingData.bookingDetails.flight.departureAirport}</div>
                     </div>
-                    
+
                     {/* Flight Duration */}
                     <div className="col-span-2 flex flex-col items-center justify-center">
                       <div className="text-sm text-gray-600">{bookingData.bookingDetails.flight.duration}</div>
@@ -191,7 +227,7 @@ export default function FlightBookingSuccess() {
                         {bookingData.bookingDetails.flight.stops === 0 ? 'Non-stop' : `${bookingData.bookingDetails.flight.stops} stop`}
                       </div>
                     </div>
-                    
+
                     {/* Arrival */}
                     <div className="col-span-5">
                       <div className="text-2xl font-bold">{bookingData.bookingDetails.flight.arrivalTime}</div>
@@ -200,11 +236,11 @@ export default function FlightBookingSuccess() {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Passenger Details */}
                 <div className="mb-6 pb-6 border-b border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">Passenger Details</h3>
-                  
+
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
@@ -252,28 +288,28 @@ export default function FlightBookingSuccess() {
                     </table>
                   </div>
                 </div>
-                
+
                 {/* Baggage Information */}
                 <div className="mb-6 pb-6 border-b border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-800 mb-3">Baggage Information</h3>
-                  
+
                   <div className="flex flex-col md:flex-row gap-4">
                     <div className="flex-1 bg-gray-50 p-4 rounded border border-gray-200">
                       <div className="font-medium mb-1">Cabin Baggage</div>
                       <div className="text-sm text-gray-600">{bookingData.bookingDetails.baggage.cabin}</div>
                     </div>
-                    
+
                     <div className="flex-1 bg-gray-50 p-4 rounded border border-gray-200">
                       <div className="font-medium mb-1">Check-in Baggage</div>
                       <div className="text-sm text-gray-600">{bookingData.bookingDetails.baggage.checkIn}</div>
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Contact Information */}
                 <div>
                   <h3 className="text-lg font-semibold text-gray-800 mb-3">Contact Information</h3>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <div className="text-sm text-gray-600">Mobile</div>
@@ -288,45 +324,45 @@ export default function FlightBookingSuccess() {
               </div>
             </div>
           </div>
-          
+
           {/* Right Column - Payment Summary */}
           <div className="w-full lg:w-1/3 px-3">
             <div className="bg-white rounded-lg shadow-md border border-gray-200 mb-6">
               <div className="p-4 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-800">Payment Summary</h2>
               </div>
-              
+
               <div className="p-4">
                 <div className="mb-4 pb-4 border-b border-gray-200">
                   <div className="flex justify-between items-center mb-2">
                     <div className="text-gray-600">Payment Method</div>
                     <div className="font-medium">
-                      {bookingData.paymentMethod === "creditCard" ? "Credit Card" : 
-                       bookingData.paymentMethod === "upi" ? "UPI" : 
-                       bookingData.paymentMethod === "netBanking" ? "Net Banking" : 
-                       bookingData.paymentMethod === "wallet" ? "Wallet" : 
-                       bookingData.paymentMethod === "paypal" ? "PayPal" : "Credit Card"}
+                      {bookingData.paymentMethod === "creditCard" ? "Credit Card" :
+                        bookingData.paymentMethod === "upi" ? "UPI" :
+                          bookingData.paymentMethod === "netBanking" ? "Net Banking" :
+                            bookingData.paymentMethod === "wallet" ? "Wallet" :
+                              bookingData.paymentMethod === "paypal" ? "PayPal" : "Credit Card"}
                     </div>
                   </div>
-                  
+
                   {bookingData.paymentMethod === "creditCard" && bookingData.paymentDetails && (
                     <div className="text-sm text-gray-500 flex justify-end items-center">
                       {bookingData.paymentDetails.cardNumber}
                     </div>
                   )}
-                  
+
                   {bookingData.paymentMethod === "upi" && bookingData.paymentDetails && (
                     <div className="text-sm text-gray-500 flex justify-end items-center">
                       {bookingData.paymentDetails.upiId}
                     </div>
                   )}
-                  
+
                   <div className="flex justify-between items-center mt-2">
                     <div className="text-gray-600">Status</div>
                     <div className="text-green-600 font-medium">Paid</div>
                   </div>
                 </div>
-                
+
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between items-center">
                     <div className="text-gray-600">Base Fare</div>
@@ -336,14 +372,14 @@ export default function FlightBookingSuccess() {
                     <div className="text-gray-600">Taxes & Fees</div>
                     <div>₹{bookingData.calculatedFare.tax}</div>
                   </div>
-                  
+
                   {bookingData.calculatedFare.addonsTotal > 0 && (
                     <div className="flex justify-between items-center">
                       <div className="text-gray-600">Add-ons</div>
                       <div>₹{bookingData.calculatedFare.addonsTotal}</div>
                     </div>
                   )}
-                  
+
                   {bookingData.calculatedFare.vipServiceFee > 0 && (
                     <div className="flex justify-between items-center">
                       <div className="text-gray-600">VIP Service</div>
@@ -351,7 +387,7 @@ export default function FlightBookingSuccess() {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="border-t border-gray-200 pt-4">
                   <div className="flex justify-between items-center">
                     <div className="font-semibold text-gray-800">Total Amount</div>
@@ -360,13 +396,13 @@ export default function FlightBookingSuccess() {
                 </div>
               </div>
             </div>
-            
+
             {/* Important Information */}
             <div className="bg-white rounded-lg shadow-md border border-gray-200">
               <div className="p-4 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-800">Important Information</h2>
               </div>
-              
+
               <div className="p-4">
                 <ul className="space-y-4">
                   <li className="flex">
@@ -415,8 +451,13 @@ export default function FlightBookingSuccess() {
           </div>
         </div>
       </div>
-      
+
       <Footer />
+
+      {/* Hidden container for PDF Generation */}
+      <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
+        <FlightETicket ref={ticketRef} bookingData={bookingData} />
+      </div>
     </div>
   );
 } 

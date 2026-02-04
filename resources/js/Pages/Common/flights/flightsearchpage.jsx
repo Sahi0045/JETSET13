@@ -517,6 +517,7 @@ function FlightSearchPage() {
           flightNumber: flight.flightNumber,
           refundable: flight.refundable || false,
           seats: flight.seats || 'Available',
+          stopDetails: flight.stopDetails || [], // Preserve stop details from API
           segments: [{
             departure: {
               time: flight.departure.time,
@@ -586,6 +587,7 @@ function FlightSearchPage() {
           flightNumber: flight.flightNumber,
           refundable: flight.refundable || false,
           seats: flight.seats || 0,
+          stopDetails: flight.stopDetails || [], // Preserve stop details from API
           segments: [{
             departure: {
               time: flight.departure.time,
@@ -614,6 +616,66 @@ function FlightSearchPage() {
         };
       }
     });
+  };
+
+  // Render stop details with tooltip
+  const renderStopDetails = (flight) => {
+    if (flight.stops === 0) {
+      return <span className="text-green-600 font-medium">Non-stop</span>;
+    }
+
+    // Use stopDetails from API if available, otherwise try to calculate from segments
+    let layovers = [];
+
+    if (flight.stopDetails && flight.stopDetails.length > 0) {
+      // Use pre-calculated stop details from API
+      layovers = flight.stopDetails.map(stop => ({
+        code: stop.airport,
+        cityName: cityMap[stop.airport] || stop.airport,
+        duration: stop.duration || 'N/A'
+      }));
+    } else if (flight.segments && flight.segments.length > 1) {
+      // Fallback: Calculate layovers from segments
+      layovers = flight.segments.slice(0, -1).map((seg, i) => {
+        const nextSeg = flight.segments[i + 1];
+        const arrival = new Date(seg.arrival.at);
+        const departure = new Date(nextSeg.departure.at);
+        const diffMs = departure - arrival;
+        const hours = Math.floor(diffMs / 3600000);
+        const mins = Math.floor((diffMs % 3600000) / 60000);
+        return {
+          code: seg.arrival.airport,
+          cityName: seg.arrival.cityName || cityMap[seg.arrival.airport] || seg.arrival.airport,
+          duration: `${hours}h ${mins > 0 ? mins + 'm' : ''}`
+        };
+      });
+    }
+
+    return (
+      <div className="relative group cursor-pointer inline-block z-20">
+        <span className="text-orange-600 font-medium border-b border-dashed border-orange-300 hover:border-orange-600 transition-colors">
+          {flight.stops} {flight.stops === 1 ? 'stop' : 'stops'}
+          {layovers.length > 0 && <span className="text-xs ml-1 text-gray-500">via {layovers[0].code}</span>}
+        </span>
+
+        {/* Enhanced Tooltip */}
+        {layovers.length > 0 && (
+          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-max bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none z-50">
+            <div className="font-bold text-[#65B3CF] mb-1.5 border-b border-gray-700 pb-1">Layover Information</div>
+            {layovers.map((l, idx) => (
+              <div key={idx} className="flex items-center gap-2 mb-1 last:mb-0 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                <span className="text-gray-300">Stop {idx + 1}:</span>
+                <span className="font-semibold text-white">{l.cityName} ({l.code})</span>
+                <span className="text-gray-400">•</span>
+                <span className="text-yellow-400 font-mono">{l.duration}</span>
+              </div>
+            ))}
+            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Get flights from API
@@ -1651,6 +1713,28 @@ function FlightSearchPage() {
 
   // Flight Search Form Component
   const FlightSearchForm = ({ initialData, onSearch }) => {
+    // Curated city images for visual impact
+    const cityImages = {
+      DEL: "https://images.unsplash.com/photo-1587474265584-bc778c18d390?q=80&w=200&auto=format&fit=crop", // Delhi
+      BOM: "https://images.unsplash.com/photo-1529253355930-ddbe30b0be8a?q=80&w=200&auto=format&fit=crop", // Mumbai
+      BLR: "https://images.unsplash.com/photo-1596176530529-1bb3202e8afd?q=80&w=200&auto=format&fit=crop", // Bangalore
+      HYD: "https://images.unsplash.com/photo-1626014903708-377e30d0568,9?q=80&w=200&auto=format&fit=crop", // Hyderabad (Charminar usually) - using generic India fallback if specific not found
+      GOI: "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?q=80&w=200&auto=format&fit=crop", // Goa
+      MAA: "https://images.unsplash.com/photo-1582510003544-08d5b84d46a4?q=80&w=200&auto=format&fit=crop", // Chennai
+      CCU: "https://images.unsplash.com/photo-1536421469767-80559bb6f5e1?q=80&w=200&auto=format&fit=crop", // Kolkata
+      PNQ: "https://images.unsplash.com/photo-1572973418512-c9772c91839c?q=80&w=200&auto=format&fit=crop", // Pune
+      DXB: "https://images.unsplash.com/photo-1546412414-8035e1776c0a?q=80&w=200&auto=format&fit=crop", // Dubai
+      LHR: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?q=80&w=200&auto=format&fit=crop", // London
+      JFK: "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?q=80&w=200&auto=format&fit=crop", // NYC
+      SIN: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?q=80&w=200&auto=format&fit=crop", // Singapore
+      BKK: "https://images.unsplash.com/photo-1508009603885-50cf7c579365?q=80&w=200&auto=format&fit=crop", // Bangkok
+      AMD: "https://images.unsplash.com/photo-1588661635384-5f5328246d65?q=80&w=200&auto=format&fit=crop", // Ahmedabad
+    };
+
+    // Default fallback image
+    const validCityImages = cityImages; // Alias for cleaner use
+    const defaultCityImage = "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=200&auto=format&fit=crop"; // Generic travel
+
     const [formData, setFormData] = useState({
       from: initialData.from || 'DEL',
       to: initialData.to || 'HYD',
@@ -1699,26 +1783,40 @@ function FlightSearchPage() {
       if (suggestions.length === 0) return null;
 
       return (
-        <div className="absolute z-50 w-full mt-1 bg-white rounded-lg shadow-xl max-h-60 overflow-y-auto border border-gray-200">
+        <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-2xl max-h-80 overflow-y-auto border border-gray-100 divide-y divide-gray-50 overflow-hidden ring-1 ring-black ring-opacity-5">
           {suggestions.map((s) => (
             <div
               key={s.code}
-              className="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-50 last:border-0"
-              onMouseDown={(e) => {
-                e.preventDefault(); // Prevent blur
-                handleSelectCity(field, s.code);
-              }}
+              className="flex items-center px-4 py-3 hover:bg-blue-50 cursor-pointer transition-colors duration-150 group"
+              onClick={() => handleSelectCity(field, s.code)}
             >
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-[#055B75]">{s.code}</span>
-                <span className="text-xs text-gray-400">{s.country}</span>
+              {/* City Image */}
+              <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden mr-4 shadow-sm border border-gray-100 group-hover:border-blue-200">
+                <img
+                  src={validCityImages[s.code] || defaultCityImage}
+                  alt={s.name}
+                  className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
+                  onError={(e) => { e.target.src = defaultCityImage; }}
+                />
               </div>
-              <div className="text-sm text-gray-600 truncate">{s.name}</div>
+
+              {/* Text Info */}
+              <div className="flex-grow">
+                <div className="font-bold text-gray-800 flex items-center justify-between">
+                  <span>{s.name}</span>
+                  <span className="text-xs font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded group-hover:bg-blue-200 group-hover:text-blue-800 transition-colors">{s.code}</span>
+                </div>
+                <div className="text-xs text-gray-500 flex items-center mt-0.5">
+                  <MapPin className="w-3 h-3 mr-1 text-gray-400 group-hover:text-blue-400" />
+                  {s.country || 'Unknown Country'}
+                </div>
+              </div>
             </div>
           ))}
         </div>
       );
     };
+
 
     const handleSubmit = (e) => {
       e.preventDefault();
@@ -2174,11 +2272,7 @@ function FlightSearchPage() {
                                 {flight.duration?.replace('PT', '').replace('H', 'h ').replace('M', 'm') || 'N/A'}
                               </div>
                               <div className="text-xs mt-1">
-                                {flight.stops === 0 ? (
-                                  <span className="text-green-600 font-medium">Non-stop</span>
-                                ) : (
-                                  <span className="text-orange-600 font-medium">{flight.stops} {flight.stops === 1 ? 'stop' : 'stops'}</span>
-                                )}
+                                {renderStopDetails(flight)}
                               </div>
                             </div>
                             <div>
