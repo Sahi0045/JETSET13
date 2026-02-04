@@ -466,9 +466,17 @@ function ManageBooking() {
         <div ref={ticketRef} className="w-[800px] bg-white text-gray-800 font-sans relative" style={{ width: '800px' }}>
           {/* Ticket Header */}
           <div className="bg-[#055B75] text-white p-8 flex justify-between items-center rounded-t-lg">
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight mb-2">JetSetters</h1>
-              <p className="text-sm uppercase tracking-widest opacity-80">Electronic Ticket Receipt</p>
+            <div className="flex items-center gap-4">
+              <img
+                src="/Logo-jet.svg"
+                alt="JetSetters"
+                className="w-16 h-16 object-contain bg-white rounded-lg p-1"
+                crossOrigin="anonymous"
+              />
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">JetSetters</h1>
+                <p className="text-sm uppercase tracking-widest opacity-80">Electronic Ticket Receipt</p>
+              </div>
             </div>
             <div className="text-right">
               <div className="text-xs uppercase opacity-70 mb-1">Booking Reference</div>
