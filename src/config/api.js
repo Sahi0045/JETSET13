@@ -131,6 +131,11 @@ export const endpoints = {
   // Airport endpoints
   airports: {
     search: createEndpoint('/airports/search')
+  },
+
+  // Geo endpoints
+  geo: {
+    location: createEndpoint('/geo/location')
   }
 };
 
