@@ -13,16 +13,6 @@ import { useLocationContext } from '../../../Context/LocationContext';
 import "./booking-confirmation.css";
 
 
-// CONFIGURATION: Set this to true when Amadeus API is available
-const USE_AMADEUS_API = false;
-
-// Amadeus API configuration
-const AMADEUS_API_CONFIG = {
-  baseUrl: "https://api.amadeus.com/v2",
-  apiKey: "YOUR_AMADEUS_API_KEY", // Replace with your actual API key
-  apiSecret: "YOUR_AMADEUS_API_SECRET" // Replace with your actual API secret
-};
-
 function FlightBookingConfirmation() {
   const routerLocation = useLocation();
   const { country, callingCode, currency: userCurrency } = useLocationContext();
@@ -54,7 +44,7 @@ function FlightBookingConfirmation() {
     refundDetails: true,
     visaRequirements: true
   });
-  const [apiToken, setApiToken] = useState(null);
+
 
   // Check authentication status on component mount
   useEffect(() => {
@@ -72,64 +62,12 @@ function FlightBookingConfirmation() {
     checkAuth();
   }, []);
 
-  // Authenticate with Amadeus API (if enabled)
-  const authenticateAmadeus = async () => {
-    try {
-      // In a real implementation, you would make a POST request to Amadeus auth endpoint
-      // Example:
-      // const response = await fetch('https://test.api.amadeus.com/v1/security/oauth2/token', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/x-www-form-urlencoded',
-      //   },
-      //   body: `grant_type=client_credentials&client_id=${AMADEUS_API_CONFIG.apiKey}&client_secret=${AMADEUS_API_CONFIG.apiSecret}`
-      // });
-      // const data = await response.json();
-      // setApiToken(data.access_token);
-
-      // For now, we'll just set a mock token
-      console.log("Authenticated with Amadeus API (mock)");
-      setApiToken("mock_amadeus_token");
-      return "mock_amadeus_token";
-    } catch (error) {
-      console.error("Failed to authenticate with Amadeus API:", error);
-      return null;
-    }
-  };
-
-  // Fetch booking details from Amadeus API
-  const fetchBookingFromApi = async (id) => {
-    try {
-      // Get token if not available
-      const token = apiToken || await authenticateAmadeus();
-      if (!token) {
-        throw new Error("Authentication failed");
-      }
-
-      // In a real implementation, you would make a GET request to Amadeus booking API
-      // Example:
-      // const response = await fetch(`${AMADEUS_API_CONFIG.baseUrl}/booking/flight-orders/${id}`, {
-      //   method: 'GET',
-      //   headers: {
-      //     'Authorization': `Bearer ${token}`
-      //   }
-      // });
-      // const data = await response.json();
-      // return transformBookingData(data);
-
-      // For now, simulate API call with a delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Return mock booking data
-      const mockBooking = flightBookingData.bookings.find(b => b.bookingId === id) ||
-        flightBookingData.internationalBookings.find(b => b.bookingId === id) ||
-        flightBookingData.bookings[0];
-
-      return mockBooking;
-    } catch (error) {
-      console.error("Error fetching booking from API:", error);
-      return null;
-    }
+  // Fetch booking details from mock data (fallback when no search-page data is passed)
+  const fetchBookingFromMockData = (id) => {
+    const mockBooking = flightBookingData.bookings.find(b => b.bookingId === id) ||
+      flightBookingData.internationalBookings.find(b => b.bookingId === id) ||
+      flightBookingData.bookings[0];
+    return mockBooking || null;
   };
 
   // Transform Amadeus API booking data to our format
@@ -318,12 +256,12 @@ function FlightBookingConfirmation() {
           console.log("Using flight data from search page", routerLocation.state.flightData);
           bookingData = transformFlightData(routerLocation.state.flightData);
         } else {
-          // Fallback: Fetch from API (or mock) using the ID
+          // Fallback: Use mock data when no search-page state is available
           const targetId = bookingId || "TEST_BOOKING_123";
-          console.log("No state data, fetching from API for ID:", targetId);
-          const apiData = await fetchBookingFromApi(targetId);
-          if (apiData) {
-            bookingData = transformBookingData(apiData);
+          console.log("No state data, using mock data for ID:", targetId);
+          const mockData = fetchBookingFromMockData(targetId);
+          if (mockData) {
+            bookingData = transformBookingData(mockData);
           } else {
             setError("No flight data available. Please return to the search page and try again.");
             return;
