@@ -81,9 +81,9 @@ class CurrencyService {
       if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
         this.currentCurrency = DEFAULT_CURRENCY;
         localStorage.setItem('userCurrency', this.currentCurrency);
-        
+
         // Dispatch an event so components can update
-        window.dispatchEvent(new CustomEvent('currencyChanged', { 
+        window.dispatchEvent(new CustomEvent('currencyChanged', {
           detail: { currency: this.currentCurrency }
         }));
         return;
@@ -96,9 +96,9 @@ class CurrencyService {
         if (country && COUNTRY_CURRENCY[country]) {
           this.currentCurrency = COUNTRY_CURRENCY[country];
           localStorage.setItem('userCurrency', this.currentCurrency);
-          
+
           // Dispatch an event so components can update
-          window.dispatchEvent(new CustomEvent('currencyChanged', { 
+          window.dispatchEvent(new CustomEvent('currencyChanged', {
             detail: { currency: this.currentCurrency }
           }));
           return;
@@ -107,9 +107,9 @@ class CurrencyService {
 
       // Fall back to IP-based geolocation only for localhost/development
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        const response = await fetch('https://ipapi.co/json/');
+        const response = await fetch('/api/geo/location');
         const data = await response.json();
-        
+
         if (data && data.country) {
           const country = data.country;
           this.currentCurrency = COUNTRY_CURRENCY[country] || DEFAULT_CURRENCY;
@@ -123,9 +123,9 @@ class CurrencyService {
 
     // Store the currency preference
     localStorage.setItem('userCurrency', this.currentCurrency);
-    
+
     // Dispatch an event so components can update
-    window.dispatchEvent(new CustomEvent('currencyChanged', { 
+    window.dispatchEvent(new CustomEvent('currencyChanged', {
       detail: { currency: this.currentCurrency }
     }));
   }
@@ -146,9 +146,9 @@ class CurrencyService {
     if (CURRENCY_CONFIG[currencyCode]) {
       this.currentCurrency = currencyCode;
       localStorage.setItem('userCurrency', currencyCode);
-      
+
       // Dispatch an event so components can update
-      window.dispatchEvent(new CustomEvent('currencyChanged', { 
+      window.dispatchEvent(new CustomEvent('currencyChanged', {
         detail: { currency: currencyCode }
       }));
     }
@@ -163,7 +163,7 @@ class CurrencyService {
   convertPrice(priceInUSD, targetCurrency = null) {
     const currency = targetCurrency || this.getCurrency();
     const rate = EXCHANGE_RATES[currency] || 1;
-    
+
     return priceInUSD * rate;
   }
 
@@ -176,21 +176,21 @@ class CurrencyService {
   formatPrice(price, currencyCode = null) {
     const currency = currencyCode || this.getCurrency();
     const config = CURRENCY_CONFIG[currency] || CURRENCY_CONFIG[DEFAULT_CURRENCY];
-    
+
     // Round to 2 decimal places
     let formattedValue = Math.round(price * 100) / 100;
-    
+
     // For INR, round to whole numbers
     if (currency === 'INR') {
       formattedValue = Math.round(formattedValue);
     }
-    
+
     // Format with thousand separators
     formattedValue = formattedValue.toLocaleString('en-US', {
       minimumFractionDigits: currency === 'INR' ? 0 : 2,
       maximumFractionDigits: currency === 'INR' ? 0 : 2
     });
-    
+
     // Apply currency-specific formatting
     return config.format(formattedValue);
   }
@@ -207,11 +207,11 @@ class CurrencyService {
     if (typeof price === 'string') {
       numericPrice = parseFloat(price.replace(/[^0-9.]/g, ''));
     }
-    
+
     if (isNaN(numericPrice)) {
       return price; // Return original if parsing failed
     }
-    
+
     const convertedPrice = this.convertPrice(numericPrice, currencyCode);
     return this.formatPrice(convertedPrice, currencyCode);
   }

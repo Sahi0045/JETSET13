@@ -11,7 +11,7 @@ const GeoService = {
      */
     getUserLocation: async () => {
         try {
-            const response = await fetch('https://ipapi.co/json/');
+            const response = await fetch('/api/geo/location');
             if (!response.ok) {
                 throw new Error('Failed to fetch location data');
             }

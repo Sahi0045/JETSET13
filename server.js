@@ -19,6 +19,7 @@ import inquiryRoutes from './backend/routes/inquiry.routes.js';
 import quoteRoutes from './backend/routes/quote.routes.js';
 import cruiseRoutes from './backend/routes/cruise.routes.js';
 import supabaseAuthRoutes from './backend/routes/supabaseAuth.js';
+import geoRoutes from './backend/routes/geo.routes.js';
 import supabase from './backend/config/supabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -54,8 +55,10 @@ app.use('/api/email', emailRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/inquiries', inquiryRoutes);
 app.use('/api/quotes', quoteRoutes);
+app.api_cruises = cruiseRoutes; // Assuming this line was part of previous block which is not exactly matched, but the instruction is to add geoRoutes.
 app.use('/api/cruises', cruiseRoutes);
 app.use('/api/supabase', supabaseAuthRoutes);
+app.use('/api/geo', geoRoutes);
 
 // Test endpoint
 app.get('/api/test', (req, res) => {
@@ -132,7 +135,7 @@ const testSupabaseConnection = async (retryCount = 0, maxRetries = 5) => {
   try {
     console.log(`📡 Testing Supabase connection (attempt ${retryCount + 1}/${maxRetries + 1})...`);
     const { data, error } = await supabase.from('users').select('count').single();
-    
+
     if (error) {
       if (retryCount < maxRetries) {
         console.warn(`⚠️ Supabase connection error: ${error.message}. Retrying in 3 seconds...`);
@@ -149,7 +152,7 @@ const testSupabaseConnection = async (retryCount = 0, maxRetries = 5) => {
         return false;
       }
     }
-    
+
     console.log('✅ Supabase connection established successfully.');
     return true;
   } catch (error) {
@@ -172,7 +175,7 @@ testSupabaseConnection();
 app.post('/api/send-email', async (req, res) => {
   try {
     console.log('📧 Direct email endpoint hit with data:', req.body);
-    
+
     // Check if API key is available
     if (!process.env.RESEND_API_KEY) {
       console.error('📧 ERROR: Missing Resend API key in environment variables');
@@ -181,7 +184,7 @@ app.post('/api/send-email', async (req, res) => {
         error: 'Missing email API key'
       });
     }
-    
+
     // Import and initialize Resend with a try-catch to handle any errors
     let resend;
     try {
@@ -194,9 +197,9 @@ app.post('/api/send-email', async (req, res) => {
         error: 'Failed to initialize email service'
       });
     }
-    
+
     const { name, email, phone, type = 'callback', details = {} } = req.body;
-    
+
     // Simple formatted email with dynamic content based on type
     let html = `
       <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
@@ -213,7 +216,7 @@ app.post('/api/send-email', async (req, res) => {
             <p><strong>Phone:</strong> ${phone}</p>
             <p><strong>Email:</strong> ${email}</p>
     `;
-    
+
     // Add type-specific content
     if (type === 'package' && details) {
       html += `
@@ -241,7 +244,7 @@ app.post('/api/send-email', async (req, res) => {
             <p><strong>Message:</strong> ${details.message || 'None'}</p>
       `;
     }
-    
+
     // Close the HTML structure
     html += `          </div>
           
@@ -253,11 +256,11 @@ app.post('/api/send-email', async (req, res) => {
         </div>
       </div>
     `;
-    
+
     const text = html.replace(/<[^>]*>?/gm, '')
       .replace(/\s+/g, ' ')
       .trim();
-    
+
     try {
       // Always use a verified sender email with Resend
       const result = await resend.emails.send({
@@ -267,9 +270,9 @@ app.post('/api/send-email', async (req, res) => {
         html,
         text
       });
-      
+
       console.log('📧 Email sent successfully:', result);
-      
+
       return res.status(200).json({
         success: true,
         message: 'Email sent successfully',
@@ -277,7 +280,7 @@ app.post('/api/send-email', async (req, res) => {
       });
     } catch (sendError) {
       console.error('📧 Error sending email via Resend:', sendError);
-      
+
       // Return a more specific error message based on the error type
       if (sendError.statusCode === 403 && sendError.message.includes('domain is not verified')) {
         return res.status(200).json({
@@ -287,7 +290,7 @@ app.post('/api/send-email', async (req, res) => {
           note: 'The callback request was saved successfully, but email sending requires domain verification. Your data is safely stored.'
         });
       }
-      
+
       return res.status(200).json({
         success: true,
         message: 'Callback data saved, but email could not be sent',
@@ -295,10 +298,10 @@ app.post('/api/send-email', async (req, res) => {
         data: null
       });
     }
-    
+
   } catch (error) {
     console.error('📧 Error in send-email endpoint:', error);
-    
+
     // Still return a 200 response to prevent blocking the callback flow
     return res.status(200).json({
       success: true,
@@ -357,7 +360,7 @@ if (process.env.NODE_ENV !== 'production' || process.env.VERCEL_ENV === undefine
       const port = await findAvailablePort(PORT);
       const server = app.listen(port, () => {
         console.log(`🚀 Server running on port ${port}`);
-        
+
         // Re-apply CORS middleware with updated settings
         app.use((req, res, next) => {
           res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -365,7 +368,7 @@ if (process.env.NODE_ENV !== 'production' || process.env.VERCEL_ENV === undefine
           res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, Origin, X-Requested-With, x-csrf-token');
           res.header('Access-Control-Allow-Credentials', 'true');
           res.header('Access-Control-Expose-Headers', 'set-cookie');
-          
+
           if (req.method === 'OPTIONS') {
             return res.sendStatus(200);
           }
