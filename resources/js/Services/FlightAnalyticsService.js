@@ -99,7 +99,7 @@ export const getMostTraveledDestinations = async (origin, period) => {
  * Get Busiest Travel Periods for a city
  * @param {string} origin - IATA city code
  * @param {string} year - Year (e.g., "2024")
- * @param {string} direction - "ARRIVING" or "DEPARTING"
+ * @param {string} direction - "ARRIVING" or "DEPARTINg"
  */
 export const getBusiestTravelPeriod = async (origin, year, direction = 'DEPARTING') => {
     return fetchWithCache(

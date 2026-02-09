@@ -285,7 +285,7 @@ async function handlePaymentInitiation(req, res) {
         returnUrl: finalReturnUrl,
         cancelUrl: finalCancelUrl,
         merchant: {
-          name: 'JetSet Travel'
+          name: 'JetSetters'
         },
         displayControl: {
           billingAddress: 'MANDATORY',  // Required for 3DS2 - ensures billing data is collected
@@ -1876,7 +1876,7 @@ async function handleHostedCheckout(req, res) {
 
     // Travel Agent Info provided by ARC
     const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || 'JETSET001';
-    const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'JetSet Travel LLC';
+    const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'JetSetters';
 
     console.log('   ARC Pay Base URL:', arcBaseUrl);
     console.log('   ARC Pay Merchant ID:', arcMerchantId);
@@ -1905,7 +1905,8 @@ async function handleHostedCheckout(req, res) {
         returnUrl: finalReturnUrl,
         cancelUrl: finalCancelUrl,
         merchant: {
-          name: 'JetSet Travel'
+          name: 'JetSetters',
+          url: frontendBaseUrl
         },
         displayControl: {
           billingAddress: 'MANDATORY',  // Required for 3DS2 - ensures billing data is collected
