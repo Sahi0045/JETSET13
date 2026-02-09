@@ -78,8 +78,8 @@ const fetchWithCache = async (endpoint, params, cacheKey) => {
  */
 export const getMostBookedDestinations = async (origin, period) => {
     return fetchWithCache(
-        '/flights/analytics',
-        { endpoint: 'booked', origin, period },
+        '/flights/analytics/booked',
+        { origin, period },
         `booked_${origin}_${period}`
     );
 };
@@ -89,8 +89,8 @@ export const getMostBookedDestinations = async (origin, period) => {
  */
 export const getMostTraveledDestinations = async (origin, period) => {
     return fetchWithCache(
-        '/flights/analytics',
-        { endpoint: 'traveled', origin, period },
+        '/flights/analytics/traveled',
+        { origin, period },
         `traveled_${origin}_${period}`
     );
 };
@@ -103,8 +103,8 @@ export const getMostTraveledDestinations = async (origin, period) => {
  */
 export const getBusiestTravelPeriod = async (origin, year, direction = 'DEPARTING') => {
     return fetchWithCache(
-        '/flights/analytics',
-        { endpoint: 'busiest', origin, year, direction },
+        '/flights/analytics/busiest',
+        { origin, year, direction },
         `busiest_${origin}_${year}_${direction}`
     );
 };
