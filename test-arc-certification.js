@@ -101,7 +101,7 @@ async function testCreateSession() {
         returnUrl: 'https://www.jetsetterss.com/payment/callback',
         cancelUrl: 'https://www.jetsetterss.com/payment/cancelled',
         merchant: {
-          name: 'JetSet Travel'
+          name: 'JetSetters'
         }
       },
       order: {
@@ -216,7 +216,7 @@ async function testAuthenticate() {
 
     const authData = JSON.parse(responseText);
     const transactionStatus = authData.authentication?.['3ds2']?.transactionStatus ||
-                             authData.transaction?.[0]?.authentication?.['3ds2']?.transactionStatus;
+      authData.transaction?.[0]?.authentication?.['3ds2']?.transactionStatus;
     const authStatus = authData.authenticationStatus || authData.order?.authenticationStatus;
 
     console.log('Transaction Status:', transactionStatus);
@@ -252,7 +252,7 @@ async function testPay(authResult) {
 
     // Extract authentication transaction ID
     const authTransactionId = authResult?.authData?.authentication?.['3ds']?.transactionId ||
-                              authResult?.authData?.transaction?.[0]?.authentication?.['3ds']?.transactionId;
+      authResult?.authData?.transaction?.[0]?.authentication?.['3ds']?.transactionId;
 
     const requestBody = {
       apiOperation: 'PAY',
@@ -701,7 +701,7 @@ async function runCertificationTests() {
 
   if (testResults.failed.length > 0) {
     console.log('\n❌ Failed Tests:');
-    testResults.failed.forEach(({name, details}) => {
+    testResults.failed.forEach(({ name, details }) => {
       console.log(`   - ${name}`);
       console.log(`     ${details}`);
     });
@@ -709,7 +709,7 @@ async function runCertificationTests() {
 
   if (testResults.warnings.length > 0) {
     console.log('\n⚠️  Warnings:');
-    testResults.warnings.forEach(({name, details}) => {
+    testResults.warnings.forEach(({ name, details }) => {
       console.log(`   - ${name}`);
       console.log(`     ${details}`);
     });

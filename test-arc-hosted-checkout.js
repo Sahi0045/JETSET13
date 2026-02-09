@@ -43,7 +43,7 @@ async function testHostedCheckout() {
         returnUrl: 'https://www.jetsetterss.com/payment/callback',
         cancelUrl: 'https://www.jetsetterss.com/payment/cancelled',
         merchant: {
-          name: 'JetSet Travel'
+          name: 'JetSetters'
         },
         displayControl: {
           billingAddress: 'OPTIONAL',
