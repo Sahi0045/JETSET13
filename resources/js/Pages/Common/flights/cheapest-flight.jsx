@@ -101,18 +101,29 @@ export default function CheapestFlights({ onBookFlight }) {
         // Step 1: Dynamically discover top destinations via Amadeus analytics
         const bookedData = await FlightAnalyticsService.getMostBookedDestinations(userOriginCode);
 
-        if (!bookedData || bookedData.length === 0) {
-          if (isMounted) {
-            setError("No destinations found for your location. Please try again later.");
-            setLoading(false);
-          }
-          return;
+        // If API returns no data, use country-based curated destinations
+        let destinationCodes;
+        if (bookedData && bookedData.length > 0) {
+          destinationCodes = bookedData.map(d => ({ destination: d.destination }));
+          console.log(`📊 Discovered ${bookedData.length} popular destinations, fetching cheapest dates...`);
+        } else {
+          console.log('📊 API returned no destinations, using curated fallback for country:', location.countryCode);
+          // Country-specific popular flight routes
+          const countryFallbacks = {
+            'IN': ['BOM', 'BLR', 'GOI', 'JAI', 'CCU', 'HYD', 'MAA', 'DXB', 'BKK', 'SIN'],
+            'US': ['LAX', 'JFK', 'ORD', 'SFO', 'MIA', 'LHR', 'CDG', 'NRT', 'CUN', 'HNL'],
+            'GB': ['CDG', 'BCN', 'AMS', 'DXB', 'JFK', 'FCO', 'IST', 'ATH', 'LIS', 'BKK'],
+            'AE': ['BOM', 'DEL', 'LHR', 'BKK', 'IST', 'CDG', 'SIN', 'JFK', 'CAI', 'KUL'],
+          };
+          const fallbackCodes = countryFallbacks[location.countryCode] || countryFallbacks['IN'];
+          // Remove origin from fallback list
+          destinationCodes = fallbackCodes
+            .filter(c => c !== userOriginCode)
+            .map(c => ({ destination: c }));
         }
 
-        console.log(`📊 Discovered ${bookedData.length} popular destinations, fetching cheapest dates...`);
-
         // Step 2: For each discovered destination, fetch cheapest flight dates in parallel
-        const promises = bookedData
+        const promises = destinationCodes
           .slice(0, 6) // Limit parallel API calls to avoid timeouts
           .map(async (item) => {
             const destCode = item.destination;
@@ -164,7 +175,27 @@ export default function CheapestFlights({ onBookFlight }) {
             validFlights.sort((a, b) => a.price - b.price);
             setFlights(validFlights);
           } else {
-            setError("No cheapest fares available right now. Please try again later.");
+            // Fallback: show destination cards without prices
+            const fallbackCards = destinationCodes.slice(0, 6).map(item => {
+              const code = item.destination;
+              const airport = airportByCode[code];
+              return {
+                id: code,
+                destination: airport?.name || code,
+                destinationCode: code,
+                region: airport?.country || 'International',
+                price: null,
+                currency: 'USD',
+                date: 'Flexible dates',
+                image: getCityImage(airport?.name || code),
+                isApiData: false,
+              };
+            }).filter(Boolean);
+            if (fallbackCards.length > 0) {
+              setFlights(fallbackCards);
+            } else {
+              setError("No cheapest fares available right now. Please try again later.");
+            }
           }
           setLoading(false);
         }
@@ -267,13 +298,15 @@ export default function CheapestFlights({ onBookFlight }) {
               {/* Corner decoration */}
               <div className="absolute top-0 right-0 w-12 h-12 bg-[#65B3CF]/20 backdrop-blur-sm rounded-bl-xl"></div>
 
-              {/* Price tag */}
-              <div className="absolute bottom-2 right-2 bg-[#055B75]/90 backdrop-blur-sm text-white text-xs font-bold py-1 px-2 rounded-md flex items-center shadow-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                </svg>
-                Best Price
-              </div>
+              {/* Price tag — only for API data */}
+              {flight.isApiData && (
+                <div className="absolute bottom-2 right-2 bg-[#055B75]/90 backdrop-blur-sm text-white text-xs font-bold py-1 px-2 rounded-md flex items-center shadow-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                  </svg>
+                  Best Price
+                </div>
+              )}
             </div>
 
             {/* Content section */}
@@ -297,10 +330,16 @@ export default function CheapestFlights({ onBookFlight }) {
               {/* Price and button */}
               <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
                 <div className="flex items-baseline">
-                  <p className="font-bold text-[#055B75] text-lg">
-                    <Price amount={flight.price} />
-                  </p>
-                  <span className="text-xs text-gray-500 ml-1">onwards</span>
+                  {flight.price != null ? (
+                    <>
+                      <p className="font-bold text-[#055B75] text-lg">
+                        <Price amount={flight.price} />
+                      </p>
+                      <span className="text-xs text-gray-500 ml-1">onwards</span>
+                    </>
+                  ) : (
+                    <p className="font-semibold text-[#055B75] text-sm">Search flights</p>
+                  )}
                 </div>
 
                 <button
