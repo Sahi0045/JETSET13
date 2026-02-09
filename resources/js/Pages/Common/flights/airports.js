@@ -1,3 +1,13 @@
+/**
+ * Static Airport Data
+ * 
+ * This file contains a comprehensive list of airports for fallback/offline mode.
+ * Primary airport data is fetched dynamically from Amadeus Reference Data API
+ * via AirportService.js - this static list is used when API is unavailable.
+ * 
+ * @see ../../../Services/AirportService.js for dynamic fetching
+ * @see https://developers.amadeus.com/self-service/category/flights/api-doc/airport-and-city-search
+ */
 export const allAirports = [
     // --- INDIA ---
     { id: 1, name: "New Delhi", code: "DEL", country: "India", type: "domestic" },

@@ -1,9 +1,10 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { Calendar, Users, MapPin, Search, ChevronDown } from "lucide-react"
 import { defaultSearchData, specialFares, sourceCities, allDestinations } from "./data.js"
 import { allAirports } from "./airports.js";
+import AirportService from "../../../Services/AirportService";
 import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
 import { useLocationContext } from '../../../Context/LocationContext';
 
@@ -19,6 +20,10 @@ export default function FlightSearchForm({ initialData, onSearch }) {
   const [fromSuggestions, setFromSuggestions] = useState([]);
   const [toSuggestions, setToSuggestions] = useState([]);
   const [selectedFare, setSelectedFare] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Debounce timer ref
+  const searchTimeoutRef = useRef(null);
 
   // Create a map of city names to their codes
   const cityCodeMap = allAirports.reduce((acc, city) => {
@@ -44,36 +49,49 @@ export default function FlightSearchForm({ initialData, onSearch }) {
 
   // Set default "From" location based on user's location
   useEffect(() => {
-    if (loaded && !initialData?.from && !formData.from && city) {
-      // Direct match
-      const directMatch = allAirports.find(d => d.name.toLowerCase() === city.toLowerCase());
+    const setDefaultFrom = async () => {
+      if (loaded && !initialData?.from && !formData.from && city) {
+        // 1. Try local match first for instant result
+        let match = allAirports.find(d => d.name.toLowerCase() === city.toLowerCase());
 
-      if (directMatch) {
-        setFormData(prev => ({
-          ...prev,
-          from: directMatch.name,
-          fromCode: directMatch.code,
-          fromCountry: directMatch.country,
-          fromType: directMatch.type
-        }));
-      } else {
-        // Loose match (city contains or is contained in destination name)
-        const looseMatch = allAirports.find(d =>
-          d.name.toLowerCase().includes(city.toLowerCase()) ||
-          city.toLowerCase().includes(d.name.toLowerCase())
-        );
+        if (!match) {
+          // 2. Try loose local match
+          match = allAirports.find(d =>
+            d.name.toLowerCase().includes(city.toLowerCase()) ||
+            city.toLowerCase().includes(d.name.toLowerCase())
+          );
+        }
 
-        if (looseMatch) {
+        if (match) {
           setFormData(prev => ({
             ...prev,
-            from: looseMatch.name,
-            fromCode: looseMatch.code,
-            fromCountry: looseMatch.country,
-            fromType: looseMatch.type
+            from: match.name,
+            fromCode: match.code,
+            fromCountry: match.country,
+            fromType: match.type
           }));
+        } else {
+          // 3. Last resort: Dynamic search via API
+          try {
+            const dynamicResults = await AirportService.searchAirports(city, { limit: 1 });
+            if (dynamicResults && dynamicResults.length > 0) {
+              const bestMatch = dynamicResults[0];
+              setFormData(prev => ({
+                ...prev,
+                from: bestMatch.name,
+                fromCode: bestMatch.code,
+                fromCountry: bestMatch.country,
+                fromType: bestMatch.type || 'international'
+              }));
+            }
+          } catch (e) {
+            console.warn('Failed to fetch dynamic default from location', e);
+          }
         }
       }
-    }
+    };
+
+    setDefaultFrom();
   }, [loaded, city, initialData, formData.from]);
 
   const handleTripTypeChange = (type) => {
@@ -147,32 +165,39 @@ export default function FlightSearchForm({ initialData, onSearch }) {
       setShowFromSuggestions(false);
     }
 
-    // Show suggestions for the current field
+    // Show suggestions for the current field with dynamic API search
     if (name === "from" || name === "to") {
       const showSuggestions = name === "from" ? setShowFromSuggestions : setShowToSuggestions;
       const setSuggestions = name === "from" ? setFromSuggestions : setToSuggestions;
 
       showSuggestions(true);
 
-      // Filter all airports based on input
-      const filtered = allAirports
-        .filter((city) => {
-          const searchTerm = value.toLowerCase();
-          return (
-            city.name.toLowerCase().includes(searchTerm) ||
-            city.code.toLowerCase().includes(searchTerm) ||
-            city.country.toLowerCase().includes(searchTerm)
-          );
-        })
-        .slice(0, 15) // Limit results for better performance
-        .map(city => ({
-          name: city.name,
-          code: city.code,
-          country: city.country,
-          type: city.type
-        }));
+      // Clear previous timeout
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
 
-      setSuggestions(filtered);
+      // Show local results immediately for responsiveness
+      const localFiltered = AirportService.searchLocalAirports(value);
+      setSuggestions(localFiltered);
+
+      // Debounce API call (300ms)
+      if (value.trim().length >= 2) {
+        searchTimeoutRef.current = setTimeout(async () => {
+          setIsSearching(true);
+          try {
+            const apiResults = await AirportService.searchAirports(value);
+            if (apiResults && apiResults.length > 0) {
+              setSuggestions(apiResults);
+            }
+          } catch (error) {
+            console.warn('Airport search API error:', error);
+            // Keep local results on API failure
+          } finally {
+            setIsSearching(false);
+          }
+        }, 300);
+      }
     }
 
     // Clear validation error when field is changed

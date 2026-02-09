@@ -27,33 +27,33 @@ class AmadeusService {
       // Try three different sources to find valid credentials
       let apiKey = process.env.AMADEUS_API_KEY || process.env.REACT_APP_AMADEUS_API_KEY;
       let apiSecret = process.env.AMADEUS_API_SECRET || process.env.REACT_APP_AMADEUS_API_SECRET;
-      
+
       // Log which keys we're going to use
       console.log('Amadeus API credentials being used:', {
-        keySource: process.env.AMADEUS_API_KEY ? 'AMADEUS_API_KEY' : 
-                 (process.env.REACT_APP_AMADEUS_API_KEY ? 'REACT_APP_AMADEUS_API_KEY' : 'none'),
-        secretSource: process.env.AMADEUS_API_SECRET ? 'AMADEUS_API_SECRET' : 
-                    (process.env.REACT_APP_AMADEUS_API_SECRET ? 'REACT_APP_AMADEUS_API_SECRET' : 'none'),
+        keySource: process.env.AMADEUS_API_KEY ? 'AMADEUS_API_KEY' :
+          (process.env.REACT_APP_AMADEUS_API_KEY ? 'REACT_APP_AMADEUS_API_KEY' : 'none'),
+        secretSource: process.env.AMADEUS_API_SECRET ? 'AMADEUS_API_SECRET' :
+          (process.env.REACT_APP_AMADEUS_API_SECRET ? 'REACT_APP_AMADEUS_API_SECRET' : 'none'),
         keyFirstChars: apiKey ? apiKey.substring(0, 5) + '...' : 'undefined',
         secretLength: apiSecret ? apiSecret.length : 0
       });
-      
+
       // Check if credentials are available
       if (!apiKey || !apiSecret) {
         console.error('ERROR: Missing Amadeus API credentials in environment variables');
         throw new Error('Missing Amadeus API credentials');
       }
-      
+
       // Use URLSearchParams for proper encoding
       const params = new URLSearchParams();
       params.append('grant_type', 'client_credentials');
       params.append('client_id', apiKey);
       params.append('client_secret', apiSecret);
-      
+
       console.log('Attempting Amadeus authentication with credentials...');
-      
+
       const response = await axios.post(
-        `${this.baseUrls.v1}/security/oauth2/token`, 
+        `${this.baseUrls.v1}/security/oauth2/token`,
         params.toString(),
         {
           headers: {
@@ -65,7 +65,7 @@ class AmadeusService {
       this.token = response.data.access_token;
       // Set token expiration to 29 minutes from now (tokens typically expire in 30 minutes)
       this.tokenExpiration = new Date(Date.now() + 29 * 60 * 1000);
-      
+
       console.log('✅ Successfully obtained Amadeus token');
       return this.token;
     } catch (error) {
@@ -82,9 +82,9 @@ class AmadeusService {
   async searchFlights(params) {
     try {
       const token = await this.getAccessToken();
-      
+
       console.log('🔍 Searching flights with params:', params);
-      
+
       // Prepare search parameters for Amadeus API
       const searchParams = {
         originLocationCode: params.from || params.originLocationCode,
@@ -116,7 +116,7 @@ class AmadeusService {
       });
 
       console.log(`✅ Found ${response.data.data?.length || 0} flight offers`);
-      
+
       return {
         success: true,
         data: response.data.data || [],
@@ -139,10 +139,10 @@ class AmadeusService {
   async createFlightOrder(flightOrderData) {
     try {
       const token = await this.getAccessToken();
-      
+
       console.log('📋 Creating REAL flight order with Amadeus API...');
       console.log('Flight Order Data:', JSON.stringify(flightOrderData, null, 2));
-      
+
       const response = await axios.post(
         `${this.baseUrls.v1}/booking/flight-orders`,
         flightOrderData,
@@ -157,7 +157,7 @@ class AmadeusService {
       );
 
       console.log('✅ REAL flight order created successfully via Amadeus API');
-      
+
       return {
         success: true,
         data: response.data.data,
@@ -169,21 +169,21 @@ class AmadeusService {
 
     } catch (error) {
       console.log('⚠️ Real Amadeus booking failed, generating mock PNR for testing...');
-      
+
       // Check if this is a test environment limitation
       const errorCode = error.response?.data?.errors?.[0]?.code;
       if (errorCode === '38187' || errorCode === '38190' || error.response?.status === 401) {
         console.log('🧪 Using mock PNR generation for testing purposes');
-        
+
         const mockPNR = this.generateMockPNR();
         const travelers = flightOrderData.data?.travelers?.length || 1;
         const mockOrderData = this.generateMockOrderData(mockPNR, travelers);
-        
+
         // Store the mock order
         this.storeMockOrder(mockOrderData.id, mockOrderData, mockPNR);
-        
+
         console.log(`✅ Mock booking created with PNR: ${mockPNR}`);
-        
+
         return {
           success: true,
           data: mockOrderData,
@@ -194,7 +194,7 @@ class AmadeusService {
           message: 'Mock booking created for testing - use production keys for real PNRs'
         };
       }
-      
+
       console.error('❌ Flight order creation failed:', error.response?.data || error.message);
       throw {
         success: false,
@@ -207,7 +207,7 @@ class AmadeusService {
   async getFlightOrderDetails(orderId) {
     try {
       const token = await this.getAccessToken();
-      
+
       const response = await axios.get(
         `${this.baseUrls.v1}/booking/flight-orders/${orderId}`,
         {
@@ -226,7 +226,7 @@ class AmadeusService {
 
     } catch (error) {
       console.log('⚠️ Real order retrieval failed, checking mock storage...');
-      
+
       // Check if this is a mock order
       const mockOrder = this.getMockOrder(orderId);
       if (mockOrder) {
@@ -238,7 +238,7 @@ class AmadeusService {
           mode: 'MOCK_STORAGE'
         };
       }
-      
+
       console.error('❌ Error fetching flight order details:', error.response?.data || error.message);
       throw {
         success: false,
@@ -253,9 +253,9 @@ class AmadeusService {
   async priceFlightOffer(flightOffer) {
     try {
       const token = await this.getAccessToken();
-      
+
       console.log('💰 Pricing flight offer...');
-      
+
       const response = await axios.post(
         `${this.baseUrls.v1}/shopping/flight-offers/pricing`,
         {
@@ -274,7 +274,7 @@ class AmadeusService {
       );
 
       console.log('✅ Flight offer priced successfully');
-      
+
       return {
         success: true,
         data: response.data.data
@@ -290,51 +290,74 @@ class AmadeusService {
     }
   }
 
-  // ===== UTILITY METHODS =====
-
   /**
-   * Search for cities/locations using Amadeus API autocomplete
+   * Search for cities/locations using Amadeus Airport & City Search API
+   * @see https://developers.amadeus.com/self-service/category/flights/api-doc/airport-and-city-search
+   * 
    * @param {string} keyword - Search keyword (city name, airport code, etc.)
    * @param {string} subType - Type of location: CITY, AIRPORT, or both
+   * @param {Object} options - Additional options
+   * @param {string} options.countryCode - ISO 3166-1 alpha-2 country code (e.g., US, IN)
+   * @param {number} options.limit - Maximum results (default: 10)
+   * @param {string} options.sort - Sort order: analytics.travelers.score (default)
    * @returns {Promise<Object>} - List of matching locations
    */
-  async searchLocations(keyword, subType = 'CITY,AIRPORT') {
+  async searchLocations(keyword, subType = 'CITY,AIRPORT', options = {}) {
     try {
       const token = await this.getAccessToken();
-      
-      console.log(`🔍 Searching locations for keyword: ${keyword}`);
-      
+
+      console.log(`🔍 Searching locations for keyword: ${keyword}`, options);
+
+      // Build query parameters per Amadeus API spec
+      const params = {
+        keyword: keyword,
+        subType: subType,
+        'page[limit]': options.limit || 10,
+        view: 'LIGHT', // LIGHT for autocomplete, FULL for detailed
+        sort: options.sort || 'analytics.travelers.score' // Sort by traveler popularity
+      };
+
+      // Add countryCode filter if provided
+      if (options.countryCode) {
+        params.countryCode = options.countryCode;
+      }
+
       const response = await axios.get(`${this.baseUrls.v1}/reference-data/locations`, {
         headers: {
           'Authorization': `Bearer ${token}`
         },
-        params: {
-          keyword: keyword,
-          subType: subType,
-          'page[limit]': 10,
-          view: 'LIGHT'
-        }
+        params: params
       });
 
       const locations = response.data.data || [];
       console.log(`✅ Found ${locations.length} locations for "${keyword}"`);
 
-      // Format locations for frontend
+      // Format locations for frontend with full details
       const formattedLocations = locations.map(loc => ({
+        // Core fields matching airports.js format
         name: loc.name || loc.address?.cityName || keyword,
         code: loc.iataCode,
         type: loc.subType,
+        // Extended fields from Amadeus
         cityName: loc.address?.cityName || loc.name,
         cityCode: loc.address?.cityCode || loc.iataCode,
         country: loc.address?.countryName || loc.address?.countryCode || '',
         countryCode: loc.address?.countryCode || '',
+        // Analytics score for ranking
+        score: loc.analytics?.travelers?.score || 0,
+        // Geographic data
+        geoCode: loc.geoCode ? {
+          latitude: loc.geoCode.latitude,
+          longitude: loc.geoCode.longitude
+        } : null,
         // For display
         displayName: `${loc.name || loc.address?.cityName}${loc.address?.countryName ? ', ' + loc.address.countryName : ''}`
       }));
 
       return {
         success: true,
-        data: formattedLocations
+        data: formattedLocations,
+        meta: response.data.meta
       };
 
     } catch (error) {
@@ -350,7 +373,7 @@ class AmadeusService {
   async getAirportsByCity(cityCode) {
     try {
       const token = await this.getAccessToken();
-      
+
       const response = await axios.get(`${this.baseUrls.v1}/reference-data/locations/airports`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -378,7 +401,7 @@ class AmadeusService {
   async getAirlineCodes() {
     try {
       const token = await this.getAccessToken();
-      
+
       const response = await axios.get(`${this.baseUrls.v1}/reference-data/airlines`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -405,25 +428,25 @@ class AmadeusService {
   // Filter out test properties and prioritize real hotels
   prioritizeHotels(hotels, limit = 20) {
     if (!hotels || hotels.length === 0) return [];
-    
+
     // Define priority scoring function
     const getPriority = (hotel) => {
       const name = hotel.name?.toUpperCase() || '';
-      
+
       // Skip likely test properties
       if (name.includes('TEST PROPERTY') || name.includes('TEST HOTEL') || name.includes('SYNSIX')) {
         return -1;
       }
-      
+
       let score = 0;
-      
+
       // Prioritize actual hotels
       if (name.includes('HOTEL')) score += 3;
       if (name.includes('HILTON') || name.includes('MARRIOTT') || name.includes('HYATT')) score += 5;
-      
+
       return score;
     };
-    
+
     // Score, filter and sort hotels
     return hotels
       .map(hotel => ({ ...hotel, priority: getPriority(hotel) }))
@@ -435,7 +458,7 @@ class AmadeusService {
   async searchHotels(params) {
     try {
       const token = await this.getAccessToken();
-      
+
       // First, get hotels in the city using v1 endpoint
       const hotelListResponse = await axios.get(`${this.baseUrls.v1}/reference-data/locations/hotels/by-city`, {
         headers: {
@@ -448,14 +471,14 @@ class AmadeusService {
           hotelSource: 'ALL'
         }
       });
-      
+
       console.log(`Found ${hotelListResponse.data.data?.length || 0} hotels in ${params.cityCode}`);
-      
+
       // If no hotels found, return empty results
       if (!hotelListResponse.data.data || hotelListResponse.data.data.length === 0) {
         return { data: [] };
       }
-      
+
       // SKIP availability check for test environment to show all hotels
       // Most test hotel IDs don't support availability checks, so we just return the hotel list
       console.log(`Returning all ${hotelListResponse.data.data.length} hotels without availability check (test environment)`);
@@ -469,21 +492,21 @@ class AmadeusService {
   async getHotelDetails(hotelId) {
     try {
       const token = await this.getAccessToken();
-      
+
       const response = await axios.get(`${this.baseUrls.v2}/shopping/hotel-offers/by-hotel`, {
         headers: {
           'Authorization': `Bearer ${token}`
         },
         params: {
           hotelId: hotelId,
-          checkInDate: new Date(Date.now() + 24*60*60*1000).toISOString().split('T')[0], // Tomorrow
-          checkOutDate: new Date(Date.now() + 2*24*60*60*1000).toISOString().split('T')[0], // Day after tomorrow
+          checkInDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Tomorrow
+          checkOutDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Day after tomorrow
           adults: 2,
           roomQuantity: 1,
           currency: 'USD'
         }
       });
-      
+
       return response.data;
     } catch (error) {
       console.error('Error getting hotel details:', error.response?.data || error.message);
@@ -494,7 +517,7 @@ class AmadeusService {
   async getHotelAvailability(hotelId, checkInDate, checkOutDate, adults) {
     try {
       const token = await this.getAccessToken();
-      
+
       const response = await axios.get(`${this.baseUrls.v3}/shopping/hotel-offers`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -509,7 +532,7 @@ class AmadeusService {
           bestRateOnly: true
         }
       });
-      
+
       return response.data;
     } catch (error) {
       console.error('Error getting hotel availability:', error.response?.data || error.message);
@@ -520,7 +543,7 @@ class AmadeusService {
   async bookHotel(offerId, guests, payments) {
     try {
       const token = await this.getAccessToken();
-      
+
       const bookingData = {
         data: {
           type: "hotel-booking",
@@ -531,14 +554,14 @@ class AmadeusService {
           payments: payments
         }
       };
-      
+
       const response = await axios.post(`${this.baseUrls.v1}/booking/hotel-bookings`, bookingData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/vnd.amadeus+json'
         }
       });
-      
+
       return response.data;
     } catch (error) {
       console.error('Error booking hotel:', error.response?.data || error.message);
@@ -547,7 +570,7 @@ class AmadeusService {
   }
 
   // ===== MOCK PNR GENERATION (FOR TESTING ONLY) =====
-  
+
   // Mock order storage for testing
   static mockOrders = new Map();
 
@@ -568,7 +591,7 @@ class AmadeusService {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const numbers = '0123456789';
     let pnr = '';
-    
+
     // Generate 6-character PNR (typical airline format: ABC123)
     for (let i = 0; i < 3; i++) {
       pnr += letters.charAt(Math.floor(Math.random() * letters.length));
@@ -576,13 +599,13 @@ class AmadeusService {
     for (let i = 0; i < 3; i++) {
       pnr += numbers.charAt(Math.floor(Math.random() * numbers.length));
     }
-    
+
     return pnr;
   }
 
   generateMockOrderData(pnr, travelers = 1) {
     const orderId = `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    
+
     return {
       id: orderId,
       type: 'flight-order',
@@ -617,7 +640,7 @@ class AmadeusService {
                   },
                   arrival: {
                     iataCode: 'LAX',
-                    terminal: '1', 
+                    terminal: '1',
                     at: '2024-08-15T11:30:00'
                   },
                   carrierCode: 'AA',
@@ -656,7 +679,7 @@ class AmadeusService {
           validatingAirlineCodes: [
             'AA'
           ],
-          travelerPricings: Array.from({length: travelers}, (_, i) => ({
+          travelerPricings: Array.from({ length: travelers }, (_, i) => ({
             travelerId: (i + 1).toString(),
             fareOption: 'STANDARD',
             travelerType: 'ADULT',
@@ -680,7 +703,7 @@ class AmadeusService {
           }))
         }
       ],
-      travelers: Array.from({length: travelers}, (_, i) => ({
+      travelers: Array.from({ length: travelers }, (_, i) => ({
         id: (i + 1).toString(),
         dateOfBirth: '1990-01-01',
         name: {
