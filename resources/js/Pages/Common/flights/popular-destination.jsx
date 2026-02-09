@@ -46,7 +46,8 @@ export default function PopularDestinations({ onSelectDestination }) {
       try {
         // Get user location to fetch relevant trending data
         const location = await GeoService.getUserLocation();
-        const originCode = location.city || 'DEL'; // Default to Delhi
+        // Use cityCode (IATA) instead of city name for API
+        const originCode = location.cityCode || 'DEL'; // Default to Delhi IATA code
 
         console.log(`📊 Fetching most booked destinations from ${originCode}`);
 
@@ -160,7 +161,7 @@ export default function PopularDestinations({ onSelectDestination }) {
               alt={destination.name}
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
               loading="eager"
-              fetchPriority={index < 4 ? "high" : "auto"}
+              fetchpriority={index < 4 ? "high" : "auto"}
               onLoad={() => handleImageLoad(destination.id)}
               onError={(e) => {
                 e.target.onerror = null;
