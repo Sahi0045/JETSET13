@@ -7,16 +7,32 @@ import axios from 'axios';
  */
 export const getGeoLocation = async (req, res) => {
     try {
-        // Try ipapi.co first
+        // Extract the real client IP from proxy headers (Vercel, Nginx, etc.)
+        const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+            || req.headers['x-real-ip']
+            || req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim()
+            || req.ip
+            || req.connection?.remoteAddress;
+
+        console.log('GeoService: Detected client IP:', clientIp);
+
+        // Try ipapi.co first — pass the client IP explicitly
         try {
-            const response = await axios.get('https://ipapi.co/json/', {
+            const url = clientIp && !isPrivateIp(clientIp)
+                ? `https://ipapi.co/${clientIp}/json/`
+                : 'https://ipapi.co/json/';
+            console.log('GeoService: Fetching from:', url);
+            const response = await axios.get(url, {
                 headers: { 'User-Agent': 'JetSetGo/1.0' }
             });
             return res.status(200).json(response.data);
         } catch (primaryError) {
             console.warn('Primary geo service (ipapi.co) failed:', primaryError.message);
-            // Fallback to ip-api.com
-            const fallbackResponse = await axios.get('http://ip-api.com/json/');
+            // Fallback to ip-api.com — pass client IP explicitly
+            const fallbackUrl = clientIp && !isPrivateIp(clientIp)
+                ? `http://ip-api.com/json/${clientIp}`
+                : 'http://ip-api.com/json/';
+            const fallbackResponse = await axios.get(fallbackUrl);
             // Map ip-api.com response to match ipapi.co structure roughly
             const data = fallbackResponse.data;
             return res.status(200).json({
@@ -25,8 +41,8 @@ export const getGeoLocation = async (req, res) => {
                 city: data.city,
                 region: data.regionName,
                 ip: data.query,
-                currency: 'USD', // ip-api free doesn't give currency, verify if critical
-                country_calling_code: '' // ip-api free doesn't give calling code
+                currency: data.countryCode === 'IN' ? 'INR' : 'USD',
+                country_calling_code: data.countryCode === 'IN' ? '+91' : ''
             });
         }
     } catch (error) {
@@ -34,6 +50,24 @@ export const getGeoLocation = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch location data' });
     }
 };
+
+/**
+ * Check if an IP is a private/local address (not useful for geolocation)
+ */
+function isPrivateIp(ip) {
+    if (!ip) return true;
+    return ip === '127.0.0.1'
+        || ip === '::1'
+        || ip === 'localhost'
+        || ip.startsWith('10.')
+        || ip.startsWith('172.16.') || ip.startsWith('172.17.') || ip.startsWith('172.18.')
+        || ip.startsWith('172.19.') || ip.startsWith('172.2') || ip.startsWith('172.3')
+        || ip.startsWith('192.168.')
+        || ip.startsWith('fe80:')
+        || ip.startsWith('::ffff:127.')
+        || ip.startsWith('::ffff:10.')
+        || ip.startsWith('::ffff:192.168.');
+}
 
 export const getGeoLocationByIp = async (req, res) => {
     try {
