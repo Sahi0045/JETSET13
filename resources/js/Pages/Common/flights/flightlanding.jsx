@@ -235,13 +235,14 @@ function FlightLanding() {
 
   const handleSearch = async (formData) => {
     try {
-      // Convert city names to IATA codes
-      const fromCode = cityToIATACode[formData.from] || formData.from;
-      const toCode = cityToIATACode[formData.to] || formData.to;
+      // Use IATA codes from formData (set when user selects from suggestions)
+      // Fall back to cityToIATACode map, then raw input as last resort
+      const fromCode = formData.fromCode || cityToIATACode[formData.from] || formData.from;
+      const toCode = formData.toCode || cityToIATACode[formData.to] || formData.to;
 
       console.log('Converting cities to IATA codes:', {
-        from: `${formData.from} -> ${fromCode}`,
-        to: `${formData.to} -> ${toCode}`
+        from: `${formData.from} -> ${fromCode} (formData.fromCode: ${formData.fromCode})`,
+        to: `${formData.to} -> ${toCode} (formData.toCode: ${formData.toCode})`
       });
 
       const searchData = {
@@ -301,8 +302,8 @@ function FlightLanding() {
         state: {
           searchData: {
             ...formData,
-            from: cityToIATACode[formData.from] || formData.from,
-            to: cityToIATACode[formData.to] || formData.to
+            from: formData.fromCode || cityToIATACode[formData.from] || formData.from,
+            to: formData.toCode || cityToIATACode[formData.to] || formData.to
           }
         }
       });

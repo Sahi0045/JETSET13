@@ -945,15 +945,17 @@ function FlightSearchPage() {
       const flightData = transformFlightData(data.data.flights);
       setFlights(flightData);
 
-      // Update prices in the date range
-      const { dateWisePrices, lowestPrice } = data.data;
-      setDateRange(prev =>
-        prev.map(d => ({
-          ...d,
-          price: dateWisePrices[d.isoDate] ? `$${dateWisePrices[d.isoDate]}` : d.price,
-          isLowestPrice: dateWisePrices[d.isoDate] === lowestPrice
-        }))
-      );
+      // Update prices in the date range (only if dateWisePrices is available)
+      const { dateWisePrices, lowestPrice } = data.data || {};
+      if (dateWisePrices) {
+        setDateRange(prev =>
+          prev.map(d => ({
+            ...d,
+            price: dateWisePrices[d.isoDate] ? `$${dateWisePrices[d.isoDate]}` : d.price,
+            isLowestPrice: dateWisePrices[d.isoDate] === lowestPrice
+          }))
+        );
+      }
 
       // Update URL with new search params
       navigate(`/flights/search?from=${newSearchParams.from}&to=${newSearchParams.to}&date=${selectedDate.isoDate}`, {
