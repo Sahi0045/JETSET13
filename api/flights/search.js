@@ -13,9 +13,9 @@ export default async function handler(req, res) {
 
   // Only allow POST method for flight search
   if (req.method !== 'POST') {
-    return res.status(405).json({ 
-      success: false, 
-      error: 'Method not allowed. Use POST.' 
+    return res.status(405).json({
+      success: false,
+      error: 'Method not allowed. Use POST.'
     });
   }
 
@@ -32,8 +32,8 @@ export default async function handler(req, res) {
   try {
     console.log('🔍 Flight search request received');
     console.log('Request body:', req.body);
-    
-    const { from, to, departDate, returnDate, tripType, travelers, max = 10 } = req.body;
+
+    const { from, to, departDate, returnDate, tripType, travelers, travelClass, max = 10 } = req.body;
 
     // Validate required fields
     if (!from || !to || !departDate) {
@@ -76,6 +76,7 @@ export default async function handler(req, res) {
     }
 
     console.log('✅ Validation passed. Searching flights with Amadeus API...');
+    console.log('🎫 Travel Class requested:', travelClass || 'ECONOMY (default)');
 
     // Prepare search parameters for Amadeus API
     const searchParams = {
@@ -84,13 +85,14 @@ export default async function handler(req, res) {
       departDate,
       returnDate: returnDate && returnDate.trim() !== '' ? returnDate : undefined,
       travelers: parseInt(travelers) || 1,
+      travelClass: travelClass || undefined, // ECONOMY, PREMIUM_ECONOMY, BUSINESS, FIRST
       max: parseInt(max) || 10
     };
 
     try {
       // Call real Amadeus API
       const amadeusResponse = await AmadeusService.searchFlights(searchParams);
-      
+
       if (!amadeusResponse.success) {
         throw new Error(amadeusResponse.error);
       }
@@ -114,7 +116,7 @@ export default async function handler(req, res) {
 
       // Transform Amadeus response to frontend format
       const transformedFlights = transformAmadeusFlightData(
-        amadeusResponse.data, 
+        amadeusResponse.data,
         amadeusResponse.dictionaries
       );
 
@@ -133,11 +135,11 @@ export default async function handler(req, res) {
 
     } catch (amadeusError) {
       console.error('❌ Amadeus API error:', amadeusError);
-      
+
       // Check if it's a credentials issue
-      const isCredentialError = amadeusError.message?.includes('credentials') || 
-                                amadeusError.message?.includes('Missing Amadeus');
-      
+      const isCredentialError = amadeusError.message?.includes('credentials') ||
+        amadeusError.message?.includes('Missing Amadeus');
+
       return res.status(500).json({
         success: false,
         error: 'Flight search failed',
@@ -170,22 +172,22 @@ export default async function handler(req, res) {
 // Transform Amadeus API response to frontend format
 function transformAmadeusFlightData(amadeusFlights, dictionaries = {}) {
   if (!amadeusFlights || amadeusFlights.length === 0) return [];
-  
+
   const airlines = dictionaries?.carriers || {};
   const airports = dictionaries?.locations || {};
   const aircraft = dictionaries?.aircraft || {};
-  
+
   return amadeusFlights.map(flight => {
     try {
       const firstItinerary = flight.itineraries?.[0];
       const firstSegment = firstItinerary?.segments?.[0];
       const lastSegment = firstItinerary?.segments?.[firstItinerary.segments.length - 1];
-      
+
       if (!firstSegment || !lastSegment) {
         console.warn('Invalid flight segment data:', flight);
         return null;
       }
-      
+
       // Calculate total duration
       let totalDuration = 'Unknown';
       if (firstItinerary?.duration) {
@@ -196,49 +198,49 @@ function transformAmadeusFlightData(amadeusFlights, dictionaries = {}) {
           totalDuration = `${hours}h ${minutes}m`;
         }
       }
-      
+
       // Get airline name
       const carrierCode = firstSegment.carrierCode;
       const airlineName = airlines[carrierCode] || carrierCode;
-      
+
       // Format departure and arrival times
       const departure = {
-        time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          hour12: false 
+        time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
         }),
         airport: firstSegment.departure.iataCode,
         terminal: firstSegment.departure.terminal || 'T1',
         date: firstSegment.departure.at.split('T')[0]
       };
-      
+
       const arrival = {
-        time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          hour12: false 
+        time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
         }),
         airport: lastSegment.arrival.iataCode,
         terminal: lastSegment.arrival.terminal || 'T1',
         date: lastSegment.arrival.at.split('T')[0]
       };
-      
+
       // Calculate stops
       const stops = Math.max(0, firstItinerary.segments.length - 1);
-      
+
       // Get pricing info
       const price = {
         total: flight.price?.total || '0',
         amount: parseFloat(flight.price?.total || 0),
         currency: flight.price?.currency || 'USD'
       };
-      
+
       // Get traveler pricing for cabin class
       const travelerPricing = flight.travelerPricings?.[0];
       const fareDetails = travelerPricing?.fareDetailsBySegment?.[0];
       const cabin = fareDetails?.cabin || 'ECONOMY';
-      
+
       return {
         id: flight.id,
         airline: airlineName,
@@ -255,7 +257,7 @@ function transformAmadeusFlightData(amadeusFlights, dictionaries = {}) {
         })) : [],
         aircraft: aircraft[firstSegment.aircraft?.code] || firstSegment.aircraft?.code || 'Unknown',
         cabin: cabin,
-        baggage: fareDetails?.includedCheckedBags?.weight 
+        baggage: fareDetails?.includedCheckedBags?.weight
           ? `${fareDetails.includedCheckedBags.weight}${fareDetails.includedCheckedBags.weightUnit || 'kg'}`
           : '23kg',
         refundable: travelerPricing?.price?.refundableTaxes ? true : false,

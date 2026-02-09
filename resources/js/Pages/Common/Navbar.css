@@ -74,7 +74,8 @@
     .logo-container {
       display: flex;
       flex-direction: column;
-      align-items: flex-start;
+      align-items: flex-end;
+      /* Changed from flex-start to flex-end for right alignment */
       margin-top: 4px;
     }
 
@@ -94,13 +95,21 @@
     }
 
     .navbar-tagline {
-      font-size: 10px;
-      font-weight: 600;
+      font-size: 14px;
+      /* Increased size */
+      font-weight: 700;
       color: #055B75;
-      letter-spacing: 0.5px;
-      margin-top: -2px;
+      letter-spacing: 1px;
+      margin-top: -4px;
+      font-family: 'Brush Script MT', 'Comic Sans MS', cursive;
+      /* Stylish handwritten font */
       font-style: italic;
       white-space: nowrap;
+      text-shadow: 1px 1px 0px rgba(255, 255, 255, 0.5);
+      /* Added subtle shadow */
+      transform: rotate(-3deg);
+      /* Slight tilt for style */
+      margin-right: 4px;
     }
 
     .navbar.scrolled .navbar-tagline {
