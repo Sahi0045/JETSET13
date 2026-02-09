@@ -11,15 +11,15 @@ const __dirname = path.dirname(__filename);
 export default defineConfig(({ mode }) => {
     // Default to secure=false if VITE_SECURE is not set
     const isSecure = process.env.VITE_SECURE === 'true';
-    
+
     let httpsConfig = {};
-    
+
     // Set up HTTPS if enabled
     if (isSecure) {
         console.log('HTTPS is enabled for Vite development server');
         // Use self-signed certs if available
         const certPath = path.resolve(__dirname, './certs');
-        if (fs.existsSync(path.join(certPath, 'cert.pem')) && 
+        if (fs.existsSync(path.join(certPath, 'cert.pem')) &&
             fs.existsSync(path.join(certPath, 'key.pem'))) {
             httpsConfig = {
                 cert: fs.readFileSync(path.join(certPath, 'cert.pem')),
@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => {
             };
         }
     }
-    
+
     return {
         plugins: [
             react()
@@ -82,7 +82,7 @@ export default defineConfig(({ mode }) => {
             historyApiFallback: true,
             proxy: {
                 '/api': {
-                    target: 'http://localhost:5004',
+                    target: 'http://localhost:5005',
                     changeOrigin: true,
                     secure: false,
                     ws: true
