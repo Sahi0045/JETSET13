@@ -1,22 +1,22 @@
 import { Link, useNavigate } from "react-router-dom"
 import Navbar from "../Navbar"
 import Footer from "../Footer"
-import { 
-  Search, 
-  Globe, 
-  Users, 
-  Calendar, 
-  Star, 
-  Mail, 
-  Check, 
-  Heart, 
-  ArrowRight, 
-  ChevronLeft, 
-  ChevronRight, 
-  Coffee, 
-  Wifi, 
-  Tv, 
-  Clock, 
+import {
+  Search,
+  Globe,
+  Users,
+  Calendar,
+  Star,
+  Mail,
+  Check,
+  Heart,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  Coffee,
+  Wifi,
+  Tv,
+  Clock,
   MapPin,
   Award,
   Sparkles,
@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import { popularDestinations } from "./hotel"
 import { useState, useEffect, useRef } from "react"
+import Price from "../../../Components/Price"
 import axios from 'axios';
 import * as amadeusUtils from './amadeusUtils';
 import DirectAmadeusService from '../../../Services/DirectAmadeusService';
@@ -41,7 +42,7 @@ export default function LandingPage() {
   const [isFavorite, setIsFavorite] = useState({});
   const [isHovered, setIsHovered] = useState(null);
   const carouselRef = useRef(null);
-  
+
   // Search states
   const [searchDestination, setSearchDestination] = useState("");
   const [searchPackageType, setSearchPackageType] = useState("All Inclusive");
@@ -51,7 +52,7 @@ export default function LandingPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState(null);
   const [cityCode, setCityCode] = useState("");
-  
+
   // Date picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -61,7 +62,7 @@ export default function LandingPage() {
   const [hoverDate, setHoverDate] = useState(null);
   const datePickerRef = useRef(null);
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  
+
   // Destination search suggestion states
   const [destinationSuggestions, setDestinationSuggestions] = useState([]);
   const [showDestinationSuggestions, setShowDestinationSuggestions] = useState(false);
@@ -124,7 +125,7 @@ export default function LandingPage() {
     try {
       const formattedCheckInDate = selectedStartDate ? amadeusUtils.formatDate(selectedStartDate) : undefined;
       const formattedCheckOutDate = selectedEndDate ? amadeusUtils.formatDate(selectedEndDate) : undefined;
-      
+
       console.log('Search Parameters:', {
         destination: cityCode,
         checkInDate: formattedCheckInDate,
@@ -134,7 +135,7 @@ export default function LandingPage() {
 
       // Use API_BASE_URL from centralized config
       console.log('Using API URL from config:', API_BASE_URL);
-      
+
       try {
         // First try the regular search endpoint
         const response = await axios.get(`${API_BASE_URL}/hotels/search`, {
@@ -145,13 +146,13 @@ export default function LandingPage() {
             travelers: searchTravelers
           }
         });
-        
+
         console.log('API Response:', response.data);
         console.log('API Response structure:', JSON.stringify(response.data, null, 2));
 
         // Check if API returned empty results
         let emptyResults = false;
-        
+
         // Check all possible data structures
         if (response.data.data?.hotels && Array.isArray(response.data.data.hotels) && response.data.data.hotels.length === 0) {
           emptyResults = true;
@@ -160,7 +161,7 @@ export default function LandingPage() {
         } else if (response.data.data && Array.isArray(response.data.data) && response.data.data.length === 0) {
           emptyResults = true;
         }
-        
+
         // If empty results, try Direct Amadeus API before falling back to placeholders
         if (emptyResults) {
           console.log('Production API returned empty results, attempting Direct Amadeus API...');
@@ -171,7 +172,7 @@ export default function LandingPage() {
               formattedCheckOutDate,
               searchTravelers
             );
-            
+
             if (amadeusHotels && amadeusHotels.length > 0) {
               console.log('Direct Amadeus API returned', amadeusHotels.length, 'hotels');
               // Create a modified response with real hotel data from Amadeus
@@ -197,7 +198,7 @@ export default function LandingPage() {
         processSearchResponse(response);
       } catch (error) {
         console.error('Search API error, falling back to mock endpoint:', error);
-        
+
         try {
           // If the regular search fails, try the mock search endpoint
           const mockResponse = await axios.get(`${API_BASE_URL}/hotels/mock-search`, {
@@ -208,7 +209,7 @@ export default function LandingPage() {
               travelers: searchTravelers
             }
           });
-          
+
           console.log('Mock API Response:', mockResponse.data);
           processSearchResponse(mockResponse);
         } catch (mockError) {
@@ -239,12 +240,12 @@ export default function LandingPage() {
 
       // Extract hotels data from response - handle different possible response structures
       let hotelsData = [];
-      
+
       // Case 1: response.data.data.hotels exists
       if (response.data.data?.hotels && Array.isArray(response.data.data.hotels)) {
         hotelsData = response.data.data.hotels;
         console.log('Found hotels in response.data.data.hotels:', hotelsData.length);
-      } 
+      }
       // Case 2: response.data.data exists and is an array
       else if (response.data.data?.data && Array.isArray(response.data.data.data)) {
         hotelsData = response.data.data.data;
@@ -259,20 +260,20 @@ export default function LandingPage() {
         // Generate placeholder hotels
         hotelsData = generatePlaceholderHotels(cityCode, 5);
       }
-      
+
       // If we found an array structure but it's empty, generate placeholder hotels
       if (hotelsData.length === 0) {
         console.log('Found empty hotels array, creating placeholder hotels instead');
         hotelsData = generatePlaceholderHotels(cityCode, 5);
       }
-      
+
       // Process hotels to ensure all required fields are present
       hotelsData = hotelsData.map((hotel, index) => {
         // Add unique ID if missing
         if (!hotel.id) {
           hotel.id = `hotel-${cityCode}-${index}-${Date.now()}`;
         }
-        
+
         // Add hotel name if missing
         if (!hotel.name) {
           const cityInfo = popularDestinations.find(dest => dest.code === cityCode) || {
@@ -281,7 +282,7 @@ export default function LandingPage() {
           };
           hotel.name = `${cityInfo.name} ${['Grand Hotel', 'Plaza Resort', 'Luxury Suites', 'Executive Inn', 'Palace Hotel'][index % 5]}`;
         }
-        
+
         return hotel;
       });
 
@@ -294,14 +295,14 @@ export default function LandingPage() {
             const countryCode = hotel.address?.countryCode || '';
             hotel.location = countryCode ? `${cityName}, ${countryCode}` : cityName;
           }
-          
+
           // Ensure image is an array
           if (!hotel.images && hotel.image) {
             hotel.images = [hotel.image];
           } else if (!hotel.images && !hotel.image) {
             hotel.images = [`https://source.unsplash.com/random/300x200/?hotel,${hotel.id || Math.random()}`];
           }
-          
+
           // Ensure amenities is an array
           if (!hotel.amenities || !Array.isArray(hotel.amenities)) {
             hotel.amenities = ['Free WiFi', 'Air Conditioning', 'Pool'].slice(0, 3);
@@ -311,7 +312,7 @@ export default function LandingPage() {
         });
 
         // Navigate to the HotelSearchResults component using the correct route path
-      navigate('/hotel-search-results', {
+        navigate('/hotel-search-results', {
           state: {
             searchResults: formattedHotels,
             searchParams: {
@@ -329,7 +330,7 @@ export default function LandingPage() {
       console.error('API Error:', response.data.message);
       setSearchError(response.data.message || "No hotels found");
     }
-    
+
     setIsSearching(false);
   };
 
@@ -339,7 +340,7 @@ export default function LandingPage() {
       name: cityCode,
       country: 'Unknown'
     };
-    
+
     const hotelNames = [
       `${cityInfo.name} Grand Hotel`,
       `${cityInfo.name} Plaza Resort`,
@@ -350,7 +351,7 @@ export default function LandingPage() {
       `${cityInfo.name} Continental`,
       `${cityInfo.name} International`
     ];
-    
+
     const images = [
       'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80',
       'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1470&q=80',
@@ -358,7 +359,7 @@ export default function LandingPage() {
       'https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&w=1600&q=80',
       'https://images.unsplash.com/photo-1564501049412-61c2a3083791?auto=format&fit=crop&w=1470&q=80'
     ];
-    
+
     const amenities = [
       ['WiFi', 'Room Service', 'Restaurant'],
       ['WiFi', 'Pool', 'Fitness Center'],
@@ -366,8 +367,8 @@ export default function LandingPage() {
       ['WiFi', 'Spa', 'Bar'],
       ['WiFi', 'Airport Shuttle', 'Conference Room']
     ];
-    
-    return Array.from({length: Math.min(count, hotelNames.length)}, (_, i) => ({
+
+    return Array.from({ length: Math.min(count, hotelNames.length) }, (_, i) => ({
       id: `placeholder-${i}`,
       name: hotelNames[i],
       location: `${cityInfo.name}, ${cityInfo.country}`,
@@ -394,7 +395,7 @@ export default function LandingPage() {
       setFilteredSuggestions([]);
       return;
     }
-    const filtered = destinationSuggestions.filter(dest => 
+    const filtered = destinationSuggestions.filter(dest =>
       dest && dest.name && dest.name.toLowerCase().includes(value.toLowerCase())
     );
     setFilteredSuggestions(filtered);
@@ -407,36 +408,36 @@ export default function LandingPage() {
     const uniqueDestinations = [...new Set(popularDestinations.map(hotel => hotel.location))];
     setDestinationSuggestions(uniqueDestinations);
   }, []);
-  
+
   // Handle clicks outside dropdowns
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (showDatePicker && datePickerRef.current && !datePickerRef.current.contains(event.target)) {
         setShowDatePicker(false);
       }
-      
+
       if (showDestinationSuggestions && destinationRef.current && !destinationRef.current.contains(event.target)) {
         setShowDestinationSuggestions(false);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showDatePicker, showDestinationSuggestions]);
-  
+
   // Generate calendar days for the date picker
   const generateCalendarDays = () => {
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
     let days = Array(firstDayOfMonth).fill(null);
-    
+
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(i);
     }
-    
+
     return days;
   };
-  
+
   // Handle manual date input
   const handleManualDateInput = (value, type) => {
     const date = new Date(value);
@@ -466,9 +467,9 @@ export default function LandingPage() {
   // Handle calendar date selection
   const handleDateSelect = (day) => {
     if (!day) return;
-    
+
     const selectedDate = new Date(currentYear, currentMonth, day);
-    
+
     if (!selectedStartDate || (selectedStartDate && selectedEndDate)) {
       setSelectedStartDate(selectedDate);
       setSelectedEndDate(null);
@@ -496,28 +497,28 @@ export default function LandingPage() {
 
     setSearchDates(amadeusUtils.formatDateRange(startDate, endDate));
   };
-  
+
   // Handle date hover for range selection
   const handleDateHover = (day) => {
     if (!day || !selectedStartDate || selectedEndDate) return;
     setHoverDate(new Date(currentYear, currentMonth, day));
   };
-  
+
   // Check if a date is in range
   const isInRange = (day) => {
     if (!day || !selectedStartDate) return false;
-    
+
     const date = new Date(currentYear, currentMonth, day);
     const end = selectedEndDate || hoverDate;
-    
+
     return end && date > selectedStartDate && date < end;
   };
-  
+
   // Filter destination suggestions based on input
   const filterDestinations = (input) => {
     setSearchDestination(input);
     if (input.length > 0) {
-      const filtered = destinationSuggestions.filter(dest => 
+      const filtered = destinationSuggestions.filter(dest =>
         dest.toLowerCase().includes(input.toLowerCase())
       );
       setFilteredSuggestions(filtered);
@@ -526,7 +527,7 @@ export default function LandingPage() {
       setShowDestinationSuggestions(false);
     }
   };
-  
+
   // Reset date selection
   const resetDateSelection = () => {
     setSelectedStartDate(null);
@@ -541,20 +542,20 @@ export default function LandingPage() {
     const handleScroll = () => {
       const scrollPosition = window.scrollY;
       const sections = document.querySelectorAll('.animate-on-scroll');
-      
+
       sections.forEach((section) => {
         const sectionTop = section.getBoundingClientRect().top;
         const sectionId = section.id;
-        
+
         if (sectionTop < window.innerHeight * 0.75) {
           setIsVisible(prev => ({ ...prev, [sectionId]: true }));
         }
       });
     };
-    
+
     window.addEventListener('scroll', handleScroll);
     handleScroll(); // Check on initial load
-    
+
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -563,7 +564,7 @@ export default function LandingPage() {
     const interval = setInterval(() => {
       nextSlide();
     }, 5000);
-    
+
     return () => clearInterval(interval);
   }, [activeIndex]);
 
@@ -574,7 +575,7 @@ export default function LandingPage() {
   const prevSlide = () => {
     setActiveIndex((current) => (current === 0 ? popularDestinations.length - 1 : current - 1));
   };
-  
+
   const toggleFavorite = (id, e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -588,7 +589,7 @@ export default function LandingPage() {
     { icon: <Tv size={20} />, text: "Smart TV & Entertainment" },
     { icon: <Clock size={20} />, text: "Flexible Check-in" }
   ];
-  
+
   // Amenities list with icons
   const amenities = [
     { icon: <Wifi size={18} />, text: "Free WiFi" },
@@ -599,20 +600,20 @@ export default function LandingPage() {
     // Set the search parameters
     setSearchDestination(destination.name);
     setCityCode(destination.code);
-    
+
     // Set default dates (next 2 days)
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const dayAfterTomorrow = new Date(tomorrow);
     dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
-    
+
     setSelectedStartDate(tomorrow);
     setSelectedEndDate(dayAfterTomorrow);
-    
+
     // Format dates using the utility function
     setSearchDates(amadeusUtils.formatDateRange(tomorrow, dayAfterTomorrow));
-    
+
     // Trigger the search
     handleSearch();
   };
@@ -659,7 +660,7 @@ export default function LandingPage() {
     <main className="min-h-screen bg-white font-poppins overflow-x-hidden">
       {/* Navbar */}
       <Navbar />
-      
+
       {/* Hero Section */}
       <div className="relative min-h-[85vh] md:min-h-[100vh] overflow-hidden pb-32 md:pb-40">
         {/* Hero Background with Overlay */}
@@ -714,7 +715,7 @@ export default function LandingPage() {
                 <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 tracking-tight leading-tight">Experience Luxury <span className="text-yellow-300">&</span></h1>
                 <h1 className="text-2xl sm:text-3xl font-bold text-white mb-3 tracking-tight leading-tight">Exceptional Comfort</h1>
                 <p className="text-sm sm:text-base text-white mb-6 tracking-wide max-w-xs">Your perfect getaway with premium amenities and service</p>
-                
+
                 {/* Mobile Quick Stats - Better Mobile Layout */}
                 <div className="grid grid-cols-2 gap-3 mt-4">
                   <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 flex flex-col items-center">
@@ -777,7 +778,7 @@ export default function LandingPage() {
                         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                           <Globe className="h-4 w-4 text-blue-500" />
                         </div>
-                        
+
                         {/* Destination Suggestions Dropdown */}
                         {showDestinationSuggestions && (
                           <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
@@ -789,7 +790,7 @@ export default function LandingPage() {
                             </div>
                             <ul className="py-1">
                               {filteredSuggestions.map((destination, index) => (
-                                <li 
+                                <li
                                   key={index}
                                   className="px-4 py-3 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition-colors"
                                   onClick={() => handleDestinationSelect(destination)}
@@ -841,7 +842,7 @@ export default function LandingPage() {
 
                   {/* Tablet Search Button */}
                   <div className="flex justify-center mt-4">
-                    <button 
+                    <button
                       onClick={handleSearch}
                       className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-3 px-8 rounded-xl transition-all duration-300 font-medium flex items-center justify-center gap-3 shadow-lg hover:shadow-blue-500/30 relative overflow-hidden group"
                       disabled={isSearching}
@@ -862,7 +863,7 @@ export default function LandingPage() {
                       </div>
                     </button>
                   </div>
-                  
+
                   {searchError && (
                     <div className="mt-4 text-center">
                       <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm">
@@ -892,8 +893,8 @@ export default function LandingPage() {
                 <div className="relative">
                   {/* Mobile Search Toggle */}
                   <div className="block md:hidden mb-4">
-                    <button 
-                      onClick={() => setShowMobileSearch(prev => !prev)} 
+                    <button
+                      onClick={() => setShowMobileSearch(prev => !prev)}
                       className="w-full bg-blue-50 text-blue-600 px-4 py-3 rounded-xl flex items-center justify-between"
                     >
                       <span className="font-medium">Search Properties</span>
@@ -925,7 +926,7 @@ export default function LandingPage() {
                           <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                             <Globe className="h-4 w-4 text-blue-500" />
                           </div>
-                          
+
                           {/* Enhanced Mobile-Friendly Destination Suggestions Dropdown */}
                           {showDestinationSuggestions && (
                             <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[60vh] md:max-h-60 overflow-y-auto">
@@ -937,7 +938,7 @@ export default function LandingPage() {
                               </div>
                               <ul className="py-1">
                                 {filteredSuggestions.map((destination, index) => (
-                                  <li 
+                                  <li
                                     key={index}
                                     className="px-4 py-3 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition-colors"
                                     onClick={() => handleDestinationSelect(destination)}
@@ -966,7 +967,7 @@ export default function LandingPage() {
                           Package Type
                         </label>
                         <div className="relative group">
-                          <select 
+                          <select
                             value={searchPackageType}
                             onChange={(e) => setSearchPackageType(e.target.value)}
                             className="w-full py-2.5 pl-4 pr-10 bg-gray-50/80 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
@@ -1021,14 +1022,14 @@ export default function LandingPage() {
                           <div className="flex items-center justify-between bg-gray-50/80 rounded-lg py-2.5 px-4">
                             <span className="text-gray-700">{searchTravelers} Travelers</span>
                             <div className="flex items-center gap-2">
-                              <button 
+                              <button
                                 onClick={() => setSearchTravelers(prev => Math.max(1, prev - 1))}
                                 className="p-1 rounded-full hover:bg-gray-200 transition-colors"
                               >
                                 <Minus className="h-4 w-4 text-blue-500" />
                               </button>
                               <span className="w-8 text-center">{searchTravelers}</span>
-                              <button 
+                              <button
                                 onClick={() => setSearchTravelers(prev => Math.min(10, prev + 1))}
                                 className="p-1 rounded-full hover:bg-gray-200 transition-colors"
                               >
@@ -1042,7 +1043,7 @@ export default function LandingPage() {
 
                     {/* Enhanced Search Button */}
                     <div className="flex justify-center mt-4 md:mt-6">
-                      <button 
+                      <button
                         onClick={handleSearch}
                         className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-3 sm:py-4 px-8 sm:px-12 rounded-xl transition-all duration-300 font-medium flex items-center justify-center gap-3 shadow-lg hover:shadow-blue-500/30 relative overflow-hidden group"
                         disabled={isSearching}
@@ -1063,7 +1064,7 @@ export default function LandingPage() {
                         </div>
                       </button>
                     </div>
-                    
+
                     {searchError && (
                       <div className="mt-4 text-center">
                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm">
@@ -1085,14 +1086,14 @@ export default function LandingPage() {
             <div className="bg-white w-full rounded-t-3xl p-6 animate-slide-up max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg font-semibold">Search Hotels</h3>
-                <button 
+                <button
                   onClick={handleMobileSearchClose}
                   className="p-2 hover:bg-gray-100 rounded-full"
                 >
                   <X size={24} />
                 </button>
               </div>
-              
+
               {/* Visual indicator for drag to close */}
               <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6 -mt-2"></div>
 
@@ -1113,7 +1114,7 @@ export default function LandingPage() {
                       className="w-full py-2.5 pl-8 pr-4 bg-gray-50 rounded-lg text-base border-0 focus:ring-2 focus:ring-blue-500"
                     />
                     <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500" />
-                    
+
                     {/* Mobile destination suggestions */}
                     {showDestinationSuggestions && filteredSuggestions.length > 0 && (
                       <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto border border-gray-200">
@@ -1122,7 +1123,7 @@ export default function LandingPage() {
                         </div>
                         <ul>
                           {filteredSuggestions.map((destination, index) => (
-                            <li 
+                            <li
                               key={index}
                               className="px-4 py-3 hover:bg-blue-50 active:bg-blue-100 cursor-pointer border-b border-gray-100 last:border-0"
                               onClick={() => handleDestinationSelect(destination)}
@@ -1186,7 +1187,7 @@ export default function LandingPage() {
                         <p className="text-xs text-gray-500">Ages 13 or above</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <button 
+                        <button
                           onClick={() => setSearchTravelers(prev => Math.max(1, prev - 1))}
                           className="w-9 h-9 flex items-center justify-center bg-white rounded-full shadow border border-gray-200 active:bg-gray-100"
                           aria-label="Decrease travelers"
@@ -1194,7 +1195,7 @@ export default function LandingPage() {
                           <Minus size={16} className="text-blue-600" />
                         </button>
                         <span className="w-8 text-center font-medium text-lg">{searchTravelers}</span>
-                        <button 
+                        <button
                           onClick={() => setSearchTravelers(prev => Math.min(10, prev + 1))}
                           className="w-9 h-9 flex items-center justify-center bg-white rounded-full shadow border border-gray-200 active:bg-gray-100"
                           aria-label="Increase travelers"
@@ -1213,7 +1214,7 @@ export default function LandingPage() {
                   </label>
                   <div className="p-4">
                     <div className="relative">
-                      <select 
+                      <select
                         value={searchPackageType}
                         onChange={(e) => setSearchPackageType(e.target.value)}
                         className="w-full p-3 bg-gray-50 rounded-lg border-0 appearance-none focus:ring-2 focus:ring-blue-500 pr-10"
@@ -1282,7 +1283,7 @@ export default function LandingPage() {
           animation: slide-up 0.3s ease-out forwards;
         }
       `}</style>
-      
+
       {/* Most Popular Section - Enhanced with Interactive Carousel */}
       <div className="py-20 bg-gradient-to-b from-[#f0f7fa] to-white" id="popular-section">
         <div className="container mx-auto px-4">
@@ -1294,16 +1295,16 @@ export default function LandingPage() {
           </div>
 
           <div className="relative max-w-6xl mx-auto animate-on-scroll" id="carousel" ref={carouselRef}>
-            <button 
+            <button
               onClick={prevSlide}
               className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white p-3 rounded-full shadow-lg hover:bg-blue-50 transition-colors -ml-5 md:-ml-6 focus:outline-none focus:ring-2 focus:ring-blue-400"
               aria-label="Previous slide"
             >
               <ChevronLeft className="text-blue-600" size={24} />
             </button>
-            
+
             <div className="overflow-hidden rounded-2xl shadow-xl">
-              <div 
+              <div
                 className="flex transition-transform duration-700 ease-out"
                 style={{ transform: `translateX(-${activeIndex * 100}%)` }}
               >
@@ -1317,44 +1318,44 @@ export default function LandingPage() {
                           className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 hover:scale-110"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
-                        
+
                         {/* Rating Badge */}
                         <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full flex items-center shadow-md">
                           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 mr-1" />
                           <span className="text-sm font-semibold">5.0</span>
                           <span className="text-xs text-gray-500 ml-1">(128 reviews)</span>
                         </div>
-                        
+
                         {/* Favorite Button */}
-                        <button 
+                        <button
                           className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm p-2 rounded-full text-gray-600 hover:text-red-500 transition-colors shadow-md focus:outline-none"
                           onClick={(e) => toggleFavorite(destination.id, e)}
                           aria-label="Add to favorites"
                         >
                           <Heart size={20} className={isFavorite[destination.id] ? "text-red-500 fill-red-500" : ""} />
                         </button>
-                        
+
                         {/* Price Badge */}
                         <div className="absolute bottom-4 left-4 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg">
-                          ${destination.price} <span className="text-xs font-normal">per night</span>
+                          <Price amount={destination.price} /> <span className="text-xs font-normal">per night</span>
                         </div>
                       </div>
-                      
+
                       <div className="p-8 flex flex-col justify-between">
                         <div>
                           <div className="flex items-center justify-between mb-2">
                             <h3 className="text-2xl font-bold text-gray-800">{destination.name}</h3>
                           </div>
-                          
+
                           <div className="flex items-center gap-2 mb-4 text-gray-600">
                             <MapPin size={18} className="text-blue-500" />
                             <span className="text-sm">{destination.location}</span>
                           </div>
-                          
+
                           <p className="text-gray-600 mb-6 leading-relaxed">
                             Experience luxury in the heart of nature with stunning views and premium amenities. Perfect for both relaxation and adventure seekers.
                           </p>
-                          
+
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                             {features.slice(0, 4).map((feature, idx) => (
                               <div key={idx} className="flex items-center text-gray-700">
@@ -1364,7 +1365,7 @@ export default function LandingPage() {
                             ))}
                           </div>
                         </div>
-                        
+
                         <div className="mt-auto">
                           <div className="flex flex-wrap items-center justify-between gap-4">
                             <Link
@@ -1374,7 +1375,7 @@ export default function LandingPage() {
                               View Details
                               <ArrowRight size={16} className="transform transition-transform group-hover:translate-x-1" />
                             </Link>
-                            
+
                             <div className="flex items-center gap-1">
                               <span className="text-sm text-gray-500">Available:</span>
                               <span className="text-sm font-semibold text-green-600">Today</span>
@@ -1387,19 +1388,19 @@ export default function LandingPage() {
                 ))}
               </div>
             </div>
-            
-            <button 
+
+            <button
               onClick={nextSlide}
               className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white p-3 rounded-full shadow-lg hover:bg-blue-50 transition-colors -mr-5 md:-mr-6 focus:outline-none focus:ring-2 focus:ring-blue-400"
               aria-label="Next slide"
             >
               <ChevronRight className="text-blue-600" size={24} />
             </button>
-            
+
             <div className="flex justify-center gap-2 mt-8">
               {popularDestinations.slice(0, 5).map((_, idx) => (
-                <button 
-                  key={idx} 
+                <button
+                  key={idx}
                   onClick={() => setActiveIndex(idx)}
                   className={`w-3 h-3 rounded-full transition-all duration-300 focus:outline-none ${idx === activeIndex ? 'bg-blue-600 scale-125' : 'bg-gray-300 hover:bg-gray-400'}`}
                   aria-label={`Go to slide ${idx + 1}`}
@@ -1407,7 +1408,7 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-          
+
           {/* Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto mt-16 animate-on-scroll" id="stats">
             <div className="bg-white rounded-xl shadow-md p-6 text-center transform transition-transform hover:-translate-y-1 hover:shadow-lg">
@@ -1417,7 +1418,7 @@ export default function LandingPage() {
               <h3 className="text-2xl font-bold text-gray-800 mb-1">500+</h3>
               <p className="text-gray-600">Premium Properties</p>
             </div>
-            
+
             <div className="bg-white rounded-xl shadow-md p-6 text-center transform transition-transform hover:-translate-y-1 hover:shadow-lg">
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Users className="h-8 w-8 text-blue-600" />
@@ -1425,7 +1426,7 @@ export default function LandingPage() {
               <h3 className="text-2xl font-bold text-gray-800 mb-1">100+</h3>
               <p className="text-gray-600">Happy Guests</p>
             </div>
-            
+
             <div className="bg-white rounded-xl shadow-md p-6 text-center transform transition-transform hover:-translate-y-1 hover:shadow-lg">
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Star className="h-8 w-8 text-blue-600" />
@@ -1449,8 +1450,8 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto animate-on-scroll" id="destinations-grid">
             {popularDestinations.slice(0, 8).map((destination) => (
-              <div 
-                key={destination.id} 
+              <div
+                key={destination.id}
                 className="group cursor-pointer"
                 onClick={() => handleCardClick(destination)}
                 onMouseEnter={() => setIsHovered(destination.id)}
@@ -1468,21 +1469,21 @@ export default function LandingPage() {
                     className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
-                  
+
                   <div className="absolute bottom-0 left-0 p-6 text-white w-full">
                     <h3 className="text-xl font-bold mb-1 group-hover:text-blue-300 transition-colors">{destination.name}</h3>
                     <div className="flex items-center mb-3">
                       <MapPin size={16} className="mr-1 text-blue-300" />
                       <p className="text-sm text-gray-200">{destination.location}</p>
                     </div>
-                    
+
                     <div className="flex items-center mb-3">
                       <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full flex items-center">
                         <Star className="h-3 w-3 mr-1 text-yellow-400" />
                         <span className="text-xs">{destination.hotelCount} properties available</span>
                       </div>
                     </div>
-                    
+
                     <div className="transform transition-all duration-300 translate-y-8 opacity-0 group-hover:translate-y-0 group-hover:opacity-100">
                       <button className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-1 w-full justify-center">
                         Explore Properties <ArrowRight size={16} />
@@ -1493,7 +1494,7 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-          
+
           {/* Featured Destination Highlight */}
           <div className="mt-16 max-w-6xl mx-auto animate-on-scroll" id="featured-destination">
             <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-2xl shadow-lg overflow-hidden">
@@ -1519,8 +1520,8 @@ export default function LandingPage() {
                     </li>
                   </ul>
                   <div>
-                    <Link 
-                      to="/destinations/kashmir" 
+                    <Link
+                      to="/destinations/kashmir"
                       className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-lg transition-all duration-300 font-medium inline-flex items-center gap-2 shadow-md hover:shadow-blue-500/30 group"
                     >
                       Explore Kashmir
@@ -1529,17 +1530,17 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <div className="relative h-64 md:h-auto">
-                  <img 
-                    src="https://images.unsplash.com/photo-1566837497312-7be7830ae9b1?q=80&w=2070&auto=format&fit=crop" 
-                    alt="Jammu & Kashmir" 
+                  <img
+                    src="https://images.unsplash.com/photo-1566837497312-7be7830ae9b1?q=80&w=2070&auto=format&fit=crop"
+                    alt="Jammu & Kashmir"
                     className="absolute inset-0 w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-l from-transparent to-blue-900/20"></div>
-                  
+
                   {/* Price Badge */}
                   <div className="absolute bottom-6 right-6 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-lg shadow-lg">
                     <p className="text-sm font-semibold text-gray-900">Starting from</p>
-                    <p className="text-2xl font-bold text-blue-600">$199<span className="text-sm font-normal text-gray-600">/night</span></p>
+                    <p className="text-2xl font-bold text-blue-600"><Price amount={199} /><span className="text-sm font-normal text-gray-600">/night</span></p>
                   </div>
                 </div>
               </div>

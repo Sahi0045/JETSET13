@@ -11,6 +11,8 @@ import Footer from "../Footer";
 import withPageElements from "../PageWrapper";
 import ArcPayService from "../../../Services/ArcPayService";
 import LoadingSpinner from "../../../Components/LoadingSpinner";
+import Price from "../../../Components/Price";
+import currencyService from "../../../Services/CurrencyService";
 
 function FlightPayment() {
   const location = useLocation();
@@ -174,7 +176,7 @@ function FlightPayment() {
 
         const checkoutResponse = await ArcPayService.createHostedCheckout({
           amount: amount,
-          currency: paymentData?.calculatedFare?.currency || 'USD',
+          currency: paymentData?.calculatedFare?.currency || currencyService.getCurrency(),
           orderId: orderId,
           bookingType: 'flight',
           customerEmail: paymentData?.passengerData?.[0]?.email || 'customer@jetsetgo.com',
@@ -368,7 +370,7 @@ function FlightPayment() {
 
       const checkoutResponse = await ArcPayService.createHostedCheckout({
         amount: finalAmount,
-        currency: 'USD',
+        currency: paymentData?.calculatedFare?.currency || currencyService.getCurrency(),
         orderId: orderId,
         bookingType: 'flight',
         customerEmail: paymentData?.passengerData?.[0]?.email || 'customer@jetsetgo.com',
@@ -619,20 +621,20 @@ function FlightPayment() {
                           Base Fare ({paymentData?.passengerData?.length || 0} Traveller{paymentData?.passengerData?.length > 1 ? 's' : ''})
                         </span>
                         <span className="font-medium">
-                          ${paymentData?.calculatedFare?.baseFare?.toFixed(2) || '0.00'}
+                          <Price amount={paymentData?.calculatedFare?.baseFare || 0} />
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Taxes & Fees</span>
                         <span className="font-medium">
-                          ${paymentData?.calculatedFare?.totalTax?.toFixed(2) || '0.00'}
+                          <Price amount={paymentData?.calculatedFare?.totalTax || 0} />
                         </span>
                       </div>
                       {paymentData?.calculatedFare?.addonsTotal > 0 && (
                         <div className="flex justify-between">
                           <span className="text-gray-600">Add-ons</span>
                           <span className="font-medium">
-                            ${paymentData?.calculatedFare?.addonsTotal?.toFixed(2) || '0.00'}
+                            <Price amount={paymentData?.calculatedFare?.addonsTotal || 0} />
                           </span>
                         </div>
                       )}
@@ -640,14 +642,14 @@ function FlightPayment() {
                         <div className="flex justify-between">
                           <span className="text-gray-600">VIP Service</span>
                           <span className="font-medium">
-                            ${paymentData?.calculatedFare?.vipServiceFee?.toFixed(2) || '0.00'}
+                            <Price amount={paymentData?.calculatedFare?.vipServiceFee || 0} />
                           </span>
                         </div>
                       )}
                       {discountAmount > 0 && (
                         <div className="flex justify-between text-green-600">
                           <span>Discount Applied</span>
-                          <span className="font-medium">- ${discountAmount.toFixed(2)}</span>
+                          <span className="font-medium text-green-600">- <Price amount={discountAmount} /></span>
                         </div>
                       )}
                     </div>
@@ -656,7 +658,7 @@ function FlightPayment() {
                     <div className="border-t border-gray-200 pt-4 mt-4">
                       <div className="flex justify-between items-center">
                         <span className="text-lg font-semibold text-gray-900">Total Payable</span>
-                        <span className="text-xl font-bold text-blue-600">${finalAmount.toFixed(2)}</span>
+                        <span className="text-xl font-bold text-blue-600"><Price amount={finalAmount} /></span>
                       </div>
                       <p className="text-xs text-gray-500 mt-1 text-right">(Inclusive of all taxes)</p>
                     </div>
@@ -978,7 +980,7 @@ function FlightPayment() {
                             ) : (
                               <div className="flex items-center">
                                 <Lock className="w-5 h-5 mr-2" />
-                                Pay ₹{finalAmount.toFixed(2)}
+                                Pay <Price amount={finalAmount} />
                               </div>
                             )}
                           </button>
@@ -1082,7 +1084,7 @@ function FlightPayment() {
                             ) : (
                               <>
                                 <Lock className="w-5 h-5 mr-2" />
-                                Pay Securely ₹{finalAmount.toFixed(2)}
+                                Pay Securely <Price amount={finalAmount} />
                               </>
                             )}
                           </button>
@@ -1143,7 +1145,7 @@ function FlightPayment() {
                     <CheckCircle className="w-12 h-12 text-green-600" />
                   </div>
                   <h4 className="text-lg font-semibold text-gray-800 mb-2">
-                    Payment of ₹{finalAmount.toFixed(2)} Successful!
+                    Payment of <Price amount={finalAmount} /> Successful!
                   </h4>
                   <p className="text-gray-600 mb-4 text-sm">
                     Your booking is confirmed. Redirecting you shortly...

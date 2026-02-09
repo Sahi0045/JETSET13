@@ -9,9 +9,11 @@ import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
 import supabase from '../../../lib/supabase';
 import { formatDateToISO } from '../../../utils/dateUtils';
+import { useLocationContext } from '../../../Context/LocationContext';
 
 const HotelsLanding = () => {
     const navigate = useNavigate();
+    const { city, loaded } = useLocationContext();
     const destinationInputRef = useRef(null);
     const [destination, setDestination] = useState('');
     const [dateRange, setDateRange] = useState([null, null]);
@@ -95,6 +97,13 @@ const HotelsLanding = () => {
             }
         };
     }, []);
+
+    // Auto-fill destination from user's location
+    useEffect(() => {
+        if (loaded && city && !destination) {
+            setDestination(city);
+        }
+    }, [loaded, city]);
 
     // Featured hotels data - IDs match hotels.json
     const featuredHotels = [

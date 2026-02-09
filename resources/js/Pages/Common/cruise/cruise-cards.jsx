@@ -82,7 +82,7 @@ const CruiseCards = () => {
         description: cruise.name,
         destinations: cruise.destinations,
         departurePorts: [cruise.departure_port],
-        price: `$${cruise.price_per_person}`,
+        price: cruise.price_per_person,
         priceValue: cruise.price_per_person,
         departureDate: cruise.departure_date
       }));

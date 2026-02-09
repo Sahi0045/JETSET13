@@ -3,6 +3,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoadingSpinner from './Components/LoadingSpinner';
+import { LocationProvider } from './Context/LocationContext';
 
 // Fallback components
 // Fallback components
@@ -573,107 +574,109 @@ const ProtectedRoute = React.lazy(() =>
 const App = () => {
   return (
     <React.Suspense fallback={<LoadingComponent />}>
-      <Routes>
-        <Route path="/" element={<Welcome />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/profiledashboard" element={<ProfileDashboard />} />
-        <Route path="/complete-profile" element={<CompleteProfile />} />
+      <LocationProvider>
+        <Routes>
+          <Route path="/" element={<Welcome />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/profiledashboard" element={<ProfileDashboard />} />
+          <Route path="/complete-profile" element={<CompleteProfile />} />
 
-        {/* Supabase Auth Routes */}
-        <Route path="/supabase-login" element={<SupabaseLogin />} />
-        <Route path="/supabase-signup" element={<SupabaseSignup />} />
-        <Route path="/supabase-profile" element={<SupabaseProfileDashboard />} />
-        <Route path="/supabase-auth-debug" element={<SupabaseAuthDebug />} />
-        <Route path="/supabase-auth-status" element={<SupabaseAuthStatus />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
+          {/* Supabase Auth Routes */}
+          <Route path="/supabase-login" element={<SupabaseLogin />} />
+          <Route path="/supabase-signup" element={<SupabaseSignup />} />
+          <Route path="/supabase-profile" element={<SupabaseProfileDashboard />} />
+          <Route path="/supabase-auth-debug" element={<SupabaseAuthDebug />} />
+          <Route path="/supabase-auth-status" element={<SupabaseAuthStatus />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
 
-        <Route path="/my-trips" element={<MyTripsPage />} />
-        <Route path="/manage-booking/:bookingId" element={<ManageBooking />} />
-        <Route path="/manage-booking" element={<ManageBooking />} />
-        <Route path="/forgot-password" element={<Navigate to="/login" />} />
-        <Route path="/booking-confirmation" element={<BookingConfirmation />} />
-        <Route path="/cruise" element={<CruiseHomepage />} />
-        <Route path="/cruises" element={<CruiseCards />} />
-        <Route path="/itinerary" element={<Itinerary />} />
-        <Route path="/cruise-booking-summary" element={<CruiseBookingSummary />} />
-        <Route path="/flight" element={<Flights />} />
-        <Route path="/flights" element={<FlightLanding />} />
-        <Route path="/flights/search" element={<FlightSearchPage />} />
-        <Route path="/flights/booking/:bookingId" element={<FlightBookingConfirmation />} />
-        <Route path="/flights/booking-confirmation" element={<FlightBookingConfirmation />} />
-        <Route path="/flight-payment" element={<FlightPayment />} />
-        <Route path="/flight-create-orders" element={<FlightCreateOrders />} />
-        <Route path="/flight-booking-success" element={<FlightBookingSuccess />} />
-        <Route path="/packages" element={<Packages />} />
-        
-        {/* Hotels Routes - Primary */}
-        <Route path="/hotels" element={<Hotels />} />
-        <Route path="/hotels/search" element={<SearchHotels />} />
-        <Route path="/hotels/details" element={<HotelDetailsPage />} />
-        <Route path="/hotels/booking-summary" element={<HotelBookingSummary />} />
-        <Route path="/hotel-booking-success" element={<HotelBookingSuccess />} />
-        
-        {/* Legacy hotel routes - redirect to new system */}
-        <Route path="/rental" element={<Navigate to="/hotels" />} />
-        <Route path="/rental/booking" element={<Navigate to="/hotels" />} />
-        <Route path="/hotel-details" element={<Navigate to="/hotels" />} />
-        <Route path="/hotel-search" element={<Navigate to="/hotels/search" />} />
-        <Route path="/hotel-search-results" element={<Navigate to="/hotels/search" />} />
+          <Route path="/my-trips" element={<MyTripsPage />} />
+          <Route path="/manage-booking/:bookingId" element={<ManageBooking />} />
+          <Route path="/manage-booking" element={<ManageBooking />} />
+          <Route path="/forgot-password" element={<Navigate to="/login" />} />
+          <Route path="/booking-confirmation" element={<BookingConfirmation />} />
+          <Route path="/cruise" element={<CruiseHomepage />} />
+          <Route path="/cruises" element={<CruiseCards />} />
+          <Route path="/itinerary" element={<Itinerary />} />
+          <Route path="/cruise-booking-summary" element={<CruiseBookingSummary />} />
+          <Route path="/flight" element={<Flights />} />
+          <Route path="/flights" element={<FlightLanding />} />
+          <Route path="/flights/search" element={<FlightSearchPage />} />
+          <Route path="/flights/booking/:bookingId" element={<FlightBookingConfirmation />} />
+          <Route path="/flights/booking-confirmation" element={<FlightBookingConfirmation />} />
+          <Route path="/flight-payment" element={<FlightPayment />} />
+          <Route path="/flight-create-orders" element={<FlightCreateOrders />} />
+          <Route path="/flight-booking-success" element={<FlightBookingSuccess />} />
+          <Route path="/packages" element={<Packages />} />
 
-        {/* Package Routes */}
-        <Route path="/packages/itinerary" element={<ItineraryPackage />} />
-        <Route path="/packages/booking-summary" element={<PackageBookingSummary />} />
+          {/* Hotels Routes - Primary */}
+          <Route path="/hotels" element={<Hotels />} />
+          <Route path="/hotels/search" element={<SearchHotels />} />
+          <Route path="/hotels/details" element={<HotelDetailsPage />} />
+          <Route path="/hotels/booking-summary" element={<HotelBookingSummary />} />
+          <Route path="/hotel-booking-success" element={<HotelBookingSuccess />} />
 
-        {/* Footer Pages */}
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/cookies" element={<Cookies />} />
-        <Route path="/careers" element={<Careers />} />
+          {/* Legacy hotel routes - redirect to new system */}
+          <Route path="/rental" element={<Navigate to="/hotels" />} />
+          <Route path="/rental/booking" element={<Navigate to="/hotels" />} />
+          <Route path="/hotel-details" element={<Navigate to="/hotels" />} />
+          <Route path="/hotel-search" element={<Navigate to="/hotels/search" />} />
+          <Route path="/hotel-search-results" element={<Navigate to="/hotels/search" />} />
 
-        {/* New Footer Pages */}
-        <Route path="/resources" element={<Resources />} />
-        <Route path="/destinations" element={<Destinations />} />
-        <Route path="/travel-blog" element={<TravelBlog />} />
-        <Route path="/support" element={<Support />} />
-        <Route path="/faqs" element={<FAQs />} />
-        <Route path="/company" element={<Company />} />
-        <Route path="/about-us" element={<AboutUs />} />
-        <Route path="/contact" element={<ContactUs />} />
-        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-        <Route path="/terms-conditions" element={<TermsConditions />} />
-        <Route path="/request" element={<RequestPage />} />
-        <Route path="/inquiry/:id" element={<InquiryDetail />} />
-        <Route path="/quote-detail" element={<QuoteDetail />} />
+          {/* Package Routes */}
+          <Route path="/packages/itinerary" element={<ItineraryPackage />} />
+          <Route path="/packages/booking-summary" element={<PackageBookingSummary />} />
 
-        {/* Payment Routes */}
-        <Route path="/payment/callback" element={<PaymentCallback />} />
-        <Route path="/payment/success" element={<PaymentSuccess />} />
-        <Route path="/payment/failed" element={<PaymentFailed />} />
+          {/* Footer Pages */}
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/cookies" element={<Cookies />} />
+          <Route path="/careers" element={<Careers />} />
 
-        {/* Admin Routes */}
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin/*" element={
-          <ProtectedRoute requireAuth={true} requireAdmin={true}>
-            <AdminPanel />
-          </ProtectedRoute>
-        } />
+          {/* New Footer Pages */}
+          <Route path="/resources" element={<Resources />} />
+          <Route path="/destinations" element={<Destinations />} />
+          <Route path="/travel-blog" element={<TravelBlog />} />
+          <Route path="/support" element={<Support />} />
+          <Route path="/faqs" element={<FAQs />} />
+          <Route path="/company" element={<Company />} />
+          <Route path="/about-us" element={<AboutUs />} />
+          <Route path="/contact" element={<ContactUs />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms-conditions" element={<TermsConditions />} />
+          <Route path="/request" element={<RequestPage />} />
+          <Route path="/inquiry/:id" element={<InquiryDetail />} />
+          <Route path="/quote-detail" element={<QuoteDetail />} />
 
-        {/* Legacy redirects for backward compatibility */}
-        <Route path="/about" element={<Navigate to="/about-us" />} />
-        <Route path="/blog" element={<Navigate to="/travel-blog" />} />
-        <Route path="/faq" element={<Navigate to="/faqs" />} />
-        <Route path="/cruise-booking" element={<Navigate to="/cruises" />} />
-        <Route path="/reviews" element={<Navigate to="/" />} />
-        <Route path="/covid-updates" element={<Navigate to="/" />} />
-        <Route path="/special-offers" element={<Navigate to="/" />} />
-        <Route path="/destinations/:destination" element={<Navigate to="/cruises" />} />
-        <Route path="/secure-booking" element={<Navigate to="/privacy-policy" />} />
+          {/* Payment Routes */}
+          <Route path="/payment/callback" element={<PaymentCallback />} />
+          <Route path="/payment/success" element={<PaymentSuccess />} />
+          <Route path="/payment/failed" element={<PaymentFailed />} />
 
-        <Route path="/404" element={<Error />} />
-        <Route path="*" element={<Navigate to="/404" />} />
-      </Routes>
+          {/* Admin Routes */}
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/*" element={
+            <ProtectedRoute requireAuth={true} requireAdmin={true}>
+              <AdminPanel />
+            </ProtectedRoute>
+          } />
+
+          {/* Legacy redirects for backward compatibility */}
+          <Route path="/about" element={<Navigate to="/about-us" />} />
+          <Route path="/blog" element={<Navigate to="/travel-blog" />} />
+          <Route path="/faq" element={<Navigate to="/faqs" />} />
+          <Route path="/cruise-booking" element={<Navigate to="/cruises" />} />
+          <Route path="/reviews" element={<Navigate to="/" />} />
+          <Route path="/covid-updates" element={<Navigate to="/" />} />
+          <Route path="/special-offers" element={<Navigate to="/" />} />
+          <Route path="/destinations/:destination" element={<Navigate to="/cruises" />} />
+          <Route path="/secure-booking" element={<Navigate to="/privacy-policy" />} />
+
+          <Route path="/404" element={<Error />} />
+          <Route path="*" element={<Navigate to="/404" />} />
+        </Routes>
+      </LocationProvider>
     </React.Suspense>
   );
 };

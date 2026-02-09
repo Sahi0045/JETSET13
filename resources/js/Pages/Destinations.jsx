@@ -13,6 +13,7 @@ import {
 } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
+import Price from '../Components/Price';
 
 const Destinations = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -35,7 +36,7 @@ const Destinations = () => {
       description: 'The city that never sleeps, offering iconic landmarks and vibrant culture.',
       rating: 4.9,
       reviews: 2543,
-      price: 'From $999',
+      price: 999,
       duration: '3–7 days',
       highlights: ['Broadway', 'Statue of Liberty', 'Central Park'],
       bestTime: 'Apr–Jun, Sep–Nov'
@@ -48,7 +49,7 @@ const Destinations = () => {
       description: 'Hollywood glamour, beaches, and endless entertainment.',
       rating: 4.7,
       reviews: 1820,
-      price: 'From $1,099',
+      price: 1099,
       duration: '4–8 days',
       highlights: ['Hollywood', 'Santa Monica', 'Beverly Hills'],
       bestTime: 'Mar–Oct'
@@ -61,7 +62,7 @@ const Destinations = () => {
       description: 'Tropical beaches, nightlife, and Latin culture.',
       rating: 4.8,
       reviews: 1432,
-      price: 'From $899',
+      price: 899,
       duration: '3–6 days',
       highlights: ['South Beach', 'Nightlife', 'Cruises'],
       bestTime: 'Nov–Apr'
@@ -74,7 +75,7 @@ const Destinations = () => {
       description: 'Cosmopolitan city with iconic skyline and cultural diversity.',
       rating: 4.7,
       reviews: 1103,
-      price: 'From $1,049',
+      price: 1049,
       duration: '4–7 days',
       highlights: ['CN Tower', 'Niagara Falls', 'Downtown'],
       bestTime: 'May–Sep'
@@ -87,7 +88,7 @@ const Destinations = () => {
       description: 'Mountains, ocean, and outdoor adventures.',
       rating: 4.8,
       reviews: 980,
-      price: 'From $1,199',
+      price: 1199,
       duration: '5–9 days',
       highlights: ['Stanley Park', 'Hiking', 'Whistler'],
       bestTime: 'Jun–Sep'
@@ -102,7 +103,7 @@ const Destinations = () => {
       description: 'The financial capital of India with vibrant nightlife.',
       rating: 4.6,
       reviews: 1650,
-      price: 'From $499',
+      price: 499,
       duration: '3–6 days',
       highlights: ['Marine Drive', 'Gateway of India', 'Street Food'],
       bestTime: 'Nov–Feb'
@@ -115,7 +116,7 @@ const Destinations = () => {
       description: 'Historic capital rich in culture and heritage.',
       rating: 4.5,
       reviews: 1490,
-      price: 'From $449',
+      price: 449,
       duration: '3–5 days',
       highlights: ['Red Fort', 'Qutub Minar', 'Old Delhi'],
       bestTime: 'Oct–Mar'
@@ -128,7 +129,7 @@ const Destinations = () => {
       description: 'India\'s most popular beach destination.',
       rating: 4.8,
       reviews: 2310,
-      price: 'From $399',
+      price: 399,
       duration: '4–7 days',
       highlights: ['Beaches', 'Nightlife', 'Water Sports'],
       bestTime: 'Nov–Feb'
@@ -141,7 +142,7 @@ const Destinations = () => {
       description: 'The Pink City with royal palaces and forts.',
       rating: 4.7,
       reviews: 1215,
-      price: 'From $499',
+      price: 499,
       duration: '3–5 days',
       highlights: ['Amber Fort', 'Hawa Mahal', 'City Palace'],
       bestTime: 'Oct–Mar'
@@ -156,7 +157,7 @@ const Destinations = () => {
       description: 'The City of Light with art, romance, and cuisine.',
       rating: 4.9,
       reviews: 2156,
-      price: 'From $1,299',
+      price: 1299,
       duration: '5–10 days',
       highlights: ['Eiffel Tower', 'Louvre', 'Seine Cruise'],
       bestTime: 'Apr–Jun, Sep–Oct'
@@ -169,7 +170,7 @@ const Destinations = () => {
       description: 'French Riviera beauty with Mediterranean charm.',
       rating: 4.8,
       reviews: 890,
-      price: 'From $1,199',
+      price: 1199,
       duration: '4–7 days',
       highlights: ['Promenade', 'Beaches', 'Old Town'],
       bestTime: 'May–Sep'
@@ -182,7 +183,7 @@ const Destinations = () => {
       description: 'Historic port city with stunning coastline.',
       rating: 4.6,
       reviews: 670,
-      price: 'From $1,049',
+      price: 1049,
       duration: '4–6 days',
       highlights: ['Old Port', 'Calanques', 'Seafood'],
       bestTime: 'Apr–Oct'
@@ -195,7 +196,7 @@ const Destinations = () => {
       description: 'Gastronomic capital of France.',
       rating: 4.7,
       reviews: 540,
-      price: 'From $1,099',
+      price: 1099,
       duration: '3–5 days',
       highlights: ['Cuisine', 'Old Town', 'Rivers'],
       bestTime: 'Apr–Jun, Sep'
@@ -273,7 +274,7 @@ const Destinations = () => {
                   <div className="space-y-2 mb-4 pb-4 border-b border-gray-100">
                     <div className="flex justify-between text-xs text-neutral-500">
                       <span>{dest.duration}</span>
-                      <span className="font-medium text-neutral-700">{dest.price}</span>
+                      <span className="font-medium text-neutral-700">From <Price amount={dest.price} /></span>
                     </div>
                   </div>
 

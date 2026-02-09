@@ -3,11 +3,13 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Star, MapPin, Wifi, Coffee, Tv, Users, Heart, ArrowLeft, Search, X, Globe, Calendar, ChevronDown } from 'lucide-react';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
+import Price from '../../../Components/Price';
 import axios from 'axios';
 import * as amadeusUtils from './amadeusUtils';
 import DirectAmadeusService from '../../../Services/DirectAmadeusService';
 import { popularDestinations } from './hotel';
 import LoadingSpinner from '../../../Components/LoadingSpinner';
+import currencyService from '../../../Services/CurrencyService';
 
 export default function HotelSearchResults() {
   const location = useLocation();
@@ -561,7 +563,8 @@ export default function HotelSearchResults() {
   // Format price for display
   const formatPrice = (price) => {
     const numPrice = parseFloat(price);
-    return isNaN(numPrice) ? '$0' : `$${numPrice.toFixed(2)}`;
+    const symbol = currencyService.getCurrencySymbol();
+    return isNaN(numPrice) ? `${symbol}0` : `${symbol}${numPrice.toFixed(2)}`;
   };
 
   // Filter and sort hotels
@@ -933,7 +936,9 @@ export default function HotelSearchResults() {
                 {/* Price and Book Button */}
                 <div className="mt-4 flex items-end justify-between">
                   <div>
-                    <p className="text-2xl font-bold text-gray-900">{formatPrice(hotel.price)}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      <Price amount={{ amount: hotel.price, currency: hotel.currency || 'USD' }} />
+                    </p>
                     <p className="text-sm text-gray-600">per night</p>
                   </div>
                   <button

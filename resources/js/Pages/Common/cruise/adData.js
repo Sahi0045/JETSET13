@@ -6,7 +6,7 @@ const adData = [
     subtitle: "7 Days of Luxury & Adventure",
     imagePath: "/cruise/caribbean-cruise.jpg",
     badge: "Limited Time Offer",
-    price: "$499",
+    price: 499,
     pricePeriod: "per person",
     features: [
       { icon: "ship", text: "Luxury Ship" },
@@ -31,7 +31,7 @@ const adData = [
     subtitle: "10 Days of Culture & Relaxation",
     imagePath: "/cruise/mediterranean-cruise.jpg",
     badge: "Best Seller",
-    price: "$899",
+    price: 899,
     pricePeriod: "per person",
     features: [
       { icon: "ship", text: "Premium Suite" },
@@ -56,7 +56,7 @@ const adData = [
     subtitle: "Experience Nature's Majesty",
     imagePath: "/cruise/alaska-cruise.jpg",
     badge: "New Itinerary",
-    price: "$799",
+    price: 799,
     pricePeriod: "per person",
     features: [
       { icon: "mountain", text: "Glacier Viewing" },
@@ -81,7 +81,7 @@ const adData = [
     subtitle: "5-Star All-Inclusive Experience",
     imagePath: "/cruise/bahamas-cruise.jpg",
     badge: "Premium Package",
-    price: "$699",
+    price: 699,
     pricePeriod: "all inclusive",
     features: [
       { icon: "cocktail", text: "Premium Drinks" },
@@ -106,7 +106,7 @@ const adData = [
     subtitle: "Discover Paradise Islands",
     imagePath: "/cruise/hawaii-cruise.jpg",
     badge: "Family Friendly",
-    price: "$849",
+    price: 849,
     pricePeriod: "per person",
     features: [
       { icon: "umbrella-beach", text: "Beach Excursions" },

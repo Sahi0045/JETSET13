@@ -1,5 +1,6 @@
 import React, { forwardRef } from 'react';
 import { Plane, Calendar, Clock, MapPin, User, Briefcase, Phone, Mail } from 'lucide-react';
+import Price from '../../../Components/Price';
 
 const FlightETicket = forwardRef(({ bookingData }, ref) => {
     if (!bookingData) return null;
@@ -180,7 +181,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                         <div className="text-right">
                             <div className="inline-block text-left">
                                 <p className="text-xs text-gray-400 uppercase mb-1">Total Amount Paid</p>
-                                <p className="text-3xl font-bold text-[#055B75]">₹{calculatedFare.totalAmount}</p>
+                                <p className="text-3xl font-bold text-[#055B75]"><Price amount={calculatedFare.totalAmount} /></p>
                                 <p className="text-xs text-green-600 mt-1 font-medium">Payment Confirmed ✅</p>
                             </div>
 

@@ -18,6 +18,8 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { getTodayDate } from '../../utils/dateUtils';
+import currencyService from '../../Services/CurrencyService';
+import { useLocationContext } from '../../Context/LocationContext';
 
 // Reusable Input Component - MUST be outside the main component to prevent re-mounting on every state change
 const InputField = ({ label, name, type = "text", required = false, placeholder, error, className = "", value, onChange, min }) => (
@@ -41,6 +43,7 @@ const InputField = ({ label, name, type = "text", required = false, placeholder,
 );
 
 const RequestPage = () => {
+  const { country: userCountry, callingCode, loaded, currency: userCurrency } = useLocationContext();
   const [activeTab, setActiveTab] = useState('inquiry');
   const [selectedInquiryType, setSelectedInquiryType] = useState('general');
   const [formData, setFormData] = useState({
@@ -106,6 +109,17 @@ const RequestPage = () => {
       console.log('📧 Auto-filled contact info from logged-in user:', user.email);
     }
   }, [isAuthenticated, user]);
+
+  // Auto-fill location data
+  useEffect(() => {
+    if (loaded) {
+      setFormData(prev => ({
+        ...prev,
+        customer_country: prev.customer_country || userCountry || '',
+        customer_phone: prev.customer_phone || (callingCode ? `${callingCode} ` : '')
+      }));
+    }
+  }, [loaded, userCountry, callingCode]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -624,10 +638,10 @@ const RequestPage = () => {
             className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           >
             <option value="">Select Range</option>
-            <option value="budget">$1,000 - $2,500</option>
-            <option value="moderate">$2,500 - $5,000</option>
-            <option value="luxury">$5,000 - $10,000</option>
-            <option value="ultra">$10,000+</option>
+            <option value="budget">{currencyService.getCurrencySymbol()}1,000 - {currencyService.getCurrencySymbol()}2,500</option>
+            <option value="moderate">{currencyService.getCurrencySymbol()}2,500 - {currencyService.getCurrencySymbol()}5,000</option>
+            <option value="luxury">{currencyService.getCurrencySymbol()}5,000 - {currencyService.getCurrencySymbol()}10,000</option>
+            <option value="ultra">{currencyService.getCurrencySymbol()}10,000+</option>
           </select>
         </div>
       </div>
@@ -693,10 +707,10 @@ const RequestPage = () => {
             className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           >
             <option value="">Select Budget Range</option>
-            <option value="budget">$1,000 - $2,500</option>
-            <option value="moderate">$2,500 - $5,000</option>
-            <option value="luxury">$5,000 - $10,000</option>
-            <option value="ultra_luxury">$10,000+</option>
+            <option value="budget">{currencyService.getCurrencySymbol()}1,000 - {currencyService.getCurrencySymbol()}2,500</option>
+            <option value="moderate">{currencyService.getCurrencySymbol()}2,500 - {currencyService.getCurrencySymbol()}5,000</option>
+            <option value="luxury">{currencyService.getCurrencySymbol()}5,000 - {currencyService.getCurrencySymbol()}10,000</option>
+            <option value="ultra_luxury">{currencyService.getCurrencySymbol()}10,000+</option>
           </select>
         </div>
 

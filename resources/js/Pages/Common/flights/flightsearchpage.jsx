@@ -176,7 +176,7 @@ function FlightSearchPage() {
               setDateRange(prev =>
                 prev.map(d => ({
                   ...d,
-                  price: data.data.dateWisePrices?.[d.isoDate] ? `$${data.data.dateWisePrices[d.isoDate]}` : null,
+                  price: data.data.dateWisePrices?.[d.isoDate] || null,
                   isLowestPrice: data.data.lowestPrice && data.data.dateWisePrices?.[d.isoDate] === data.data.lowestPrice
                 }))
               );
@@ -580,7 +580,7 @@ function FlightSearchPage() {
           price: {
             amount: flight.price.amount,
             total: flight.price.total,
-            currency: flight.price.currency || 'INR'
+            currency: flight.price.currency || currencyService.getCurrency()
           },
           amenities: [],
           baggage: {
@@ -769,7 +769,7 @@ function FlightSearchPage() {
         setDateRange(prev =>
           prev.map(d => ({
             ...d,
-            price: data.data.dateWisePrices?.[d.isoDate] ? `$${data.data.dateWisePrices[d.isoDate]}` : d.price,
+            price: data.data.dateWisePrices?.[d.isoDate] || d.price,
             isLowestPrice: data.data.lowestPrice && data.data.dateWisePrices?.[d.isoDate] === data.data.lowestPrice
           }))
         );
@@ -1172,8 +1172,8 @@ function FlightSearchPage() {
     const quickFilters = [
       { type: 'stops', value: '0', label: 'Non-stop' },
       { type: 'stops', value: '1', label: '1 Stop max' },
-      { type: 'price', value: [0, 5000], label: 'Under $5000' },
-      { type: 'price', value: [0, 10000], label: 'Under $10000' }
+      { type: 'price', value: [0, 5000], label: `Under ${currencyService.getCurrencySymbol()}5000` },
+      { type: 'price', value: [0, 10000], label: `Under ${currencyService.getCurrencySymbol()}10000` }
     ];
 
     return (
@@ -1329,7 +1329,7 @@ function FlightSearchPage() {
                       <div className="flex justify-between mb-2">
                         <span className="font-medium text-gray-700">Price range</span>
                         <span className="text-[#055B75] font-medium">
-                          ${filters.price[0]} - ${filters.price[1]}
+                          {currencyService.getCurrencySymbol()}{filters.price[0]} - {currencyService.getCurrencySymbol()}{filters.price[1]}
                         </span>
                       </div>
                       <input
@@ -1353,7 +1353,7 @@ function FlightSearchPage() {
                             : 'bg-white border-gray-200 text-gray-700'
                             }`}
                         >
-                          Under ${price.toLocaleString()}
+                          Under {currencyService.getCurrencySymbol()}{price.toLocaleString()}
                         </button>
                       ))}
                     </div>
@@ -2008,7 +2008,7 @@ function FlightSearchPage() {
                   </span>
                   {date.price && (
                     <span className="price text-sm font-medium">
-                      {date.price}
+                      <Price amount={date.price} />
                       {date.isLowestPrice && !date.selected && (
                         <span className="ml-1 text-xs">↓</span>
                       )}
@@ -2064,8 +2064,8 @@ function FlightSearchPage() {
                     <h4 className="font-medium text-gray-800 mb-4">Price Range</h4>
                     <div className="px-2">
                       <div className="flex justify-between mb-3">
-                        <span className="text-sm font-medium text-[#055B75]">${filters.price[0]}</span>
-                        <span className="text-sm font-medium text-[#055B75]">${filters.price[1]}</span>
+                        <span className="text-sm font-medium text-[#055B75]">{currencyService.getCurrencySymbol()}{filters.price[0]}</span>
+                        <span className="text-sm font-medium text-[#055B75]">{currencyService.getCurrencySymbol()}{filters.price[1]}</span>
                       </div>
 
                       <input

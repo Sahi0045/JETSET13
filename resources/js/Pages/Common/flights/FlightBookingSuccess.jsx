@@ -5,6 +5,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
+import Price from '../../../Components/Price';
 import FlightETicket from './FlightETicket';
 
 export default function FlightBookingSuccess() {
@@ -376,24 +377,24 @@ export default function FlightBookingSuccess() {
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between items-center">
                     <div className="text-gray-600">Base Fare</div>
-                    <div>₹{bookingData.calculatedFare.baseFare}</div>
+                    <div><Price amount={bookingData.calculatedFare.baseFare} /></div>
                   </div>
                   <div className="flex justify-between items-center">
                     <div className="text-gray-600">Taxes & Fees</div>
-                    <div>₹{bookingData.calculatedFare.tax}</div>
+                    <div><Price amount={bookingData.calculatedFare.tax} /></div>
                   </div>
 
                   {bookingData.calculatedFare.addonsTotal > 0 && (
                     <div className="flex justify-between items-center">
                       <div className="text-gray-600">Add-ons</div>
-                      <div>₹{bookingData.calculatedFare.addonsTotal}</div>
+                      <div><Price amount={bookingData.calculatedFare.addonsTotal} /></div>
                     </div>
                   )}
 
                   {bookingData.calculatedFare.vipServiceFee > 0 && (
                     <div className="flex justify-between items-center">
                       <div className="text-gray-600">VIP Service</div>
-                      <div>₹{bookingData.calculatedFare.vipServiceFee}</div>
+                      <div><Price amount={bookingData.calculatedFare.vipServiceFee} /></div>
                     </div>
                   )}
                 </div>
@@ -401,7 +402,7 @@ export default function FlightBookingSuccess() {
                 <div className="border-t border-gray-200 pt-4">
                   <div className="flex justify-between items-center">
                     <div className="font-semibold text-gray-800">Total Amount</div>
-                    <div className="font-bold text-xl">₹{bookingData.calculatedFare.totalAmount}</div>
+                    <div className="font-bold text-xl"><Price amount={bookingData.calculatedFare.totalAmount} /></div>
                   </div>
                 </div>
               </div>

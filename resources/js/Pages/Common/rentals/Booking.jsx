@@ -9,6 +9,7 @@ import {
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import axios from 'axios';
+import Price from '../../../Components/Price';
 
 export default function Booking() {
   const navigate = useNavigate();
@@ -64,7 +65,7 @@ export default function Booking() {
 
     try {
       console.log('Starting hotel booking with Arc Pay integration...');
-      
+
       // Step 1: Create hotel booking
       const bookingRequestData = {
         action: 'bookHotel',
@@ -108,7 +109,7 @@ export default function Booking() {
 
           if (paymentResponse.data.success) {
             console.log('Arc Pay order created successfully');
-            
+
             // Redirect to Arc Pay payment page or show success
             if (paymentResponse.data.paymentUrl) {
               window.location.href = paymentResponse.data.paymentUrl;
@@ -116,17 +117,17 @@ export default function Booking() {
             }
           }
         }
-        
+
         setSuccess(true);
       } else {
         throw new Error(hotelBookingResponse.data.error || 'Failed to create booking');
       }
     } catch (err) {
       console.error('Booking error:', err);
-      const errorDetail = err.response?.data?.message || 
-                         err.response?.data?.error ||
-                         err.message ||
-                         'Failed to process booking. Please try again.';
+      const errorDetail = err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to process booking. Please try again.';
       setError(errorDetail);
     } finally {
       setLoading(false);
@@ -211,7 +212,7 @@ export default function Booking() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Service Charge</span>
-                    <span className="font-medium">$30.00</span>
+                    <span className="font-medium"><Price amount={30} /></span>
                   </div>
                   <div className="pt-3 border-t border-gray-200">
                     <div className="flex justify-between font-bold text-lg">
@@ -234,11 +235,10 @@ export default function Booking() {
               <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={() => setPaymentInfo(prev => ({ ...prev, paymentOption: 'pay_now' }))}
-                  className={`p-4 rounded-lg border-2 transition-colors ${
-                    paymentInfo.paymentOption === 'pay_now'
+                  className={`p-4 rounded-lg border-2 transition-colors ${paymentInfo.paymentOption === 'pay_now'
                       ? 'border-[#0061ff] bg-blue-50'
                       : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium">Pay Now</span>
@@ -248,11 +248,10 @@ export default function Booking() {
                 </button>
                 <button
                   onClick={() => setPaymentInfo(prev => ({ ...prev, paymentOption: 'pay_at_hotel' }))}
-                  className={`p-4 rounded-lg border-2 transition-colors ${
-                    paymentInfo.paymentOption === 'pay_at_hotel'
+                  className={`p-4 rounded-lg border-2 transition-colors ${paymentInfo.paymentOption === 'pay_at_hotel'
                       ? 'border-[#0061ff] bg-blue-50'
                       : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium">Pay at Hotel</span>

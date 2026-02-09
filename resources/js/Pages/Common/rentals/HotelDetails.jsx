@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import * as amadeusUtils from './amadeusUtils';
 import DirectAmadeusService from '../../../Services/DirectAmadeusService';
 import LoadingSpinner from '../../../Components/LoadingSpinner';
+import Price from '../../../Components/Price';
 
 export default function HotelDetails() {
   const navigate = useNavigate();
@@ -1303,11 +1304,11 @@ export default function HotelDetails() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-700">Cleaning fee</span>
-                        <span className="text-gray-700">$50</span>
+                        <span className="text-gray-700"><Price amount={50} /></span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-700">Service fee</span>
-                        <span className="text-gray-700">$30</span>
+                        <span className="text-gray-700"><Price amount={30} /></span>
                       </div>
                       <div className="border-t border-gray-200 pt-4 flex justify-between font-bold">
                         <span>Total</span>

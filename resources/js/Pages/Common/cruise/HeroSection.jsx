@@ -8,6 +8,7 @@ import { Search, MapPin, DollarSign, ChevronDown, Anchor, Ship, Navigation } fro
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { formatDateToISO } from "../../../utils/dateUtils";
+import currencyService from "../../../Services/CurrencyService";
 
 const HeroSection = () => {
   const navigate = useNavigate();
@@ -25,7 +26,11 @@ const HeroSection = () => {
   const [departurePorts, setDeparturePorts] = useState([]);
   const [scrolled, setScrolled] = useState(false);
   const [priceRanges] = useState([
-    '$100-$500', '$500-$1000', '$1000-$1500', '$1500-$2000', '$2000+'
+    `${currencyService.getCurrencySymbol()}100-${currencyService.getCurrencySymbol()}500`,
+    `${currencyService.getCurrencySymbol()}500-${currencyService.getCurrencySymbol()}1000`,
+    `${currencyService.getCurrencySymbol()}1000-${currencyService.getCurrencySymbol()}1500`,
+    `${currencyService.getCurrencySymbol()}1500-${currencyService.getCurrencySymbol()}2000`,
+    `${currencyService.getCurrencySymbol()}2000+`
   ]);
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -192,21 +197,28 @@ const HeroSection = () => {
         matches = false;
       }
 
-      // Filter by price range (basic implementation)
+      // Filter by price range (dynamic currency-aware implementation)
       if (searchValues.price) {
         const priceRange = searchValues.price;
         const cruisePrice = parseInt(cruise.price.replace(/\D/g, ''));
 
-        if (priceRange === '$100-$500' && (cruisePrice < 100 || cruisePrice > 500)) {
-          matches = false;
-        } else if (priceRange === '$500-$1000' && (cruisePrice < 500 || cruisePrice > 1000)) {
-          matches = false;
-        } else if (priceRange === '$1000-$1500' && (cruisePrice < 1000 || cruisePrice > 1500)) {
-          matches = false;
-        } else if (priceRange === '$1500-$2000' && (cruisePrice < 1500 || cruisePrice > 2000)) {
-          matches = false;
-        } else if (priceRange === '$2000+' && cruisePrice < 2000) {
-          matches = false;
+        // Extract numeric values from price range (handles any currency symbol)
+        const rangeMatch = priceRange.match(/([0-9]+)-?([0-9]+)?\+?/);
+        if (rangeMatch) {
+          const minPrice = parseInt(rangeMatch[1]);
+          const maxPrice = rangeMatch[2] ? parseInt(rangeMatch[2]) : null;
+
+          if (priceRange.includes('+')) {
+            // Open-ended range (e.g., $2000+)
+            if (cruisePrice < minPrice) {
+              matches = false;
+            }
+          } else if (maxPrice) {
+            // Closed range (e.g., $100-$500)
+            if (cruisePrice < minPrice || cruisePrice > maxPrice) {
+              matches = false;
+            }
+          }
         }
       }
 
@@ -393,10 +405,10 @@ const HeroSection = () => {
                   onChange={(e) => setPriceRange(e.target.value)}
                 >
                   <option value="Any Price">Any Price</option>
-                  <option value="0-1000">$0 - $1,000</option>
-                  <option value="1000-2000">$1,000 - $2,000</option>
-                  <option value="2000-5000">$2,000 - $5,000</option>
-                  <option value="5000+">$5,000+</option>
+                  <option value="0-1000">{currencyService.getCurrencySymbol()}0 - {currencyService.getCurrencySymbol()}1,000</option>
+                  <option value="1000-2000">{currencyService.getCurrencySymbol()}1,000 - {currencyService.getCurrencySymbol()}2,000</option>
+                  <option value="2000-5000">{currencyService.getCurrencySymbol()}2,000 - {currencyService.getCurrencySymbol()}5,000</option>
+                  <option value="5000+">{currencyService.getCurrencySymbol()}5,000+</option>
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
               </div>

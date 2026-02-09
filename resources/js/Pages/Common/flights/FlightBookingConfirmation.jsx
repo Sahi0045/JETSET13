@@ -9,6 +9,7 @@ import currencyService from "../../../Services/CurrencyService";
 import { flightBookingData } from "./data";
 import supabase from "../../../lib/supabase";
 import ArcPayService from "../../../Services/ArcPayService";
+import { useLocationContext } from '../../../Context/LocationContext';
 import "./booking-confirmation.css";
 
 
@@ -23,7 +24,8 @@ const AMADEUS_API_CONFIG = {
 };
 
 function FlightBookingConfirmation() {
-  const location = useLocation();
+  const routerLocation = useLocation();
+  const { country, callingCode, currency: userCurrency } = useLocationContext();
   const navigate = useNavigate();
   const { bookingId } = useParams();
   const [bookingDetails, setBookingDetails] = useState(null);
@@ -42,7 +44,7 @@ function FlightBookingConfirmation() {
     addonsTotal: 0,
     vipServiceFee: 0,
     totalAmount: 0,
-    currency: 'EUR'
+    currency: userCurrency || 'EUR'
   });
   const [expandedSections, setExpandedSections] = useState({
     flightDetails: true,
@@ -312,9 +314,9 @@ function FlightBookingConfirmation() {
         let bookingData;
 
         // Check if flight data was passed from search page
-        if (location.state?.flightData) {
-          console.log("Using flight data from search page", location.state.flightData);
-          bookingData = transformFlightData(location.state.flightData);
+        if (routerLocation.state?.flightData) {
+          console.log("Using flight data from search page", routerLocation.state.flightData);
+          bookingData = transformFlightData(routerLocation.state.flightData);
         } else {
           // Fallback: Fetch from API (or mock) using the ID
           const targetId = bookingId || "TEST_BOOKING_123";
@@ -345,7 +347,7 @@ function FlightBookingConfirmation() {
     };
 
     getBookingDetails();
-  }, [location.state, bookingId]);
+  }, [routerLocation.state, bookingId]);
 
   // Add an effect to update fare when passengers, addons, or VIP service changes
   useEffect(() => {
@@ -988,7 +990,7 @@ function FlightBookingConfirmation() {
                     <label>Country Code</label>
                     <div className="relative">
                       <select className="form-input appearance-none bg-white">
-                        <option>India (+91)</option>
+                        <option>{country ? `${country} (${callingCode})` : 'India (+91)'}</option>
                       </select>
                       <ChevronDown className="absolute right-3 top-3.5 h-4 w-4 text-gray-500 pointer-events-none" />
                     </div>

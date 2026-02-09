@@ -4,11 +4,13 @@ import React, { useState, useEffect } from "react"
 import { Calendar, Users, MapPin, Search, ChevronDown } from "lucide-react"
 import { defaultSearchData, specialFares, sourceCities, allDestinations } from "./data.js"
 import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
+import { useLocationContext } from '../../../Context/LocationContext';
 
 // Get this from a config or parent component
 const USE_AMADEUS_API = true;
 
 export default function FlightSearchForm({ initialData, onSearch }) {
+  const { city, loaded, country: userCountry } = useLocationContext();
   const [formData, setFormData] = useState(initialData || defaultSearchData)
   const [formErrors, setFormErrors] = useState({})
   const [showFromSuggestions, setShowFromSuggestions] = useState(false);
@@ -33,12 +35,45 @@ export default function FlightSearchForm({ initialData, onSearch }) {
     return acc;
   }, {});
 
-  // Update form data when initialData changes
   useEffect(() => {
     if (initialData) {
       setFormData(initialData);
     }
   }, [initialData]);
+
+  // Set default "From" location based on user's location
+  useEffect(() => {
+    if (loaded && !initialData?.from && !formData.from && city) {
+      // Direct match
+      const directMatch = allDestinations.find(d => d.name.toLowerCase() === city.toLowerCase());
+
+      if (directMatch) {
+        setFormData(prev => ({
+          ...prev,
+          from: directMatch.name,
+          fromCode: directMatch.code,
+          fromCountry: directMatch.country,
+          fromType: directMatch.type
+        }));
+      } else {
+        // Loose match (city contains or is contained in destination name)
+        const looseMatch = allDestinations.find(d =>
+          d.name.toLowerCase().includes(city.toLowerCase()) ||
+          city.toLowerCase().includes(d.name.toLowerCase())
+        );
+
+        if (looseMatch) {
+          setFormData(prev => ({
+            ...prev,
+            from: looseMatch.name,
+            fromCode: looseMatch.code,
+            fromCountry: looseMatch.country,
+            fromType: looseMatch.type
+          }));
+        }
+      }
+    }
+  }, [loaded, city, initialData, formData.from]);
 
   const handleTripTypeChange = (type) => {
     if (type === "roundTrip") {
