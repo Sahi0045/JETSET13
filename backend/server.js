@@ -9,6 +9,7 @@ import emailRoutes from './routes/email.routes.js';
 import inquiryRoutes from './routes/inquiry.routes.js';
 import quoteRoutes from './routes/quote.routes.js';
 import featureFlagRoutes from './routes/featureFlag.routes.js';
+import geoRoutes from './routes/geo.routes.js';
 import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
 // import 
 // const flightRoutes =re('./routes/flights');
@@ -45,8 +46,8 @@ app.use(express.urlencoded({ extended: true }));
 // Test route
 app.get('/api/test', (req, res) => {
   console.log('Test endpoint hit');
-  res.json({ 
-    message: 'Server is running', 
+  res.json({
+    message: 'Server is running',
     timestamp: new Date().toISOString(),
     cors: {
       origin: req.headers.origin,
@@ -67,11 +68,12 @@ app.use('/api/email', emailRoutes);
 app.use('/api/inquiries', inquiryRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/feature-flags', featureFlagRoutes);
+app.use('/api/geo', geoRoutes);
 
 // 404 handler for undefined routes (must be after all routes)
 app.use((req, res, next) => {
   console.log('404 - Route not found:', req.method, req.path);
-  res.status(404).json({ 
+  res.status(404).json({
     success: false,
     message: `Route ${req.method} ${req.path} not found`,
     path: req.path,
