@@ -693,11 +693,11 @@ router.get('/bookings', async (req, res) => {
     // Transform database format to frontend format
     const transformedBookings = (data || []).map(booking => {
       // Get amount from total_amount column or from booking_details or from flight_offer
-      const amount = booking.total_amount || 
-                     booking.booking_details?.amount ||
-                     booking.booking_details?.flight_offer?.price?.total ||
-                     0;
-      
+      const amount = booking.total_amount ||
+        booking.booking_details?.amount ||
+        booking.booking_details?.flight_offer?.price?.total ||
+        0;
+
       return {
         id: booking.id,
         type: booking.travel_type,
@@ -741,6 +741,154 @@ router.get('/bookings', async (req, res) => {
       success: false,
       error: error.message || 'Failed to fetch bookings'
     });
+  }
+});
+
+// ===== FLIGHT ANALYTICS ENDPOINTS =====
+
+// Most Booked Destinations
+router.get('/analytics/booked', async (req, res) => {
+  try {
+    const { origin, period } = req.query;
+
+    if (!origin) {
+      return res.status(400).json({ success: false, error: 'Origin city code is required' });
+    }
+
+    console.log(`📊 Analytics: Most booked from ${origin}`);
+    const result = await AmadeusService.getMostBookedDestinations(origin, period);
+
+    res.json({
+      success: result.success,
+      data: result.data || [],
+      meta: result.meta
+    });
+  } catch (error) {
+    console.error('❌ Analytics error:', error);
+    res.json({ success: true, data: [], fallback: true, error: error.message });
+  }
+});
+
+// Most Traveled Destinations
+router.get('/analytics/traveled', async (req, res) => {
+  try {
+    const { origin, period } = req.query;
+
+    if (!origin) {
+      return res.status(400).json({ success: false, error: 'Origin city code is required' });
+    }
+
+    console.log(`📊 Analytics: Most traveled from ${origin}`);
+    const result = await AmadeusService.getMostTraveledDestinations(origin, period);
+
+    res.json({
+      success: result.success,
+      data: result.data || [],
+      meta: result.meta
+    });
+  } catch (error) {
+    console.error('❌ Analytics error:', error);
+    res.json({ success: true, data: [], fallback: true, error: error.message });
+  }
+});
+
+// Busiest Travel Period
+router.get('/analytics/busiest', async (req, res) => {
+  try {
+    const { origin, year, direction } = req.query;
+
+    if (!origin) {
+      return res.status(400).json({ success: false, error: 'Origin city code is required' });
+    }
+
+    console.log(`📈 Analytics: Busiest period for ${origin}`);
+    const result = await AmadeusService.getBusiestTravelPeriod(origin, year, direction || 'DEPARTING');
+
+    res.json({
+      success: result.success,
+      data: result.data || [],
+      meta: result.meta
+    });
+  } catch (error) {
+    console.error('❌ Analytics error:', error);
+    res.json({ success: true, data: [], fallback: true, error: error.message });
+  }
+});
+
+// Cheapest Flight Dates
+router.get('/cheapest-dates', async (req, res) => {
+  try {
+    const { origin, destination, departureDate, oneWay, duration, nonStop, viewBy } = req.query;
+
+    if (!origin || !destination) {
+      return res.status(400).json({ success: false, error: 'Origin and destination are required' });
+    }
+
+    console.log(`💰 Cheapest dates: ${origin} → ${destination}`);
+    const result = await AmadeusService.getCheapestFlightDates(origin, destination, {
+      departureDate,
+      oneWay: oneWay === 'true',
+      duration: duration ? parseInt(duration) : undefined,
+      nonStop: nonStop === 'true',
+      viewBy: viewBy || 'DATE'
+    });
+
+    res.json({
+      success: result.success,
+      data: result.data || [],
+      dictionaries: result.dictionaries,
+      meta: result.meta
+    });
+  } catch (error) {
+    console.error('❌ Cheapest dates error:', error);
+    res.json({ success: true, data: [], fallback: true, error: error.message });
+  }
+});
+
+// Flight Status
+router.get('/status', async (req, res) => {
+  try {
+    const { carrier, flightNumber, date } = req.query;
+
+    if (!carrier || !flightNumber || !date) {
+      return res.status(400).json({ success: false, error: 'Carrier, flightNumber, and date are required' });
+    }
+
+    console.log(`✈️ Flight status: ${carrier}${flightNumber} on ${date}`);
+    const result = await AmadeusService.getFlightStatus(carrier, flightNumber, date);
+
+    res.json({
+      success: result.success,
+      data: result.data || [],
+      meta: result.meta
+    });
+  } catch (error) {
+    console.error('❌ Flight status error:', error);
+    res.json({ success: true, data: [], fallback: true, error: error.message });
+  }
+});
+
+// Flight Availabilities
+router.post('/availabilities', async (req, res) => {
+  try {
+    const { origin, destination, departureDate } = req.body;
+
+    if (!origin || !destination || !departureDate) {
+      return res.status(400).json({ success: false, error: 'Origin, destination, and departureDate are required' });
+    }
+
+    console.log(`🎫 Availabilities: ${origin} → ${destination}`);
+    const result = await AmadeusService.getFlightAvailabilities({ origin, destination, departureDate });
+
+    res.json({
+      success: result.success,
+      data: result.data || [],
+      dictionaries: result.dictionaries,
+      meta: result.meta
+    });
+  } catch (error) {
+    console.error('❌ Availabilities error:', error);
+    res.json({ success: true, data: [], fallback: true, error: error.message });
   }
 });
 

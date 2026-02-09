@@ -5,7 +5,7 @@
  * @see https://developers.amadeus.com/self-service/category/flights
  */
 
-import apiConfig from '../../src/config/api.js';
+import apiConfig from '../../../src/config/api.js';
 
 // In-memory cache
 const cache = {
