@@ -13,6 +13,7 @@ import {
   sourceCities,
   specialFares
 } from "./data.js";
+import { getTodayDate, getSafeDate } from "../../../utils/dateUtils";
 
 // Import centralized API configuration
 import apiConfig from '../../../../../src/config/api.js';
@@ -30,7 +31,7 @@ function FlightSearchPage() {
   const [searchParams, setSearchParams] = useState(searchData || {
     from: 'DEL',
     to: 'HYD',
-    departDate: new Date().toISOString().split('T')[0],
+    departDate: getTodayDate(),
     returnDate: '',
     travelers: 1,
     tripType: 'one-way'
@@ -63,7 +64,8 @@ function FlightSearchPage() {
   useEffect(() => {
     const generateDateRange = (centerDate) => {
       const dates = [];
-      const baseDate = new Date(centerDate);
+      // Ensure we work with local noon to avoid timezone shifts
+      const baseDate = centerDate instanceof Date ? centerDate : getSafeDate(centerDate);
 
       // Generate 3 days before and after the selected date
       for (let i = -3; i <= 3; i++) {
@@ -76,7 +78,11 @@ function FlightSearchPage() {
         });
 
         const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-        const isoDate = date.toISOString().split('T')[0];
+
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        const isoDate = `${y}-${m}-${d}`;
 
         dates.push({
           date: formattedDate,
@@ -85,7 +91,7 @@ function FlightSearchPage() {
           price: null,
           selected: i === 0,
           isWeekend: [0, 6].includes(date.getDay()),
-          isPast: date < new Date().setHours(0, 0, 0, 0)
+          isPast: isoDate < getTodayDate()
         });
       }
 
@@ -94,7 +100,7 @@ function FlightSearchPage() {
 
     const initializeDates = () => {
       const searchDate = location.state?.searchData?.departDate;
-      const centerDate = searchDate ? new Date(searchDate) : new Date();
+      const centerDate = searchDate ? getSafeDate(searchDate) : new Date();
       const dates = generateDateRange(centerDate);
       setDateRange(dates);
     };
@@ -170,8 +176,8 @@ function FlightSearchPage() {
               setDateRange(prev =>
                 prev.map(d => ({
                   ...d,
-                  price: data.data.dateWisePrices[d.isoDate] ? `$${data.data.dateWisePrices[d.isoDate]}` : null,
-                  isLowestPrice: data.data.dateWisePrices[d.isoDate] === data.data.lowestPrice
+                  price: data.data.dateWisePrices?.[d.isoDate] ? `$${data.data.dateWisePrices[d.isoDate]}` : null,
+                  isLowestPrice: data.data.lowestPrice && data.data.dateWisePrices?.[d.isoDate] === data.data.lowestPrice
                 }))
               );
             }
@@ -758,12 +764,12 @@ function FlightSearchPage() {
       setFlights(flightData);
 
       // Update prices in the date range if available
-      if (data.data.dateWisePrices) {
+      if (data.data?.dateWisePrices) {
         setDateRange(prev =>
           prev.map(d => ({
             ...d,
-            price: data.data.dateWisePrices[d.isoDate] ? `$${data.data.dateWisePrices[d.isoDate]}` : d.price,
-            isLowestPrice: data.data.dateWisePrices[d.isoDate] === data.data.lowestPrice
+            price: data.data.dateWisePrices?.[d.isoDate] ? `$${data.data.dateWisePrices[d.isoDate]}` : d.price,
+            isLowestPrice: data.data.lowestPrice && data.data.dateWisePrices?.[d.isoDate] === data.data.lowestPrice
           }))
         );
       }

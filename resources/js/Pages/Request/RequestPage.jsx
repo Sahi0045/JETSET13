@@ -17,6 +17,7 @@ import {
   Loader2,
   RefreshCw
 } from 'lucide-react';
+import { getTodayDate } from '../../utils/dateUtils';
 
 // Reusable Input Component - MUST be outside the main component to prevent re-mounting on every state change
 const InputField = ({ label, name, type = "text", required = false, placeholder, error, className = "", value, onChange, min }) => (
@@ -398,7 +399,7 @@ const RequestPage = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <InputField label="From (Origin)" name="flight_origin" required placeholder="e.g., New York (JFK)" error={errors.flight_origin} value={formData.flight_origin} onChange={handleChange} />
         <InputField label="To (Destination)" name="flight_destination" required placeholder="e.g., London (LHR)" error={errors.flight_destination} value={formData.flight_destination} onChange={handleChange} />
-        <InputField label="Departure Date" name="flight_departure_date" type="date" required error={errors.flight_departure_date} value={formData.flight_departure_date} onChange={handleChange} min={new Date().toISOString().split('T')[0]} />
+        <InputField label="Departure Date" name="flight_departure_date" type="date" required error={errors.flight_departure_date} value={formData.flight_departure_date} onChange={handleChange} min={getTodayDate()} />
 
         <div className="space-y-1">
           <label className="block text-sm font-semibold text-gray-700">Return Date</label>
@@ -407,7 +408,7 @@ const RequestPage = () => {
             name="flight_return_date"
             value={formData.flight_return_date}
             onChange={handleChange}
-            min={formData.flight_departure_date || new Date().toISOString().split('T')[0]}
+            min={formData.flight_departure_date || getTodayDate()}
             className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] transition-colors outline-none"
           />
         </div>
@@ -454,7 +455,7 @@ const RequestPage = () => {
         <div className="md:col-span-2">
           <InputField label="Destination City" name="hotel_destination" required placeholder="e.g., Paris, France" error={errors.hotel_destination} value={formData.hotel_destination} onChange={handleChange} />
         </div>
-        <InputField label="Check-in Date" name="hotel_checkin_date" type="date" required error={errors.hotel_checkin_date} value={formData.hotel_checkin_date} onChange={handleChange} min={new Date().toISOString().split('T')[0]} />
+        <InputField label="Check-in Date" name="hotel_checkin_date" type="date" required error={errors.hotel_checkin_date} value={formData.hotel_checkin_date} onChange={handleChange} min={getTodayDate()} />
 
         <div className="space-y-1">
           <label className="block text-sm font-semibold text-gray-700">Check-out Date *</label>
@@ -463,7 +464,7 @@ const RequestPage = () => {
             name="hotel_checkout_date"
             value={formData.hotel_checkout_date}
             onChange={handleChange}
-            min={formData.hotel_checkin_date || new Date().toISOString().split('T')[0]}
+            min={formData.hotel_checkin_date || getTodayDate()}
             className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           />
           {errors.hotel_checkout_date && <span className="text-sm text-red-500 font-medium">{errors.hotel_checkout_date}</span>}
@@ -525,7 +526,7 @@ const RequestPage = () => {
         <div className="md:col-span-2">
           <InputField label="Cruise Destination/Region" name="cruise_destination" required placeholder="e.g., Caribbean, Mediterranean" error={errors.cruise_destination} value={formData.cruise_destination} onChange={handleChange} />
         </div>
-        <InputField label="Departure Date" name="cruise_departure_date" type="date" required error={errors.cruise_departure_date} value={formData.cruise_departure_date} onChange={handleChange} min={new Date().toISOString().split('T')[0]} />
+        <InputField label="Departure Date" name="cruise_departure_date" type="date" required error={errors.cruise_departure_date} value={formData.cruise_departure_date} onChange={handleChange} min={getTodayDate()} />
 
         <div className="space-y-1">
           <label className="block text-sm font-semibold text-gray-700">Duration (Days) *</label>
@@ -584,7 +585,7 @@ const RequestPage = () => {
         <div className="md:col-span-2">
           <InputField label="Destination" name="package_destination" required placeholder="e.g., Hawaii, Europe" error={errors.package_destination} value={formData.package_destination} onChange={handleChange} />
         </div>
-        <InputField label="Start Date" name="package_start_date" type="date" required error={errors.package_start_date} value={formData.package_start_date} onChange={handleChange} min={new Date().toISOString().split('T')[0]} />
+        <InputField label="Start Date" name="package_start_date" type="date" required error={errors.package_start_date} value={formData.package_start_date} onChange={handleChange} min={getTodayDate()} />
 
         <div className="space-y-1">
           <label className="block text-sm font-semibold text-gray-700">End Date *</label>
@@ -593,7 +594,7 @@ const RequestPage = () => {
             name="package_end_date"
             value={formData.package_end_date}
             onChange={handleChange}
-            min={formData.package_start_date || new Date().toISOString().split('T')[0]}
+            min={formData.package_start_date || getTodayDate()}
             className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066b2] focus:border-[#0066b2] outline-none"
           />
           {errors.package_end_date && <span className="text-sm text-red-500 font-medium">{errors.package_end_date}</span>}

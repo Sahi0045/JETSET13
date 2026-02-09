@@ -8,6 +8,7 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
 import supabase from '../../../lib/supabase';
+import { formatDateToISO } from '../../../utils/dateUtils';
 
 const HotelsLanding = () => {
     const navigate = useNavigate();
@@ -150,8 +151,8 @@ const HotelsLanding = () => {
         // Build search parameters
         const params = new URLSearchParams();
         if (destination) params.set('destination', destination);
-        if (startDate) params.set('checkIn', startDate.toISOString().split('T')[0]);
-        if (endDate) params.set('checkOut', endDate.toISOString().split('T')[0]);
+        if (startDate) params.set('checkIn', formatDateToISO(startDate));
+        if (endDate) params.set('checkOut', formatDateToISO(endDate));
         params.set('rooms', guests.rooms);
         params.set('adults', guests.adults);
         params.set('children', guests.children);

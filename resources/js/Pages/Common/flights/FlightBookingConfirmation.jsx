@@ -215,8 +215,10 @@ function FlightBookingConfirmation() {
       flight: {
         airline: flightData.airline.name,
         flightNumber: `${flightData.airline.code} ${flightData.id}`,
-        departureCity: flightData.departure.airport,
-        arrivalCity: flightData.arrival.airport,
+        departureCode: flightData.departure.airport,
+        arrivalCode: flightData.arrival.airport,
+        departureCity: flightData.departure.cityName || flightData.departure.airport,
+        arrivalCity: flightData.arrival.cityName || flightData.arrival.airport,
         departureTime: flightData.departure.time,
         arrivalTime: flightData.arrival.time,
         duration: flightData.duration,
@@ -740,7 +742,7 @@ function FlightBookingConfirmation() {
               <div className="booking-card-body">
                 <div className="flight-route">
                   <div className="flight-endpoint">
-                    <div className="city-code">{bookingDetails?.flight?.departureCity?.substring(0, 3).toUpperCase()}</div>
+                    <div className="city-code">{bookingDetails?.flight?.departureCode || bookingDetails?.flight?.departureCity?.substring(0, 3).toUpperCase()}</div>
                     <div className="city-name">{bookingDetails?.flight?.departureCity}</div>
                     <div className="time">{bookingDetails?.flight?.departureTime}</div>
                     <div className="airport" title={bookingDetails?.flight?.departureAirport}>
@@ -761,7 +763,7 @@ function FlightBookingConfirmation() {
                   </div>
 
                   <div className="flight-endpoint">
-                    <div className="city-code">{bookingDetails?.flight?.arrivalCity?.substring(0, 3).toUpperCase()}</div>
+                    <div className="city-code">{bookingDetails?.flight?.arrivalCode || bookingDetails?.flight?.arrivalCity?.substring(0, 3).toUpperCase()}</div>
                     <div className="city-name">{bookingDetails?.flight?.arrivalCity}</div>
                     <div className="time">{bookingDetails?.flight?.arrivalTime}</div>
                     <div className="airport" title={bookingDetails?.flight?.arrivalAirport}>

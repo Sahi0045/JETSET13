@@ -7,6 +7,7 @@ import destinationsData from './data/destinations.json';
 import { Search, MapPin, DollarSign, ChevronDown, Anchor, Ship, Navigation } from 'lucide-react';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import { formatDateToISO } from "../../../utils/dateUtils";
 
 const HeroSection = () => {
   const navigate = useNavigate();
@@ -172,6 +173,10 @@ const HeroSection = () => {
     Object.entries(searchValues).forEach(([key, value]) => {
       if (value) queryParams.append(key, value);
     });
+
+    // Add date range if selected
+    if (startDate) queryParams.append('startDate', formatDateToISO(startDate));
+    if (endDate) queryParams.append('endDate', formatDateToISO(endDate));
 
     // Filter cruise results based on search criteria
     const filteredResults = cruiseData.cruiseLines.filter(cruise => {

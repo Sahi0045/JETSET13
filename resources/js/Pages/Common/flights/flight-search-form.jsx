@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { Calendar, Users, MapPin, Search, ChevronDown } from "lucide-react"
 import { defaultSearchData, specialFares, sourceCities, allDestinations } from "./data.js"
+import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
 
 // Get this from a config or parent component
 const USE_AMADEUS_API = true;
@@ -41,10 +42,18 @@ export default function FlightSearchForm({ initialData, onSearch }) {
 
   const handleTripTypeChange = (type) => {
     if (type === "roundTrip") {
-      const baseDepart = formData.departDate ? new Date(formData.departDate) : new Date();
+      const currentDepart = formData.departDate || getTodayDate();
+
+      // Suggest return date 3 days after departure
+      const baseDepart = getSafeDate(currentDepart);
       const suggestedReturn = new Date(baseDepart);
-      suggestedReturn.setDate(baseDepart.getDate() + 3);
-      const suggestedReturnStr = suggestedReturn.toISOString().split('T')[0];
+      suggestedReturn.setDate(suggestedReturn.getDate() + 3);
+
+      const year = suggestedReturn.getFullYear();
+      const month = String(suggestedReturn.getMonth() + 1).padStart(2, '0');
+      const day = String(suggestedReturn.getDate()).padStart(2, '0');
+      const suggestedReturnStr = `${year}-${month}-${day}`;
+
       setFormData(prev => ({
         ...prev,
         tripType: "roundTrip",
@@ -64,26 +73,32 @@ export default function FlightSearchForm({ initialData, onSearch }) {
     // Update the field
     setFormData((prev) => {
       const next = { ...prev, [name]: value };
-      // If departDate changes in roundTrip, enforce returnDate >= departDate + 1
-      if (name === 'departDate' && prev.tripType === 'roundTrip') {
-        const depart = value ? new Date(value) : null;
-        if (depart) {
-          const minReturn = new Date(depart);
-          minReturn.setDate(depart.getDate() + 1);
-          const minReturnStr = minReturn.toISOString().split('T')[0];
-          if (!next.returnDate || new Date(next.returnDate) <= depart) {
-            next.returnDate = minReturnStr;
+
+      // If departDate changes
+      if (name === 'departDate') {
+        const today = getTodayDate();
+        if (value && value < today) {
+          // Don't allow past dates if user manually types? HTML5 min attribute handles this usually but good to be safe
+          // next.departDate = today; // Optional: Force reset or let validation handle it
+        }
+
+        // In round trip, ensure return date is valid
+        if (prev.tripType === 'roundTrip' && value) {
+          const minReturn = value; // Can return same day
+          if (!next.returnDate || next.returnDate < minReturn) {
+            next.returnDate = getNextDay(value); // Suggest next day or same day? Usually airlines allow same day returns. Let's suggest next day for better UX but allow same day via min attribute if needed. The original logic was +1 day.
           }
         }
       }
-      // If returnDate set earlier than departDate, bump it
+
+      // If returnDate changes, ensure it's not before departDate
       if (name === 'returnDate' && prev.tripType === 'roundTrip' && prev.departDate) {
-        const depart = new Date(prev.departDate);
-        const ret = new Date(value);
-        if (ret <= depart) {
-          const minReturn = new Date(depart);
-          minReturn.setDate(depart.getDate() + 1);
-          next.returnDate = minReturn.toISOString().split('T')[0];
+        if (value < prev.departDate) {
+          // If user selects a return date before depart date, maybe update depart date? 
+          // Or just reset return date. 
+          // Better UX: prevent selection via min attribute.
+          // But if they type it:
+          next.returnDate = getNextDay(prev.departDate);
         }
       }
       return next;
@@ -314,6 +329,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
                 type="date"
                 name="departDate"
                 value={formData.departDate || ""}
+                min={getTodayDate()}
                 onChange={handleInputChange}
                 className="w-full p-3 pr-10 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                 placeholder="Select date"
@@ -334,6 +350,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
                   type="date"
                   name="returnDate"
                   value={formData.returnDate || ""}
+                  min={formData.departDate || getTodayDate()}
                   onChange={handleInputChange}
                   className="w-full p-3 pr-10 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                   placeholder="Select date"

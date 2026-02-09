@@ -303,7 +303,21 @@ function FlightPayment() {
       }
       if (!cardDetails.expiryDate.match(/^(0[1-9]|1[0-2])\/\d{2}$/)) {
         errors.expiryDate = "Please enter a valid expiry date (MM/YY)";
+      } else {
+        const [month, year] = cardDetails.expiryDate.split('/').map(Number);
+        // Create date for the last day of the expiry month
+        // Month is 1-based from input, new Date takes 0-based month.
+        // new Date(year, monthIndex, 0) gives last day of previous month.
+        // So new Date(2000+year, month, 0) gives last day of 'month'.
+        const expiry = new Date(2000 + year, month, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time part
+
+        if (expiry < today) {
+          errors.expiryDate = "Card has expired";
+        }
       }
+
       if (!cardDetails.cvv.match(/^\d{3,4}$/)) {
         errors.cvv = "Please enter a valid CVV";
       }
