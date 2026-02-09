@@ -92,7 +92,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
     };
 
     setDefaultFrom();
-  }, [loaded, city, initialData, formData.from]);
+  }, [loaded, city, initialData]);
 
   const handleTripTypeChange = (type) => {
     if (type === "roundTrip") {
