@@ -425,6 +425,278 @@ class AmadeusService {
     }
   }
 
+  // ===== FLIGHT ANALYTICS APIs =====
+
+  /**
+   * Get Most Booked Destinations from a given origin
+   * @see https://developers.amadeus.com/self-service/category/flights/api-doc/flight-most-booked-destinations
+   * @param {string} origin - IATA city code (e.g., "NYC", "DEL")
+   * @param {string} period - Time period (e.g., "2024-01" for January 2024)
+   * @returns {Promise<Object>} - List of most booked destinations
+   */
+  async getMostBookedDestinations(origin, period) {
+    try {
+      const token = await this.getAccessToken();
+
+      console.log(`📊 Fetching most booked destinations from ${origin} for ${period}`);
+
+      const response = await axios.get(`${this.baseUrls.v1}/travel/analytics/air-traffic/booked`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        params: {
+          originCityCode: origin,
+          period: period || this.getDefaultPeriod(),
+          max: 10,
+          sort: 'analytics.flights.score'
+        }
+      });
+
+      const destinations = response.data.data || [];
+      console.log(`✅ Found ${destinations.length} most booked destinations from ${origin}`);
+
+      return {
+        success: true,
+        data: destinations.map(d => ({
+          destination: d.destination,
+          flightScore: d.analytics?.flights?.score || 0,
+          travelerScore: d.analytics?.travelers?.score || 0
+        })),
+        meta: response.data.meta
+      };
+
+    } catch (error) {
+      console.error('❌ Error fetching most booked destinations:', error.response?.data || error.message);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  /**
+   * Get Most Traveled Destinations from a given origin
+   * @see https://developers.amadeus.com/self-service/category/flights/api-doc/flight-most-traveled-destinations
+   */
+  async getMostTraveledDestinations(origin, period) {
+    try {
+      const token = await this.getAccessToken();
+
+      console.log(`📊 Fetching most traveled destinations from ${origin}`);
+
+      const response = await axios.get(`${this.baseUrls.v1}/travel/analytics/air-traffic/traveled`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        params: {
+          originCityCode: origin,
+          period: period || this.getDefaultPeriod(),
+          max: 10,
+          sort: 'analytics.travelers.score'
+        }
+      });
+
+      const destinations = response.data.data || [];
+      console.log(`✅ Found ${destinations.length} most traveled destinations`);
+
+      return {
+        success: true,
+        data: destinations.map(d => ({
+          destination: d.destination,
+          travelerScore: d.analytics?.travelers?.score || 0
+        })),
+        meta: response.data.meta
+      };
+
+    } catch (error) {
+      console.error('❌ Error fetching most traveled destinations:', error.response?.data || error.message);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  /**
+   * Get Cheapest Flight Dates between two cities
+   * @see https://developers.amadeus.com/self-service/category/flights/api-doc/flight-cheapest-date-search
+   */
+  async getCheapestFlightDates(origin, destination, options = {}) {
+    try {
+      const token = await this.getAccessToken();
+
+      console.log(`💰 Searching cheapest dates: ${origin} → ${destination}`);
+
+      const response = await axios.get(`${this.baseUrls.v1}/shopping/flight-dates`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        params: {
+          origin: origin,
+          destination: destination,
+          departureDate: options.departureDate, // Optional: specific date range
+          oneWay: options.oneWay || false,
+          duration: options.duration, // Optional: trip duration in days
+          nonStop: options.nonStop || false,
+          viewBy: options.viewBy || 'DATE' // DATE, DURATION, or WEEK
+        }
+      });
+
+      const dates = response.data.data || [];
+      console.log(`✅ Found ${dates.length} date options`);
+
+      return {
+        success: true,
+        data: dates.map(d => ({
+          departureDate: d.departureDate,
+          returnDate: d.returnDate,
+          price: {
+            total: d.price?.total,
+            currency: response.data.dictionaries?.currencies ?
+              Object.keys(response.data.dictionaries.currencies)[0] : 'USD'
+          },
+          links: d.links
+        })),
+        dictionaries: response.data.dictionaries,
+        meta: response.data.meta
+      };
+
+    } catch (error) {
+      console.error('❌ Error fetching cheapest dates:', error.response?.data || error.message);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  /**
+   * Get On-Demand Flight Status
+   * @see https://developers.amadeus.com/self-service/category/flights/api-doc/on-demand-flight-status
+   */
+  async getFlightStatus(carrierCode, flightNumber, scheduledDate) {
+    try {
+      const token = await this.getAccessToken();
+
+      console.log(`✈️ Getting status for ${carrierCode}${flightNumber} on ${scheduledDate}`);
+
+      const response = await axios.get(`${this.baseUrls.v2}/schedule/flights`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        params: {
+          carrierCode: carrierCode,
+          flightNumber: flightNumber,
+          scheduledDepartureDate: scheduledDate
+        }
+      });
+
+      const flights = response.data.data || [];
+      console.log(`✅ Found ${flights.length} flight status records`);
+
+      return {
+        success: true,
+        data: flights.map(f => ({
+          flightNumber: `${f.flightDesignator?.carrierCode}${f.flightDesignator?.flightNumber}`,
+          departure: {
+            airport: f.flightPoints?.[0]?.iataCode,
+            scheduledTime: f.flightPoints?.[0]?.departure?.timings?.[0]?.value,
+            terminal: f.flightPoints?.[0]?.departure?.terminal?.code
+          },
+          arrival: {
+            airport: f.flightPoints?.[1]?.iataCode,
+            scheduledTime: f.flightPoints?.[1]?.arrival?.timings?.[0]?.value,
+            terminal: f.flightPoints?.[1]?.arrival?.terminal?.code
+          },
+          aircraft: f.legs?.[0]?.aircraftEquipment?.aircraftType,
+          duration: f.segments?.[0]?.scheduledSegmentDuration
+        })),
+        meta: response.data.meta
+      };
+
+    } catch (error) {
+      console.error('❌ Error fetching flight status:', error.response?.data || error.message);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  /**
+   * Get Flight Availabilities (seat inventory)
+   * @see https://developers.amadeus.com/self-service/category/flights/api-doc/flight-availabilities-search
+   */
+  async getFlightAvailabilities(params) {
+    try {
+      const token = await this.getAccessToken();
+
+      console.log(`🎫 Searching flight availabilities: ${params.origin} → ${params.destination}`);
+
+      const requestBody = {
+        originDestinations: [{
+          id: '1',
+          originLocationCode: params.origin,
+          destinationLocationCode: params.destination,
+          departureDateTime: { date: params.departureDate }
+        }],
+        travelers: [{ id: '1', travelerType: 'ADULT' }],
+        sources: ['GDS']
+      };
+
+      const response = await axios.post(
+        `${this.baseUrls.v1}/shopping/availability/flight-availabilities`,
+        requestBody,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const availabilities = response.data.data || [];
+      console.log(`✅ Found ${availabilities.length} flight availabilities`);
+
+      return {
+        success: true,
+        data: availabilities,
+        dictionaries: response.data.dictionaries,
+        meta: response.data.meta
+      };
+
+    } catch (error) {
+      console.error('❌ Error fetching flight availabilities:', error.response?.data || error.message);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  /**
+   * Get Busiest Traveling Period for a city
+   * @see https://developers.amadeus.com/self-service/category/flights/api-doc/flight-busiest-traveling-period
+   */
+  async getBusiestTravelPeriod(origin, year, direction = 'ARRIVING') {
+    try {
+      const token = await this.getAccessToken();
+
+      console.log(`📈 Fetching busiest travel period for ${origin} in ${year}`);
+
+      const response = await axios.get(`${this.baseUrls.v1}/travel/analytics/air-traffic/busiest-period`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        params: {
+          cityCode: origin,
+          period: year || new Date().getFullYear().toString(),
+          direction: direction // ARRIVING or DEPARTING
+        }
+      });
+
+      const periods = response.data.data || [];
+      console.log(`✅ Found ${periods.length} busiest periods`);
+
+      return {
+        success: true,
+        data: periods.map(p => ({
+          period: p.period,
+          travelerScore: p.analytics?.travelers?.score || 0
+        })),
+        meta: response.data.meta
+      };
+
+    } catch (error) {
+      console.error('❌ Error fetching busiest travel period:', error.response?.data || error.message);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  /**
+   * Get default period for analytics (previous month)
+   */
+  getDefaultPeriod() {
+    const now = new Date();
+    now.setMonth(now.getMonth() - 1);
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }
+
   // Filter out test properties and prioritize real hotels
   prioritizeHotels(hotels, limit = 20) {
     if (!hotels || hotels.length === 0) return [];

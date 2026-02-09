@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react"
 import { destinations } from "./data.js"
+import FlightAnalyticsService from "../../../Services/FlightAnalyticsService.js"
+import GeoService from "../../../Services/GeoService.js"
+
+// Mapping IATA codes to destination data for enrichment
+const destinationCodeMap = destinations.reduce((acc, d) => {
+  acc[d.code] = d;
+  return acc;
+}, {});
 
 // Preload images with Promise tracking
 const preloadImage = (src) => {
@@ -23,9 +31,68 @@ destinations.forEach((destination) => {
 });
 
 export default function PopularDestinations({ onSelectDestination }) {
+  const [displayDestinations, setDisplayDestinations] = useState(destinations);
+  const [trendingBadges, setTrendingBadges] = useState({});
+  const [isApiLoading, setIsApiLoading] = useState(true);
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [loadedImages, setLoadedImages] = useState({});
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Fetch most booked destinations from API
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchTrendingDestinations = async () => {
+      try {
+        // Get user location to fetch relevant trending data
+        const location = await GeoService.getUserLocation();
+        const originCode = location.city || 'DEL'; // Default to Delhi
+
+        console.log(`📊 Fetching most booked destinations from ${originCode}`);
+
+        const bookedData = await FlightAnalyticsService.getMostBookedDestinations(originCode);
+
+        if (isMounted && bookedData && bookedData.length > 0) {
+          console.log(`✅ Got ${bookedData.length} trending destinations`);
+
+          // Create trending badges for destinations that appear in API results
+          const badges = {};
+          bookedData.forEach((item, index) => {
+            if (destinationCodeMap[item.destination]) {
+              badges[item.destination] = {
+                rank: index + 1,
+                score: item.flightScore || item.travelerScore
+              };
+            }
+          });
+
+          setTrendingBadges(badges);
+
+          // Reorder destinations: put API-trending ones first
+          const reorderedDestinations = [...destinations].sort((a, b) => {
+            const aRank = badges[a.code]?.rank || 999;
+            const bRank = badges[b.code]?.rank || 999;
+            return aRank - bRank;
+          });
+
+          setDisplayDestinations(reorderedDestinations.slice(0, 8)); // Show top 8
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not fetch trending destinations:', error.message);
+        // Keep static destinations as fallback
+      } finally {
+        if (isMounted) {
+          setIsApiLoading(false);
+        }
+      }
+    };
+
+    fetchTrendingDestinations();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Preload images on component mount (handles SPA navigation)
   useEffect(() => {
@@ -33,7 +100,7 @@ export default function PopularDestinations({ onSelectDestination }) {
 
     const loadImages = async () => {
       // Preload all images in parallel
-      const loadPromises = destinations.map(async (destination) => {
+      const loadPromises = displayDestinations.map(async (destination) => {
         if (destination.image) {
           await preloadImage(destination.image);
           if (isMounted) {
@@ -53,7 +120,7 @@ export default function PopularDestinations({ onSelectDestination }) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [displayDestinations]);
 
   const handleImageLoad = useCallback((destinationId) => {
     setLoadedImages(prev => ({ ...prev, [destinationId]: true }));
@@ -68,7 +135,7 @@ export default function PopularDestinations({ onSelectDestination }) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-      {destinations.map((destination, index) => (
+      {displayDestinations.map((destination, index) => (
         <div
           key={destination.id}
           className={`rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 relative h-[320px] cursor-pointer group ${selectedDestination?.id === destination.id ? 'ring-2 ring-[#055B75]' : ''
@@ -105,11 +172,13 @@ export default function PopularDestinations({ onSelectDestination }) {
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/30"></div>
           </div>
 
-          {/* Badge - Only for first item */}
-          {index === 0 && (
+          {/* Dynamic Trending Badge */}
+          {(trendingBadges[destination.code] || index === 0) && (
             <div className="absolute top-4 left-4 z-10">
-              <div className="bg-[#055B75] text-white text-sm font-medium py-1 px-4 rounded-full shadow-md animate-pulse">
-                Popular Choice
+              <div className={`text-white text-sm font-medium py-1 px-4 rounded-full shadow-md ${trendingBadges[destination.code] ? 'bg-gradient-to-r from-[#FF6B6B] to-[#FF8E53]' : 'bg-[#055B75] animate-pulse'}`}>
+                {trendingBadges[destination.code]
+                  ? `🔥 #${trendingBadges[destination.code].rank} Trending`
+                  : 'Popular Choice'}
               </div>
             </div>
           )}

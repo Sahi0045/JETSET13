@@ -108,7 +108,11 @@ export const endpoints = {
   // Flight endpoints
   flights: {
     search: createEndpoint('/flights/search'),
-    booking: createEndpoint('/flights/order')
+    booking: createEndpoint('/flights/order'),
+    analytics: createEndpoint('/flights/analytics'),
+    cheapestDates: createEndpoint('/flights/cheapest-dates'),
+    status: createEndpoint('/flights/status'),
+    availabilities: createEndpoint('/flights/availabilities')
   },
 
   // Hotel endpoints
