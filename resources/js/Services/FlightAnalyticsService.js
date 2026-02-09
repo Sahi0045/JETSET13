@@ -49,9 +49,16 @@ const fetchWithCache = async (endpoint, params, cacheKey) => {
             }
         });
 
+        // Abort request after 15 seconds to avoid zombie requests
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
         const response = await fetch(url.toString(), {
-            headers: { 'Accept': 'application/json' }
+            headers: { 'Accept': 'application/json' },
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 

@@ -447,7 +447,8 @@ class AmadeusService {
           period: period || this.getDefaultPeriod(),
           max: 10,
           sort: 'analytics.flights.score'
-        }
+        },
+        timeout: 8000
       });
 
       const destinations = response.data.data || [];
@@ -527,7 +528,8 @@ class AmadeusService {
           duration: options.duration, // Optional: trip duration in days
           nonStop: options.nonStop || false,
           viewBy: options.viewBy || 'DATE' // DATE, DURATION, or WEEK
-        }
+        },
+        timeout: 8000
       });
 
       const dates = response.data.data || [];
