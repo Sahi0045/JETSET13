@@ -556,17 +556,17 @@ function FlightBookingConfirmation() {
     try {
       console.log('🚀 Initiating direct ARC Pay checkout...');
 
-      // Prepare flight data for ARC Pay
-      const flightData = location.state?.flightData;
+      // Prepare flight data for ARC Pay - use routerLocation.state for raw flight data
+      const rawFlightData = routerLocation.state?.flightData;
       const amount = calculatedFare.totalAmount;
 
       // Get flight details
-      const flightNumber = `${flightData?.airline?.code || 'XX'} ${flightData?.id || '000'}`;
-      const carrierCode = flightData?.airline?.code || 'XX';
-      const departureAirport = flightData?.departure?.airport || 'XXX';
-      const arrivalAirport = flightData?.arrival?.airport || 'XXX';
-      const departureDate = flightData?.departure?.date || new Date().toISOString().split('T')[0];
-      const segments = flightData?.segments || [];
+      const flightNumber = `${rawFlightData?.airline?.code || 'XX'} ${rawFlightData?.id || '000'}`;
+      const carrierCode = rawFlightData?.airline?.code || 'XX';
+      const departureAirport = rawFlightData?.departure?.airport || 'XXX';
+      const arrivalAirport = rawFlightData?.arrival?.airport || 'XXX';
+      const departureDate = rawFlightData?.departure?.date || new Date().toISOString().split('T')[0];
+      const segments = rawFlightData?.segments || [];
 
       // Build flight data for ARC Pay
       const flightDataForArcPay = {
@@ -587,8 +587,8 @@ function FlightBookingConfirmation() {
             at: seg.arrival?.time || ''
           }
         })),
-        originalOffer: flightData?.originalOffer || flightData,
-        itineraries: flightData?.itineraries || [{
+        originalOffer: rawFlightData?.originalOffer || rawFlightData,
+        itineraries: rawFlightData?.itineraries || [{
           segments: segments.map(seg => ({
             carrierCode: seg.carrier || carrierCode,
             number: seg.number || flightNumber.split(' ')[1] || '000',
@@ -600,8 +600,8 @@ function FlightBookingConfirmation() {
 
       // Store ALL booking data in localStorage before redirect
       const bookingDataForStorage = {
-        selectedFlight: flightData,
-        originalOffer: flightData?.originalOffer,
+        selectedFlight: rawFlightData,
+        originalOffer: rawFlightData?.originalOffer || rawFlightData,
         passengerData: passengerData,
         bookingDetails: bookingDetails,
         calculatedFare: calculatedFare,

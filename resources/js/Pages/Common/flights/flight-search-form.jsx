@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { Calendar, Users, MapPin, Search, ChevronDown } from "lucide-react"
 import { defaultSearchData, specialFares, sourceCities, allDestinations } from "./data.js"
+import { allAirports } from "./airports.js";
 import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
 import { useLocationContext } from '../../../Context/LocationContext';
 
@@ -20,13 +21,13 @@ export default function FlightSearchForm({ initialData, onSearch }) {
   const [selectedFare, setSelectedFare] = useState(null);
 
   // Create a map of city names to their codes
-  const cityCodeMap = allDestinations.reduce((acc, city) => {
+  const cityCodeMap = allAirports.reduce((acc, city) => {
     acc[city.name] = city.code;
     return acc;
   }, {});
 
   // Create a map of codes to city details
-  const cityDetailsMap = allDestinations.reduce((acc, city) => {
+  const cityDetailsMap = allAirports.reduce((acc, city) => {
     acc[city.code] = {
       name: city.name,
       country: city.country,
@@ -45,7 +46,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
   useEffect(() => {
     if (loaded && !initialData?.from && !formData.from && city) {
       // Direct match
-      const directMatch = allDestinations.find(d => d.name.toLowerCase() === city.toLowerCase());
+      const directMatch = allAirports.find(d => d.name.toLowerCase() === city.toLowerCase());
 
       if (directMatch) {
         setFormData(prev => ({
@@ -57,7 +58,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
         }));
       } else {
         // Loose match (city contains or is contained in destination name)
-        const looseMatch = allDestinations.find(d =>
+        const looseMatch = allAirports.find(d =>
           d.name.toLowerCase().includes(city.toLowerCase()) ||
           city.toLowerCase().includes(d.name.toLowerCase())
         );
@@ -153,8 +154,8 @@ export default function FlightSearchForm({ initialData, onSearch }) {
 
       showSuggestions(true);
 
-      // Filter all destinations based on input
-      const filtered = allDestinations
+      // Filter all airports based on input
+      const filtered = allAirports
         .filter((city) => {
           const searchTerm = value.toLowerCase();
           return (
@@ -163,6 +164,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
             city.country.toLowerCase().includes(searchTerm)
           );
         })
+        .slice(0, 15) // Limit results for better performance
         .map(city => ({
           name: city.name,
           code: city.code,

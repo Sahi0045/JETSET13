@@ -13,6 +13,7 @@ import {
   sourceCities,
   specialFares
 } from "./data.js";
+import { allAirports } from "./airports.js";
 import { getTodayDate, getSafeDate } from "../../../utils/dateUtils";
 
 // Import centralized API configuration
@@ -244,141 +245,22 @@ function FlightSearchPage() {
     'OZ': 'Asiana Airlines'
   };
 
-  // City code to name mapping
-  const cityMap = {
-    // Indian Cities
-    'DEL': 'New Delhi (Indira Gandhi International)',
-    'BOM': 'Mumbai (Chhatrapati Shivaji Maharaj International)',
-    'BLR': 'Bangalore (Kempegowda International)',
-    'MAA': 'Chennai (Chennai International)',
-    'CCU': 'Kolkata (Netaji Subhash Chandra Bose International)',
-    'HYD': 'Hyderabad (Rajiv Gandhi International)',
-    'AMD': 'Ahmedabad (Sardar Vallabhbhai Patel International)',
-    'GOI': 'Goa (Dabolim International)',
-    'JAI': 'Jaipur (Jaipur International)',
-    'LKO': 'Lucknow (Chaudhary Charan Singh International)',
-    'PNQ': 'Pune (Pune International)',
-    'COK': 'Kochi (Cochin International)',
-    'TRV': 'Thiruvananthapuram (Trivandrum International)',
-    'GAU': 'Guwahati (Lokpriya Gopinath Bordoloi International)',
-    'VNS': 'Varanasi (Lal Bahadur Shastri International)',
-    'ATQ': 'Amritsar (Sri Guru Ram Dass Jee International)',
-    'BHO': 'Bhopal (Raja Bhoj International)',
-    'IDR': 'Indore (Devi Ahilya Bai Holkar International)',
-    'PAT': 'Patna (Jay Prakash Narayan International)',
-    'BBI': 'Bhubaneswar (Biju Patnaik International)',
-    'NAG': 'Nagpur (Dr. Babasaheb Ambedkar International)',
-    'BDQ': 'Vadodara (Vadodara International)',
-    'STV': 'Surat (Surat International)',
-    'VTZ': 'Visakhapatnam (Visakhapatnam International)',
-    'CJB': 'Coimbatore (Coimbatore International)',
-    'IXE': 'Mangalore (Mangalore International)',
-    'IXM': 'Madurai (Madurai International)',
-    'TRZ': 'Tiruchirappalli (Tiruchirappalli International)',
-    'DED': 'Dehradun (Dehradun International)',
-    'SXR': 'Srinagar (Srinagar International)',
-    'IXC': 'Chandigarh (Chandigarh International)',
-    'IXU': 'Aurangabad (Aurangabad International)',
-    'IXJ': 'Jammu (Jammu International)',
-    'IXR': 'Ranchi (Birsa Munda International)',
-    'IXB': 'Bagdogra (Bagdogra International)',
-    'IXZ': 'Port Blair (Veer Savarkar International)',
-    'IXA': 'Agartala (Maharaja Bir Bikram International)',
-    'IXD': 'Allahabad (Prayagraj International)',
-    'IXG': 'Belgaum (Belgaum International)',
-    'IXH': 'Kailashahar (Kailashahar Airport)',
-    'IXI': 'Lilabari (Lilabari Airport)',
-    'IXK': 'Keshod (Keshod Airport)',
-    'IXL': 'Leh (Kushok Bakula Rimpochee Airport)',
-    'IXN': 'Khowai (Khowai Airport)',
-    'IXP': 'Pathankot (Pathankot Airport)',
-    'IXQ': 'Kamalpur (Kamalpur Airport)',
-    'IXS': 'Silchar (Silchar Airport)',
-    'IXT': 'Pasighat (Pasighat Airport)',
-    'IXV': 'Along (Along Airport)',
-    'IXW': 'Jamshedpur (Sonari Airport)',
-    'IXY': 'Kandla (Kandla Airport)',
-    // 'IXZ': 'Port Blair (Veer Savarkar International)',
+  // City code to name mapping - Generated from comprehensive airports database
+  const cityMap = allAirports.reduce((acc, airport) => {
+    acc[airport.code] = `${airport.name}${airport.country ? ` (${airport.name === airport.city ? airport.country : airport.name + ', ' + airport.country})` : ''}`;
+    // Actually, simpler mapping is better for most UI parts
+    acc[airport.code] = airport.name;
+    return acc;
+  }, {});
 
-    // US Cities
-    'JFK': 'New York (John F. Kennedy International)',
-    'LAX': 'Los Angeles (Los Angeles International)',
-    'ORD': 'Chicago (O\'Hare International)',
-    'SFO': 'San Francisco (San Francisco International)',
-    'MIA': 'Miami (Miami International)',
-    'DFW': 'Dallas (Dallas/Fort Worth International)',
-    'BOS': 'Boston (Logan International)',
-    'SEA': 'Seattle (Seattle-Tacoma International)',
-    'IAD': 'Washington DC (Dulles International)',
-    'ATL': 'Atlanta (Hartsfield-Jackson International)',
-    'IAH': 'Houston (George Bush Intercontinental)',
-    'LAS': 'Las Vegas (McCarran International)',
-    'MCO': 'Orlando (Orlando International)',
-    'DEN': 'Denver (Denver International)',
-    'PHL': 'Philadelphia (Philadelphia International)',
-    'EWR': 'Newark (Newark Liberty International)',
-    'DTW': 'Detroit (Detroit Metropolitan)',
-    'MSP': 'Minneapolis (Minneapolis-Saint Paul International)',
-    'CLT': 'Charlotte (Charlotte Douglas International)',
-    'PHX': 'Phoenix (Phoenix Sky Harbor International)',
-    'SLC': 'Salt Lake City (Salt Lake City International)',
-    'BWI': 'Baltimore (Baltimore/Washington International)',
-    'SAN': 'San Diego (San Diego International)',
-    'TPA': 'Tampa (Tampa International)',
-    'PDX': 'Portland (Portland International)',
-    'HNL': 'Honolulu (Daniel K. Inouye International)',
-    'AUS': 'Austin (Austin-Bergstrom International)',
-    'BNA': 'Nashville (Nashville International)',
-    'MSY': 'New Orleans (Louis Armstrong International)',
-    'PIT': 'Pittsburgh (Pittsburgh International)',
+  // Full name mapping for search/display
+  const fullCityMap = allAirports.reduce((acc, airport) => {
+    acc[airport.code] = `${airport.name} (${airport.code})`;
+    return acc;
+  }, {});
+  // No static mappings needed - all airports are handled dynamically from airports.js
+  // No static mappings needed
 
-    // UK Cities
-    'LHR': 'London (Heathrow International)',
-    'MAN': 'Manchester (Manchester International)',
-    'BHX': 'Birmingham (Birmingham International)',
-    'GLA': 'Glasgow (Glasgow International)',
-    'EDI': 'Edinburgh (Edinburgh International)',
-    'BRS': 'Bristol (Bristol International)',
-    'NCL': 'Newcastle (Newcastle International)',
-    'LPL': 'Liverpool (Liverpool John Lennon)',
-    'LBA': 'Leeds (Leeds Bradford International)',
-    'BFS': 'Belfast (Belfast International)',
-    'LTN': 'London (Luton International)',
-    'STN': 'London (Stansted International)',
-    'LGW': 'London (Gatwick International)',
-    'LCY': 'London (City International)',
-    'EMA': 'East Midlands (East Midlands International)',
-    'SOU': 'Southampton (Southampton International)',
-    'ABZ': 'Aberdeen (Aberdeen International)',
-    'BHD': 'Belfast (George Best Belfast City)',
-    'CWL': 'Cardiff (Cardiff International)',
-    'DSA': 'Doncaster (Doncaster Sheffield)',
-    'EXT': 'Exeter (Exeter International)',
-    'HUY': 'Humberside (Humberside International)',
-    'INV': 'Inverness (Inverness International)',
-    'NWI': 'Norwich (Norwich International)',
-    'MME': 'Durham (Durham Tees Valley International)',
-
-    // Other International Cities
-    'DXB': 'Dubai (Dubai International)',
-    'SIN': 'Singapore (Changi International)',
-    'BKK': 'Bangkok (Suvarnabhumi International)',
-    'CDG': 'Paris (Charles de Gaulle International)',
-    'HND': 'Tokyo (Haneda International)',
-    'SYD': 'Sydney (Kingsford Smith International)',
-    'YYZ': 'Toronto (Pearson International)',
-    'HKG': 'Hong Kong (Hong Kong International)',
-    'FRA': 'Frankfurt (Frankfurt International)',
-    'AMS': 'Amsterdam (Schiphol International)',
-    'FCO': 'Rome (Fiumicino International)',
-    'MAD': 'Madrid (Barajas International)',
-    'IST': 'Istanbul (Istanbul International)',
-    'ICN': 'Seoul (Incheon International)',
-    'PVG': 'Shanghai (Pudong International)',
-    'MEL': 'Melbourne (Melbourne International)',
-    'AKL': 'Auckland (Auckland International)',
-    'CPT': 'Cape Town (Cape Town International)'
-  };
 
   // Aircraft code to name mapping
   const aircraftMap = {
@@ -1024,53 +906,8 @@ function FlightSearchPage() {
 
   // Get country by airport code
   const getCountryByCode = (code) => {
-    // Indian airports
-    if ([
-      'DEL', 'BOM', 'BLR', 'MAA', 'CCU', 'HYD', 'AMD', 'GOI', 'JAI', 'LKO',
-      'PNQ', 'COK', 'TRV', 'GAU', 'VNS', 'ATQ', 'BHO', 'IDR', 'PAT', 'BBI',
-      'NAG', 'BDQ', 'STV', 'VTZ', 'CJB', 'IXE', 'IXM', 'TRZ', 'DED', 'SXR'
-    ].includes(code)) {
-      return 'India';
-    }
-
-    // US airports
-    if ([
-      'JFK', 'LAX', 'ORD', 'SFO', 'MIA', 'DFW', 'BOS', 'SEA', 'IAD', 'ATL',
-      'IAH', 'LAS', 'MCO', 'DEN', 'PHL'
-    ].includes(code)) {
-      return 'United States';
-    }
-
-    // UK airports
-    if ([
-      'LHR', 'MAN', 'BHX', 'GLA', 'EDI', 'BRS', 'NCL', 'LPL', 'LBA', 'BFS'
-    ].includes(code)) {
-      return 'United Kingdom';
-    }
-
-    // Other countries
-    const countryMap = {
-      'DXB': 'UAE',
-      'SIN': 'Singapore',
-      'BKK': 'Thailand',
-      'CDG': 'France',
-      'HND': 'Japan',
-      'SYD': 'Australia',
-      'YYZ': 'Canada',
-      'HKG': 'Hong Kong',
-      'FRA': 'Germany',
-      'AMS': 'Netherlands',
-      'FCO': 'Italy',
-      'MAD': 'Spain',
-      'IST': 'Turkey',
-      'ICN': 'South Korea',
-      'PVG': 'China',
-      'MEL': 'Australia',
-      'AKL': 'New Zealand',
-      'CPT': 'South Africa'
-    };
-
-    return countryMap[code] || 'Unknown';
+    const airport = allAirports.find(a => a.code === code);
+    return airport ? airport.country : 'Unknown';
   };
 
   // Handle city selection

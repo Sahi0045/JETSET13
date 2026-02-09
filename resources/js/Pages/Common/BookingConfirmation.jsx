@@ -325,15 +325,28 @@ function BookingConfirmation() {
                 </div>
               </div>
 
-              {/* Passenger Details */}
-              {bookingData.passengers && typeof bookingData.passengers === 'object' && (
+              {/* Passenger Details - Support both flat travelers array and nested passengers.adults */}
+              {(bookingData.passengers || bookingData.travelers) && (
                 <div className="mb-6">
                   <h4 className="text-md font-bold text-gray-900 mb-3 flex items-center gap-2">
                     <Users className="w-4 h-4 text-blue-600" />
                     Passenger Details
                   </h4>
                   <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-                    {bookingData.passengers.adults?.map((passenger, index) => (
+                    {/* Handle flat travelers array (from flight bookings) */}
+                    {Array.isArray(bookingData.travelers) && bookingData.travelers.map((traveler, index) => (
+                      <div key={`traveler-${index}`} className="flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">
+                          {index + 1}
+                        </span>
+                        <span className="text-gray-700 font-medium">
+                          {traveler.firstName || traveler.name?.firstName || ''} {traveler.lastName || traveler.name?.lastName || ''}
+                        </span>
+                        {traveler.email && <span className="text-gray-400 text-sm">({traveler.email})</span>}
+                      </div>
+                    ))}
+                    {/* Handle nested passengers.adults (from cruise/other bookings) */}
+                    {bookingData.passengers?.adults?.map((passenger, index) => (
                       <div key={`adult-${index}`} className="flex items-center gap-2">
                         <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">
                           A{index + 1}
@@ -344,7 +357,7 @@ function BookingConfirmation() {
                         {passenger.email && <span className="text-gray-400 text-sm">({passenger.email})</span>}
                       </div>
                     ))}
-                    {bookingData.passengers.children?.filter(child => child.firstName).map((passenger, index) => (
+                    {bookingData.passengers?.children?.filter(child => child.firstName).map((passenger, index) => (
                       <div key={`child-${index}`} className="flex items-center gap-2">
                         <span className="inline-flex items-center justify-center w-6 h-6 bg-green-100 text-green-700 text-xs font-bold rounded-full">
                           C{index + 1}
