@@ -30,7 +30,7 @@ const getApiUrl = () => {
         if (typeof window !== 'undefined') {
             const isLocal = window.location.hostname === 'localhost' ||
                 window.location.hostname === '127.0.0.1';
-            return isLocal ? 'http://localhost:5005/api' : 'https://www.jetsetterss.com/api';
+            return isLocal ? 'http://localhost:5004/api' : 'https://www.jetsetterss.com/api';
         }
         return '';
     }

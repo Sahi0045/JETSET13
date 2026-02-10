@@ -2,7 +2,7 @@
 
 // Default production and development URLs
 const DEFAULT_PROD_URL = 'https://www.jetsetterss.com/api';
-const DEFAULT_DEV_PORT = 5005;
+const DEFAULT_DEV_PORT = 5004;
 
 // Get the base API URL from environment variables - prioritize frontend-safe variables
 const getApiBaseUrl = () => {
