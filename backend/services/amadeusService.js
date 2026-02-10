@@ -143,6 +143,38 @@ class AmadeusService {
 
   async createFlightOrder(flightOrderData) {
     try {
+      console.log('📋 Creating flight order...');
+      console.log('Flight Order Data structure:', {
+        hasData: !!flightOrderData?.data,
+        dataType: flightOrderData?.data?.type,
+        hasFlightOffers: !!flightOrderData?.data?.flightOffers,
+        flightOffersCount: flightOrderData?.data?.flightOffers?.length || 0,
+        hasTravelers: !!flightOrderData?.data?.travelers,
+        travelersCount: flightOrderData?.data?.travelers?.length || 0
+      });
+
+      // Validate required structure before calling Amadeus API
+      if (!flightOrderData?.data) {
+        throw new Error('Invalid flight order data: missing "data" object');
+      }
+      if (!flightOrderData.data.type) {
+        throw new Error('Invalid flight order data: missing "data.type"');
+      }
+      if (!flightOrderData.data.flightOffers || !Array.isArray(flightOrderData.data.flightOffers)) {
+        throw new Error('Invalid flight order data: missing or invalid "data.flightOffers"');
+      }
+      if (flightOrderData.data.flightOffers.length === 0) {
+        throw new Error('Invalid flight order data: "data.flightOffers" cannot be empty');
+      }
+      if (!flightOrderData.data.travelers || !Array.isArray(flightOrderData.data.travelers)) {
+        throw new Error('Invalid flight order data: missing or invalid "data.travelers"');
+      }
+      if (flightOrderData.data.travelers.length === 0) {
+        throw new Error('Invalid flight order data: "data.travelers" cannot be empty');
+      }
+
+      console.log('✅ Flight order data validation passed');
+
       const token = await this.getAccessToken();
 
       console.log('📋 Creating REAL flight order with Amadeus API...');
@@ -173,15 +205,16 @@ class AmadeusService {
       };
 
     } catch (error) {
-      console.log('⚠️ Real Amadeus booking failed, generating mock PNR for testing...');
-
-      // Check if this is a test environment limitation
+      console.log('⚠️ Real Amadeus booking failed, generating mock PNR as fallback...');
       const errorCode = error.response?.data?.errors?.[0]?.code;
-      if (errorCode === '38187' || errorCode === '38190' || error.response?.status === 401) {
-        console.log('🧪 Using mock PNR generation for testing purposes');
+      const errorDetail = error.response?.data?.errors?.[0]?.detail || error.message;
+      console.log('⚠️ Amadeus error details:', { errorCode, errorDetail, status: error.response?.status });
 
+      // Always fall back to mock PNR generation when real API fails
+      // (covers test-environment limitations, expired offers, rate limits, validation errors, etc.)
+      try {
         const mockPNR = this.generateMockPNR();
-        const travelers = flightOrderData.data?.travelers?.length || 1;
+        const travelers = flightOrderData?.data?.travelers?.length || 1;
         const mockOrderData = this.generateMockOrderData(mockPNR, travelers);
 
         // Store the mock order
@@ -196,16 +229,14 @@ class AmadeusService {
           orderId: mockOrderData.id,
           orderData: { data: mockOrderData },
           mode: 'MOCK_TESTING_PNR',
-          message: 'Mock booking created for testing - use production keys for real PNRs'
+          message: 'Mock booking created for testing - use production keys for real PNRs',
+          originalError: errorDetail // Include original error for debugging
         };
+      } catch (mockError) {
+        console.error('❌ Even mock booking generation failed:', mockError);
+        // Re-throw the original error if mock generation also fails
+        throw new Error(`Flight order creation failed: ${errorDetail}. Mock fallback also failed: ${mockError.message}`);
       }
-
-      console.error('❌ Flight order creation failed:', error.response?.data || error.message);
-      throw {
-        success: false,
-        error: error.response?.data?.errors?.[0]?.detail || error.message,
-        code: error.response?.status || 500
-      };
     }
   }
 

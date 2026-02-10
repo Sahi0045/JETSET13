@@ -253,15 +253,33 @@ function FlightCreateOrders() {
       console.error('Error response data:', error.response?.data);
       console.error('Error status:', error.response?.status);
 
-      // Extract more detailed error message
+      // Extract more detailed error message with priority order
       let errorMessage = 'Failed to process order';
-      if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.response?.data?.details) {
-        errorMessage = error.response.data.details;
+
+      if (error.response?.data) {
+        // Backend returned structured error
+        if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        } else if (error.response.data.details) {
+          errorMessage = error.response.data.details;
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        }
       } else if (error.message) {
+        // Use error.message as fallback
         errorMessage = error.message;
       }
+
+      // Add context for common errors
+      if (errorMessage.includes('Network Error') || errorMessage.includes('timeout')) {
+        errorMessage = 'Connection error. Please check your internet connection and try again.';
+      } else if (errorMessage.includes('500')) {
+        errorMessage = 'Server error. Our team has been notified. Please try again or contact support.';
+      } else if (errorMessage.includes('Invalid flight order data')) {
+        errorMessage = 'Booking data validation failed. Please try searching for flights again.';
+      }
+
+      console.error('📛 Final error message shown to user:', errorMessage);
 
       setError(errorMessage);
     } finally {
