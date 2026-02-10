@@ -119,9 +119,15 @@ function FlightSearchPage() {
           console.log('Fetching flights with search data:', location.state.searchData);
 
           // Ensure all required fields are present
+          // Helper to extract code from string like "City (CODE)"
+          const extractCode = (str) => {
+            const match = str && str.match(/\(([A-Z]{3})\)$/);
+            return match ? match[1] : str;
+          };
+
           const searchData = {
-            from: location.state.searchData.from,
-            to: location.state.searchData.to,
+            from: extractCode(location.state.searchData.from),
+            to: extractCode(location.state.searchData.to),
             departDate: location.state.searchData.departDate,
             returnDate: location.state.searchData.returnDate,
             travelers: parseInt(location.state.searchData.travelers) || 1,
@@ -789,13 +795,21 @@ function FlightSearchPage() {
     setError(null);
 
     try {
-      // Update search params with new date
+      // Helper to extract code from string like "City (CODE)"
+      const extractCode = (str) => {
+        const match = str && str.match(/\(([A-Z]{3})\)$/);
+        return match ? match[1] : str;
+      };
+
+      // Create new search params with updated date AND extracted codes
       const newSearchParams = {
         ...searchParams,
-        from: searchParams.from || 'DEL',
-        to: searchParams.to || 'HYD',
+        from: extractCode(searchParams.from),
+        to: extractCode(searchParams.to),
         departDate: selectedDate.isoDate
       };
+
+      // Update local state and URL with the new params immediately
       setSearchParams(newSearchParams);
 
       // Update date range to show selection
@@ -1294,7 +1308,20 @@ function FlightSearchPage() {
 
     const handleSubmit = (e) => {
       e.preventDefault();
-      onSearch(localSearchParams);
+
+      // Extract codes from "City (CODE)" strings
+      const extractCode = (str) => {
+        const match = str && str.match(/\(([A-Z]{3})\)$/);
+        return match ? match[1] : str;
+      };
+
+      const finalSearchParams = {
+        ...localSearchParams,
+        from: extractCode(localSearchParams.from),
+        to: extractCode(localSearchParams.to)
+      };
+
+      onSearch(finalSearchParams);
       setIsOpen(false);
     };
 
@@ -1357,6 +1384,15 @@ function FlightSearchPage() {
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#055B75]"
                       placeholder="Enter city or airport"
                     />
+                    {/* Add suggestions here if needed, or rely on desktop form logic if shared, but MobileSearchBar is simple input currently. 
+                        Ideally should have suggestions too but for now just text input. 
+                        Users might type "Delhi" and we need to handle it. 
+                        But since we just updated the main form, let's keep this simple or consistent.
+                        Actually, if the user types "Delhi" here, handleSearch needs to handle it.
+                        The main handleSearch logic in flightsearchpage does NOT have the extraction logic?
+                        Wait, I updated `FlightSearchForm` inside `flightsearchpage`, but `MobileSearchBar` calls `onSearch` which is `handleSearch` of `FlightSearchPage`.
+                        I need to check `handleSearch` of `FlightSearchPage`.
+                    */}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
@@ -1583,8 +1619,8 @@ function FlightSearchPage() {
     const defaultCityImage = "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=200&auto=format&fit=crop"; // Generic travel
 
     const [formData, setFormData] = useState({
-      from: initialData.from || 'DEL',
-      to: initialData.to || 'HYD',
+      from: initialData.from || 'Delhi (DEL)', // Default to formatted string
+      to: initialData.to || 'Hyderabad (HYD)', // Default to formatted string
       departDate: initialData.departDate || new Date().toISOString().split('T')[0],
       returnDate: initialData.returnDate || '',
       travelers: initialData.travelers || 1,
@@ -1593,6 +1629,20 @@ function FlightSearchPage() {
     });
     const [activeField, setActiveField] = useState(null);
 
+    // Initialize inputs with formatted "City (Code)" if they are just codes
+    useEffect(() => {
+      if (initialData.from && !initialData.from.includes('(')) {
+        const fromName = cityMap[initialData.from] || initialData.from;
+        // avoid double code if cityMap already has it, though cityMap usually just has name
+        // actually cityMap in flightsearchpage.jsx is just name currently.
+        setFormData(prev => ({ ...prev, from: `${fromName} (${initialData.from})` }));
+      }
+      if (initialData.to && !initialData.to.includes('(')) {
+        const toName = cityMap[initialData.to] || initialData.to;
+        setFormData(prev => ({ ...prev, to: `${toName} (${initialData.to})` }));
+      }
+    }, [initialData]);
+
     const handleInputChange = (field, value) => {
       setFormData(prev => ({
         ...prev,
@@ -1600,10 +1650,10 @@ function FlightSearchPage() {
       }));
     };
 
-    const handleSelectCity = (field, code) => {
+    const handleSelectCity = (field, code, name) => {
       setFormData(prev => ({
         ...prev,
-        [field]: code
+        [field]: `${name} (${code})`
       }));
       setActiveField(null);
     };
@@ -1636,7 +1686,7 @@ function FlightSearchPage() {
             <div
               key={s.code}
               className="flex items-center px-4 py-3 hover:bg-blue-50 cursor-pointer transition-colors duration-150 group"
-              onClick={() => handleSelectCity(field, s.code)}
+              onClick={() => handleSelectCity(field, s.code, s.name)}
             >
               {/* City Image */}
               <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden mr-4 shadow-sm border border-gray-100 group-hover:border-blue-200">
@@ -1668,7 +1718,20 @@ function FlightSearchPage() {
 
     const handleSubmit = (e) => {
       e.preventDefault();
-      onSearch(formData);
+
+      // Extract codes from "City (CODE)" strings
+      const extractCode = (str) => {
+        const match = str && str.match(/\(([A-Z]{3})\)$/);
+        return match ? match[1] : str; // Fallback to original if no match (assuming it might be just code)
+      };
+
+      const finalFormData = {
+        ...formData,
+        from: extractCode(formData.from),
+        to: extractCode(formData.to)
+      };
+
+      onSearch(finalFormData);
     };
 
     // Close suggestions on click outside

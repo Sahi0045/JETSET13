@@ -65,7 +65,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
         if (match) {
           setFormData(prev => ({
             ...prev,
-            from: match.name,
+            from: `${match.name} (${match.code})`,
             fromCode: match.code,
             fromCountry: match.country,
             fromType: match.type
@@ -78,7 +78,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
               const bestMatch = dynamicResults[0];
               setFormData(prev => ({
                 ...prev,
-                from: bestMatch.name,
+                from: `${bestMatch.name} (${bestMatch.code})`,
                 fromCode: bestMatch.code,
                 fromCountry: bestMatch.country,
                 fromType: bestMatch.type || 'international'
@@ -217,7 +217,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
     if (selectedCity) {
       setFormData((prev) => ({
         ...prev,
-        [field]: selectedCity.name,
+        [field]: `${selectedCity.name} (${selectedCity.code})`,
         [`${field}Code`]: selectedCity.code,
         [`${field}Country`]: selectedCity.country,
         [`${field}Type`]: selectedCity.type
@@ -270,11 +270,17 @@ export default function FlightSearchForm({ initialData, onSearch }) {
       return;
     }
 
+    // Helper to extract code from string like "City (CODE)"
+    const extractCode = (str) => {
+      const match = str && str.match(/\(([A-Z]{3})\)$/);
+      return match ? match[1] : null;
+    };
+
     // Ensure we have the city codes
     const searchData = {
       ...formData,
-      fromCode: formData.fromCode || cityCodeMap[formData.from],
-      toCode: formData.toCode || cityCodeMap[formData.to]
+      fromCode: formData.fromCode || extractCode(formData.from) || cityCodeMap[formData.from],
+      toCode: formData.toCode || extractCode(formData.to) || cityCodeMap[formData.to]
     };
 
     if (onSearch) {
