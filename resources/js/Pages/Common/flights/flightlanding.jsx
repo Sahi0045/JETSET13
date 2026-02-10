@@ -16,6 +16,7 @@ import { heroImage } from "./data.js"
 // Import airports database for dynamic city-to-IATA mapping
 import { allAirports } from "./airports.js";
 
+import { useLocationContext } from "../../../Context/LocationContext"
 // Dynamically build city-to-IATA map from airports database
 // This replaces the previous 180+ line hardcoded map and stays in sync with airports.js
 const cityToIATACode = allAirports.reduce((acc, airport) => {
@@ -25,8 +26,11 @@ const cityToIATACode = allAirports.reduce((acc, airport) => {
   return acc;
 }, {});
 
+
+
 function FlightLanding() {
   const navigate = useNavigate();
+  const { city, cityCode } = useLocationContext();
 
   const handleSearch = async (formData) => {
     try {
@@ -107,11 +111,15 @@ function FlightLanding() {
 
   // Handle navigation to destination search
   const handleExploreDestinations = () => {
+    const defaultOrigin = city || "New Delhi";
+    const defaultOriginCode = cityCode || "DEL";
+
     // Navigate to search page with default search parameters
     navigate('/flights/search', {
       state: {
         searchData: {
-          from: "New Delhi", // Default source
+          from: defaultOrigin, // Dynamic source
+          fromCode: defaultOriginCode,
           to: "",  // Empty destination for exploring all
           tripType: "oneWay",
           departDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from today
@@ -124,9 +132,11 @@ function FlightLanding() {
 
   // Handle book flight for a specific destination
   const handleBookFlight = (destination) => {
+    const defaultOrigin = city || "New Delhi";
+
     // Create a search request with the selected destination
     const searchData = {
-      from: "New Delhi", // Default source
+      from: defaultOrigin, // Dynamic source
       to: destination,
       tripType: "oneWay",
       departDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from today
@@ -135,7 +145,7 @@ function FlightLanding() {
     };
 
     // Get IATA codes for the cities
-    const fromCode = cityToIATACode[searchData.from] || searchData.from;
+    const fromCode = cityToIATACode[searchData.from] || cityCode || searchData.from;
     const toCode = cityToIATACode[searchData.to] || searchData.to;
 
     // Add IATA codes to search data

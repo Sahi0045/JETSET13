@@ -4,9 +4,10 @@ import React, { useState, useEffect, useCallback } from "react"
 import { ChevronDown, Loader2, AlertCircle } from "lucide-react"
 import Price from "../../../Components/Price"
 import FlightAnalyticsService from "../../../Services/FlightAnalyticsService.js"
-import GeoService from "../../../Services/GeoService.js"
+
 import { allAirports } from "./airports.js"
 
+import { useLocationContext } from "../../../Context/LocationContext"
 // Build a lookup map: IATA code → city details
 const airportByCode = allAirports.reduce((acc, a) => {
   if (a.code) acc[a.code] = a;
@@ -69,7 +70,10 @@ const formatDate = (dateStr) => {
   }
 };
 
+
+
 export default function CheapestFlights({ onBookFlight }) {
+  const { city, cityCode, countryCode, loading: locationLoading } = useLocationContext();
   const [flights, setFlights] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -82,14 +86,17 @@ export default function CheapestFlights({ onBookFlight }) {
     let isMounted = true;
 
     const fetchCheapestFlights = async () => {
+      // Wait for location context to be loaded
+      if (locationLoading) return;
+
       try {
         setLoading(true);
         setError(null);
 
-        // Get user's origin city from geolocation
-        const location = await GeoService.getUserLocation();
-        const userOriginCode = location.cityCode || 'DEL';
-        const userOriginCity = location.city || 'New Delhi';
+        // Get user's origin city from context
+        const userOriginCode = cityCode || 'DEL';
+        const userOriginCity = city || 'New Delhi';
+        const userCountryCode = countryCode || 'IN';
 
         if (isMounted) {
           setOriginCode(userOriginCode);
@@ -107,7 +114,7 @@ export default function CheapestFlights({ onBookFlight }) {
           destinationCodes = bookedData.map(d => ({ destination: d.destination }));
           console.log(`📊 Discovered ${bookedData.length} popular destinations, fetching cheapest dates...`);
         } else {
-          console.log('📊 API returned no destinations, using curated fallback for country:', location.countryCode);
+          console.log('📊 API returned no destinations, using curated fallback for country:', userCountryCode);
           // Country-specific popular flight routes
           const countryFallbacks = {
             'IN': ['BOM', 'BLR', 'GOI', 'JAI', 'CCU', 'HYD', 'MAA', 'DXB', 'BKK', 'SIN'],
@@ -115,7 +122,7 @@ export default function CheapestFlights({ onBookFlight }) {
             'GB': ['CDG', 'BCN', 'AMS', 'DXB', 'JFK', 'FCO', 'IST', 'ATH', 'LIS', 'BKK'],
             'AE': ['BOM', 'DEL', 'LHR', 'BKK', 'IST', 'CDG', 'SIN', 'JFK', 'CAI', 'KUL'],
           };
-          const fallbackCodes = countryFallbacks[location.countryCode] || countryFallbacks['IN'];
+          const fallbackCodes = countryFallbacks[userCountryCode] || countryFallbacks['IN'];
           // Remove origin from fallback list
           destinationCodes = fallbackCodes
             .filter(c => c !== userOriginCode)
@@ -210,7 +217,7 @@ export default function CheapestFlights({ onBookFlight }) {
 
     fetchCheapestFlights();
     return () => { isMounted = false; };
-  }, []);
+  }, [cityCode, city, countryCode, locationLoading]);
 
   const handleImageLoad = useCallback((id) => {
     setLoadedImages(prev => ({ ...prev, [id]: true }));
