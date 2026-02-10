@@ -317,10 +317,10 @@ export default function FlightSearchForm({ initialData, onSearch }) {
       </div>
 
       {/* Main Search Form */}
-      <div className="w-full mx-auto bg-white rounded-xl shadow-md p-6 max-w-5xl lg:max-w-6xl xl:max-w-7xl">
-        <div className="flex flex-col lg:flex-row items-end justify-between gap-4">
+      <div className="w-full mx-auto bg-white rounded-xl shadow-md p-6 max-w-7xl">
+        <div className="flex flex-col lg:flex-row lg:flex-wrap items-end gap-3">
           {/* From */}
-          <div className="flex-1 w-full">
+          <div className="flex-[1.5] min-w-[160px] w-full lg:w-auto">
             <label className="text-gray-600 text-sm font-medium mb-2 block">From</label>
             <div className="relative">
               <input
@@ -357,7 +357,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           </div>
 
           {/* To */}
-          <div className="flex-1 w-full">
+          <div className="flex-[1.5] min-w-[160px] w-full lg:w-auto">
             <label className="text-gray-600 text-sm font-medium mb-2 block">To</label>
             <div className="relative">
               <input
@@ -394,7 +394,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           </div>
 
           {/* Depart Date */}
-          <div className="flex-1 w-full">
+          <div className="flex-1 min-w-[140px] w-full lg:w-auto">
             <label className="text-gray-600 text-sm font-medium mb-2 block">Depart Date</label>
             <div className="relative">
               <input
@@ -415,7 +415,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
 
           {/* Return Date - Only visible for Round Trip */}
           {formData.tripType === "roundTrip" && (
-            <div className="flex-1 w-full">
+            <div className="flex-1 min-w-[140px] w-full lg:w-auto">
               <label className="text-gray-600 text-sm font-medium mb-2 block">Return Date</label>
               <div className="relative">
                 <input
@@ -436,7 +436,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           )}
 
           {/* Travelers */}
-          <div className="flex-1 w-full">
+          <div className="flex-1 min-w-[130px] w-full lg:w-auto">
             <label className="text-gray-600 text-sm font-medium mb-2 block">Travelers</label>
             <div className="relative">
               <select
@@ -455,7 +455,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           </div>
 
           {/* Class */}
-          <div className="flex-1 w-full">
+          <div className="flex-1 min-w-[120px] w-full lg:w-auto">
             <label className="text-gray-600 text-sm font-medium mb-2 block">Class</label>
             <div className="relative">
               <select
@@ -474,7 +474,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           </div>
 
           {/* Search Button */}
-          <div className="ml-2 w-full lg:w-auto">
+          <div className="w-full lg:w-auto lg:flex-shrink-0">
             <button
               onClick={handleSearch}
               className="h-12 w-full lg:w-auto bg-[#055B75] hover:bg-[#044A5F] text-white px-8 rounded-md flex items-center justify-center transition-colors shadow-md hover:shadow-lg"
