@@ -167,6 +167,7 @@ function FlightBookingConfirmation() {
         cabin: flightData.cabin,
         fareType: flightData.class,
         stops: flightData.stops,
+        stopDetails: flightData.stopDetails || [],
         basePrice: basePrice,
         tax: totalTaxes,
         platformFee: platformFee,
@@ -698,7 +699,27 @@ function FlightBookingConfirmation() {
                       <div className="plane-icon">✈</div>
                     </div>
                     <div className="stops-label">
-                      {bookingDetails?.flight?.stops === "0" ? "Direct Flight" : `${bookingDetails?.flight?.stops} Stopover(s)`}
+                      {bookingDetails?.flight?.stops === "0" || bookingDetails?.flight?.stops === 0 ? (
+                        "Direct Flight"
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          <div className="font-medium">
+                            {bookingDetails?.flight?.stops} {bookingDetails?.flight?.stops === 1 ? 'Stopover' : 'Stopovers'}
+                          </div>
+                          {bookingDetails?.flight?.stopDetails && bookingDetails.flight.stopDetails.length > 0 && (
+                            <div className="text-xs text-gray-600 space-y-0.5">
+                              {bookingDetails.flight.stopDetails.map((stop, idx) => (
+                                <div key={idx} className="flex items-center gap-1.5">
+                                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                                  <span className="font-medium">{stop.airport}</span>
+                                  <span className="text-gray-500">•</span>
+                                  <span className="text-yellow-600">{stop.duration}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
