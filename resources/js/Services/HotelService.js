@@ -28,10 +28,8 @@ class HotelService {
         try {
             console.log(`🔍 HotelService: Searching locations for: ${keyword}`);
 
-            // Use different URL patterns for production (Vercel) vs local dev (Express)
-            const url = isProduction
-                ? `${API_BASE_URL}/hotels?endpoint=locations&keyword=${encodeURIComponent(keyword)}`
-                : `${API_BASE_URL}/hotels/locations?keyword=${encodeURIComponent(keyword)}`;
+            // Use the same URL pattern for both production and local dev
+            const url = `${API_BASE_URL}/hotels/locations?keyword=${encodeURIComponent(keyword)}`;
 
             const response = await axios.get(url, { timeout: 10000 });
 
@@ -69,10 +67,8 @@ class HotelService {
             try {
                 console.log(`🌐 Attempting backend /hotels/search for ${cityCode}...`);
 
-                // Use different URL patterns for production (Vercel) vs local dev (Express)
-                const url = isProduction
-                    ? `${API_BASE_URL}/hotels?endpoint=search`
-                    : `${API_BASE_URL}/hotels/search`;
+                // Use the same URL pattern for both production and local dev
+                const url = `${API_BASE_URL}/hotels/search`;
 
                 const response = await axios.get(url, {
                     params: {
@@ -129,17 +125,17 @@ class HotelService {
         if (hotelId.startsWith('amadeus-')) {
             // First, try to get cached hotel data from search results (stored in sessionStorage)
             const cachedHotel = this.getCachedHotelData(hotelId);
-            
+
             const rawHotelId = hotelId.replace('amadeus-', '');
             console.log(`🔍 Detected Amadeus hotel ID, fetching details for ${rawHotelId}`);
-            
+
             const amadeusHotel = await this.fetchAmadeusHotelDetails(
                 rawHotelId,
                 checkInDate,
                 checkOutDate,
                 adults
             );
-            
+
             if (amadeusHotel) {
                 // Merge cached data (name, location, etc.) with Amadeus offers
                 if (cachedHotel) {
@@ -154,7 +150,7 @@ class HotelService {
                 }
                 return amadeusHotel;
             }
-            
+
             // If Amadeus fetch failed, use cached hotel data from search results
             if (cachedHotel) {
                 console.log('✅ Using cached hotel data from search results');
@@ -175,7 +171,7 @@ class HotelService {
             if (cached) {
                 const hotel = JSON.parse(cached);
                 console.log(`📦 Found cached hotel data for ${hotelId}`);
-                
+
                 // Ensure it has rooms for booking
                 if (!hotel.rooms || hotel.rooms.length === 0) {
                     hotel.rooms = [
@@ -201,7 +197,7 @@ class HotelService {
                         }
                     ];
                 }
-                
+
                 return hotel;
             }
         } catch (error) {
@@ -217,10 +213,8 @@ class HotelService {
         try {
             console.log(`🏨 Fetching Amadeus hotel details for ${rawHotelId}...`);
 
-            // Build URL differently for production (Vercel) vs local dev (Express)
-            const url = isProduction
-                ? `${API_BASE_URL}/hotels?endpoint=offers&hotelId=${encodeURIComponent(rawHotelId)}&checkInDate=${checkInDate || ''}&checkOutDate=${checkOutDate || ''}&adults=${adults}`
-                : `${API_BASE_URL}/hotels/offers/${encodeURIComponent(rawHotelId)}?checkInDate=${checkInDate || ''}&checkOutDate=${checkOutDate || ''}&adults=${adults}`;
+            // Use the same URL pattern for both production and local dev
+            const url = `${API_BASE_URL}/hotels/offers/${encodeURIComponent(rawHotelId)}?checkInDate=${checkInDate || ''}&checkOutDate=${checkOutDate || ''}&adults=${adults}`;
 
             const response = await axios.get(url, { timeout: 15000 });
 
@@ -244,7 +238,7 @@ class HotelService {
      */
     createFallbackHotelObject(rawHotelId, checkInDate, checkOutDate) {
         const nights = this.calculateNights(checkInDate, checkOutDate);
-        
+
         return {
             id: `amadeus-${rawHotelId}`,
             hotelId: rawHotelId,
