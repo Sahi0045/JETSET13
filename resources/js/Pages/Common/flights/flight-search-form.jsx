@@ -474,7 +474,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           </div>
 
           {/* Search Button */}
-          <div className="w-full lg:w-auto lg:flex-shrink-0">
+          <div className={`w-full lg:w-auto lg:flex-shrink-0 ${formData.tripType === "roundTrip" ? "lg:basis-full lg:flex lg:justify-center lg:mt-4" : ""}`}>
             <button
               onClick={handleSearch}
               className="h-12 w-full lg:w-auto bg-[#055B75] hover:bg-[#044A5F] text-white px-8 rounded-md flex items-center justify-center transition-colors shadow-md hover:shadow-lg"
