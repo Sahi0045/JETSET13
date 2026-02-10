@@ -335,15 +335,18 @@ export default function FlightSearchForm({ initialData, onSearch }) {
               <MapPin className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             </div>
             {showFromSuggestions && fromSuggestions.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 max-h-60 overflow-auto">
+              <div className="absolute z-20 w-full min-w-[280px] max-w-[90vw] sm:max-w-sm mt-1 bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto left-0">
                 {fromSuggestions.map((city, index) => (
                   <div
                     key={index}
-                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                    className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100 transition-colors"
                     onClick={() => handleSuggestionClick(city.name, "from")}
                   >
-                    <div className="font-medium">{city.name}</div>
-                    <div className="text-sm text-gray-500">{city.code}</div>
+                    <div className="font-semibold text-gray-800">{city.name}</div>
+                    <div className="text-xs text-gray-500 flex justify-between">
+                      <span>{city.code}</span>
+                      <span>{city.country}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -369,16 +372,17 @@ export default function FlightSearchForm({ initialData, onSearch }) {
               <MapPin className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             </div>
             {showToSuggestions && toSuggestions.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 max-h-60 overflow-auto">
+              <div className="absolute z-20 w-full min-w-[280px] max-w-[90vw] sm:max-w-sm mt-1 bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto right-0 sm:left-0 sm:right-auto">
                 {toSuggestions.map((city, index) => (
                   <div
                     key={index}
-                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                    className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100 transition-colors"
                     onClick={() => handleSuggestionClick(city.name, "to")}
                   >
-                    <div className="font-medium">{city.name}</div>
-                    <div className="text-sm text-gray-500">
-                      {city.code} - {city.country} ({city.type})
+                    <div className="font-semibold text-gray-800">{city.name}</div>
+                    <div className="text-xs text-gray-500 flex justify-between">
+                      <span>{city.code}</span>
+                      <span>{city.country}</span>
                     </div>
                   </div>
                 ))}
@@ -437,7 +441,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
             <div className="relative">
               <select
                 name="travelers"
-                value={formData.travelers || "2"}
+                value={formData.travelers || "1"}
                 onChange={handleInputChange}
                 className="w-full p-3 pr-10 appearance-none border border-gray-200 rounded-md text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
               >
@@ -447,6 +451,25 @@ export default function FlightSearchForm({ initialData, onSearch }) {
                 <option value="4">4+ Travelers</option>
               </select>
               <Users className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Class */}
+          <div className="flex-1 w-full">
+            <label className="text-gray-600 text-sm font-medium mb-2 block">Class</label>
+            <div className="relative">
+              <select
+                name="travelClass"
+                value={formData.travelClass || "ECONOMY"}
+                onChange={handleInputChange}
+                className="w-full p-3 pr-10 appearance-none border border-gray-200 rounded-md text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
+              >
+                <option value="ECONOMY">Economy</option>
+                <option value="PREMIUM_ECONOMY">Premium Economy</option>
+                <option value="BUSINESS">Business</option>
+                <option value="FIRST">First Class</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
             </div>
           </div>
 

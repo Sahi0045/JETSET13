@@ -292,8 +292,32 @@ function transformAmadeusFlightData(amadeusFlights, dictionaries = {}) {
         date: lastSegment.arrival.at.split('T')[0]
       };
 
-      // Calculate stops
-      const stops = Math.max(0, firstItinerary.segments.length - 1);
+      // Calculate stops and layover details
+      const segments = firstItinerary.segments;
+      const stops = Math.max(0, segments.length - 1);
+
+      let stopDetails = [];
+      if (stops > 0) {
+        stopDetails = segments.slice(0, -1).map((seg, index) => {
+          const nextSeg = segments[index + 1];
+          const arrivalTime = new Date(seg.arrival.at);
+          const departureTime = new Date(nextSeg.departure.at);
+          const diffMs = departureTime - arrivalTime;
+
+          const hours = Math.floor(diffMs / 3600000);
+          const minutes = Math.floor((diffMs % 3600000) / 60000);
+          const durationStr = `${hours}h ${minutes}m`;
+
+          return {
+            airport: seg.arrival.iataCode,
+            terminal: seg.arrival.terminal || '',
+            arrivalAt: seg.arrival.at,
+            departureAt: nextSeg.departure.at,
+            duration: durationStr,
+            waitingTime: durationStr
+          };
+        });
+      }
 
       // Get pricing info
       const price = {
@@ -302,10 +326,14 @@ function transformAmadeusFlightData(amadeusFlights, dictionaries = {}) {
         currency: flight.price?.currency || 'USD'
       };
 
-      // Get traveler pricing for cabin class
+      // Get traveler pricing for cabin class — check all segments for highest cabin
       const travelerPricing = flight.travelerPricings?.[0];
       const fareDetails = travelerPricing?.fareDetailsBySegment?.[0];
-      const cabin = fareDetails?.cabin || 'ECONOMY';
+      const allCabins = travelerPricing?.fareDetailsBySegment?.map(f => f.cabin) || [];
+      const cabinPriority = { 'FIRST': 4, 'BUSINESS': 3, 'PREMIUM_ECONOMY': 2, 'ECONOMY': 1 };
+      const cabin = allCabins.reduce((prev, current) => {
+        return (cabinPriority[current] || 0) > (cabinPriority[prev] || 0) ? current : prev;
+      }, 'ECONOMY');
 
       return {
         id: flight.id,
@@ -317,10 +345,7 @@ function transformAmadeusFlightData(amadeusFlights, dictionaries = {}) {
         departure: departure,
         arrival: arrival,
         stops: stops,
-        stopDetails: stops > 0 ? firstItinerary.segments.slice(0, -1).map(seg => ({
-          airport: seg.arrival.iataCode,
-          duration: seg.duration || 'Unknown'
-        })) : [],
+        stopDetails: stopDetails,
         aircraft: aircraft[firstSegment.aircraft?.code] || firstSegment.aircraft?.code || 'Unknown',
         cabin: cabin,
         baggage: fareDetails?.includedCheckedBags?.weight

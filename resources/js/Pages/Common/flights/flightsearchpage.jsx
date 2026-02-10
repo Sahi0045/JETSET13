@@ -39,6 +39,7 @@ function FlightSearchPage() {
     tripType: 'one-way'
   });
   const [flights, setFlights] = useState(apiResponse?.data || []);
+  const [openTooltipId, setOpenTooltipId] = useState(null); // ID of the currently open layover tooltip
   const [loading, setLoading] = useState(true);
   const [sortOrder, setSortOrder] = useState("price");
   const [dateRange, setDateRange] = useState([]);
@@ -131,8 +132,13 @@ function FlightSearchPage() {
             departDate: location.state.searchData.departDate,
             returnDate: location.state.searchData.returnDate,
             travelers: parseInt(location.state.searchData.travelers) || 1,
+            travelClass: location.state.searchData.travelClass || 'ECONOMY', // Pass travel class
             max: 20 // Increased max results
           };
+
+          // Apply initial filters if passed in state (e.g. from a previous search or deep link)
+          if (location.state.searchData.maxPrice) searchData.maxPrice = location.state.searchData.maxPrice;
+          if (location.state.searchData.nonStop) searchData.nonStop = location.state.searchData.nonStop;
 
           // Validate required fields
           if (!searchData.from || !searchData.to || !searchData.departDate) {
@@ -519,51 +525,48 @@ function FlightSearchPage() {
       return <span className="text-green-600 font-medium">Non-stop</span>;
     }
 
-    // Use stopDetails from API if available, otherwise try to calculate from segments
-    let layovers = [];
-
-    if (flight.stopDetails && flight.stopDetails.length > 0) {
-      // Use pre-calculated stop details from API
-      layovers = flight.stopDetails.map(stop => ({
-        code: stop.airport,
-        cityName: cityMap[stop.airport] || stop.airport,
-        duration: stop.duration || 'N/A'
-      }));
-    } else if (flight.segments && flight.segments.length > 1) {
-      // Fallback: Calculate layovers from segments
-      layovers = flight.segments.slice(0, -1).map((seg, i) => {
-        const nextSeg = flight.segments[i + 1];
-        const arrival = new Date(seg.arrival.at);
-        const departure = new Date(nextSeg.departure.at);
-        const diffMs = departure - arrival;
-        const hours = Math.floor(diffMs / 3600000);
-        const mins = Math.floor((diffMs % 3600000) / 60000);
-        return {
-          code: seg.arrival.airport,
-          cityName: seg.arrival.cityName || cityMap[seg.arrival.airport] || seg.arrival.airport,
-          duration: `${hours}h ${mins > 0 ? mins + 'm' : ''}`
-        };
-      });
-    }
+    // Use detailed stop info from backend
+    const layovers = flight.stopDetails || [];
+    const isOpen = openTooltipId === flight.id;
 
     return (
-      <div className="relative group cursor-pointer inline-block z-20">
-        <span className="text-orange-600 font-medium border-b border-dashed border-orange-300 hover:border-orange-600 transition-colors">
+      <div className="relative inline-block z-20">
+        <button
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent triggering row click if any
+            setOpenTooltipId(isOpen ? null : flight.id);
+          }}
+          className="text-orange-600 font-medium border-b border-dashed border-orange-300 hover:border-orange-600 transition-colors focus:outline-none"
+        >
           {flight.stops} {flight.stops === 1 ? 'stop' : 'stops'}
-          {layovers.length > 0 && <span className="text-xs ml-1 text-gray-500">via {layovers[0].code}</span>}
-        </span>
+          {layovers.length > 0 && <span className="text-xs ml-1 text-gray-500">via {layovers[0].airport}</span>}
+        </button>
 
-        {/* Enhanced Tooltip */}
-        {layovers.length > 0 && (
-          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-max bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none z-50">
-            <div className="font-bold text-[#65B3CF] mb-1.5 border-b border-gray-700 pb-1">Layover Information</div>
+        {/* Enhanced Tooltip - Click activated */}
+        {isOpen && layovers.length > 0 && (
+          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-max max-w-[280px] sm:max-w-xs bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl z-50 animate-in fade-in zoom-in-95 duration-200">
+            {/* Close button for mobile convenience */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenTooltipId(null);
+              }}
+              className="absolute top-1 right-1 text-gray-400 hover:text-white p-1"
+            >
+              ×
+            </button>
+
+            <div className="font-bold text-[#65B3CF] mb-1.5 border-b border-gray-700 pb-1 pr-4">Layover Information</div>
             {layovers.map((l, idx) => (
-              <div key={idx} className="flex items-center gap-2 mb-1 last:mb-0 whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-                <span className="text-gray-300">Stop {idx + 1}:</span>
-                <span className="font-semibold text-white">{l.cityName} ({l.code})</span>
-                <span className="text-gray-400">•</span>
-                <span className="text-yellow-400 font-mono">{l.duration}</span>
+              <div key={idx} className="mb-2 last:mb-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                  <span className="text-gray-300">Stop {idx + 1}:</span>
+                  <span className="font-semibold text-white">{cityMap[l.airport] || l.airport} ({l.airport})</span>
+                </div>
+                <div className="pl-3.5 text-gray-400">
+                  <span className="text-yellow-400 font-mono">{l.duration}</span> layover
+                </div>
               </div>
             ))}
             <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
@@ -604,39 +607,35 @@ function FlightSearchPage() {
     setSearchParams(formData);
     setError(null);
 
-    // Ensure all required fields are present
-    if (!formData.from || !formData.to || !formData.departDate) {
-      setError('Please fill in all required fields');
-      setLoading(false);
-      return;
-    }
-
     try {
-      const searchData = {
+      // Use API endpoint from centralized config
+      const apiUrl = apiConfig.endpoints.flights.search;
+
+      // Add filters to payload
+      const payload = {
         from: formData.from,
         to: formData.to,
         departDate: formData.departDate,
         returnDate: formData.returnDate,
         travelers: parseInt(formData.travelers) || 1,
         travelClass: formData.travelClass || 'ECONOMY',
-        max: 10
+        max: 10,
+        maxPrice: filters.price[1],
+        nonStop: filters.stops === '0', // If stops filter says 0 (Direct), pass nonStop=true
       };
 
       // Remove returnDate if it's empty
-      if (!searchData.returnDate) {
-        delete searchData.returnDate;
+      if (!payload.returnDate) {
+        delete payload.returnDate;
       }
-
-      // Use API endpoint from centralized config
-      const apiUrl = apiConfig.endpoints.flights.search;
-      console.log('Making API request to:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
-        body: JSON.stringify(searchData)
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -806,7 +805,10 @@ function FlightSearchPage() {
         ...searchParams,
         from: extractCode(searchParams.from),
         to: extractCode(searchParams.to),
-        departDate: selectedDate.isoDate
+        departDate: selectedDate.isoDate,
+        travelClass: searchParams.travelClass || 'ECONOMY',
+        travelers: parseInt(searchParams.travelers) || 1,
+        max: 20
       };
 
       // Update local state and URL with the new params immediately
@@ -838,8 +840,8 @@ function FlightSearchPage() {
         throw new Error(data.error || 'Failed to fetch flights');
       }
 
-      // Transform flight data
-      const flightData = transformFlightData(data.data.flights);
+      // Transform flight data — backend returns { data: [...flights] }, not { data: { flights: [...] } }
+      const flightData = transformFlightData(data.data || []);
       setFlights(flightData);
 
       // Update prices in the date range (only if dateWisePrices is available)
@@ -1867,7 +1869,7 @@ function FlightSearchPage() {
             <p className="text-[#B9D0DC] text-center max-w-2xl mb-6">Compare prices, schedules, and amenities from top airlines to book the best deal for your trip</p>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 shadow-xl border border-white/20 transform hover:scale-[1.01] transition-transform duration-300">
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 shadow-xl border border-white/20 transform hover:scale-[1.01] transition-transform duration-300" style={{ overflow: 'visible' }}>
             <FlightSearchForm
               initialData={searchParams}
               onSearch={handleSearch}
@@ -2121,7 +2123,7 @@ function FlightSearchPage() {
                     {currentItems.map((flight, index) => (
                       <div
                         key={index}
-                        className="bg-white rounded-xl shadow-sm hover:shadow-md overflow-hidden border border-gray-200 hover:border-[#65B3CF] transition-all duration-300 group"
+                        className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-200 hover:border-[#65B3CF] transition-all duration-300 group" style={{ overflow: 'visible' }}
                       >
                         {/* Top section with airline and price */}
                         <div className="p-5">
@@ -2206,7 +2208,7 @@ function FlightSearchPage() {
                             <div>
                               <div className="font-medium text-gray-500 mb-1">Class</div>
                               <div className="font-bold text-gray-800">
-                                {flight.cabin?.charAt(0).toUpperCase() + flight.cabin?.slice(1).toLowerCase() || 'Economy'}
+                                {flight.cabin ? flight.cabin.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : 'Economy'}
                               </div>
                               <div className="text-xs mt-1">
                                 {flight.baggage?.checked?.weight ? `${flight.baggage.checked.weight}${flight.baggage.checked.weightUnit}` : 'No checked baggage'}

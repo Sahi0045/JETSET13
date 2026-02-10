@@ -152,16 +152,16 @@ const resolveToIATACode = async (location) => {
 };
 
 // Transform Amadeus API response to frontend format
-const transformAmadeusFlightData = (amadeusFlights, dictionaries = {}) => {
-  if (!amadeusFlights || amadeusFlights.length === 0) return [];
+const transformAmadeusFlightData = (flights, dictionaries = {}) => {
+  if (!flights || flights.length === 0) return [];
 
   const airlines = dictionaries?.carriers || {};
   const airports = dictionaries?.locations || {};
   const aircraft = dictionaries?.aircraft || {};
 
-  return amadeusFlights.map(flight => {
+  return flights.map((flight, index) => {
     try {
-      const firstItinerary = flight.itineraries?.[0];
+      const firstItinerary = flight.itineraries[0];
       const firstSegment = firstItinerary?.segments?.[0];
       const lastSegment = firstItinerary?.segments?.[firstItinerary.segments.length - 1];
 
@@ -208,8 +208,32 @@ const transformAmadeusFlightData = (amadeusFlights, dictionaries = {}) => {
         date: lastSegment.arrival.at.split('T')[0]
       };
 
-      // Calculate stops
-      const stops = Math.max(0, firstItinerary.segments.length - 1);
+      // Calculate stops and layover details
+      const segments = firstItinerary.segments;
+      const stops = Math.max(0, segments.length - 1);
+
+      let stopDetails = [];
+      if (stops > 0) {
+        stopDetails = segments.slice(0, -1).map((seg, index) => {
+          const nextSeg = segments[index + 1];
+          const arrivalTime = new Date(seg.arrival.at);
+          const departureTime = new Date(nextSeg.departure.at);
+          const diffMs = departureTime - arrivalTime;
+
+          const hours = Math.floor(diffMs / 3600000);
+          const minutes = Math.floor((diffMs % 3600000) / 60000);
+          const durationStr = `${hours}h ${minutes}m`;
+
+          return {
+            airport: seg.arrival.iataCode,
+            terminal: seg.arrival.terminal || '',
+            arrivalAt: seg.arrival.at,
+            departureAt: nextSeg.departure.at,
+            duration: durationStr,
+            waitingTime: durationStr // explicit alias for clarity
+          };
+        });
+      }
 
       // Get pricing info
       const price = {
@@ -221,7 +245,22 @@ const transformAmadeusFlightData = (amadeusFlights, dictionaries = {}) => {
       // Get traveler pricing for cabin class
       const travelerPricing = flight.travelerPricings?.[0];
       const fareDetails = travelerPricing?.fareDetailsBySegment?.[0];
-      const cabin = fareDetails?.cabin || 'ECONOMY';
+
+      if (index === 0) {
+        console.log('DEBUG: First flight travelerPricing:', JSON.stringify(travelerPricing, null, 2));
+      }
+
+      // Check all segments to find the highest cabin class
+
+      // Check all segments to find the highest cabin class
+      // Some itineraries (mixed cabin) might start with Economy but main leg is Business.
+      // We should show the "best" cabin available in the itinerary.
+      const allCabins = travelerPricing?.fareDetailsBySegment?.map(f => f.cabin) || [];
+      const cabinPriority = { 'FIRST': 4, 'BUSINESS': 3, 'PREMIUM_ECONOMY': 2, 'ECONOMY': 1 };
+
+      const cabin = allCabins.reduce((prev, current) => {
+        return (cabinPriority[current] || 0) > (cabinPriority[prev] || 0) ? current : prev;
+      }, 'ECONOMY');
 
       return {
         id: flight.id,
@@ -233,10 +272,7 @@ const transformAmadeusFlightData = (amadeusFlights, dictionaries = {}) => {
         departure: departure,
         arrival: arrival,
         stops: stops,
-        stopDetails: stops > 0 ? firstItinerary.segments.slice(0, -1).map(seg => ({
-          airport: seg.arrival.iataCode,
-          duration: seg.duration || 'Unknown'
-        })) : [],
+        stopDetails: stopDetails,
         aircraft: aircraft[firstSegment.aircraft?.code] || firstSegment.aircraft?.code || 'Unknown',
         cabin: cabin,
         baggage: fareDetails?.includedCheckedBags?.weight
@@ -297,7 +333,10 @@ router.post('/search', async (req, res) => {
       departDate,
       returnDate: returnDate && returnDate.trim() !== '' ? returnDate : undefined,
       travelers: parseInt(travelers) || 1,
-      max: 20
+      max: 20,
+      travelClass: req.body.travelClass, // Add travelClass (ECONOMY, BUSINESS, etc)
+      nonStop: req.body.nonStop === 'true' || req.body.nonStop === true, // Add nonStop filter
+      maxPrice: req.body.maxPrice // Add maxPrice filter
     };
 
     console.log('Searching flights with params:', searchParams);
@@ -343,10 +382,10 @@ router.post('/search', async (req, res) => {
       console.error('❌ Amadeus API error:', amadeusError);
 
       // Return detailed error information
-      return res.status(500).json({
+      return res.status(amadeusError.code || 500).json({
         success: false,
         error: 'Flight search failed',
-        details: amadeusError.message || 'Unable to search flights at this time',
+        details: amadeusError.error || amadeusError.message || 'Unable to search flights at this time',
         code: amadeusError.code || 500
       });
     }
