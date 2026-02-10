@@ -91,6 +91,66 @@ const getAmadeusCredentials = () => {
   return { apiKey, apiSecret };
 };
 
+// Common city name to IATA code mapping for resolving non-IATA inputs
+const CITY_TO_IATA = {
+  // Major international cities
+  'new york': 'JFK', 'new delhi': 'DEL', 'los angeles': 'LAX', 'san francisco': 'SFO',
+  'chicago': 'ORD', 'miami': 'MIA', 'london': 'LHR', 'paris': 'CDG', 'tokyo': 'NRT',
+  'dubai': 'DXB', 'singapore': 'SIN', 'hong kong': 'HKG', 'bangkok': 'BKK',
+  'sydney': 'SYD', 'toronto': 'YYZ', 'mumbai': 'BOM', 'bangalore': 'BLR',
+  'hyderabad': 'HYD', 'chennai': 'MAA', 'kolkata': 'CCU', 'goa': 'GOI',
+  'jaipur': 'JAI', 'ahmedabad': 'AMD', 'pune': 'PNQ', 'kochi': 'COK',
+  'beijing': 'PEK', 'shanghai': 'PVG', 'seoul': 'ICN', 'istanbul': 'IST',
+  'rome': 'FCO', 'amsterdam': 'AMS', 'frankfurt': 'FRA', 'berlin': 'BER',
+  'madrid': 'MAD', 'barcelona': 'BCN', 'kuala lumpur': 'KUL', 'bali': 'DPS',
+  'maldives': 'MLE', 'phuket': 'HKT', 'kathmandu': 'KTM', 'colombo': 'CMB',
+  'doha': 'DOH', 'abu dhabi': 'AUH', 'riyadh': 'RUH', 'cairo': 'CAI',
+  'nairobi': 'NBO', 'johannesburg': 'JNB', 'sao paulo': 'GRU', 'mexico city': 'MEX',
+  'dallas': 'DFW', 'houston': 'IAH', 'seattle': 'SEA', 'boston': 'BOS',
+  'washington': 'IAD', 'atlanta': 'ATL', 'denver': 'DEN', 'las vegas': 'LAS',
+  'orlando': 'MCO', 'philadelphia': 'PHL', 'vancouver': 'YVR', 'melbourne': 'MEL',
+  'auckland': 'AKL', 'delhi': 'DEL', 'bombay': 'BOM', 'calcutta': 'CCU',
+  'madras': 'MAA', 'bengaluru': 'BLR', 'trivandrum': 'TRV', 'lucknow': 'LKO',
+  'chandigarh': 'IXC', 'indore': 'IDR', 'varanasi': 'VNS', 'amritsar': 'ATQ',
+  'patna': 'PAT', 'mangalore': 'IXE', 'coimbatore': 'CJB', 'srinagar': 'SXR',
+  'udaipur': 'UDR', 'jodhpur': 'JDH',
+};
+
+/**
+ * Resolve a location string to an IATA code.
+ * If it's already 3 uppercase letters, return as-is.
+ * Otherwise try the static map, then fall back to Amadeus location search.
+ */
+const resolveToIATACode = async (location) => {
+  if (!location) return location;
+
+  // Already an IATA code (3 uppercase letters)
+  if (/^[A-Z]{3}$/.test(location)) return location;
+
+  // Try static map (case-insensitive)
+  const lower = location.toLowerCase().trim();
+  if (CITY_TO_IATA[lower]) {
+    console.log(`📍 Resolved "${location}" -> ${CITY_TO_IATA[lower]} (static map)`);
+    return CITY_TO_IATA[lower];
+  }
+
+  // Try Amadeus location search API as fallback
+  try {
+    const result = await AmadeusService.searchLocations(location, 'CITY,AIRPORT', { limit: 1 });
+    if (result.success && result.data?.length > 0) {
+      const code = result.data[0].code;
+      console.log(`📍 Resolved "${location}" -> ${code} (Amadeus API)`);
+      return code;
+    }
+  } catch (err) {
+    console.warn(`⚠️ Could not resolve "${location}" via Amadeus API:`, err.message);
+  }
+
+  // Return as-is if nothing matched (will likely fail at Amadeus, but gives a clear error)
+  console.warn(`⚠️ Could not resolve "${location}" to IATA code, passing as-is`);
+  return location;
+};
+
 // Transform Amadeus API response to frontend format
 const transformAmadeusFlightData = (amadeusFlights, dictionaries = {}) => {
   if (!amadeusFlights || amadeusFlights.length === 0) return [];
@@ -225,10 +285,15 @@ router.post('/search', async (req, res) => {
 
     console.log('✅ Amadeus credentials found, proceeding with real API call');
 
+    // Resolve city names to IATA codes (handles cases like "New York" -> "JFK")
+    const resolvedFrom = await resolveToIATACode(from);
+    const resolvedTo = await resolveToIATACode(to);
+    console.log(`📍 Resolved locations: from="${from}" -> "${resolvedFrom}", to="${to}" -> "${resolvedTo}"`);
+
     // Prepare search parameters
     const searchParams = {
-      from,
-      to,
+      from: resolvedFrom,
+      to: resolvedTo,
       departDate,
       returnDate: returnDate && returnDate.trim() !== '' ? returnDate : undefined,
       travelers: parseInt(travelers) || 1,

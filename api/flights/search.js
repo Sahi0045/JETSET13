@@ -1,5 +1,64 @@
 import AmadeusService from '../../backend/services/amadeusService.js';
 
+// Common city name to IATA code mapping for resolving non-IATA inputs
+const CITY_TO_IATA = {
+  'new york': 'JFK', 'new delhi': 'DEL', 'los angeles': 'LAX', 'san francisco': 'SFO',
+  'chicago': 'ORD', 'miami': 'MIA', 'london': 'LHR', 'paris': 'CDG', 'tokyo': 'NRT',
+  'dubai': 'DXB', 'singapore': 'SIN', 'hong kong': 'HKG', 'bangkok': 'BKK',
+  'sydney': 'SYD', 'toronto': 'YYZ', 'mumbai': 'BOM', 'bangalore': 'BLR',
+  'hyderabad': 'HYD', 'chennai': 'MAA', 'kolkata': 'CCU', 'goa': 'GOI',
+  'jaipur': 'JAI', 'ahmedabad': 'AMD', 'pune': 'PNQ', 'kochi': 'COK',
+  'beijing': 'PEK', 'shanghai': 'PVG', 'seoul': 'ICN', 'istanbul': 'IST',
+  'rome': 'FCO', 'amsterdam': 'AMS', 'frankfurt': 'FRA', 'berlin': 'BER',
+  'madrid': 'MAD', 'barcelona': 'BCN', 'kuala lumpur': 'KUL', 'bali': 'DPS',
+  'maldives': 'MLE', 'phuket': 'HKT', 'kathmandu': 'KTM', 'colombo': 'CMB',
+  'doha': 'DOH', 'abu dhabi': 'AUH', 'riyadh': 'RUH', 'cairo': 'CAI',
+  'nairobi': 'NBO', 'johannesburg': 'JNB', 'sao paulo': 'GRU', 'mexico city': 'MEX',
+  'dallas': 'DFW', 'houston': 'IAH', 'seattle': 'SEA', 'boston': 'BOS',
+  'washington': 'IAD', 'atlanta': 'ATL', 'denver': 'DEN', 'las vegas': 'LAS',
+  'orlando': 'MCO', 'philadelphia': 'PHL', 'vancouver': 'YVR', 'melbourne': 'MEL',
+  'auckland': 'AKL', 'delhi': 'DEL', 'bombay': 'BOM', 'calcutta': 'CCU',
+  'madras': 'MAA', 'bengaluru': 'BLR', 'trivandrum': 'TRV', 'lucknow': 'LKO',
+  'chandigarh': 'IXC', 'indore': 'IDR', 'varanasi': 'VNS', 'amritsar': 'ATQ',
+  'patna': 'PAT', 'mangalore': 'IXE', 'coimbatore': 'CJB', 'srinagar': 'SXR',
+  'udaipur': 'UDR', 'jodhpur': 'JDH',
+};
+
+/**
+ * Resolve a location string to an IATA code.
+ * If it's already 3 uppercase letters, return as-is.
+ * Otherwise try the static map, then fall back to Amadeus location search.
+ */
+async function resolveToIATACode(location) {
+  if (!location) return location;
+
+  // Already an IATA code (3 uppercase letters)
+  if (/^[A-Z]{3}$/.test(location)) return location;
+
+  // Try static map (case-insensitive)
+  const lower = location.toLowerCase().trim();
+  if (CITY_TO_IATA[lower]) {
+    console.log(`📍 Resolved "${location}" -> ${CITY_TO_IATA[lower]} (static map)`);
+    return CITY_TO_IATA[lower];
+  }
+
+  // Try Amadeus location search API as fallback
+  try {
+    const result = await AmadeusService.searchLocations(location, 'CITY,AIRPORT', { limit: 1 });
+    if (result.success && result.data?.length > 0) {
+      const code = result.data[0].code;
+      console.log(`📍 Resolved "${location}" -> ${code} (Amadeus API)`);
+      return code;
+    }
+  } catch (err) {
+    console.warn(`⚠️ Could not resolve "${location}" via Amadeus API:`, err.message);
+  }
+
+  // Return as-is (will fail IATA validation and give a clear error)
+  console.warn(`⚠️ Could not resolve "${location}" to IATA code`);
+  return location;
+}
+
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -33,15 +92,22 @@ export default async function handler(req, res) {
     console.log('🔍 Flight search request received');
     console.log('Request body:', req.body);
 
-    const { from, to, departDate, returnDate, tripType, travelers, travelClass, max = 10 } = req.body;
+    const { from: rawFrom, to: rawTo, departDate, returnDate, tripType, travelers, travelClass, max = 10 } = req.body;
 
     // Validate required fields
-    if (!from || !to || !departDate) {
-      console.log('❌ Missing required fields:', { from, to, departDate });
+    if (!rawFrom || !rawTo || !departDate) {
+      console.log('❌ Missing required fields:', { from: rawFrom, to: rawTo, departDate });
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: from, to, and departDate are required'
       });
+    }
+
+    // Resolve city names to IATA codes before validation
+    const from = await resolveToIATACode(rawFrom);
+    const to = await resolveToIATACode(rawTo);
+    if (rawFrom !== from || rawTo !== to) {
+      console.log(`📍 Resolved locations: from="${rawFrom}" -> "${from}", to="${rawTo}" -> "${to}"`);
     }
 
     // Validate IATA codes (3-letter airport codes)
@@ -50,8 +116,8 @@ export default async function handler(req, res) {
         success: false,
         error: 'Invalid airport codes. Airport codes must be 3-letter IATA codes (e.g., DEL, JAI)',
         details: {
-          from: !/^[A-Z]{3}$/.test(from) ? 'Invalid origin airport code' : null,
-          to: !/^[A-Z]{3}$/.test(to) ? 'Invalid destination airport code' : null
+          from: !/^[A-Z]{3}$/.test(from) ? `Invalid origin airport code: "${rawFrom}"` : null,
+          to: !/^[A-Z]{3}$/.test(to) ? `Invalid destination airport code: "${rawTo}"` : null
         }
       });
     }
