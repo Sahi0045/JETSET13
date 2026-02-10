@@ -23,7 +23,7 @@ This document provides a complete guide for the ARC Pay Gateway integration impl
 ### Payment Flow
 
 ```
-User views quote → Clicks "Pay Now"
+User views quote → Clicks "Pay Nnow"
     ↓
 Frontend calls POST /api/payments?action=initiate-payment
     ↓
