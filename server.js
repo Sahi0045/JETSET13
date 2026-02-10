@@ -20,7 +20,6 @@ import quoteRoutes from './backend/routes/quote.routes.js';
 import cruiseRoutes from './backend/routes/cruise.routes.js';
 import supabaseAuthRoutes from './backend/routes/supabaseAuth.js';
 import geoRoutes from './backend/routes/geo.routes.js';
-import destinationRoutes from './backend/routes/destination.routes.js';
 import supabase from './backend/config/supabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -60,7 +59,6 @@ app.api_cruises = cruiseRoutes; // Assuming this line was part of previous block
 app.use('/api/cruises', cruiseRoutes);
 app.use('/api/supabase', supabaseAuthRoutes);
 app.use('/api/geo', geoRoutes);
-app.use('/api/destinations', destinationRoutes);
 
 // Test endpoint
 app.get('/api/test', (req, res) => {

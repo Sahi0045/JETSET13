@@ -10,7 +10,6 @@ import inquiryRoutes from './routes/inquiry.routes.js';
 import quoteRoutes from './routes/quote.routes.js';
 import featureFlagRoutes from './routes/featureFlag.routes.js';
 import geoRoutes from './routes/geo.routes.js';
-import destinationRoutes from './routes/destination.routes.js';
 import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
 // import 
 // const flightRoutes =re('./routes/flights');
@@ -70,7 +69,6 @@ app.use('/api/inquiries', inquiryRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/feature-flags', featureFlagRoutes);
 app.use('/api/geo', geoRoutes);
-app.use('/api/destinations', destinationRoutes);
 
 // 404 handler for undefined routes (must be after all routes)
 app.use((req, res, next) => {
