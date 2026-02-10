@@ -105,6 +105,11 @@ class AmadeusService {
         searchParams.travelClass = params.travelClass;
       }
 
+      // Add nonStop setting if specified
+      if (params.nonStop !== undefined) {
+        searchParams.nonStop = params.nonStop;
+      }
+
       console.log('Amadeus flight search parameters:', searchParams);
 
       const response = await axios.get(`${this.baseUrls.v2}/shopping/flight-offers`, {

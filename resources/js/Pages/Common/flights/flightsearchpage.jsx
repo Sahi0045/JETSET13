@@ -698,8 +698,20 @@ function FlightSearchPage() {
       }
 
       // Filter by stops
-      if (filters.stops !== "any" && String(flight.stops) !== String(filters.stops)) {
-        return false;
+      if (filters.stops !== "any") {
+        const stops = parseInt(filters.stops);
+        const flightStops = flight.stops;
+
+        if (stops === 2) {
+          // For 2+, show flights with 2 or more stops
+          if (flightStops < 2) return false;
+        } else if (stops === 1) {
+          // For 1 stop max, show 0 or 1 stops
+          if (flightStops > 1) return false;
+        } else {
+          // Exact match for 0
+          if (flightStops !== stops) return false;
+        }
       }
 
       // Filter by airlines
@@ -1221,7 +1233,8 @@ function FlightSearchPage() {
                     {[
                       { value: 'any', label: 'Any number of stops', icon: '🔄' },
                       { value: '0', label: 'Non-stop only', icon: '✈️' },
-                      { value: '1', label: '1 stop maximum', icon: '🛑' }
+                      { value: '1', label: '1 stop maximum', icon: '🛑' },
+                      { value: '2', label: '2+ stops', icon: '🛑' }
                     ].map(option => (
                       <button
                         key={option.value}

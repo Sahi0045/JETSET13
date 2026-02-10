@@ -333,7 +333,8 @@ router.post('/search', async (req, res) => {
       departDate,
       returnDate: returnDate && returnDate.trim() !== '' ? returnDate : undefined,
       travelers: parseInt(travelers) || 1,
-      max: 20,
+      travelers: parseInt(travelers) || 1,
+      max: 50, // Increased to 50 to ensure we get a wider variety of flights (including 2+ stops)
       travelClass: req.body.travelClass, // Add travelClass (ECONOMY, BUSINESS, etc)
       nonStop: req.body.nonStop === 'true' || req.body.nonStop === true, // Add nonStop filter
       maxPrice: req.body.maxPrice // Add maxPrice filter
