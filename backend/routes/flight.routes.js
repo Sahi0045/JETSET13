@@ -445,19 +445,32 @@ router.post('/order', async (req, res) => {
     // Accept both flightOffer (singular) and flightOffers (plural)
     const offers = flightOffers || (flightOffer ? [flightOffer] : null);
 
-    if (!offers || !travelers) {
+    // Ensure travelers is always an array (even if empty) to prevent validation errors
+    const travelersList = Array.isArray(travelers) ? travelers : (travelers ? [travelers] : []);
+
+    console.log('📋 Validating request:', {
+      hasOffers: !!offers,
+      offersCount: offers?.length || 0,
+      hasTravelers: !!travelers,
+      travelersListCount: travelersList.length,
+      hasContactInfo: !!contactInfo,
+      totalAmount: totalAmount || amount
+    });
+
+    if (!offers) {
       console.error('❌ Missing required fields:', {
         hasOffers: !!offers,
         hasTravelers: !!travelers,
+        hasTravelersList: travelersList.length > 0,
         receivedKeys: Object.keys(req.body)
       });
       return res.status(400).json({
         success: false,
-        error: 'Flight offers and travelers are required'
+        error: 'Flight offers are required'
       });
     }
 
-    console.log('✅ Valid request - offers:', offers.length, 'travelers:', travelers.length);
+    console.log('✅ Valid request - offers:', offers.length, 'travelers:', travelersList.length);
 
     // Check if the flight offer is in valid Amadeus format
     // Our transformed UI format has: segments, airline.code, departure.time
@@ -480,88 +493,98 @@ router.post('/order', async (req, res) => {
     if (!isValidAmadeusOffer) {
       console.log('🧪 Flight offer is in UI format (not Amadeus format), generating mock booking...');
 
-      const mockPNR = generateMockPNR();
-      const orderId = `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const bookingReference = `BOOK-${Date.now().toString(36).toUpperCase()}`;
+      try {
+        const mockPNR = generateMockPNR();
+        const orderId = `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const bookingReference = `BOOK-${Date.now().toString(36).toUpperCase()}`;
 
-      // Extract price - prioritize from destructured request body, then from flight offer
-      const finalAmount = totalAmount || amount || firstOffer?.price?.total || firstOffer?.price?.amount || firstOffer?.totalPrice?.amount || '0';
-      const currency = firstOffer?.price?.currency || firstOffer?.totalPrice?.currency || 'USD';
+        // Extract price - prioritize from destructured request body, then from flight offer
+        const finalAmount = totalAmount || amount || firstOffer?.price?.total || firstOffer?.price?.amount || firstOffer?.totalPrice?.amount || '0';
+        const currency = firstOffer?.price?.currency || firstOffer?.totalPrice?.currency || 'USD';
 
-      console.log('💰 Amount for booking:', {
-        fromTotalAmount: totalAmount,
-        fromAmount: amount,
-        fromFlightOfferPriceTotal: firstOffer?.price?.total,
-        fromFlightOfferPriceAmount: firstOffer?.price?.amount,
-        finalAmount: finalAmount
-      });
+        console.log('💰 Amount for booking:', {
+          fromTotalAmount: totalAmount,
+          fromAmount: amount,
+          fromFlightOfferPriceTotal: firstOffer?.price?.total,
+          fromFlightOfferPriceAmount: firstOffer?.price?.amount,
+          finalAmount: finalAmount
+        });
 
-      // Extract flight details for database
-      const firstSegment = firstOffer?.segments?.[0] || firstOffer?.itineraries?.[0]?.segments?.[0] || {};
-      const lastSegment = firstOffer?.segments?.[firstOffer?.segments?.length - 1] || firstSegment;
+        // Extract flight details for database
+        const firstSegment = firstOffer?.segments?.[0] || firstOffer?.itineraries?.[0]?.segments?.[0] || {};
+        const lastSegment = firstOffer?.segments?.[firstOffer?.segments?.length - 1] || firstSegment;
 
-      console.log(`✅ Mock booking created: PNR=${mockPNR}, OrderID=${orderId}`);
+        console.log(`✅ Mock booking created: PNR=${mockPNR}, OrderID=${orderId}`);
 
-      // Save booking to database
-      const dbBooking = await saveBookingToDatabase({
-        bookingReference: bookingReference,
-        pnr: mockPNR,
-        orderId: orderId,
-        transactionId: transactionId || `TXN-${Date.now()}`,
-        totalAmount: finalAmount,
-        origin: firstSegment.departure?.airport || firstOffer?.origin || firstOffer?.departure?.airport || '',
-        destination: lastSegment.arrival?.airport || firstOffer?.destination || firstOffer?.arrival?.airport || '',
-        departureDate: firstSegment.departure?.date || firstOffer?.departureDate || '',
-        departureTime: firstSegment.departure?.time || firstOffer?.departureTime || '',
-        arrivalTime: lastSegment.arrival?.time || firstOffer?.arrivalTime || '',
-        airline: firstSegment.airline?.code || firstOffer?.airline?.code || '',
-        airlineName: firstSegment.airline?.name || firstOffer?.airline?.name || '',
-        flightNumber: firstOffer?.flightNumber || '',
-        duration: firstOffer?.duration || '',
-        cabinClass: firstOffer?.cabinClass || firstOffer?.travelClass || 'ECONOMY',
-        travelers: travelers.map((t, i) => ({
-          id: `${i + 1}`,
-          firstName: t.firstName || 'Guest',
-          lastName: t.lastName || 'User',
-          dateOfBirth: t.dateOfBirth,
-          gender: t.gender
-        })),
-        flightOffer: firstOffer,
-        userId: req.body.userId || null
-      });
-
-      console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
-
-      return res.json({
-        success: true,
-        data: {
-          id: orderId,
-          orderId: orderId,
-          pnr: mockPNR,
-          status: 'CONFIRMED',
+        // Save booking to database
+        const dbBooking = await saveBookingToDatabase({
           bookingReference: bookingReference,
-          flightOffers: offers,
-          travelers: travelers.map((t, i) => ({
+          pnr: mockPNR,
+          orderId: orderId,
+          transactionId: transactionId || `TXN-${Date.now()}`,
+          totalAmount: finalAmount,
+          origin: firstSegment.departure?.airport || firstOffer?.origin || firstOffer?.departure?.airport || '',
+          destination: lastSegment.arrival?.airport || firstOffer?.destination || firstOffer?.arrival?.airport || '',
+          departureDate: firstSegment.departure?.date || firstOffer?.departureDate || '',
+          departureTime: firstSegment.departure?.time || firstOffer?.departureTime || '',
+          arrivalTime: lastSegment.arrival?.time || firstOffer?.arrivalTime || '',
+          airline: firstSegment.airline?.code || firstOffer?.airline?.code || '',
+          airlineName: firstSegment.airline?.name || firstOffer?.airline?.name || '',
+          flightNumber: firstOffer?.flightNumber || '',
+          duration: firstOffer?.duration || '',
+          cabinClass: firstOffer?.cabinClass || firstOffer?.travelClass || 'ECONOMY',
+          travelers: travelersList.map((t, i) => ({
             id: `${i + 1}`,
-            name: { firstName: t.firstName || 'Guest', lastName: t.lastName || 'User' }
+            firstName: t.firstName || 'Guest',
+            lastName: t.lastName || 'User',
+            dateOfBirth: t.dateOfBirth,
+            gender: t.gender
           })),
-          totalPrice: { amount: totalAmount, currency: currency },
-          createdAt: new Date().toISOString(),
-          databaseId: dbBooking?.id || null
-        },
-        pnr: mockPNR,
-        orderId: orderId,
-        bookingReference: bookingReference,
-        mode: 'MOCK_DEMO_BOOKING',
-        savedToDatabase: !!dbBooking,
-        message: 'Demo booking created successfully with mock PNR (real Amadeus booking requires original offer data)'
-      });
+          flightOffer: firstOffer,
+          userId: req.body.userId || null
+        });
+
+        console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
+
+        return res.json({
+          success: true,
+          data: {
+            id: orderId,
+            orderId: orderId,
+            pnr: mockPNR,
+            status: 'CONFIRMED',
+            bookingReference: bookingReference,
+            flightOffers: offers,
+            travelers: travelersList.map((t, i) => ({
+              id: `${i + 1}`,
+              name: { firstName: t.firstName || 'Guest', lastName: t.lastName || 'User' }
+            })),
+            totalPrice: { amount: totalAmount, currency: currency },
+            createdAt: new Date().toISOString(),
+            databaseId: dbBooking?.id || null
+          },
+          pnr: mockPNR,
+          orderId: orderId,
+          bookingReference: bookingReference,
+          mode: 'MOCK_DEMO_BOOKING',
+          savedToDatabase: !!dbBooking,
+          message: 'Demo booking created successfully with mock PNR (real Amadeus booking requires original offer data)'
+        });
+      } catch (mockError) {
+        console.error('❌ Error creating mock booking:', mockError);
+        console.error('❌ Mock booking error details:', {
+          message: mockError.message,
+          stack: mockError.stack,
+          firstOffer: firstOffer
+        });
+        throw new Error(`Failed to create mock booking: ${mockError.message}`);
+      }
     }
 
     // Prepare flight order data for Amadeus (only if we have valid Amadeus format)
     // The travelers from frontend are already in correct format: { id, firstName, lastName, dateOfBirth, gender }
     // But Amadeus needs name.firstName and name.lastName
-    const amadeusTravelers = travelers.map((traveler, idx) => ({
+    const amadeusTravelers = travelersList.map((traveler, idx) => ({
       id: traveler.id || `${idx + 1}`,
       dateOfBirth: traveler.dateOfBirth || '1990-01-01',
       gender: (traveler.gender || 'MALE').toUpperCase() === 'MALE' ? 'MALE' : 'FEMALE',
@@ -570,7 +593,7 @@ router.post('/order', async (req, res) => {
         lastName: traveler.lastName || 'User'
       },
       contact: contactInfo ? {
-        emailAddress: contactInfo.email || travelers[0]?.email,
+        emailAddress: contactInfo.email || travelersList[0]?.email,
         phones: [{
           deviceType: 'MOBILE',
           countryCallingCode: contactInfo.countryCode || '1',
@@ -647,9 +670,17 @@ router.post('/order', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Flight order creation error:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    console.error('❌ Request body that caused error:', JSON.stringify(req.body, null, 2));
+
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to create flight order'
+      error: error.message || 'Failed to create flight order',
+      details: process.env.NODE_ENV !== 'production' ? error.stack : undefined
     });
   }
 });

@@ -160,6 +160,15 @@ function FlightCreateOrders() {
       };
 
       console.log('Sending flight booking data:', flightBookingData);
+      console.log('📋 Flight booking request details:', {
+        hasFlightOffer: !!flightBookingData.flightOffer,
+        flightOfferKeys: flightBookingData.flightOffer ? Object.keys(flightBookingData.flightOffer) : [],
+        hasTravelers: !!flightBookingData.travelers,
+        travelersCount: flightBookingData.travelers?.length || 0,
+        hasContactInfo: !!flightBookingData.contactInfo,
+        totalAmount: flightBookingData.totalAmount
+      });
+      console.log('📋 Full payload:', JSON.stringify(flightBookingData, null, 2));
 
       const response = await axios.post(endpoints.flights.booking, flightBookingData);
 
