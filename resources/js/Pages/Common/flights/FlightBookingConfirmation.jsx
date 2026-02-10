@@ -10,6 +10,7 @@ import { flightBookingData } from "./data";
 import supabase from "../../../lib/supabase";
 import ArcPayService from "../../../Services/ArcPayService";
 import { useLocationContext } from '../../../Context/LocationContext';
+import { allAirports } from './airports';
 import "./booking-confirmation.css";
 
 
@@ -44,6 +45,39 @@ function FlightBookingConfirmation() {
     refundDetails: true,
     visaRequirements: true
   });
+
+  // Country code state
+  const [selectedCountryCode, setSelectedCountryCode] = useState(callingCode || '+91');
+  const [availableCountryCodes] = useState([
+    { code: '+91', country: 'India' },
+    { code: '+1', country: 'USA/Canada' },
+    { code: '+44', country: 'UK' },
+    { code: '+61', country: 'Australia' },
+    { code: '+81', country: 'Japan' },
+    { code: '+49', country: 'Germany' },
+    { code: '+33', country: 'France' },
+    { code: '+971', country: 'UAE' },
+    { code: '+65', country: 'Singapore' },
+    { code: '+60', country: 'Malaysia' },
+    { code: '+66', country: 'Thailand' },
+    { code: '+84', country: 'Vietnam' },
+    { code: '+62', country: 'Indonesia' },
+    // Add more as needed
+  ]);
+
+  // Update selected country code when context changes
+  useEffect(() => {
+    if (callingCode) {
+      setSelectedCountryCode(callingCode);
+    }
+  }, [callingCode]);
+
+  // Helper to get city name from airport code
+  const getCityName = (code) => {
+    if (!code) return '';
+    const airport = allAirports.find(a => a.code === code);
+    return airport ? airport.name : code;
+  };
 
 
   // Check authentication status on component mount
@@ -711,7 +745,9 @@ function FlightBookingConfirmation() {
                               {bookingDetails.flight.stopDetails.map((stop, idx) => (
                                 <div key={idx} className="flex items-center gap-1.5">
                                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-                                  <span className="font-medium">{stop.airport}</span>
+                                  <span className="font-medium">
+                                    {getCityName(stop.airport)} ({stop.airport})
+                                  </span>
                                   <span className="text-gray-500">•</span>
                                   <span className="text-yellow-600">{stop.duration}</span>
                                 </div>
@@ -948,8 +984,16 @@ function FlightBookingConfirmation() {
                   <div className="form-group">
                     <label>Country Code</label>
                     <div className="relative">
-                      <select className="form-input appearance-none bg-white">
-                        <option>{country ? `${country} (${callingCode})` : 'India (+91)'}</option>
+                      <select
+                        className="form-input appearance-none bg-white pr-8"
+                        value={selectedCountryCode}
+                        onChange={(e) => setSelectedCountryCode(e.target.value)}
+                      >
+                        {availableCountryCodes.map((cc) => (
+                          <option key={cc.code} value={cc.code}>
+                            {cc.country} ({cc.code})
+                          </option>
+                        ))}
                       </select>
                       <ChevronDown className="absolute right-3 top-3.5 h-4 w-4 text-gray-500 pointer-events-none" />
                     </div>
