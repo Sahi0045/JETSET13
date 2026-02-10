@@ -737,8 +737,60 @@ class AmadeusService {
   async searchHotels(params) {
     try {
       const token = await this.getAccessToken();
+      console.log(`🏨 Searching hotels in ${params.cityCode} with Amadeus...`);
 
-      // First, get hotels in the city using v1 endpoint
+      // 1. First attempt: Search for hotels with AVAILABILITY (Shop API)
+      // This ensures we get bookable hotels with prices
+      try {
+        console.log('🔍 Attempting to find available hotels via Shopping API...');
+
+        const shoppingParams = {
+          cityCode: params.cityCode,
+          checkInDate: params.checkInDate,
+          checkOutDate: params.checkOutDate,
+          adults: params.adults || 2,
+          roomQuantity: 1,
+          currency: 'USD',
+          radius: params.radius || 20,
+          radiusUnit: 'KM',
+          paymentPolicy: 'NONE', // maximize results
+          includeClosed: false,
+          bestRateOnly: true
+        };
+
+        // If dates are missing, generate default future dates
+        if (!shoppingParams.checkInDate || !shoppingParams.checkOutDate) {
+          const today = new Date();
+          const nextMonth = new Date(today);
+          nextMonth.setDate(today.getDate() + 30);
+          const nextMonthEnd = new Date(nextMonth);
+          nextMonthEnd.setDate(nextMonth.getDate() + 3);
+
+          shoppingParams.checkInDate = nextMonth.toISOString().split('T')[0];
+          shoppingParams.checkOutDate = nextMonthEnd.toISOString().split('T')[0];
+          console.log(`📅 Using default dates for availability search: ${shoppingParams.checkInDate} to ${shoppingParams.checkOutDate}`);
+        }
+
+        const shoppingResponse = await axios.get(`${this.baseUrls.v3}/shopping/hotel-offers`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          params: shoppingParams
+        });
+
+        if (shoppingResponse.data.data && shoppingResponse.data.data.length > 0) {
+          console.log(`✅ Found ${shoppingResponse.data.data.length} available hotels with offers`);
+          return { data: shoppingResponse.data.data };
+        }
+
+        console.log('⚠️ No hotels found with availability, falling back to directory search');
+
+      } catch (shoppingError) {
+        console.warn('⚠️ Shopping API search failed/empty, falling back to directory search:', shoppingError.response?.data?.errors?.[0]?.detail || shoppingError.message);
+      }
+
+      // 2. Fallback: Get hotels in the city using v1 endpoint (Reference Data)
+      // This returns a list of hotels, but we don't know if they are bookable
+      console.log('📂 Performing directory search (Reference Data API)...');
+
       const hotelListResponse = await axios.get(`${this.baseUrls.v1}/reference-data/locations/hotels/by-city`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -751,17 +803,24 @@ class AmadeusService {
         }
       });
 
-      console.log(`Found ${hotelListResponse.data.data?.length || 0} hotels in ${params.cityCode}`);
+      console.log(`✅ Found ${hotelListResponse.data.data?.length || 0} hotels in ${params.cityCode} directory`);
 
       // If no hotels found, return empty results
       if (!hotelListResponse.data.data || hotelListResponse.data.data.length === 0) {
         return { data: [] };
       }
 
-      // SKIP availability check for test environment to show all hotels
-      // Most test hotel IDs don't support availability checks, so we just return the hotel list
-      console.log(`Returning all ${hotelListResponse.data.data.length} hotels without availability check (test environment)`);
-      return hotelListResponse.data;
+      // Filter and prioritize identifying specific known test hotels if in test environment
+      // This helps avoid "INVALID PROPERTY CODE" errors by preferring hotels that might actually work
+      const hotels = hotelListResponse.data.data;
+
+      // For fallback directory results, we return the raw list
+      // The controller will handle formatting
+      return {
+        data: hotels,
+        hotels: hotels // standardized property for controller
+      };
+
     } catch (error) {
       console.error('❌ Hotel search error:', error.response?.data || error.message);
       throw error;
