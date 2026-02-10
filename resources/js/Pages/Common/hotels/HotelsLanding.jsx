@@ -105,49 +105,30 @@ const HotelsLanding = () => {
         }
     }, [loaded, city]);
 
-    // Featured hotels data - IDs match hotels.json
-    const featuredHotels = [
-        {
-            id: 'maldives-1',
-            name: "Soneva Fushi",
-            location: "Maldives",
-            image: "https://images.unsplash.com/photo-1573843981267-be1999ff37cd?auto=format&fit=crop&w=1600&q=80",
-            rating: 4.9,
-            reviews: 876,
-            price: 2200,
-            tags: ["Overwater", "Eco-Luxury", "Diving"]
-        },
-        {
-            id: 'swiss-1',
-            name: "The Chedi Andermatt",
-            location: "Swiss Alps",
-            image: "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?auto=format&fit=crop&w=1600&q=80",
-            rating: 4.9,
-            reviews: 567,
-            price: 950,
-            tags: ["Ski Resort", "Mountain Views", "Luxury"]
-        },
-        {
-            id: 'dubai-1',
-            name: "Burj Al Arab Jumeirah",
-            location: "Dubai",
-            image: "https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&w=1600&q=80",
-            rating: 5.0,
-            reviews: 2456,
-            price: 1500,
-            tags: ["Ultra Luxury", "Beachfront", "Iconic"]
-        },
-        {
-            id: 'paris-1',
-            name: "Four Seasons George V",
-            location: "Paris",
-            image: "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1600&q=80",
-            rating: 4.9,
-            reviews: 1987,
-            price: 1200,
-            tags: ["Luxury", "Champs-Élysées", "Michelin"]
-        }
-    ];
+    // Featured hotels state
+    const [featuredHotelsList, setFeaturedHotelsList] = useState([]);
+    const [loadingFeatured, setLoadingFeatured] = useState(true);
+
+    // Fetch featured hotels based on location
+    useEffect(() => {
+        const fetchFeatured = async () => {
+            setLoadingFeatured(true);
+            try {
+                // Use city from context or default to null (which falls back to global featured)
+                const locationToUse = loaded ? city : null;
+                const hotels = await hotelService.getFeaturedByLocation(locationToUse);
+                setFeaturedHotelsList(hotels);
+            } catch (error) {
+                console.error('Error fetching featured hotels:', error);
+                // Fallback to static list if service fails
+                setFeaturedHotelsList([]);
+            } finally {
+                setLoadingFeatured(false);
+            }
+        };
+
+        fetchFeatured();
+    }, [city, loaded]);
 
     // Handler to navigate to hotel details
     const handleHotelClick = (hotelId) => {
@@ -432,75 +413,106 @@ const HotelsLanding = () => {
                     <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-4">
                         <div className="max-w-2xl">
                             <span className="text-[#65B3CF] font-semibold tracking-wider text-sm uppercase mb-2 block">Luxury Stays</span>
-                            <h2 className="text-4xl font-bold text-[#055B75] mb-4">Featured Hotels</h2>
+                            <h2 className="text-4xl font-bold text-[#055B75] mb-4">
+                                {loaded && city ? `Featured Hotels in ${city}` : 'Featured Hotels'}
+                            </h2>
                             <p className="text-gray-600 text-lg">Discover our handpicked collection of the world's most stunning luxury hotels and resorts.</p>
                         </div>
-                        <button className="hidden md:flex items-center gap-2 text-[#055B75] font-bold text-lg hover:text-[#034457] transition-colors group bg-[#F0FAFC] px-6 py-3 rounded-xl hover:bg-[#E0F2F7]">
+                        <button
+                            onClick={() => navigate(loaded && city ? `/hotels/search?destination=${encodeURIComponent(city)}` : '/hotels/search')}
+                            className="hidden md:flex items-center gap-2 text-[#055B75] font-bold text-lg hover:text-[#034457] transition-colors group bg-[#F0FAFC] px-6 py-3 rounded-xl hover:bg-[#E0F2F7]"
+                        >
                             View All Hotels <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                        {featuredHotels.map((hotel) => (
-                            <div key={hotel.id} className="bg-white rounded-[2rem] overflow-hidden shadow-lg border border-gray-100 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group cursor-pointer flex flex-col h-full">
-                                <div className="relative h-72 overflow-hidden">
-                                    <img
-                                        src={hotel.image}
-                                        alt={hotel.name}
-                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60"></div>
-
-                                    <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg">
-                                        <Star className="fill-yellow-400 text-yellow-400" size={14} />
-                                        <span className="text-xs font-bold text-gray-900">{hotel.rating}</span>
+                    {loadingFeatured ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                            {[1, 2, 3, 4].map((i) => (
+                                <div key={i} className="bg-white rounded-[2rem] overflow-hidden shadow-lg border border-gray-100 h-[450px] animate-pulse">
+                                    <div className="h-72 bg-gray-200"></div>
+                                    <div className="p-6 space-y-4">
+                                        <div className="h-6 bg-gray-200 rounded w-3/4"></div>
+                                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                                        <div className="h-10 bg-gray-200 rounded w-full mt-4"></div>
                                     </div>
-                                    <div className="absolute top-4 left-4">
-                                        <span className="bg-[#055B75] text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wide shadow-lg">
-                                            {hotel.tags[0]}
-                                        </span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                            {featuredHotelsList.map((hotel) => (
+                                <div key={hotel.id} className="bg-white rounded-[2rem] overflow-hidden shadow-lg border border-gray-100 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group cursor-pointer flex flex-col h-full">
+                                    <div className="relative h-72 overflow-hidden">
+                                        <img
+                                            src={hotel.image}
+                                            alt={hotel.name}
+                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80'; }}
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60"></div>
+
+                                        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg">
+                                            <Star className="fill-yellow-400 text-yellow-400" size={14} />
+                                            <span className="text-xs font-bold text-gray-900">{hotel.rating || 4.5}</span>
+                                        </div>
+                                        {hotel.tags && hotel.tags.length > 0 && (
+                                            <div className="absolute top-4 left-4">
+                                                <span className="bg-[#055B75] text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wide shadow-lg">
+                                                    {hotel.tags[0]}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Price Overlay on Image */}
+                                        <div className="absolute bottom-4 left-4 text-white">
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-2xl font-bold">
+                                                    {hotel.currency === 'EUR' ? '€' : '$'}{hotel.price}
+                                                </span>
+                                                <span className="text-white/80 text-sm font-medium">/night</span>
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    {/* Price Overlay on Image */}
-                                    <div className="absolute bottom-4 left-4 text-white">
-                                        <div className="flex items-baseline gap-1">
-                                            <span className="text-2xl font-bold">${hotel.price}</span>
-                                            <span className="text-white/80 text-sm font-medium">/night</span>
+                                    <div className="p-6 flex flex-col flex-grow">
+                                        <h3 className="font-bold text-xl text-gray-900 mb-2 group-hover:text-[#055B75] transition-colors line-clamp-1">{hotel.name}</h3>
+                                        <div className="flex items-center gap-1.5 text-gray-500 text-sm mb-4">
+                                            <MapPin size={16} className="text-[#65B3CF]" />
+                                            <span className="line-clamp-1">{hotel.location || hotel.destinationName}</span>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2 mb-6">
+                                            {hotel.tags ? hotel.tags.slice(1, 3).map((tag, i) => (
+                                                <span key={i} className="text-xs bg-gray-50 text-gray-600 px-2.5 py-1.5 rounded-lg border border-gray-100 font-medium">
+                                                    {tag}
+                                                </span>
+                                            )) : (
+                                                hotel.amenities && hotel.amenities.slice(0, 3).map((amenity, i) => (
+                                                    <span key={i} className="text-xs bg-gray-50 text-gray-600 px-2.5 py-1.5 rounded-lg border border-gray-100 font-medium line-clamp-1">
+                                                        {amenity}
+                                                    </span>
+                                                ))
+                                            )}
+                                        </div>
+
+                                        <div className="mt-auto pt-4 border-t border-gray-100">
+                                            <button
+                                                onClick={() => handleHotelClick(hotel.hotelId || hotel.id)} // Prefer raw ID for API hotels
+                                                className="w-full bg-white border-2 border-[#055B75] text-[#055B75] py-3 rounded-xl font-bold hover:bg-[#055B75] hover:text-white transition-all duration-300 flex items-center justify-center gap-2 group/btn"
+                                            >
+                                                Check Availability
+                                                <ArrowRight size={18} className="group-hover/btn:translate-x-1 transition-transform" />
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
-
-                                <div className="p-6 flex flex-col flex-grow">
-                                    <h3 className="font-bold text-xl text-gray-900 mb-2 group-hover:text-[#055B75] transition-colors">{hotel.name}</h3>
-                                    <div className="flex items-center gap-1.5 text-gray-500 text-sm mb-4">
-                                        <MapPin size={16} className="text-[#65B3CF]" />
-                                        <span>{hotel.location}</span>
-                                    </div>
-
-                                    <div className="flex flex-wrap gap-2 mb-6">
-                                        {hotel.tags.slice(1).map((tag, i) => (
-                                            <span key={i} className="text-xs bg-gray-50 text-gray-600 px-2.5 py-1.5 rounded-lg border border-gray-100 font-medium">
-                                                {tag}
-                                            </span>
-                                        ))}
-                                    </div>
-
-                                    <div className="mt-auto pt-4 border-t border-gray-100">
-                                        <button
-                                            onClick={() => handleHotelClick(hotel.id)}
-                                            className="w-full bg-white border-2 border-[#055B75] text-[#055B75] py-3 rounded-xl font-bold hover:bg-[#055B75] hover:text-white transition-all duration-300 flex items-center justify-center gap-2 group/btn"
-                                        >
-                                            Check Availability
-                                            <ArrowRight size={18} className="group-hover/btn:translate-x-1 transition-transform" />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    )}
 
                     <button
-                        onClick={() => navigate('/hotels/search')}
+                        onClick={() => navigate(loaded && city ? `/hotels/search?destination=${encodeURIComponent(city)}` : '/hotels/search')}
                         className="md:hidden mt-8 w-full flex items-center justify-center gap-2 bg-white border-2 border-[#055B75] text-[#055B75] font-bold py-4 rounded-xl hover:bg-[#F0FAFC] transition-colors"
                     >
                         View All Hotels <ArrowRight size={20} />

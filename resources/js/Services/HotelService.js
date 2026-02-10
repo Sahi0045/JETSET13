@@ -407,6 +407,48 @@ class HotelService {
     }
 
     /**
+     * Get featured hotels based on user location
+     * @param {string} location - User's current city/location
+     * @param {number} count - Number of hotels to return
+     * @returns {Promise<Array>} - Featured hotels for location or fallback
+     */
+    async getFeaturedByLocation(location, count = 4) {
+        console.log(`🌟 Getting featured hotels for location: ${location}`);
+
+        // Default to global featured if no location
+        if (!location) {
+            return this.getFeaturedHotels(count);
+        }
+
+        // Calculate default dates (2 weeks from now, 3 nights stay)
+        const today = new Date();
+        const checkIn = new Date(today);
+        checkIn.setDate(today.getDate() + 14);
+        const checkOut = new Date(checkIn);
+        checkOut.setDate(checkIn.getDate() + 3);
+
+        const checkInStr = checkIn.toISOString().split('T')[0];
+        const checkOutStr = checkOut.toISOString().split('T')[0];
+
+        try {
+            // Search for hotels in the user's location
+            const hotels = await this.searchHotels(location, checkInStr, checkOutStr, 2);
+
+            if (hotels && hotels.length > 0) {
+                console.log(`✅ Found ${hotels.length} featured hotels for ${location}`);
+                // Sort by rating/price/recommendation and take top N
+                // For now, let's just take the first N as they usually come sorted by relevance
+                return hotels.slice(0, count);
+            }
+        } catch (error) {
+            console.error('❌ Error fetching featured hotels by location:', error);
+        }
+
+        console.log('⚠️ No hotels found for location, falling back to global featured');
+        return this.getFeaturedHotels(count);
+    }
+
+    /**
      * Get available destinations
      * @returns {Array} - Array of destination objects
      */
