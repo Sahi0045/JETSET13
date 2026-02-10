@@ -51,6 +51,99 @@ class HotelService {
     }
 
     /**
+     * Autocomplete hotel names using Amadeus Hotel Name Autocomplete API
+     * @param {string} keyword - Hotel name keyword (e.g., "Hilton", "Marriott")
+     * @param {number} max - Maximum results (default 10)
+     * @returns {Promise<Array>} - Array of hotel name suggestions with IDs
+     */
+    async autocompleteHotelNames(keyword, max = 10) {
+        if (!keyword || keyword.length < 2) return [];
+
+        try {
+            console.log(`🏨 HotelService: Autocompleting hotel names for: "${keyword}"`);
+
+            const url = isProduction
+                ? `${API_BASE_URL}/hotels?endpoint=autocomplete&keyword=${encodeURIComponent(keyword)}&max=${max}`
+                : `${API_BASE_URL}/hotels/autocomplete?keyword=${encodeURIComponent(keyword)}&max=${max}`;
+
+            const response = await axios.get(url, { timeout: 10000 });
+
+            if (response.data?.success && response.data?.data) {
+                console.log(`✅ Found ${response.data.data.length} hotel name matches`);
+                return response.data.data;
+            }
+            return [];
+        } catch (error) {
+            console.error('❌ Error autocompleting hotel names:', error.response?.data || error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Search hotel offers with enhanced Amadeus API (live pricing)
+     * @param {string} hotelIds - Comma-separated hotel IDs
+     * @param {number} adults - Number of adults
+     * @param {string} checkInDate - YYYY-MM-DD
+     * @param {string} checkOutDate - YYYY-MM-DD
+     * @param {string} currency - Currency code
+     * @returns {Promise<Array>} - Array of hotel offers with pricing
+     */
+    async searchHotelOffers(hotelIds, adults = 2, checkInDate, checkOutDate, currency = 'USD') {
+        try {
+            console.log(`🏨 HotelService: Searching offers for hotels: ${hotelIds}`);
+
+            const url = isProduction
+                ? `${API_BASE_URL}/hotels?endpoint=search-offers`
+                : `${API_BASE_URL}/hotels/search-offers`;
+
+            const response = await axios.get(url, {
+                params: { hotelIds, adults, checkInDate, checkOutDate, currency },
+                timeout: 15000
+            });
+
+            if (response.data?.success && response.data?.data) {
+                console.log(`✅ Found offers for ${response.data.data.length} hotels`);
+                return response.data.data.map(offer => this.transformAmadeusOfferToHotelObject(offer, offer.hotelId));
+            }
+            return [];
+        } catch (error) {
+            console.error('❌ Error searching hotel offers:', error.response?.data || error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Get tours and activities near a location using Amadeus API
+     * @param {number} latitude - Latitude
+     * @param {number} longitude - Longitude
+     * @param {number} radius - Search radius in km (default 20)
+     * @returns {Promise<Array>} - Array of tours and activities
+     */
+    async getToursAndActivities(latitude, longitude, radius = 20) {
+        try {
+            console.log(`🎭 HotelService: Getting activities near ${latitude},${longitude}`);
+
+            const url = isProduction
+                ? `${API_BASE_URL}/destinations?endpoint=activities`
+                : `${API_BASE_URL}/destinations/activities`;
+
+            const response = await axios.get(url, {
+                params: { latitude, longitude, radius },
+                timeout: 15000
+            });
+
+            if (response.data?.success && response.data?.data) {
+                console.log(`✅ Found ${response.data.data.length} tours & activities`);
+                return response.data.data;
+            }
+            return [];
+        } catch (error) {
+            console.error('❌ Error getting tours & activities:', error.response?.data || error.message);
+            return [];
+        }
+    }
+
+    /**
      * Search hotels by destination/city
      * @param {string} destination - City name or code
      * @param {string} checkInDate - Check-in date (YYYY-MM-DD)
@@ -129,17 +222,17 @@ class HotelService {
         if (hotelId.startsWith('amadeus-')) {
             // First, try to get cached hotel data from search results (stored in sessionStorage)
             const cachedHotel = this.getCachedHotelData(hotelId);
-            
+
             const rawHotelId = hotelId.replace('amadeus-', '');
             console.log(`🔍 Detected Amadeus hotel ID, fetching details for ${rawHotelId}`);
-            
+
             const amadeusHotel = await this.fetchAmadeusHotelDetails(
                 rawHotelId,
                 checkInDate,
                 checkOutDate,
                 adults
             );
-            
+
             if (amadeusHotel) {
                 // Merge cached data (name, location, etc.) with Amadeus offers
                 if (cachedHotel) {
@@ -154,7 +247,7 @@ class HotelService {
                 }
                 return amadeusHotel;
             }
-            
+
             // If Amadeus fetch failed, use cached hotel data from search results
             if (cachedHotel) {
                 console.log('✅ Using cached hotel data from search results');
@@ -175,7 +268,7 @@ class HotelService {
             if (cached) {
                 const hotel = JSON.parse(cached);
                 console.log(`📦 Found cached hotel data for ${hotelId}`);
-                
+
                 // Ensure it has rooms for booking
                 if (!hotel.rooms || hotel.rooms.length === 0) {
                     hotel.rooms = [
@@ -201,7 +294,7 @@ class HotelService {
                         }
                     ];
                 }
-                
+
                 return hotel;
             }
         } catch (error) {
@@ -244,7 +337,7 @@ class HotelService {
      */
     createFallbackHotelObject(rawHotelId, checkInDate, checkOutDate) {
         const nights = this.calculateNights(checkInDate, checkOutDate);
-        
+
         return {
             id: `amadeus-${rawHotelId}`,
             hotelId: rawHotelId,

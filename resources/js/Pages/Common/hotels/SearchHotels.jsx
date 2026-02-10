@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, MapPin, Star, ArrowRight, Heart, X, ChevronDown, Wifi, Coffee, Car, Dumbbell, Bath, Loader2 } from 'lucide-react';
+import { Search, MapPin, Star, ArrowRight, Heart, X, ChevronDown, Wifi, Coffee, Car, Dumbbell, Bath, Loader2, Building2 } from 'lucide-react';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
@@ -30,6 +30,8 @@ const SearchHotels = () => {
     const [selectedDestination, setSelectedDestination] = useState(null);
     const [suggestions, setSuggestions] = useState([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+    const [searchMode, setSearchMode] = useState('city'); // 'city' or 'hotel'
+    const [hotelSuggestions, setHotelSuggestions] = useState([]);
 
     // State
     const [hotels, setHotels] = useState([]);
@@ -52,38 +54,73 @@ const SearchHotels = () => {
     const searchLocations = useCallback(async (keyword) => {
         if (!keyword || keyword.length < 2) {
             setSuggestions([]);
+            setHotelSuggestions([]);
             setLoadingSuggestions(false);
             return;
         }
 
         setLoadingSuggestions(true);
         try {
-            const results = await hotelService.searchLocations(keyword);
-            if (results && results.length > 0) {
-                setSuggestions(results);
+            if (searchMode === 'city') {
+                const results = await hotelService.searchLocations(keyword);
+                setSuggestions(results?.length > 0 ? results : []);
+                setHotelSuggestions([]);
             } else {
+                const results = await hotelService.autocompleteHotelNames(keyword, 8);
+                setHotelSuggestions(results?.length > 0 ? results : []);
                 setSuggestions([]);
             }
         } catch (error) {
-            console.error('Error searching locations:', error);
+            console.error('Error searching:', error);
             setSuggestions([]);
+            setHotelSuggestions([]);
         } finally {
             setLoadingSuggestions(false);
         }
-    }, []);
+    }, [searchMode]);
 
     // Handle search query change with debounce
     const handleSearchQueryChange = (value) => {
         setSearchQuery(value);
         setSelectedDestination(null);
-        
+
         if (debounceTimer.current) {
             clearTimeout(debounceTimer.current);
         }
-        
+
         debounceTimer.current = setTimeout(() => {
             searchLocations(value);
         }, 300);
+    };
+
+    // Handle hotel name selection — fetch live offers for the selected hotel
+    const handleSelectHotel = async (hotel) => {
+        setSearchQuery(hotel.displayName || hotel.name);
+        setShowSuggestions(false);
+        setHotelSuggestions([]);
+
+        if (hotel.hotelIds?.length > 0) {
+            setLoading(true);
+            try {
+                const hotelIds = hotel.hotelIds.slice(0, 5).join(',');
+                const offers = await hotelService.searchHotelOffers(
+                    hotelIds,
+                    guests.adults,
+                    checkInDate,
+                    checkOutDate
+                );
+                if (offers.length > 0) {
+                    setHotels(offers);
+                } else {
+                    setError('No offers found for this hotel. Try different dates.');
+                }
+            } catch (err) {
+                console.error('Error fetching hotel offers:', err);
+                setError('Failed to fetch hotel offers.');
+            } finally {
+                setLoading(false);
+            }
+        }
     };
 
     // Cleanup debounce timer
@@ -180,7 +217,7 @@ const SearchHotels = () => {
     const handleHotelClick = (hotel) => {
         // Store hotel data in sessionStorage so details page can use it as fallback
         sessionStorage.setItem(`hotel-${hotel.id}`, JSON.stringify(hotel));
-        
+
         const params = new URLSearchParams();
         params.set('id', hotel.id);
         if (checkInDate) params.set('checkIn', checkInDate);
@@ -238,15 +275,42 @@ const SearchHotels = () => {
             {/* Search Header */}
             <div className="bg-white shadow-md sticky top-0 z-40">
                 <div className="container mx-auto px-4 py-4">
+                    {/* Search Mode Toggle */}
+                    <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-1 w-fit">
+                        <button
+                            type="button"
+                            onClick={() => { setSearchMode('city'); setSuggestions([]); setHotelSuggestions([]); }}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${searchMode === 'city'
+                                    ? 'bg-[#055B75] text-white shadow-sm'
+                                    : 'text-gray-600 hover:text-gray-800'
+                                }`}
+                        >
+                            <MapPin size={14} /> Search by City
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setSearchMode('hotel'); setSuggestions([]); setHotelSuggestions([]); }}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${searchMode === 'hotel'
+                                    ? 'bg-[#055B75] text-white shadow-sm'
+                                    : 'text-gray-600 hover:text-gray-800'
+                                }`}
+                        >
+                            <Building2 size={14} /> Search by Hotel Name
+                        </button>
+                    </div>
+
                     <form onSubmit={handleSearchSubmit} className="flex flex-col md:flex-row gap-4 items-center">
                         {/* Search Input with Autocomplete */}
                         <div className="relative flex-1 w-full group" ref={searchInputRef}>
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                <Search className="text-gray-400 group-hover:text-[#055B75] transition-colors" size={20} />
+                                {searchMode === 'city'
+                                    ? <Search className="text-gray-400 group-hover:text-[#055B75] transition-colors" size={20} />
+                                    : <Building2 className="text-gray-400 group-hover:text-[#055B75] transition-colors" size={20} />
+                                }
                             </div>
                             <input
                                 type="text"
-                                placeholder="Search any city worldwide..."
+                                placeholder={searchMode === 'city' ? 'Search any city worldwide...' : 'Search hotel name (e.g., Hilton, Marriott)...'}
                                 value={searchQuery}
                                 onChange={(e) => handleSearchQueryChange(e.target.value)}
                                 onFocus={() => setShowSuggestions(true)}
@@ -265,6 +329,7 @@ const SearchHotels = () => {
                                         setSearchQuery('');
                                         setSelectedDestination(null);
                                         setSuggestions([]);
+                                        setHotelSuggestions([]);
                                     }}
                                     className="absolute inset-y-0 right-0 pr-4 flex items-center"
                                 >
@@ -272,8 +337,8 @@ const SearchHotels = () => {
                                 </button>
                             )}
 
-                            {/* Suggestions Dropdown */}
-                            {showSuggestions && searchQuery.length >= 2 && (
+                            {/* Suggestions Dropdown — City Mode */}
+                            {showSuggestions && searchQuery.length >= 2 && searchMode === 'city' && (
                                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
                                     <div className="p-2 border-b border-gray-100 text-xs text-gray-500 font-medium uppercase tracking-wide flex items-center gap-2">
                                         {loadingSuggestions ? (
@@ -303,6 +368,45 @@ const SearchHotels = () => {
                                     ) : !loadingSuggestions && searchQuery.length >= 2 ? (
                                         <div className="px-4 py-3 text-gray-500 text-sm">
                                             No destinations found. Try a different search.
+                                        </div>
+                                    ) : null}
+                                </div>
+                            )}
+
+                            {/* Suggestions Dropdown — Hotel Name Mode */}
+                            {showSuggestions && searchQuery.length >= 2 && searchMode === 'hotel' && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+                                    <div className="p-2 border-b border-gray-100 text-xs text-gray-500 font-medium uppercase tracking-wide flex items-center gap-2">
+                                        {loadingSuggestions ? (
+                                            <>
+                                                <Loader2 size={12} className="animate-spin" />
+                                                Searching hotels...
+                                            </>
+                                        ) : (
+                                            `${hotelSuggestions.length} Hotel matches for "${searchQuery}"`
+                                        )}
+                                    </div>
+                                    {hotelSuggestions.length > 0 ? (
+                                        hotelSuggestions.map((hotel, index) => (
+                                            <button
+                                                key={hotel.id || index}
+                                                type="button"
+                                                onClick={() => handleSelectHotel(hotel)}
+                                                className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[#F0FAFC] transition-colors text-left border-b border-gray-50 last:border-0"
+                                            >
+                                                <Building2 size={18} className="text-[#055B75] flex-shrink-0" />
+                                                <div className="flex-1">
+                                                    <div className="font-medium text-gray-800">{hotel.displayName || hotel.name}</div>
+                                                    <div className="text-sm text-gray-500">
+                                                        {hotel.hotelIds?.length || 0} properties • {hotel.subtype || 'Hotel Chain'}
+                                                    </div>
+                                                </div>
+                                                <ArrowRight size={16} className="text-gray-400" />
+                                            </button>
+                                        ))
+                                    ) : !loadingSuggestions && searchQuery.length >= 2 ? (
+                                        <div className="px-4 py-3 text-gray-500 text-sm">
+                                            No hotels found. Try a different name.
                                         </div>
                                     ) : null}
                                 </div>

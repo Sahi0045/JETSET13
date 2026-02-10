@@ -24,14 +24,14 @@ router.get('/destinations', getDestinations);
 router.get('/locations', async (req, res) => {
   try {
     const { keyword } = req.query;
-    
+
     if (!keyword || keyword.length < 2) {
       return res.status(400).json({
         success: false,
         error: 'Keyword must be at least 2 characters'
       });
     }
-    
+
     const result = await amadeusService.searchLocations(keyword, 'CITY');
     return res.json(result);
   } catch (error) {
@@ -65,17 +65,17 @@ router.get('/offers/:hotelId', async (req, res) => {
   try {
     const { hotelId } = req.params;
     const { checkInDate, checkOutDate, adults } = req.query;
-    
+
     if (!hotelId || !checkInDate || !checkOutDate) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Hotel ID, check-in date, and check-out date are required' 
+      return res.status(400).json({
+        success: false,
+        message: 'Hotel ID, check-in date, and check-out date are required'
       });
     }
-    
+
     // Get access token
     const token = await getAccessToken();
-    
+
     // Use v3 endpoint for hotel offers
     const response = await axios.get(`${AMADEUS_API_URLS.v3}/shopping/hotel-offers`, {
       headers: {
@@ -92,14 +92,14 @@ router.get('/offers/:hotelId', async (req, res) => {
         bestRateOnly: true
       }
     });
-    
+
     return res.json({
       success: true,
       data: response.data
     });
   } catch (error) {
     console.error('Error checking hotel availability:', error.response?.data || error);
-    
+
     // Handle specific errors
     if (error.response?.data?.errors) {
       return res.status(400).json({
@@ -108,7 +108,7 @@ router.get('/offers/:hotelId', async (req, res) => {
         error: error.response.data.errors[0]?.detail || 'No offers available'
       });
     }
-    
+
     return res.status(500).json({
       success: false,
       message: 'Error checking hotel availability',
@@ -119,6 +119,163 @@ router.get('/offers/:hotelId', async (req, res) => {
 
 // Book a hotel
 router.post('/book/:hotelId', bookHotel);
+
+// ===== NEW AMADEUS API ROUTES =====
+
+/**
+ * GET /api/hotels/autocomplete
+ * Hotel Name Autocomplete - Search hotels by name keyword
+ * Query: keyword (required, 4+ chars), subType, max, lang, countryCode
+ */
+router.get('/autocomplete', async (req, res) => {
+  try {
+    const { keyword, subType, max, lang, countryCode } = req.query;
+
+    if (!keyword || keyword.length < 4) {
+      return res.status(400).json({
+        success: false,
+        error: 'Keyword must be at least 4 characters'
+      });
+    }
+
+    const options = {};
+    if (subType) options.subType = subType;
+    if (max) options.max = parseInt(max);
+    if (lang) options.lang = lang;
+    if (countryCode) options.countryCode = countryCode;
+
+    const result = await amadeusService.searchHotelsByName(keyword, options);
+    return res.json(result);
+  } catch (error) {
+    console.error('Error in hotel autocomplete:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to search hotels by name',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/hotels/ratings
+ * Hotel Ratings (E-Reputation) - Sentiment analysis for hotels
+ * Query: hotelIds (required, comma-separated Amadeus hotel IDs)
+ */
+router.get('/ratings', async (req, res) => {
+  try {
+    const { hotelIds } = req.query;
+
+    if (!hotelIds) {
+      return res.status(400).json({
+        success: false,
+        error: 'hotelIds parameter is required (comma-separated Amadeus hotel IDs)'
+      });
+    }
+
+    const result = await amadeusService.getHotelRatings(hotelIds);
+    return res.json(result);
+  } catch (error) {
+    console.error('Error fetching hotel ratings:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch hotel ratings',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/hotels/search-offers
+ * Hotel Search (Enhanced) - Search hotel offers with full parameters
+ * Query: hotelIds (required), adults, checkInDate, checkOutDate, roomQuantity,
+ *        currency, priceRange, paymentPolicy, boardType, bestRateOnly, lang
+ */
+router.get('/search-offers', async (req, res) => {
+  try {
+    const {
+      hotelIds, adults, checkInDate, checkOutDate, countryOfResidence,
+      roomQuantity, priceRange, currency, paymentPolicy, boardType,
+      bestRateOnly, lang
+    } = req.query;
+
+    if (!hotelIds) {
+      return res.status(400).json({
+        success: false,
+        error: 'hotelIds parameter is required'
+      });
+    }
+
+    const result = await amadeusService.searchHotelOffers({
+      hotelIds,
+      adults: adults ? parseInt(adults) : undefined,
+      checkInDate,
+      checkOutDate,
+      countryOfResidence,
+      roomQuantity: roomQuantity ? parseInt(roomQuantity) : undefined,
+      priceRange,
+      currency,
+      paymentPolicy,
+      boardType,
+      bestRateOnly: bestRateOnly !== undefined ? bestRateOnly === 'true' : undefined,
+      lang
+    });
+
+    return res.json(result);
+  } catch (error) {
+    console.error('Error searching hotel offers:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to search hotel offers',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/hotels/book-order
+ * Hotel Booking (v2) - Create a hotel order
+ * Body: offerId (required), guests[], payments{}, remarks
+ */
+router.post('/book-order', async (req, res) => {
+  try {
+    const { offerId, guests, payments, remarks, travelAgent } = req.body;
+
+    if (!offerId) {
+      return res.status(400).json({
+        success: false,
+        error: 'offerId is required'
+      });
+    }
+
+    if (!guests || guests.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'At least one guest is required'
+      });
+    }
+
+    const result = await amadeusService.bookHotelOrder({
+      offerId,
+      guests,
+      payments,
+      remarks,
+      travelAgent
+    });
+
+    if (result.success) {
+      return res.json(result);
+    } else {
+      return res.status(400).json(result);
+    }
+  } catch (error) {
+    console.error('Error booking hotel order:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to book hotel',
+      message: error.message
+    });
+  }
+});
 
 // Add a test endpoint
 router.get('/test', (req, res) => {
@@ -135,7 +292,7 @@ router.get('/test', (req, res) => {
 router.get('/mock-search', (req, res) => {
   // Get parameters
   const { destination } = req.query;
-  
+
   // Create sample hotels based on destination
   const mockHotels = [
     {
@@ -184,7 +341,7 @@ router.get('/mock-search', (req, res) => {
       amenities: ['Breakfast', 'Parking', 'Airport Shuttle']
     }
   ];
-  
+
   // Return structured response with hotels array
   res.json({
     success: true,
@@ -198,17 +355,17 @@ router.get('/mock-search', (req, res) => {
 router.get('/direct-search', async (req, res) => {
   try {
     const { cityCode } = req.query;
-    
+
     if (!cityCode) {
       return res.status(400).json({
         success: false,
         message: 'City code is required'
       });
     }
-    
+
     // Get access token
     const token = await getAccessToken();
-    
+
     // Search for hotels in the city using v1 endpoint
     const searchResponse = await axios.get(`${AMADEUS_API_URLS.v1}/reference-data/locations/hotels/by-city`, {
       headers: {
@@ -221,7 +378,7 @@ router.get('/direct-search', async (req, res) => {
         hotelSource: 'ALL'
       }
     });
-    
+
     res.json({
       success: true,
       data: searchResponse.data
@@ -252,7 +409,7 @@ router.get('/check-availability', async (req, res) => {
 
     // First, determine if destination is a city code or hotel ID
     let hotelId = null;
-    
+
     // If the destination looks like a hotel ID (usually longer alphanumeric string)
     if (destination.length > 3) {
       hotelId = destination;
@@ -280,7 +437,7 @@ router.get('/check-availability', async (req, res) => {
 
         // Get the first hotel's ID
         hotelId = searchResponse.data.data[0].hotelId;
-        
+
         // Return the hotel search results since we can't reliably check availability
         return res.json({
           success: true,
@@ -334,7 +491,7 @@ router.get('/check-availability', async (req, res) => {
       }
     } catch (availabilityError) {
       console.error('Error checking hotel availability:', availabilityError.response?.data || availabilityError);
-      
+
       // Handle specific availability errors
       if (availabilityError.response?.status === 400) {
         const errorDetail = availabilityError.response?.data?.errors?.[0]?.detail || '';
@@ -345,7 +502,7 @@ router.get('/check-availability', async (req, res) => {
           });
         }
       }
-      
+
       // Try the fallback hotel ID that we know works
       try {
         console.log('Trying fallback hotel ID EDLONDER');
@@ -364,7 +521,7 @@ router.get('/check-availability', async (req, res) => {
             bestRateOnly: true
           }
         });
-        
+
         if (fallbackResponse.data.data && fallbackResponse.data.data.length > 0) {
           return res.json({
             success: true,
@@ -375,7 +532,7 @@ router.get('/check-availability', async (req, res) => {
       } catch (fallbackError) {
         console.error('Fallback hotel attempt also failed:', fallbackError.message);
       }
-      
+
       return res.status(availabilityError.response?.status || 500).json({
         success: false,
         message: availabilityError.response?.data?.errors?.[0]?.detail || 'Error checking hotel availability'
@@ -399,15 +556,15 @@ const getAccessToken = async () => {
       reactKeyExists: !!process.env.REACT_APP_AMADEUS_API_KEY,
       reactSecretExists: !!process.env.REACT_APP_AMADEUS_API_SECRET
     });
-    
+
     // Try server-side variables first, fall back to React ones if needed
     const apiKey = process.env.AMADEUS_API_KEY || process.env.REACT_APP_AMADEUS_API_KEY;
     const apiSecret = process.env.AMADEUS_API_SECRET || process.env.REACT_APP_AMADEUS_API_SECRET;
-    
+
     if (!apiKey || !apiSecret) {
       throw new Error('Missing Amadeus API credentials');
     }
-    
+
     const response = await axios.post(
       `${AMADEUS_API_URLS.v1}/security/oauth2/token`,
       new URLSearchParams({ grant_type: 'client_credentials' }).toString(), // form body
