@@ -1683,7 +1683,7 @@ function FlightSearchPage() {
       if (suggestions.length === 0) return null;
 
       return (
-        <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-2xl max-h-80 overflow-y-auto border border-gray-100 divide-y divide-gray-50 overflow-hidden ring-1 ring-black ring-opacity-5">
+        <div className="absolute z-50 w-[340px] max-w-[90vw] mt-2 bg-white rounded-xl shadow-2xl max-h-80 overflow-y-auto border border-gray-100 divide-y divide-gray-50 ring-1 ring-black ring-opacity-5 left-0">
           {suggestions.map((s) => (
             <div
               key={s.code}
