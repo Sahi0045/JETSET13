@@ -904,38 +904,68 @@ export default function TravelDashboard() {
               <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Travel Details</span>
             </div>
 
-            {isFlightBooking && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {(booking.origin || booking.destination) && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Route</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.origin || 'N/A'} → {booking.destination || 'N/A'}</p>
+              {isFlightBooking && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {(booking.origin || booking.destination) && (
+                      <div className="bg-white rounded-lg p-3 border border-blue-200">
+                        <p className="text-xs text-blue-600 font-semibold mb-1">Route</p>
+                        <p className="text-sm font-bold text-gray-900">{booking.origin || 'N/A'} → {booking.destination || 'N/A'}</p>
+                      </div>
+                    )}
+                    {booking.departureDate && (
+                      <div className="bg-white rounded-lg p-3 border border-blue-200">
+                        <p className="text-xs text-blue-600 font-semibold mb-1">Departure</p>
+                        <p className="text-sm font-bold text-gray-900">{new Date(booking.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                        {booking.departureTime && <p className="text-xs text-gray-500 mt-0.5">{booking.departureTime}{booking.departureTerminal ? ` • Terminal ${booking.departureTerminal}` : ''}</p>}
+                      </div>
+                    )}
+                    {(booking.airlineName || booking.flightNumber) && (
+                      <div className="bg-white rounded-lg p-3 border border-blue-200">
+                        <p className="text-xs text-blue-600 font-semibold mb-1">Flight</p>
+                        <p className="text-sm font-bold text-gray-900">{booking.airlineName || booking.airline || ''}</p>
+                        {booking.flightNumber && <p className="text-xs text-gray-500 mt-0.5">{booking.flightNumber}{booking.aircraft ? ` • ${booking.aircraft}` : ''}</p>}
+                      </div>
+                    )}
+                    {booking.duration && (
+                      <div className="bg-white rounded-lg p-3 border border-blue-200">
+                        <p className="text-xs text-blue-600 font-semibold mb-1">Duration</p>
+                        <p className="text-sm font-bold text-gray-900">{booking.duration.startsWith('PT') ? booking.duration.replace('PT', '').replace('H', 'h ').replace('M', 'm') : booking.duration}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{booking.stops === 0 ? 'Direct' : `${booking.stops} Stop(s)`}{booking.cabinClass ? ` • ${booking.cabinClass.replace('_', ' ')}` : ''}</p>
+                      </div>
+                    )}
                   </div>
-                )}
-                {booking.departureDate && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Departure</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(booking.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                  </div>
-                )}
-                {booking.returnDate && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Return</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(booking.returnDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                  </div>
-                )}
-                {(booking.passengers || booking.travelClass) && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">{booking.travelClass ? 'Class & Passengers' : 'Passengers'}</p>
-                    <p className="text-sm font-bold text-gray-900 capitalize">
-                      {booking.travelClass && booking.travelClass.replace('_', ' ')}
-                      {booking.travelClass && booking.passengers && ' • '}
-                      {booking.passengers && `${booking.passengers} ${booking.passengers === 1 ? 'Traveler' : 'Travelers'}`}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+                  {(booking.baggage || booking.brandedFareLabel || booking.arrivalTime) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {booking.arrivalTime && (
+                        <div className="bg-white rounded-lg p-3 border border-blue-200">
+                          <p className="text-xs text-blue-600 font-semibold mb-1">Arrival</p>
+                          <p className="text-sm font-bold text-gray-900">{booking.arrivalTime}</p>
+                          {booking.arrivalTerminal && <p className="text-xs text-gray-500 mt-0.5">Terminal {booking.arrivalTerminal}</p>}
+                        </div>
+                      )}
+                      {booking.baggage && (
+                        <div className="bg-white rounded-lg p-3 border border-blue-200">
+                          <p className="text-xs text-blue-600 font-semibold mb-1">Baggage</p>
+                          <p className="text-sm font-bold text-gray-900">{booking.baggage}</p>
+                        </div>
+                      )}
+                      {booking.brandedFareLabel && (
+                        <div className="bg-white rounded-lg p-3 border border-blue-200">
+                          <p className="text-xs text-blue-600 font-semibold mb-1">Fare Type</p>
+                          <p className="text-sm font-bold text-gray-900">{booking.brandedFareLabel}</p>
+                        </div>
+                      )}
+                      {booking.pnr && (
+                        <div className="bg-white rounded-lg p-3 border border-blue-200">
+                          <p className="text-xs text-blue-600 font-semibold mb-1">PNR</p>
+                          <p className="text-sm font-bold text-blue-700 font-mono">{booking.pnr}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
             {isHotelBooking && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

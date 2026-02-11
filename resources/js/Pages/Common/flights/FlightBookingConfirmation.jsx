@@ -79,6 +79,17 @@ function FlightBookingConfirmation() {
     return airport ? airport.name : code;
   };
 
+  // Helper to format baggage info from Amadeus data
+  // Amadeus sends either {weight, weightUnit} or {quantity} (pieces)
+  const formatBaggage = (bag) => {
+    if (!bag) return null;
+    if (typeof bag === 'string') return bag;
+    if (bag.weight && bag.weightUnit) return `${bag.weight} ${bag.weightUnit}`;
+    if (bag.weight) return `${bag.weight} KG`;
+    if (bag.quantity) return `${bag.quantity} ${bag.quantity === 1 ? 'Piece' : 'Pieces'}`;
+    return null;
+  };
+
 
   // Check authentication status on component mount
   useEffect(() => {
@@ -135,9 +146,10 @@ function FlightBookingConfirmation() {
           currency: apiData.payment?.currency || "USD"
         }
       },
-      baggage: {
-        checkIn: "23 KG"
-      },
+        baggage: {
+          checkIn: apiData.flight?.baggage || "23 KG",
+          cabin: apiData.flight?.cabinBaggage || null
+        },
       passengers: apiData.passengers,
       contact: { email: "", phone: "" },
       addOns: [], // Initialize empty
@@ -829,10 +841,10 @@ function FlightBookingConfirmation() {
                       <span className="label">Flight No</span>
                       <span className="value">{bookingDetails?.flight?.flightNumber}</span>
                     </div>
-                    <div className="info-box">
-                      <span className="label">Baggage</span>
-                      <span className="value">{typeof bookingDetails?.baggage?.checkIn === 'object' ? `${bookingDetails.baggage.checkIn.weight} ${bookingDetails.baggage.checkIn.weightUnit}` : (bookingDetails?.baggage?.checkIn || "23 KG")}</span>
-                    </div>
+                      <div className="info-box">
+                        <span className="label">Baggage</span>
+                        <span className="value">{formatBaggage(bookingDetails?.baggage?.checkIn) || 'Included'}</span>
+                      </div>
                     {bookingDetails?.flight?.operatingAirlineName && bookingDetails.flight.operatingAirlineName !== bookingDetails.flight.airline && (
                       <div className="info-box">
                         <span className="label">Operated by</span>

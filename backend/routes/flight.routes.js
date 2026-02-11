@@ -16,38 +16,60 @@ async function saveBookingToDatabase(bookingData) {
     return null;
   }
 
-  try {
-    const { data, error } = await supabase
-      .from('bookings')
-      .insert({
-        user_id: bookingData.userId || null,
-        booking_reference: bookingData.bookingReference,
-        travel_type: 'flight',
-        status: 'confirmed',
-        total_amount: parseFloat(bookingData.totalAmount) || 0,
-        payment_status: 'paid',
-        booking_details: {
-          pnr: bookingData.pnr,
-          order_id: bookingData.orderId,
-          transaction_id: bookingData.transactionId,
-          amount: parseFloat(bookingData.totalAmount) || 0,
-          currency: bookingData.currency || 'USD',
-          origin: bookingData.origin,
-          destination: bookingData.destination,
-          departure_date: bookingData.departureDate,
-          departure_time: bookingData.departureTime,
-          arrival_time: bookingData.arrivalTime,
-          airline: bookingData.airline,
-          airline_name: bookingData.airlineName,
-          flight_number: bookingData.flightNumber,
-          duration: bookingData.duration,
-          cabin_class: bookingData.cabinClass,
-          flight_offer: bookingData.flightOffer,
-          // Fare breakdown for itemized display & refund support
-          fare_breakdown: bookingData.fareBreakdown || null
-        },
-        passenger_details: bookingData.passengerDetails || bookingData.travelers
-      })
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .insert({
+          user_id: bookingData.userId || null,
+          booking_reference: bookingData.bookingReference,
+          travel_type: 'flight',
+          status: 'confirmed',
+          total_amount: parseFloat(bookingData.totalAmount) || 0,
+          payment_status: 'paid',
+          booking_details: {
+            pnr: bookingData.pnr,
+            order_id: bookingData.orderId,
+            transaction_id: bookingData.transactionId,
+            amount: parseFloat(bookingData.totalAmount) || 0,
+            currency: bookingData.currency || 'USD',
+            origin: bookingData.origin,
+            destination: bookingData.destination,
+            departure_date: bookingData.departureDate,
+            departure_time: bookingData.departureTime,
+            arrival_time: bookingData.arrivalTime,
+            airline: bookingData.airline,
+            airline_name: bookingData.airlineName,
+            flight_number: bookingData.flightNumber,
+            duration: bookingData.duration,
+            cabin_class: bookingData.cabinClass,
+            // Amadeus enriched fields
+            departure_terminal: bookingData.departureTerminal || '',
+            arrival_terminal: bookingData.arrivalTerminal || '',
+            aircraft: bookingData.aircraft || '',
+            stops: bookingData.stops ?? 0,
+            stop_details: bookingData.stopDetails || [],
+            branded_fare: bookingData.brandedFare || null,
+            branded_fare_label: bookingData.brandedFareLabel || null,
+            operating_carrier: bookingData.operatingCarrier || null,
+            operating_airline_name: bookingData.operatingAirlineName || null,
+            last_ticketing_date: bookingData.lastTicketingDate || null,
+            number_of_bookable_seats: bookingData.numberOfBookableSeats || null,
+            refundable: bookingData.refundable || false,
+            baggage_details: bookingData.baggageDetails || null,
+            baggage: bookingData.baggage || null,
+            origin_city: bookingData.originCity || '',
+            destination_city: bookingData.destinationCity || '',
+            departure_date_full: bookingData.departureDateFull || '',
+            arrival_date: bookingData.arrivalDate || '',
+            price_base: bookingData.priceBase || null,
+            price_grand_total: bookingData.priceGrandTotal || null,
+            price_fees: bookingData.priceFees || [],
+            flight_offer: bookingData.flightOffer,
+            // Fare breakdown for itemized display & refund support
+            fare_breakdown: bookingData.fareBreakdown || null
+          },
+          passenger_details: bookingData.passengerDetails || bookingData.travelers
+        })
       .select()
       .single();
 
@@ -291,8 +313,10 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
             lastTicketingDate: flight.lastTicketingDate || null,
             numberOfBookableSeats: flight.numberOfBookableSeats || null,
             baggage: fareDetails?.includedCheckedBags?.weight
-              ? `${fareDetails.includedCheckedBags.weight}${fareDetails.includedCheckedBags.weightUnit || 'kg'}`
-              : '23kg',
+              ? `${fareDetails.includedCheckedBags.weight} ${fareDetails.includedCheckedBags.weightUnit || 'KG'}`
+              : (fareDetails?.includedCheckedBags?.quantity
+                ? `${fareDetails.includedCheckedBags.quantity} ${fareDetails.includedCheckedBags.quantity === 1 ? 'Piece' : 'Pieces'}`
+                : null),
             baggageDetails: {
               checked: fareDetails?.includedCheckedBags || null,
               cabin: fareDetails?.includedCabinBags || null
@@ -539,41 +563,62 @@ router.post('/order', async (req, res) => {
 
         console.log(`✅ Mock booking created: PNR=${mockPNR}, OrderID=${orderId}`);
 
-        // Save booking to database
-        const dbBooking = await saveBookingToDatabase({
-          bookingReference: bookingReference,
-          pnr: mockPNR,
-          orderId: orderId,
-          transactionId: transactionId || `TXN-${Date.now()}`,
-          totalAmount: finalAmount,
-          origin: firstSegment.departure?.airport || firstOffer?.origin || firstOffer?.departure?.airport || '',
-          destination: lastSegment.arrival?.airport || firstOffer?.destination || firstOffer?.arrival?.airport || '',
-          departureDate: firstSegment.departure?.date || firstOffer?.departureDate || '',
-          departureTime: firstSegment.departure?.time || firstOffer?.departureTime || '',
-          arrivalTime: lastSegment.arrival?.time || firstOffer?.arrivalTime || '',
-          airline: firstSegment.airline?.code || firstOffer?.airline?.code || '',
-          airlineName: firstSegment.airline?.name || firstOffer?.airline?.name || '',
-          flightNumber: firstOffer?.flightNumber || '',
-          duration: firstOffer?.duration || '',
-          cabinClass: firstOffer?.cabinClass || firstOffer?.travelClass || 'ECONOMY',
-          fareBreakdown: fareBreakdown || null,
-          passengerDetails: passengerDetails || travelersList.map((t, i) => ({
-            id: `${i + 1}`,
-            firstName: t.firstName || 'Guest',
-            lastName: t.lastName || 'User',
-            dateOfBirth: t.dateOfBirth,
-            gender: t.gender,
-            title: t.title || '',
-            mobile: t.mobile || '',
-            email: t.email || '',
-            seatNumber: t.seatNumber || '',
-            meal: t.meal || '',
-            baggage: t.baggage || '',
-            requiresWheelchair: t.requiresWheelchair || false
-          })),
-          flightOffer: firstOffer,
-          userId: req.body.userId || null
-        });
+          // Save booking to database with all Amadeus fields
+          const dbBooking = await saveBookingToDatabase({
+            bookingReference: bookingReference,
+            pnr: mockPNR,
+            orderId: orderId,
+            transactionId: transactionId || `TXN-${Date.now()}`,
+            totalAmount: finalAmount,
+            currency: firstOffer?.price?.currency || 'USD',
+            origin: firstSegment.departure?.airport || firstOffer?.origin || firstOffer?.departure?.airport || '',
+            destination: lastSegment.arrival?.airport || firstOffer?.destination || firstOffer?.arrival?.airport || '',
+            departureDate: firstSegment.departure?.date || firstOffer?.departureDate || '',
+            departureTime: firstSegment.departure?.time || firstOffer?.departureTime || '',
+            arrivalTime: lastSegment.arrival?.time || firstOffer?.arrivalTime || '',
+            arrivalDate: lastSegment.arrival?.date || firstOffer?.arrivalDate || '',
+            airline: firstSegment.airline?.code || firstOffer?.airline?.code || firstOffer?.airlineCode || '',
+            airlineName: firstSegment.airline?.name || firstOffer?.airline?.name || firstOffer?.airline || '',
+            flightNumber: firstOffer?.flightNumber || '',
+            duration: firstOffer?.duration || '',
+            cabinClass: firstOffer?.cabinClass || firstOffer?.travelClass || firstOffer?.cabin || 'ECONOMY',
+            departureTerminal: firstSegment.departure?.terminal || firstOffer?.departure?.terminal || '',
+            arrivalTerminal: lastSegment.arrival?.terminal || firstOffer?.arrival?.terminal || '',
+            aircraft: firstOffer?.aircraft || '',
+            stops: firstOffer?.stops ?? 0,
+            stopDetails: firstOffer?.stopDetails || [],
+            brandedFare: firstOffer?.brandedFare || null,
+            brandedFareLabel: firstOffer?.brandedFareLabel || null,
+            operatingCarrier: firstOffer?.operatingCarrier || null,
+            operatingAirlineName: firstOffer?.operatingAirlineName || null,
+            lastTicketingDate: firstOffer?.lastTicketingDate || null,
+            numberOfBookableSeats: firstOffer?.numberOfBookableSeats || null,
+            refundable: firstOffer?.refundable || false,
+            baggageDetails: firstOffer?.baggageDetails || null,
+            baggage: firstOffer?.baggage || null,
+            originCity: firstOffer?.departure?.cityName || '',
+            destinationCity: firstOffer?.arrival?.cityName || '',
+            priceBase: firstOffer?.price?.base || null,
+            priceGrandTotal: firstOffer?.price?.grandTotal || firstOffer?.price?.total || null,
+            priceFees: firstOffer?.price?.fees || [],
+            fareBreakdown: fareBreakdown || null,
+            passengerDetails: passengerDetails || travelersList.map((t, i) => ({
+              id: `${i + 1}`,
+              firstName: t.firstName || 'Guest',
+              lastName: t.lastName || 'User',
+              dateOfBirth: t.dateOfBirth,
+              gender: t.gender,
+              title: t.title || '',
+              mobile: t.mobile || '',
+              email: t.email || '',
+              seatNumber: t.seatNumber || '',
+              meal: t.meal || '',
+              baggage: t.baggage || '',
+              requiresWheelchair: t.requiresWheelchair || false
+            })),
+            flightOffer: firstOffer,
+            userId: req.body.userId || null
+          });
 
         console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
 
@@ -775,34 +820,74 @@ router.post('/order', async (req, res) => {
     const pnrValue = orderResponse.pnr || orderResponse.data?.associatedRecords?.[0]?.reference;
     const orderIdValue = orderResponse.orderId || orderResponse.data?.id;
 
-    // Save real Amadeus booking to database
-    const dbBooking = await saveBookingToDatabase({
-      bookingReference: orderIdValue,
-      pnr: pnrValue,
-      orderId: orderIdValue,
-      transactionId: req.body.transactionId || `TXN-${Date.now()}`,
-      totalAmount: firstOffer?.price?.total || '0',
-      origin: firstSegment.departure?.iataCode || '',
-      destination: lastSegment.arrival?.iataCode || '',
-      departureDate: firstSegment.departure?.at?.split('T')[0] || '',
-      departureTime: firstSegment.departure?.at ? new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
-      arrivalTime: lastSegment.arrival?.at ? new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
-      airline: firstSegment.carrierCode || '',
-      airlineName: firstOffer?.validatingAirlineCodes?.[0] || firstSegment.carrierCode || '',
-      flightNumber: firstSegment.number ? `${firstSegment.carrierCode}${firstSegment.number}` : '',
-      duration: firstItinerary?.duration || '',
-      cabinClass: firstOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.cabin || 'ECONOMY',
-      fareBreakdown: fareBreakdown || null,
-      passengerDetails: passengerDetails || amadeusTravelers.map((t) => ({
-        id: t.id,
-        firstName: t.name.firstName,
-        lastName: t.name.lastName,
-        dateOfBirth: t.dateOfBirth,
-        gender: t.gender
-      })),
-      flightOffer: firstOffer,
-      userId: req.body.userId || null
-    });
+      // Extract Amadeus enriched fields
+      const fareDetails = firstOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0];
+      const allSegments = firstItinerary?.segments || [];
+      const stopsCount = Math.max(0, allSegments.length - 1);
+      let stopDetailsList = [];
+      if (stopsCount > 0) {
+        stopDetailsList = allSegments.slice(0, -1).map((seg, idx) => {
+          const nextSeg = allSegments[idx + 1];
+          return {
+            airport: seg.arrival?.iataCode || '',
+            terminal: seg.arrival?.terminal || '',
+            duration: ''
+          };
+        });
+      }
+
+      // Save real Amadeus booking to database with all fields
+      const dbBooking = await saveBookingToDatabase({
+        bookingReference: orderIdValue,
+        pnr: pnrValue,
+        orderId: orderIdValue,
+        transactionId: req.body.transactionId || `TXN-${Date.now()}`,
+        totalAmount: firstOffer?.price?.total || '0',
+        currency: firstOffer?.price?.currency || 'USD',
+        origin: firstSegment.departure?.iataCode || '',
+        destination: lastSegment.arrival?.iataCode || '',
+        departureDate: firstSegment.departure?.at?.split('T')[0] || '',
+        departureTime: firstSegment.departure?.at ? new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+        arrivalTime: lastSegment.arrival?.at ? new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+        arrivalDate: lastSegment.arrival?.at?.split('T')[0] || '',
+        airline: firstSegment.carrierCode || '',
+        airlineName: firstOffer?.validatingAirlineCodes?.[0] || firstSegment.carrierCode || '',
+        flightNumber: firstSegment.number ? `${firstSegment.carrierCode}${firstSegment.number}` : '',
+        duration: firstItinerary?.duration || '',
+        cabinClass: fareDetails?.cabin || 'ECONOMY',
+        departureTerminal: firstSegment.departure?.terminal || '',
+        arrivalTerminal: lastSegment.arrival?.terminal || '',
+        aircraft: firstSegment.aircraft?.code || '',
+        stops: stopsCount,
+        stopDetails: stopDetailsList,
+        brandedFare: fareDetails?.brandedFare || null,
+        brandedFareLabel: fareDetails?.brandedFareLabel || null,
+        operatingCarrier: firstSegment.operating?.carrierCode || null,
+        operatingAirlineName: firstSegment.operating?.carrierCode || null,
+        lastTicketingDate: firstOffer?.lastTicketingDate || null,
+        numberOfBookableSeats: firstOffer?.numberOfBookableSeats || null,
+        refundable: firstOffer?.travelerPricings?.[0]?.price?.refundableTaxes ? true : false,
+        baggageDetails: {
+          checked: fareDetails?.includedCheckedBags || null,
+          cabin: fareDetails?.includedCabinBags || null
+        },
+        baggage: fareDetails?.includedCheckedBags?.weight
+          ? `${fareDetails.includedCheckedBags.weight}${fareDetails.includedCheckedBags.weightUnit || 'kg'}`
+          : (fareDetails?.includedCheckedBags?.quantity ? `${fareDetails.includedCheckedBags.quantity} Piece(s)` : null),
+        priceBase: firstOffer?.price?.base || null,
+        priceGrandTotal: firstOffer?.price?.grandTotal || firstOffer?.price?.total || null,
+        priceFees: firstOffer?.price?.fees || [],
+        fareBreakdown: fareBreakdown || null,
+        passengerDetails: passengerDetails || amadeusTravelers.map((t) => ({
+          id: t.id,
+          firstName: t.name.firstName,
+          lastName: t.name.lastName,
+          dateOfBirth: t.dateOfBirth,
+          gender: t.gender
+        })),
+        flightOffer: firstOffer,
+        userId: req.body.userId || null
+      });
 
     console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
 
@@ -1041,33 +1126,55 @@ router.get('/bookings', async (req, res) => {
         booking.booking_details?.flight_offer?.price?.total ||
         0;
 
-      return {
-        id: booking.id,
-        type: booking.travel_type,
-        bookingReference: booking.booking_reference,
-        status: booking.status,
-        totalAmount: parseFloat(amount) || 0,
-        amount: parseFloat(amount) || 0, // Add both for compatibility
-        currency: booking.booking_details?.currency || booking.booking_details?.flight_offer?.price?.currency || 'USD',
-        paymentStatus: booking.payment_status,
-        bookingDate: booking.created_at,
-        // Spread booking_details
-        pnr: booking.booking_details?.pnr,
-        orderId: booking.booking_details?.order_id,
-        transactionId: booking.booking_details?.transaction_id,
-        origin: booking.booking_details?.origin,
-        destination: booking.booking_details?.destination,
-        departureDate: booking.booking_details?.departure_date,
-        departureTime: booking.booking_details?.departure_time,
-        arrivalTime: booking.booking_details?.arrival_time,
-        airline: booking.booking_details?.airline,
-        airlineName: booking.booking_details?.airline_name,
-        flightNumber: booking.booking_details?.flight_number,
-        duration: booking.booking_details?.duration,
-        cabinClass: booking.booking_details?.cabin_class,
-        // Travelers
-        travelers: booking.passenger_details
-      };
+        return {
+          id: booking.id,
+          type: booking.travel_type,
+          bookingReference: booking.booking_reference,
+          status: booking.status,
+          totalAmount: parseFloat(amount) || 0,
+          amount: parseFloat(amount) || 0, // Add both for compatibility
+          currency: booking.booking_details?.currency || booking.booking_details?.flight_offer?.price?.currency || 'USD',
+          paymentStatus: booking.payment_status,
+          bookingDate: booking.created_at,
+          // Core booking_details
+          pnr: booking.booking_details?.pnr,
+          orderId: booking.booking_details?.order_id,
+          transactionId: booking.booking_details?.transaction_id,
+          origin: booking.booking_details?.origin,
+          destination: booking.booking_details?.destination,
+          departureDate: booking.booking_details?.departure_date,
+          departureTime: booking.booking_details?.departure_time,
+          arrivalTime: booking.booking_details?.arrival_time,
+          arrivalDate: booking.booking_details?.arrival_date,
+          airline: booking.booking_details?.airline,
+          airlineName: booking.booking_details?.airline_name,
+          flightNumber: booking.booking_details?.flight_number,
+          duration: booking.booking_details?.duration,
+          cabinClass: booking.booking_details?.cabin_class,
+          // Amadeus enriched fields
+          departureTerminal: booking.booking_details?.departure_terminal || '',
+          arrivalTerminal: booking.booking_details?.arrival_terminal || '',
+          aircraft: booking.booking_details?.aircraft || '',
+          stops: booking.booking_details?.stops ?? 0,
+          stopDetails: booking.booking_details?.stop_details || [],
+          brandedFare: booking.booking_details?.branded_fare || null,
+          brandedFareLabel: booking.booking_details?.branded_fare_label || null,
+          operatingCarrier: booking.booking_details?.operating_carrier || null,
+          operatingAirlineName: booking.booking_details?.operating_airline_name || null,
+          lastTicketingDate: booking.booking_details?.last_ticketing_date || null,
+          numberOfBookableSeats: booking.booking_details?.number_of_bookable_seats || null,
+          refundable: booking.booking_details?.refundable || false,
+          baggageDetails: booking.booking_details?.baggage_details || null,
+          baggage: booking.booking_details?.baggage || null,
+          originCity: booking.booking_details?.origin_city || '',
+          destinationCity: booking.booking_details?.destination_city || '',
+          priceBase: booking.booking_details?.price_base || null,
+          priceGrandTotal: booking.booking_details?.price_grand_total || null,
+          priceFees: booking.booking_details?.price_fees || [],
+          fareBreakdown: booking.booking_details?.fare_breakdown || null,
+          // Travelers
+          travelers: booking.passenger_details
+        };
     });
 
     console.log(`✅ Fetched ${transformedBookings.length} bookings from database`);
