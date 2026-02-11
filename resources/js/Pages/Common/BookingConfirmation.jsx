@@ -378,6 +378,34 @@ function BookingConfirmation() {
                   <CreditCard className="w-4 h-4 text-blue-600" />
                   Payment Summary
                 </h4>
+                <div className="mb-4">
+                  {bookingData.fareBreakdown && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-sm">
+                      <div className="flex justify-between text-gray-600 mb-2">
+                        <span>Base Fare</span>
+                        <span>{bookingData.currency || 'USD'} {parseFloat(bookingData.fareBreakdown.baseFare || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600 mb-2">
+                        <span>Taxes & Fees</span>
+                        <span>{bookingData.currency || 'USD'} {parseFloat(bookingData.fareBreakdown.totalTax || 0).toFixed(2)}</span>
+                      </div>
+                      {bookingData.fareBreakdown.addonsTotal > 0 && (
+                        <div className="flex justify-between text-gray-600 mb-2">
+                          <span>Add-ons</span>
+                          <span>{bookingData.currency || 'USD'} {parseFloat(bookingData.fareBreakdown.addonsTotal).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {bookingData.fareBreakdown.vipServiceFee > 0 && (
+                        <div className="flex justify-between text-gray-600 mb-2">
+                          <span>VIP Services</span>
+                          <span>{bookingData.currency || 'USD'} {parseFloat(bookingData.fareBreakdown.vipServiceFee).toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="border-t border-gray-300 my-2"></div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex justify-between items-center p-4 bg-green-50 rounded-xl border border-green-200">
                   <div>
                     <p className="text-sm text-green-700">Total Paid</p>

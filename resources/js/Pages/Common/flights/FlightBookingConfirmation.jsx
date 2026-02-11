@@ -440,13 +440,26 @@ function FlightBookingConfirmation() {
   };
 
   const handlePassengerChange = (id, field, value) => {
-    const updatedPassengers = passengerData.map(passenger => {
+    const updatedPassengers = passengerData.map((passenger) => {
       if (passenger.id === id) {
         return { ...passenger, [field]: value };
       }
       return passenger;
     });
     setPassengerData(updatedPassengers);
+
+    // Auto-sync contact info with first passenger
+    if (passengerData.length > 0 && id === passengerData[0].id) {
+      if (field === 'email' || field === 'mobile') {
+        setBookingDetails(prev => ({
+          ...prev,
+          contact: {
+            ...prev?.contact,
+            [field === 'mobile' ? 'phone' : 'email']: value
+          }
+        }));
+      }
+    }
   };
 
   const handleAddPassenger = () => {
@@ -571,12 +584,23 @@ function FlightBookingConfirmation() {
         }]
       };
 
+      // Ensure contact info is populated from first passenger if missing
+      const finalContact = {
+        email: bookingDetails?.contact?.email || passengerData?.[0]?.email || "",
+        phone: bookingDetails?.contact?.phone || passengerData?.[0]?.mobile || ""
+      };
+
+      const finalBookingDetails = {
+        ...bookingDetails,
+        contact: finalContact
+      };
+
       // Store ALL booking data in localStorage before redirect
       const bookingDataForStorage = {
         selectedFlight: rawFlightData,
         originalOffer: rawFlightData?.originalOffer || rawFlightData,
-        passengerData: passengerData,
-        bookingDetails: bookingDetails,
+        passengerData: passengerData, // Contains full details: title, meal, seat, etc.
+        bookingDetails: finalBookingDetails,
         calculatedFare: calculatedFare,
         amount: amount,
         flightData: flightDataForArcPay
@@ -1049,7 +1073,7 @@ function FlightBookingConfirmation() {
                       <div key={addon.id} className={`addon-card ${selectedAddons.includes(addon.id) ? 'selected' : ''}`}>
                         <div className="addon-header">
                           <h3 className="addon-title">{addon.name}</h3>
-                          <div className="addon-price">€{addon.price}</div>
+                          <div className="addon-price">{calculatedFare.currency || '€'}{addon.price}</div>
                         </div>
                         <p className="text-sm text-[#7F8073] mb-3">{addon.description}</p>
                         <ul className="addon-benefits">

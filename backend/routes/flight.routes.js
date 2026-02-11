@@ -30,7 +30,7 @@ async function saveBookingToDatabase(bookingData) {
           pnr: bookingData.pnr,
           order_id: bookingData.orderId,
           transaction_id: bookingData.transactionId,
-          amount: parseFloat(bookingData.totalAmount) || 0, // Also store in booking_details for redundancy
+          amount: parseFloat(bookingData.totalAmount) || 0,
           currency: bookingData.currency || 'USD',
           origin: bookingData.origin,
           destination: bookingData.destination,
@@ -42,9 +42,11 @@ async function saveBookingToDatabase(bookingData) {
           flight_number: bookingData.flightNumber,
           duration: bookingData.duration,
           cabin_class: bookingData.cabinClass,
-          flight_offer: bookingData.flightOffer
+          flight_offer: bookingData.flightOffer,
+          // Fare breakdown for itemized display & refund support
+          fare_breakdown: bookingData.fareBreakdown || null
         },
-        passenger_details: bookingData.travelers
+        passenger_details: bookingData.passengerDetails || bookingData.travelers
       })
       .select()
       .single();
@@ -440,7 +442,7 @@ router.post('/order', async (req, res) => {
     console.log('📋 Flight order creation request received');
     console.log('Request body keys:', Object.keys(req.body));
 
-    const { flightOffer, flightOffers, travelers, payments, contactInfo, totalAmount, transactionId, amount } = req.body;
+    const { flightOffer, flightOffers, travelers, payments, contactInfo, totalAmount, transactionId, amount, fareBreakdown, passengerDetails } = req.body;
 
     // Accept both flightOffer (singular) and flightOffers (plural)
     const offers = flightOffers || (flightOffer ? [flightOffer] : null);
@@ -533,12 +535,20 @@ router.post('/order', async (req, res) => {
           flightNumber: firstOffer?.flightNumber || '',
           duration: firstOffer?.duration || '',
           cabinClass: firstOffer?.cabinClass || firstOffer?.travelClass || 'ECONOMY',
-          travelers: travelersList.map((t, i) => ({
+          fareBreakdown: fareBreakdown || null,
+          passengerDetails: passengerDetails || travelersList.map((t, i) => ({
             id: `${i + 1}`,
             firstName: t.firstName || 'Guest',
             lastName: t.lastName || 'User',
             dateOfBirth: t.dateOfBirth,
-            gender: t.gender
+            gender: t.gender,
+            title: t.title || '',
+            mobile: t.mobile || '',
+            email: t.email || '',
+            seatNumber: t.seatNumber || '',
+            meal: t.meal || '',
+            baggage: t.baggage || '',
+            requiresWheelchair: t.requiresWheelchair || false
           })),
           flightOffer: firstOffer,
           userId: req.body.userId || null
@@ -709,7 +719,8 @@ router.post('/order', async (req, res) => {
       flightNumber: firstSegment.number ? `${firstSegment.carrierCode}${firstSegment.number}` : '',
       duration: firstItinerary?.duration || '',
       cabinClass: firstOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.cabin || 'ECONOMY',
-      travelers: amadeusTravelers.map((t) => ({
+      fareBreakdown: fareBreakdown || null,
+      passengerDetails: passengerDetails || amadeusTravelers.map((t) => ({
         id: t.id,
         firstName: t.name.firstName,
         lastName: t.name.lastName,
@@ -746,6 +757,64 @@ router.post('/order', async (req, res) => {
       success: false,
       error: error.message || 'Failed to create flight order',
       details: process.env.NODE_ENV !== 'production' ? error.stack : undefined
+    });
+  }
+});
+
+// Cancel a flight order
+router.delete('/order/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    console.log(`🗑️ Cancel flight order request: ${orderId}`);
+
+    // Try real Amadeus cancellation first
+    try {
+      const result = await AmadeusService.cancelFlightOrder(orderId);
+      if (result.success) {
+        // Also update database status if available
+        if (supabase) {
+          await supabase
+            .from('bookings')
+            .update({ status: 'cancelled' })
+            .or(`booking_reference.eq.${orderId},booking_details->>order_id.eq.${orderId}`);
+        }
+
+        return res.json({
+          success: true,
+          message: result.message,
+          mode: result.mode || 'AMADEUS_CANCELLATION'
+        });
+      }
+    } catch (cancelError) {
+      console.log('⚠️ Amadeus cancellation failed, updating database status:', cancelError.error || cancelError.message);
+    }
+
+    // Fallback: just mark as cancelled in our database
+    if (supabase) {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: 'cancelled' })
+        .or(`booking_reference.eq.${orderId},booking_details->>order_id.eq.${orderId}`);
+
+      if (!error) {
+        return res.json({
+          success: true,
+          message: `Order ${orderId} has been cancelled in the system`,
+          mode: 'DATABASE_CANCELLATION'
+        });
+      }
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: 'Unable to cancel the order'
+    });
+
+  } catch (error) {
+    console.error('❌ Cancel order error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to cancel flight order'
     });
   }
 });

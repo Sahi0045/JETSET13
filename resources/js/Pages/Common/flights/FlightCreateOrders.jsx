@@ -121,6 +121,24 @@ function FlightCreateOrders() {
         }
       }
 
+      // Prepare full passenger details for backend (and storage)
+      const passengerDetails = orderData.passengerData?.map((p, i) => ({
+        id: `${i + 1}`,
+        firstName: p.firstName || "Traveler",
+        lastName: p.lastName || "Name",
+        dateOfBirth: p.dateOfBirth || "1990-01-01",
+        gender: p.gender || "MALE",
+        title: p.title || '',
+        mobile: p.mobile || '',
+        email: p.email || '',
+        seatNumber: p.seatNumber || '',
+        meal: p.meal || '',
+        baggage: p.baggage || '',
+        requiresWheelchair: p.requiresWheelchair || false
+      })) || [];
+
+      const fareBreakdown = orderData.calculatedFare || null;
+
       // Proceed with creating the flight order
       // Prioritize originalOffer (full Amadeus API data) over transformed flight data
       const flightBookingData = {
@@ -137,25 +155,19 @@ function FlightCreateOrders() {
         // Include totalAmount for database storage
         totalAmount: orderData.amount || orderData.calculatedFare?.totalAmount || orderData.selectedFlight?.price?.total || orderData.originalOffer?.price?.total || "0",
         transactionId: orderData.transactionId || `TXN-${Date.now()}`,
-        travelers: orderData.passengerData && orderData.passengerData.length > 0
-          ? orderData.passengerData.map((passenger, index) => ({
-            id: `${index + 1}`,
-            firstName: passenger.firstName || orderData.paymentDetails?.cardHolder?.split(' ')[0] || "Test",
-            lastName: passenger.lastName || orderData.paymentDetails?.cardHolder?.split(' ').slice(1).join(' ') || "User",
-            dateOfBirth: passenger.dateOfBirth || "1990-01-01",
-            gender: passenger.gender || "MALE"
-          }))
-          : [{
-            id: "1",
-            firstName: orderData.paymentDetails?.cardHolder?.split(' ')[0] || "Test",
-            lastName: orderData.paymentDetails?.cardHolder?.split(' ').slice(1).join(' ') || "User",
-            dateOfBirth: "1990-01-01",
-            gender: "MALE"
-          }],
+        travelers: passengerDetails.map(p => ({
+          id: p.id,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          dateOfBirth: p.dateOfBirth,
+          gender: p.gender
+        })),
+        passengerDetails: passengerDetails, // Send full details to backend
+        fareBreakdown: fareBreakdown,       // Send fare breakdown to backend
         contactInfo: {
-          email: orderData.customerEmail || "test@jetsetgo.com",
-          countryCode: "1",
-          phoneNumber: "1234567890"
+          email: orderData.bookingDetails?.contact?.email || orderData.customerEmail || "test@jetsetgo.com",
+          countryCode: orderData.bookingDetails?.contact?.countryCode || "1",
+          phoneNumber: orderData.bookingDetails?.contact?.phone || "1234567890"
         }
       };
 
@@ -235,7 +247,10 @@ function FlightCreateOrders() {
           flightNumber: firstSegment.number ? `${firstSegment.carrierCode}${firstSegment.number}` : flightData.flightNumber || '',
           // Additional details
           cabinClass: flightData.cabinClass || flightData.travelClass || 'ECONOMY',
-          passengers: formattedTravelers.length || 1
+          passengers: formattedTravelers.length || 1,
+          passengerData: passengerDetails, // Store full passenger details
+          fareBreakdown: fareBreakdown,    // Store fare breakdown for confirmation page
+          contact: orderData.bookingDetails?.contact // Store contact info
         };
 
         console.log('📝 Saving completed flight booking:', completedFlightBooking);
