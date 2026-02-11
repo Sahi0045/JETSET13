@@ -285,14 +285,18 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
           aircraft: aircraft[firstSegment.aircraft?.code] || firstSegment.aircraft?.code || 'Unknown',
           cabin: cabin,
           brandedFare: brandedFare,
-          brandedFareLabel: brandedFareLabel,
-          operatingCarrier: operatingCarrier,
-          operatingAirlineName: operatingAirlineName,
-          lastTicketingDate: flight.lastTicketingDate || null,
-          numberOfBookableSeats: flight.numberOfBookableSeats || null,
-          baggage: fareDetails?.includedCheckedBags?.weight
-            ? `${fareDetails.includedCheckedBags.weight}${fareDetails.includedCheckedBags.weightUnit || 'kg'}`
-            : '23kg',
+            brandedFareLabel: brandedFareLabel,
+            operatingCarrier: operatingCarrier,
+            operatingAirlineName: operatingAirlineName,
+            lastTicketingDate: flight.lastTicketingDate || null,
+            numberOfBookableSeats: flight.numberOfBookableSeats || null,
+            baggage: fareDetails?.includedCheckedBags?.weight
+              ? `${fareDetails.includedCheckedBags.weight}${fareDetails.includedCheckedBags.weightUnit || 'kg'}`
+              : '23kg',
+            baggageDetails: {
+              checked: fareDetails?.includedCheckedBags || null,
+              cabin: fareDetails?.includedCabinBags || null
+            },
           refundable: travelerPricing?.price?.refundableTaxes ? true : false,
           seats: flight.numberOfBookableSeats || 'Available',
           isUpsellOffer: flight.isUpsellOffer || false,

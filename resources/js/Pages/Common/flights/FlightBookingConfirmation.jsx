@@ -184,31 +184,45 @@ function FlightBookingConfirmation() {
     // Total taxes = platform fee + country tax
     const totalTaxes = countryTax + platformFee;
 
-    return {
-      bookingId: bookingId || `BOOK-${Date.now()}`,
-      flight: {
-        airline: flightData.airline.name,
-        flightNumber: `${flightData.airline.code} ${flightData.id}`,
-        departureCode: flightData.departure.airport,
-        arrivalCode: flightData.arrival.airport,
-        departureCity: flightData.departure.cityName || flightData.departure.airport,
-        arrivalCity: flightData.arrival.cityName || flightData.arrival.airport,
-        departureTime: flightData.departure.time,
-        arrivalTime: flightData.arrival.time,
-        duration: flightData.duration,
-        departureDate: flightData.departure.date,
-        arrivalDate: flightData.arrival.date,
-        cabin: flightData.cabin,
-        fareType: flightData.class,
-        stops: flightData.stops,
-        stopDetails: flightData.stopDetails || [],
-        basePrice: basePrice,
-        tax: totalTaxes,
-        platformFee: platformFee,
-        countryTax: countryTax,
-        totalPrice: basePrice + totalTaxes, // Base fare + taxes
-        departureAirport: `${flightData.departure.airport} Terminal ${flightData.departure.terminal}`,
-        arrivalAirport: `${flightData.arrival.airport} Terminal ${flightData.arrival.terminal}`,
+      return {
+        bookingId: bookingId || `BOOK-${Date.now()}`,
+        flight: {
+          airline: flightData.airline.name,
+          airlineCode: flightData.airline.code,
+          airlineLogo: flightData.airline.logo,
+          flightNumber: `${flightData.airline.code} ${flightData.id}`,
+          departureCode: flightData.departure.airport,
+          arrivalCode: flightData.arrival.airport,
+          departureCity: flightData.departure.cityName || flightData.departure.airport,
+          arrivalCity: flightData.arrival.cityName || flightData.arrival.airport,
+          departureTime: flightData.departure.time,
+          arrivalTime: flightData.arrival.time,
+          duration: flightData.duration,
+          departureDate: flightData.departure.date,
+          arrivalDate: flightData.arrival.date,
+          cabin: flightData.cabin,
+          fareType: flightData.class,
+          brandedFare: flightData.brandedFare || null,
+          brandedFareLabel: flightData.brandedFareLabel || null,
+          operatingCarrier: flightData.operatingCarrier || null,
+          operatingAirlineName: flightData.operatingAirlineName || null,
+          numberOfBookableSeats: flightData.numberOfBookableSeats || null,
+          lastTicketingDate: flightData.lastTicketingDate || null,
+          stops: flightData.stops,
+          stopDetails: flightData.stopDetails || [],
+          basePrice: basePrice,
+          tax: totalTaxes,
+          platformFee: platformFee,
+          countryTax: countryTax,
+          totalPrice: basePrice + totalTaxes,
+          departureAirport: flightData.departure.terminal
+            ? `${flightData.departure.airport} Terminal ${flightData.departure.terminal}`
+            : flightData.departure.airport,
+          arrivalAirport: flightData.arrival.terminal
+            ? `${flightData.arrival.airport} Terminal ${flightData.arrival.terminal}`
+            : flightData.arrival.airport,
+          departureTerminal: flightData.departure.terminal || '',
+          arrivalTerminal: flightData.arrival.terminal || '',
         segments: flightData.segments.map(segment => ({
           departure: {
             airport: segment.departure.airport,
@@ -467,20 +481,23 @@ function FlightBookingConfirmation() {
 
   const handleAddPassenger = () => {
     const newPassenger = {
-      id: passengerData.length + 1,
-      type: "Adult",
-      title: "Mr",
-      firstName: "",
-      lastName: "",
-      dateOfBirth: "",
-      seatNumber: "",
-      meal: "Regular",
-      baggage: "15 Kg",
-      mobile: "",
-      email: "",
-      gender: "male",
-      requiresWheelchair: false
-    };
+        id: passengerData.length + 1,
+        type: "Adult",
+        title: "Mr",
+        firstName: "",
+        lastName: "",
+        dateOfBirth: "",
+        seatNumber: "",
+        meal: "Regular",
+        baggage: "15 Kg",
+        mobile: "",
+        email: "",
+        gender: "male",
+        requiresWheelchair: false,
+        nationality: "",
+        passportNumber: "",
+        passportExpiry: ""
+      };
     const updatedPassengers = [...passengerData, newPassenger];
     setPassengerData(updatedPassengers);
     updateFareSummary(updatedPassengers.length);
@@ -727,18 +744,25 @@ function FlightBookingConfirmation() {
             {/* Flight Details Card (Boarding Pass Style) */}
             <div className="booking-card flight-card">
               <div className="booking-card-header">
-                <h2>
-                  <div className="airline-logo-placeholder">
-                    {bookingDetails?.flight?.airline?.substring(0, 2).toUpperCase() || "JS"}
+                  <h2>
+                    <div className="airline-logo-placeholder">
+                      {bookingDetails?.flight?.airlineCode || bookingDetails?.flight?.airline?.substring(0, 2).toUpperCase() || "JS"}
+                    </div>
+                    {bookingDetails?.flight?.airline || 'JetSetters Airlines'}
+                    <span className="opacity-70 font-normal ml-2 text-sm">
+                      #{bookingDetails?.flight?.flightNumber}
+                    </span>
+                  </h2>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {bookingDetails?.flight?.brandedFareLabel && (
+                      <span className="text-xs px-2 py-1 bg-white/20 rounded font-medium">
+                        {bookingDetails.flight.brandedFareLabel}
+                      </span>
+                    )}
+                    <span className="cabin-class-badge">
+                      {bookingDetails?.flight?.cabin || 'Economy Class'}
+                    </span>
                   </div>
-                  {bookingDetails?.flight?.airline || 'JetSetters Airlines'}
-                  <span className="opacity-70 font-normal ml-2 text-sm">
-                    #{bookingDetails?.flight?.flightNumber}
-                  </span>
-                </h2>
-                <span className="cabin-class-badge">
-                  {bookingDetails?.flight?.cabin || 'Economy Class'}
-                </span>
               </div>
 
               <div className="booking-card-body">
@@ -796,20 +820,38 @@ function FlightBookingConfirmation() {
                   </div>
                 </div>
 
-                <div className="flight-info-grid">
-                  <div className="info-box">
-                    <span className="label">Date</span>
-                    <span className="value">{formatShortDate(bookingDetails?.flight?.departureDate)}</span>
+                  <div className="flight-info-grid">
+                    <div className="info-box">
+                      <span className="label">Date</span>
+                      <span className="value">{formatShortDate(bookingDetails?.flight?.departureDate)}</span>
+                    </div>
+                    <div className="info-box">
+                      <span className="label">Flight No</span>
+                      <span className="value">{bookingDetails?.flight?.flightNumber}</span>
+                    </div>
+                    <div className="info-box">
+                      <span className="label">Baggage</span>
+                      <span className="value">{typeof bookingDetails?.baggage?.checkIn === 'object' ? `${bookingDetails.baggage.checkIn.weight} ${bookingDetails.baggage.checkIn.weightUnit}` : (bookingDetails?.baggage?.checkIn || "23 KG")}</span>
+                    </div>
+                    {bookingDetails?.flight?.operatingAirlineName && bookingDetails.flight.operatingAirlineName !== bookingDetails.flight.airline && (
+                      <div className="info-box">
+                        <span className="label">Operated by</span>
+                        <span className="value">{bookingDetails.flight.operatingAirlineName}</span>
+                      </div>
+                    )}
+                    {bookingDetails?.flight?.numberOfBookableSeats && bookingDetails.flight.numberOfBookableSeats <= 9 && (
+                      <div className="info-box">
+                        <span className="label">Seats Left</span>
+                        <span className="value text-red-600">{bookingDetails.flight.numberOfBookableSeats}</span>
+                      </div>
+                    )}
+                    {bookingDetails?.flight?.lastTicketingDate && (
+                      <div className="info-box">
+                        <span className="label">Book By</span>
+                        <span className="value">{formatShortDate(bookingDetails.flight.lastTicketingDate)}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="info-box">
-                    <span className="label">Flight No</span>
-                    <span className="value">{bookingDetails?.flight?.flightNumber}</span>
-                  </div>
-                  <div className="info-box">
-                    <span className="label">Baggage</span>
-                    <span className="value">{typeof bookingDetails?.baggage?.checkIn === 'object' ? `${bookingDetails.baggage.checkIn.weight} ${bookingDetails.baggage.checkIn.weightUnit}` : (bookingDetails?.baggage?.checkIn || "23 KG")}</span>
-                  </div>
-                </div>
               </div>
             </div>
 

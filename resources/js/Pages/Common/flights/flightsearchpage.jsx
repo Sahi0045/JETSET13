@@ -8,7 +8,6 @@ import Price from '../../../Components/Price';
 import currencyService from '../../../Services/CurrencyService';
 import {
   defaultSearchData,
-  cheapFlights,
   destinations,
   sourceCities,
   specialFares
@@ -126,19 +125,24 @@ function FlightSearchPage() {
             return match ? match[1] : str;
           };
 
-          const searchData = {
-            from: extractCode(location.state.searchData.from),
-            to: extractCode(location.state.searchData.to),
-            departDate: location.state.searchData.departDate,
-            returnDate: location.state.searchData.returnDate,
-            travelers: parseInt(location.state.searchData.travelers) || 1,
-            travelClass: location.state.searchData.travelClass || 'ECONOMY', // Pass travel class
-            max: 20 // Increased max results
-          };
+            const sd = location.state.searchData;
+            const searchData = {
+              from: extractCode(sd.from),
+              to: extractCode(sd.to),
+              departDate: sd.departDate,
+              returnDate: sd.returnDate,
+              adults: parseInt(sd.adults) || parseInt(sd.travelers) || 1,
+              children: parseInt(sd.children) || 0,
+              infants: parseInt(sd.infants) || 0,
+              travelClass: sd.travelClass || 'ECONOMY',
+              max: 50
+            };
 
-          // Apply initial filters if passed in state (e.g. from a previous search or deep link)
-          if (location.state.searchData.maxPrice) searchData.maxPrice = location.state.searchData.maxPrice;
-          if (location.state.searchData.nonStop) searchData.nonStop = location.state.searchData.nonStop;
+            // Apply initial filters if passed in state (e.g. from a previous search or deep link)
+            if (sd.maxPrice) searchData.maxPrice = sd.maxPrice;
+            if (sd.nonStop) searchData.nonStop = sd.nonStop;
+            if (sd.includedAirlineCodes) searchData.includedAirlineCodes = sd.includedAirlineCodes;
+            if (sd.excludedAirlineCodes) searchData.excludedAirlineCodes = sd.excludedAirlineCodes;
 
           // Validate required fields
           if (!searchData.from || !searchData.to || !searchData.departDate) {
@@ -180,12 +184,28 @@ function FlightSearchPage() {
             console.log('No flights found for the given search criteria');
             setFlights([]);
           } else {
-            // Transform flight data
-            const flightData = transformFlightData(data.data || []);
-            console.log('Transformed flight data:', flightData);
-            setFlights(flightData);
+              // Transform flight data
+              const flightData = transformFlightData(data.data || []);
+              console.log('Transformed flight data:', flightData);
+              setFlights(flightData);
 
-            // Update prices in the date range
+              // Build dynamic airline/aircraft maps from results
+              const newAirlineMap = {};
+              const newAircraftMap = {};
+              flightData.forEach(f => {
+                if (f.airline?.code && f.airline?.name) newAirlineMap[f.airline.code] = f.airline.name;
+                if (f.operatingCarrier && f.operatingAirlineName) newAirlineMap[f.operatingCarrier] = f.operatingAirlineName;
+                if (f.segments) f.segments.forEach(s => {
+                  if (s.airline?.code && s.airline?.name) newAirlineMap[s.airline.code] = s.airline.name;
+                  if (s.aircraft && typeof s.aircraft === 'string' && s.aircraft !== 'Unknown Aircraft') {
+                    // aircraft is already a resolved name from backend
+                  }
+                });
+              });
+              setDynamicAirlineMap(prev => ({ ...prev, ...newAirlineMap }));
+              setDynamicAircraftMap(prev => ({ ...prev, ...newAircraftMap }));
+
+              // Update prices in the date range
             if (data.data?.dateWisePrices) {
               setDateRange(prev =>
                 prev.map(d => ({
@@ -196,17 +216,11 @@ function FlightSearchPage() {
               );
             }
           }
-        } catch (error) {
-          console.error('Error fetching initial flights:', error);
-
-          // Use mock data if API fails
-          if (cheapFlights && cheapFlights.length > 0) {
-            console.log('Using mock flight data as fallback');
-            setFlights(cheapFlights);
-          } else {
+          } catch (error) {
+            console.error('Error fetching initial flights:', error);
             setFlights([]);
-          }
-        } finally {
+            setError(error.message);
+          } finally {
           setLoading(false);
         }
       } else {
@@ -379,12 +393,12 @@ function FlightSearchPage() {
             grandTotal: flight.price.grandTotal || flight.price.total,
             fees: flight.price.fees || []
           },
-          amenities: [],
-          baggage: {
-            checked: { weight: parseInt(flight.baggage) || 15, weightUnit: 'KG' },
-            cabin: { weight: 7, weightUnit: 'KG' }
-          },
-          cabin: flight.cabin || 'ECONOMY',
+            amenities: [],
+            baggage: {
+              checked: flight.baggageDetails?.checked || { weight: parseInt(flight.baggage) || 0, weightUnit: 'KG' },
+              cabin: flight.baggageDetails?.cabin || { weight: 0, weightUnit: 'KG' }
+            },
+            cabin: flight.cabin || 'ECONOMY',
           class: flight.cabin || 'ECONOMY',
           brandedFare: flight.brandedFare || null,
           brandedFareLabel: flight.brandedFareLabel || null,
@@ -461,12 +475,12 @@ function FlightSearchPage() {
             grandTotal: flight.price.grandTotal || flight.price.total,
             fees: flight.price.fees || []
           },
-          amenities: [],
-          baggage: {
-            checked: { weight: parseInt(flight.baggage) || 0, weightUnit: 'KG' },
-            cabin: { weight: 7, weightUnit: 'KG' }
-          },
-          cabin: flight.cabin || 'Economy',
+            amenities: [],
+            baggage: {
+              checked: flight.baggageDetails?.checked || { weight: parseInt(flight.baggage) || 0, weightUnit: 'KG' },
+              cabin: flight.baggageDetails?.cabin || { weight: 0, weightUnit: 'KG' }
+            },
+            cabin: flight.cabin || 'Economy',
           class: flight.cabin || 'Economy',
           brandedFare: flight.brandedFare || null,
           brandedFareLabel: flight.brandedFareLabel || null,
@@ -675,17 +689,10 @@ function FlightSearchPage() {
         );
       }
     } catch (error) {
-      console.error('Error fetching flights:', error);
-
-      // Use mock data if API fails
-      if (cheapFlights && cheapFlights.length > 0) {
-        console.log('Using mock flight data as fallback for search');
-        setFlights(cheapFlights);
-      } else {
+        console.error('Error fetching flights:', error);
         setFlights([]);
         setError(error.message);
-      }
-    } finally {
+      } finally {
       setLoading(false);
     }
   };
@@ -824,16 +831,18 @@ function FlightSearchPage() {
         return match ? match[1] : str;
       };
 
-      // Create new search params with updated date AND extracted codes
-      const newSearchParams = {
-        ...searchParams,
-        from: extractCode(searchParams.from),
-        to: extractCode(searchParams.to),
-        departDate: selectedDate.isoDate,
-        travelClass: searchParams.travelClass || 'ECONOMY',
-        travelers: parseInt(searchParams.travelers) || 1,
-        max: 20
-      };
+        // Create new search params with updated date AND extracted codes
+        const newSearchParams = {
+          ...searchParams,
+          from: extractCode(searchParams.from),
+          to: extractCode(searchParams.to),
+          departDate: selectedDate.isoDate,
+          travelClass: searchParams.travelClass || 'ECONOMY',
+          adults: parseInt(searchParams.adults) || parseInt(searchParams.travelers) || 1,
+          children: parseInt(searchParams.children) || 0,
+          infants: parseInt(searchParams.infants) || 0,
+          max: 50
+        };
 
       // Update local state and URL with the new params immediately
       setSearchParams(newSearchParams);
@@ -864,11 +873,22 @@ function FlightSearchPage() {
         throw new Error(data.error || 'Failed to fetch flights');
       }
 
-      // Transform flight data — backend returns { data: [...flights] }, not { data: { flights: [...] } }
-      const flightData = transformFlightData(data.data || []);
-      setFlights(flightData);
+        // Transform flight data — backend returns { data: [...flights] }, not { data: { flights: [...] } }
+        const flightData = transformFlightData(data.data || []);
+        setFlights(flightData);
 
-      // Update prices in the date range (only if dateWisePrices is available)
+        // Build dynamic airline/aircraft maps from date-select results
+        const newAirlineMap = {};
+        flightData.forEach(f => {
+          if (f.airline?.code && f.airline?.name) newAirlineMap[f.airline.code] = f.airline.name;
+          if (f.operatingCarrier && f.operatingAirlineName) newAirlineMap[f.operatingCarrier] = f.operatingAirlineName;
+          if (f.segments) f.segments.forEach(s => {
+            if (s.airline?.code && s.airline?.name) newAirlineMap[s.airline.code] = s.airline.name;
+          });
+        });
+        setDynamicAirlineMap(prev => ({ ...prev, ...newAirlineMap }));
+
+        // Update prices in the date range (only if dateWisePrices is available)
       const { dateWisePrices, lowestPrice } = data.data || {};
       if (dateWisePrices) {
         setDateRange(prev =>
