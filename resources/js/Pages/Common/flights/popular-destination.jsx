@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react"
 import { destinations } from "./data.js"
 import FlightAnalyticsService from "../../../Services/FlightAnalyticsService.js"
-import GeoService from "../../../Services/GeoService.js"
 import { allAirports } from "./airports.js"
+import { useLocationContext } from "../../../Context/LocationContext"
 
 // Build IATA code → airport details lookup
 const airportByCode = allAirports.reduce((acc, a) => {
@@ -73,6 +73,7 @@ const preloadImage = (src) => {
 };
 
 export default function PopularDestinations({ onSelectDestination }) {
+  const { cityCode, loading: locationLoading } = useLocationContext();
   const [displayDestinations, setDisplayDestinations] = useState(destinations);
   const [trendingBadges, setTrendingBadges] = useState({});
   const [isApiLoading, setIsApiLoading] = useState(true);
@@ -85,10 +86,12 @@ export default function PopularDestinations({ onSelectDestination }) {
     let isMounted = true;
 
     const fetchTrendingDestinations = async () => {
+      // Wait for location context to be loaded
+      if (locationLoading) return;
+
       try {
-        // Get user location for relevant trending data
-        const location = await GeoService.getUserLocation();
-        const originCode = location.cityCode || 'DEL';
+        // Get user location from shared LocationContext
+        const originCode = cityCode || 'DEL';
 
         console.log(`📊 Fetching most booked destinations from ${originCode}`);
 
@@ -170,7 +173,7 @@ export default function PopularDestinations({ onSelectDestination }) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [cityCode, locationLoading]);
 
   // Preload images on component mount
   useEffect(() => {

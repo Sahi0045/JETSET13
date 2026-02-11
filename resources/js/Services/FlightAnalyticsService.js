@@ -87,7 +87,7 @@ export const getMostBookedDestinations = async (origin, period) => {
     return fetchWithCache(
         '/flights/analytics/booked',
         { origin, period },
-        `booked_${origin}_${period}`
+        `booked_${origin}${period ? '_' + period : ''}`
     );
 };
 
@@ -98,7 +98,7 @@ export const getMostTraveledDestinations = async (origin, period) => {
     return fetchWithCache(
         '/flights/analytics/traveled',
         { origin, period },
-        `traveled_${origin}_${period}`
+        `traveled_${origin}${period ? '_' + period : ''}`
     );
 };
 
