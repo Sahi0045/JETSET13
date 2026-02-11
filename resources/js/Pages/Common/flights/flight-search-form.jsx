@@ -7,6 +7,8 @@ import { allAirports } from "./airports.js";
 import AirportService from "../../../Services/AirportService";
 import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
 import { useLocationContext } from '../../../Context/LocationContext';
+import CustomFlightCalendar from "./CustomFlightCalendar";
+import { format, parseISO, isValid } from 'date-fns';
 
 // Get this from a config or parent component
 const USE_AMADEUS_API = true;
@@ -21,6 +23,11 @@ export default function FlightSearchForm({ initialData, onSearch }) {
   const [toSuggestions, setToSuggestions] = useState([]);
   const [selectedFare, setSelectedFare] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [showDepartCalendar, setShowDepartCalendar] = useState(false);
+  const [showReturnCalendar, setShowReturnCalendar] = useState(false);
+
+  const departCalendarRef = useRef(null);
+  const returnCalendarRef = useRef(null);
 
   // Debounce timer ref
   const searchTimeoutRef = useRef(null);
@@ -121,6 +128,32 @@ export default function FlightSearchForm({ initialData, onSearch }) {
       }));
     }
   }
+
+  // Handle outside click for calendars
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (departCalendarRef.current && !departCalendarRef.current.contains(event.target)) {
+        setShowDepartCalendar(false);
+      }
+      if (returnCalendarRef.current && !returnCalendarRef.current.contains(event.target)) {
+        setShowReturnCalendar(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const formatDateDisplay = (dateStr) => {
+    if (!dateStr) return "";
+    try {
+      const date = parseISO(dateStr);
+      if (!isValid(date)) return dateStr;
+      return format(date, 'dd/MM/yyyy');
+    } catch {
+      return dateStr;
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -394,19 +427,33 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           </div>
 
           {/* Depart Date */}
-          <div className="flex-1 min-w-[140px] w-full lg:w-auto">
+          <div className="flex-1 min-w-[140px] w-full lg:w-auto relative" ref={departCalendarRef}>
             <label className="text-gray-600 text-sm font-medium mb-2 block">Depart Date</label>
             <div className="relative">
-              <input
-                type="date"
-                name="departDate"
-                value={formData.departDate || ""}
-                min={getTodayDate()}
-                onChange={handleInputChange}
-                className="w-full p-3 pr-10 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                placeholder="Select date"
-              />
+              <div
+                onClick={() => {
+                  setShowDepartCalendar(!showDepartCalendar);
+                  setShowReturnCalendar(false);
+                }}
+                className="w-full p-3 pr-10 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer min-h-[50px] flex items-center"
+              >
+                {formData.departDate ? formatDateDisplay(formData.departDate) : <span className="text-gray-400">dd/mm/yyyy</span>}
+              </div>
               <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
+
+              {showDepartCalendar && (
+                <CustomFlightCalendar
+                  selectedDate={formData.departDate}
+                  minDate={new Date()}
+                  originCode={formData.fromCode}
+                  destinationCode={formData.toCode}
+                  onSelect={(date) => {
+                    handleInputChange({ target: { name: 'departDate', value: date } });
+                    setShowDepartCalendar(false);
+                  }}
+                  onClose={() => setShowDepartCalendar(false)}
+                />
+              )}
             </div>
             {formErrors.departDate && (
               <p className="text-red-500 text-xs mt-1">{formErrors.departDate}</p>
@@ -415,19 +462,33 @@ export default function FlightSearchForm({ initialData, onSearch }) {
 
           {/* Return Date - Only visible for Round Trip */}
           {formData.tripType === "roundTrip" && (
-            <div className="flex-1 min-w-[140px] w-full lg:w-auto">
+            <div className="flex-1 min-w-[140px] w-full lg:w-auto relative" ref={returnCalendarRef}>
               <label className="text-gray-600 text-sm font-medium mb-2 block">Return Date</label>
               <div className="relative">
-                <input
-                  type="date"
-                  name="returnDate"
-                  value={formData.returnDate || ""}
-                  min={formData.departDate || getTodayDate()}
-                  onChange={handleInputChange}
-                  className="w-full p-3 pr-10 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                  placeholder="Select date"
-                />
+                <div
+                  onClick={() => {
+                    setShowReturnCalendar(!showReturnCalendar);
+                    setShowDepartCalendar(false);
+                  }}
+                  className="w-full p-3 pr-10 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer min-h-[50px] flex items-center"
+                >
+                  {formData.returnDate ? formatDateDisplay(formData.returnDate) : <span className="text-gray-400">dd/mm/yyyy</span>}
+                </div>
                 <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
+
+                {showReturnCalendar && (
+                  <CustomFlightCalendar
+                    selectedDate={formData.returnDate}
+                    minDate={formData.departDate ? parseISO(formData.departDate) : new Date()}
+                    originCode={formData.fromCode}
+                    destinationCode={formData.toCode}
+                    onSelect={(date) => {
+                      handleInputChange({ target: { name: 'returnDate', value: date } });
+                      setShowReturnCalendar(false);
+                    }}
+                    onClose={() => setShowReturnCalendar(false)}
+                  />
+                )}
               </div>
               {formErrors.returnDate && (
                 <p className="text-red-500 text-xs mt-1">{formErrors.returnDate}</p>
