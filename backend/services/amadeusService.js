@@ -286,13 +286,84 @@ class AmadeusService {
     }
   }
 
+  /**
+   * Cancel a flight order by its ID
+   * @see https://developers.amadeus.com/self-service/category/flights/api-doc/flight-order-management
+   * @param {string} orderId - The flight order ID to cancel
+   * @returns {Promise<Object>} - Cancellation result
+   */
+  async cancelFlightOrder(orderId) {
+    try {
+      const token = await this.getAccessToken();
+
+      console.log(`🗑️ Cancelling flight order: ${orderId}`);
+
+      await axios.delete(
+        `${this.baseUrls.v1}/booking/flight-orders/${orderId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.amadeus+json'
+          }
+        }
+      );
+
+      console.log(`✅ Flight order ${orderId} cancelled successfully`);
+
+      return {
+        success: true,
+        message: `Flight order ${orderId} has been cancelled`
+      };
+
+    } catch (error) {
+      console.error('❌ Error cancelling flight order:', error.response?.data || error.message);
+
+      // Check if it's a mock order and remove from storage
+      const mockOrder = this.getMockOrder(orderId);
+      if (mockOrder) {
+        // Remove from mock storage (in-memory)
+        if (this.mockOrders) {
+          this.mockOrders.delete(orderId);
+        }
+        console.log(`✅ Mock order ${orderId} removed from storage`);
+        return {
+          success: true,
+          message: `Mock order ${orderId} has been cancelled`,
+          mode: 'MOCK_CANCELLATION'
+        };
+      }
+
+      throw {
+        success: false,
+        error: error.response?.data?.errors?.[0]?.detail || error.message,
+        code: error.response?.status || 500
+      };
+    }
+  }
+
   // ===== FLIGHT PRICING AND CONFIRMATION =====
 
-  async priceFlightOffer(flightOffer) {
+  /**
+   * Price a flight offer with optional ancillary data
+   * @param {Object} flightOffer - The flight offer to price
+   * @param {Object} options - Optional pricing options
+   * @param {string[]} options.include - Additional data to include (e.g., 'bags', 'detailed-fare-rules', 'credit-card-fees', 'other-services')
+   * @returns {Promise<Object>} - Priced flight offer
+   */
+  async priceFlightOffer(flightOffer, options = {}) {
     try {
       const token = await this.getAccessToken();
 
       console.log('💰 Pricing flight offer...');
+
+      // Build query params for include (bags, fare rules, etc.)
+      const queryParams = {};
+      if (options.include && Array.isArray(options.include)) {
+        queryParams.include = options.include.join(',');
+      } else {
+        // Default: include bags and detailed fare rules for richer pricing
+        queryParams.include = 'bags,detailed-fare-rules';
+      }
 
       const response = await axios.post(
         `${this.baseUrls.v1}/shopping/flight-offers/pricing`,
@@ -307,7 +378,8 @@ class AmadeusService {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/vnd.amadeus+json',
             'Accept': 'application/vnd.amadeus+json'
-          }
+          },
+          params: queryParams
         }
       );
 
@@ -315,7 +387,8 @@ class AmadeusService {
 
       return {
         success: true,
-        data: response.data.data
+        data: response.data.data,
+        dictionaries: response.data.dictionaries
       };
 
     } catch (error) {
@@ -436,17 +509,27 @@ class AmadeusService {
     }
   }
 
-  async getAirlineCodes() {
+  /**
+   * Look up airline information by IATA/ICAO codes
+   * @see https://developers.amadeus.com/self-service/category/flights/api-doc/airline-code-lookup
+   * @param {string} [codes] - Optional comma-separated airline codes (e.g., 'AA,BA,AI'). If omitted, returns all airlines.
+   * @returns {Promise<Object>} - List of matching airlines
+   */
+  async getAirlineCodes(codes) {
     try {
       const token = await this.getAccessToken();
+
+      // Build params per spec: only 'airlineCodes' is a valid parameter
+      const params = {};
+      if (codes) {
+        params.airlineCodes = codes;
+      }
 
       const response = await axios.get(`${this.baseUrls.v1}/reference-data/airlines`, {
         headers: {
           'Authorization': `Bearer ${token}`
         },
-        params: {
-          'page[limit]': 100
-        }
+        params: params
       });
 
       return {
@@ -647,22 +730,57 @@ class AmadeusService {
    * Get Flight Availabilities (seat inventory)
    * @see https://developers.amadeus.com/self-service/category/flights/api-doc/flight-availabilities-search
    */
+  /**
+   * Get Flight Availabilities (seat inventory)
+   * @see https://developers.amadeus.com/self-service/category/flights/api-doc/flight-availabilities-search
+   * @param {Object} params - Search parameters
+   * @param {string} params.origin - Origin IATA code
+   * @param {string} params.destination - Destination IATA code
+   * @param {string} params.departureDate - Departure date (YYYY-MM-DD)
+   * @param {Array} [params.originDestinations] - Full origin-destination array for multi-city (overrides origin/destination/departureDate)
+   * @param {number} [params.adults=1] - Number of adult travelers
+   * @param {number} [params.children=0] - Number of child travelers
+   * @param {Object} [params.searchCriteria] - Optional search criteria for filtering
+   * @param {string} [params.searchCriteria.cabin] - Cabin class filter (ECONOMY, PREMIUM_ECONOMY, BUSINESS, FIRST)
+   * @param {string[]} [params.searchCriteria.carrierCodes] - Carrier code filters
+   * @returns {Promise<Object>} - Flight availabilities
+   */
   async getFlightAvailabilities(params) {
     try {
       const token = await this.getAccessToken();
 
       console.log(`🎫 Searching flight availabilities: ${params.origin} → ${params.destination}`);
 
+      // Build travelers array dynamically
+      const travelers = [];
+      const adultCount = parseInt(params.adults) || 1;
+      const childCount = parseInt(params.children) || 0;
+
+      for (let i = 1; i <= adultCount; i++) {
+        travelers.push({ id: `${i}`, travelerType: 'ADULT' });
+      }
+      for (let i = 1; i <= childCount; i++) {
+        travelers.push({ id: `${adultCount + i}`, travelerType: 'CHILD' });
+      }
+
+      // Build origin-destinations — allow full array override for multi-city
+      const originDestinations = params.originDestinations || [{
+        id: '1',
+        originLocationCode: params.origin,
+        destinationLocationCode: params.destination,
+        departureDateTime: { date: params.departureDate }
+      }];
+
       const requestBody = {
-        originDestinations: [{
-          id: '1',
-          originLocationCode: params.origin,
-          destinationLocationCode: params.destination,
-          departureDateTime: { date: params.departureDate }
-        }],
-        travelers: [{ id: '1', travelerType: 'ADULT' }],
-        sources: ['GDS']
+        originDestinations,
+        travelers,
+        sources: params.sources || ['GDS']
       };
+
+      // Add optional search criteria (cabin, carrier, connections)
+      if (params.searchCriteria) {
+        requestBody.searchCriteria = params.searchCriteria;
+      }
 
       const response = await axios.post(
         `${this.baseUrls.v1}/shopping/availability/flight-availabilities`,

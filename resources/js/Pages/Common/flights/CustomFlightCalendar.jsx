@@ -33,9 +33,12 @@ export default function CustomFlightCalendar({
 
     // Fetch prices for visibility range
     useEffect(() => {
-        const fetchPrices = async () => {
-            if (!originCode || !destinationCode) return;
+        if (!originCode || !destinationCode) return;
 
+        const abortController = new AbortController();
+        let cancelled = false;
+
+        const fetchPrices = async () => {
             setLoading(true);
             console.log(`[Calendar] Fetching prices for ${originCode} -> ${destinationCode}...`);
             try {
@@ -45,6 +48,8 @@ export default function CustomFlightCalendar({
                     destinationCode,
                     { viewBy: 'DATE' }
                 );
+
+                if (cancelled) return;
 
                 if (data && data.length > 0) {
                     console.log(`[Calendar] Received ${data.length} price points from cheapest-dates API`);
@@ -64,14 +69,14 @@ export default function CustomFlightCalendar({
                 const m1Start = startOfMonth(currentMonth);
                 const m2End = endOfMonth(nextMonth);
 
-                // Sample ~4 dates spread across both months
+                // Sample ~5 dates spread across both months
                 const sampleDates = [];
                 let d = isBefore(m1Start, today) ? today : m1Start;
                 while (isBefore(d, m2End) || format(d, 'yyyy-MM-dd') === format(m2End, 'yyyy-MM-dd')) {
                     sampleDates.push(format(d, 'yyyy-MM-dd'));
-                    d = addDays(d, 7); // Every 7 days = ~8 samples for 2 months
+                    d = addDays(d, 7);
                 }
-                const datesToFetch = sampleDates.slice(0, 5); // Limit to 5 samples
+                const datesToFetch = sampleDates.slice(0, 5);
 
                 const response = await fetch(`${baseUrl}/flights/calendar-prices`, {
                     method: 'POST',
@@ -80,13 +85,15 @@ export default function CustomFlightCalendar({
                         origin: originCode,
                         destination: destinationCode,
                         dates: datesToFetch
-                    })
+                    }),
+                    signal: abortController.signal
                 });
+
+                if (cancelled) return;
 
                 if (response.ok) {
                     const result = await response.json();
                     if (result.success && result.prices && Object.keys(result.prices).length > 0) {
-                        // Interpolate prices for dates between samples
                         const fetchedPrices = result.prices;
                         const sortedDates = Object.keys(fetchedPrices).sort();
                         if (sortedDates.length >= 2) {
@@ -109,13 +116,20 @@ export default function CustomFlightCalendar({
                     }
                 }
             } catch (err) {
-                console.warn('Failed to fetch calendar prices:', err);
+                if (err.name !== 'AbortError') {
+                    console.warn('Failed to fetch calendar prices:', err);
+                }
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
 
         fetchPrices();
+
+        return () => {
+            cancelled = true;
+            abortController.abort();
+        };
     }, [originCode, destinationCode, currentMonth]);
 
     // Drag handlers
