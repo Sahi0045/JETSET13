@@ -4,6 +4,53 @@ import AmadeusService from '../services/amadeusService.js';
 const router = express.Router();
 
 /**
+ * @route GET /api/airports/search
+ * @desc Search for airports and cities by keyword (GET for frontend compatibility)
+ * @access Public
+ */
+router.get('/search', async (req, res) => {
+    try {
+        const { keyword, subType, countryCode, limit } = req.query;
+
+        if (!keyword || keyword.length < 1) {
+            return res.status(400).json({
+                success: false,
+                error: 'Keyword is required'
+            });
+        }
+
+        const type = subType || 'CITY,AIRPORT';
+        const options = {
+            limit: parseInt(limit) || 10,
+            countryCode: countryCode || undefined
+        };
+
+        console.log(`✈️ Airport search (GET): "${keyword}" (${type})`);
+
+        const result = await AmadeusService.searchLocations(keyword, type, options);
+
+        if (result.success) {
+            return res.json({
+                success: true,
+                data: result.data,
+                meta: result.meta
+            });
+        } else {
+            return res.status(500).json({
+                success: false,
+                error: result.error || 'Failed to search locations'
+            });
+        }
+    } catch (error) {
+        console.error('❌ Error in airport search route:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Internal server error'
+        });
+    }
+});
+
+/**
  * @route POST /api/airports/search
  * @desc Search for airports and cities by keyword
  * @access Public

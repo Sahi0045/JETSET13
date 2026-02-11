@@ -224,39 +224,10 @@ function FlightSearchPage() {
     }
   }, [location.state]);
 
-  // Airline code to name mapping
-  const airlineMap = {
-    // Full-service carriers
-    'AI': 'Air India',
-    'IX': 'Air India Express',
-    'UK': 'Vistara',
-    // Low-cost carriers
-    '6E': 'IndiGo',
-    'SG': 'SpiceJet',
-    'G8': 'Go First',
-    'I5': 'AirAsia India',
-    'QP': 'Akasa Air',
-    // International airlines
-    'EK': 'Emirates',
-    'EY': 'Etihad Airways',
-    'QR': 'Qatar Airways',
-    'SQ': 'Singapore Airlines',
-    'TG': 'Thai Airways',
-    'MH': 'Malaysia Airlines',
-    'BA': 'British Airways',
-    'LH': 'Lufthansa',
-    'AF': 'Air France',
-    'KL': 'KLM Royal Dutch',
-    'DL': 'Delta Air Lines',
-    'AA': 'American Airlines',
-    'UA': 'United Airlines',
-    'CX': 'Cathay Pacific',
-    'QF': 'Qantas',
-    'JL': 'Japan Airlines',
-    'NH': 'ANA',
-    'KE': 'Korean Air',
-    'OZ': 'Asiana Airlines'
-  };
+  // Dynamic airline names - populated from Amadeus API responses (no hardcoding)
+  // The backend transform already resolves airline codes to names using Amadeus dictionaries.carriers
+  // This map is only used as a fallback cache and gets populated dynamically from search results
+  const [dynamicAirlineMap, setDynamicAirlineMap] = useState({});
 
   // City code to name mapping - Generated from comprehensive airports database
   const cityMap = allAirports.reduce((acc, airport) => {
@@ -275,28 +246,9 @@ function FlightSearchPage() {
   // No static mappings needed
 
 
-  // Aircraft code to name mapping
-  const aircraftMap = {
-    // Narrow-body aircraft
-    '320': 'Airbus A320',
-    '321': 'Airbus A321',
-    '32N': 'Airbus A320neo',
-    '32Q': 'Airbus A321neo',
-    '738': 'Boeing 737-800',
-    '739': 'Boeing 737-900',
-    '7M8': 'Boeing 737 MAX 8',
-    // Wide-body aircraft
-    '788': 'Boeing 787-8 Dreamliner',
-    '789': 'Boeing 787-9 Dreamliner',
-    '77W': 'Boeing 777-300ER',
-    '359': 'Airbus A350-900',
-    '351': 'Airbus A350-1000',
-    // Regional aircraft
-    'AT7': 'ATR 72',
-    'AT4': 'ATR 42',
-    'E90': 'Embraer E190',
-    'E95': 'Embraer E195'
-  };
+  // Dynamic aircraft names - populated from Amadeus API responses (no hardcoding)
+  // The backend transform already resolves aircraft codes to names using Amadeus dictionaries.aircraft
+  const [dynamicAircraftMap, setDynamicAircraftMap] = useState({});
 
   // Transform Amadeus API flight data to our format
   const transformFlightData = (data) => {
@@ -305,32 +257,38 @@ function FlightSearchPage() {
     return data.map(flight => {
       // Check if this is our API format (simple) or Amadeus format (complex)
       if (flight.itineraries) {
-        // Handle Amadeus API format (existing logic)
+        // Handle raw Amadeus API format (rarely used - backend normally transforms)
         const itinerary = flight.itineraries[0];
         const segments = itinerary.segments;
         const firstSegment = segments[0];
         const lastSegment = segments[segments.length - 1];
         const price = flight.price;
+        const travelerPricing = flight.travelerPricings?.[0];
+        const fareDetails = travelerPricing?.fareDetailsBySegment?.[0];
+
+        // Build dynamic maps from this flight's data
+        const carrierCode = firstSegment.carrierCode;
+        const airlineName = dynamicAirlineMap[carrierCode] || carrierCode;
 
         return {
           id: flight.id,
           airline: {
-            code: firstSegment.carrierCode,
-            name: airlineMap[firstSegment.carrierCode] || firstSegment.carrierCode,
-            logo: `https://pics.avs.io/200/200/${firstSegment.carrierCode.toUpperCase()}.png`
+            code: carrierCode,
+            name: airlineName,
+            logo: `https://pics.avs.io/200/200/${carrierCode.toUpperCase()}.png`
           },
           departure: {
             time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             date: new Date(firstSegment.departure.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
             airport: firstSegment.departure.iataCode,
-            terminal: firstSegment.departure.terminal || 'T1',
+            terminal: firstSegment.departure.terminal || '',
             cityName: cityMap[firstSegment.departure.iataCode] || firstSegment.departure.iataCode
           },
           arrival: {
             time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             date: new Date(lastSegment.arrival.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
             airport: lastSegment.arrival.iataCode,
-            terminal: lastSegment.arrival.terminal || 'T1',
+            terminal: lastSegment.arrival.terminal || '',
             cityName: cityMap[lastSegment.arrival.iataCode] || lastSegment.arrival.iataCode
           },
           duration: itinerary.duration,
@@ -339,39 +297,50 @@ function FlightSearchPage() {
             amount: parseFloat(price.total),
             total: price.total,
             currency: price.currency || 'USD',
-            base: price.base,
-            fees: price.fees
+            base: price.base || '0',
+            grandTotal: price.grandTotal || price.total,
+            fees: price.fees || []
           },
-          amenities: flight.travelerPricings[0].fareDetailsBySegment[0].amenities || [],
+          amenities: fareDetails?.amenities || [],
           baggage: {
-            checked: flight.travelerPricings[0].fareDetailsBySegment[0].includedCheckedBags || { weight: 0, weightUnit: 'KG' },
-            cabin: flight.travelerPricings[0].fareDetailsBySegment[0].includedCabinBags || { weight: 0, weightUnit: 'KG' }
+            checked: fareDetails?.includedCheckedBags || { weight: 0, weightUnit: 'KG' },
+            cabin: fareDetails?.includedCabinBags || { weight: 0, weightUnit: 'KG' }
           },
-          cabin: flight.travelerPricings[0].fareDetailsBySegment[0].cabin || 'ECONOMY',
-          class: flight.travelerPricings[0].fareDetailsBySegment[0].class || 'ECONOMY',
+          cabin: fareDetails?.cabin || 'ECONOMY',
+          class: fareDetails?.class || 'ECONOMY',
+          brandedFare: fareDetails?.brandedFare || null,
+          brandedFareLabel: fareDetails?.brandedFareLabel || null,
+          operatingCarrier: firstSegment.operating?.carrierCode || null,
+          operatingAirlineName: firstSegment.operating?.carrierCode ? (dynamicAirlineMap[firstSegment.operating.carrierCode] || firstSegment.operating.carrierCode) : null,
+          lastTicketingDate: flight.lastTicketingDate || null,
+          numberOfBookableSeats: flight.numberOfBookableSeats || null,
+          isUpsellOffer: flight.isUpsellOffer || false,
+          refundable: travelerPricing?.price?.refundableTaxes ? true : false,
           segments: segments.map(segment => ({
             departure: {
               time: new Date(segment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
               airport: segment.departure.iataCode,
-              terminal: segment.departure.terminal || 'T1',
+              terminal: segment.departure.terminal || '',
               cityName: cityMap[segment.departure.iataCode] || segment.departure.iataCode,
               at: segment.departure.at
             },
             arrival: {
               time: new Date(segment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
               airport: segment.arrival.iataCode,
-              terminal: segment.arrival.terminal || 'T1',
+              terminal: segment.arrival.terminal || '',
               cityName: cityMap[segment.arrival.iataCode] || segment.arrival.iataCode,
               at: segment.arrival.at
             },
             airline: {
               code: segment.carrierCode,
-              name: airlineMap[segment.carrierCode] || segment.carrierCode,
+              name: dynamicAirlineMap[segment.carrierCode] || segment.carrierCode,
               logo: `https://pics.avs.io/200/200/${segment.carrierCode.toUpperCase()}.png`
             },
+            operatingCarrier: segment.operating?.carrierCode || null,
+            operatingAirlineName: segment.operating?.carrierCode ? (dynamicAirlineMap[segment.operating.carrierCode] || segment.operating.carrierCode) : null,
             duration: segment.duration,
             flightNumber: `${segment.carrierCode} ${segment.number}`,
-            aircraft: aircraftMap[segment.aircraft?.code] || segment.aircraft?.code || 'Unknown Aircraft',
+            aircraft: dynamicAircraftMap[segment.aircraft?.code] || segment.aircraft?.code || 'Unknown Aircraft',
             stops: 0
           })),
           // IMPORTANT: Preserve original Amadeus offer for booking API
@@ -390,14 +359,14 @@ function FlightSearchPage() {
             time: flight.departure.time,
             date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
             airport: flight.departure.airport,
-            terminal: flight.departure.terminal || 'T1',
+            terminal: flight.departure.terminal || '',
             cityName: cityMap[flight.departure.airport] || flight.departure.airport
           },
           arrival: {
             time: flight.arrival.time,
             date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
             airport: flight.arrival.airport,
-            terminal: flight.arrival.terminal || 'T1',
+            terminal: flight.arrival.terminal || '',
             cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
           },
           duration: flight.duration,
@@ -405,7 +374,10 @@ function FlightSearchPage() {
           price: {
             amount: flight.price.amount,
             total: flight.price.total,
-            currency: flight.price.currency || 'USD'
+            currency: flight.price.currency || 'USD',
+            base: flight.price.base || '0',
+            grandTotal: flight.price.grandTotal || flight.price.total,
+            fees: flight.price.fees || []
           },
           amenities: [],
           baggage: {
@@ -414,23 +386,30 @@ function FlightSearchPage() {
           },
           cabin: flight.cabin || 'ECONOMY',
           class: flight.cabin || 'ECONOMY',
+          brandedFare: flight.brandedFare || null,
+          brandedFareLabel: flight.brandedFareLabel || null,
+          operatingCarrier: flight.operatingCarrier || null,
+          operatingAirlineName: flight.operatingAirlineName || null,
+          lastTicketingDate: flight.lastTicketingDate || null,
+          numberOfBookableSeats: flight.numberOfBookableSeats || null,
+          isUpsellOffer: flight.isUpsellOffer || false,
           aircraft: flight.aircraft || 'Unknown',
           flightNumber: flight.flightNumber,
           refundable: flight.refundable || false,
-          seats: flight.seats || 'Available',
-          stopDetails: flight.stopDetails || [], // Preserve stop details from API
+          seats: flight.numberOfBookableSeats || flight.seats || 'Available',
+          stopDetails: flight.stopDetails || [],
           segments: [{
             departure: {
               time: flight.departure.time,
               airport: flight.departure.airport,
-              terminal: flight.departure.terminal || 'T1',
+              terminal: flight.departure.terminal || '',
               cityName: cityMap[flight.departure.airport] || flight.departure.airport,
               at: `${flight.departure.date}T${flight.departure.time}:00`
             },
             arrival: {
               time: flight.arrival.time,
               airport: flight.arrival.airport,
-              terminal: flight.arrival.terminal || 'T1',
+              terminal: flight.arrival.terminal || '',
               cityName: cityMap[flight.arrival.airport] || flight.arrival.airport,
               at: `${flight.arrival.date}T${flight.arrival.time}:00`
             },
@@ -439,6 +418,8 @@ function FlightSearchPage() {
               name: flight.airline,
               logo: `https://pics.avs.io/200/200/${flight.airlineCode?.toUpperCase()}.png`
             },
+            operatingCarrier: flight.operatingCarrier || null,
+            operatingAirlineName: flight.operatingAirlineName || null,
             duration: flight.duration,
             flightNumber: flight.flightNumber,
             aircraft: flight.aircraft || 'Unknown Aircraft',
@@ -460,14 +441,14 @@ function FlightSearchPage() {
             time: flight.departure.time,
             date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
             airport: flight.departure.airport,
-            terminal: flight.departure.terminal || 'T1',
+            terminal: flight.departure.terminal || '',
             cityName: cityMap[flight.departure.airport] || flight.departure.airport
           },
           arrival: {
             time: flight.arrival.time,
             date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
             airport: flight.arrival.airport,
-            terminal: flight.arrival.terminal || 'T1',
+            terminal: flight.arrival.terminal || '',
             cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
           },
           duration: flight.duration,
@@ -475,7 +456,10 @@ function FlightSearchPage() {
           price: {
             amount: flight.price.amount,
             total: flight.price.total,
-            currency: flight.price.currency || currencyService.getCurrency()
+            currency: flight.price.currency || currencyService.getCurrency(),
+            base: flight.price.base || '0',
+            grandTotal: flight.price.grandTotal || flight.price.total,
+            fees: flight.price.fees || []
           },
           amenities: [],
           baggage: {
@@ -484,23 +468,30 @@ function FlightSearchPage() {
           },
           cabin: flight.cabin || 'Economy',
           class: flight.cabin || 'Economy',
+          brandedFare: flight.brandedFare || null,
+          brandedFareLabel: flight.brandedFareLabel || null,
+          operatingCarrier: flight.operatingCarrier || null,
+          operatingAirlineName: flight.operatingAirlineName || null,
+          lastTicketingDate: flight.lastTicketingDate || null,
+          numberOfBookableSeats: flight.numberOfBookableSeats || null,
+          isUpsellOffer: flight.isUpsellOffer || false,
           aircraft: flight.aircraft || 'Unknown',
           flightNumber: flight.flightNumber,
           refundable: flight.refundable || false,
-          seats: flight.seats || 0,
-          stopDetails: flight.stopDetails || [], // Preserve stop details from API
+          seats: flight.numberOfBookableSeats || flight.seats || 0,
+          stopDetails: flight.stopDetails || [],
           segments: [{
             departure: {
               time: flight.departure.time,
               airport: flight.departure.airport,
-              terminal: flight.departure.terminal || 'T1',
+              terminal: flight.departure.terminal || '',
               cityName: cityMap[flight.departure.airport] || flight.departure.airport,
               at: `${flight.departure.date}T${flight.departure.time}:00`
             },
             arrival: {
               time: flight.arrival.time,
               airport: flight.arrival.airport,
-              terminal: flight.arrival.terminal || 'T1',
+              terminal: flight.arrival.terminal || '',
               cityName: cityMap[flight.arrival.airport] || flight.arrival.airport,
               at: `${flight.arrival.date}T${flight.arrival.time}:00`
             },
@@ -509,6 +500,8 @@ function FlightSearchPage() {
               name: flight.airline,
               logo: `/images/airlines/${flight.airlineCode.toLowerCase()}.png`
             },
+            operatingCarrier: flight.operatingCarrier || null,
+            operatingAirlineName: flight.operatingAirlineName || null,
             duration: flight.duration,
             flightNumber: flight.flightNumber,
             aircraft: flight.aircraft || 'Unknown Aircraft',
@@ -617,11 +610,15 @@ function FlightSearchPage() {
         to: formData.to,
         departDate: formData.departDate,
         returnDate: formData.returnDate,
-        travelers: parseInt(formData.travelers) || 1,
+        adults: parseInt(formData.adults) || parseInt(formData.travelers) || 1,
+        children: parseInt(formData.children) || 0,
+        infants: parseInt(formData.infants) || 0,
         travelClass: formData.travelClass || 'ECONOMY',
-        max: 10,
-        maxPrice: filters.price[1],
-        nonStop: filters.stops === '0', // If stops filter says 0 (Direct), pass nonStop=true
+        max: 50,
+        maxPrice: formData.maxPrice || (filters.price[1] < 50000 ? filters.price[1] : undefined),
+        nonStop: filters.stops === '0',
+        includedAirlineCodes: formData.includedAirlineCodes || undefined,
+        excludedAirlineCodes: formData.excludedAirlineCodes || undefined,
       };
 
       // Remove returnDate if it's empty
@@ -651,6 +648,21 @@ function FlightSearchPage() {
 
       const flightData = transformFlightData(data.data);
       setFlights(flightData);
+
+      // Build dynamic airline map from search results for future reference
+      const newAirlineMap = { ...dynamicAirlineMap };
+      const newAircraftMap = { ...dynamicAircraftMap };
+      flightData.forEach(f => {
+        if (f.airline?.code && f.airline?.name) newAirlineMap[f.airline.code] = f.airline.name;
+        if (f.operatingCarrier && f.operatingAirlineName) newAirlineMap[f.operatingCarrier] = f.operatingAirlineName;
+        if (f.segments) {
+          f.segments.forEach(s => {
+            if (s.airline?.code && s.airline?.name) newAirlineMap[s.airline.code] = s.airline.name;
+          });
+        }
+      });
+      setDynamicAirlineMap(newAirlineMap);
+      setDynamicAircraftMap(newAircraftMap);
 
       // Update prices in the date range if available
       if (data.data?.dateWisePrices) {
@@ -890,10 +902,15 @@ function FlightSearchPage() {
     handleFilterChange('airlines', updatedAirlines);
   };
 
-  // Get all airlines for filtering
+  // Get all airlines for filtering - dynamically from current search results
   const getAllAirlines = () => {
-    // Return all airlines from the airlineMap
-    return Object.values(airlineMap).sort();
+    if (!flights || flights.length === 0) return [];
+    const airlineNames = new Set();
+    flights.forEach(f => {
+      const name = f.airline?.name || f.airline;
+      if (name) airlineNames.add(name);
+    });
+    return [...airlineNames].sort();
   };
 
   // Handle booking a flight
@@ -2157,11 +2174,22 @@ function FlightSearchPage() {
                               </div>
                               <div>
                                 <h3 className="font-bold text-gray-900 text-lg">{flight.airline?.name || 'Unknown Airline'}</h3>
-                                <div className="text-sm text-gray-500 flex items-center">
+                                <div className="text-sm text-gray-500 flex items-center flex-wrap gap-x-2">
                                   <span className="font-medium text-[#055B75]">{flight.segments?.[0]?.flightNumber || 'N/A'}</span>
-                                  <span className="mx-2">•</span>
-                                  <span>{flight.segments?.[0]?.aircraft || 'Unknown Aircraft'}</span>
+                                  <span className="mx-1">•</span>
+                                  <span>{flight.segments?.[0]?.aircraft || flight.aircraft || 'Unknown Aircraft'}</span>
+                                  {flight.operatingCarrier && flight.operatingCarrier !== flight.airline?.code && (
+                                    <>
+                                      <span className="mx-1">•</span>
+                                      <span className="text-xs text-orange-600">Operated by {flight.operatingAirlineName || flight.operatingCarrier}</span>
+                                    </>
+                                  )}
                                 </div>
+                                {flight.brandedFare && (
+                                  <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded font-medium">
+                                    {flight.brandedFareLabel || flight.brandedFare}
+                                  </span>
+                                )}
                               </div>
                             </div>
 
@@ -2170,9 +2198,6 @@ function FlightSearchPage() {
                               <div className="text-right mb-3">
                                 <div className="text-3xl font-bold text-[#055B75] flex items-center">
                                   <Price amount={flight.price} showCode={true} />
-                                  {Math.random() > 0.7 && (
-                                    <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-bold">DEAL</span>
-                                  )}
                                 </div>
                                 <div className="text-xs text-gray-500">per passenger</div>
                               </div>
@@ -2226,6 +2251,16 @@ function FlightSearchPage() {
                               <div className="text-xs mt-1">
                                 {flight.baggage?.checked?.weight ? `${flight.baggage.checked.weight}${flight.baggage.checked.weightUnit}` : 'No checked baggage'}
                               </div>
+                              {flight.numberOfBookableSeats && flight.numberOfBookableSeats <= 9 && (
+                                <div className="text-xs mt-1 text-red-600 font-medium">
+                                  Only {flight.numberOfBookableSeats} seat{flight.numberOfBookableSeats > 1 ? 's' : ''} left
+                                </div>
+                              )}
+                              {flight.lastTicketingDate && (
+                                <div className="text-xs mt-0.5 text-gray-400">
+                                  Book by {new Date(flight.lastTicketingDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>

@@ -87,30 +87,53 @@ class AmadeusService {
 
       console.log('🔍 Searching flights with params:', params);
 
-      // Prepare search parameters for Amadeus API
-      const searchParams = {
-        originLocationCode: params.from || params.originLocationCode,
-        destinationLocationCode: params.to || params.destinationLocationCode,
-        departureDate: params.departDate || params.departureDate,
-        adults: parseInt(params.travelers || params.adults) || 1,
-        max: parseInt(params.max) || 10,
-        currencyCode: params.currency || 'USD'
-      };
+    // Prepare search parameters for Amadeus API
+    const searchParams = {
+      originLocationCode: params.from || params.originLocationCode,
+      destinationLocationCode: params.to || params.destinationLocationCode,
+      departureDate: params.departDate || params.departureDate,
+      adults: parseInt(params.adults || params.travelers) || 1,
+      max: parseInt(params.max) || 10,
+      currencyCode: params.currency || 'USD'
+    };
 
-      // Add return date for round trip
-      if (params.returnDate && params.returnDate.trim() !== '') {
-        searchParams.returnDate = params.returnDate;
-      }
+    // Add children count if specified
+    if (params.children && parseInt(params.children) > 0) {
+      searchParams.children = parseInt(params.children);
+    }
 
-      // Add cabin class if specified
-      if (params.travelClass) {
-        searchParams.travelClass = params.travelClass;
-      }
+    // Add infants count if specified
+    if (params.infants && parseInt(params.infants) > 0) {
+      searchParams.infants = parseInt(params.infants);
+    }
 
-      // Add nonStop setting if specified
-      if (params.nonStop !== undefined) {
-        searchParams.nonStop = params.nonStop;
-      }
+    // Add return date for round trip
+    if (params.returnDate && params.returnDate.trim() !== '') {
+      searchParams.returnDate = params.returnDate;
+    }
+
+    // Add cabin class if specified
+    if (params.travelClass) {
+      searchParams.travelClass = params.travelClass;
+    }
+
+    // Add nonStop setting if specified
+    if (params.nonStop !== undefined) {
+      searchParams.nonStop = params.nonStop;
+    }
+
+    // Add maxPrice filter if specified
+    if (params.maxPrice && parseFloat(params.maxPrice) > 0) {
+      searchParams.maxPrice = parseFloat(params.maxPrice);
+    }
+
+    // Add airline code filters if specified
+    if (params.includedAirlineCodes) {
+      searchParams.includedAirlineCodes = params.includedAirlineCodes;
+    }
+    if (params.excludedAirlineCodes) {
+      searchParams.excludedAirlineCodes = params.excludedAirlineCodes;
+    }
 
       console.log('Amadeus flight search parameters:', searchParams);
 
@@ -846,14 +869,116 @@ class AmadeusService {
     }
   }
 
-  /**
-   * Get default period for analytics (previous month)
-   */
-  getDefaultPeriod() {
-    const now = new Date();
-    now.setMonth(now.getMonth() - 1);
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  }
+    /**
+     * Search for flight inspiration (cheapest destinations from an origin)
+     * @see https://developers.amadeus.com/self-service/category/flights/api-doc/flight-inspiration-search
+     * @param {string} origin - IATA code of origin
+     * @param {Object} options - Optional params
+     * @returns {Promise<Object>} - Cheapest destination offers
+     */
+    async getFlightInspirations(origin, options = {}) {
+      try {
+        const token = await this.getAccessToken();
+
+        console.log(`💡 Flight inspiration search from ${origin}`);
+
+        const params = {
+          origin: origin,
+          ...(options.departureDate && { departureDate: options.departureDate }),
+          ...(options.oneWay !== undefined && { oneWay: options.oneWay }),
+          ...(options.duration && { duration: options.duration }),
+          ...(options.nonStop !== undefined && { nonStop: options.nonStop }),
+          ...(options.maxPrice && { maxPrice: options.maxPrice }),
+          ...(options.viewBy && { viewBy: options.viewBy }),
+          ...(options.destination && { destination: options.destination })
+        };
+
+        const response = await axios.get(`${this.baseUrls.v1}/shopping/flight-destinations`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          params: params,
+          timeout: 10000
+        });
+
+        const destinations = response.data.data || [];
+        console.log(`✅ Found ${destinations.length} inspiration destinations`);
+
+        return {
+          success: true,
+          data: destinations.map(d => ({
+            destination: d.destination,
+            departureDate: d.departureDate,
+            returnDate: d.returnDate,
+            price: {
+              total: d.price?.total,
+              currency: response.data.dictionaries?.currencies
+                ? Object.keys(response.data.dictionaries.currencies)[0] : 'USD'
+            },
+            links: d.links
+          })),
+          dictionaries: response.data.dictionaries,
+          meta: response.data.meta
+        };
+
+      } catch (error) {
+        console.error('❌ Flight inspiration search error:', error.response?.data || error.message);
+        return { success: false, error: error.response?.data?.errors?.[0]?.detail || error.message, data: [] };
+      }
+    }
+
+    /**
+     * Get flight price analysis (price metrics for an itinerary)
+     * @see https://developers.amadeus.com/self-service/category/flights/api-doc/flight-price-analysis
+     * @param {string} originIataCode - Origin IATA code
+     * @param {string} destinationIataCode - Destination IATA code
+     * @param {string} departureDate - Departure date (YYYY-MM-DD)
+     * @param {Object} options - Optional params
+     * @returns {Promise<Object>} - Price metrics
+     */
+    async getFlightPriceAnalysis(originIataCode, destinationIataCode, departureDate, options = {}) {
+      try {
+        const token = await this.getAccessToken();
+
+        console.log(`📊 Price analysis: ${originIataCode} → ${destinationIataCode} on ${departureDate}`);
+
+        const params = {
+          originIataCode,
+          destinationIataCode,
+          departureDate,
+          currencyCode: options.currencyCode || 'USD',
+          ...(options.oneWay !== undefined && { oneWay: options.oneWay })
+        };
+
+        const response = await axios.get(`${this.baseUrls.v1}/analytics/itinerary-price-metrics`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          params: params,
+          timeout: 10000
+        });
+
+        const metrics = response.data.data || [];
+        console.log(`✅ Found ${metrics.length} price metric entries`);
+
+        return {
+          success: true,
+          data: metrics,
+          meta: response.data.meta
+        };
+
+      } catch (error) {
+        console.error('❌ Flight price analysis error:', error.response?.data || error.message);
+        return { success: false, error: error.response?.data?.errors?.[0]?.detail || error.message, data: [] };
+      }
+    }
+
+    /**
+     * Get default period for analytics — use a historical period that has data in test env
+     */
+    getDefaultPeriod() {
+      // Test environment only has data for past periods
+      // Use 6 months ago to ensure data availability
+      const now = new Date();
+      now.setMonth(now.getMonth() - 6);
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
 
   // Filter out test properties and prioritize real hotels
   prioritizeHotels(hotels, limit = 20) {

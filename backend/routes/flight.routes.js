@@ -238,52 +238,66 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
       }
 
       // Get pricing info
-      const price = {
-        total: flight.price?.total || '0',
-        amount: parseFloat(flight.price?.total || 0),
-        currency: flight.price?.currency || 'USD'
-      };
+        const price = {
+          total: flight.price?.total || '0',
+          amount: parseFloat(flight.price?.total || 0),
+          currency: flight.price?.currency || 'USD',
+          base: flight.price?.base || '0',
+          grandTotal: flight.price?.grandTotal || flight.price?.total || '0',
+          fees: flight.price?.fees || []
+        };
 
-      // Get traveler pricing for cabin class
-      const travelerPricing = flight.travelerPricings?.[0];
-      const fareDetails = travelerPricing?.fareDetailsBySegment?.[0];
+        // Get traveler pricing for cabin class
+        const travelerPricing = flight.travelerPricings?.[0];
+        const fareDetails = travelerPricing?.fareDetailsBySegment?.[0];
 
-      if (index === 0) {
-        console.log('DEBUG: First flight travelerPricing:', JSON.stringify(travelerPricing, null, 2));
-      }
+        if (index === 0) {
+          console.log('DEBUG: First flight travelerPricing:', JSON.stringify(travelerPricing, null, 2));
+        }
 
-      // Check all segments to find the highest cabin class
+        // Check all segments to find the highest cabin class
+        const allCabins = travelerPricing?.fareDetailsBySegment?.map(f => f.cabin) || [];
+        const cabinPriority = { 'FIRST': 4, 'BUSINESS': 3, 'PREMIUM_ECONOMY': 2, 'ECONOMY': 1 };
 
-      // Check all segments to find the highest cabin class
-      // Some itineraries (mixed cabin) might start with Economy but main leg is Business.
-      // We should show the "best" cabin available in the itinerary.
-      const allCabins = travelerPricing?.fareDetailsBySegment?.map(f => f.cabin) || [];
-      const cabinPriority = { 'FIRST': 4, 'BUSINESS': 3, 'PREMIUM_ECONOMY': 2, 'ECONOMY': 1 };
+        const cabin = allCabins.reduce((prev, current) => {
+          return (cabinPriority[current] || 0) > (cabinPriority[prev] || 0) ? current : prev;
+        }, 'ECONOMY');
 
-      const cabin = allCabins.reduce((prev, current) => {
-        return (cabinPriority[current] || 0) > (cabinPriority[prev] || 0) ? current : prev;
-      }, 'ECONOMY');
+        // Extract branded fare info
+        const brandedFare = fareDetails?.brandedFare || null;
+        const brandedFareLabel = fareDetails?.brandedFareLabel || null;
 
-      return {
-        id: flight.id,
-        airline: airlineName,
-        airlineCode: carrierCode,
-        flightNumber: `${carrierCode}-${firstSegment.number}`,
-        price: price,
-        duration: totalDuration,
-        departure: departure,
-        arrival: arrival,
-        stops: stops,
-        stopDetails: stopDetails,
-        aircraft: aircraft[firstSegment.aircraft?.code] || firstSegment.aircraft?.code || 'Unknown',
-        cabin: cabin,
-        baggage: fareDetails?.includedCheckedBags?.weight
-          ? `${fareDetails.includedCheckedBags.weight}${fareDetails.includedCheckedBags.weightUnit || 'kg'}`
-          : '23kg',
-        refundable: travelerPricing?.price?.refundableTaxes ? true : false,
-        seats: 'Available',
-        originalOffer: flight // Keep original for booking
-      };
+        // Extract operating carrier (codeshare info)
+        const operatingCarrier = firstSegment.operating?.carrierCode || null;
+        const operatingAirlineName = operatingCarrier ? (airlines[operatingCarrier] || operatingCarrier) : null;
+
+        return {
+          id: flight.id,
+          airline: airlineName,
+          airlineCode: carrierCode,
+          flightNumber: `${carrierCode}-${firstSegment.number}`,
+          price: price,
+          duration: totalDuration,
+          departure: departure,
+          arrival: arrival,
+          stops: stops,
+          stopDetails: stopDetails,
+          aircraft: aircraft[firstSegment.aircraft?.code] || firstSegment.aircraft?.code || 'Unknown',
+          cabin: cabin,
+          brandedFare: brandedFare,
+          brandedFareLabel: brandedFareLabel,
+          operatingCarrier: operatingCarrier,
+          operatingAirlineName: operatingAirlineName,
+          lastTicketingDate: flight.lastTicketingDate || null,
+          numberOfBookableSeats: flight.numberOfBookableSeats || null,
+          baggage: fareDetails?.includedCheckedBags?.weight
+            ? `${fareDetails.includedCheckedBags.weight}${fareDetails.includedCheckedBags.weightUnit || 'kg'}`
+            : '23kg',
+          refundable: travelerPricing?.price?.refundableTaxes ? true : false,
+          seats: flight.numberOfBookableSeats || 'Available',
+          isUpsellOffer: flight.isUpsellOffer || false,
+          originalOffer: flight // Keep original for booking
+        };
     } catch (error) {
       console.error('Error transforming flight offer:', error);
       return null;
@@ -329,18 +343,21 @@ router.post('/search', async (req, res) => {
     console.log(`📍 Resolved locations: from="${from}" -> "${resolvedFrom}", to="${to}" -> "${resolvedTo}"`);
 
     // Prepare search parameters
-    const searchParams = {
-      from: resolvedFrom,
-      to: resolvedTo,
-      departDate,
-      returnDate: returnDate && returnDate.trim() !== '' ? returnDate : undefined,
-      travelers: parseInt(travelers) || 1,
-      travelers: parseInt(travelers) || 1,
-      max: 50, // Increased to 50 to ensure we get a wider variety of flights (including 2+ stops)
-      travelClass: req.body.travelClass, // Add travelClass (ECONOMY, BUSINESS, etc)
-      nonStop: req.body.nonStop === 'true' || req.body.nonStop === true, // Add nonStop filter
-      maxPrice: req.body.maxPrice // Add maxPrice filter
-    };
+      const searchParams = {
+        from: resolvedFrom,
+        to: resolvedTo,
+        departDate,
+        returnDate: returnDate && returnDate.trim() !== '' ? returnDate : undefined,
+        adults: parseInt(req.body.adults || travelers) || 1,
+        children: parseInt(req.body.children) || 0,
+        infants: parseInt(req.body.infants) || 0,
+        max: 50,
+        travelClass: req.body.travelClass,
+        nonStop: req.body.nonStop === 'true' || req.body.nonStop === true,
+        maxPrice: req.body.maxPrice,
+        includedAirlineCodes: req.body.includedAirlineCodes,
+        excludedAirlineCodes: req.body.excludedAirlineCodes
+      };
 
     console.log('Searching flights with params:', searchParams);
 
@@ -594,29 +611,81 @@ router.post('/order', async (req, res) => {
     // Prepare flight order data for Amadeus (only if we have valid Amadeus format)
     // The travelers from frontend are already in correct format: { id, firstName, lastName, dateOfBirth, gender }
     // But Amadeus needs name.firstName and name.lastName
-    const amadeusTravelers = travelersList.map((traveler, idx) => ({
-      id: traveler.id || `${idx + 1}`,
-      dateOfBirth: traveler.dateOfBirth || '1990-01-01',
-      gender: (traveler.gender || 'MALE').toUpperCase() === 'MALE' ? 'MALE' : 'FEMALE',
-      name: {
-        firstName: traveler.firstName || 'Test',
-        lastName: traveler.lastName || 'User'
-      },
-      contact: contactInfo ? {
-        emailAddress: contactInfo.email || travelersList[0]?.email,
-        phones: [{
-          deviceType: 'MOBILE',
-          countryCallingCode: contactInfo.countryCode || '1',
-          number: contactInfo.phoneNumber || '1234567890'
-        }]
-      } : undefined
-    }));
+    const amadeusTravelers = travelersList.map((traveler, idx) => {
+      const travelerObj = {
+        id: traveler.id || `${idx + 1}`,
+        dateOfBirth: traveler.dateOfBirth || '1990-01-01',
+        gender: (traveler.gender || 'MALE').toUpperCase() === 'MALE' ? 'MALE' : 'FEMALE',
+        name: {
+          firstName: traveler.firstName || 'Test',
+          lastName: traveler.lastName || 'User'
+        },
+        contact: contactInfo ? {
+          emailAddress: contactInfo.email || travelersList[0]?.email,
+          phones: [{
+            deviceType: 'MOBILE',
+            countryCallingCode: contactInfo.countryCode || '1',
+            number: contactInfo.phoneNumber || '1234567890'
+          }]
+        } : undefined
+      };
+
+      // Add passport/document details if provided
+      if (traveler.passportNumber || traveler.documentNumber) {
+        travelerObj.documents = [{
+          documentType: traveler.documentType || 'PASSPORT',
+          birthPlace: traveler.birthPlace || '',
+          issuanceLocation: traveler.issuanceLocation || '',
+          issuanceDate: traveler.issuanceDate || '',
+          number: traveler.passportNumber || traveler.documentNumber || '',
+          expiryDate: traveler.passportExpiry || traveler.expiryDate || '',
+          issuanceCountry: traveler.issuanceCountry || traveler.nationality || '',
+          validityCountry: traveler.validityCountry || traveler.nationality || '',
+          nationality: traveler.nationality || '',
+          holder: true
+        }];
+      }
+
+      return travelerObj;
+    });
+
+    // Price the flight offer before creating order (validates offer is still valid)
+    let pricedOffer = offers[0];
+    try {
+      console.log('💰 Pricing flight offer before booking...');
+      const pricingResult = await AmadeusService.priceFlightOffer(offers[0]);
+      if (pricingResult.success && pricingResult.data?.flightOffers?.[0]) {
+        pricedOffer = pricingResult.data.flightOffers[0];
+        console.log('✅ Flight offer priced successfully, using priced version');
+      } else {
+        console.log('⚠️ Pricing failed, proceeding with original offer');
+      }
+    } catch (pricingError) {
+      console.log('⚠️ Pricing step failed, proceeding with original offer:', pricingError.message || pricingError.error);
+    }
 
     const flightOrderData = {
       data: {
         type: 'flight-order',
-        flightOffers: offers,
-        travelers: amadeusTravelers
+        flightOffers: [pricedOffer],
+        travelers: amadeusTravelers,
+        ticketingAgreement: {
+          option: 'DELAY_TO_CANCEL',
+          delay: '6D'
+        },
+        contacts: [{
+          addresseeName: {
+            firstName: amadeusTravelers[0]?.name?.firstName || 'Guest',
+            lastName: amadeusTravelers[0]?.name?.lastName || 'User'
+          },
+          purpose: 'STANDARD',
+          phones: amadeusTravelers[0]?.contact?.phones || [{
+            deviceType: 'MOBILE',
+            countryCallingCode: '1',
+            number: '1234567890'
+          }],
+          emailAddress: contactInfo?.email || travelersList[0]?.email || 'guest@jetsetters.com'
+        }]
       }
     };
 
@@ -1233,6 +1302,95 @@ router.post('/availabilities', async (req, res) => {
   } catch (error) {
     console.error('❌ Availabilities error:', error);
     res.json({ success: true, data: [], fallback: true, error: error.message });
+  }
+});
+
+// ===== AIRPORT & CITY SEARCH =====
+
+// Airport/City search endpoint (exposed for frontend AirportService)
+router.get('/airports/search', async (req, res) => {
+  try {
+    const { keyword, subType, countryCode, limit } = req.query;
+
+    if (!keyword || keyword.length < 1) {
+      return res.status(400).json({ success: false, error: 'keyword is required (min 1 char)' });
+    }
+
+    console.log(`🔍 Airport search: "${keyword}"`);
+    const result = await AmadeusService.searchLocations(
+      keyword,
+      subType || 'CITY,AIRPORT',
+      { countryCode, limit: parseInt(limit) || 10 }
+    );
+
+    res.json({
+      success: result.success,
+      data: result.data || [],
+      meta: result.meta
+    });
+  } catch (error) {
+    console.error('❌ Airport search error:', error);
+    res.json({ success: false, data: [], error: error.message });
+  }
+});
+
+// ===== FLIGHT INSPIRATION SEARCH =====
+
+router.get('/inspiration', async (req, res) => {
+  try {
+    const { origin, departureDate, oneWay, duration, nonStop, maxPrice, viewBy, destination } = req.query;
+
+    if (!origin) {
+      return res.status(400).json({ success: false, error: 'Origin is required' });
+    }
+
+    console.log(`💡 Inspiration search from ${origin}`);
+    const result = await AmadeusService.getFlightInspirations(origin, {
+      departureDate,
+      oneWay: oneWay === 'true',
+      duration: duration ? parseInt(duration) : undefined,
+      nonStop: nonStop === 'true',
+      maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+      viewBy: viewBy || 'DATE',
+      destination
+    });
+
+    res.json({
+      success: result.success,
+      data: result.data || [],
+      dictionaries: result.dictionaries,
+      meta: result.meta
+    });
+  } catch (error) {
+    console.error('❌ Inspiration search error:', error);
+    res.json({ success: false, data: [], error: error.message });
+  }
+});
+
+// ===== FLIGHT PRICE ANALYSIS =====
+
+router.get('/price-analysis', async (req, res) => {
+  try {
+    const { origin, destination, departureDate, currencyCode, oneWay } = req.query;
+
+    if (!origin || !destination || !departureDate) {
+      return res.status(400).json({ success: false, error: 'origin, destination, and departureDate are required' });
+    }
+
+    console.log(`📊 Price analysis: ${origin} → ${destination} on ${departureDate}`);
+    const result = await AmadeusService.getFlightPriceAnalysis(origin, destination, departureDate, {
+      currencyCode: currencyCode || 'USD',
+      oneWay: oneWay === 'true'
+    });
+
+    res.json({
+      success: result.success,
+      data: result.data || [],
+      meta: result.meta
+    });
+  } catch (error) {
+    console.error('❌ Price analysis error:', error);
+    res.json({ success: false, data: [], error: error.message });
   }
 });
 

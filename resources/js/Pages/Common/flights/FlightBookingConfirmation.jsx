@@ -333,20 +333,23 @@ function FlightBookingConfirmation() {
   useEffect(() => {
     if (passengerData.length === 0 && bookingDetails) {
       const defaultPassenger = {
-        id: 1,
-        type: "Adult",
-        title: "Mr",
-        firstName: "",
-        lastName: "",
-        dateOfBirth: "",
-        seatNumber: "",
-        meal: "Regular",
-        baggage: "15 Kg",
-        mobile: "",
-        email: "",
-        gender: "male",
-        requiresWheelchair: false
-      };
+          id: 1,
+          type: "Adult",
+          title: "Mr",
+          firstName: "",
+          lastName: "",
+          dateOfBirth: "",
+          seatNumber: "",
+          meal: "Regular",
+          baggage: "15 Kg",
+          mobile: "",
+          email: "",
+          gender: "male",
+          requiresWheelchair: false,
+          nationality: "",
+          passportNumber: "",
+          passportExpiry: ""
+        };
       setPassengerData([defaultPassenger]);
     }
   }, [bookingDetails, passengerData.length]);
@@ -960,21 +963,55 @@ function FlightBookingConfirmation() {
                           value={passenger.email}
                           onChange={(e) => handlePassengerChange(passenger.id, 'email', e.target.value)}
                           readOnly={!editMode}
-                        />
-                      </div>
-                      <div className="form-group flex justify-center items-end pb-2">
-                        <label className="flex items-center cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            className="w-4 h-4 mr-2 accent-[#055B75]"
-                            checked={passenger.requiresWheelchair}
-                            onChange={(e) => handlePassengerChange(passenger.id, 'requiresWheelchair', e.target.checked)}
-                            disabled={!editMode}
                           />
-                          <span className="text-sm font-medium text-[#626363]">Request Wheelchair</span>
-                        </label>
+                        </div>
+                        {/* Passport / Travel Document Fields */}
+                        <div className="form-group">
+                          <label>Nationality</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="e.g. US, IN, GB"
+                            value={passenger.nationality || ''}
+                            onChange={(e) => handlePassengerChange(passenger.id, 'nationality', e.target.value.toUpperCase())}
+                            readOnly={!editMode}
+                            maxLength={2}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Passport Number</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="e.g. P12345678"
+                            value={passenger.passportNumber || ''}
+                            onChange={(e) => handlePassengerChange(passenger.id, 'passportNumber', e.target.value.toUpperCase())}
+                            readOnly={!editMode}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Passport Expiry Date</label>
+                          <input
+                            type="date"
+                            className="form-input"
+                            value={passenger.passportExpiry || ''}
+                            onChange={(e) => handlePassengerChange(passenger.id, 'passportExpiry', e.target.value)}
+                            readOnly={!editMode}
+                          />
+                        </div>
+                        <div className="form-group flex justify-center items-end pb-2">
+                          <label className="flex items-center cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 mr-2 accent-[#055B75]"
+                              checked={passenger.requiresWheelchair}
+                              onChange={(e) => handlePassengerChange(passenger.id, 'requiresWheelchair', e.target.checked)}
+                              disabled={!editMode}
+                            />
+                            <span className="text-sm font-medium text-[#626363]">Request Wheelchair</span>
+                          </label>
+                        </div>
                       </div>
-                    </div>
                   </div>
                 ))}
 
