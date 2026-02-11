@@ -236,21 +236,29 @@ function FlightBookingConfirmation() {
           departureTerminal: flightData.departure.terminal || '',
           arrivalTerminal: flightData.arrival.terminal || '',
         segments: flightData.segments.map(segment => ({
-          departure: {
-            airport: segment.departure.airport,
-            terminal: segment.departure.terminal,
-            time: segment.departure.time
-          },
-          arrival: {
-            airport: segment.arrival.airport,
-            terminal: segment.arrival.terminal,
-            time: segment.arrival.time
-          },
-          duration: segment.duration,
-          aircraft: segment.aircraft || 'Unknown',
-          carrier: flightData.airline.code,
-          number: segment.flightNumber
-        })),
+            departure: {
+              airport: segment.departure.airport,
+              terminal: segment.departure.terminal,
+              time: segment.departure.time,
+              at: segment.departure.at || null,
+              cityName: segment.departure.cityName || getCityName(segment.departure.airport) || segment.departure.airport
+            },
+            arrival: {
+              airport: segment.arrival.airport,
+              terminal: segment.arrival.terminal,
+              time: segment.arrival.time,
+              at: segment.arrival.at || null,
+              cityName: segment.arrival.cityName || getCityName(segment.arrival.airport) || segment.arrival.airport
+            },
+            duration: segment.duration,
+            aircraft: segment.aircraft || 'Unknown',
+            carrier: segment.airline?.code || flightData.airline.code,
+            carrierName: segment.airline?.name || flightData.airline.name,
+            carrierLogo: segment.airline?.logo || flightData.airline.logo,
+            operatingCarrier: segment.operatingCarrier || null,
+            operatingAirlineName: segment.operatingAirlineName || null,
+            number: segment.flightNumber
+          })),
         price: {
           base: basePrice,
           platformFee: platformFee,
@@ -452,12 +460,40 @@ function FlightBookingConfirmation() {
     return duration;
   };
 
-  // Format just month and day
-  const formatShortDate = (dateString) => {
-    const date = new Date(dateString);
-    const options = { day: 'numeric', month: 'short' };
-    return date.toLocaleDateString('en-US', options);
-  };
+    // Format just month and day
+    const formatShortDate = (dateString) => {
+      const date = new Date(dateString);
+      const options = { day: 'numeric', month: 'short' };
+      return date.toLocaleDateString('en-US', options);
+    };
+
+    // Format full date with day of week: "Fri, 13 Feb 2026"
+    const formatFullDate = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    // Format time from ISO datetime: "11:20"
+    const formatTimeFromISO = (isoString) => {
+      if (!isoString) return '';
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) return '';
+      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    };
+
+    // Calculate layover duration between two ISO datetimes
+    const calcLayover = (arrivalAt, departureAt) => {
+      if (!arrivalAt || !departureAt) return '';
+      const arr = new Date(arrivalAt);
+      const dep = new Date(departureAt);
+      const diffMs = dep - arr;
+      if (diffMs <= 0) return '';
+      const hours = Math.floor(diffMs / 3600000);
+      const minutes = Math.floor((diffMs % 3600000) / 60000);
+      return `${hours}h ${minutes}m`;
+    };
 
   const handleLogin = () => {
     // In a real app, this would trigger a login flow
@@ -778,64 +814,143 @@ function FlightBookingConfirmation() {
               </div>
 
               <div className="booking-card-body">
-                <div className="flight-route">
-                  <div className="flight-endpoint">
-                    <div className="city-code">{bookingDetails?.flight?.departureCode || bookingDetails?.flight?.departureCity?.substring(0, 3).toUpperCase()}</div>
-                    <div className="city-name">{bookingDetails?.flight?.departureCity}</div>
-                    <div className="time">{bookingDetails?.flight?.departureTime}</div>
-                    <div className="airport" title={bookingDetails?.flight?.departureAirport}>
-                      {typeof bookingDetails?.flight?.departureAirport === 'string' ? bookingDetails.flight.departureAirport.split('(')[0] : 'Departure Airport'}
-                    </div>
-                  </div>
-
-                  <div className="flight-path">
-                    <div className="duration">
-                      {formatDuration(bookingDetails?.flight?.duration)}
-                    </div>
-                    <div className="path-line">
-                      <div className="plane-icon">✈</div>
-                    </div>
-                    <div className="stops-label">
-                      {bookingDetails?.flight?.stops === "0" || bookingDetails?.flight?.stops === 0 ? (
-                        "Direct Flight"
-                      ) : (
-                        <div className="flex flex-col gap-1">
-                          <div className="font-medium">
-                            {bookingDetails?.flight?.stops} {bookingDetails?.flight?.stops === 1 ? 'Stopover' : 'Stopovers'}
-                          </div>
-                          {bookingDetails?.flight?.stopDetails && bookingDetails.flight.stopDetails.length > 0 && (
-                            <div className="text-xs text-gray-600 space-y-0.5">
-                              {bookingDetails.flight.stopDetails.map((stop, idx) => (
-                                <div key={idx} className="flex items-center gap-1.5">
-                                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-                                  <span className="font-medium">
-                                    {getCityName(stop.airport)} ({stop.airport})
-                                  </span>
-                                  <span className="text-gray-500">•</span>
-                                  <span className="text-yellow-600">{stop.duration}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flight-endpoint">
-                    <div className="city-code">{bookingDetails?.flight?.arrivalCode || bookingDetails?.flight?.arrivalCity?.substring(0, 3).toUpperCase()}</div>
-                    <div className="city-name">{bookingDetails?.flight?.arrivalCity}</div>
-                    <div className="time">{bookingDetails?.flight?.arrivalTime}</div>
-                    <div className="airport" title={bookingDetails?.flight?.arrivalAirport}>
-                      {typeof bookingDetails?.flight?.arrivalAirport === 'string' ? bookingDetails.flight.arrivalAirport.split('(')[0] : 'Arrival Airport'}
-                    </div>
+                {/* Route Summary Header */}
+                <div className="flex items-center justify-between mb-4 px-2 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                  <span className="font-semibold text-[#055B75]">
+                    {bookingDetails?.flight?.departureCity} &rarr; {bookingDetails?.flight?.arrivalCity}
+                  </span>
+                  <div className="flex items-center gap-3 text-sm text-gray-600">
+                    <span>{bookingDetails?.flight?.stops === "0" || bookingDetails?.flight?.stops === 0 ? 'Direct' : `${bookingDetails?.flight?.stops} Stop${bookingDetails?.flight?.stops > 1 ? 's' : ''}`}</span>
+                    <span className="text-gray-300">|</span>
+                    <span>Total: {formatDuration(bookingDetails?.flight?.duration)}</span>
                   </div>
                 </div>
+
+                {/* Segment-by-segment breakdown */}
+                {bookingDetails?.flight?.segments && bookingDetails.flight.segments.length > 1 ? (
+                  <div className="space-y-0">
+                    {bookingDetails.flight.segments.map((seg, idx) => {
+                      const depDate = seg.departure.at ? formatFullDate(seg.departure.at) : formatShortDate(bookingDetails?.flight?.departureDate);
+                      const arrDate = seg.arrival.at ? formatFullDate(seg.arrival.at) : '';
+                      const depTime = seg.departure.at ? formatTimeFromISO(seg.departure.at) : seg.departure.time;
+                      const arrTime = seg.arrival.at ? formatTimeFromISO(seg.arrival.at) : seg.arrival.time;
+                      const nextSeg = bookingDetails.flight.segments[idx + 1];
+                      const layover = nextSeg ? calcLayover(seg.arrival.at, nextSeg.departure.at) : '';
+
+                      return (
+                        <React.Fragment key={idx}>
+                          {/* Segment Card */}
+                          <div className="flex gap-4 py-4 px-2">
+                            {/* Left - Airline Info */}
+                            <div className="flex flex-col items-center min-w-[90px] text-center">
+                              <img
+                                src={seg.carrierLogo || `https://pics.avs.io/200/200/${(seg.carrier || 'XX').toUpperCase()}.png`}
+                                alt={seg.carrierName || seg.carrier}
+                                className="w-10 h-10 rounded-full object-contain border border-gray-200 mb-1"
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                              />
+                              <div className="text-xs font-semibold text-gray-700">{seg.carrierName || seg.carrier}</div>
+                              <div className="text-[10px] text-gray-500">{seg.number}</div>
+                              <div className="text-[10px] text-gray-400">{seg.aircraft !== 'Unknown' ? seg.aircraft : ''}</div>
+                            </div>
+
+                            {/* Center - Route */}
+                            <div className="flex-1 flex items-stretch gap-3">
+                              {/* Departure */}
+                              <div className="flex flex-col items-start min-w-[120px]">
+                                <div className="text-xs text-gray-500">{seg.departure.cityName || getCityName(seg.departure.airport)}</div>
+                                <div className="text-2xl font-bold text-[#055B75]">{depTime}</div>
+                                <div className="text-xs text-gray-500">{depDate}</div>
+                                <div className="text-[11px] text-gray-400 mt-0.5">
+                                  {getCityName(seg.departure.airport)} Airport{seg.departure.terminal ? `, T${seg.departure.terminal}` : ''}
+                                </div>
+                              </div>
+
+                              {/* Duration Arrow */}
+                              <div className="flex flex-col items-center justify-center flex-1 min-w-[80px]">
+                                <div className="text-xs text-gray-500 font-medium">{formatDuration(seg.duration)}</div>
+                                <div className="relative w-full flex items-center my-1">
+                                  <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
+                                  <div className="mx-1 text-gray-400 text-sm">&#9992;</div>
+                                  <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
+                                </div>
+                                <div className="text-[10px] font-medium px-2 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1]">
+                                  {bookingDetails?.flight?.cabin || 'Economy'}
+                                </div>
+                              </div>
+
+                              {/* Arrival */}
+                              <div className="flex flex-col items-end min-w-[120px] text-right">
+                                <div className="text-xs text-gray-500">{seg.arrival.cityName || getCityName(seg.arrival.airport)}</div>
+                                <div className="text-2xl font-bold text-[#055B75]">{arrTime}</div>
+                                <div className="text-xs text-gray-500">{arrDate}</div>
+                                <div className="text-[11px] text-gray-400 mt-0.5">
+                                  {getCityName(seg.arrival.airport)} Airport{seg.arrival.terminal ? `, T${seg.arrival.terminal}` : ''}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Layover Banner between segments */}
+                          {nextSeg && (
+                            <div className="flex items-center justify-center gap-2 py-2.5 px-4 mx-2 my-1 bg-amber-50 border border-amber-200 rounded-lg">
+                              <span className="text-amber-600 text-sm">&#9201;</span>
+                              <span className="text-sm font-medium text-amber-800">
+                                Change planes at <strong>{getCityName(seg.arrival.airport)} ({seg.arrival.airport})</strong>
+                              </span>
+                              {layover && (
+                                <>
+                                  <span className="text-amber-400 mx-1">|</span>
+                                  <span className="text-sm text-amber-700">Connecting Time: <strong>{layover}</strong></span>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* Single segment / direct flight - original layout with dates */
+                  <div className="flight-route">
+                    <div className="flight-endpoint">
+                      <div className="city-code">{bookingDetails?.flight?.departureCode || bookingDetails?.flight?.departureCity?.substring(0, 3).toUpperCase()}</div>
+                      <div className="city-name">{bookingDetails?.flight?.departureCity}</div>
+                      <div className="time">{bookingDetails?.flight?.departureTime}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{formatFullDate(bookingDetails?.flight?.departureDate)}</div>
+                      <div className="airport" title={bookingDetails?.flight?.departureAirport}>
+                        {getCityName(bookingDetails?.flight?.departureCode)} Airport{bookingDetails?.flight?.departureTerminal ? `, T${bookingDetails.flight.departureTerminal}` : ''}
+                      </div>
+                    </div>
+
+                    <div className="flight-path">
+                      <div className="duration">
+                        {formatDuration(bookingDetails?.flight?.duration)}
+                      </div>
+                      <div className="path-line">
+                        <div className="plane-icon">&#9992;</div>
+                      </div>
+                      <div className="stops-label">
+                        Direct Flight
+                      </div>
+                    </div>
+
+                    <div className="flight-endpoint">
+                      <div className="city-code">{bookingDetails?.flight?.arrivalCode || bookingDetails?.flight?.arrivalCity?.substring(0, 3).toUpperCase()}</div>
+                      <div className="city-name">{bookingDetails?.flight?.arrivalCity}</div>
+                      <div className="time">{bookingDetails?.flight?.arrivalTime}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{formatFullDate(bookingDetails?.flight?.arrivalDate || bookingDetails?.flight?.departureDate)}</div>
+                      <div className="airport" title={bookingDetails?.flight?.arrivalAirport}>
+                        {getCityName(bookingDetails?.flight?.arrivalCode)} Airport{bookingDetails?.flight?.arrivalTerminal ? `, T${bookingDetails.flight.arrivalTerminal}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                   <div className="flight-info-grid">
                     <div className="info-box">
                       <span className="label">Date</span>
-                      <span className="value">{formatShortDate(bookingDetails?.flight?.departureDate)}</span>
+                      <span className="value">{formatFullDate(bookingDetails?.flight?.departureDate)}</span>
                     </div>
                     <div className="info-box">
                       <span className="label">Flight No</span>

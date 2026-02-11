@@ -411,36 +411,70 @@ function FlightSearchPage() {
           flightNumber: flight.flightNumber,
           refundable: flight.refundable || false,
           seats: flight.numberOfBookableSeats || flight.seats || 'Available',
-          stopDetails: flight.stopDetails || [],
-          segments: [{
-            departure: {
-              time: flight.departure.time,
-              airport: flight.departure.airport,
-              terminal: flight.departure.terminal || '',
-              cityName: cityMap[flight.departure.airport] || flight.departure.airport,
-              at: `${flight.departure.date}T${flight.departure.time}:00`
-            },
-            arrival: {
-              time: flight.arrival.time,
-              airport: flight.arrival.airport,
-              terminal: flight.arrival.terminal || '',
-              cityName: cityMap[flight.arrival.airport] || flight.arrival.airport,
-              at: `${flight.arrival.date}T${flight.arrival.time}:00`
-            },
-            airline: {
-              code: flight.airlineCode,
-              name: flight.airline,
-              logo: `https://pics.avs.io/200/200/${flight.airlineCode?.toUpperCase()}.png`
-            },
-            operatingCarrier: flight.operatingCarrier || null,
-            operatingAirlineName: flight.operatingAirlineName || null,
-            duration: flight.duration,
-            flightNumber: flight.flightNumber,
-            aircraft: flight.aircraft || 'Unknown Aircraft',
-            stops: 0
-          }],
-          // IMPORTANT: Preserve original Amadeus offer for booking API
-          originalOffer: flight.originalOffer
+            stopDetails: flight.stopDetails || [],
+            segments: (() => {
+              // Extract real segments from originalOffer for multi-stop flights
+              const origSegs = flight.originalOffer?.itineraries?.[0]?.segments;
+              if (origSegs && origSegs.length > 1) {
+                return origSegs.map(segment => ({
+                  departure: {
+                    time: new Date(segment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                    airport: segment.departure.iataCode,
+                    terminal: segment.departure.terminal || '',
+                    cityName: cityMap[segment.departure.iataCode] || segment.departure.iataCode,
+                    at: segment.departure.at
+                  },
+                  arrival: {
+                    time: new Date(segment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                    airport: segment.arrival.iataCode,
+                    terminal: segment.arrival.terminal || '',
+                    cityName: cityMap[segment.arrival.iataCode] || segment.arrival.iataCode,
+                    at: segment.arrival.at
+                  },
+                  airline: {
+                    code: segment.carrierCode,
+                    name: dynamicAirlineMap[segment.carrierCode] || segment.carrierCode,
+                    logo: `https://pics.avs.io/200/200/${segment.carrierCode.toUpperCase()}.png`
+                  },
+                  operatingCarrier: segment.operating?.carrierCode || null,
+                  operatingAirlineName: segment.operating?.carrierCode ? (dynamicAirlineMap[segment.operating.carrierCode] || segment.operating.carrierCode) : null,
+                  duration: segment.duration,
+                  flightNumber: `${segment.carrierCode} ${segment.number}`,
+                  aircraft: dynamicAircraftMap[segment.aircraft?.code] || segment.aircraft?.code || 'Unknown Aircraft',
+                  stops: 0
+                }));
+              }
+              // Single segment fallback
+              return [{
+                departure: {
+                  time: flight.departure.time,
+                  airport: flight.departure.airport,
+                  terminal: flight.departure.terminal || '',
+                  cityName: cityMap[flight.departure.airport] || flight.departure.airport,
+                  at: `${flight.departure.date}T${flight.departure.time}:00`
+                },
+                arrival: {
+                  time: flight.arrival.time,
+                  airport: flight.arrival.airport,
+                  terminal: flight.arrival.terminal || '',
+                  cityName: cityMap[flight.arrival.airport] || flight.arrival.airport,
+                  at: `${flight.arrival.date}T${flight.arrival.time}:00`
+                },
+                airline: {
+                  code: flight.airlineCode,
+                  name: flight.airline,
+                  logo: `https://pics.avs.io/200/200/${flight.airlineCode?.toUpperCase()}.png`
+                },
+                operatingCarrier: flight.operatingCarrier || null,
+                operatingAirlineName: flight.operatingAirlineName || null,
+                duration: flight.duration,
+                flightNumber: flight.flightNumber,
+                aircraft: flight.aircraft || 'Unknown Aircraft',
+                stops: 0
+              }];
+            })(),
+            // IMPORTANT: Preserve original Amadeus offer for booking API
+            originalOffer: flight.originalOffer
         };
       } else {
         // Handle our simple API format (no originalOffer available)
