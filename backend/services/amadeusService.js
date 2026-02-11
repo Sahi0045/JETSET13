@@ -6,12 +6,14 @@ dotenv.config();
 
 class AmadeusService {
   constructor() {
-    // Use TEST API endpoints with test credentials
+    // Use test API (keys are test credentials despite .env label)
+    const apiHost = process.env.AMADEUS_API_HOST || 'https://test.api.amadeus.com';
     this.baseUrls = {
-      v1: 'https://test.api.amadeus.com/v1',
-      v2: 'https://test.api.amadeus.com/v2',
-      v3: 'https://test.api.amadeus.com/v3'
+      v1: `${apiHost}/v1`,
+      v2: `${apiHost}/v2`,
+      v3: `${apiHost}/v3`
     };
+    console.log(`Amadeus API host: ${apiHost} (NODE_ENV=${process.env.NODE_ENV})`);
     this.token = null;
     this.tokenExpiration = null;
   }

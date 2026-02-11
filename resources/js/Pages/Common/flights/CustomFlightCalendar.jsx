@@ -31,98 +31,6 @@ export default function CustomFlightCalendar({
         return values.length > 0 ? Math.min(...values) : null;
     }, [prices]);
 
-    // Fallback: fetch prices by sampling flight searches for key dates
-    const fetchPricesViaFlightSearch = async (origin, destination, month1, month2) => {
-        const baseUrl = apiConfig?.baseUrl || '';
-        const newPrices = {};
-
-        // Sample dates: pick ~8 spread across both months to minimize API calls
-        const sampleDates = [];
-        const m1Start = startOfMonth(month1);
-        const m2End = endOfMonth(month2);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        // Sample every 4-5 days across the two months
-        let d = isBefore(m1Start, today) ? today : m1Start;
-        while (isBefore(d, m2End) || format(d, 'yyyy-MM-dd') === format(m2End, 'yyyy-MM-dd')) {
-            sampleDates.push(format(d, 'yyyy-MM-dd'));
-            d = addDays(d, 4);
-        }
-
-        // Limit to 8 sample dates to avoid too many requests
-        const datesToFetch = sampleDates.slice(0, 8);
-
-        console.log(`[Calendar] Fetching prices via flight search for ${datesToFetch.length} sample dates`);
-
-        // Fetch in parallel (max 4 concurrent)
-        const batchSize = 4;
-        for (let i = 0; i < datesToFetch.length; i += batchSize) {
-            const batch = datesToFetch.slice(i, i + batchSize);
-            const results = await Promise.allSettled(
-                batch.map(async (date) => {
-                    try {
-                        const response = await fetch(`${baseUrl}/flights/search`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                            body: JSON.stringify({
-                                from: origin,
-                                to: destination,
-                                departDate: date,
-                                travelers: 1,
-                                max: 1 // Only need cheapest
-                            })
-                        });
-                        if (!response.ok) return null;
-                        const data = await response.json();
-                        if (data.success && data.data && data.data.length > 0) {
-                            // Get the cheapest price from results
-                            const cheapest = data.data.reduce((min, f) => {
-                                const p = parseFloat(f.price?.total || f.price?.amount || 0);
-                                return p > 0 && p < min ? p : min;
-                            }, Infinity);
-                            if (cheapest < Infinity) {
-                                return { date, price: cheapest };
-                            }
-                        }
-                        return null;
-                    } catch {
-                        return null;
-                    }
-                })
-            );
-
-            results.forEach(r => {
-                if (r.status === 'fulfilled' && r.value) {
-                    newPrices[r.value.date] = r.value.price;
-                }
-            });
-        }
-
-        // Interpolate prices for dates between samples
-        const sortedDates = Object.keys(newPrices).sort();
-        if (sortedDates.length >= 2) {
-            for (let i = 0; i < sortedDates.length - 1; i++) {
-                const startDate = new Date(sortedDates[i]);
-                const endDate = new Date(sortedDates[i + 1]);
-                const startPrice = newPrices[sortedDates[i]];
-                const endPrice = newPrices[sortedDates[i + 1]];
-                const daysBetween = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
-
-                for (let j = 1; j < daysBetween; j++) {
-                    const interpDate = format(addDays(startDate, j), 'yyyy-MM-dd');
-                    if (!newPrices[interpDate]) {
-                        // Linear interpolation
-                        const ratio = j / daysBetween;
-                        newPrices[interpDate] = Math.round(startPrice + (endPrice - startPrice) * ratio);
-                    }
-                }
-            }
-        }
-
-        return newPrices;
-    };
-
     // Fetch prices for visibility range
     useEffect(() => {
         const fetchPrices = async () => {
@@ -148,34 +56,67 @@ export default function CustomFlightCalendar({
                     return;
                 }
 
-                // Fallback: sample prices via regular flight search
-                console.log(`[Calendar] cheapest-dates returned no data, using flight search fallback`);
-                const fallbackPrices = await fetchPricesViaFlightSearch(
-                    originCode, destinationCode, currentMonth, nextMonth
-                );
-                if (Object.keys(fallbackPrices).length > 0) {
-                    console.log(`[Calendar] Got ${Object.keys(fallbackPrices).length} price points from flight search fallback`);
-                    setPrices(fallbackPrices);
+                // Fallback: use server-side calendar-prices endpoint (handles caching & rate limiting)
+                console.log(`[Calendar] cheapest-dates returned no data, using calendar-prices fallback`);
+                const baseUrl = apiConfig?.baseUrl || '';
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const m1Start = startOfMonth(currentMonth);
+                const m2End = endOfMonth(nextMonth);
+
+                // Sample ~4 dates spread across both months
+                const sampleDates = [];
+                let d = isBefore(m1Start, today) ? today : m1Start;
+                while (isBefore(d, m2End) || format(d, 'yyyy-MM-dd') === format(m2End, 'yyyy-MM-dd')) {
+                    sampleDates.push(format(d, 'yyyy-MM-dd'));
+                    d = addDays(d, 7); // Every 7 days = ~8 samples for 2 months
+                }
+                const datesToFetch = sampleDates.slice(0, 5); // Limit to 5 samples
+
+                const response = await fetch(`${baseUrl}/flights/calendar-prices`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        origin: originCode,
+                        destination: destinationCode,
+                        dates: datesToFetch
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.prices && Object.keys(result.prices).length > 0) {
+                        // Interpolate prices for dates between samples
+                        const fetchedPrices = result.prices;
+                        const sortedDates = Object.keys(fetchedPrices).sort();
+                        if (sortedDates.length >= 2) {
+                            for (let i = 0; i < sortedDates.length - 1; i++) {
+                                const startDate = new Date(sortedDates[i]);
+                                const endDate = new Date(sortedDates[i + 1]);
+                                const startPrice = fetchedPrices[sortedDates[i]];
+                                const endPrice = fetchedPrices[sortedDates[i + 1]];
+                                const daysBetween = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
+                                for (let j = 1; j < daysBetween; j++) {
+                                    const interpDate = format(addDays(startDate, j), 'yyyy-MM-dd');
+                                    if (!fetchedPrices[interpDate]) {
+                                        fetchedPrices[interpDate] = Math.round(startPrice + (endPrice - startPrice) * (j / daysBetween));
+                                    }
+                                }
+                            }
+                        }
+                        console.log(`[Calendar] Got ${Object.keys(fetchedPrices).length} price points from calendar-prices`);
+                        setPrices(fetchedPrices);
+                    }
                 }
             } catch (err) {
-                console.warn('Failed to fetch calendar prices, trying fallback:', err);
-                try {
-                    const fallbackPrices = await fetchPricesViaFlightSearch(
-                        originCode, destinationCode, currentMonth, nextMonth
-                    );
-                    if (Object.keys(fallbackPrices).length > 0) {
-                        setPrices(fallbackPrices);
-                    }
-                } catch (fallbackErr) {
-                    console.warn('Fallback also failed:', fallbackErr);
-                }
+                console.warn('Failed to fetch calendar prices:', err);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchPrices();
-    }, [originCode, destinationCode, currentMonth]); // Also refetch when month changes
+    }, [originCode, destinationCode, currentMonth]);
 
     // Drag handlers
     const handleMouseDown = (e) => {

@@ -1016,6 +1016,10 @@ router.get('/analytics/busiest', async (req, res) => {
   }
 });
 
+// In-memory cache for calendar prices (origin-dest-date -> { price, timestamp })
+const calendarPriceCache = new Map();
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
 // Cheapest Flight Dates
 router.get('/cheapest-dates', async (req, res) => {
   try {
@@ -1043,6 +1047,76 @@ router.get('/cheapest-dates', async (req, res) => {
   } catch (error) {
     console.error('❌ Cheapest dates error:', error);
     res.json({ success: true, data: [], fallback: true, error: error.message });
+  }
+});
+
+// Calendar prices endpoint - fetches prices for multiple dates with caching
+router.post('/calendar-prices', async (req, res) => {
+  try {
+    const { origin, destination, dates } = req.body;
+
+    if (!origin || !destination || !dates || !Array.isArray(dates)) {
+      return res.status(400).json({ success: false, error: 'origin, destination, and dates[] are required' });
+    }
+
+    console.log(`📅 Calendar prices: ${origin} → ${destination} for ${dates.length} dates`);
+
+    const prices = {};
+    const uncachedDates = [];
+
+    // Check cache first
+    for (const date of dates) {
+      const cacheKey = `${origin}-${destination}-${date}`;
+      const cached = calendarPriceCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
+        prices[date] = cached.price;
+      } else {
+        uncachedDates.push(date);
+      }
+    }
+
+    console.log(`📅 Cache: ${dates.length - uncachedDates.length} hits, ${uncachedDates.length} misses`);
+
+    // Fetch uncached dates sequentially with delay
+    for (const date of uncachedDates) {
+      try {
+        const resolvedFrom = await resolveToIATACode(origin);
+        const resolvedTo = await resolveToIATACode(destination);
+        const result = await AmadeusService.searchFlights({
+          from: resolvedFrom,
+          to: resolvedTo,
+          departDate: date,
+          travelers: 1,
+          max: 1
+        });
+
+        if (result.success && result.data && result.data.length > 0) {
+          const cheapest = result.data.reduce((min, f) => {
+            const p = parseFloat(f.price?.grandTotal || f.price?.total || 0);
+            return p > 0 && p < min ? p : min;
+          }, Infinity);
+          if (cheapest < Infinity) {
+            prices[date] = cheapest;
+            calendarPriceCache.set(`${origin}-${destination}-${date}`, {
+              price: cheapest,
+              timestamp: Date.now()
+            });
+          }
+        }
+
+        // Delay between Amadeus calls to avoid rate limits
+        if (uncachedDates.indexOf(date) < uncachedDates.length - 1) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+      } catch (err) {
+        console.warn(`📅 Failed to fetch price for ${date}:`, err.message);
+      }
+    }
+
+    res.json({ success: true, prices });
+  } catch (error) {
+    console.error('❌ Calendar prices error:', error);
+    res.json({ success: false, prices: {}, error: error.message });
   }
 });
 
