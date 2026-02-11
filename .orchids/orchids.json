@@ -1,0 +1,9 @@
+{
+  "projectId": "498113a5-a0a5-4590-a163-7e90c60e6eea",
+  "createdAt": 1739260800000,
+  "startupCommands": [
+    "npm install --legacy-peer-deps; NODE_ENV=development PORT=5004 node backend/server.js",
+    "npx vite --host --port 5173"
+  ],
+  "templateId": "any"
+}

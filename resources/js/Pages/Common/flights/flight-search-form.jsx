@@ -441,13 +441,13 @@ export default function FlightSearchForm({ initialData, onSearch }) {
               </div>
               <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
 
-              {showDepartCalendar && (
-                <CustomFlightCalendar
-                  selectedDate={formData.departDate}
-                  minDate={new Date()}
-                  originCode={formData.fromCode}
-                  destinationCode={formData.toCode}
-                  onSelect={(date) => {
+                {showDepartCalendar && (
+                  <CustomFlightCalendar
+                    selectedDate={formData.departDate}
+                    minDate={new Date()}
+                    originCode={formData.fromCode || (formData.from?.match(/\(([A-Z]{3})\)/)?.[1])}
+                    destinationCode={formData.toCode || (formData.to?.match(/\(([A-Z]{3})\)/)?.[1])}
+                    onSelect={(date) => {
                     handleInputChange({ target: { name: 'departDate', value: date } });
                     setShowDepartCalendar(false);
                   }}
@@ -476,13 +476,13 @@ export default function FlightSearchForm({ initialData, onSearch }) {
                 </div>
                 <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
 
-                {showReturnCalendar && (
-                  <CustomFlightCalendar
-                    selectedDate={formData.returnDate}
-                    minDate={formData.departDate ? parseISO(formData.departDate) : new Date()}
-                    originCode={formData.fromCode}
-                    destinationCode={formData.toCode}
-                    onSelect={(date) => {
+                  {showReturnCalendar && (
+                    <CustomFlightCalendar
+                      selectedDate={formData.returnDate}
+                      minDate={formData.departDate ? parseISO(formData.departDate) : new Date()}
+                      originCode={formData.fromCode || (formData.from?.match(/\(([A-Z]{3})\)/)?.[1])}
+                      destinationCode={formData.toCode || (formData.to?.match(/\(([A-Z]{3})\)/)?.[1])}
+                      onSelect={(date) => {
                       handleInputChange({ target: { name: 'returnDate', value: date } });
                       setShowReturnCalendar(false);
                     }}

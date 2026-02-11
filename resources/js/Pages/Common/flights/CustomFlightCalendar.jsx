@@ -1,9 +1,10 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from "react"
-import { format, addMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek, isBefore, isToday } from "date-fns"
+import { format, addMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek, isBefore, isToday, addDays } from "date-fns"
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import FlightAnalyticsService from "../../../Services/FlightAnalyticsService"
+import apiConfig from '../../../../../src/config/api.js'
 
 export default function CustomFlightCalendar({
     selectedDate,
@@ -30,14 +31,107 @@ export default function CustomFlightCalendar({
         return values.length > 0 ? Math.min(...values) : null;
     }, [prices]);
 
+    // Fallback: fetch prices by sampling flight searches for key dates
+    const fetchPricesViaFlightSearch = async (origin, destination, month1, month2) => {
+        const baseUrl = apiConfig?.baseUrl || '';
+        const newPrices = {};
+
+        // Sample dates: pick ~8 spread across both months to minimize API calls
+        const sampleDates = [];
+        const m1Start = startOfMonth(month1);
+        const m2End = endOfMonth(month2);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Sample every 4-5 days across the two months
+        let d = isBefore(m1Start, today) ? today : m1Start;
+        while (isBefore(d, m2End) || format(d, 'yyyy-MM-dd') === format(m2End, 'yyyy-MM-dd')) {
+            sampleDates.push(format(d, 'yyyy-MM-dd'));
+            d = addDays(d, 4);
+        }
+
+        // Limit to 8 sample dates to avoid too many requests
+        const datesToFetch = sampleDates.slice(0, 8);
+
+        console.log(`[Calendar] Fetching prices via flight search for ${datesToFetch.length} sample dates`);
+
+        // Fetch in parallel (max 4 concurrent)
+        const batchSize = 4;
+        for (let i = 0; i < datesToFetch.length; i += batchSize) {
+            const batch = datesToFetch.slice(i, i + batchSize);
+            const results = await Promise.allSettled(
+                batch.map(async (date) => {
+                    try {
+                        const response = await fetch(`${baseUrl}/flights/search`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                            body: JSON.stringify({
+                                from: origin,
+                                to: destination,
+                                departDate: date,
+                                travelers: 1,
+                                max: 1 // Only need cheapest
+                            })
+                        });
+                        if (!response.ok) return null;
+                        const data = await response.json();
+                        if (data.success && data.data && data.data.length > 0) {
+                            // Get the cheapest price from results
+                            const cheapest = data.data.reduce((min, f) => {
+                                const p = parseFloat(f.price?.total || f.price?.amount || 0);
+                                return p > 0 && p < min ? p : min;
+                            }, Infinity);
+                            if (cheapest < Infinity) {
+                                return { date, price: cheapest };
+                            }
+                        }
+                        return null;
+                    } catch {
+                        return null;
+                    }
+                })
+            );
+
+            results.forEach(r => {
+                if (r.status === 'fulfilled' && r.value) {
+                    newPrices[r.value.date] = r.value.price;
+                }
+            });
+        }
+
+        // Interpolate prices for dates between samples
+        const sortedDates = Object.keys(newPrices).sort();
+        if (sortedDates.length >= 2) {
+            for (let i = 0; i < sortedDates.length - 1; i++) {
+                const startDate = new Date(sortedDates[i]);
+                const endDate = new Date(sortedDates[i + 1]);
+                const startPrice = newPrices[sortedDates[i]];
+                const endPrice = newPrices[sortedDates[i + 1]];
+                const daysBetween = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
+
+                for (let j = 1; j < daysBetween; j++) {
+                    const interpDate = format(addDays(startDate, j), 'yyyy-MM-dd');
+                    if (!newPrices[interpDate]) {
+                        // Linear interpolation
+                        const ratio = j / daysBetween;
+                        newPrices[interpDate] = Math.round(startPrice + (endPrice - startPrice) * ratio);
+                    }
+                }
+            }
+        }
+
+        return newPrices;
+    };
+
     // Fetch prices for visibility range
     useEffect(() => {
         const fetchPrices = async () => {
             if (!originCode || !destinationCode) return;
 
             setLoading(true);
-            console.log(`🔍 [Calendar] Fetching Amadeus prices for ${originCode} -> ${destinationCode}...`);
+            console.log(`[Calendar] Fetching prices for ${originCode} -> ${destinationCode}...`);
             try {
+                // Try cheapest-dates API first
                 const data = await FlightAnalyticsService.getCheapestFlightDates(
                     originCode,
                     destinationCode,
@@ -45,22 +139,43 @@ export default function CustomFlightCalendar({
                 );
 
                 if (data && data.length > 0) {
-                    console.log(`✅ [Calendar] Received ${data.length} price points from Amadeus`);
+                    console.log(`[Calendar] Received ${data.length} price points from cheapest-dates API`);
                     const newPrices = {};
                     data.forEach(item => {
                         newPrices[item.departureDate] = parseFloat(item.price.total);
                     });
                     setPrices(newPrices);
+                    return;
+                }
+
+                // Fallback: sample prices via regular flight search
+                console.log(`[Calendar] cheapest-dates returned no data, using flight search fallback`);
+                const fallbackPrices = await fetchPricesViaFlightSearch(
+                    originCode, destinationCode, currentMonth, nextMonth
+                );
+                if (Object.keys(fallbackPrices).length > 0) {
+                    console.log(`[Calendar] Got ${Object.keys(fallbackPrices).length} price points from flight search fallback`);
+                    setPrices(fallbackPrices);
                 }
             } catch (err) {
-                console.warn('Failed to fetch calendar prices:', err);
+                console.warn('Failed to fetch calendar prices, trying fallback:', err);
+                try {
+                    const fallbackPrices = await fetchPricesViaFlightSearch(
+                        originCode, destinationCode, currentMonth, nextMonth
+                    );
+                    if (Object.keys(fallbackPrices).length > 0) {
+                        setPrices(fallbackPrices);
+                    }
+                } catch (fallbackErr) {
+                    console.warn('Fallback also failed:', fallbackErr);
+                }
             } finally {
                 setLoading(false);
             }
         };
 
         fetchPrices();
-    }, [originCode, destinationCode]); // Fetch only when route changes
+    }, [originCode, destinationCode, currentMonth]); // Also refetch when month changes
 
     // Drag handlers
     const handleMouseDown = (e) => {
