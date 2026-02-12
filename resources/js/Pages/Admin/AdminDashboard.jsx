@@ -435,6 +435,15 @@ const AdminDashboard = () => {
               <div className="action-arrow">→</div>
             </Link>
 
+            <Link to="/admin/bookings" className="action-card">
+              <div className="action-icon">🎫</div>
+              <div className="action-content">
+                <h4>Manage Bookings</h4>
+                <p>View and control all flight, cruise, hotel & package bookings</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </Link>
+
             <Link to="/admin/feature-flags" className="action-card">
               <div className="action-icon">⚙️</div>
               <div className="action-content">

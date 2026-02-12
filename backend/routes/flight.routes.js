@@ -1525,4 +1525,193 @@ router.get('/price-analysis', async (req, res) => {
   }
 });
 
+// ============================================
+// ADMIN BOOKINGS ENDPOINTS
+// For viewing and managing all direct bookings
+// ============================================
+
+// GET all bookings for admin (no userId filter)
+router.get('/admin-bookings', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+
+    const { type, status, payment_status, search, page = 1, limit = 50 } = req.query;
+
+    let query = supabase.from('bookings').select('*', { count: 'exact' });
+
+    if (type && type !== 'all') {
+      query = query.eq('travel_type', type);
+    }
+    if (status && status !== 'all') {
+      query = query.eq('status', status);
+    }
+    if (payment_status && payment_status !== 'all') {
+      query = query.eq('payment_status', payment_status);
+    }
+    if (search) {
+      query = query.ilike('booking_reference', `%${search}%`);
+    }
+
+    // Pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    query = query.order('created_at', { ascending: false })
+      .range(offset, offset + parseInt(limit) - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('❌ Error fetching admin bookings:', error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    // Transform bookings for admin view
+    const bookings = (data || []).map(booking => {
+      const amount = booking.total_amount ||
+        booking.booking_details?.amount ||
+        booking.booking_details?.flight_offer?.price?.total || 0;
+
+      // Extract customer info from passenger_details or booking_details
+      let customerName = 'N/A';
+      let customerEmail = '';
+      if (booking.passenger_details && Array.isArray(booking.passenger_details) && booking.passenger_details.length > 0) {
+        const p = booking.passenger_details[0];
+        customerName = `${p.firstName || p.first_name || ''} ${p.lastName || p.last_name || ''}`.trim() || 'N/A';
+        customerEmail = p.email || '';
+      } else if (booking.booking_details?.contact?.email) {
+        customerEmail = booking.booking_details.contact.email;
+      }
+
+      return {
+        id: booking.id,
+        userId: booking.user_id,
+        type: booking.travel_type,
+        bookingReference: booking.booking_reference,
+        status: booking.status,
+        totalAmount: parseFloat(amount) || 0,
+        currency: booking.booking_details?.currency || 'USD',
+        paymentStatus: booking.payment_status,
+        bookingDate: booking.created_at,
+        customerName,
+        customerEmail,
+        // Flight fields
+        pnr: booking.booking_details?.pnr || '',
+        origin: booking.booking_details?.origin || '',
+        destination: booking.booking_details?.destination || '',
+        departureDate: booking.booking_details?.departure_date || '',
+        airline: booking.booking_details?.airline_name || booking.booking_details?.airline || '',
+        // Cruise fields
+        cruiseName: booking.booking_details?.cruise_name || '',
+        cruiseDeparture: booking.booking_details?.departure || '',
+        cruiseArrival: booking.booking_details?.arrival || '',
+        // Raw details for expandable view
+        bookingDetails: booking.booking_details,
+        passengerDetails: booking.passenger_details
+      };
+    });
+
+    res.json({
+      success: true,
+      data: bookings,
+      count: count || bookings.length,
+      page: parseInt(page),
+      totalPages: Math.ceil((count || bookings.length) / parseInt(limit))
+    });
+  } catch (error) {
+    console.error('❌ Admin bookings error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT update booking status (admin)
+router.put('/admin-bookings/:id', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+
+    const { id } = req.params;
+    const { status, payment_status, notes } = req.body;
+
+    const updateData = {};
+    if (status) updateData.status = status;
+    if (payment_status) updateData.payment_status = payment_status;
+    if (notes) updateData.admin_notes = notes;
+    updateData.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    res.json({ success: true, data, message: 'Booking updated successfully' });
+  } catch (error) {
+    console.error('❌ Admin booking update error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST cancel booking (admin) — updates status + triggers ARC Pay refund/void
+router.post('/admin-bookings/:id/cancel', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+
+    const { id } = req.params;
+    const { reason = 'Admin cancellation' } = req.body;
+
+    // Fetch booking
+    const { data: booking, error: fetchError } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !booking) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+
+    if (booking.status === 'cancelled') {
+      return res.status(400).json({ success: false, error: 'Booking is already cancelled' });
+    }
+
+    // Update booking status
+    const { error: updateError } = await supabase
+      .from('bookings')
+      .update({
+        status: 'cancelled',
+        payment_status: booking.payment_status === 'paid' ? 'refund_pending' : 'cancelled',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (updateError) {
+      return res.status(500).json({ success: false, error: updateError.message });
+    }
+
+    res.json({
+      success: true,
+      message: `Booking ${booking.booking_reference} cancelled successfully`,
+      data: {
+        bookingId: id,
+        bookingReference: booking.booking_reference,
+        previousStatus: booking.status,
+        newStatus: 'cancelled',
+        reason
+      }
+    });
+  } catch (error) {
+    console.error('❌ Admin booking cancel error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
