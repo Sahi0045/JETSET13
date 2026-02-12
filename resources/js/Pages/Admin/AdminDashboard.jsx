@@ -41,6 +41,8 @@ const AdminDashboard = () => {
 
       if (!token) {
         console.error('No authentication token found');
+        setRecentInquiries([]);
+        setLoading(false);
         return;
       }
 

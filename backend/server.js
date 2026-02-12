@@ -22,10 +22,36 @@ const app = express();
 // Debugging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  console.log('Headers:', req.headers);
-  if (req.body) {
-    console.log('Body:', { ...req.body, password: req.body.password ? '***' : undefined });
+
+  if (process.env.NODE_ENV === 'development') {
+    const redactedHeaders = { ...req.headers };
+    if (redactedHeaders.authorization) {
+      redactedHeaders.authorization = 'Bearer ***';
+    }
+    if (redactedHeaders.cookie) {
+      redactedHeaders.cookie = '***';
+    }
+
+    const redactedBody = req.body ? { ...req.body } : undefined;
+    if (redactedBody) {
+      if (redactedBody.password) redactedBody.password = '***';
+      if (redactedBody.cardDetails) {
+        redactedBody.cardDetails = {
+          ...redactedBody.cardDetails,
+          cardNumber: redactedBody.cardDetails.cardNumber ? '***' : undefined,
+          cvv: redactedBody.cardDetails.cvv ? '***' : undefined
+        };
+      }
+      if (redactedBody.cardNumber) redactedBody.cardNumber = '***';
+      if (redactedBody.cvv) redactedBody.cvv = '***';
+    }
+
+    console.log('Headers:', redactedHeaders);
+    if (redactedBody) {
+      console.log('Body:', redactedBody);
+    }
   }
+
   next();
 });
 

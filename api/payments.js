@@ -21,8 +21,13 @@ const supabase = createClient(supabaseUrl || 'https://qqmagqwumjipdqvxbiqu.supab
 
 export default async function handler(req, res) {
   // Set CORS headers
+  const configuredOrigin = process.env.ALLOWED_ORIGIN || process.env.CORS_ORIGIN;
+  const allowedOrigin = configuredOrigin && configuredOrigin !== '*'
+    ? configuredOrigin
+    : (process.env.NODE_ENV === 'development' ? req.headers.origin || '' : '');
+
   res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
@@ -231,7 +236,7 @@ async function handlePaymentInitiation(req, res) {
 
     // 4. Call ARC Pay API to create hosted checkout session
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
-    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD;
     const arcBaseUrl = process.env.ARC_PAY_BASE_URL || process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
     if (!arcMerchantId || !arcApiPassword) {
@@ -673,7 +678,7 @@ async function handlePaymentCallback(req, res) {
 
     // 3. Retrieve order and transaction details from ARC Pay
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
-    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD;
     const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
     // ARC Pay uses merchant.MERCHANT_ID:password format for authentication
@@ -1861,7 +1866,7 @@ async function handleHostedCheckout(req, res) {
 
     // ARC Pay credentials - Using API version 100 (latest)
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
-    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD;
     // Check for ARC_PAY_API_URL first (full URL), then ARC_PAY_BASE_URL, then fallback to v100
     let arcApiUrl = process.env.ARC_PAY_API_URL || process.env.ARC_PAY_BASE_URL;
     // If URL contains version/77, upgrade to version/100
@@ -2355,7 +2360,7 @@ async function handlePaymentRefund(req, res) {
 
     // Call ARC Pay REFUND API
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
-    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD;
     const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
@@ -2563,7 +2568,7 @@ async function handlePaymentVoid(req, res) {
 
     // Call ARC Pay VOID API
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
-    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD;
     const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
@@ -2675,7 +2680,7 @@ async function handlePaymentCapture(req, res) {
 
     // Call ARC Pay CAPTURE API
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
-    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD;
     const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
@@ -2802,7 +2807,7 @@ async function handlePaymentRetrieve(req, res) {
 
     // Call ARC Pay RETRIEVE API
     const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
-    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+    const arcApiPassword = process.env.ARC_PAY_API_PASSWORD;
     const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
 
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
@@ -3081,7 +3086,7 @@ async function handleCancelBooking(req, res) {
 
         if (payment) {
           const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
-          const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+          const arcApiPassword = process.env.ARC_PAY_API_PASSWORD;
           const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
           const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
@@ -3241,9 +3246,9 @@ async function handleDebug(req, res) {
   const envVars = {
     SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'Not set',
     SUPABASE_KEY: (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY) ? 'Set (hidden)' : 'Not set',
-    ARC_PAY_MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704 (fallback)',
-    ARC_PAY_API_PASSWORD: process.env.ARC_PAY_API_PASSWORD ? 'Set (hidden)' : '4d41a81750f1ee3f6aa4adf0dfd6310c (fallback)',
-    ARC_PAY_BASE_URL: process.env.ARC_PAY_BASE_URL || process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/77 (fallback)',
+    ARC_PAY_MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'Not set',
+    ARC_PAY_API_PASSWORD: process.env.ARC_PAY_API_PASSWORD ? 'Set (hidden)' : 'Not set',
+    ARC_PAY_BASE_URL: process.env.ARC_PAY_BASE_URL || process.env.ARC_PAY_API_URL || 'Not set',
     NODE_ENV: process.env.NODE_ENV || 'Not set',
     FRONTEND_URL: process.env.FRONTEND_URL || 'Not set'
   };
