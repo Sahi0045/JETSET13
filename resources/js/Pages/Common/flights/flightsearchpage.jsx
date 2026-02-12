@@ -43,14 +43,14 @@ function FlightSearchPage() {
   const [loading, setLoading] = useState(true);
   const [sortOrder, setSortOrder] = useState("price");
   const [dateRange, setDateRange] = useState([]);
-    const [filters, setFilters] = useState({
-      price: [0, 50000],
-      stops: "any",
-      airlines: [],
-      departureTime: "any", // any, early_morning, morning, afternoon, evening, night
-      baggage: "any", // any, included, cabin_only
-      refundable: "any" // any, yes, no
-    });
+  const [filters, setFilters] = useState({
+    price: [0, 50000],
+    stops: "any",
+    airlines: [],
+    departureTime: "any", // any, early_morning, morning, afternoon, evening, night
+    baggage: "any", // any, included, cabin_only
+    refundable: "any" // any, yes, no
+  });
   const [error, setError] = useState(null);
   const [expandedFlights, setExpandedFlights] = useState({});
   const [isMobileView, setIsMobileView] = useState(false);
@@ -129,24 +129,24 @@ function FlightSearchPage() {
             return match ? match[1] : str;
           };
 
-            const sd = location.state.searchData;
-            const searchData = {
-              from: extractCode(sd.from),
-              to: extractCode(sd.to),
-              departDate: sd.departDate,
-              returnDate: sd.returnDate,
-              adults: parseInt(sd.adults) || parseInt(sd.travelers) || 1,
-              children: parseInt(sd.children) || 0,
-              infants: parseInt(sd.infants) || 0,
-              travelClass: sd.travelClass || 'ECONOMY',
-              max: 50
-            };
+          const sd = location.state.searchData;
+          const searchData = {
+            from: extractCode(sd.from),
+            to: extractCode(sd.to),
+            departDate: sd.departDate,
+            returnDate: sd.returnDate,
+            adults: parseInt(sd.adults) || parseInt(sd.travelers) || 1,
+            children: parseInt(sd.children) || 0,
+            infants: parseInt(sd.infants) || 0,
+            travelClass: sd.travelClass || 'ECONOMY',
+            max: 50
+          };
 
-            // Apply initial filters if passed in state (e.g. from a previous search or deep link)
-            if (sd.maxPrice) searchData.maxPrice = sd.maxPrice;
-            if (sd.nonStop) searchData.nonStop = sd.nonStop;
-            if (sd.includedAirlineCodes) searchData.includedAirlineCodes = sd.includedAirlineCodes;
-            if (sd.excludedAirlineCodes) searchData.excludedAirlineCodes = sd.excludedAirlineCodes;
+          // Apply initial filters if passed in state (e.g. from a previous search or deep link)
+          if (sd.maxPrice) searchData.maxPrice = sd.maxPrice;
+          if (sd.nonStop) searchData.nonStop = sd.nonStop;
+          if (sd.includedAirlineCodes) searchData.includedAirlineCodes = sd.includedAirlineCodes;
+          if (sd.excludedAirlineCodes) searchData.excludedAirlineCodes = sd.excludedAirlineCodes;
 
           // Validate required fields
           if (!searchData.from || !searchData.to || !searchData.departDate) {
@@ -188,28 +188,28 @@ function FlightSearchPage() {
             console.log('No flights found for the given search criteria');
             setFlights([]);
           } else {
-              // Transform flight data
-              const flightData = transformFlightData(data.data || []);
-              console.log('Transformed flight data:', flightData);
-              setFlights(flightData);
+            // Transform flight data
+            const flightData = transformFlightData(data.data || []);
+            console.log('Transformed flight data:', flightData);
+            setFlights(flightData);
 
-              // Build dynamic airline/aircraft maps from results
-              const newAirlineMap = {};
-              const newAircraftMap = {};
-              flightData.forEach(f => {
-                if (f.airline?.code && f.airline?.name) newAirlineMap[f.airline.code] = f.airline.name;
-                if (f.operatingCarrier && f.operatingAirlineName) newAirlineMap[f.operatingCarrier] = f.operatingAirlineName;
-                if (f.segments) f.segments.forEach(s => {
-                  if (s.airline?.code && s.airline?.name) newAirlineMap[s.airline.code] = s.airline.name;
-                  if (s.aircraft && typeof s.aircraft === 'string' && s.aircraft !== 'Unknown Aircraft') {
-                    // aircraft is already a resolved name from backend
-                  }
-                });
+            // Build dynamic airline/aircraft maps from results
+            const newAirlineMap = {};
+            const newAircraftMap = {};
+            flightData.forEach(f => {
+              if (f.airline?.code && f.airline?.name) newAirlineMap[f.airline.code] = f.airline.name;
+              if (f.operatingCarrier && f.operatingAirlineName) newAirlineMap[f.operatingCarrier] = f.operatingAirlineName;
+              if (f.segments) f.segments.forEach(s => {
+                if (s.airline?.code && s.airline?.name) newAirlineMap[s.airline.code] = s.airline.name;
+                if (s.aircraft && typeof s.aircraft === 'string' && s.aircraft !== 'Unknown Aircraft') {
+                  // aircraft is already a resolved name from backend
+                }
               });
-              setDynamicAirlineMap(prev => ({ ...prev, ...newAirlineMap }));
-              setDynamicAircraftMap(prev => ({ ...prev, ...newAircraftMap }));
+            });
+            setDynamicAirlineMap(prev => ({ ...prev, ...newAirlineMap }));
+            setDynamicAircraftMap(prev => ({ ...prev, ...newAircraftMap }));
 
-              // Update prices in the date range
+            // Update prices in the date range
             if (data.data?.dateWisePrices) {
               setDateRange(prev =>
                 prev.map(d => ({
@@ -220,11 +220,11 @@ function FlightSearchPage() {
               );
             }
           }
-          } catch (error) {
-            console.error('Error fetching initial flights:', error);
-            setFlights([]);
-            setError(error.message);
-          } finally {
+        } catch (error) {
+          console.error('Error fetching initial flights:', error);
+          setFlights([]);
+          setError(error.message);
+        } finally {
           setLoading(false);
         }
       } else {
@@ -295,22 +295,22 @@ function FlightSearchPage() {
             name: airlineName,
             logo: `https://pics.avs.io/200/200/${carrierCode.toUpperCase()}.png`
           },
-            departure: {
-              time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-              date: new Date(firstSegment.departure.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-              rawDate: firstSegment.departure.at?.split('T')[0] || firstSegment.departure.at,
-              airport: firstSegment.departure.iataCode,
-              terminal: firstSegment.departure.terminal || '',
-              cityName: cityMap[firstSegment.departure.iataCode] || firstSegment.departure.iataCode
-            },
-            arrival: {
-              time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-              date: new Date(lastSegment.arrival.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-              rawDate: lastSegment.arrival.at?.split('T')[0] || lastSegment.arrival.at,
-              airport: lastSegment.arrival.iataCode,
-              terminal: lastSegment.arrival.terminal || '',
-              cityName: cityMap[lastSegment.arrival.iataCode] || lastSegment.arrival.iataCode
-            },
+          departure: {
+            time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            date: new Date(firstSegment.departure.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            rawDate: firstSegment.departure.at?.split('T')[0] || firstSegment.departure.at,
+            airport: firstSegment.departure.iataCode,
+            terminal: firstSegment.departure.terminal || '',
+            cityName: cityMap[firstSegment.departure.iataCode] || firstSegment.departure.iataCode
+          },
+          arrival: {
+            time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            date: new Date(lastSegment.arrival.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            rawDate: lastSegment.arrival.at?.split('T')[0] || lastSegment.arrival.at,
+            airport: lastSegment.arrival.iataCode,
+            terminal: lastSegment.arrival.terminal || '',
+            cityName: cityMap[lastSegment.arrival.iataCode] || lastSegment.arrival.iataCode
+          },
           duration: itinerary.duration,
           stops: segments.length - 1,
           price: {
@@ -375,38 +375,38 @@ function FlightSearchPage() {
             name: flight.airline,
             logo: `https://pics.avs.io/200/200/${flight.airlineCode?.toUpperCase()}.png`
           },
-            departure: {
-              time: flight.departure.time,
-              date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-              rawDate: flight.departure.date,
-              airport: flight.departure.airport,
-              terminal: flight.departure.terminal || '',
-              cityName: cityMap[flight.departure.airport] || flight.departure.airport
-            },
-            arrival: {
-              time: flight.arrival.time,
-              date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-              rawDate: flight.arrival.date,
-              airport: flight.arrival.airport,
-              terminal: flight.arrival.terminal || '',
-              cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
-            },
-            duration: flight.duration,
-            stops: flight.stops || 0,
-            price: {
-              amount: flight.price.amount,
-              total: flight.price.total,
-              currency: flight.price.currency || 'USD',
-              base: flight.price.base || '0',
-              grandTotal: flight.price.grandTotal || flight.price.total,
+          departure: {
+            time: flight.departure.time,
+            date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            rawDate: flight.departure.date,
+            airport: flight.departure.airport,
+            terminal: flight.departure.terminal || '',
+            cityName: cityMap[flight.departure.airport] || flight.departure.airport
+          },
+          arrival: {
+            time: flight.arrival.time,
+            date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            rawDate: flight.arrival.date,
+            airport: flight.arrival.airport,
+            terminal: flight.arrival.terminal || '',
+            cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
+          },
+          duration: flight.duration,
+          stops: flight.stops || 0,
+          price: {
+            amount: flight.price.amount,
+            total: flight.price.total,
+            currency: flight.price.currency || 'USD',
+            base: flight.price.base || '0',
+            grandTotal: flight.price.grandTotal || flight.price.total,
             fees: flight.price.fees || []
           },
-            amenities: [],
-            baggage: {
-              checked: flight.baggageDetails?.checked || { weight: parseInt(flight.baggage) || 0, weightUnit: 'KG' },
-              cabin: flight.baggageDetails?.cabin || { weight: 0, weightUnit: 'KG' }
-            },
-            cabin: flight.cabin || 'ECONOMY',
+          amenities: [],
+          baggage: {
+            checked: flight.baggageDetails?.checked || { weight: parseInt(flight.baggage) || 0, weightUnit: 'KG' },
+            cabin: flight.baggageDetails?.cabin || { weight: 0, weightUnit: 'KG' }
+          },
+          cabin: flight.cabin || 'ECONOMY',
           class: flight.cabin || 'ECONOMY',
           brandedFare: flight.brandedFare || null,
           brandedFareLabel: flight.brandedFareLabel || null,
@@ -419,96 +419,96 @@ function FlightSearchPage() {
           flightNumber: flight.flightNumber,
           refundable: flight.refundable || false,
           seats: flight.numberOfBookableSeats || flight.seats || 'Available',
-            stopDetails: flight.stopDetails || [],
-            segments: (() => {
-              // Extract real segments from originalOffer for multi-stop flights
-              const origSegs = flight.originalOffer?.itineraries?.[0]?.segments;
-              if (origSegs && origSegs.length > 1) {
-                return origSegs.map(segment => ({
-                  departure: {
-                    time: new Date(segment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                    airport: segment.departure.iataCode,
-                    terminal: segment.departure.terminal || '',
-                    cityName: cityMap[segment.departure.iataCode] || segment.departure.iataCode,
-                    at: segment.departure.at
-                  },
-                  arrival: {
-                    time: new Date(segment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                    airport: segment.arrival.iataCode,
-                    terminal: segment.arrival.terminal || '',
-                    cityName: cityMap[segment.arrival.iataCode] || segment.arrival.iataCode,
-                    at: segment.arrival.at
-                  },
-                  airline: {
-                    code: segment.carrierCode,
-                    name: dynamicAirlineMap[segment.carrierCode] || segment.carrierCode,
-                    logo: `https://pics.avs.io/200/200/${segment.carrierCode.toUpperCase()}.png`
-                  },
-                  operatingCarrier: segment.operating?.carrierCode || null,
-                  operatingAirlineName: segment.operating?.carrierCode ? (dynamicAirlineMap[segment.operating.carrierCode] || segment.operating.carrierCode) : null,
-                  duration: segment.duration,
-                  flightNumber: `${segment.carrierCode} ${segment.number}`,
-                  aircraft: dynamicAircraftMap[segment.aircraft?.code] || segment.aircraft?.code || 'Unknown Aircraft',
-                  stops: 0
-                }));
-              }
-              // Single segment fallback
-              return [{
+          stopDetails: flight.stopDetails || [],
+          segments: (() => {
+            // Extract real segments from originalOffer for multi-stop flights
+            const origSegs = flight.originalOffer?.itineraries?.[0]?.segments;
+            if (origSegs && origSegs.length > 1) {
+              return origSegs.map(segment => ({
                 departure: {
-                  time: flight.departure.time,
-                  airport: flight.departure.airport,
-                  terminal: flight.departure.terminal || '',
-                  cityName: cityMap[flight.departure.airport] || flight.departure.airport,
-                  at: `${flight.departure.date}T${flight.departure.time}:00`
+                  time: new Date(segment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                  airport: segment.departure.iataCode,
+                  terminal: segment.departure.terminal || '',
+                  cityName: cityMap[segment.departure.iataCode] || segment.departure.iataCode,
+                  at: segment.departure.at
                 },
                 arrival: {
-                  time: flight.arrival.time,
-                  airport: flight.arrival.airport,
-                  terminal: flight.arrival.terminal || '',
-                  cityName: cityMap[flight.arrival.airport] || flight.arrival.airport,
-                  at: `${flight.arrival.date}T${flight.arrival.time}:00`
+                  time: new Date(segment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                  airport: segment.arrival.iataCode,
+                  terminal: segment.arrival.terminal || '',
+                  cityName: cityMap[segment.arrival.iataCode] || segment.arrival.iataCode,
+                  at: segment.arrival.at
                 },
                 airline: {
-                  code: flight.airlineCode,
-                  name: flight.airline,
-                  logo: `https://pics.avs.io/200/200/${flight.airlineCode?.toUpperCase()}.png`
+                  code: segment.carrierCode,
+                  name: dynamicAirlineMap[segment.carrierCode] || segment.carrierCode,
+                  logo: `https://pics.avs.io/200/200/${segment.carrierCode.toUpperCase()}.png`
                 },
-                operatingCarrier: flight.operatingCarrier || null,
-                operatingAirlineName: flight.operatingAirlineName || null,
-                duration: flight.duration,
-                flightNumber: flight.flightNumber,
-                aircraft: flight.aircraft || 'Unknown Aircraft',
+                operatingCarrier: segment.operating?.carrierCode || null,
+                operatingAirlineName: segment.operating?.carrierCode ? (dynamicAirlineMap[segment.operating.carrierCode] || segment.operating.carrierCode) : null,
+                duration: segment.duration,
+                flightNumber: `${segment.carrierCode} ${segment.number}`,
+                aircraft: dynamicAircraftMap[segment.aircraft?.code] || segment.aircraft?.code || 'Unknown Aircraft',
                 stops: 0
-              }];
-            })(),
-            // IMPORTANT: Preserve original Amadeus offer for booking API
-            originalOffer: flight.originalOffer
+              }));
+            }
+            // Single segment fallback
+            return [{
+              departure: {
+                time: flight.departure.time,
+                airport: flight.departure.airport,
+                terminal: flight.departure.terminal || '',
+                cityName: cityMap[flight.departure.airport] || flight.departure.airport,
+                at: `${flight.departure.date}T${flight.departure.time}:00`
+              },
+              arrival: {
+                time: flight.arrival.time,
+                airport: flight.arrival.airport,
+                terminal: flight.arrival.terminal || '',
+                cityName: cityMap[flight.arrival.airport] || flight.arrival.airport,
+                at: `${flight.arrival.date}T${flight.arrival.time}:00`
+              },
+              airline: {
+                code: flight.airlineCode,
+                name: flight.airline,
+                logo: `https://pics.avs.io/200/200/${flight.airlineCode?.toUpperCase()}.png`
+              },
+              operatingCarrier: flight.operatingCarrier || null,
+              operatingAirlineName: flight.operatingAirlineName || null,
+              duration: flight.duration,
+              flightNumber: flight.flightNumber,
+              aircraft: flight.aircraft || 'Unknown Aircraft',
+              stops: 0
+            }];
+          })(),
+          // IMPORTANT: Preserve original Amadeus offer for booking API
+          originalOffer: flight.originalOffer
         };
       } else {
-          // Handle our simple API format (no originalOffer available)
-          return {
-            id: flight.id,
-            airline: {
-              code: flight.airlineCode,
-              name: flight.airline,
-              logo: `https://pics.avs.io/200/200/${flight.airlineCode.toUpperCase()}.png`
-            },
-            departure: {
-              time: flight.departure.time,
-              date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-              rawDate: flight.departure.date,
-              airport: flight.departure.airport,
-              terminal: flight.departure.terminal || '',
-              cityName: cityMap[flight.departure.airport] || flight.departure.airport
-            },
-            arrival: {
-              time: flight.arrival.time,
-              date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-              rawDate: flight.arrival.date,
-              airport: flight.arrival.airport,
-              terminal: flight.arrival.terminal || '',
-              cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
-            },
+        // Handle our simple API format (no originalOffer available)
+        return {
+          id: flight.id,
+          airline: {
+            code: flight.airlineCode,
+            name: flight.airline,
+            logo: `https://pics.avs.io/200/200/${flight.airlineCode.toUpperCase()}.png`
+          },
+          departure: {
+            time: flight.departure.time,
+            date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            rawDate: flight.departure.date,
+            airport: flight.departure.airport,
+            terminal: flight.departure.terminal || '',
+            cityName: cityMap[flight.departure.airport] || flight.departure.airport
+          },
+          arrival: {
+            time: flight.arrival.time,
+            date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            rawDate: flight.arrival.date,
+            airport: flight.arrival.airport,
+            terminal: flight.arrival.terminal || '',
+            cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
+          },
           duration: flight.duration,
           stops: flight.stops || 0,
           price: {
@@ -519,12 +519,12 @@ function FlightSearchPage() {
             grandTotal: flight.price.grandTotal || flight.price.total,
             fees: flight.price.fees || []
           },
-            amenities: [],
-            baggage: {
-              checked: flight.baggageDetails?.checked || { weight: parseInt(flight.baggage) || 0, weightUnit: 'KG' },
-              cabin: flight.baggageDetails?.cabin || { weight: 0, weightUnit: 'KG' }
-            },
-            cabin: flight.cabin || 'Economy',
+          amenities: [],
+          baggage: {
+            checked: flight.baggageDetails?.checked || { weight: parseInt(flight.baggage) || 0, weightUnit: 'KG' },
+            cabin: flight.baggageDetails?.cabin || { weight: 0, weightUnit: 'KG' }
+          },
+          cabin: flight.cabin || 'Economy',
           class: flight.cabin || 'Economy',
           brandedFare: flight.brandedFare || null,
           brandedFareLabel: flight.brandedFareLabel || null,
@@ -733,10 +733,10 @@ function FlightSearchPage() {
         );
       }
     } catch (error) {
-        console.error('Error fetching flights:', error);
-        setFlights([]);
-        setError(error.message);
-      } finally {
+      console.error('Error fetching flights:', error);
+      setFlights([]);
+      setError(error.message);
+    } finally {
       setLoading(false);
     }
   };
@@ -750,6 +750,7 @@ function FlightSearchPage() {
   };
 
   // Helper to get a reliable numeric price for filtering
+  // Returns the price converted to the user's display currency so filters match what the user sees
   const getFlightPriceAmount = (flight) => {
     if (!flight || !flight.price) return 0;
     let amount = flight.price.amount;
@@ -764,8 +765,37 @@ function FlightSearchPage() {
         amount = total;
       }
     }
-    return Number.isFinite(amount) ? amount : 0;
+    if (!Number.isFinite(amount)) return 0;
+
+    // Convert from source currency (API) to user's display currency
+    const sourceCurrency = flight.price.currency || 'USD';
+    const targetCurrency = currencyService.getCurrency();
+    if (sourceCurrency !== targetCurrency) {
+      // Convert source → USD → target
+      const usdAmount = sourceCurrency === 'USD' ? amount : amount / (currencyService.getExchangeRate(sourceCurrency) || 1);
+      amount = currencyService.convertPrice(usdAmount, targetCurrency);
+    }
+    return Math.round(amount);
   };
+
+  // Dynamically compute price range bounds from current flights
+  const [priceRangeBounds, setPriceRangeBounds] = useState({ min: 0, max: 50000 });
+
+  useEffect(() => {
+    if (flights && flights.length > 0) {
+      const prices = flights.map(f => getFlightPriceAmount(f)).filter(p => p > 0);
+      if (prices.length > 0) {
+        const minPrice = Math.floor(Math.min(...prices) / 500) * 500; // round down to nearest 500
+        const maxPrice = Math.ceil(Math.max(...prices) / 500) * 500;  // round up to nearest 500
+        setPriceRangeBounds({ min: minPrice, max: maxPrice });
+        // Auto-set filter to cover full range
+        setFilters(prev => ({
+          ...prev,
+          price: [minPrice, maxPrice]
+        }));
+      }
+    }
+  }, [flights]);
 
   // Apply filters to flights
   const getFilteredFlights = () => {
@@ -774,67 +804,67 @@ function FlightSearchPage() {
     return flights.filter(flight => {
       // Filter by price
       const flightPrice = getFlightPriceAmount(flight);
-        if (flightPrice < filters.price[0] || flightPrice > filters.price[1]) {
+      if (flightPrice < filters.price[0] || flightPrice > filters.price[1]) {
+        return false;
+      }
+
+      // Filter by stops
+      if (filters.stops !== "any") {
+        const stops = parseInt(filters.stops);
+        const flightStops = flight.stops;
+
+        if (stops === 2) {
+          if (flightStops < 2) return false;
+        } else if (stops === 1) {
+          if (flightStops > 1) return false;
+        } else {
+          if (flightStops !== stops) return false;
+        }
+      }
+
+      // Filter by airlines
+      if (filters.airlines.length > 0) {
+        const airlineName = flight.airline?.name;
+        if (!filters.airlines.includes(airlineName)) {
           return false;
         }
+      }
 
-        // Filter by stops
-        if (filters.stops !== "any") {
-          const stops = parseInt(filters.stops);
-          const flightStops = flight.stops;
+      // Filter by departure time
+      if (filters.departureTime !== "any") {
+        const depTime = flight.departure?.time;
+        if (depTime) {
+          const hour = parseInt(depTime.split(':')[0]) || parseInt(depTime.match(/(\d+)/)?.[1]) || 0;
+          const isPM = depTime.toLowerCase().includes('pm');
+          const isAM = depTime.toLowerCase().includes('am');
+          let h24 = hour;
+          if (isPM && hour !== 12) h24 = hour + 12;
+          if (isAM && hour === 12) h24 = 0;
 
-          if (stops === 2) {
-            if (flightStops < 2) return false;
-          } else if (stops === 1) {
-            if (flightStops > 1) return false;
-          } else {
-            if (flightStops !== stops) return false;
+          switch (filters.departureTime) {
+            case 'early_morning': if (h24 < 0 || h24 >= 6) return false; break;
+            case 'morning': if (h24 < 6 || h24 >= 12) return false; break;
+            case 'afternoon': if (h24 < 12 || h24 >= 18) return false; break;
+            case 'evening': if (h24 < 18 || h24 >= 21) return false; break;
+            case 'night': if (h24 < 21 && h24 >= 0) return false; break;
           }
         }
+      }
 
-        // Filter by airlines
-        if (filters.airlines.length > 0) {
-          const airlineName = flight.airline?.name;
-          if (!filters.airlines.includes(airlineName)) {
-            return false;
-          }
-        }
+      // Filter by baggage
+      if (filters.baggage !== "any") {
+        const checkedWeight = flight.baggage?.checked?.weight || 0;
+        if (filters.baggage === 'included' && checkedWeight <= 0) return false;
+        if (filters.baggage === 'cabin_only' && checkedWeight > 0) return false;
+      }
 
-        // Filter by departure time
-        if (filters.departureTime !== "any") {
-          const depTime = flight.departure?.time;
-          if (depTime) {
-            const hour = parseInt(depTime.split(':')[0]) || parseInt(depTime.match(/(\d+)/)?.[1]) || 0;
-            const isPM = depTime.toLowerCase().includes('pm');
-            const isAM = depTime.toLowerCase().includes('am');
-            let h24 = hour;
-            if (isPM && hour !== 12) h24 = hour + 12;
-            if (isAM && hour === 12) h24 = 0;
+      // Filter by refundable
+      if (filters.refundable !== "any") {
+        if (filters.refundable === 'yes' && !flight.refundable) return false;
+        if (filters.refundable === 'no' && flight.refundable) return false;
+      }
 
-            switch (filters.departureTime) {
-              case 'early_morning': if (h24 < 0 || h24 >= 6) return false; break;
-              case 'morning': if (h24 < 6 || h24 >= 12) return false; break;
-              case 'afternoon': if (h24 < 12 || h24 >= 18) return false; break;
-              case 'evening': if (h24 < 18 || h24 >= 21) return false; break;
-              case 'night': if (h24 < 21 && h24 >= 0) return false; break;
-            }
-          }
-        }
-
-        // Filter by baggage
-        if (filters.baggage !== "any") {
-          const checkedWeight = flight.baggage?.checked?.weight || 0;
-          if (filters.baggage === 'included' && checkedWeight <= 0) return false;
-          if (filters.baggage === 'cabin_only' && checkedWeight > 0) return false;
-        }
-
-        // Filter by refundable
-        if (filters.refundable !== "any") {
-          if (filters.refundable === 'yes' && !flight.refundable) return false;
-          if (filters.refundable === 'no' && flight.refundable) return false;
-        }
-
-        return true;
+      return true;
     }).sort((a, b) => {
       // Sort by selected order
       const aPrice = a.price?.amount || 0;
@@ -924,18 +954,18 @@ function FlightSearchPage() {
         return match ? match[1] : str;
       };
 
-        // Create new search params with updated date AND extracted codes
-        const newSearchParams = {
-          ...searchParams,
-          from: extractCode(searchParams.from),
-          to: extractCode(searchParams.to),
-          departDate: selectedDate.isoDate,
-          travelClass: searchParams.travelClass || 'ECONOMY',
-          adults: parseInt(searchParams.adults) || parseInt(searchParams.travelers) || 1,
-          children: parseInt(searchParams.children) || 0,
-          infants: parseInt(searchParams.infants) || 0,
-          max: 50
-        };
+      // Create new search params with updated date AND extracted codes
+      const newSearchParams = {
+        ...searchParams,
+        from: extractCode(searchParams.from),
+        to: extractCode(searchParams.to),
+        departDate: selectedDate.isoDate,
+        travelClass: searchParams.travelClass || 'ECONOMY',
+        adults: parseInt(searchParams.adults) || parseInt(searchParams.travelers) || 1,
+        children: parseInt(searchParams.children) || 0,
+        infants: parseInt(searchParams.infants) || 0,
+        max: 50
+      };
 
       // Update local state and URL with the new params immediately
       setSearchParams(newSearchParams);
@@ -966,22 +996,22 @@ function FlightSearchPage() {
         throw new Error(data.error || 'Failed to fetch flights');
       }
 
-        // Transform flight data — backend returns { data: [...flights] }, not { data: { flights: [...] } }
-        const flightData = transformFlightData(data.data || []);
-        setFlights(flightData);
+      // Transform flight data — backend returns { data: [...flights] }, not { data: { flights: [...] } }
+      const flightData = transformFlightData(data.data || []);
+      setFlights(flightData);
 
-        // Build dynamic airline/aircraft maps from date-select results
-        const newAirlineMap = {};
-        flightData.forEach(f => {
-          if (f.airline?.code && f.airline?.name) newAirlineMap[f.airline.code] = f.airline.name;
-          if (f.operatingCarrier && f.operatingAirlineName) newAirlineMap[f.operatingCarrier] = f.operatingAirlineName;
-          if (f.segments) f.segments.forEach(s => {
-            if (s.airline?.code && s.airline?.name) newAirlineMap[s.airline.code] = s.airline.name;
-          });
+      // Build dynamic airline/aircraft maps from date-select results
+      const newAirlineMap = {};
+      flightData.forEach(f => {
+        if (f.airline?.code && f.airline?.name) newAirlineMap[f.airline.code] = f.airline.name;
+        if (f.operatingCarrier && f.operatingAirlineName) newAirlineMap[f.operatingCarrier] = f.operatingAirlineName;
+        if (f.segments) f.segments.forEach(s => {
+          if (s.airline?.code && s.airline?.name) newAirlineMap[s.airline.code] = s.airline.name;
         });
-        setDynamicAirlineMap(prev => ({ ...prev, ...newAirlineMap }));
+      });
+      setDynamicAirlineMap(prev => ({ ...prev, ...newAirlineMap }));
 
-        // Update prices in the date range (only if dateWisePrices is available)
+      // Update prices in the date range (only if dateWisePrices is available)
       const { dateWisePrices, lowestPrice } = data.data || {};
       if (dateWisePrices) {
         setDateRange(prev =>
@@ -1327,13 +1357,13 @@ function FlightSearchPage() {
                       <div className="flex justify-between mb-2">
                         <span className="font-medium text-gray-700">Price range</span>
                         <span className="text-[#055B75] font-medium">
-                          {currencyService.getCurrencySymbol()}{filters.price[0]} - {currencyService.getCurrencySymbol()}{filters.price[1]}
+                          {currencyService.getCurrencySymbol()}{filters.price[0].toLocaleString()} - {currencyService.getCurrencySymbol()}{filters.price[1].toLocaleString()}
                         </span>
                       </div>
                       <input
                         type="range"
-                        min="0"
-                        max="50000"
+                        min={priceRangeBounds.min}
+                        max={priceRangeBounds.max}
                         step="1000"
                         value={filters.price[1]}
                         onChange={(e) => onFilterChange('price', [filters.price[0], parseInt(e.target.value)])}
@@ -1415,34 +1445,34 @@ function FlightSearchPage() {
             <div className="p-4 border-t bg-gray-50">
               <div className="flex gap-3">
                 <button
-                    onClick={() => {
-                        onFilterChange('price', [0, 50000]);
-                        onFilterChange('stops', 'any');
-                        onFilterChange('airlines', []);
-                        onFilterChange('departureTime', 'any');
-                        onFilterChange('baggage', 'any');
-                        onFilterChange('refundable', 'any');
-                        onSortChange('price');
-                      }}
-                    className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
-                  >
-                    Reset All
-                  </button>
-                  <button
-                    onClick={onClose}
-                    className="flex-1 py-3 bg-[#055B75] text-white rounded-xl font-medium hover:bg-[#034457] transition-colors"
-                  >
-                    Apply Filters
-                  </button>
-                </div>
+                  onClick={() => {
+                    onFilterChange('price', [0, 50000]);
+                    onFilterChange('stops', 'any');
+                    onFilterChange('airlines', []);
+                    onFilterChange('departureTime', 'any');
+                    onFilterChange('baggage', 'any');
+                    onFilterChange('refundable', 'any');
+                    onSortChange('price');
+                  }}
+                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+                >
+                  Reset All
+                </button>
+                <button
+                  onClick={onClose}
+                  className="flex-1 py-3 bg-[#055B75] text-white rounded-xl font-medium hover:bg-[#034457] transition-colors"
+                >
+                  Apply Filters
+                </button>
               </div>
             </div>
           </div>
         </div>
-      );
-    };
+      </div>
+    );
+  };
 
-    // MobileSearchBar removed - using FlightSearchForm instead
+  // MobileSearchBar removed - using FlightSearchForm instead
 
   const { currentItems, totalPages, totalItems, startIndex, endIndex } = getPaginatedData();
 
@@ -1483,63 +1513,63 @@ function FlightSearchPage() {
         </div>
       </div>
 
-        {/* Enhanced Date Navigation Bar */}
-        <div className="bg-white shadow-md border-b border-gray-200 sticky top-0 z-20">
-          <div className="container mx-auto max-w-6xl px-4 py-3">
-            {/* Date selector */}
-            <div className="flex items-center justify-center bg-white rounded-lg relative">
-              <button
-                onClick={() => handleDateNavigate(-1)}
-                className="text-gray-600 hover:text-gray-800 p-2 rounded-full hover:bg-gray-100 transition-all flex-shrink-0"
-                aria-label="Previous week"
-              >
-                <ChevronLeft className="h-6 w-6" />
-              </button>
+      {/* Enhanced Date Navigation Bar */}
+      <div className="bg-white shadow-md border-b border-gray-200 sticky top-0 z-20">
+        <div className="container mx-auto max-w-6xl px-4 py-3">
+          {/* Date selector */}
+          <div className="flex items-center justify-center bg-white rounded-lg relative">
+            <button
+              onClick={() => handleDateNavigate(-1)}
+              className="text-gray-600 hover:text-gray-800 p-2 rounded-full hover:bg-gray-100 transition-all flex-shrink-0"
+              aria-label="Previous week"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </button>
 
-              <div className="flex items-center justify-center space-x-2 overflow-x-auto hide-scrollbar mx-4">
-                {dateRange.map((date, index) => (
-                  <button
-                    key={index}
-                    onClick={() => !date.isPast && handleDateSelect(date)}
-                    disabled={date.isPast}
-                    className={`
+            <div className="flex items-center justify-center space-x-2 overflow-x-auto hide-scrollbar mx-4">
+              {dateRange.map((date, index) => (
+                <button
+                  key={index}
+                  onClick={() => !date.isPast && handleDateSelect(date)}
+                  disabled={date.isPast}
+                  className={`
                       date-button flex flex-col items-center p-2 rounded-lg min-w-[80px]
                       ${date.selected ? 'selected bg-[#055B75] text-white shadow-md' : 'hover:bg-[#F0FAFC]'}
                       ${date.isWeekend && !date.selected ? 'text-[#055B75]' : ''}
                       ${date.isLowestPrice && !date.selected ? 'border border-[#65B3CF] bg-[#F0FAFC]' : ''}
                       ${date.isPast ? 'opacity-50 cursor-not-allowed' : ''}
                     `}
-                  >
-                    <span className={`text-sm font-medium ${date.selected ? 'text-blue-100' : ''}`}>
-                      {date.day}
+                >
+                  <span className={`text-sm font-medium ${date.selected ? 'text-blue-100' : ''}`}>
+                    {date.day}
+                  </span>
+                  <span className={`text-lg font-bold ${date.selected ? 'text-white' : ''}`}>
+                    {date.date}
+                  </span>
+                  {date.price && (
+                    <span className="price text-sm font-medium">
+                      <Price amount={date.price} />
+                      {date.isLowestPrice && !date.selected && (
+                        <span className="ml-1 text-xs">↓</span>
+                      )}
                     </span>
-                    <span className={`text-lg font-bold ${date.selected ? 'text-white' : ''}`}>
-                      {date.date}
-                    </span>
-                    {date.price && (
-                      <span className="price text-sm font-medium">
-                        <Price amount={date.price} />
-                        {date.isLowestPrice && !date.selected && (
-                          <span className="ml-1 text-xs">↓</span>
-                        )}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={() => handleDateNavigate(1)}
-                className="text-gray-600 hover:text-gray-800 p-2 rounded-full hover:bg-gray-100 transition-all flex-shrink-0"
-                aria-label="Next week"
-              >
-                <ChevronRight className="h-6 w-6" />
-              </button>
-
-
+                  )}
+                </button>
+              ))}
             </div>
+
+            <button
+              onClick={() => handleDateNavigate(1)}
+              className="text-gray-600 hover:text-gray-800 p-2 rounded-full hover:bg-gray-100 transition-all flex-shrink-0"
+              aria-label="Next week"
+            >
+              <ChevronRight className="h-6 w-6" />
+            </button>
+
+
           </div>
         </div>
+      </div>
 
       <div className="bg-[#F0FAFC] min-h-screen pb-12 pt-8">
         <div className="container mx-auto max-w-6xl px-4">
@@ -1550,309 +1580,302 @@ function FlightSearchPage() {
             </div>
           ) : (
             <div className="flex flex-col md:flex-row gap-6">
-                {/* Professional OTA-Style Filter Sidebar */}
-                <div className="w-full md:w-[280px] lg:w-[300px] flex-shrink-0">
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-                    
-                    {/* Filter Header */}
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <Filter className="h-4 w-4 text-[#055B75]" />
-                        <span className="text-sm font-bold text-gray-800 uppercase tracking-wide">Filters</span>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setFilters({
-                            price: [0, 50000],
-                            stops: "any",
-                            airlines: [],
-                            departureTime: "any",
-                            baggage: "any",
-                            refundable: "any"
-                          });
-                        }}
-                        className="text-xs font-semibold text-[#055B75] hover:text-[#034457] hover:underline transition-colors"
-                      >
-                        RESET ALL
-                      </button>
-                    </div>
+              {/* Professional OTA-Style Filter Sidebar */}
+              <div className="w-full md:w-[280px] lg:w-[300px] flex-shrink-0">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
 
-                    {/* Popular Filters (Quick Filters) */}
-                    <div className="px-5 py-4 border-b border-gray-100">
-                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Popular Filters</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {[
-                          { label: 'Non-Stop', action: () => handleFilterChange('stops', filters.stops === '0' ? 'any' : '0'), active: filters.stops === '0' },
-                          { label: 'Refundable', action: () => handleFilterChange('refundable', filters.refundable === 'yes' ? 'any' : 'yes'), active: filters.refundable === 'yes' },
-                          { label: 'With Baggage', action: () => handleFilterChange('baggage', filters.baggage === 'included' ? 'any' : 'included'), active: filters.baggage === 'included' },
-                          { label: 'Morning Dep.', action: () => handleFilterChange('departureTime', filters.departureTime === 'morning' ? 'any' : 'morning'), active: filters.departureTime === 'morning' },
-                        ].map((chip, idx) => (
-                          <button
-                            key={idx}
-                            onClick={chip.action}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-200 ${
-                              chip.active
-                                ? 'bg-[#055B75] text-white border-[#055B75] shadow-sm'
-                                : 'bg-white text-gray-600 border-gray-200 hover:border-[#055B75] hover:text-[#055B75]'
+                  {/* Filter Header */}
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-4 w-4 text-[#055B75]" />
+                      <span className="text-sm font-bold text-gray-800 uppercase tracking-wide">Filters</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setFilters({
+                          price: [0, 50000],
+                          stops: "any",
+                          airlines: [],
+                          departureTime: "any",
+                          baggage: "any",
+                          refundable: "any"
+                        });
+                      }}
+                      className="text-xs font-semibold text-[#055B75] hover:text-[#034457] hover:underline transition-colors"
+                    >
+                      RESET ALL
+                    </button>
+                  </div>
+
+                  {/* Popular Filters (Quick Filters) */}
+                  <div className="px-5 py-4 border-b border-gray-100">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Popular Filters</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { label: 'Non-Stop', action: () => handleFilterChange('stops', filters.stops === '0' ? 'any' : '0'), active: filters.stops === '0' },
+                        { label: 'Refundable', action: () => handleFilterChange('refundable', filters.refundable === 'yes' ? 'any' : 'yes'), active: filters.refundable === 'yes' },
+                        { label: 'With Baggage', action: () => handleFilterChange('baggage', filters.baggage === 'included' ? 'any' : 'included'), active: filters.baggage === 'included' },
+                        { label: 'Morning Dep.', action: () => handleFilterChange('departureTime', filters.departureTime === 'morning' ? 'any' : 'morning'), active: filters.departureTime === 'morning' },
+                      ].map((chip, idx) => (
+                        <button
+                          key={idx}
+                          onClick={chip.action}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-200 ${chip.active
+                            ? 'bg-[#055B75] text-white border-[#055B75] shadow-sm'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-[#055B75] hover:text-[#055B75]'
                             }`}
-                          >
-                            {chip.label}
-                          </button>
-                        ))}
-                      </div>
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
                     </div>
+                  </div>
 
-                    {/* Price Range - Professional dual slider */}
-                    <div className="px-5 py-4 border-b border-gray-100">
-                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Price Range</h4>
-                      <div className="mb-3">
-                        <div className="flex items-center gap-2 mb-4">
-                          <div className="flex-1">
-                            <label className="text-[10px] text-gray-400 font-medium mb-1 block">MIN</label>
-                            <div className="relative">
-                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">{currencyService.getCurrencySymbol()}</span>
-                              <input
-                                type="number"
-                                min="0"
-                                max={filters.price[1]}
-                                step="500"
-                                value={filters.price[0]}
-                                onChange={(e) => handleFilterChange('price', [Math.min(parseInt(e.target.value) || 0, filters.price[1]), filters.price[1]])}
-                                className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-200 rounded-md text-gray-700 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75] outline-none"
-                              />
-                            </div>
-                          </div>
-                          <span className="text-gray-300 mt-4">-</span>
-                          <div className="flex-1">
-                            <label className="text-[10px] text-gray-400 font-medium mb-1 block">MAX</label>
-                            <div className="relative">
-                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">{currencyService.getCurrencySymbol()}</span>
-                              <input
-                                type="number"
-                                min={filters.price[0]}
-                                max="50000"
-                                step="500"
-                                value={filters.price[1]}
-                                onChange={(e) => handleFilterChange('price', [filters.price[0], Math.max(parseInt(e.target.value) || 0, filters.price[0])])}
-                                className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-200 rounded-md text-gray-700 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75] outline-none"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                          {/* Dual Range Slider */}
-                          <div className="relative h-6 mx-1">
-                            {/* Background track */}
-                            <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1.5 bg-gray-200 rounded-full" />
-                            {/* Active track */}
-                            <div
-                              className="absolute top-1/2 -translate-y-1/2 h-1.5 bg-[#055B75] rounded-full"
-                              style={{
-                                left: `${(filters.price[0] / 50000) * 100}%`,
-                                right: `${100 - (filters.price[1] / 50000) * 100}%`
-                              }}
-                            />
-                            {/* Min thumb */}
+                  {/* Price Range - Professional dual slider */}
+                  <div className="px-5 py-4 border-b border-gray-100">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Price Range</h4>
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="flex-1">
+                          <label className="text-[10px] text-gray-400 font-medium mb-1 block">MIN</label>
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">{currencyService.getCurrencySymbol()}</span>
                             <input
-                              type="range"
-                              min="0"
-                              max="50000"
+                              type="number"
+                              min={priceRangeBounds.min}
+                              max={filters.price[1]}
                               step="500"
                               value={filters.price[0]}
-                              onChange={(e) => handleFilterChange('price', [Math.min(parseInt(e.target.value), filters.price[1] - 500), filters.price[1]])}
-                              className="absolute top-0 left-0 w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#055B75] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-30 [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#055B75] [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:cursor-pointer"
-                              style={{ zIndex: filters.price[0] > 25000 ? 20 : 10 }}
-                            />
-                            {/* Max thumb */}
-                            <input
-                              type="range"
-                              min="0"
-                              max="50000"
-                              step="500"
-                              value={filters.price[1]}
-                              onChange={(e) => handleFilterChange('price', [filters.price[0], Math.max(parseInt(e.target.value), filters.price[0] + 500)])}
-                              className="absolute top-0 left-0 w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#055B75] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-30 [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#055B75] [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:cursor-pointer"
-                              style={{ zIndex: filters.price[1] < 25000 ? 20 : 10 }}
+                              onChange={(e) => handleFilterChange('price', [Math.min(parseInt(e.target.value) || 0, filters.price[1]), filters.price[1]])}
+                              className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-200 rounded-md text-gray-700 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75] outline-none"
                             />
                           </div>
-                        <div className="flex justify-between mt-1.5">
-                          <span className="text-[10px] text-gray-400">{currencyService.getCurrencySymbol()}0</span>
-                          <span className="text-[10px] text-gray-400">{currencyService.getCurrencySymbol()}50,000</span>
+                        </div>
+                        <span className="text-gray-300 mt-4">-</span>
+                        <div className="flex-1">
+                          <label className="text-[10px] text-gray-400 font-medium mb-1 block">MAX</label>
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">{currencyService.getCurrencySymbol()}</span>
+                            <input
+                              type="number"
+                              min={filters.price[0]}
+                              max={priceRangeBounds.max}
+                              step="500"
+                              value={filters.price[1]}
+                              onChange={(e) => handleFilterChange('price', [filters.price[0], Math.max(parseInt(e.target.value) || 0, filters.price[0])])}
+                              className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-200 rounded-md text-gray-700 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75] outline-none"
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Stops Filter */}
-                    <div className="px-5 py-4 border-b border-gray-100">
-                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Stops</h4>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {[
-                          { value: 'any', label: 'Any' },
-                          { value: '0', label: 'Non-stop' },
-                          { value: '1', label: '1 Stop' },
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => handleFilterChange('stops', opt.value)}
-                            className={`px-2 py-2 rounded-lg text-xs font-medium border text-center transition-all duration-200 ${
-                              filters.stops === opt.value
-                                ? 'bg-[#055B75] text-white border-[#055B75] shadow-sm'
-                                : 'bg-white text-gray-600 border-gray-200 hover:border-[#65B3CF]'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
+                      {/* Dual Range Slider */}
+                      <div className="relative h-6 mx-1">
+                        {/* Background track */}
+                        <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1.5 bg-gray-200 rounded-full" />
+                        {/* Active track */}
+                        <div
+                          className="absolute top-1/2 -translate-y-1/2 h-1.5 bg-[#055B75] rounded-full"
+                          style={{
+                            left: `${((filters.price[0] - priceRangeBounds.min) / (priceRangeBounds.max - priceRangeBounds.min || 1)) * 100}%`,
+                            right: `${100 - ((filters.price[1] - priceRangeBounds.min) / (priceRangeBounds.max - priceRangeBounds.min || 1)) * 100}%`
+                          }}
+                        />
+                        {/* Min thumb */}
+                        <input
+                          type="range"
+                          min={priceRangeBounds.min}
+                          max={priceRangeBounds.max}
+                          step="500"
+                          value={filters.price[0]}
+                          onChange={(e) => handleFilterChange('price', [Math.min(parseInt(e.target.value) || priceRangeBounds.min, filters.price[1] - 500), filters.price[1]])}
+                          className="absolute top-0 left-0 w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#055B75] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-30 [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#055B75] [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:cursor-pointer"
+                          style={{ zIndex: filters.price[0] > 25000 ? 20 : 10 }}
+                        />
+                        {/* Max thumb */}
+                        <input
+                          type="range"
+                          min={priceRangeBounds.min}
+                          max={priceRangeBounds.max}
+                          step="500"
+                          value={filters.price[1]}
+                          onChange={(e) => handleFilterChange('price', [filters.price[0], Math.max(parseInt(e.target.value) || priceRangeBounds.max, filters.price[0] + 500)])}
+                          className="absolute top-0 left-0 w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#055B75] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-30 [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#055B75] [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:cursor-pointer"
+                          style={{ zIndex: filters.price[1] < 25000 ? 20 : 10 }}
+                        />
                       </div>
-                      <button
-                        onClick={() => handleFilterChange('stops', filters.stops === '2' ? 'any' : '2')}
-                        className={`mt-1.5 w-full px-2 py-2 rounded-lg text-xs font-medium border text-center transition-all duration-200 ${
-                          filters.stops === '2'
+                      <div className="flex justify-between mt-1.5">
+                        <span className="text-[10px] text-gray-400">{currencyService.getCurrencySymbol()}{priceRangeBounds.min.toLocaleString()}</span>
+                        <span className="text-[10px] text-gray-400">{currencyService.getCurrencySymbol()}{priceRangeBounds.max.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stops Filter */}
+                  <div className="px-5 py-4 border-b border-gray-100">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Stops</h4>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { value: 'any', label: 'Any' },
+                        { value: '0', label: 'Non-stop' },
+                        { value: '1', label: '1 Stop' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => handleFilterChange('stops', opt.value)}
+                          className={`px-2 py-2 rounded-lg text-xs font-medium border text-center transition-all duration-200 ${filters.stops === opt.value
                             ? 'bg-[#055B75] text-white border-[#055B75] shadow-sm'
                             : 'bg-white text-gray-600 border-gray-200 hover:border-[#65B3CF]'
+                            }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => handleFilterChange('stops', filters.stops === '2' ? 'any' : '2')}
+                      className={`mt-1.5 w-full px-2 py-2 rounded-lg text-xs font-medium border text-center transition-all duration-200 ${filters.stops === '2'
+                        ? 'bg-[#055B75] text-white border-[#055B75] shadow-sm'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-[#65B3CF]'
                         }`}
-                      >
-                        2+ Stops
-                      </button>
-                    </div>
-
-                    {/* Departure Time Filter */}
-                    <div className="px-5 py-4 border-b border-gray-100">
-                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Departure Time</h4>
-                      <div className="grid grid-cols-2 gap-2">
-                        {[
-                          { value: 'early_morning', label: 'Before 6 AM', sublabel: 'Early Morning', icon: <Moon className="h-3.5 w-3.5" /> },
-                          { value: 'morning', label: '6 AM - 12 PM', sublabel: 'Morning', icon: <Sunrise className="h-3.5 w-3.5" /> },
-                          { value: 'afternoon', label: '12 PM - 6 PM', sublabel: 'Afternoon', icon: <Sun className="h-3.5 w-3.5" /> },
-                          { value: 'evening', label: '6 PM - 9 PM', sublabel: 'Evening', icon: <Sunset className="h-3.5 w-3.5" /> },
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => handleFilterChange('departureTime', filters.departureTime === opt.value ? 'any' : opt.value)}
-                            className={`flex flex-col items-center p-2.5 rounded-lg border text-center transition-all duration-200 ${
-                              filters.departureTime === opt.value
-                                ? 'bg-[#F0FAFC] border-[#055B75] text-[#055B75]'
-                                : 'bg-white border-gray-200 text-gray-500 hover:border-[#65B3CF]'
-                            }`}
-                          >
-                            <span className={`mb-1 ${filters.departureTime === opt.value ? 'text-[#055B75]' : 'text-gray-400'}`}>{opt.icon}</span>
-                            <span className="text-[10px] font-semibold leading-tight">{opt.sublabel}</span>
-                            <span className="text-[9px] text-gray-400 mt-0.5">{opt.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Baggage Filter */}
-                    <div className="px-5 py-4 border-b border-gray-100">
-                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                        <Briefcase className="h-3.5 w-3.5 text-gray-400" />
-                        Baggage
-                      </h4>
-                      <div className="space-y-1.5">
-                        {[
-                          { value: 'any', label: 'Any', desc: 'Show all flights' },
-                          { value: 'included', label: 'Check-in Baggage Included', desc: 'Flights with checked baggage' },
-                          { value: 'cabin_only', label: 'Cabin Baggage Only', desc: 'No checked baggage' },
-                        ].map((opt) => (
-                          <label
-                            key={opt.value}
-                            className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
-                              filters.baggage === opt.value
-                                ? 'bg-[#F0FAFC] border border-[#055B75]/20'
-                                : 'hover:bg-gray-50 border border-transparent'
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name="baggage"
-                              className="mt-0.5 w-3.5 h-3.5 text-[#055B75] border-gray-300 focus:ring-[#055B75]"
-                              checked={filters.baggage === opt.value}
-                              onChange={() => handleFilterChange('baggage', opt.value)}
-                            />
-                            <div>
-                              <div className="text-xs font-medium text-gray-700">{opt.label}</div>
-                              <div className="text-[10px] text-gray-400">{opt.desc}</div>
-                            </div>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Refundable Filter */}
-                    <div className="px-5 py-4 border-b border-gray-100">
-                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                        <ShieldCheck className="h-3.5 w-3.5 text-gray-400" />
-                        Fare Type
-                      </h4>
-                      <div className="space-y-1.5">
-                        {[
-                          { value: 'any', label: 'All Fares' },
-                          { value: 'yes', label: 'Refundable Only' },
-                          { value: 'no', label: 'Non-Refundable Only' },
-                        ].map((opt) => (
-                          <label
-                            key={opt.value}
-                            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                              filters.refundable === opt.value
-                                ? 'bg-[#F0FAFC] border border-[#055B75]/20'
-                                : 'hover:bg-gray-50 border border-transparent'
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name="refundable"
-                              className="w-3.5 h-3.5 text-[#055B75] border-gray-300 focus:ring-[#055B75]"
-                              checked={filters.refundable === opt.value}
-                              onChange={() => handleFilterChange('refundable', opt.value)}
-                            />
-                            <span className="text-xs font-medium text-gray-700">{opt.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Airlines Filter */}
-                    <div className="px-5 py-4">
-                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Airlines</h4>
-                      {getAllAirlines().length > 0 ? (
-                        <div className="space-y-0.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                          {getAllAirlines().map(airline => {
-                            const airlineFlights = flights.filter(f => f.airline?.name === airline);
-                            const minPrice = airlineFlights.length > 0 ? Math.min(...airlineFlights.map(f => f.price?.amount || 0)) : null;
-                            return (
-                              <label
-                                key={airline}
-                                className={`flex items-center justify-between px-2.5 py-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                                  filters.airlines.includes(airline)
-                                    ? 'bg-[#F0FAFC]'
-                                    : 'hover:bg-gray-50'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    className="w-3.5 h-3.5 text-[#055B75] border-gray-300 rounded focus:ring-[#055B75]"
-                                    checked={filters.airlines.includes(airline)}
-                                    onChange={() => toggleAirlineFilter(airline)}
-                                  />
-                                  <span className="text-xs text-gray-700 font-medium">{airline}</span>
-                                </div>
-                                {minPrice !== null && (
-                                  <span className="text-[10px] text-gray-400 font-medium">
-                                    {currencyService.getCurrencySymbol()}{Math.round(minPrice).toLocaleString()}
-                                  </span>
-                                )}
-                              </label>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-gray-400 italic">No airlines to filter</p>
-                      )}
-                    </div>
-
+                    >
+                      2+ Stops
+                    </button>
                   </div>
+
+                  {/* Departure Time Filter */}
+                  <div className="px-5 py-4 border-b border-gray-100">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Departure Time</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: 'early_morning', label: 'Before 6 AM', sublabel: 'Early Morning', icon: <Moon className="h-3.5 w-3.5" /> },
+                        { value: 'morning', label: '6 AM - 12 PM', sublabel: 'Morning', icon: <Sunrise className="h-3.5 w-3.5" /> },
+                        { value: 'afternoon', label: '12 PM - 6 PM', sublabel: 'Afternoon', icon: <Sun className="h-3.5 w-3.5" /> },
+                        { value: 'evening', label: '6 PM - 9 PM', sublabel: 'Evening', icon: <Sunset className="h-3.5 w-3.5" /> },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => handleFilterChange('departureTime', filters.departureTime === opt.value ? 'any' : opt.value)}
+                          className={`flex flex-col items-center p-2.5 rounded-lg border text-center transition-all duration-200 ${filters.departureTime === opt.value
+                            ? 'bg-[#F0FAFC] border-[#055B75] text-[#055B75]'
+                            : 'bg-white border-gray-200 text-gray-500 hover:border-[#65B3CF]'
+                            }`}
+                        >
+                          <span className={`mb-1 ${filters.departureTime === opt.value ? 'text-[#055B75]' : 'text-gray-400'}`}>{opt.icon}</span>
+                          <span className="text-[10px] font-semibold leading-tight">{opt.sublabel}</span>
+                          <span className="text-[9px] text-gray-400 mt-0.5">{opt.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Baggage Filter */}
+                  <div className="px-5 py-4 border-b border-gray-100">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <Briefcase className="h-3.5 w-3.5 text-gray-400" />
+                      Baggage
+                    </h4>
+                    <div className="space-y-1.5">
+                      {[
+                        { value: 'any', label: 'Any', desc: 'Show all flights' },
+                        { value: 'included', label: 'Check-in Baggage Included', desc: 'Flights with checked baggage' },
+                        { value: 'cabin_only', label: 'Cabin Baggage Only', desc: 'No checked baggage' },
+                      ].map((opt) => (
+                        <label
+                          key={opt.value}
+                          className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-all duration-200 ${filters.baggage === opt.value
+                            ? 'bg-[#F0FAFC] border border-[#055B75]/20'
+                            : 'hover:bg-gray-50 border border-transparent'
+                            }`}
+                        >
+                          <input
+                            type="radio"
+                            name="baggage"
+                            className="mt-0.5 w-3.5 h-3.5 text-[#055B75] border-gray-300 focus:ring-[#055B75]"
+                            checked={filters.baggage === opt.value}
+                            onChange={() => handleFilterChange('baggage', opt.value)}
+                          />
+                          <div>
+                            <div className="text-xs font-medium text-gray-700">{opt.label}</div>
+                            <div className="text-[10px] text-gray-400">{opt.desc}</div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Refundable Filter */}
+                  <div className="px-5 py-4 border-b border-gray-100">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <ShieldCheck className="h-3.5 w-3.5 text-gray-400" />
+                      Fare Type
+                    </h4>
+                    <div className="space-y-1.5">
+                      {[
+                        { value: 'any', label: 'All Fares' },
+                        { value: 'yes', label: 'Refundable Only' },
+                        { value: 'no', label: 'Non-Refundable Only' },
+                      ].map((opt) => (
+                        <label
+                          key={opt.value}
+                          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 ${filters.refundable === opt.value
+                            ? 'bg-[#F0FAFC] border border-[#055B75]/20'
+                            : 'hover:bg-gray-50 border border-transparent'
+                            }`}
+                        >
+                          <input
+                            type="radio"
+                            name="refundable"
+                            className="w-3.5 h-3.5 text-[#055B75] border-gray-300 focus:ring-[#055B75]"
+                            checked={filters.refundable === opt.value}
+                            onChange={() => handleFilterChange('refundable', opt.value)}
+                          />
+                          <span className="text-xs font-medium text-gray-700">{opt.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Airlines Filter */}
+                  <div className="px-5 py-4">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Airlines</h4>
+                    {getAllAirlines().length > 0 ? (
+                      <div className="space-y-0.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                        {getAllAirlines().map(airline => {
+                          const airlineFlights = flights.filter(f => f.airline?.name === airline);
+                          const minPrice = airlineFlights.length > 0 ? Math.min(...airlineFlights.map(f => f.price?.amount || 0)) : null;
+                          return (
+                            <label
+                              key={airline}
+                              className={`flex items-center justify-between px-2.5 py-2 rounded-lg cursor-pointer transition-all duration-200 ${filters.airlines.includes(airline)
+                                ? 'bg-[#F0FAFC]'
+                                : 'hover:bg-gray-50'
+                                }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  className="w-3.5 h-3.5 text-[#055B75] border-gray-300 rounded focus:ring-[#055B75]"
+                                  checked={filters.airlines.includes(airline)}
+                                  onChange={() => toggleAirlineFilter(airline)}
+                                />
+                                <span className="text-xs text-gray-700 font-medium">{airline}</span>
+                              </div>
+                              {minPrice !== null && (
+                                <span className="text-[10px] text-gray-400 font-medium">
+                                  {currencyService.getCurrencySymbol()}{Math.round(minPrice).toLocaleString()}
+                                </span>
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">No airlines to filter</p>
+                    )}
+                  </div>
+
                 </div>
+              </div>
 
               {/* Results */}
               <div className="flex-1 min-w-0">
@@ -1869,23 +1892,23 @@ function FlightSearchPage() {
                       </p>
                     </div>
 
-                      <div className="flex items-center space-x-3">
-                        <span className="text-gray-600 text-sm font-medium">Sort by:</span>
-                        <div className="relative">
-                          <select
-                            value={sortOrder}
-                            onChange={(e) => setSortOrder(e.target.value)}
-                            className="cursor-pointer appearance-none pl-4 pr-10 py-2.5 bg-white border-2 border-gray-200 rounded-xl text-[#055B75] font-semibold text-sm focus:ring-2 focus:ring-[#65B3CF] focus:border-[#65B3CF] focus:outline-none hover:border-[#B9D0DC] hover:shadow-sm transition-all"
-                          >
-                            <option value="price">Price - Low to High</option>
-                            <option value="-price">Price - High to Low</option>
-                            <option value="duration">Duration - Shortest</option>
-                            <option value="departure">Departure - Earliest</option>
-                            <option value="arrival">Arrival - Earliest</option>
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#055B75] h-4 w-4 pointer-events-none" />
-                        </div>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-gray-600 text-sm font-medium">Sort by:</span>
+                      <div className="relative">
+                        <select
+                          value={sortOrder}
+                          onChange={(e) => setSortOrder(e.target.value)}
+                          className="cursor-pointer appearance-none pl-4 pr-10 py-2.5 bg-white border-2 border-gray-200 rounded-xl text-[#055B75] font-semibold text-sm focus:ring-2 focus:ring-[#65B3CF] focus:border-[#65B3CF] focus:outline-none hover:border-[#B9D0DC] hover:shadow-sm transition-all"
+                        >
+                          <option value="price">Price - Low to High</option>
+                          <option value="-price">Price - High to Low</option>
+                          <option value="duration">Duration - Shortest</option>
+                          <option value="departure">Departure - Earliest</option>
+                          <option value="arrival">Arrival - Earliest</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#055B75] h-4 w-4 pointer-events-none" />
                       </div>
+                    </div>
                   </div>
                 </div>
 
