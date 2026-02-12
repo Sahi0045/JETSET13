@@ -1,16 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FaShip, FaCalendarAlt, FaMapMarkerAlt, FaUser, FaCheckCircle, FaClock, FaAnchor, FaPrint, FaCopy, FaWater, FaCompass, FaPhoneAlt, FaEnvelope, FaSuitcaseRolling } from 'react-icons/fa';
+import { FaShip, FaCalendarAlt, FaMapMarkerAlt, FaUser, FaCheckCircle, FaClock, FaAnchor, FaPrint, FaCopy, FaWater, FaCompass, FaPhoneAlt, FaEnvelope, FaSuitcaseRolling, FaDownload } from 'react-icons/fa';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import Price from '../../../Components/Price';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 function CruiseBookingSuccess() {
     const location = useLocation();
     const navigate = useNavigate();
     const [bookingData, setBookingData] = useState(null);
     const [showCopied, setShowCopied] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
+    const ticketRef = React.useRef(null);
 
     useEffect(() => {
         if (location.state) {
@@ -45,6 +49,38 @@ function CruiseBookingSuccess() {
 
     const handlePrint = () => {
         window.print();
+    };
+
+    const handleDownload = async () => {
+        if (!ticketRef.current) return;
+
+        try {
+            setIsDownloading(true);
+            const canvas = await html2canvas(ticketRef.current, {
+                scale: 2, // Higher quality
+                useCORS: true, // Allow cross-origin images
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            const imgWidth = 210; // A4 width in mm
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+            pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+            pdf.save(`Cruise-Ticket-${bookingData.orderId || 'booking'}.pdf`);
+        } catch (error) {
+            console.error('Error generating ticket PDF:', error);
+            alert('Failed to download ticket. Please try printing instead.');
+        } finally {
+            setIsDownloading(false);
+        }
     };
 
     if (!bookingData) {
@@ -90,7 +126,7 @@ function CruiseBookingSuccess() {
                 <div className="relative mx-auto" style={{ maxWidth: '900px' }}>
 
                     {/* ── Ticket Card ── */}
-                    <div className="bg-white rounded-3xl overflow-hidden"
+                    <div ref={ticketRef} className="bg-white rounded-3xl overflow-hidden"
                         style={{ boxShadow: '0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1)' }}>
 
                         {/* ── Top Banner with Gradient ── */}
@@ -445,6 +481,25 @@ function CruiseBookingSuccess() {
                                 color: 'white'
                             }}>
                             Book Another Cruise
+                        </button>
+                        <button
+                            onClick={handleDownload}
+                            disabled={isDownloading}
+                            className="w-full sm:w-auto px-6 py-4 rounded-2xl font-bold text-lg transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+                            style={{
+                                background: 'rgba(255,255,255,0.12)',
+                                backdropFilter: 'blur(8px)',
+                                border: '2px solid rgba(255,255,255,0.25)',
+                                color: 'white',
+                                opacity: isDownloading ? 0.7 : 1,
+                                cursor: isDownloading ? 'wait' : 'pointer'
+                            }}>
+                            {isDownloading ? (
+                                <span className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></span>
+                            ) : (
+                                <FaDownload />
+                            )}
+                            {isDownloading ? 'Generating...' : 'Download Ticket'}
                         </button>
                         <button
                             onClick={handlePrint}
