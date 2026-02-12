@@ -1482,7 +1482,7 @@ function FlightSearchPage() {
 
 
       {/* Enhanced Header Section with Background Image */}
-      <div className="relative px-4 py-12 bg-gradient-to-r from-[#055B75] to-[#034457] text-white overflow-hidden">
+      <div className="relative px-4 py-12 bg-gradient-to-r from-[#055B75] to-[#034457] text-white z-30">
         <div className="absolute inset-0 overflow-hidden">
           <img
             src="https://images.unsplash.com/photo-1569154941061-e231b4725ef1?q=80&w=2070&auto=format&fit=crop"
