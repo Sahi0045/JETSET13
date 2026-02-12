@@ -743,19 +743,37 @@ function FlightSearchPage() {
 
   // Handle filter changes
   const handleFilterChange = (filterType, value) => {
-    setFilters({
-      ...filters,
+    setFilters(prev => ({
+      ...prev,
       [filterType]: value
-    });
+    }));
   };
 
-    // Apply filters to flights
-    const getFilteredFlights = () => {
-      if (!flights || !Array.isArray(flights)) return [];
+  // Helper to get a reliable numeric price for filtering
+  const getFlightPriceAmount = (flight) => {
+    if (!flight || !flight.price) return 0;
+    let amount = flight.price.amount;
+    if (typeof amount === 'string') {
+      amount = parseFloat(amount.replace(/,/g, ''));
+    }
+    if (typeof amount !== 'number' || Number.isNaN(amount)) {
+      const total = flight.price.total;
+      if (typeof total === 'string') {
+        amount = parseFloat(total.replace(/,/g, ''));
+      } else if (typeof total === 'number') {
+        amount = total;
+      }
+    }
+    return Number.isFinite(amount) ? amount : 0;
+  };
 
-      return flights.filter(flight => {
-        // Filter by price
-        const flightPrice = flight.price?.amount || 0;
+  // Apply filters to flights
+  const getFilteredFlights = () => {
+    if (!flights || !Array.isArray(flights)) return [];
+
+    return flights.filter(flight => {
+      // Filter by price
+      const flightPrice = getFlightPriceAmount(flight);
         if (flightPrice < filters.price[0] || flightPrice > filters.price[1]) {
           return false;
         }
