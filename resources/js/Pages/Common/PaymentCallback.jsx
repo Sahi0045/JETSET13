@@ -51,7 +51,7 @@ export default function PaymentCallback() {
           console.log('📦 All localStorage keys:', Object.keys(localStorage));
           console.log('📦 Retrieved booking data:', storedBookingData ? `Found (${storedBookingData.length} chars)` : 'Not found');
           console.log('📦 Retrieved session data:', pendingSession ? 'Found' : 'Not found');
-          
+
           // Debug: Log raw localStorage values
           if (storedBookingData) {
             console.log('📦 Raw booking data preview:', storedBookingData.substring(0, 200) + '...');
@@ -130,6 +130,26 @@ export default function PaymentCallback() {
           const confirmationRoute = confirmationRoutes[bookingType] || '/booking-success';
 
           setTimeout(() => {
+            // Save the completed booking to localStorage so My Trips can display it
+            const completedBooking = {
+              ...bookingData,
+              orderId,
+              bookingReference: orderId,
+              type: bookingType,
+              status: 'CONFIRMED',
+              paymentVerified: true,
+              orderCreatedAt: new Date().toISOString()
+            };
+
+            if (bookingType === 'cruise') {
+              localStorage.setItem('completedBooking', JSON.stringify(completedBooking));
+            } else if (bookingType === 'hotel') {
+              localStorage.setItem('completedHotelBooking', JSON.stringify(completedBooking));
+            } else if (bookingType === 'package') {
+              localStorage.setItem('completedPackageBooking', JSON.stringify(completedBooking));
+            }
+
+            // Clean up pending data
             localStorage.removeItem(pendingBookingKey);
             localStorage.removeItem('pendingPaymentSession');
             navigate(confirmationRoute, {
