@@ -785,13 +785,12 @@ function FlightSearchPage() {
     if (flights && flights.length > 0) {
       const prices = flights.map(f => getFlightPriceAmount(f)).filter(p => p > 0);
       if (prices.length > 0) {
-        const minPrice = Math.floor(Math.min(...prices) / 500) * 500; // round down to nearest 500
         const maxPrice = Math.ceil(Math.max(...prices) / 500) * 500;  // round up to nearest 500
-        setPriceRangeBounds({ min: minPrice, max: maxPrice });
-        // Auto-set filter to cover full range
+        setPriceRangeBounds({ min: 0, max: maxPrice });
+        // Auto-set filter: 0 to max so all flights show initially
         setFilters(prev => ({
           ...prev,
-          price: [minPrice, maxPrice]
+          price: [0, maxPrice]
         }));
       }
     }
@@ -1642,11 +1641,14 @@ function FlightSearchPage() {
                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">{currencyService.getCurrencySymbol()}</span>
                             <input
                               type="number"
-                              min={priceRangeBounds.min}
-                              max={filters.price[1]}
+                              min={0}
+                              max={priceRangeBounds.max}
                               step="500"
                               value={filters.price[0]}
-                              onChange={(e) => handleFilterChange('price', [Math.min(parseInt(e.target.value) || 0, filters.price[1]), filters.price[1]])}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                if (!isNaN(val)) handleFilterChange('price', [val, filters.price[1]]);
+                              }}
                               className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-200 rounded-md text-gray-700 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75] outline-none"
                             />
                           </div>
@@ -1658,11 +1660,14 @@ function FlightSearchPage() {
                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">{currencyService.getCurrencySymbol()}</span>
                             <input
                               type="number"
-                              min={filters.price[0]}
+                              min={0}
                               max={priceRangeBounds.max}
                               step="500"
                               value={filters.price[1]}
-                              onChange={(e) => handleFilterChange('price', [filters.price[0], Math.max(parseInt(e.target.value) || 0, filters.price[0])])}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                if (!isNaN(val)) handleFilterChange('price', [filters.price[0], val]);
+                              }}
                               className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-200 rounded-md text-gray-700 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75] outline-none"
                             />
                           </div>
