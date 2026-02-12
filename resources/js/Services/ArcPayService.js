@@ -217,6 +217,33 @@ class ArcPayService {
         }
     }
 
+    // Cancel Booking - Orchestrated cancellation (Amadeus + ARC Pay refund/void + DB)
+    async cancelBooking(bookingReference, email = null, reason = 'Customer request') {
+        try {
+            console.log('🚫 Cancelling booking:', bookingReference);
+
+            const response = await this.api.post('?action=cancel-booking', {
+                bookingReference,
+                email,
+                reason
+            });
+
+            return {
+                success: response.data.success,
+                message: response.data.message,
+                cancellation: response.data.cancellation,
+                booking: response.data.booking
+            };
+        } catch (error) {
+            console.error('Cancel booking failed:', error);
+            return {
+                success: false,
+                error: error.response?.data?.error || error.message,
+                details: error.response?.data?.details
+            };
+        }
+    }
+
     // Test ARC Pay Integration
     async testIntegration() {
         try {

@@ -73,6 +73,8 @@ export default async function handler(req, res) {
         return handlePaymentCapture(req, res);
       case 'payment-retrieve':
         return handlePaymentRetrieve(req, res);
+      case 'cancel-booking':
+        return handleCancelBooking(req, res);
       case 'test':
         return handleTest(req, res);
       case 'health':
@@ -82,7 +84,7 @@ export default async function handler(req, res) {
       default:
         return res.status(400).json({
           success: false,
-          error: 'Invalid action. Supported actions: initiate-payment, payment-callback, get-payment-details, gateway-status, session-create, order-create, hosted-checkout, payment-process, payment-verify, payment-refund, payment-void, payment-capture, payment-retrieve, test, health, debug'
+          error: 'Invalid action. Supported actions: initiate-payment, payment-callback, get-payment-details, gateway-status, session-create, order-create, hosted-checkout, payment-process, payment-verify, payment-refund, payment-void, payment-capture, payment-retrieve, cancel-booking, test, health, debug'
         });
     }
   } catch (error) {
@@ -2913,6 +2915,323 @@ async function handleHealthCheck(req, res) {
       status: 'unhealthy',
       error: error.message,
       timestamp: new Date().toISOString()
+    });
+  }
+}
+
+// ============================================
+// CANCEL BOOKING - Orchestrated cancellation
+// ============================================
+
+// Cancel Booking - Orchestrates Amadeus cancellation + ARC Pay refund/void + DB update
+async function handleCancelBooking(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    console.log('🚫 Handling CANCEL-BOOKING operation');
+
+    const {
+      bookingReference,
+      email,
+      reason = 'Customer request'
+    } = req.body;
+
+    if (!bookingReference) {
+      return res.status(400).json({
+        success: false,
+        error: 'bookingReference is required'
+      });
+    }
+
+    // 1. Look up booking in Supabase
+    let booking = null;
+    let bookingError = null;
+
+    // Try by booking_reference first
+    const { data: byRef, error: refError } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('booking_reference', bookingReference)
+      .single();
+
+    if (byRef) {
+      booking = byRef;
+    } else {
+      // Fallback: try by order_id in booking_details
+      const { data: byOrder, error: orderError } = await supabase
+        .from('bookings')
+        .select('*')
+        .filter('booking_details->>order_id', 'eq', bookingReference)
+        .single();
+
+      if (byOrder) {
+        booking = byOrder;
+      } else {
+        bookingError = refError || orderError;
+      }
+    }
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        error: 'Booking not found',
+        details: `No booking found with reference: ${bookingReference}`
+      });
+    }
+
+    // Check if already cancelled
+    if (booking.status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        error: 'Booking is already cancelled',
+        booking: {
+          id: booking.id,
+          reference: booking.booking_reference,
+          status: booking.status
+        }
+      });
+    }
+
+    // Optional email verification
+    if (email && booking.customer_email && email.toLowerCase() !== booking.customer_email.toLowerCase()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Email does not match the booking'
+      });
+    }
+
+    console.log('📋 Booking found:', booking.id, 'Status:', booking.status, 'Payment:', booking.payment_status);
+
+    const cancellationResult = {
+      bookingId: booking.id,
+      bookingReference: booking.booking_reference,
+      amadeusCancelled: false,
+      paymentProcessed: false,
+      refundAmount: null,
+      paymentAction: null
+    };
+
+    // 2. Cancel flight via Amadeus API (if we have an order ID)
+    const orderId = booking.booking_reference ||
+      booking.booking_details?.order_id ||
+      booking.booking_details?.amadeus_order_id;
+
+    if (orderId) {
+      try {
+        // Get Amadeus access token
+        const amadeus_client_id = process.env.AMADEUS_API_KEY || process.env.AMADEUS_CLIENT_ID;
+        const amadeus_client_secret = process.env.AMADEUS_API_SECRET || process.env.AMADEUS_CLIENT_SECRET;
+        const amadeus_base_url = process.env.AMADEUS_BASE_URL || 'https://test.api.amadeus.com';
+
+        if (amadeus_client_id && amadeus_client_secret) {
+          // Get access token
+          const tokenResponse = await fetch(`${amadeus_base_url}/v1/security/oauth2/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `grant_type=client_credentials&client_id=${amadeus_client_id}&client_secret=${amadeus_client_secret}`
+          });
+
+          if (tokenResponse.ok) {
+            const tokenData = await tokenResponse.json();
+            const amadeusToken = tokenData.access_token;
+
+            // Cancel the flight order
+            console.log(`🗑️ Cancelling Amadeus flight order: ${orderId}`);
+            const cancelResponse = await fetch(
+              `${amadeus_base_url}/v1/booking/flight-orders/${orderId}`,
+              {
+                method: 'DELETE',
+                headers: {
+                  'Authorization': `Bearer ${amadeusToken}`,
+                  'Accept': 'application/vnd.amadeus+json'
+                }
+              }
+            );
+
+            if (cancelResponse.ok || cancelResponse.status === 204) {
+              console.log('✅ Amadeus flight order cancelled successfully');
+              cancellationResult.amadeusCancelled = true;
+            } else {
+              const cancelError = await cancelResponse.text();
+              console.warn('⚠️ Amadeus cancellation failed:', cancelResponse.status, cancelError);
+              // Don't fail entirely - still proceed with DB update
+            }
+          }
+        } else {
+          console.warn('⚠️ Amadeus credentials not configured, skipping API cancellation');
+        }
+      } catch (amadeusError) {
+        console.warn('⚠️ Amadeus cancellation error (proceeding with DB update):', amadeusError.message);
+      }
+    }
+
+    // 3. Process refund/void via ARC Pay (if payment was made)
+    if (booking.payment_status === 'paid' || booking.payment_status === 'completed') {
+      try {
+        // Look up payment record
+        const { data: payment } = await supabase
+          .from('payments')
+          .select('*')
+          .or(`quote_id.eq.${booking.id},id.eq.${booking.payment_id || 'none'}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (payment) {
+          const arcMerchantId = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
+          const arcApiPassword = process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c';
+          const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
+          const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
+
+          const refundAmount = parseFloat(payment.amount || booking.total_amount || 0);
+
+          if (payment.payment_status === 'completed') {
+            // Payment was captured → REFUND
+            const refundTransactionId = `refund-cancel-${Date.now()}`;
+            const refundUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${refundTransactionId}`;
+
+            console.log('💸 Initiating ARC Pay REFUND for cancellation...');
+            const refundResponse = await fetch(refundUrl, {
+              method: 'PUT',
+              headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({
+                apiOperation: 'REFUND',
+                transaction: {
+                  amount: refundAmount.toFixed(2),
+                  currency: payment.currency || 'USD',
+                  reference: `Cancellation: ${reason}`
+                }
+              })
+            });
+
+            if (refundResponse.ok) {
+              console.log('✅ ARC Pay refund processed');
+              cancellationResult.paymentProcessed = true;
+              cancellationResult.paymentAction = 'REFUND';
+              cancellationResult.refundAmount = refundAmount;
+
+              // Update payment record
+              await supabase.from('payments').update({
+                payment_status: 'refunded',
+                metadata: {
+                  ...payment.metadata,
+                  cancellationRefund: {
+                    transactionId: refundTransactionId,
+                    amount: refundAmount,
+                    reason,
+                    refundedAt: new Date().toISOString()
+                  }
+                }
+              }).eq('id', payment.id);
+            } else {
+              console.warn('⚠️ ARC Pay refund failed:', await refundResponse.text());
+            }
+          } else if (payment.payment_status === 'pending' || payment.payment_status === 'authorized') {
+            // Payment not captured yet → VOID
+            const voidTransactionId = `void-cancel-${Date.now()}`;
+            const voidUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${voidTransactionId}`;
+
+            console.log('🚫 Initiating ARC Pay VOID for cancellation...');
+            const voidResponse = await fetch(voidUrl, {
+              method: 'PUT',
+              headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({
+                apiOperation: 'VOID',
+                transaction: {
+                  targetTransactionId: payment.arc_transaction_id
+                }
+              })
+            });
+
+            if (voidResponse.ok) {
+              console.log('✅ ARC Pay void processed');
+              cancellationResult.paymentProcessed = true;
+              cancellationResult.paymentAction = 'VOID';
+              cancellationResult.refundAmount = refundAmount;
+
+              await supabase.from('payments').update({
+                payment_status: 'cancelled',
+                metadata: {
+                  ...payment.metadata,
+                  cancellationVoid: {
+                    transactionId: voidTransactionId,
+                    reason,
+                    voidedAt: new Date().toISOString()
+                  }
+                }
+              }).eq('id', payment.id);
+            } else {
+              console.warn('⚠️ ARC Pay void failed:', await voidResponse.text());
+            }
+          }
+        } else {
+          console.log('ℹ️ No payment record found for refund/void');
+        }
+      } catch (paymentError) {
+        console.warn('⚠️ Payment refund/void error (proceeding):', paymentError.message);
+      }
+    }
+
+    // 4. Update booking status in Supabase (always do this)
+    const { error: updateError } = await supabase
+      .from('bookings')
+      .update({
+        status: 'cancelled',
+        payment_status: cancellationResult.paymentProcessed ? 'refunded' : booking.payment_status,
+        booking_details: {
+          ...booking.booking_details,
+          cancellation: {
+            cancelledAt: new Date().toISOString(),
+            reason: reason,
+            amadeusCancelled: cancellationResult.amadeusCancelled,
+            paymentAction: cancellationResult.paymentAction,
+            refundAmount: cancellationResult.refundAmount
+          }
+        }
+      })
+      .eq('id', booking.id);
+
+    if (updateError) {
+      console.error('❌ Failed to update booking status:', updateError);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to update booking status',
+        details: updateError.message
+      });
+    }
+
+    console.log('✅ Booking cancelled successfully:', booking.id);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Booking cancelled successfully',
+      cancellation: cancellationResult,
+      booking: {
+        id: booking.id,
+        reference: booking.booking_reference,
+        status: 'cancelled',
+        previousStatus: booking.status,
+        refundAmount: cancellationResult.refundAmount,
+        paymentAction: cancellationResult.paymentAction
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Cancel booking error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to cancel booking',
+      details: error.message
     });
   }
 }

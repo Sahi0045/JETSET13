@@ -20,6 +20,7 @@ import {
 import { getTodayDate } from '../../utils/dateUtils';
 import currencyService from '../../Services/CurrencyService';
 import { useLocationContext } from '../../Context/LocationContext';
+import ArcPayService from '../../Services/ArcPayService';
 
 // Reusable Input Component - MUST be outside the main component to prevent re-mounting on every state change
 const InputField = ({ label, name, type = "text", required = false, placeholder, error, className = "", value, onChange, min }) => (
@@ -46,6 +47,52 @@ const RequestPage = () => {
   const { country: userCountry, callingCode, loaded, currency: userCurrency } = useLocationContext();
   const [activeTab, setActiveTab] = useState('inquiry');
   const [selectedInquiryType, setSelectedInquiryType] = useState('general');
+
+  // Cancel booking state
+  const [cancelRef, setCancelRef] = useState('');
+  const [cancelEmail, setCancelEmail] = useState('');
+  const [cancelReason, setCancelReason] = useState('Change of plans');
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelResult, setCancelResult] = useState(null);
+
+  const handleCancelBooking = async (e) => {
+    e.preventDefault();
+    if (!cancelRef.trim()) return;
+
+    setCancelLoading(true);
+    setCancelResult(null);
+    try {
+      const result = await ArcPayService.cancelBooking(
+        cancelRef.trim(),
+        cancelEmail.trim() || null,
+        cancelReason
+      );
+
+      if (result.success) {
+        setCancelResult({
+          success: true,
+          message: result.message || 'Booking cancelled successfully',
+          refundAmount: result.booking?.refundAmount,
+          paymentAction: result.booking?.paymentAction,
+          reference: result.booking?.reference
+        });
+        setCancelRef('');
+        setCancelEmail('');
+      } else {
+        setCancelResult({
+          success: false,
+          message: result.error || 'Failed to cancel booking. Please try again or contact support.'
+        });
+      }
+    } catch (err) {
+      setCancelResult({
+        success: false,
+        message: 'An error occurred. Please contact support.'
+      });
+    } finally {
+      setCancelLoading(false);
+    }
+  };
   const [formData, setFormData] = useState({
     // Common fields
     customer_name: '',
@@ -852,18 +899,102 @@ const RequestPage = () => {
               </div>
             )}
 
-            {activeTab !== 'inquiry' && (
+            {activeTab === 'cancel' && (
+              <div className="p-6 md:p-10">
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Cancel a Booking</h3>
+                <p className="text-gray-500 mb-8">Enter your booking reference and email to cancel your booking. A refund will be processed automatically if applicable.</p>
+
+                {/* Cancel Result */}
+                {cancelResult && (
+                  <div className={`mb-6 p-4 rounded-lg ${cancelResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                    {cancelResult.success ? (
+                      <div className="flex items-start gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <h4 className="font-semibold text-green-800">{cancelResult.message}</h4>
+                          {cancelResult.refundAmount && (
+                            <p className="text-green-700 text-sm mt-1">
+                              A {cancelResult.paymentAction === 'REFUND' ? 'refund' : 'reversal'} of <strong>${parseFloat(cancelResult.refundAmount).toFixed(2)}</strong> has been initiated.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-3">
+                        <RefreshCw className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <h4 className="font-semibold text-red-800">Cancellation Failed</h4>
+                          <p className="text-red-700 text-sm mt-1">{cancelResult.message}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <form onSubmit={handleCancelBooking} className="space-y-6 max-w-lg">
+                  <div className="space-y-1">
+                    <label className="block text-sm font-semibold text-gray-700">Booking Reference <span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      value={cancelRef}
+                      onChange={(e) => setCancelRef(e.target.value)}
+                      placeholder="e.g. eJzTd9f3... or BK-12345"
+                      required
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-sm font-semibold text-gray-700">Email Address</label>
+                    <input
+                      type="email"
+                      value={cancelEmail}
+                      onChange={(e) => setCancelEmail(e.target.value)}
+                      placeholder="Email used when booking (for verification)"
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-sm font-semibold text-gray-700">Reason for Cancellation</label>
+                    <select
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option>Change of plans</option>
+                      <option>Found a better deal</option>
+                      <option>Schedule conflict</option>
+                      <option>Personal reasons</option>
+                      <option>Medical emergency</option>
+                      <option>Other</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={cancelLoading || !cancelRef.trim()}
+                    className="w-full md:w-auto px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-3 disabled:opacity-50"
+                  >
+                    {cancelLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
+                    {cancelLoading ? 'Processing...' : 'Cancel Booking'}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {activeTab === 'modify' && (
               <div className="flex flex-col items-center justify-center text-center p-20 text-gray-500">
                 <div className="bg-gray-100 p-6 rounded-full mb-6">
                   <RefreshCw className="w-12 h-12 text-gray-400" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">Coming Soon</h3>
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">Modify Booking</h3>
                 <p className="max-w-md">
-                  This feature is currently under development. To modify or cancel an existing booking, please contact our support team directly.
+                  To modify an existing booking (change dates, names, or other details), please contact our support team directly.
                 </p>
-                <button className="mt-8 px-6 py-3 bg-[#055B75] text-white font-semibold rounded-lg hover:bg-[#034457] transition-colors">
+                <a href="mailto:support@jetsetgo.com" className="mt-8 px-6 py-3 bg-[#055B75] text-white font-semibold rounded-lg hover:bg-[#034457] transition-colors">
                   Contact Support
-                </button>
+                </a>
               </div>
             )}
           </div>
