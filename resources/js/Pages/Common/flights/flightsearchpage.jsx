@@ -1518,13 +1518,7 @@ function FlightSearchPage() {
                 <ChevronRight className="h-6 w-6" />
               </button>
 
-              {loading && (
-                <div className="absolute inset-0 bg-white/50 flex items-center justify-center">
-                  <div className="transform scale-50">
-                    <LoadingSpinner />
-                  </div>
-                </div>
-              )}
+
             </div>
           </div>
         </div>

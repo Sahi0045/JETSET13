@@ -82,17 +82,7 @@ const LoadingSpinner = ({ text = "Loading...", fullScreen = false, className = "
             </div>
           </div>
 
-          {/* Orbiting globe element */}
-          <div className="absolute inset-0 animate-orbit">
-            <div className="absolute -top-1.5 left-1/2 -translate-x-1/2">
-              <div className="relative">
-                <div className="absolute inset-0 bg-[#65B3CF] rounded-full blur-sm animate-pulse" />
-                <div className="relative bg-[#055B75] rounded-full p-1">
-                  <Globe className="w-3.5 h-3.5 text-white" />
-                </div>
-              </div>
-            </div>
-          </div>
+
         </div>
 
         {/* Brand Text */}
