@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FaShip, FaCalendarAlt, FaMapMarkerAlt, FaUser, FaCheckCircle, FaClock, FaAnchor, FaPrint, FaDownload, FaCopy } from 'react-icons/fa';
+import { FaShip, FaCalendarAlt, FaMapMarkerAlt, FaUser, FaCheckCircle, FaClock, FaAnchor, FaPrint, FaCopy, FaWater, FaCompass, FaPhoneAlt, FaEnvelope, FaSuitcaseRolling } from 'react-icons/fa';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
@@ -16,13 +16,12 @@ function CruiseBookingSuccess() {
         if (location.state) {
             setBookingData(location.state);
         } else {
-            // Try to retrieve from localStorage as fallback
-            const stored = localStorage.getItem('pendingCruiseBooking');
+            const stored = localStorage.getItem('completedBooking');
             if (stored) {
                 try {
                     const parsed = JSON.parse(stored);
                     setBookingData({
-                        orderId: 'CRUISE-' + Date.now(),
+                        orderId: parsed.orderId || parsed.bookingReference || 'CRUISE-' + Date.now(),
                         bookingData: parsed,
                         paymentVerified: true
                     });
@@ -60,311 +59,404 @@ function CruiseBookingSuccess() {
     const passengers = cruise.passengerDetails || {};
     const adults = passengers.adults || [];
     const children = passengers.children || [];
+    const totalPassengers = adults.length + children.length;
+    const primaryPassenger = adults[0] || {};
+    const primaryName = `${primaryPassenger.firstName || primaryPassenger.first_name || ''} ${primaryPassenger.lastName || primaryPassenger.last_name || ''}`.trim() || 'Guest';
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
+        <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #0c1e30 0%, #0a3d5c 30%, #055B75 60%, #0a3d5c 100%)' }}>
             <Navbar />
 
-            <div className="container mx-auto px-4 pt-24 pb-12">
-                {/* Success Banner */}
-                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-8 mb-8 shadow-sm">
-                    <div className="flex flex-col md:flex-row items-center">
-                        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4 md:mb-0 md:mr-8 shadow-md">
-                            <FaCheckCircle className="w-10 h-10 text-green-600" />
-                        </div>
-                        <div className="text-center md:text-left flex-1">
-                            <h1 className="text-3xl font-bold text-gray-800 mb-2">Cruise Booking Confirmed! 🚢</h1>
-                            <p className="text-gray-600 mb-3 text-lg">
-                                Your cruise adventure has been successfully booked. A confirmation email will be sent shortly.
-                            </p>
-                            <div className="flex items-center justify-center md:justify-start gap-2 bg-white rounded-lg px-4 py-2 inline-flex border border-green-200">
-                                <span className="text-sm text-gray-500">Booking ID:</span>
-                                <span className="font-bold text-[#055B75] text-lg">{bookingData.orderId}</span>
-                                <button
-                                    onClick={copyOrderId}
-                                    className="text-[#055B75] hover:bg-[#055B75]/10 p-1.5 rounded-md transition-colors"
-                                    title="Copy Booking ID"
-                                >
-                                    <FaCopy className="w-4 h-4" />
-                                </button>
-                                {showCopied && (
-                                    <span className="text-xs text-green-600 font-medium animate-pulse">Copied!</span>
-                                )}
-                            </div>
-                        </div>
-                        <div className="mt-4 md:mt-0 flex gap-3">
-                            <button
-                                onClick={handlePrint}
-                                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                            >
-                                <FaPrint className="w-4 h-4" />
-                                <span className="text-sm font-medium">Print</span>
-                            </button>
-                        </div>
+            <div className="container mx-auto px-4 pt-24 pb-16 max-w-5xl">
+
+                {/* ── Animated Success Header ── */}
+                <div className="text-center mb-10">
+                    <div className="inline-flex items-center justify-center w-24 h-24 rounded-full mb-6"
+                        style={{
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            boxShadow: '0 0 0 8px rgba(16, 185, 129, 0.15), 0 0 0 16px rgba(16, 185, 129, 0.08), 0 8px 32px rgba(0,0,0,0.3)'
+                        }}>
+                        <FaCheckCircle className="text-white text-5xl" />
                     </div>
+                    <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight">
+                        Booking Confirmed! <span className="inline-block animate-bounce">🎉</span>
+                    </h1>
+                    <p className="text-blue-200 text-lg">Your cruise has been successfully booked.</p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left Column - Cruise & Booking Details */}
-                    <div className="lg:col-span-2 space-y-6">
-                        {/* Cruise Details Card */}
-                        <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
-                            <div className="bg-gradient-to-r from-[#055B75] to-[#034457] px-6 py-4 flex items-center gap-3">
-                                <FaShip className="text-white text-xl" />
-                                <h2 className="text-xl font-bold text-white">Cruise Details</h2>
+                {/* ══════════════════════════════════════════════
+                     CRUISE BOARDING PASS / TICKET
+                    ══════════════════════════════════════════════ */}
+                <div className="relative mx-auto" style={{ maxWidth: '900px' }}>
+
+                    {/* ── Ticket Card ── */}
+                    <div className="bg-white rounded-3xl overflow-hidden"
+                        style={{ boxShadow: '0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1)' }}>
+
+                        {/* ── Top Banner with Gradient ── */}
+                        <div className="relative overflow-hidden"
+                            style={{
+                                background: 'linear-gradient(135deg, #055B75 0%, #0a3d5c 40%, #1e3a5f 70%, #2563eb 100%)',
+                                minHeight: '200px'
+                            }}>
+
+                            {/* Decorative wave patterns */}
+                            <div className="absolute inset-0 opacity-10">
+                                <svg className="absolute bottom-0 left-0 w-full" viewBox="0 0 1440 120" fill="none">
+                                    <path d="M0,64 C360,120 720,0 1080,64 C1260,96 1440,48 1440,48 L1440,120 L0,120 Z" fill="white" />
+                                </svg>
+                                <svg className="absolute bottom-4 left-0 w-full" viewBox="0 0 1440 120" fill="none">
+                                    <path d="M0,80 C240,20 480,100 720,60 C960,20 1200,80 1440,40 L1440,120 L0,120 Z" fill="white" opacity="0.5" />
+                                </svg>
                             </div>
 
-                            <div className="p-6">
-                                {/* Cruise Image & Name */}
-                                {cruise.cruiseImage && (
-                                    <div className="relative rounded-xl overflow-hidden mb-6 h-48">
-                                        <img
-                                            src={cruise.cruiseImage}
-                                            alt={cruise.cruiseName}
-                                            className="w-full h-full object-cover"
-                                            onError={(e) => { e.target.style.display = 'none'; }}
-                                        />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-6">
-                                            <h3 className="text-2xl font-bold text-white">{cruise.cruiseName || 'Cruise Voyage'}</h3>
-                                        </div>
-                                    </div>
-                                )}
+                            {/* Ship silhouette decoration */}
+                            <div className="absolute right-6 top-6 opacity-15">
+                                <FaShip className="text-white" style={{ fontSize: '120px' }} />
+                            </div>
 
-                                {!cruise.cruiseImage && cruise.cruiseName && (
-                                    <h3 className="text-2xl font-bold text-gray-800 mb-4">{cruise.cruiseName}</h3>
-                                )}
-
-                                {/* Cruise Info Grid */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                    {cruise.duration && (
-                                        <div className="bg-blue-50 rounded-xl p-4 text-center">
-                                            <FaClock className="text-[#055B75] mx-auto mb-2 text-xl" />
-                                            <div className="text-xs text-gray-500 uppercase font-medium">Duration</div>
-                                            <div className="font-bold text-gray-800 mt-1">{cruise.duration}</div>
-                                        </div>
-                                    )}
-                                    {cruise.departure && (
-                                        <div className="bg-green-50 rounded-xl p-4 text-center">
-                                            <FaMapMarkerAlt className="text-green-600 mx-auto mb-2 text-xl" />
-                                            <div className="text-xs text-gray-500 uppercase font-medium">Departure</div>
-                                            <div className="font-bold text-gray-800 mt-1 text-sm">{cruise.departure}</div>
-                                        </div>
-                                    )}
-                                    {cruise.arrival && (
-                                        <div className="bg-orange-50 rounded-xl p-4 text-center">
-                                            <FaAnchor className="text-orange-600 mx-auto mb-2 text-xl" />
-                                            <div className="text-xs text-gray-500 uppercase font-medium">Arrival</div>
-                                            <div className="font-bold text-gray-800 mt-1 text-sm">{cruise.arrival}</div>
-                                        </div>
-                                    )}
-                                    {cruise.departureDate && (
-                                        <div className="bg-purple-50 rounded-xl p-4 text-center">
-                                            <FaCalendarAlt className="text-purple-600 mx-auto mb-2 text-xl" />
-                                            <div className="text-xs text-gray-500 uppercase font-medium">Sail Date</div>
-                                            <div className="font-bold text-gray-800 mt-1 text-sm">
-                                                {new Date(cruise.departureDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            <div className="relative z-10 p-8 pb-12">
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                                                style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
+                                                <FaShip className="text-white text-2xl" />
+                                            </div>
+                                            <div>
+                                                <p className="text-blue-200 text-xs uppercase tracking-[3px] font-semibold">Cruise Booking</p>
+                                                <p className="text-white text-sm font-medium opacity-80">#{bookingData.orderId}</p>
                                             </div>
                                         </div>
-                                    )}
+                                        <h2 className="text-3xl md:text-4xl font-extrabold text-white leading-tight">
+                                            {cruise.cruiseName || 'Cruise Voyage'}
+                                        </h2>
+                                        {cruise.duration && (
+                                            <p className="text-blue-200 mt-2 text-lg font-medium flex items-center gap-2">
+                                                <FaClock className="text-blue-300" />
+                                                {cruise.duration}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="hidden md:flex flex-col items-end gap-2">
+                                        <span className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2"
+                                            style={{ background: 'rgba(16, 185, 129, 0.25)', color: '#6ee7b7', border: '1px solid rgba(16, 185, 129, 0.4)' }}>
+                                            <FaCheckCircle /> Confirmed
+                                        </span>
+                                    </div>
                                 </div>
-
-                                {/* Date Details */}
-                                {(cruise.departureDate || cruise.returnDate) && (
-                                    <div className="flex items-center justify-between bg-gray-50 rounded-xl p-4 border border-gray-200">
-                                        <div className="text-center flex-1">
-                                            <div className="text-xs text-gray-500 uppercase font-medium mb-1">Departure Date</div>
-                                            <div className="font-semibold text-gray-800">
-                                                {cruise.departureDate ? new Date(cruise.departureDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}
-                                            </div>
-                                        </div>
-                                        <div className="h-12 w-px bg-gray-300 mx-4"></div>
-                                        <div className="text-center flex-1">
-                                            <div className="text-xs text-gray-500 uppercase font-medium mb-1">Return Date</div>
-                                            <div className="font-semibold text-gray-800">
-                                                {cruise.returnDate ? new Date(cruise.returnDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         </div>
 
-                        {/* Passenger Details Card */}
-                        {(adults.length > 0 || children.length > 0) && (
-                            <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
-                                <div className="bg-gradient-to-r from-[#055B75] to-[#034457] px-6 py-4 flex items-center gap-3">
-                                    <FaUser className="text-white text-lg" />
-                                    <h2 className="text-xl font-bold text-white">Passenger Details</h2>
-                                </div>
+                        {/* ── Route Section (Boarding Pass Style) ── */}
+                        {(cruise.departure || cruise.arrival) && (
+                            <div className="px-8 py-8 border-b-2 border-dashed border-gray-200" style={{ background: 'linear-gradient(to right, #f0f9ff, #f8fafc, #f0f9ff)' }}>
+                                <div className="flex items-center justify-between gap-4">
+                                    {/* Departure */}
+                                    <div className="flex-1 text-center">
+                                        <div className="w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-3"
+                                            style={{ background: 'linear-gradient(135deg, #055B75, #0a3d5c)' }}>
+                                            <FaMapMarkerAlt className="text-white text-xl" />
+                                        </div>
+                                        <p className="text-[10px] text-gray-400 uppercase tracking-[2px] font-bold mb-1">Departure Port</p>
+                                        <p className="text-xl font-extrabold text-gray-900">{cruise.departure || 'TBD'}</p>
+                                        {cruise.departureDate && (
+                                            <p className="text-sm text-gray-500 mt-1 font-medium">
+                                                {new Date(cruise.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                                            </p>
+                                        )}
+                                    </div>
 
-                                <div className="p-6">
-                                    {adults.length > 0 && (
-                                        <div className="mb-4">
-                                            <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Adults</h4>
-                                            <div className="space-y-3">
-                                                {adults.map((adult, index) => (
-                                                    <div key={index} className="flex items-center gap-4 bg-gray-50 rounded-xl p-4 border border-gray-200">
-                                                        <div className="w-10 h-10 bg-[#055B75] rounded-full flex items-center justify-center text-white font-bold">
-                                                            {index + 1}
-                                                        </div>
-                                                        <div>
-                                                            <div className="font-semibold text-gray-800">
-                                                                {adult.firstName || adult.first_name || ''} {adult.lastName || adult.last_name || ''}
-                                                            </div>
-                                                            {(adult.age || adult.gender) && (
-                                                                <div className="text-sm text-gray-500">
-                                                                    {adult.gender && <span className="mr-2">{adult.gender}</span>}
-                                                                    {adult.age && <span>Age: {adult.age}</span>}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                    {/* Route Line with Ship */}
+                                    <div className="flex-1 flex flex-col items-center px-4">
+                                        <div className="relative w-full flex items-center justify-center">
+                                            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-0.5 bg-gradient-to-r from-[#055B75] via-blue-400 to-[#055B75] opacity-30"></div>
+                                            {/* Animated dots */}
+                                            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
+                                                <div className="flex justify-between px-2">
+                                                    {[...Array(7)].map((_, i) => (
+                                                        <div key={i} className="w-1.5 h-1.5 rounded-full bg-[#055B75]" style={{ opacity: 0.2 + (i * 0.1) }}></div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="relative z-10 w-14 h-14 rounded-full flex items-center justify-center"
+                                                style={{ background: 'linear-gradient(135deg, #055B75 0%, #2563eb 100%)', boxShadow: '0 4px 15px rgba(5, 91, 117, 0.4)' }}>
+                                                <FaShip className="text-white text-xl" />
                                             </div>
                                         </div>
-                                    )}
+                                        {cruise.duration && (
+                                            <p className="text-xs text-gray-400 mt-3 font-semibold uppercase tracking-wider">{cruise.duration}</p>
+                                        )}
+                                    </div>
 
-                                    {children.length > 0 && (
-                                        <div>
-                                            <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Children</h4>
-                                            <div className="space-y-3">
-                                                {children.map((child, index) => (
-                                                    <div key={index} className="flex items-center gap-4 bg-gray-50 rounded-xl p-4 border border-gray-200">
-                                                        <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold">
-                                                            {index + 1}
-                                                        </div>
-                                                        <div>
-                                                            <div className="font-semibold text-gray-800">
-                                                                {child.firstName || child.first_name || ''} {child.lastName || child.last_name || ''}
-                                                            </div>
-                                                            {child.age && (
-                                                                <div className="text-sm text-gray-500">Age: {child.age}</div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                    {/* Arrival */}
+                                    <div className="flex-1 text-center">
+                                        <div className="w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-3"
+                                            style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+                                            <FaAnchor className="text-white text-xl" />
                                         </div>
-                                    )}
+                                        <p className="text-[10px] text-gray-400 uppercase tracking-[2px] font-bold mb-1">Arrival Port</p>
+                                        <p className="text-xl font-extrabold text-gray-900">{cruise.arrival || 'TBD'}</p>
+                                        {cruise.returnDate && (
+                                            <p className="text-sm text-gray-500 mt-1 font-medium">
+                                                {new Date(cruise.returnDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         )}
+
+                        {/* ── Ticket Tear-off Effect ── */}
+                        <div className="relative">
+                            <div className="absolute -left-4 top-0 w-8 h-8 bg-[#0c1e30] rounded-full" style={{ boxShadow: 'inset 0 0 0 4px #0c1e30' }}></div>
+                            <div className="absolute -right-4 top-0 w-8 h-8 bg-[#0c1e30] rounded-full" style={{ boxShadow: 'inset 0 0 0 4px #0c1e30' }}></div>
+                        </div>
+
+                        {/* ── Booking Info Grid ── */}
+                        <div className="px-8 py-8">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                {/* Booking Reference */}
+                                <div className="space-y-1">
+                                    <p className="text-[10px] text-gray-400 uppercase tracking-[2px] font-bold">Booking Ref</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-lg font-extrabold text-gray-900 tracking-wide font-mono">{bookingData.orderId}</p>
+                                        <button onClick={copyOrderId} className="text-gray-400 hover:text-[#055B75] transition-colors p-1">
+                                            <FaCopy className="text-xs" />
+                                        </button>
+                                    </div>
+                                    {showCopied && <span className="text-xs text-green-500 font-medium">Copied!</span>}
+                                </div>
+
+                                {/* Transaction ID */}
+                                <div className="space-y-1">
+                                    <p className="text-[10px] text-gray-400 uppercase tracking-[2px] font-bold">Transaction ID</p>
+                                    <p className="text-sm font-bold text-gray-700 font-mono break-all">{cruise.transactionId || bookingData.transactionId || 'N/A'}</p>
+                                </div>
+
+                                {/* Status */}
+                                <div className="space-y-1">
+                                    <p className="text-[10px] text-gray-400 uppercase tracking-[2px] font-bold">Status</p>
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
+                                        style={{ background: 'linear-gradient(135deg, #d1fae5, #ecfdf5)', color: '#059669', border: '1px solid #a7f3d0' }}>
+                                        <FaCheckCircle className="text-green-500" />
+                                        CONFIRMED
+                                    </span>
+                                </div>
+
+                                {/* Passengers */}
+                                <div className="space-y-1">
+                                    <p className="text-[10px] text-gray-400 uppercase tracking-[2px] font-bold">Passengers</p>
+                                    <p className="text-lg font-extrabold text-gray-900">
+                                        {totalPassengers} {totalPassengers === 1 ? 'Guest' : 'Guests'}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        {adults.length > 0 && `${adults.length} Adult${adults.length > 1 ? 's' : ''}`}
+                                        {children.length > 0 && `, ${children.length} Child${children.length > 1 ? 'ren' : ''}`}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── Passenger Cards ── */}
+                        {(adults.length > 0 || children.length > 0) && (
+                            <div className="px-8 pb-8">
+                                <div className="flex items-center gap-3 mb-5">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                        style={{ background: 'linear-gradient(135deg, #055B75, #0a3d5c)' }}>
+                                        <FaUser className="text-white text-sm" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-gray-800">Passenger Details</h3>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {adults.map((adult, index) => (
+                                        <div key={`adult-${index}`}
+                                            className="flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-[#055B75]/30 transition-colors"
+                                            style={{ background: 'linear-gradient(135deg, #fafafa, #f5f5f5)' }}>
+                                            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg"
+                                                style={{ background: 'linear-gradient(135deg, #055B75, #0a3d5c)' }}>
+                                                {(adult.firstName || adult.first_name || 'G').charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="font-bold text-gray-900">
+                                                    {adult.firstName || adult.first_name || ''} {adult.lastName || adult.last_name || ''}
+                                                </p>
+                                                <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                                                    <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold">Adult</span>
+                                                    {adult.gender && <span>{adult.gender}</span>}
+                                                    {adult.age && <span>Age {adult.age}</span>}
+                                                    {adult.nationality && <span>🌍 {adult.nationality}</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {children.map((child, index) => (
+                                        <div key={`child-${index}`}
+                                            className="flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-orange-200 transition-colors"
+                                            style={{ background: 'linear-gradient(135deg, #fffbeb, #fef3c7)' }}>
+                                            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg"
+                                                style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+                                                {(child.firstName || child.first_name || 'C').charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="font-bold text-gray-900">
+                                                    {child.firstName || child.first_name || ''} {child.lastName || child.last_name || ''}
+                                                </p>
+                                                <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                                                    <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 font-semibold">Child</span>
+                                                    {child.age && <span>Age {child.age}</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── Payment Summary Section ── */}
+                        <div className="px-8 pb-8">
+                            <div className="rounded-2xl overflow-hidden border-2 border-gray-100"
+                                style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+
+                                <div className="px-6 py-4 flex items-center gap-3" style={{ background: 'linear-gradient(135deg, #055B75, #0a3d5c)' }}>
+                                    <FaWater className="text-white text-lg" />
+                                    <h3 className="text-lg font-bold text-white">Payment Summary</h3>
+                                </div>
+
+                                <div className="p-6">
+                                    <div className="space-y-3 mb-5">
+                                        {cruise.basePrice !== undefined && cruise.basePrice !== null && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-600">Base Fare</span>
+                                                <span className="font-semibold text-gray-800"><Price amount={cruise.basePrice} /></span>
+                                            </div>
+                                        )}
+                                        {cruise.taxesAndFees !== undefined && cruise.taxesAndFees !== null && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-600">Taxes & Fees</span>
+                                                <span className="font-semibold text-gray-800"><Price amount={cruise.taxesAndFees} /></span>
+                                            </div>
+                                        )}
+                                        {cruise.portCharges !== undefined && cruise.portCharges !== null && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-600">Port Charges</span>
+                                                <span className="font-semibold text-gray-800"><Price amount={cruise.portCharges} /></span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="border-t-2 border-dashed border-gray-300 pt-5">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xl font-extrabold text-gray-900">Total Paid</span>
+                                            <span className="text-2xl font-extrabold text-[#055B75]">
+                                                <Price amount={cruise.totalAmount || 0} />
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-5 flex items-center gap-3 p-4 rounded-xl"
+                                        style={{ background: 'linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%)', border: '1px solid #a7f3d0' }}>
+                                        <FaCheckCircle className="text-green-600 text-xl flex-shrink-0" />
+                                        <div>
+                                            <p className="font-bold text-green-800 text-sm">Payment Successful</p>
+                                            <p className="text-xs text-green-600">Processed securely via ARC Pay Gateway</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── Important Information ── */}
+                        <div className="px-8 pb-8">
+                            <div className="rounded-2xl overflow-hidden border-2 border-amber-100"
+                                style={{ background: 'linear-gradient(135deg, #fffbeb, #fefce8)' }}>
+                                <div className="p-6">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <FaCompass className="text-amber-600 text-lg" />
+                                        <h3 className="text-lg font-bold text-gray-800">Important Travel Information</h3>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="flex gap-3">
+                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-100 flex-shrink-0 mt-0.5">
+                                                <FaClock className="text-amber-600 text-sm" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-gray-800 text-sm">Arrive Early</p>
+                                                <p className="text-xs text-gray-600">Please arrive at the port at least 3 hours before departure.</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-100 flex-shrink-0 mt-0.5">
+                                                <FaSuitcaseRolling className="text-amber-600 text-sm" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-gray-800 text-sm">Travel Documents</p>
+                                                <p className="text-xs text-gray-600">Carry a valid passport and required visas for port calls.</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-100 flex-shrink-0 mt-0.5">
+                                                <FaPhoneAlt className="text-amber-600 text-sm" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-gray-800 text-sm">Changes & Cancellations</p>
+                                                <p className="text-xs text-gray-600">Contact support at least 72 hours before departure for any changes.</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-100 flex-shrink-0 mt-0.5">
+                                                <FaEnvelope className="text-amber-600 text-sm" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-gray-800 text-sm">Embarkation Guide</p>
+                                                <p className="text-xs text-gray-600">A detailed itinerary will be sent to your registered email.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── Footer Confirmation ── */}
+                        <div className="px-8 pb-8 text-center">
+                            <p className="text-sm text-gray-400 mb-1">🎉 A confirmation email has been sent with all the details of your booking.</p>
+                            <p className="text-xs text-gray-300">JetSetters Travel • Booking #{bookingData.orderId}</p>
+                        </div>
                     </div>
 
-                    {/* Right Column - Payment Summary & Info */}
-                    <div className="space-y-6">
-                        {/* Payment Summary Card */}
-                        <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden sticky top-24">
-                            <div className="bg-gradient-to-r from-[#055B75] to-[#034457] px-6 py-4">
-                                <h2 className="text-lg font-bold text-white">Payment Summary</h2>
-                            </div>
-
-                            <div className="p-6">
-                                <div className="space-y-3 mb-4">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-600">Base Fare</span>
-                                        <span className="font-medium">
-                                            {cruise.basePrice ? <Price amount={cruise.basePrice} /> : 'N/A'}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-600">Taxes & Fees</span>
-                                        <span className="font-medium">
-                                            {cruise.taxesAndFees ? <Price amount={cruise.taxesAndFees} /> : 'N/A'}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-600">Port Charges</span>
-                                        <span className="font-medium">
-                                            {cruise.portCharges ? <Price amount={cruise.portCharges} /> : 'N/A'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="border-t border-gray-200 pt-4 mb-6">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-lg font-bold text-gray-800">Total Amount</span>
-                                        <span className="text-xl font-bold text-[#055B75]">
-                                            {cruise.totalAmount ? <Price amount={cruise.totalAmount} /> : 'N/A'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="bg-green-50 rounded-xl p-4 border border-green-200 flex items-center gap-3">
-                                    <FaCheckCircle className="text-green-600 text-lg flex-shrink-0" />
-                                    <div>
-                                        <div className="font-semibold text-green-800 text-sm">Payment Verified</div>
-                                        <div className="text-xs text-green-600">Processed via ARC Pay Gateway</div>
-                                    </div>
-                                </div>
-
-                                {cruise.cardHolder && (
-                                    <div className="mt-4 text-sm text-gray-500">
-                                        <span className="font-medium">Card Holder:</span> {cruise.cardHolder}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Important Info Card */}
-                        <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
-                            <div className="px-6 py-4 border-b border-gray-200">
-                                <h2 className="text-lg font-semibold text-gray-800">Important Information</h2>
-                            </div>
-
-                            <div className="p-6">
-                                <ul className="space-y-4">
-                                    <li className="flex gap-3">
-                                        <div className="text-[#055B75] mt-0.5 flex-shrink-0">
-                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path>
-                                            </svg>
-                                        </div>
-                                        <p className="text-sm text-gray-600">Please arrive at the port at least 3 hours before the scheduled departure time.</p>
-                                    </li>
-                                    <li className="flex gap-3">
-                                        <div className="text-[#055B75] mt-0.5 flex-shrink-0">
-                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path>
-                                            </svg>
-                                        </div>
-                                        <p className="text-sm text-gray-600">Carry a valid passport and any required travel documents for port calls.</p>
-                                    </li>
-                                    <li className="flex gap-3">
-                                        <div className="text-[#055B75] mt-0.5 flex-shrink-0">
-                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path>
-                                            </svg>
-                                        </div>
-                                        <p className="text-sm text-gray-600">For changes or cancellations, please contact support at least 72 hours before departure.</p>
-                                    </li>
-                                    <li className="flex gap-3">
-                                        <div className="text-[#055B75] mt-0.5 flex-shrink-0">
-                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path>
-                                            </svg>
-                                        </div>
-                                        <p className="text-sm text-gray-600">A detailed itinerary and embarkation guide will be sent to your email.</p>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="space-y-3">
-                            <button
-                                onClick={() => navigate('/my-trips')}
-                                className="w-full py-3 px-6 bg-[#055B75] hover:bg-[#034457] text-white font-semibold rounded-xl transition-all shadow-md active:scale-[0.98]"
-                            >
-                                View My Trips
-                            </button>
-                            <button
-                                onClick={() => navigate('/cruise')}
-                                className="w-full py-3 px-6 bg-white hover:bg-gray-50 text-gray-700 font-semibold rounded-xl border border-gray-200 transition-all"
-                            >
-                                Browse More Cruises
-                            </button>
-                        </div>
+                    {/* ── Action Buttons ── */}
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
+                        <button
+                            onClick={() => navigate('/my-trips')}
+                            className="w-full sm:w-auto px-8 py-4 rounded-2xl text-white font-bold text-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                            style={{
+                                background: 'linear-gradient(135deg, #055B75, #2563eb)',
+                                boxShadow: '0 8px 25px rgba(5, 91, 117, 0.4)'
+                            }}>
+                            ← View All Trips
+                        </button>
+                        <button
+                            onClick={() => navigate('/cruise')}
+                            className="w-full sm:w-auto px-8 py-4 rounded-2xl font-bold text-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                            style={{
+                                background: 'rgba(255,255,255,0.12)',
+                                backdropFilter: 'blur(8px)',
+                                border: '2px solid rgba(255,255,255,0.25)',
+                                color: 'white'
+                            }}>
+                            Book Another Cruise
+                        </button>
+                        <button
+                            onClick={handlePrint}
+                            className="w-full sm:w-auto px-6 py-4 rounded-2xl font-bold text-lg transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+                            style={{
+                                background: 'rgba(255,255,255,0.12)',
+                                backdropFilter: 'blur(8px)',
+                                border: '2px solid rgba(255,255,255,0.25)',
+                                color: 'white'
+                            }}>
+                            <FaPrint /> Print Ticket
+                        </button>
                     </div>
                 </div>
             </div>
