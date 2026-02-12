@@ -169,51 +169,59 @@ export default function CustomFlightCalendar({
 
     const renderMonth = (month) => {
         const monthStart = startOfMonth(month);
-        const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
+        const startDay = (monthStart.getDay() + 6) % 7; // Mon=0, Tue=1, ... Sun=6
+        const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
 
-        // Always render exactly 6 rows (42 cells) for consistent height
-        const calendarDays = [];
-        for (let i = 0; i < 42; i++) {
-            calendarDays.push(addDays(startDate, i));
+        const cells = [];
+
+        // 1. Empty slots before start of month
+        for (let i = 0; i < startDay; i++) {
+            cells.push(<div key={`empty-start-${i}`} className="h-11"></div>);
         }
 
-        const rows = [];
-        for (let row = 0; row < 6; row++) {
-            const days = [];
-            for (let col = 0; col < 7; col++) {
-                const day = calendarDays[row * 7 + col];
-                const dateKey = format(day, 'yyyy-MM-dd');
-                const price = prices[dateKey];
-                const isCurrentMonth = isSameMonth(day, monthStart);
-                const isPast = isBefore(day, minDate) && !isToday(day);
-                const isSelected = selectedDate && isSameDay(day, new Date(selectedDate));
-                const isMinPrice = price && price === minPrice;
+        // 2. Actual day cells
+        for (let i = 1; i <= daysInMonth; i++) {
+            const day = new Date(month.getFullYear(), month.getMonth(), i);
+            const dateKey = format(day, 'yyyy-MM-dd');
+            const price = prices[dateKey];
+            const isPast = isBefore(day, minDate) && !isToday(day);
+            const isSelected = selectedDate && isSameDay(day, new Date(selectedDate));
+            const isMinPrice = price && price === minPrice;
 
-                days.push(
-                    <div
-                        key={dateKey}
-                        onClick={() => !isPast && isCurrentMonth && onSelect(dateKey)}
-                        className={`relative h-11 flex flex-col items-center justify-center transition-all
-                            ${!isCurrentMonth ? 'invisible' : ''}
-                            ${isCurrentMonth && isPast ? 'text-gray-300 cursor-not-allowed bg-gray-50/30' : ''}
-                            ${isCurrentMonth && !isPast && !isSelected ? 'cursor-pointer hover:bg-[#055B75]/5' : ''}
-                            ${isSelected ? 'bg-[#055B75] text-white rounded-lg shadow-md cursor-pointer' : ''}
-                        `}
-                    >
-                        <span className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : (isPast ? 'text-gray-300' : 'text-gray-700')}`}>
-                            {format(day, 'd')}
+            cells.push(
+                <div
+                    key={dateKey}
+                    onClick={() => !isPast && onSelect(dateKey)}
+                    className={`relative h-11 flex flex-col items-center justify-center transition-all
+                        ${isPast ? 'text-gray-300 cursor-not-allowed bg-gray-50/30' : ''}
+                        ${!isPast && !isSelected ? 'cursor-pointer hover:bg-[#055B75]/5' : ''}
+                        ${isSelected ? 'bg-[#055B75] text-white rounded-lg shadow-md cursor-pointer' : ''}
+                    `}
+                >
+                    <span className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : (isPast ? 'text-gray-300' : 'text-gray-700')}`}>
+                        {i}
+                    </span>
+                    {!isPast && price && (
+                        <span className={`text-[8px] leading-none mt-0.5 ${isSelected ? 'text-white/80' : (isMinPrice ? 'text-green-600 font-bold' : 'text-gray-400')}`}>
+                            ₹{Math.round(price).toLocaleString()}
                         </span>
-                        {isCurrentMonth && !isPast && price && (
-                            <span className={`text-[8px] leading-none mt-0.5 ${isSelected ? 'text-white/80' : (isMinPrice ? 'text-green-600 font-bold' : 'text-gray-400')}`}>
-                                ₹{Math.round(price).toLocaleString()}
-                            </span>
-                        )}
-                    </div>
-                );
-            }
+                    )}
+                </div>
+            );
+        }
+
+        // 3. Fill remaining slots to complete 6 rows (42 total)
+        const totalSlots = 42;
+        while (cells.length < totalSlots) {
+            cells.push(<div key={`empty-end-${cells.length}`} className="h-11"></div>);
+        }
+
+        // 4. Chunk into rows of 7
+        const rows = [];
+        for (let i = 0; i < cells.length; i += 7) {
             rows.push(
-                <div key={row} className="grid grid-cols-7">
-                    {days}
+                <div key={`row-${i / 7}`} className="grid grid-cols-7">
+                    {cells.slice(i, i + 7)}
                 </div>
             );
         }
@@ -237,14 +245,14 @@ export default function CustomFlightCalendar({
 
     return (
         <div
-            className={`absolute top-full left-0 mt-3 z-[100] bg-white shadow-[0_10px_40px_rgba(0,0,0,0.15)] rounded-xl border border-gray-200 w-[640px] overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${isDragging ? 'cursor-grabbing select-none' : ''}`}
+            className={`absolute top-full left-0 mt-4 z-[100] bg-white shadow-2xl rounded-xl border border-gray-200 w-[640px] overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${isDragging ? 'cursor-grabbing select-none' : ''}`}
             style={{
                 transform: `translate(${position.x}px, ${position.y}px)`,
             }}
         >
             <div
                 onMouseDown={handleMouseDown}
-                className="flex items-center justify-between p-2 bg-gray-50/80 border-b border-gray-200 cursor-grab"
+                className="flex items-center justify-between p-3 bg-gray-50 border-b border-gray-200 cursor-grab"
             >
                 <button
                     onClick={() => setCurrentMonth(addMonths(currentMonth, -1))}
@@ -271,7 +279,7 @@ export default function CustomFlightCalendar({
                 {renderMonth(nextMonth)}
             </div>
 
-            <div className="bg-gray-50/80 px-4 py-2.5 flex justify-between items-center border-t border-gray-200">
+            <div className="bg-gray-50 px-4 py-3 flex justify-between items-center border-t border-gray-200">
                 <div className="flex gap-5 items-center">
                     <div className="flex items-center gap-1.5">
                         <div className="w-3 h-3 bg-[#055B75] rounded-sm"></div>
@@ -290,5 +298,6 @@ export default function CustomFlightCalendar({
                 </button>
             </div>
         </div>
-    )
+    );
 }
+

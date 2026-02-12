@@ -54,11 +54,11 @@ export default function FlightSearchForm({ initialData, onSearch }) {
     }
   }, [initialData]);
 
-    // Geo-location auto-fill disabled - "From" field starts blank
-    useEffect(() => {
-      const setDefaultFrom = async () => {
-        // Keep blank - user must select origin manually
-      };
+  // Geo-location auto-fill disabled - "From" field starts blank
+  useEffect(() => {
+    const setDefaultFrom = async () => {
+      // Keep blank - user must select origin manually
+    };
 
     setDefaultFrom();
   }, [loaded, city, initialData]);
@@ -389,7 +389,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
           </div>
 
           {/* Depart Date */}
-          <div className="flex-1 min-w-[140px] w-full lg:w-auto relative" ref={departCalendarRef}>
+          <div className={`flex-1 min-w-[140px] w-full lg:w-auto relative ${showDepartCalendar ? 'z-50' : 'z-10'}`} ref={departCalendarRef}>
             <label className="text-gray-600 text-sm font-medium mb-2 block">Depart Date</label>
             <div className="relative">
               <div
@@ -403,13 +403,13 @@ export default function FlightSearchForm({ initialData, onSearch }) {
               </div>
               <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
 
-                {showDepartCalendar && (
-                  <CustomFlightCalendar
-                    selectedDate={formData.departDate}
-                    minDate={new Date()}
-                    originCode={formData.fromCode || (formData.from?.match(/\(([A-Z]{3})\)/)?.[1])}
-                    destinationCode={formData.toCode || (formData.to?.match(/\(([A-Z]{3})\)/)?.[1])}
-                    onSelect={(date) => {
+              {showDepartCalendar && (
+                <CustomFlightCalendar
+                  selectedDate={formData.departDate}
+                  minDate={new Date()}
+                  originCode={formData.fromCode || (formData.from?.match(/\(([A-Z]{3})\)/)?.[1])}
+                  destinationCode={formData.toCode || (formData.to?.match(/\(([A-Z]{3})\)/)?.[1])}
+                  onSelect={(date) => {
                     handleInputChange({ target: { name: 'departDate', value: date } });
                     setShowDepartCalendar(false);
                   }}
@@ -424,7 +424,7 @@ export default function FlightSearchForm({ initialData, onSearch }) {
 
           {/* Return Date - Only visible for Round Trip */}
           {formData.tripType === "roundTrip" && (
-            <div className="flex-1 min-w-[140px] w-full lg:w-auto relative" ref={returnCalendarRef}>
+            <div className={`flex-1 min-w-[140px] w-full lg:w-auto relative ${showReturnCalendar ? 'z-50' : 'z-10'}`} ref={returnCalendarRef}>
               <label className="text-gray-600 text-sm font-medium mb-2 block">Return Date</label>
               <div className="relative">
                 <div
@@ -438,13 +438,13 @@ export default function FlightSearchForm({ initialData, onSearch }) {
                 </div>
                 <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
 
-                  {showReturnCalendar && (
-                    <CustomFlightCalendar
-                      selectedDate={formData.returnDate}
-                      minDate={formData.departDate ? parseISO(formData.departDate) : new Date()}
-                      originCode={formData.fromCode || (formData.from?.match(/\(([A-Z]{3})\)/)?.[1])}
-                      destinationCode={formData.toCode || (formData.to?.match(/\(([A-Z]{3})\)/)?.[1])}
-                      onSelect={(date) => {
+                {showReturnCalendar && (
+                  <CustomFlightCalendar
+                    selectedDate={formData.returnDate}
+                    minDate={formData.departDate ? parseISO(formData.departDate) : new Date()}
+                    originCode={formData.fromCode || (formData.from?.match(/\(([A-Z]{3})\)/)?.[1])}
+                    destinationCode={formData.toCode || (formData.to?.match(/\(([A-Z]{3})\)/)?.[1])}
+                    onSelect={(date) => {
                       handleInputChange({ target: { name: 'returnDate', value: date } });
                       setShowReturnCalendar(false);
                     }}
