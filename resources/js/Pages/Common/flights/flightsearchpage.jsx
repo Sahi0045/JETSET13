@@ -295,20 +295,22 @@ function FlightSearchPage() {
             name: airlineName,
             logo: `https://pics.avs.io/200/200/${carrierCode.toUpperCase()}.png`
           },
-          departure: {
-            time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-            date: new Date(firstSegment.departure.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-            airport: firstSegment.departure.iataCode,
-            terminal: firstSegment.departure.terminal || '',
-            cityName: cityMap[firstSegment.departure.iataCode] || firstSegment.departure.iataCode
-          },
-          arrival: {
-            time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-            date: new Date(lastSegment.arrival.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-            airport: lastSegment.arrival.iataCode,
-            terminal: lastSegment.arrival.terminal || '',
-            cityName: cityMap[lastSegment.arrival.iataCode] || lastSegment.arrival.iataCode
-          },
+            departure: {
+              time: new Date(firstSegment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+              date: new Date(firstSegment.departure.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              rawDate: firstSegment.departure.at?.split('T')[0] || firstSegment.departure.at,
+              airport: firstSegment.departure.iataCode,
+              terminal: firstSegment.departure.terminal || '',
+              cityName: cityMap[firstSegment.departure.iataCode] || firstSegment.departure.iataCode
+            },
+            arrival: {
+              time: new Date(lastSegment.arrival.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+              date: new Date(lastSegment.arrival.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              rawDate: lastSegment.arrival.at?.split('T')[0] || lastSegment.arrival.at,
+              airport: lastSegment.arrival.iataCode,
+              terminal: lastSegment.arrival.terminal || '',
+              cityName: cityMap[lastSegment.arrival.iataCode] || lastSegment.arrival.iataCode
+            },
           duration: itinerary.duration,
           stops: segments.length - 1,
           price: {
@@ -373,28 +375,30 @@ function FlightSearchPage() {
             name: flight.airline,
             logo: `https://pics.avs.io/200/200/${flight.airlineCode?.toUpperCase()}.png`
           },
-          departure: {
-            time: flight.departure.time,
-            date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-            airport: flight.departure.airport,
-            terminal: flight.departure.terminal || '',
-            cityName: cityMap[flight.departure.airport] || flight.departure.airport
-          },
-          arrival: {
-            time: flight.arrival.time,
-            date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-            airport: flight.arrival.airport,
-            terminal: flight.arrival.terminal || '',
-            cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
-          },
-          duration: flight.duration,
-          stops: flight.stops || 0,
-          price: {
-            amount: flight.price.amount,
-            total: flight.price.total,
-            currency: flight.price.currency || 'USD',
-            base: flight.price.base || '0',
-            grandTotal: flight.price.grandTotal || flight.price.total,
+            departure: {
+              time: flight.departure.time,
+              date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              rawDate: flight.departure.date,
+              airport: flight.departure.airport,
+              terminal: flight.departure.terminal || '',
+              cityName: cityMap[flight.departure.airport] || flight.departure.airport
+            },
+            arrival: {
+              time: flight.arrival.time,
+              date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              rawDate: flight.arrival.date,
+              airport: flight.arrival.airport,
+              terminal: flight.arrival.terminal || '',
+              cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
+            },
+            duration: flight.duration,
+            stops: flight.stops || 0,
+            price: {
+              amount: flight.price.amount,
+              total: flight.price.total,
+              currency: flight.price.currency || 'USD',
+              base: flight.price.base || '0',
+              grandTotal: flight.price.grandTotal || flight.price.total,
             fees: flight.price.fees || []
           },
             amenities: [],
@@ -481,28 +485,30 @@ function FlightSearchPage() {
             originalOffer: flight.originalOffer
         };
       } else {
-        // Handle our simple API format (no originalOffer available)
-        return {
-          id: flight.id,
-          airline: {
-            code: flight.airlineCode,
-            name: flight.airline,
-            logo: `https://pics.avs.io/200/200/${flight.airlineCode.toUpperCase()}.png`
-          },
-          departure: {
-            time: flight.departure.time,
-            date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-            airport: flight.departure.airport,
-            terminal: flight.departure.terminal || '',
-            cityName: cityMap[flight.departure.airport] || flight.departure.airport
-          },
-          arrival: {
-            time: flight.arrival.time,
-            date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-            airport: flight.arrival.airport,
-            terminal: flight.arrival.terminal || '',
-            cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
-          },
+          // Handle our simple API format (no originalOffer available)
+          return {
+            id: flight.id,
+            airline: {
+              code: flight.airlineCode,
+              name: flight.airline,
+              logo: `https://pics.avs.io/200/200/${flight.airlineCode.toUpperCase()}.png`
+            },
+            departure: {
+              time: flight.departure.time,
+              date: new Date(flight.departure.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              rawDate: flight.departure.date,
+              airport: flight.departure.airport,
+              terminal: flight.departure.terminal || '',
+              cityName: cityMap[flight.departure.airport] || flight.departure.airport
+            },
+            arrival: {
+              time: flight.arrival.time,
+              date: new Date(flight.arrival.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              rawDate: flight.arrival.date,
+              airport: flight.arrival.airport,
+              terminal: flight.arrival.terminal || '',
+              cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
+            },
           duration: flight.duration,
           stops: flight.stops || 0,
           price: {

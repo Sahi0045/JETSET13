@@ -65,6 +65,42 @@ function FlightBookingConfirmation() {
     // Add more as needed
   ]);
 
+  // Nationality countries list
+  const countries = [
+    { code: 'IN', name: 'India', dial: '+91' }, { code: 'US', name: 'United States', dial: '+1' },
+    { code: 'GB', name: 'United Kingdom', dial: '+44' }, { code: 'CA', name: 'Canada', dial: '+1' },
+    { code: 'AU', name: 'Australia', dial: '+61' }, { code: 'DE', name: 'Germany', dial: '+49' },
+    { code: 'FR', name: 'France', dial: '+33' }, { code: 'JP', name: 'Japan', dial: '+81' },
+    { code: 'AE', name: 'UAE', dial: '+971' }, { code: 'SG', name: 'Singapore', dial: '+65' },
+    { code: 'MY', name: 'Malaysia', dial: '+60' }, { code: 'TH', name: 'Thailand', dial: '+66' },
+    { code: 'VN', name: 'Vietnam', dial: '+84' }, { code: 'ID', name: 'Indonesia', dial: '+62' },
+    { code: 'CN', name: 'China', dial: '+86' }, { code: 'KR', name: 'South Korea', dial: '+82' },
+    { code: 'IT', name: 'Italy', dial: '+39' }, { code: 'ES', name: 'Spain', dial: '+34' },
+    { code: 'BR', name: 'Brazil', dial: '+55' }, { code: 'MX', name: 'Mexico', dial: '+52' },
+    { code: 'RU', name: 'Russia', dial: '+7' }, { code: 'ZA', name: 'South Africa', dial: '+27' },
+    { code: 'NZ', name: 'New Zealand', dial: '+64' }, { code: 'PH', name: 'Philippines', dial: '+63' },
+    { code: 'PK', name: 'Pakistan', dial: '+92' }, { code: 'BD', name: 'Bangladesh', dial: '+880' },
+    { code: 'LK', name: 'Sri Lanka', dial: '+94' }, { code: 'NP', name: 'Nepal', dial: '+977' },
+    { code: 'SA', name: 'Saudi Arabia', dial: '+966' }, { code: 'QA', name: 'Qatar', dial: '+974' },
+    { code: 'KW', name: 'Kuwait', dial: '+965' }, { code: 'BH', name: 'Bahrain', dial: '+973' },
+    { code: 'OM', name: 'Oman', dial: '+968' }, { code: 'EG', name: 'Egypt', dial: '+20' },
+    { code: 'KE', name: 'Kenya', dial: '+254' }, { code: 'NG', name: 'Nigeria', dial: '+234' },
+    { code: 'TR', name: 'Turkey', dial: '+90' }, { code: 'PT', name: 'Portugal', dial: '+351' },
+    { code: 'NL', name: 'Netherlands', dial: '+31' }, { code: 'SE', name: 'Sweden', dial: '+46' },
+    { code: 'CH', name: 'Switzerland', dial: '+41' }, { code: 'AT', name: 'Austria', dial: '+43' },
+    { code: 'BE', name: 'Belgium', dial: '+32' }, { code: 'IE', name: 'Ireland', dial: '+353' },
+    { code: 'FI', name: 'Finland', dial: '+358' }, { code: 'NO', name: 'Norway', dial: '+47' },
+    { code: 'DK', name: 'Denmark', dial: '+45' }, { code: 'PL', name: 'Poland', dial: '+48' },
+    { code: 'HK', name: 'Hong Kong', dial: '+852' }, { code: 'TW', name: 'Taiwan', dial: '+886' },
+  ];
+
+  const [nationalityDropdown, setNationalityDropdown] = useState({ open: false, passengerId: null });
+  const [nationalitySearch, setNationalitySearch] = useState({});
+
+  // Date restrictions for DOB
+  const today = new Date().toISOString().split('T')[0];
+  const minDOB = '1920-01-01';
+
   // Update selected country code when context changes
   useEffect(() => {
     if (callingCode) {
@@ -210,8 +246,8 @@ function FlightBookingConfirmation() {
           departureTime: flightData.departure.time,
           arrivalTime: flightData.arrival.time,
           duration: flightData.duration,
-          departureDate: flightData.departure.date,
-          arrivalDate: flightData.arrival.date,
+          departureDate: flightData.departure.rawDate || flightData.departure.date,
+            arrivalDate: flightData.arrival.rawDate || flightData.arrival.date,
           cabin: flightData.cabin,
           fareType: flightData.class,
           brandedFare: flightData.brandedFare || null,
@@ -367,24 +403,25 @@ function FlightBookingConfirmation() {
   useEffect(() => {
     if (passengerData.length === 0 && bookingDetails) {
       const defaultPassenger = {
-          id: 1,
-          type: "Adult",
-          title: "Mr",
-          firstName: "",
-          lastName: "",
-          dateOfBirth: "",
-          seatNumber: "",
-          meal: "Regular",
-          baggage: "15 Kg",
-          mobile: "",
-          email: "",
-          gender: "male",
-          requiresWheelchair: false,
-          nationality: "",
-          passportNumber: "",
-          passportExpiry: ""
-        };
-      setPassengerData([defaultPassenger]);
+            id: 1,
+            type: "Adult",
+            title: "Mr",
+            firstName: "",
+            lastName: "",
+            dateOfBirth: "",
+            seatNumber: "",
+            meal: "Regular",
+            baggage: "15 Kg",
+            mobile: "",
+            email: "",
+            gender: "male",
+            requiresWheelchair: false,
+            nationality: "",
+            passportNumber: "",
+            passportExpiry: "",
+            countryCode: callingCode || '+91'
+          };
+        setPassengerData([defaultPassenger]);
     }
   }, [bookingDetails, passengerData.length]);
 
@@ -529,23 +566,24 @@ function FlightBookingConfirmation() {
 
   const handleAddPassenger = () => {
     const newPassenger = {
-        id: passengerData.length + 1,
-        type: "Adult",
-        title: "Mr",
-        firstName: "",
-        lastName: "",
-        dateOfBirth: "",
-        seatNumber: "",
-        meal: "Regular",
-        baggage: "15 Kg",
-        mobile: "",
-        email: "",
-        gender: "male",
-        requiresWheelchair: false,
-        nationality: "",
-        passportNumber: "",
-        passportExpiry: ""
-      };
+      id: passengerData.length + 1,
+          type: "Adult",
+          title: "Mr",
+          firstName: "",
+          lastName: "",
+          dateOfBirth: "",
+          seatNumber: "",
+          meal: "Regular",
+          baggage: "15 Kg",
+          mobile: "",
+          email: "",
+          gender: "male",
+          requiresWheelchair: false,
+          nationality: "",
+          passportNumber: "",
+          passportExpiry: "",
+          countryCode: callingCode || '+91'
+        };
     const updatedPassengers = [...passengerData, newPassenger];
     setPassengerData(updatedPassengers);
     updateFareSummary(updatedPassengers.length);
@@ -619,7 +657,7 @@ function FlightBookingConfirmation() {
       const carrierCode = rawFlightData?.airline?.code || 'XX';
       const departureAirport = rawFlightData?.departure?.airport || 'XXX';
       const arrivalAirport = rawFlightData?.arrival?.airport || 'XXX';
-      const departureDate = rawFlightData?.departure?.date || new Date().toISOString().split('T')[0];
+        const departureDate = rawFlightData?.departure?.rawDate || rawFlightData?.departure?.date || new Date().toISOString().split('T')[0];
       const segments = rawFlightData?.segments || [];
 
       // Build flight data for ARC Pay
@@ -1079,17 +1117,19 @@ function FlightBookingConfirmation() {
                           required
                         />
                       </div>
-                      <div className="form-group">
-                        <label>Date of Birth <span className="required">*</span></label>
-                        <input
-                          type="date"
-                          className="form-input"
-                          value={passenger.dateOfBirth}
-                          onChange={(e) => handlePassengerChange(passenger.id, 'dateOfBirth', e.target.value)}
-                          readOnly={!editMode}
-                          required
-                        />
-                      </div>
+                        <div className="form-group">
+                          <label>Date of Birth <span className="required">*</span></label>
+                          <input
+                            type="date"
+                            className="form-input"
+                            value={passenger.dateOfBirth}
+                            onChange={(e) => handlePassengerChange(passenger.id, 'dateOfBirth', e.target.value)}
+                            readOnly={!editMode}
+                            required
+                            max={today}
+                            min={minDOB}
+                          />
+                        </div>
                       <div className="form-group">
                         <label>Gender <span className="required">*</span></label>
                         <div className="gender-toggle">
@@ -1110,19 +1150,33 @@ function FlightBookingConfirmation() {
                         </div>
                       </div>
 
-                      {/* New Row */}
-                      <div className="form-group">
-                        <label>Mobile No <span className="required">*</span></label>
-                        <input
-                          type="tel"
-                          className="form-input"
-                          placeholder="+91 9876543210"
-                          value={passenger.mobile}
-                          onChange={(e) => handlePassengerChange(passenger.id, 'mobile', e.target.value)}
-                          readOnly={!editMode}
-                          required
-                        />
-                      </div>
+                        {/* New Row */}
+                        <div className="form-group">
+                          <label>Mobile No <span className="required">*</span></label>
+                          <div style={{ display: 'flex', gap: '0' }}>
+                              <select
+                                className="form-input"
+                                style={{ width: '90px', minWidth: '90px', borderRadius: '6px 0 0 6px', borderRight: 'none', padding: '10px 4px', fontSize: '14px', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 2px center', backgroundSize: '16px' }}
+                              value={passenger.countryCode || selectedCountryCode}
+                              onChange={(e) => handlePassengerChange(passenger.id, 'countryCode', e.target.value)}
+                              disabled={!editMode}
+                            >
+                              {countries.map(c => (
+                                <option key={c.code + c.dial} value={c.dial}>{c.dial} {c.code}</option>
+                              ))}
+                            </select>
+                            <input
+                              type="tel"
+                              className="form-input"
+                              style={{ borderRadius: '0 6px 6px 0', flex: 1 }}
+                              placeholder="9876543210"
+                              value={passenger.mobile}
+                              onChange={(e) => handlePassengerChange(passenger.id, 'mobile', e.target.value.replace(/[^0-9]/g, ''))}
+                              readOnly={!editMode}
+                              required
+                            />
+                          </div>
+                        </div>
                       <div className="form-group">
                         <label>Email (Optional)</label>
                         <input
@@ -1134,19 +1188,56 @@ function FlightBookingConfirmation() {
                           readOnly={!editMode}
                           />
                         </div>
-                        {/* Passport / Travel Document Fields */}
-                        <div className="form-group">
-                          <label>Nationality</label>
-                          <input
-                            type="text"
-                            className="form-input"
-                            placeholder="e.g. US, IN, GB"
-                            value={passenger.nationality || ''}
-                            onChange={(e) => handlePassengerChange(passenger.id, 'nationality', e.target.value.toUpperCase())}
-                            readOnly={!editMode}
-                            maxLength={2}
-                          />
-                        </div>
+                          {/* Passport / Travel Document Fields */}
+                          <div className="form-group" style={{ position: 'relative' }}>
+                            <label>Nationality</label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              placeholder="Search country..."
+                              value={nationalitySearch[passenger.id] !== undefined ? nationalitySearch[passenger.id] : (
+                                countries.find(c => c.code === passenger.nationality)?.name || passenger.nationality || ''
+                              )}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNationalitySearch(prev => ({ ...prev, [passenger.id]: val }));
+                                setNationalityDropdown({ open: true, passengerId: passenger.id });
+                                if (!val) handlePassengerChange(passenger.id, 'nationality', '');
+                              }}
+                              onFocus={() => setNationalityDropdown({ open: true, passengerId: passenger.id })}
+                              onBlur={() => setTimeout(() => setNationalityDropdown({ open: false, passengerId: null }), 200)}
+                              readOnly={!editMode}
+                            />
+                            {nationalityDropdown.open && nationalityDropdown.passengerId === passenger.id && (
+                              <div style={{
+                                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                                background: '#fff', border: '1px solid #ddd', borderRadius: '6px',
+                                maxHeight: '180px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                              }}>
+                                {countries
+                                  .filter(c => {
+                                    const search = (nationalitySearch[passenger.id] || '').toLowerCase();
+                                    return !search || c.name.toLowerCase().includes(search) || c.code.toLowerCase().includes(search);
+                                  })
+                                  .map(c => (
+                                    <div
+                                      key={c.code}
+                                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '14px', borderBottom: '1px solid #f0f0f0' }}
+                                      onMouseDown={() => {
+                                        handlePassengerChange(passenger.id, 'nationality', c.code);
+                                        setNationalitySearch(prev => ({ ...prev, [passenger.id]: c.name }));
+                                        setNationalityDropdown({ open: false, passengerId: null });
+                                      }}
+                                      onMouseEnter={(e) => e.target.style.background = '#f0f9ff'}
+                                      onMouseLeave={(e) => e.target.style.background = '#fff'}
+                                    >
+                                      <span style={{ fontWeight: 500 }}>{c.name}</span>{' '}
+                                      <span style={{ color: '#888', fontSize: '12px' }}>({c.code})</span>
+                                    </div>
+                                  ))}
+                              </div>
+                            )}
+                          </div>
                         <div className="form-group">
                           <label>Passport Number</label>
                           <input
@@ -1168,16 +1259,16 @@ function FlightBookingConfirmation() {
                             readOnly={!editMode}
                           />
                         </div>
-                        <div className="form-group flex justify-center items-end pb-2">
-                          <label className="flex items-center cursor-pointer select-none">
+                        <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
+                          <label className="flex items-center cursor-pointer select-none gap-2">
                             <input
                               type="checkbox"
-                              className="w-4 h-4 mr-2 accent-[#055B75]"
+                              style={{ width: '18px', height: '18px', minWidth: '18px', accentColor: '#055B75', borderRadius: '4px', cursor: 'pointer' }}
                               checked={passenger.requiresWheelchair}
                               onChange={(e) => handlePassengerChange(passenger.id, 'requiresWheelchair', e.target.checked)}
                               disabled={!editMode}
                             />
-                            <span className="text-sm font-medium text-[#626363]">Request Wheelchair</span>
+                            <span className="text-sm font-medium text-[#626363]">Request Wheelchair Assistance</span>
                           </label>
                         </div>
                       </div>
