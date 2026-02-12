@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FaShip, FaUser, FaCreditCard, FaLock } from 'react-icons/fa';
+import { FaShip, FaUser, FaLock } from 'react-icons/fa';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
@@ -21,15 +21,8 @@ function CruiseBookingSummary() {
     adults: [{ firstName: '', lastName: '', age: '', nationality: '' }],
     children: [{ firstName: '', lastName: '', age: '', nationality: '' }]
   });
-  const [paymentDetails, setPaymentDetails] = useState({
-    cardNumber: '',
-    cardHolder: '',
-    expiryDate: '',
-    cvv: ''
-  });
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
-  const [isPaymentSuccess, setIsPaymentSuccess] = useState(false);
 
   useEffect(() => {
     // Find the selected cruise from cruiseLineData
@@ -73,75 +66,21 @@ function CruiseBookingSummary() {
     }));
   };
 
-  const handlePaymentChange = (field, value) => {
-    // Format card number with spaces
-    if (field === 'cardNumber') {
-      value = value.replace(/\s/g, '').replace(/(.{4})/g, '$1 ').trim();
-    }
-    // Format expiry date
-    if (field === 'expiryDate') {
-      value = value.replace(/\D/g, '')
-        .replace(/^([0-9]{2})/g, '$1/')
-        .substr(0, 5);
-    }
-    // Limit CVV to 3-4 digits
-    if (field === 'cvv') {
-      value = value.replace(/\D/g, '').substr(0, 4);
-    }
-    setPaymentDetails(prev => ({ ...prev, [field]: value }));
-  };
-
   const validateForm = () => {
-    // Validate required fields - only check fields that exist in the form
-    const requiredFields = {
-      adults: ['firstName', 'lastName'], // Removed age and nationality since form doesn't have these fields
-      payment: ['cardNumber', 'cardHolder', 'expiryDate', 'cvv']
-    };
-
     // Check adult passenger details
     for (const adult of passengerDetails.adults) {
-      for (const field of requiredFields.adults) {
-        if (!adult[field] || adult[field].trim() === '') {
-          throw new Error(`Please fill in all adult passenger details`);
-        }
+      if (!adult.firstName || adult.firstName.trim() === '' || !adult.lastName || adult.lastName.trim() === '') {
+        throw new Error('Please fill in all adult passenger details');
       }
     }
 
     // Check child passenger details (if any are partially filled)
     for (const child of passengerDetails.children) {
       if (child.firstName || child.lastName) {
-        for (const field of requiredFields.adults) {
-          if (!child[field] || child[field].trim() === '') {
-            throw new Error(`Please complete all child passenger details`);
-          }
+        if (!child.firstName || child.firstName.trim() === '' || !child.lastName || child.lastName.trim() === '') {
+          throw new Error('Please complete all child passenger details');
         }
       }
-    }
-
-    // Check payment details
-    for (const field of requiredFields.payment) {
-      if (!paymentDetails[field] || paymentDetails[field].trim() === '') {
-        throw new Error(`Please enter ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}`);
-      }
-    }
-
-    // Validate card number (Luhn algorithm)
-    const cardNumber = paymentDetails.cardNumber.replace(/\s/g, '');
-    if (!/^[0-9]{16}$/.test(cardNumber)) {
-      throw new Error('Invalid card number');
-    }
-
-    // Validate expiry date
-    const [month, year] = paymentDetails.expiryDate.split('/');
-    const expiry = new Date(2000 + parseInt(year), parseInt(month) - 1);
-    const today = new Date();
-    if (expiry < today) {
-      throw new Error('Card has expired');
-    }
-
-    // Validate CVV
-    if (!/^[0-9]{3,4}$/.test(paymentDetails.cvv)) {
-      throw new Error('Invalid CVV');
     }
   };
 
@@ -182,8 +121,7 @@ function CruiseBookingSummary() {
         taxesAndFees,
         portCharges,
         totalAmount,
-        passengerDetails,
-        cardHolder: paymentDetails.cardHolder
+        passengerDetails
       };
       localStorage.setItem('pendingCruiseBooking', JSON.stringify(bookingData));
 
@@ -197,9 +135,9 @@ function CruiseBookingSummary() {
         currency: 'USD',
         orderId: orderId,
         bookingType: 'cruise',
-        customerEmail: 'customer@jetsetgo.com', // You can add email field to passenger form
-        customerName: paymentDetails.cardHolder,
-        customerPhone: '', // You can add phone field to passenger form
+        customerEmail: 'customer@jetsetgo.com',
+        customerName: `${passengerDetails.adults[0]?.firstName || ''} ${passengerDetails.adults[0]?.lastName || ''}`.trim() || 'Guest',
+        customerPhone: '',
         description: `Cruise Booking - ${cruiseData.name} (${cruiseData.duration})`,
         returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=cruise`,
         cancelUrl: `${window.location.origin}/cruise/booking-summary${location.search}`,
@@ -226,7 +164,7 @@ function CruiseBookingSummary() {
 
     } catch (error) {
       console.error('❌ Payment processing error:', error);
-      
+
       let errorMessage = 'Payment processing failed. Please try again.';
       if (error.message.includes('gateway')) {
         errorMessage = 'Payment gateway is temporarily unavailable. Please try again in a few minutes.';
@@ -354,57 +292,6 @@ function CruiseBookingSummary() {
                 </div>
               </div>
 
-              {/* Payment Details */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-4 flex items-center">
-                  <FaCreditCard className="mr-2 text-blue-500" />
-                  Payment Details
-                </h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-gray-700 mb-2">Card Number</label>
-                    <input
-                      type="text"
-                      placeholder="1234 5678 9012 3456"
-                      value={paymentDetails.cardNumber}
-                      onChange={(e) => handlePaymentChange('cardNumber', e.target.value)}
-                      className="w-full border rounded-md p-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 mb-2">Card Holder Name</label>
-                    <input
-                      type="text"
-                      placeholder="John Doe"
-                      value={paymentDetails.cardHolder}
-                      onChange={(e) => handlePaymentChange('cardHolder', e.target.value)}
-                      className="w-full border rounded-md p-2"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-gray-700 mb-2">Expiry Date</label>
-                      <input
-                        type="text"
-                        placeholder="MM/YY"
-                        value={paymentDetails.expiryDate}
-                        onChange={(e) => handlePaymentChange('expiryDate', e.target.value)}
-                        className="w-full border rounded-md p-2"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-700 mb-2">CVV</label>
-                      <input
-                        type="text"
-                        placeholder="123"
-                        value={paymentDetails.cvv}
-                        onChange={(e) => handlePaymentChange('cvv', e.target.value)}
-                        className="w-full border rounded-md p-2"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Price Summary */}
@@ -440,29 +327,27 @@ function CruiseBookingSummary() {
                 <button
                   onClick={handleSubmit}
                   disabled={isProcessing}
-                  className="w-full mt-6 bg-blue-500 text-white py-3 rounded-md hover:bg-blue-600 transition-colors flex items-center justify-center"
+                  className="w-full mt-6 bg-[#055B75] text-white py-3.5 rounded-lg hover:bg-[#034457] transition-all flex items-center justify-center font-semibold shadow-lg active:scale-[0.98]"
                 >
                   {isProcessing ? (
                     <>
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Processing...
+                      Redirecting to ARC Pay...
                     </>
                   ) : (
                     <>
                       <FaLock className="mr-2" />
-                      Confirm & Pay
+                      Confirm & Pay with ARC Pay
                     </>
                   )}
                 </button>
 
-                {error && (
-                  <p className="mt-4 text-red-500 text-center">{error}</p>
-                )}
+                <p className="text-xs text-gray-400 text-center mt-3">
+                  You will be securely redirected to ARC Pay to complete your payment.
+                </p>
 
-                {isPaymentSuccess && (
-                  <div className="mt-4 p-4 bg-green-50 text-green-700 rounded-md text-center">
-                    Payment successful! Redirecting to your trips...
-                  </div>
+                {error && (
+                  <p className="mt-4 text-red-500 text-center text-sm">{error}</p>
                 )}
               </div>
             </div>

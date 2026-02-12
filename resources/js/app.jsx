@@ -318,6 +318,11 @@ const CruiseHomepage = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Cruise Homepage..." /> }))
 );
 
+const CruiseBookingSuccess = React.lazy(() =>
+  import('./Pages/Common/cruise/CruiseBookingSuccess')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Cruise Booked..." /> }))
+);
+
 const Flights = React.lazy(() =>
   import('./Pages/Common/flights/flightsearchpage')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Flights..." /> }))
@@ -600,6 +605,7 @@ const App = () => {
           <Route path="/cruises" element={<CruiseCards />} />
           <Route path="/itinerary" element={<Itinerary />} />
           <Route path="/cruise-booking-summary" element={<CruiseBookingSummary />} />
+          <Route path="/cruise-booking-success" element={<CruiseBookingSuccess />} />
           <Route path="/flight" element={<Flights />} />
           <Route path="/flights" element={<FlightLanding />} />
           <Route path="/flights/search" element={<FlightSearchPage />} />
