@@ -279,25 +279,44 @@ export default function TravelDashboard() {
     // First, try to load bookings from database
     try {
       console.log('🔍 Fetching bookings from database...')
-      const response = await fetch(getApiUrl('flights/bookings'), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
+
+      // Get user ID from localStorage
+      let userId = null;
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          userId = user.id;
+        } catch (e) {
+          console.error('Error parsing user from localStorage:', e);
         }
-      })
+      }
 
-      if (response.ok) {
-        const result = await response.json()
-        console.log('📋 Database bookings response:', result)
+      // If no user ID, skip database fetch (guest users use localStorage only)
+      if (!userId) {
+        console.log('⚠️ No user ID found, skipping database fetch');
+        // Continue to load from localStorage
+      } else {
+        const response = await fetch(getApiUrl(`flights/bookings?userId=${userId}`), {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
 
-        if (result.success && result.data) {
-          result.data.forEach(booking => {
-            allBookings.push({
-              ...booking,
-              source: 'database'
+        if (response.ok) {
+          const result = await response.json()
+          console.log('📋 Database bookings response:', result)
+
+          if (result.success && result.data) {
+            result.data.forEach(booking => {
+              allBookings.push({
+                ...booking,
+                source: 'database'
+              })
             })
-          })
-          console.log(`✅ Loaded ${result.data.length} bookings from database`)
+            console.log(`✅ Loaded ${result.data.length} bookings from database`)
+          }
         }
       }
     } catch (error) {

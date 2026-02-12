@@ -139,6 +139,18 @@ function FlightCreateOrders() {
 
       const fareBreakdown = orderData.calculatedFare || null;
 
+      // Get user ID from localStorage
+      let userId = null;
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          userId = user.id;
+        } catch (e) {
+          console.error('Error parsing user from localStorage:', e);
+        }
+      }
+
       // Proceed with creating the flight order
       // Prioritize originalOffer (full Amadeus API data) over transformed flight data
       const flightBookingData = {
@@ -168,7 +180,8 @@ function FlightCreateOrders() {
           email: orderData.bookingDetails?.contact?.email || orderData.customerEmail || "test@jetsetgo.com",
           countryCode: orderData.bookingDetails?.contact?.countryCode || "1",
           phoneNumber: orderData.bookingDetails?.contact?.phone || "1234567890"
-        }
+        },
+        userId: userId
       };
 
       console.log('Sending flight booking data:', flightBookingData);

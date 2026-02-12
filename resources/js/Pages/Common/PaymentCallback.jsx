@@ -136,6 +136,18 @@ export default function PaymentCallback() {
               setStatus('Saving cruise booking...');
               console.log('🚢 Saving cruise booking to database...', bookingData);
 
+              // Get user ID from localStorage
+              let userId = null;
+              const userStr = localStorage.getItem('user');
+              if (userStr) {
+                try {
+                  const user = JSON.parse(userStr);
+                  userId = user.id;
+                } catch (e) {
+                  console.error('Error parsing user from localStorage:', e);
+                }
+              }
+
               const saveResponse = await fetch(getApiUrl('cruises/bookings'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -154,7 +166,8 @@ export default function PaymentCallback() {
                   totalAmount: bookingData.totalAmount || sessionData?.amount || 0,
                   passengerDetails: bookingData.passengerDetails || {},
                   transactionId: resultIndicator || '',
-                  sessionId: sessionId || sessionData?.sessionId || ''
+                  sessionId: sessionId || sessionData?.sessionId || '',
+                  userId: userId
                 })
               });
 

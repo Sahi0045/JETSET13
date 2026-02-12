@@ -1095,15 +1095,24 @@ router.get('/bookings', async (req, res) => {
     // Filter by travel type if provided
     const { type, userId } = req.query;
 
+    // SECURITY: Require userId to prevent exposing all bookings
+    if (!userId) {
+      return res.json({
+        success: true,
+        data: [],
+        count: 0,
+        message: 'No user ID provided'
+      });
+    }
+
     let query = supabase.from('bookings').select('*');
 
     if (type) {
       query = query.eq('travel_type', type);
     }
 
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
+    // Always filter by user_id
+    query = query.eq('user_id', userId);
 
     // Order by created_at descending (newest first)
     query = query.order('created_at', { ascending: false });
