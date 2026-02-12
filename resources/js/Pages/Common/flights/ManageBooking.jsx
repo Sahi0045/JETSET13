@@ -238,7 +238,7 @@ function ManageBooking() {
               Download E-Ticket
             </button>
 
-            {bookingData?.status === 'CONFIRMED' && (
+            {bookingData?.status?.toUpperCase() !== 'CANCELLED' && (
               <>
                 <button
                   onClick={modifyBooking}
