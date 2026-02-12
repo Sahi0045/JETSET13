@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { getApiUrl } from '../../utils/apiHelper';
 
 export default function PaymentCallback() {
   const [searchParams] = useSearchParams();
@@ -129,8 +130,44 @@ export default function PaymentCallback() {
 
           const confirmationRoute = confirmationRoutes[bookingType] || '/booking-success';
 
+          // Save cruise booking to database
+          if (bookingType === 'cruise') {
+            try {
+              setStatus('Saving cruise booking...');
+              console.log('🚢 Saving cruise booking to database...', bookingData);
+
+              const saveResponse = await fetch(getApiUrl('cruises/bookings'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  orderId,
+                  cruiseName: bookingData.cruiseName || '',
+                  cruiseImage: bookingData.cruiseImage || '',
+                  duration: bookingData.duration || '',
+                  departure: bookingData.departure || '',
+                  arrival: bookingData.arrival || '',
+                  departureDate: bookingData.departureDate || '',
+                  returnDate: bookingData.returnDate || '',
+                  basePrice: bookingData.basePrice || 0,
+                  taxesAndFees: bookingData.taxesAndFees || 0,
+                  portCharges: bookingData.portCharges || 0,
+                  totalAmount: bookingData.totalAmount || sessionData?.amount || 0,
+                  passengerDetails: bookingData.passengerDetails || {},
+                  transactionId: resultIndicator || '',
+                  sessionId: sessionId || sessionData?.sessionId || ''
+                })
+              });
+
+              const saveResult = await saveResponse.json();
+              console.log('🚢 Database save result:', saveResult);
+            } catch (saveError) {
+              console.error('⚠️ Failed to save cruise booking to database:', saveError);
+              // Continue even if DB save fails - we still redirect to success
+            }
+          }
+
           setTimeout(() => {
-            // Save the completed booking to localStorage so My Trips can display it
+            // Also save to localStorage as fallback
             const completedBooking = {
               ...bookingData,
               orderId,
@@ -138,6 +175,7 @@ export default function PaymentCallback() {
               type: bookingType,
               status: 'CONFIRMED',
               paymentVerified: true,
+              transactionId: resultIndicator || sessionData?.sessionId || '',
               orderCreatedAt: new Date().toISOString()
             };
 
@@ -155,7 +193,7 @@ export default function PaymentCallback() {
             navigate(confirmationRoute, {
               state: {
                 orderId,
-                bookingData,
+                bookingData: completedBooking,
                 paymentVerified: true
               }
             });

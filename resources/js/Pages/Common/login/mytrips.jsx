@@ -894,7 +894,7 @@ export default function TravelDashboard() {
         </div>
 
         {/* Show travel details for database bookings - ENHANCED DISPLAY */}
-        {(booking.origin || booking.destination || booking.departureDate || booking.hotelDestination || booking.cruiseDestination || booking.returnDate || booking.checkinDate || booking.checkoutDate || booking.cruiseDepartureDate) && (
+        {(booking.origin || booking.destination || booking.departureDate || booking.hotelDestination || booking.cruiseDestination || booking.cruiseName || booking.cruiseDeparture || booking.returnDate || booking.checkinDate || booking.checkoutDate || booking.cruiseDepartureDate) && (
           <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
             <div className="flex items-center gap-2 mb-3">
               <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -904,68 +904,68 @@ export default function TravelDashboard() {
               <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Travel Details</span>
             </div>
 
-              {isFlightBooking && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {(booking.origin || booking.destination) && (
-                      <div className="bg-white rounded-lg p-3 border border-blue-200">
-                        <p className="text-xs text-blue-600 font-semibold mb-1">Route</p>
-                        <p className="text-sm font-bold text-gray-900">{booking.origin || 'N/A'} → {booking.destination || 'N/A'}</p>
-                      </div>
-                    )}
-                    {booking.departureDate && (
-                      <div className="bg-white rounded-lg p-3 border border-blue-200">
-                        <p className="text-xs text-blue-600 font-semibold mb-1">Departure</p>
-                        <p className="text-sm font-bold text-gray-900">{new Date(booking.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                        {booking.departureTime && <p className="text-xs text-gray-500 mt-0.5">{booking.departureTime}{booking.departureTerminal ? ` • Terminal ${booking.departureTerminal}` : ''}</p>}
-                      </div>
-                    )}
-                    {(booking.airlineName || booking.flightNumber) && (
-                      <div className="bg-white rounded-lg p-3 border border-blue-200">
-                        <p className="text-xs text-blue-600 font-semibold mb-1">Flight</p>
-                        <p className="text-sm font-bold text-gray-900">{booking.airlineName || booking.airline || ''}</p>
-                        {booking.flightNumber && <p className="text-xs text-gray-500 mt-0.5">{booking.flightNumber}{booking.aircraft ? ` • ${booking.aircraft}` : ''}</p>}
-                      </div>
-                    )}
-                    {booking.duration && (
-                      <div className="bg-white rounded-lg p-3 border border-blue-200">
-                        <p className="text-xs text-blue-600 font-semibold mb-1">Duration</p>
-                        <p className="text-sm font-bold text-gray-900">{booking.duration.startsWith('PT') ? booking.duration.replace('PT', '').replace('H', 'h ').replace('M', 'm') : booking.duration}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{booking.stops === 0 ? 'Direct' : `${booking.stops} Stop(s)`}{booking.cabinClass ? ` • ${booking.cabinClass.replace('_', ' ')}` : ''}</p>
-                      </div>
-                    )}
-                  </div>
-                  {(booking.baggage || booking.brandedFareLabel || booking.arrivalTime) && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      {booking.arrivalTime && (
-                        <div className="bg-white rounded-lg p-3 border border-blue-200">
-                          <p className="text-xs text-blue-600 font-semibold mb-1">Arrival</p>
-                          <p className="text-sm font-bold text-gray-900">{booking.arrivalTime}</p>
-                          {booking.arrivalTerminal && <p className="text-xs text-gray-500 mt-0.5">Terminal {booking.arrivalTerminal}</p>}
-                        </div>
-                      )}
-                      {booking.baggage && (
-                        <div className="bg-white rounded-lg p-3 border border-blue-200">
-                          <p className="text-xs text-blue-600 font-semibold mb-1">Baggage</p>
-                          <p className="text-sm font-bold text-gray-900">{booking.baggage}</p>
-                        </div>
-                      )}
-                      {booking.brandedFareLabel && (
-                        <div className="bg-white rounded-lg p-3 border border-blue-200">
-                          <p className="text-xs text-blue-600 font-semibold mb-1">Fare Type</p>
-                          <p className="text-sm font-bold text-gray-900">{booking.brandedFareLabel}</p>
-                        </div>
-                      )}
-                      {booking.pnr && (
-                        <div className="bg-white rounded-lg p-3 border border-blue-200">
-                          <p className="text-xs text-blue-600 font-semibold mb-1">PNR</p>
-                          <p className="text-sm font-bold text-blue-700 font-mono">{booking.pnr}</p>
-                        </div>
-                      )}
+            {isFlightBooking && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {(booking.origin || booking.destination) && (
+                    <div className="bg-white rounded-lg p-3 border border-blue-200">
+                      <p className="text-xs text-blue-600 font-semibold mb-1">Route</p>
+                      <p className="text-sm font-bold text-gray-900">{booking.origin || 'N/A'} → {booking.destination || 'N/A'}</p>
+                    </div>
+                  )}
+                  {booking.departureDate && (
+                    <div className="bg-white rounded-lg p-3 border border-blue-200">
+                      <p className="text-xs text-blue-600 font-semibold mb-1">Departure</p>
+                      <p className="text-sm font-bold text-gray-900">{new Date(booking.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                      {booking.departureTime && <p className="text-xs text-gray-500 mt-0.5">{booking.departureTime}{booking.departureTerminal ? ` • Terminal ${booking.departureTerminal}` : ''}</p>}
+                    </div>
+                  )}
+                  {(booking.airlineName || booking.flightNumber) && (
+                    <div className="bg-white rounded-lg p-3 border border-blue-200">
+                      <p className="text-xs text-blue-600 font-semibold mb-1">Flight</p>
+                      <p className="text-sm font-bold text-gray-900">{booking.airlineName || booking.airline || ''}</p>
+                      {booking.flightNumber && <p className="text-xs text-gray-500 mt-0.5">{booking.flightNumber}{booking.aircraft ? ` • ${booking.aircraft}` : ''}</p>}
+                    </div>
+                  )}
+                  {booking.duration && (
+                    <div className="bg-white rounded-lg p-3 border border-blue-200">
+                      <p className="text-xs text-blue-600 font-semibold mb-1">Duration</p>
+                      <p className="text-sm font-bold text-gray-900">{booking.duration.startsWith('PT') ? booking.duration.replace('PT', '').replace('H', 'h ').replace('M', 'm') : booking.duration}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{booking.stops === 0 ? 'Direct' : `${booking.stops} Stop(s)`}{booking.cabinClass ? ` • ${booking.cabinClass.replace('_', ' ')}` : ''}</p>
                     </div>
                   )}
                 </div>
-              )}
+                {(booking.baggage || booking.brandedFareLabel || booking.arrivalTime) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {booking.arrivalTime && (
+                      <div className="bg-white rounded-lg p-3 border border-blue-200">
+                        <p className="text-xs text-blue-600 font-semibold mb-1">Arrival</p>
+                        <p className="text-sm font-bold text-gray-900">{booking.arrivalTime}</p>
+                        {booking.arrivalTerminal && <p className="text-xs text-gray-500 mt-0.5">Terminal {booking.arrivalTerminal}</p>}
+                      </div>
+                    )}
+                    {booking.baggage && (
+                      <div className="bg-white rounded-lg p-3 border border-blue-200">
+                        <p className="text-xs text-blue-600 font-semibold mb-1">Baggage</p>
+                        <p className="text-sm font-bold text-gray-900">{booking.baggage}</p>
+                      </div>
+                    )}
+                    {booking.brandedFareLabel && (
+                      <div className="bg-white rounded-lg p-3 border border-blue-200">
+                        <p className="text-xs text-blue-600 font-semibold mb-1">Fare Type</p>
+                        <p className="text-sm font-bold text-gray-900">{booking.brandedFareLabel}</p>
+                      </div>
+                    )}
+                    {booking.pnr && (
+                      <div className="bg-white rounded-lg p-3 border border-blue-200">
+                        <p className="text-xs text-blue-600 font-semibold mb-1">PNR</p>
+                        <p className="text-sm font-bold text-blue-700 font-mono">{booking.pnr}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {isHotelBooking && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -1002,10 +1002,16 @@ export default function TravelDashboard() {
 
             {isCruiseBooking && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {booking.cruiseDestination && (
+                {(booking.cruiseName || booking.cruiseDestination) && (
                   <div className="bg-white rounded-lg p-3 border border-cyan-200">
-                    <p className="text-xs text-cyan-600 font-semibold mb-1">Destination</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.cruiseDestination}</p>
+                    <p className="text-xs text-cyan-600 font-semibold mb-1">{booking.cruiseName ? 'Cruise' : 'Destination'}</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.cruiseName || booking.cruiseDestination}</p>
+                  </div>
+                )}
+                {(booking.cruiseDeparture || booking.cruiseArrival) && (
+                  <div className="bg-white rounded-lg p-3 border border-cyan-200">
+                    <p className="text-xs text-cyan-600 font-semibold mb-1">Route</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.cruiseDeparture || 'N/A'} → {booking.cruiseArrival || 'N/A'}</p>
                   </div>
                 )}
                 {booking.cruiseDepartureDate && (
@@ -1014,10 +1020,10 @@ export default function TravelDashboard() {
                     <p className="text-sm font-bold text-gray-900">{new Date(booking.cruiseDepartureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
                   </div>
                 )}
-                {booking.cruiseDuration && (
+                {(booking.cruiseDuration || booking.duration) && (
                   <div className="bg-white rounded-lg p-3 border border-cyan-200">
                     <p className="text-xs text-cyan-600 font-semibold mb-1">Duration</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.cruiseDuration} {booking.cruiseDuration === 1 ? 'Day' : 'Days'}</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.cruiseDuration || booking.duration}</p>
                   </div>
                 )}
                 {(booking.cruisePassengers || booking.cruiseCabinType) && (
@@ -1512,10 +1518,10 @@ export default function TravelDashboard() {
             onClick={() => sendInquiryStatusEmail(request)}
             disabled={emailSending[`inquiry-${request.id}`]}
             className={`flex-1 sm:flex-none px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${emailSuccess[`inquiry-${request.id}`]
-                ? 'bg-green-100 text-green-700 border border-green-300'
-                : emailSending[`inquiry-${request.id}`]
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'border-2 border-[#B9D0DC] text-[#055B75] hover:bg-[#B9D0DC]/20 hover:border-[#055B75]'
+              ? 'bg-green-100 text-green-700 border border-green-300'
+              : emailSending[`inquiry-${request.id}`]
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'border-2 border-[#B9D0DC] text-[#055B75] hover:bg-[#B9D0DC]/20 hover:border-[#055B75]'
               }`}
           >
             <span className="flex items-center justify-center gap-2">

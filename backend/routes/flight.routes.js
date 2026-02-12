@@ -1173,7 +1173,18 @@ router.get('/bookings', async (req, res) => {
         priceFees: booking.booking_details?.price_fees || [],
         fareBreakdown: booking.booking_details?.fare_breakdown || null,
         // Travelers
-        travelers: booking.passenger_details
+        travelers: booking.passenger_details,
+        // Cruise-specific fields
+        cruiseName: booking.booking_details?.cruise_name || '',
+        cruiseImage: booking.booking_details?.cruise_image || '',
+        cruiseDepartureDate: booking.booking_details?.departure_date || '',
+        cruiseReturnDate: booking.booking_details?.return_date || '',
+        cruiseDeparture: booking.booking_details?.departure || '',
+        cruiseArrival: booking.booking_details?.arrival || '',
+        cruiseDuration: booking.booking_details?.duration || '',
+        basePrice: booking.booking_details?.base_price || 0,
+        taxesAndFees: booking.booking_details?.taxes_and_fees || 0,
+        portCharges: booking.booking_details?.port_charges || 0
       };
     });
 
