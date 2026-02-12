@@ -10,7 +10,8 @@ import apiConfig from '../../../src/config/api.js';
 // In-memory cache
 const cache = {
     data: new Map(),
-    TTL: 10 * 60 * 1000 // 10 minutes
+    TTL: 10 * 60 * 1000, // 10 minutes
+    FAIL_TTL: 5 * 60 * 1000 // 5 minutes for failed requests
 };
 
 /**
@@ -32,13 +33,17 @@ const getApiUrl = () => {
  * Generic fetch with caching
  */
 const fetchWithCache = async (endpoint, params, cacheKey) => {
-    // Check cache
+    // Check cache (includes both success and failure entries)
     if (cache.data.has(cacheKey)) {
         const cached = cache.data.get(cacheKey);
-        if (Date.now() - cached.timestamp < cache.TTL) {
-            console.log(`✅ Cache hit: ${cacheKey}`);
+        const ttl = cached.failed ? cache.FAIL_TTL : cache.TTL;
+        if (Date.now() - cached.timestamp < ttl) {
+            if (!cached.failed) {
+                console.log(`✅ Cache hit: ${cacheKey}`);
+            }
             return cached.data;
         }
+        cache.data.delete(cacheKey);
     }
 
     try {
@@ -64,16 +69,31 @@ const fetchWithCache = async (endpoint, params, cacheKey) => {
 
         const result = await response.json();
 
-        if (result.success && result.data) {
+        if (result.success && result.data && result.data.length > 0) {
             cache.data.set(cacheKey, {
                 data: result.data,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                failed: false
             });
+            return result.data;
         }
 
-        return result.data || [];
+        // API returned success:false or empty data - cache as failure to avoid re-requesting
+        cache.data.set(cacheKey, {
+            data: [],
+            timestamp: Date.now(),
+            failed: true
+        });
+
+        return [];
     } catch (error) {
         console.warn(`⚠️ FlightAnalytics API error:`, error.message);
+        // Cache the failure so we don't spam the endpoint
+        cache.data.set(cacheKey, {
+            data: [],
+            timestamp: Date.now(),
+            failed: true
+        });
         return [];
     }
 };

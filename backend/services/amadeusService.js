@@ -16,6 +16,40 @@ class AmadeusService {
     console.log(`Amadeus API host: ${apiHost} (NODE_ENV=${process.env.NODE_ENV})`);
     this.token = null;
     this.tokenExpiration = null;
+
+    // Circuit breaker for endpoints that consistently fail in test env
+    this._circuitBreakers = {};
+    this._CB_THRESHOLD = 3;       // failures before tripping
+    this._CB_RESET_MS = 5 * 60 * 1000; // 5 minutes cooldown
+  }
+
+  /**
+   * Simple circuit breaker: tracks consecutive failures per endpoint key.
+   * Returns true if the circuit is open (should skip the call).
+   */
+  _isCircuitOpen(key) {
+    const cb = this._circuitBreakers[key];
+    if (!cb) return false;
+    if (cb.failures >= this._CB_THRESHOLD) {
+      if (Date.now() - cb.lastFailure < this._CB_RESET_MS) {
+        return true; // circuit is open, skip call
+      }
+      // Reset after cooldown
+      delete this._circuitBreakers[key];
+    }
+    return false;
+  }
+
+  _recordFailure(key) {
+    if (!this._circuitBreakers[key]) {
+      this._circuitBreakers[key] = { failures: 0, lastFailure: 0 };
+    }
+    this._circuitBreakers[key].failures++;
+    this._circuitBreakers[key].lastFailure = Date.now();
+  }
+
+  _recordSuccess(key) {
+    delete this._circuitBreakers[key];
   }
 
   async getAccessToken() {
@@ -657,6 +691,14 @@ class AmadeusService {
    * @see https://developers.amadeus.com/self-service/category/flights/api-doc/flight-cheapest-date-search
    */
   async getCheapestFlightDates(origin, destination, options = {}) {
+    const cbKey = 'cheapest-flight-dates';
+
+    // Circuit breaker: skip if this endpoint keeps failing
+    if (this._isCircuitOpen(cbKey)) {
+      console.log(`⚡ Circuit breaker open for ${cbKey}, skipping API call`);
+      return { success: false, error: 'Endpoint temporarily unavailable (circuit breaker)', data: [] };
+    }
+
     try {
       const token = await this.getAccessToken();
 
@@ -667,17 +709,18 @@ class AmadeusService {
         params: {
           origin: origin,
           destination: destination,
-          departureDate: options.departureDate, // Optional: specific date range
+          departureDate: options.departureDate,
           oneWay: options.oneWay || false,
-          duration: options.duration, // Optional: trip duration in days
+          duration: options.duration,
           nonStop: options.nonStop || false,
-          viewBy: options.viewBy || 'DATE' // DATE, DURATION, or WEEK
+          viewBy: options.viewBy || 'DATE'
         },
         timeout: 8000
       });
 
       const dates = response.data.data || [];
       console.log(`✅ Found ${dates.length} date options`);
+      this._recordSuccess(cbKey);
 
       return {
         success: true,
@@ -696,7 +739,8 @@ class AmadeusService {
       };
 
     } catch (error) {
-      console.error('❌ Error fetching cheapest dates:', error.response?.data || error.message);
+      this._recordFailure(cbKey);
+      console.warn(`⚠️ Cheapest dates failed (${origin}→${destination}):`, error.response?.data?.errors?.[0]?.title || error.message);
       return { success: false, error: error.message, data: [] };
     }
   }

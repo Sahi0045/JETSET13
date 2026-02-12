@@ -1,0 +1,32 @@
+2026-02-12T06:53:15.349Z [network][GET 200] http://localhost:5004/api/flights/cheapest-dates?origin=DEL&destination=BOM&oneWay=true
+  response: {"success":false,"data":[]}
+2026-02-12T06:53:15.376Z [network][GET 200] http://localhost:5004/api/flights/cheapest-dates?origin=DEL&destination=HYD&oneWay=true
+  response: {"success":false,"data":[]}
+2026-02-12T06:53:15.579Z [network][GET 200] http://localhost:5004/api/flights/cheapest-dates?origin=DEL&destination=GOI&oneWay=true
+  response: {"success":false,"data":[]}
+2026-02-12T06:53:15.595Z [network][GET 200] http://localhost:5004/api/flights/cheapest-dates?origin=DEL&destination=BLR&oneWay=true
+  response: {"success":false,"data":[]}
+2026-02-12T06:53:15.643Z [network][GET 200] http://localhost:5004/api/flights/cheapest-dates?origin=DEL&destination=CCU&oneWay=true
+  response: {"success":false,"data":[]}
+2026-02-12T06:53:15.858Z [network][GET 200] http://localhost:5004/api/flights/cheapest-dates?origin=DEL&destination=JAI&oneWay=true
+  response: {"success":false,"data":[]}
+2026-02-12T15:04:43.428Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:04:43.605Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:04:43.606Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:04:43.737Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:04:43.738Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:04:43.921Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:04:43.922Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:04:44.117Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:04:44.118Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:04:44.247Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:04:44.248Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:04:58.014Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:04:58.015Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:05:00.556Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:05:00.558Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:05:06.783Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:05:06.784Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:05:12.802Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:05:14.139Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T15:05:14.141Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
