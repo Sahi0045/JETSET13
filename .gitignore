@@ -59,3 +59,4 @@ dist/
 *.sw?
 .DS_Store
 Thumbs.db
+.cursor/mcp.json

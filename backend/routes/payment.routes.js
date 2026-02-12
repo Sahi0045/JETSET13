@@ -85,11 +85,13 @@ router.all('/', async (req, res) => {
                 return handleHostedCheckout(req, res);
             case 'session-create':
                 return handleSessionCreate(req, res);
+            case 'cancel-booking':
+                return handleCancelBookingAction(req, res);
             default:
                 return res.status(400).json({
                     success: false,
                     error: `Unknown action: ${action}`,
-                    supportedActions: ['initiate-payment', 'payment-callback', 'get-payment-details', 'gateway-status', 'hosted-checkout', 'session-create']
+                    supportedActions: ['initiate-payment', 'payment-callback', 'get-payment-details', 'gateway-status', 'hosted-checkout', 'session-create', 'cancel-booking']
                 });
         }
     } catch (error) {
@@ -1302,6 +1304,234 @@ router.post('/payment/refund', async (req, res) => {
         });
     }
 });
+
+// ============================================
+// CANCEL BOOKING - Orchestrated cancellation
+// (Kept in sync with /api/payments.js per PAYMENT_SYSTEM_ARCHITECTURE.txt)
+// ============================================
+async function handleCancelBookingAction(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        console.log('🚫 Handling CANCEL-BOOKING operation (Express)');
+
+        const {
+            bookingReference,
+            email,
+            reason = 'Customer request'
+        } = req.body;
+
+        if (!bookingReference) {
+            return res.status(400).json({
+                success: false,
+                error: 'bookingReference is required'
+            });
+        }
+
+        // 1. Look up booking in Supabase
+        let booking = null;
+
+        const { data: byRef } = await supabase
+            .from('bookings')
+            .select('*')
+            .eq('booking_reference', bookingReference)
+            .single();
+
+        if (byRef) {
+            booking = byRef;
+        } else {
+            const { data: byOrder } = await supabase
+                .from('bookings')
+                .select('*')
+                .filter('booking_details->>order_id', 'eq', bookingReference)
+                .single();
+            if (byOrder) booking = byOrder;
+        }
+
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                error: 'Booking not found',
+                details: `No booking found with reference: ${bookingReference}`
+            });
+        }
+
+        if (booking.status === 'cancelled') {
+            return res.status(400).json({
+                success: false,
+                error: 'Booking is already cancelled',
+                booking: { id: booking.id, reference: booking.booking_reference, status: booking.status }
+            });
+        }
+
+        if (email && booking.customer_email && email.toLowerCase() !== booking.customer_email.toLowerCase()) {
+            return res.status(403).json({ success: false, error: 'Email does not match the booking' });
+        }
+
+        console.log('📋 Booking found:', booking.id, 'Status:', booking.status);
+
+        const cancellationResult = {
+            bookingId: booking.id,
+            bookingReference: booking.booking_reference,
+            amadeusCancelled: false,
+            paymentProcessed: false,
+            refundAmount: null,
+            paymentAction: null
+        };
+
+        // 2. Cancel flight via Amadeus API
+        const orderId = booking.booking_reference ||
+            booking.booking_details?.order_id ||
+            booking.booking_details?.amadeus_order_id;
+
+        if (orderId) {
+            try {
+                const amadeus_client_id = process.env.AMADEUS_API_KEY || process.env.AMADEUS_CLIENT_ID;
+                const amadeus_client_secret = process.env.AMADEUS_API_SECRET || process.env.AMADEUS_CLIENT_SECRET;
+                const amadeus_base_url = process.env.AMADEUS_BASE_URL || 'https://test.api.amadeus.com';
+
+                if (amadeus_client_id && amadeus_client_secret) {
+                    const tokenResponse = await fetch(`${amadeus_base_url}/v1/security/oauth2/token`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `grant_type=client_credentials&client_id=${amadeus_client_id}&client_secret=${amadeus_client_secret}`
+                    });
+
+                    if (tokenResponse.ok) {
+                        const tokenData = await tokenResponse.json();
+                        const cancelResponse = await fetch(
+                            `${amadeus_base_url}/v1/booking/flight-orders/${orderId}`,
+                            {
+                                method: 'DELETE',
+                                headers: {
+                                    'Authorization': `Bearer ${tokenData.access_token}`,
+                                    'Accept': 'application/vnd.amadeus+json'
+                                }
+                            }
+                        );
+                        if (cancelResponse.ok || cancelResponse.status === 204) {
+                            console.log('✅ Amadeus flight order cancelled');
+                            cancellationResult.amadeusCancelled = true;
+                        } else {
+                            console.warn('⚠️ Amadeus cancellation failed:', cancelResponse.status);
+                        }
+                    }
+                }
+            } catch (amadeusError) {
+                console.warn('⚠️ Amadeus cancellation error:', amadeusError.message);
+            }
+        }
+
+        // 3. Process refund/void via ARC Pay
+        if (booking.payment_status === 'paid' || booking.payment_status === 'completed') {
+            try {
+                const { data: payment } = await supabase
+                    .from('payments')
+                    .select('*')
+                    .or(`quote_id.eq.${booking.id},id.eq.${booking.payment_id || 'none'}`)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (payment) {
+                    const authConfig = getArcPayAuthConfig();
+                    const refundAmount = parseFloat(payment.amount || booking.total_amount || 0);
+
+                    if (payment.payment_status === 'completed') {
+                        const refundTxnId = `refund-cancel-${Date.now()}`;
+                        const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}/transaction/${refundTxnId}`;
+
+                        const refundResponse = await fetch(refundUrl, {
+                            method: 'PUT',
+                            headers: authConfig.headers,
+                            body: JSON.stringify({
+                                apiOperation: 'REFUND',
+                                transaction: {
+                                    amount: refundAmount.toFixed(2),
+                                    currency: payment.currency || 'USD',
+                                    reference: `Cancellation: ${reason}`
+                                }
+                            })
+                        });
+
+                        if (refundResponse.ok) {
+                            cancellationResult.paymentProcessed = true;
+                            cancellationResult.paymentAction = 'REFUND';
+                            cancellationResult.refundAmount = refundAmount;
+                            await supabase.from('payments').update({ payment_status: 'refunded' }).eq('id', payment.id);
+                        }
+                    } else if (payment.payment_status === 'pending' || payment.payment_status === 'authorized') {
+                        const voidTxnId = `void-cancel-${Date.now()}`;
+                        const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}/transaction/${voidTxnId}`;
+
+                        const voidResponse = await fetch(voidUrl, {
+                            method: 'PUT',
+                            headers: authConfig.headers,
+                            body: JSON.stringify({
+                                apiOperation: 'VOID',
+                                transaction: { targetTransactionId: payment.arc_transaction_id }
+                            })
+                        });
+
+                        if (voidResponse.ok) {
+                            cancellationResult.paymentProcessed = true;
+                            cancellationResult.paymentAction = 'VOID';
+                            cancellationResult.refundAmount = refundAmount;
+                            await supabase.from('payments').update({ payment_status: 'cancelled' }).eq('id', payment.id);
+                        }
+                    }
+                }
+            } catch (paymentError) {
+                console.warn('⚠️ Payment refund/void error:', paymentError.message);
+            }
+        }
+
+        // 4. Update booking status
+        const { error: updateError } = await supabase
+            .from('bookings')
+            .update({
+                status: 'cancelled',
+                payment_status: cancellationResult.paymentProcessed ? 'refunded' : booking.payment_status,
+                booking_details: {
+                    ...booking.booking_details,
+                    cancellation: {
+                        cancelledAt: new Date().toISOString(),
+                        reason,
+                        amadeusCancelled: cancellationResult.amadeusCancelled,
+                        paymentAction: cancellationResult.paymentAction,
+                        refundAmount: cancellationResult.refundAmount
+                    }
+                }
+            })
+            .eq('id', booking.id);
+
+        if (updateError) {
+            return res.status(500).json({ success: false, error: 'Failed to update booking status', details: updateError.message });
+        }
+
+        console.log('✅ Booking cancelled successfully:', booking.id);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Booking cancelled successfully',
+            cancellation: cancellationResult,
+            booking: {
+                id: booking.id,
+                reference: booking.booking_reference,
+                status: 'cancelled',
+                previousStatus: booking.status,
+                refundAmount: cancellationResult.refundAmount,
+                paymentAction: cancellationResult.paymentAction
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Cancel booking error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to cancel booking', details: error.message });
+    }
+}
 
 // Production-Ready Integration Test
 router.post('/test', async (req, res) => {

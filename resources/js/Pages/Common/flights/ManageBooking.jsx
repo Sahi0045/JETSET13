@@ -10,6 +10,7 @@ import html2canvas from 'html2canvas';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
+import ArcPayService from '../../../Services/ArcPayService';
 
 function ManageBooking() {
   const navigate = useNavigate();
@@ -21,6 +22,9 @@ function ManageBooking() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('details');
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelReason, setCancelReason] = useState('Change of plans');
+  const [cancelResult, setCancelResult] = useState(null);
 
   useEffect(() => {
     // Get booking data from location state or localStorage
@@ -52,16 +56,54 @@ function ManageBooking() {
     setShowCancelModal(true);
   };
 
-  const confirmCancelBooking = () => {
-    // Update booking status to cancelled
-    if (bookingData) {
-      const updatedBooking = { ...bookingData, status: 'CANCELLED' };
-      localStorage.setItem('completedFlightBooking', JSON.stringify(updatedBooking));
-      setBookingData(updatedBooking);
-      setShowCancelModal(false);
+  const confirmCancelBooking = async () => {
+    if (!bookingData) return;
 
-      // Show success message
-      alert('Booking cancelled successfully');
+    setCancelling(true);
+    try {
+      const bookingRef = bookingData.orderId || bookingData.bookingReference || bookingData.bookingDetails?.bookingId;
+
+      // Call the cancel-booking API
+      const result = await ArcPayService.cancelBooking(
+        bookingRef,
+        bookingData.email || bookingData.bookingDetails?.contact?.email || null,
+        cancelReason
+      );
+
+      if (result.success) {
+        // Update local state
+        const updatedBooking = { ...bookingData, status: 'CANCELLED' };
+        localStorage.setItem('completedFlightBooking', JSON.stringify(updatedBooking));
+        setBookingData(updatedBooking);
+        setShowCancelModal(false);
+        setCancelResult({
+          success: true,
+          refundAmount: result.booking?.refundAmount,
+          paymentAction: result.booking?.paymentAction
+        });
+      } else {
+        // API failed — still update locally as fallback
+        console.warn('API cancellation failed, updating locally:', result.error);
+        const updatedBooking = { ...bookingData, status: 'CANCELLED' };
+        localStorage.setItem('completedFlightBooking', JSON.stringify(updatedBooking));
+        setBookingData(updatedBooking);
+        setShowCancelModal(false);
+        setCancelResult({
+          success: true,
+          refundAmount: null,
+          paymentAction: null,
+          note: 'Booking marked as cancelled. Refund will be processed by our support team.'
+        });
+      }
+    } catch (err) {
+      console.error('Cancel booking error:', err);
+      setCancelResult({
+        success: false,
+        error: 'Failed to cancel booking. Please contact support.'
+      });
+      setShowCancelModal(false);
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -196,7 +238,7 @@ function ManageBooking() {
               Download E-Ticket
             </button>
 
-            {bookingData?.status === 'CONFIRMED' && (
+            {bookingData?.status?.toUpperCase() !== 'CANCELLED' && (
               <>
                 <button
                   onClick={modifyBooking}
@@ -255,8 +297,8 @@ function ManageBooking() {
                       <p className="text-lg font-semibold font-mono">{bookingData?.orderId || bookingData?.bookingReference}</p>
                     </div>
                     <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-4">
-                        <label className="text-sm font-medium text-gray-500 block mb-1">Amount Paid</label>
-                        <p className="text-lg font-semibold">{bookingData?.currency || 'USD'} {bookingData?.amount || 'N/A'}</p>
+                      <label className="text-sm font-medium text-gray-500 block mb-1">Amount Paid</label>
+                      <p className="text-lg font-semibold">{bookingData?.currency || 'USD'} {bookingData?.amount || 'N/A'}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500 block mb-1">Transaction ID</label>
@@ -317,47 +359,47 @@ function ManageBooking() {
                       </div>
                     </div>
 
-                      {/* Additional Flight Info */}
-                      {(bookingData?.cabinClass || bookingData?.passengers || bookingData?.departureTerminal || bookingData?.arrivalTerminal || bookingData?.aircraft) && (
-                        <div className="flex justify-center gap-6 mt-4 pt-4 border-t border-gray-200 flex-wrap">
-                          {bookingData?.cabinClass && (
-                            <div className="text-center">
-                              <span className="text-xs text-gray-500 block">Class</span>
-                              <span className="text-sm font-medium text-gray-700 capitalize">{bookingData.cabinClass.toLowerCase().replace('_', ' ')}</span>
-                            </div>
-                          )}
-                          {bookingData?.passengers && (
-                            <div className="text-center">
-                              <span className="text-xs text-gray-500 block">Passengers</span>
-                              <span className="text-sm font-medium text-gray-700">{bookingData.passengers}</span>
-                            </div>
-                          )}
-                          {bookingData?.departureTerminal && (
-                            <div className="text-center">
-                              <span className="text-xs text-gray-500 block">Dep. Terminal</span>
-                              <span className="text-sm font-medium text-gray-700">T{bookingData.departureTerminal}</span>
-                            </div>
-                          )}
-                          {bookingData?.arrivalTerminal && (
-                            <div className="text-center">
-                              <span className="text-xs text-gray-500 block">Arr. Terminal</span>
-                              <span className="text-sm font-medium text-gray-700">T{bookingData.arrivalTerminal}</span>
-                            </div>
-                          )}
-                          {bookingData?.aircraft && (
-                            <div className="text-center">
-                              <span className="text-xs text-gray-500 block">Aircraft</span>
-                              <span className="text-sm font-medium text-gray-700">{bookingData.aircraft}</span>
-                            </div>
-                          )}
-                          {bookingData?.brandedFareLabel && (
-                            <div className="text-center">
-                              <span className="text-xs text-gray-500 block">Fare</span>
-                              <span className="text-sm font-medium text-gray-700">{bookingData.brandedFareLabel}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                    {/* Additional Flight Info */}
+                    {(bookingData?.cabinClass || bookingData?.passengers || bookingData?.departureTerminal || bookingData?.arrivalTerminal || bookingData?.aircraft) && (
+                      <div className="flex justify-center gap-6 mt-4 pt-4 border-t border-gray-200 flex-wrap">
+                        {bookingData?.cabinClass && (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500 block">Class</span>
+                            <span className="text-sm font-medium text-gray-700 capitalize">{bookingData.cabinClass.toLowerCase().replace('_', ' ')}</span>
+                          </div>
+                        )}
+                        {bookingData?.passengers && (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500 block">Passengers</span>
+                            <span className="text-sm font-medium text-gray-700">{bookingData.passengers}</span>
+                          </div>
+                        )}
+                        {bookingData?.departureTerminal && (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500 block">Dep. Terminal</span>
+                            <span className="text-sm font-medium text-gray-700">T{bookingData.departureTerminal}</span>
+                          </div>
+                        )}
+                        {bookingData?.arrivalTerminal && (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500 block">Arr. Terminal</span>
+                            <span className="text-sm font-medium text-gray-700">T{bookingData.arrivalTerminal}</span>
+                          </div>
+                        )}
+                        {bookingData?.aircraft && (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500 block">Aircraft</span>
+                            <span className="text-sm font-medium text-gray-700">{bookingData.aircraft}</span>
+                          </div>
+                        )}
+                        {bookingData?.brandedFareLabel && (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500 block">Fare</span>
+                            <span className="text-sm font-medium text-gray-700">{bookingData.brandedFareLabel}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -387,35 +429,35 @@ function ManageBooking() {
                             </div>
                           )}
                           {traveler.gender && (
-                              <div>
-                                <label className="text-sm font-medium text-gray-500">Gender</label>
-                                <p>{traveler.gender}</p>
-                              </div>
-                            )}
-                            {traveler.nationality && (
-                              <div>
-                                <label className="text-sm font-medium text-gray-500">Nationality</label>
-                                <p>{traveler.nationality}</p>
-                              </div>
-                            )}
-                            {traveler.passportNumber && (
-                              <div>
-                                <label className="text-sm font-medium text-gray-500">Passport Number</label>
-                                <p className="font-mono">{traveler.passportNumber}</p>
-                              </div>
-                            )}
-                            {traveler.passportExpiry && (
-                              <div>
-                                <label className="text-sm font-medium text-gray-500">Passport Expiry</label>
-                                <p>{traveler.passportExpiry}</p>
-                              </div>
-                            )}
-                            {traveler.mobile && (
-                              <div>
-                                <label className="text-sm font-medium text-gray-500">Mobile</label>
-                                <p>{traveler.mobile}</p>
-                              </div>
-                            )}
+                            <div>
+                              <label className="text-sm font-medium text-gray-500">Gender</label>
+                              <p>{traveler.gender}</p>
+                            </div>
+                          )}
+                          {traveler.nationality && (
+                            <div>
+                              <label className="text-sm font-medium text-gray-500">Nationality</label>
+                              <p>{traveler.nationality}</p>
+                            </div>
+                          )}
+                          {traveler.passportNumber && (
+                            <div>
+                              <label className="text-sm font-medium text-gray-500">Passport Number</label>
+                              <p className="font-mono">{traveler.passportNumber}</p>
+                            </div>
+                          )}
+                          {traveler.passportExpiry && (
+                            <div>
+                              <label className="text-sm font-medium text-gray-500">Passport Expiry</label>
+                              <p>{traveler.passportExpiry}</p>
+                            </div>
+                          )}
+                          {traveler.mobile && (
+                            <div>
+                              <label className="text-sm font-medium text-gray-500">Mobile</label>
+                              <p>{traveler.mobile}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -432,8 +474,8 @@ function ManageBooking() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="text-sm font-medium text-gray-500">Total Amount</label>
-                        <p className="text-xl font-bold text-green-600">{bookingData?.currency || 'USD'} {bookingData?.amount || 'N/A'}</p>
+                      <label className="text-sm font-medium text-gray-500">Total Amount</label>
+                      <p className="text-xl font-bold text-green-600">{bookingData?.currency || 'USD'} {bookingData?.amount || 'N/A'}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Payment Status</label>
@@ -481,26 +523,82 @@ function ManageBooking() {
         </div>
       </div>
 
+      {/* Cancellation Result Banner */}
+      {cancelResult && (
+        <div className={`mx-4 sm:mx-8 mb-6 p-4 rounded-lg ${cancelResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+          {cancelResult.success ? (
+            <div className="flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="font-semibold text-green-800">Booking Cancelled Successfully</h4>
+                {cancelResult.refundAmount ? (
+                  <p className="text-green-700 text-sm mt-1">
+                    A {cancelResult.paymentAction === 'REFUND' ? 'refund' : 'reversal'} of <strong>${parseFloat(cancelResult.refundAmount).toFixed(2)}</strong> has been initiated.
+                    It may take 5-10 business days to appear in your account.
+                  </p>
+                ) : cancelResult.note ? (
+                  <p className="text-green-700 text-sm mt-1">{cancelResult.note}</p>
+                ) : (
+                  <p className="text-green-700 text-sm mt-1">Your booking has been cancelled.</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="font-semibold text-red-800">Cancellation Error</h4>
+                <p className="text-red-700 text-sm mt-1">{cancelResult.error}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Cancel Booking Modal */}
       {showCancelModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-mx">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-4">Cancel Booking</h3>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 mb-4">
               Are you sure you want to cancel this booking? This action cannot be undone.
             </p>
+
+            {/* Cancel Reason */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Reason for cancellation</label>
+              <select
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option>Change of plans</option>
+                <option>Found a better deal</option>
+                <option>Schedule conflict</option>
+                <option>Personal reasons</option>
+                <option>Medical emergency</option>
+                <option>Other</option>
+              </select>
+            </div>
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowCancelModal(false)}
-                className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition"
+                disabled={cancelling}
+                className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition disabled:opacity-50"
               >
                 Keep Booking
               </button>
               <button
                 onClick={confirmCancelBooking}
-                className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition"
+                disabled={cancelling}
+                className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                Cancel Booking
+                {cancelling ? (
+                  <><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> Cancelling...</>
+                ) : (
+                  'Cancel Booking'
+                )}
               </button>
             </div>
           </div>
@@ -607,29 +705,29 @@ function ManageBooking() {
                       <div className="font-bold text-gray-700">{bookingData?.origin || bookingData?.bookingDetails?.flight?.departureAirport || 'ORIGIN'}</div>
                       <div className="text-xl font-bold text-gray-900">{bookingData?.departureTime || bookingData?.bookingDetails?.flight?.departureTime || '--:--'}</div>
                       <div className="text-xs text-gray-500 mt-1">{bookingData?.departureDate || bookingData?.bookingDetails?.flight?.departureDate ? new Date(bookingData?.departureDate || bookingData?.bookingDetails?.flight?.departureDate).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) : ''}</div>
-                        <div className="text-xs text-gray-500 mt-1">{(() => {
-                          const t = bookingData?.departureTerminal || bookingData?.bookingDetails?.departure_terminal;
-                          return t ? `Terminal ${t}` : '';
-                        })()}</div>
-                      </div>
+                      <div className="text-xs text-gray-500 mt-1">{(() => {
+                        const t = bookingData?.departureTerminal || bookingData?.bookingDetails?.departure_terminal;
+                        return t ? `Terminal ${t}` : '';
+                      })()}</div>
+                    </div>
 
-                      <div className="flex flex-col items-center px-4">
-                        <Clock className="w-4 h-4 text-gray-400 mb-1" />
-                        <div className="text-xs text-gray-500">{bookingData?.duration || bookingData?.bookingDetails?.flight?.duration || '--'}</div>
-                        <div className="w-24 h-[1px] bg-gray-300 my-1 relative">
-                          <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-1 h-1 bg-gray-400 rounded-full"></div>
-                          <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-1 bg-gray-400 rounded-full"></div>
-                        </div>
+                    <div className="flex flex-col items-center px-4">
+                      <Clock className="w-4 h-4 text-gray-400 mb-1" />
+                      <div className="text-xs text-gray-500">{bookingData?.duration || bookingData?.bookingDetails?.flight?.duration || '--'}</div>
+                      <div className="w-24 h-[1px] bg-gray-300 my-1 relative">
+                        <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-1 h-1 bg-gray-400 rounded-full"></div>
+                        <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-1 bg-gray-400 rounded-full"></div>
                       </div>
+                    </div>
 
-                      <div className="text-right">
-                        <div className="font-bold text-gray-700">{bookingData?.destination || bookingData?.bookingDetails?.flight?.arrivalAirport || 'DEST'}</div>
-                        <div className="text-xl font-bold text-gray-900">{bookingData?.arrivalTime || bookingData?.bookingDetails?.flight?.arrivalTime || '--:--'}</div>
-                        <div className="text-xs text-gray-500 mt-1">{bookingData?.arrivalDate || bookingData?.bookingDetails?.flight?.arrivalDate ? new Date(bookingData?.arrivalDate || bookingData?.bookingDetails?.flight?.arrivalDate).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) : ''}</div>
-                        <div className="text-xs text-gray-500 mt-1">{(() => {
-                          const t = bookingData?.arrivalTerminal || bookingData?.bookingDetails?.arrival_terminal;
-                          return t ? `Terminal ${t}` : '';
-                        })()}</div>
+                    <div className="text-right">
+                      <div className="font-bold text-gray-700">{bookingData?.destination || bookingData?.bookingDetails?.flight?.arrivalAirport || 'DEST'}</div>
+                      <div className="text-xl font-bold text-gray-900">{bookingData?.arrivalTime || bookingData?.bookingDetails?.flight?.arrivalTime || '--:--'}</div>
+                      <div className="text-xs text-gray-500 mt-1">{bookingData?.arrivalDate || bookingData?.bookingDetails?.flight?.arrivalDate ? new Date(bookingData?.arrivalDate || bookingData?.bookingDetails?.flight?.arrivalDate).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) : ''}</div>
+                      <div className="text-xs text-gray-500 mt-1">{(() => {
+                        const t = bookingData?.arrivalTerminal || bookingData?.bookingDetails?.arrival_terminal;
+                        return t ? `Terminal ${t}` : '';
+                      })()}</div>
                     </div>
                   </div>
                 </div>
@@ -639,28 +737,28 @@ function ManageBooking() {
                     <span className="font-bold text-gray-600 bg-gray-200 px-2 py-0.5 rounded text-xs uppercase">PNR</span>
                     <span className="font-mono font-bold text-gray-800">{bookingData?.pnr || bookingData?.bookingDetails?.pnr || 'CONFIRMED'}</span>
                   </div>
-                    <div className="flex items-center gap-6">
-                      <div className="flex items-center gap-1.5">
-                        <Luggage className="w-4 h-4 text-green-600" />
-                        <span className="text-gray-600 text-xs">Check-in: <span className="font-bold text-gray-800">{(() => {
-                          const bd = bookingData?.baggageDetails?.checked || bookingData?.bookingDetails?.baggageDetails?.checked;
-                          if (bd?.weight) return `${bd.weight} ${bd.weightUnit || 'Kgs'}`;
-                          if (bd?.quantity) return `${bd.quantity} Piece(s)`;
-                          const b = bookingData?.baggage || bookingData?.bookingDetails?.baggage;
-                          if (b && typeof b === 'string') return b;
-                          return 'Included';
-                        })()}</span></span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Briefcase className="w-4 h-4 text-green-600" />
-                        <span className="text-gray-600 text-xs">Cabin: <span className="font-bold text-gray-800">{(() => {
-                          const cb = bookingData?.baggageDetails?.cabin || bookingData?.bookingDetails?.baggageDetails?.cabin;
-                          if (cb?.weight) return `${cb.weight} ${cb.weightUnit || 'Kgs'}`;
-                          if (cb?.quantity) return `${cb.quantity} Piece(s)`;
-                          return 'Included';
-                        })()}</span></span>
-                      </div>
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-1.5">
+                      <Luggage className="w-4 h-4 text-green-600" />
+                      <span className="text-gray-600 text-xs">Check-in: <span className="font-bold text-gray-800">{(() => {
+                        const bd = bookingData?.baggageDetails?.checked || bookingData?.bookingDetails?.baggageDetails?.checked;
+                        if (bd?.weight) return `${bd.weight} ${bd.weightUnit || 'Kgs'}`;
+                        if (bd?.quantity) return `${bd.quantity} Piece(s)`;
+                        const b = bookingData?.baggage || bookingData?.bookingDetails?.baggage;
+                        if (b && typeof b === 'string') return b;
+                        return 'Included';
+                      })()}</span></span>
                     </div>
+                    <div className="flex items-center gap-1.5">
+                      <Briefcase className="w-4 h-4 text-green-600" />
+                      <span className="text-gray-600 text-xs">Cabin: <span className="font-bold text-gray-800">{(() => {
+                        const cb = bookingData?.baggageDetails?.cabin || bookingData?.bookingDetails?.baggageDetails?.cabin;
+                        if (cb?.weight) return `${cb.weight} ${cb.weightUnit || 'Kgs'}`;
+                        if (cb?.quantity) return `${cb.quantity} Piece(s)`;
+                        return 'Included';
+                      })()}</span></span>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold uppercase">{bookingData?.cabinClass || bookingData?.bookingDetails?.flight?.cabin || 'Economy'}</span>
                   </div>
@@ -756,7 +854,7 @@ function ManageBooking() {
                 </li>
                 <li className="flex items-start">
                   <CheckCircle className="w-3 h-3 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
-                    <span><span className="font-bold text-gray-700">Baggage:</span> Check-in baggage allowance is as per your fare class. Hand baggage limits apply as per airline policy.</span>
+                  <span><span className="font-bold text-gray-700">Baggage:</span> Check-in baggage allowance is as per your fare class. Hand baggage limits apply as per airline policy.</span>
                 </li>
               </ul>
             </div>
@@ -764,28 +862,28 @@ function ManageBooking() {
             {/* 8. Payment Information */}
             <div className="border border-gray-200 rounded-lg p-5 mb-6">
               <h4 className="font-bold text-gray-800 mb-3 text-sm uppercase tracking-wide">Payment Information</h4>
-                <div className="flex justify-between items-center text-sm mb-2">
-                    <span className="text-gray-600">Total Base Fare</span>
-                    <span className="font-medium">{bookingData?.currency || 'USD'} {(() => {
-                      const base = parseFloat(bookingData?.priceBase || bookingData?.calculatedFare?.baseFare || bookingData?.fareBreakdown?.baseFare || 0);
-                      if (base > 0) return base.toFixed(2);
-                      const total = parseFloat(bookingData?.amount || bookingData?.calculatedFare?.totalAmount || 0);
-                      const taxes = parseFloat(bookingData?.fareBreakdown?.totalTax || 0);
-                      if (taxes > 0 && total > taxes) return (total - taxes).toFixed(2);
-                      return total.toFixed(2);
-                    })()}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm mb-3">
-                    <span className="text-gray-600">Taxes & Fees</span>
-                    <span className="font-medium">{bookingData?.currency || 'USD'} {(() => {
-                      const total = parseFloat(bookingData?.amount || bookingData?.calculatedFare?.totalAmount || 0);
-                      const base = parseFloat(bookingData?.priceBase || bookingData?.calculatedFare?.baseFare || bookingData?.fareBreakdown?.baseFare || 0);
-                      const taxes = parseFloat(bookingData?.fareBreakdown?.totalTax || 0);
-                      if (taxes > 0) return taxes.toFixed(2);
-                      if (base > 0 && total > base) return (total - base).toFixed(2);
-                      return '0.00';
-                    })()}</span>
-                  </div>
+              <div className="flex justify-between items-center text-sm mb-2">
+                <span className="text-gray-600">Total Base Fare</span>
+                <span className="font-medium">{bookingData?.currency || 'USD'} {(() => {
+                  const base = parseFloat(bookingData?.priceBase || bookingData?.calculatedFare?.baseFare || bookingData?.fareBreakdown?.baseFare || 0);
+                  if (base > 0) return base.toFixed(2);
+                  const total = parseFloat(bookingData?.amount || bookingData?.calculatedFare?.totalAmount || 0);
+                  const taxes = parseFloat(bookingData?.fareBreakdown?.totalTax || 0);
+                  if (taxes > 0 && total > taxes) return (total - taxes).toFixed(2);
+                  return total.toFixed(2);
+                })()}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm mb-3">
+                <span className="text-gray-600">Taxes & Fees</span>
+                <span className="font-medium">{bookingData?.currency || 'USD'} {(() => {
+                  const total = parseFloat(bookingData?.amount || bookingData?.calculatedFare?.totalAmount || 0);
+                  const base = parseFloat(bookingData?.priceBase || bookingData?.calculatedFare?.baseFare || bookingData?.fareBreakdown?.baseFare || 0);
+                  const taxes = parseFloat(bookingData?.fareBreakdown?.totalTax || 0);
+                  if (taxes > 0) return taxes.toFixed(2);
+                  if (base > 0 && total > base) return (total - base).toFixed(2);
+                  return '0.00';
+                })()}</span>
+              </div>
               <div className="border-t border-dashed border-gray-200 pt-3 flex justify-between items-center">
                 <span className="font-bold text-gray-800">Total Paid</span>
                 <span className="font-bold text-xl text-green-600">{bookingData?.currency || 'USD'} {parseFloat(bookingData?.amount || bookingData?.calculatedFare?.totalAmount || 0).toFixed(2)}</span>
