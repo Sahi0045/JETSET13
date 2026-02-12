@@ -87,11 +87,17 @@ router.all('/', async (req, res) => {
                 return handleSessionCreate(req, res);
             case 'cancel-booking':
                 return handleCancelBookingAction(req, res);
+            case 'payment-refund':
+                return handlePaymentRefund(req, res);
+            case 'payment-void':
+                return handlePaymentVoid(req, res);
+            case 'payment-retrieve':
+                return handlePaymentRetrieve(req, res);
             default:
                 return res.status(400).json({
                     success: false,
                     error: `Unknown action: ${action}`,
-                    supportedActions: ['initiate-payment', 'payment-callback', 'get-payment-details', 'gateway-status', 'hosted-checkout', 'session-create', 'cancel-booking']
+                    supportedActions: ['initiate-payment', 'payment-callback', 'get-payment-details', 'gateway-status', 'hosted-checkout', 'session-create', 'cancel-booking', 'payment-refund', 'payment-void', 'payment-retrieve']
                 });
         }
     } catch (error) {
@@ -1633,4 +1639,280 @@ router.post('/test', async (req, res) => {
     }
 });
 
-export default router; 
+export default router;
+
+// ============================================
+// ADMIN PAYMENT MANAGEMENT HANDLERS
+// These handle refund, void, and status retrieval
+// from the admin panel (InquiryDetail.jsx)
+// ============================================
+
+async function handlePaymentRefund(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        console.log('💰 Handling PAYMENT-REFUND operation');
+        const { paymentId, amount, reason = 'Admin initiated refund' } = req.body;
+
+        if (!paymentId) {
+            return res.status(400).json({ success: false, error: 'paymentId is required' });
+        }
+
+        // Look up payment in Supabase
+        const { data: payment, error: fetchError } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('id', paymentId)
+            .single();
+
+        if (fetchError || !payment) {
+            return res.status(404).json({ success: false, error: 'Payment not found' });
+        }
+
+        if (payment.payment_status === 'refunded') {
+            return res.status(400).json({ success: false, error: 'Payment has already been refunded' });
+        }
+
+        const refundAmount = parseFloat(amount || payment.amount || 0);
+        if (isNaN(refundAmount) || refundAmount <= 0) {
+            return res.status(400).json({ success: false, error: 'Invalid refund amount' });
+        }
+
+        // Process refund via ARC Pay
+        const authConfig = getArcPayAuthConfig();
+        const refundTxnId = `refund-admin-${Date.now()}`;
+        const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${paymentId}/transaction/${refundTxnId}`;
+
+        try {
+            const refundResponse = await fetch(refundUrl, {
+                method: 'PUT',
+                headers: authConfig.headers,
+                body: JSON.stringify({
+                    apiOperation: 'REFUND',
+                    transaction: {
+                        amount: refundAmount.toFixed(2),
+                        currency: payment.currency || 'USD',
+                        reference: `Admin refund: ${reason}`
+                    }
+                })
+            });
+
+            const refundData = await refundResponse.json().catch(() => null);
+
+            if (refundResponse.ok) {
+                // Update payment status in DB
+                await supabase.from('payments').update({
+                    payment_status: 'refunded',
+                    refund_amount: refundAmount,
+                    refund_reason: reason,
+                    refunded_at: new Date().toISOString()
+                }).eq('id', paymentId);
+
+                // Also update the associated booking status if exists
+                if (payment.quote_id) {
+                    await supabase.from('bookings').update({
+                        payment_status: 'refunded'
+                    }).eq('id', payment.quote_id);
+                }
+
+                console.log('✅ Refund processed successfully:', paymentId);
+                return res.json({
+                    success: true,
+                    message: 'Refund processed successfully',
+                    refund: {
+                        paymentId,
+                        amount: refundAmount,
+                        transactionId: refundTxnId,
+                        status: 'refunded'
+                    }
+                });
+            } else {
+                console.warn('⚠️ ARC Pay refund failed:', refundData);
+                // Still update locally so admin can track
+                await supabase.from('payments').update({
+                    payment_status: 'refund_pending',
+                    refund_amount: refundAmount,
+                    refund_reason: reason
+                }).eq('id', paymentId);
+
+                return res.json({
+                    success: true,
+                    message: 'Refund marked as pending. ARC Pay processing may take time.',
+                    refund: {
+                        paymentId,
+                        amount: refundAmount,
+                        status: 'refund_pending',
+                        arcPayResponse: refundData
+                    }
+                });
+            }
+        } catch (arcError) {
+            console.warn('⚠️ ARC Pay refund error, marking locally:', arcError.message);
+            // Mark refund locally even if ARC Pay is unreachable
+            await supabase.from('payments').update({
+                payment_status: 'refund_pending',
+                refund_amount: refundAmount,
+                refund_reason: reason
+            }).eq('id', paymentId);
+
+            return res.json({
+                success: true,
+                message: 'Refund recorded locally. Will be processed when payment gateway is available.',
+                refund: { paymentId, amount: refundAmount, status: 'refund_pending' }
+            });
+        }
+    } catch (error) {
+        console.error('❌ Payment refund error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to process refund', details: error.message });
+    }
+}
+
+async function handlePaymentVoid(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        console.log('🚫 Handling PAYMENT-VOID operation');
+        const { paymentId, reason = 'Admin initiated void' } = req.body;
+
+        if (!paymentId) {
+            return res.status(400).json({ success: false, error: 'paymentId is required' });
+        }
+
+        const { data: payment, error: fetchError } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('id', paymentId)
+            .single();
+
+        if (fetchError || !payment) {
+            return res.status(404).json({ success: false, error: 'Payment not found' });
+        }
+
+        if (payment.payment_status === 'cancelled' || payment.payment_status === 'voided') {
+            return res.status(400).json({ success: false, error: 'Payment has already been voided/cancelled' });
+        }
+
+        // Process void via ARC Pay
+        const authConfig = getArcPayAuthConfig();
+        const voidTxnId = `void-admin-${Date.now()}`;
+        const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${paymentId}/transaction/${voidTxnId}`;
+
+        try {
+            const voidResponse = await fetch(voidUrl, {
+                method: 'PUT',
+                headers: authConfig.headers,
+                body: JSON.stringify({
+                    apiOperation: 'VOID',
+                    transaction: {
+                        targetTransactionId: payment.arc_transaction_id,
+                        reference: `Admin void: ${reason}`
+                    }
+                })
+            });
+
+            if (voidResponse.ok) {
+                await supabase.from('payments').update({
+                    payment_status: 'voided',
+                    void_reason: reason,
+                    voided_at: new Date().toISOString()
+                }).eq('id', paymentId);
+
+                console.log('✅ Payment voided successfully:', paymentId);
+                return res.json({
+                    success: true,
+                    message: 'Payment voided successfully',
+                    void: { paymentId, transactionId: voidTxnId, status: 'voided' }
+                });
+            } else {
+                const voidData = await voidResponse.json().catch(() => null);
+                return res.status(400).json({
+                    success: false,
+                    error: 'Failed to void payment. It may have already settled.',
+                    details: voidData
+                });
+            }
+        } catch (arcError) {
+            return res.status(500).json({
+                success: false,
+                error: 'Payment gateway error during void',
+                details: arcError.message
+            });
+        }
+    } catch (error) {
+        console.error('❌ Payment void error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to void payment', details: error.message });
+    }
+}
+
+async function handlePaymentRetrieve(req, res) {
+    try {
+        console.log('🔍 Handling PAYMENT-RETRIEVE operation');
+        const { paymentId } = req.query;
+
+        if (!paymentId) {
+            return res.status(400).json({ success: false, error: 'paymentId is required' });
+        }
+
+        // Get local payment record
+        const { data: payment, error: fetchError } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('id', paymentId)
+            .single();
+
+        if (fetchError || !payment) {
+            return res.status(404).json({ success: false, error: 'Payment not found' });
+        }
+
+        // Try to retrieve order status from ARC Pay
+        let arcPayData = null;
+        try {
+            const authConfig = getArcPayAuthConfig();
+            const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${paymentId}`;
+
+            const orderResponse = await fetch(orderUrl, {
+                method: 'GET',
+                headers: authConfig.headers
+            });
+
+            if (orderResponse.ok) {
+                arcPayData = await orderResponse.json();
+
+                // Sync status from ARC Pay to local DB
+                const arcStatus = arcPayData?.status;
+                let localStatus = payment.payment_status;
+
+                if (arcStatus === 'CAPTURED' && localStatus !== 'completed') {
+                    localStatus = 'completed';
+                } else if (arcStatus === 'REFUNDED' && localStatus !== 'refunded') {
+                    localStatus = 'refunded';
+                } else if (arcStatus === 'VOID' && localStatus !== 'voided') {
+                    localStatus = 'voided';
+                }
+
+                if (localStatus !== payment.payment_status) {
+                    await supabase.from('payments').update({
+                        payment_status: localStatus,
+                        last_status_check: new Date().toISOString()
+                    }).eq('id', paymentId);
+                }
+            }
+        } catch (arcError) {
+            console.warn('⚠️ Could not retrieve ARC Pay status:', arcError.message);
+        }
+
+        return res.json({
+            success: true,
+            payment: payment,
+            orderData: arcPayData
+        });
+    } catch (error) {
+        console.error('❌ Payment retrieve error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to retrieve payment', details: error.message });
+    }
+}
+
