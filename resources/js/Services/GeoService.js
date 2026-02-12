@@ -111,22 +111,24 @@ const GeoService = {
             console.warn('GeoService: Direct ipapi.co also failed', directError.message);
         }
 
-        // Try 3: ip-api.com as last external fallback
+        // Try 3: ipwho.is as last external fallback (free, supports HTTPS)
         try {
-            const response = await fetch('http://ip-api.com/json/');
+            const response = await fetch('https://ipwho.is/');
             if (response.ok) {
                 const data = await response.json();
-                const { cityCode, airportCity } = resolveAirport(data.city);
-                return {
-                    country: data.country,
-                    countryCode: data.countryCode,
-                    city: airportCity,
-                    cityCode: cityCode,
-                    rawCity: data.city,
-                    currency: 'USD',
-                    callingCode: '',
-                    region: data.regionName
-                };
+                if (data.success !== false) {
+                    const { cityCode, airportCity } = resolveAirport(data.city);
+                    return {
+                        country: data.country,
+                        countryCode: data.country_code,
+                        city: airportCity,
+                        cityCode: cityCode,
+                        rawCity: data.city,
+                        currency: data.currency?.code || 'USD',
+                        callingCode: data.calling_code || '',
+                        region: data.region
+                    };
+                }
             }
         } catch (fallbackError) {
             console.warn('GeoService: All external services failed', fallbackError.message);
@@ -148,4 +150,3 @@ const GeoService = {
 };
 
 export default GeoService;
-
