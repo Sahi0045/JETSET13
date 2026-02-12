@@ -1,11 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Use environment variables or direct values for the frontend
-const supabaseUrl = 'https://qqmagqwumjipdqvxbiqu.supabase.co';
+// Use Vite-provided environment variables for the frontend
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxbWFncXd1bWppcGRxdnhiaXF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwMDEwMTIsImV4cCI6MjA2MDU3NzAxMn0.Ho8DYLWpX_vQ6syrI2zkU3G5pnNTdnYpgtpyjjGYlDA';
 
 // Create a Supabase client for the frontend
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl || '', supabaseKey || '');
 
 console.log('Supabase client initialized');
 // Test the connection (this is optional but helps in debugging)

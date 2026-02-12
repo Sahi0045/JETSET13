@@ -22,16 +22,47 @@ const app = express();
 // Debugging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  console.log('Headers:', req.headers);
-  if (req.body) {
-    console.log('Body:', { ...req.body, password: req.body.password ? '***' : undefined });
+
+  if (process.env.NODE_ENV === 'development') {
+    const redactedHeaders = { ...req.headers };
+    if (redactedHeaders.authorization) {
+      redactedHeaders.authorization = 'Bearer ***';
+    }
+    if (redactedHeaders.cookie) {
+      redactedHeaders.cookie = '***';
+    }
+
+    const redactedBody = req.body ? { ...req.body } : undefined;
+    if (redactedBody) {
+      if (redactedBody.password) redactedBody.password = '***';
+      if (redactedBody.cardDetails) {
+        redactedBody.cardDetails = {
+          ...redactedBody.cardDetails,
+          cardNumber: redactedBody.cardDetails.cardNumber ? '***' : undefined,
+          cvv: redactedBody.cardDetails.cvv ? '***' : undefined
+        };
+      }
+      if (redactedBody.cardNumber) redactedBody.cardNumber = '***';
+      if (redactedBody.cvv) redactedBody.cvv = '***';
+    }
+
+    console.log('Headers:', redactedHeaders);
+    if (redactedBody) {
+      console.log('Body:', redactedBody);
+    }
   }
+
   next();
 });
 
 // CORS configuration
+const corsOrigins = (process.env.CORS_ORIGIN || process.env.ALLOWED_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const corsOptions = {
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5001', 'http://localhost:5004'],
+  origin: corsOrigins.length > 0 ? corsOrigins : ['https://www.jetsetterss.com'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],

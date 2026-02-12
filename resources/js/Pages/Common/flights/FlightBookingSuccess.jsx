@@ -94,6 +94,13 @@ export default function FlightBookingSuccess() {
     return date.toLocaleDateString('en-US', options);
   };
 
+  const formatCardNumber = (cardNumber = '') => {
+    const digits = cardNumber.replace(/\s/g, '');
+    if (!digits) return '';
+    const last4 = digits.slice(-4);
+    return `**** **** **** ${last4}`;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -358,7 +365,7 @@ export default function FlightBookingSuccess() {
 
                   {bookingData.paymentMethod === "creditCard" && bookingData.paymentDetails && (
                     <div className="text-sm text-gray-500 flex justify-end items-center">
-                      {bookingData.paymentDetails.cardNumber}
+                      {formatCardNumber(bookingData.paymentDetails.cardNumber)}
                     </div>
                   )}
 

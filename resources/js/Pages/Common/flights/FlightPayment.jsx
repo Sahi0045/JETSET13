@@ -62,6 +62,7 @@ function FlightPayment() {
     // Always clear session flags on fresh page load to allow new payment attempts
     sessionStorage.removeItem('arcPayRedirectInitiated');
     sessionStorage.removeItem('arcPayFailedAttempts');
+    sessionStorage.removeItem('arcPayRedirecting');
 
     if (location.state) {
       setPaymentData(location.state);

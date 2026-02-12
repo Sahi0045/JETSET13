@@ -19,14 +19,14 @@ const ARC_PAY_CONFIG = {
     API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/77/merchant/TESTARC05511704',
     MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704',
     API_USERNAME: process.env.ARC_PAY_API_USERNAME || 'TESTARC05511704',
-    API_PASSWORD: process.env.ARC_PAY_API_PASSWORD || '4d41a81750f1ee3f6aa4adf0dfd6310c',
+    API_PASSWORD: process.env.ARC_PAY_API_PASSWORD,
     BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77',
     PORTAL_URL: process.env.ARC_PAY_PORTAL_URL || 'https://api.arcpay.travel/ma/',
-    CHECK_GATEWAY_URL: 'https://api.arcpay.travel/api/rest/version/77/information',
-    REAL_TIME_MODE: process.env.ARC_PAY_REAL_TIME === 'true' || true,
-    PRODUCTION_READY_MODE: true, // Enable production-ready processing for launch
-    INTEGRATION_PASSWORD_1: process.env.ARC_PAY_INTEGRATION_PASSWORD_1 || '4d41a81750f1ee3f6aa4adf0dfd6310c',
-    INTEGRATION_PASSWORD_2: process.env.ARC_PAY_INTEGRATION_PASSWORD_2 || '03762006ad1c7c3337af5fbdbe922d2e',
+    CHECK_GATEWAY_URL: process.env.ARC_PAY_CHECK_GATEWAY_URL || 'https://api.arcpay.travel/api/rest/version/77/information',
+    REAL_TIME_MODE: process.env.ARC_PAY_REAL_TIME === 'true',
+    PRODUCTION_READY_MODE: process.env.ARC_PAY_PRODUCTION_READY_MODE === 'true',
+    INTEGRATION_PASSWORD_1: process.env.ARC_PAY_INTEGRATION_PASSWORD_1,
+    INTEGRATION_PASSWORD_2: process.env.ARC_PAY_INTEGRATION_PASSWORD_2,
     REPORTING_PASSWORD_1: process.env.ARC_PAY_REPORTING_PASSWORD_1,
     REPORTING_PASSWORD_2: process.env.ARC_PAY_REPORTING_PASSWORD_2
 };
