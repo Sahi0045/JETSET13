@@ -162,13 +162,13 @@ function FlightBookingConfirmation() {
   const transformFlightData = (flightData) => {
     if (!flightData) return null;
 
-    // The price from search page is the BASE FARE
-    // We add taxes on top of this base fare
+    // Use the same price displayed on the search results page (price.amount = Amadeus grandTotal)
+    // This is the total fare shown to the user on the search page, so it must match here as base fare
     const basePrice = parseFloat(
-      flightData.price?.base ||
-      flightData.price?.total ||
       flightData.price?.amount ||
-      flightData.originalOffer?.price?.base ||
+      flightData.price?.grandTotal ||
+      flightData.price?.total ||
+      flightData.originalOffer?.price?.grandTotal ||
       flightData.originalOffer?.price?.total ||
       0
     );
