@@ -6,6 +6,7 @@ import CheapestFlights from "./cheapest-flight"
 import SubscribeSection from "./subscribe-section"
 import Navbar from "../Navbar"
 import Footer from "../Footer"
+import LoadingSpinner from "../../../Components/LoadingSpinner"
 import withPageElements from "../PageWrapper"
 import axios from 'axios';
 import { useState, useEffect } from "react";
@@ -31,8 +32,10 @@ const cityToIATACode = allAirports.reduce((acc, airport) => {
 function FlightLanding() {
   const navigate = useNavigate();
   const { city, cityCode } = useLocationContext();
+  const [isSearching, setIsSearching] = useState(false);
 
   const handleSearch = async (formData) => {
+    setIsSearching(true);
     try {
       // Use IATA codes from formData (set when user selects from suggestions)
       // Fall back to cityToIATACode map, then raw input as last resort
@@ -106,20 +109,22 @@ function FlightLanding() {
           }
         }
       });
+    } finally {
+      setIsSearching(false);
     }
   };
 
   // Handle navigation to destination search
   const handleExploreDestinations = () => {
-      const defaultOrigin = city || "";
-      const defaultOriginCode = cityCode || "";
+    const defaultOrigin = city || "";
+    const defaultOriginCode = cityCode || "";
 
-      // Navigate to search page with default search parameters
-      navigate('/flights/search', {
-        state: {
-          searchData: {
-            from: defaultOrigin,
-            fromCode: defaultOriginCode,
+    // Navigate to search page with default search parameters
+    navigate('/flights/search', {
+      state: {
+        searchData: {
+          from: defaultOrigin,
+          fromCode: defaultOriginCode,
           to: "",  // Empty destination for exploring all
           tripType: "oneWay",
           departDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from today
@@ -169,6 +174,13 @@ function FlightLanding() {
 
   return (
     <div className="min-h-screen">
+      {/* Loading Overlay */}
+      {isSearching && (
+        <div className="fixed inset-0 z-[999] bg-white/80 backdrop-blur-sm">
+          <LoadingSpinner fullScreen={true} text="Searching for the best flights..." />
+        </div>
+      )}
+
       <Navbar />
 
       {/* Enhanced Hero Section */}
