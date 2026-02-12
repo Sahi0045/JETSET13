@@ -265,9 +265,10 @@ const HeroSection = () => {
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1548574187-57588b4d8c7c?q=80&w=2072&auto=format&fit=crop')",
+          backgroundImage: "url('https://images.unsplash.com/photo-1717541262982-731503ac4dc2?q=80&w=1920&auto=format&fit=crop')",
         }}
       >
+        <div className="absolute inset-0 bg-black/40"></div>
       </div>
 
       {/* Content Container */}
