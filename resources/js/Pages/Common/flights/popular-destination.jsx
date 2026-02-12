@@ -91,7 +91,7 @@ export default function PopularDestinations({ onSelectDestination }) {
 
       try {
         // Get user location from shared LocationContext
-        const originCode = cityCode || 'DEL';
+        const originCode = cityCode || '';
 
         console.log(`📊 Fetching most booked destinations from ${originCode}`);
 

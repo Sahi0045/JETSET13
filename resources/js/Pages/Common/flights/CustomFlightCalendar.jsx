@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from "react"
-import { format, addMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek, isBefore, isToday, addDays } from "date-fns"
+import { format, addMonths, startOfMonth, endOfMonth, isSameMonth, isSameDay, startOfWeek, isBefore, isToday, addDays } from "date-fns"
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import FlightAnalyticsService from "../../../Services/FlightAnalyticsService"
 import apiConfig from '../../../../../src/config/api.js'
@@ -169,60 +169,66 @@ export default function CustomFlightCalendar({
 
     const renderMonth = (month) => {
         const monthStart = startOfMonth(month);
-        const monthEnd = endOfMonth(monthStart);
-        const startDate = startOfWeek(monthStart, { weekStartsOn: 1 }); // Monday start
-        const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
+        const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
 
-        const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
+        // Always render exactly 6 rows (42 cells) for consistent height
+        const calendarDays = [];
+        for (let i = 0; i < 42; i++) {
+            calendarDays.push(addDays(startDate, i));
+        }
 
         const rows = [];
-        let days = [];
-        calendarDays.forEach((day, i) => {
-            const dateKey = format(day, 'yyyy-MM-dd');
-            const price = prices[dateKey];
-            const isCurrentMonth = isSameMonth(day, monthStart);
-            const isPast = isBefore(day, minDate) && !isToday(day);
-            const isSelected = selectedDate && isSameDay(day, new Date(selectedDate));
-            const isMinPrice = price && price === minPrice;
+        for (let row = 0; row < 6; row++) {
+            const days = [];
+            for (let col = 0; col < 7; col++) {
+                const day = calendarDays[row * 7 + col];
+                const dateKey = format(day, 'yyyy-MM-dd');
+                const price = prices[dateKey];
+                const isCurrentMonth = isSameMonth(day, monthStart);
+                const isPast = isBefore(day, minDate) && !isToday(day);
+                const isSelected = selectedDate && isSameDay(day, new Date(selectedDate));
+                const isMinPrice = price && price === minPrice;
 
-            days.push(
-                <div
-                    key={day.toString()}
-                    onClick={() => !isPast && isCurrentMonth && onSelect(dateKey)}
-                    className={`relative h-11 w-full flex flex-col items-center justify-center cursor-pointer transition-all border border-gray-50
-            ${!isCurrentMonth ? 'invisible' : ''}
-            ${isPast ? 'text-gray-300 cursor-not-allowed bg-gray-50/20' : 'hover:bg-blue-50/50'}
-            ${isSelected ? 'bg-red-600 text-white hover:bg-red-700 z-10 scale-[1.02] shadow-md border-red-700' : ''}
-          `}
-                >
-                    <span className={`text-[13px] font-semibold ${isSelected ? 'text-white' : (isPast ? 'text-gray-300' : 'text-gray-700')}`}>
-                        {format(day, 'dd')}
-                    </span>
-                    {isCurrentMonth && !isPast && price && (
-                        <span className={`text-[9px] mt-0 leading-none ${isSelected ? 'text-white' : (isMinPrice ? 'text-green-600 font-bold' : 'text-gray-500')}`}>
-                            ₹{Math.round(price).toLocaleString()}
+                days.push(
+                    <div
+                        key={dateKey}
+                        onClick={() => !isPast && isCurrentMonth && onSelect(dateKey)}
+                        className={`relative h-11 flex flex-col items-center justify-center transition-all
+                            ${!isCurrentMonth ? 'invisible' : ''}
+                            ${isCurrentMonth && isPast ? 'text-gray-300 cursor-not-allowed bg-gray-50/30' : ''}
+                            ${isCurrentMonth && !isPast && !isSelected ? 'cursor-pointer hover:bg-[#055B75]/5' : ''}
+                            ${isSelected ? 'bg-[#055B75] text-white rounded-lg shadow-md cursor-pointer' : ''}
+                        `}
+                    >
+                        <span className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : (isPast ? 'text-gray-300' : 'text-gray-700')}`}>
+                            {format(day, 'd')}
                         </span>
-                    )}
+                        {isCurrentMonth && !isPast && price && (
+                            <span className={`text-[8px] leading-none mt-0.5 ${isSelected ? 'text-white/80' : (isMinPrice ? 'text-green-600 font-bold' : 'text-gray-400')}`}>
+                                ₹{Math.round(price).toLocaleString()}
+                            </span>
+                        )}
+                    </div>
+                );
+            }
+            rows.push(
+                <div key={row} className="grid grid-cols-7">
+                    {days}
                 </div>
             );
-
-            if ((i + 1) % 7 === 0) {
-                rows.push(<div key={i} className="grid grid-cols-7 gap-0 border-l border-b border-gray-100 last:border-b-0">{days}</div>);
-                days = [];
-            }
-        });
+        }
 
         return (
-            <div className="flex-1">
-                <div className="text-center py-3 font-bold text-gray-800 text-sm border-b border-gray-100">
+            <div className="flex-1 min-w-0">
+                <div className="text-center py-2.5 font-bold text-gray-800 text-sm border-b border-gray-100 bg-gray-50/30">
                     {format(month, 'MMMM yyyy')}
                 </div>
-                <div className="grid grid-cols-7 text-center bg-gray-50/50 border-b border-gray-100">
+                <div className="grid grid-cols-7 text-center border-b border-gray-200 bg-gray-50/50">
                     {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-                        <div key={d} className="text-[10px] font-bold text-gray-400 py-2 uppercase tracking-wider">{d}</div>
+                        <div key={d} className="text-[10px] font-semibold text-gray-500 py-2 uppercase tracking-wider">{d}</div>
                     ))}
                 </div>
-                <div className="flex flex-col gap-0 select-none">
+                <div className="select-none p-1">
                     {rows}
                 </div>
             </div>
@@ -260,20 +266,20 @@ export default function CustomFlightCalendar({
                 </button>
             </div>
 
-            <div className="flex divide-x divide-gray-100">
+            <div className="flex divide-x divide-gray-200">
                 {renderMonth(currentMonth)}
                 {renderMonth(nextMonth)}
             </div>
 
-            <div className="bg-gray-50 p-2 px-4 flex justify-between items-center border-t border-gray-200">
-                <div className="flex gap-4 items-center">
+            <div className="bg-gray-50/80 px-4 py-2.5 flex justify-between items-center border-t border-gray-200">
+                <div className="flex gap-5 items-center">
                     <div className="flex items-center gap-1.5">
-                        <div className="w-2.5 h-2.5 bg-red-600 rounded-sm"></div>
-                        <span className="text-[10px] font-medium text-gray-600">Selected</span>
+                        <div className="w-3 h-3 bg-[#055B75] rounded-sm"></div>
+                        <span className="text-[10px] font-medium text-gray-500">Selected</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                        <div className="w-2.5 h-2.5 bg-green-100 border border-green-200 rounded-sm"></div>
-                        <span className="text-[10px] font-medium text-gray-600">Cheapest</span>
+                        <div className="w-3 h-3 bg-green-100 border border-green-300 rounded-sm"></div>
+                        <span className="text-[10px] font-medium text-gray-500">Cheapest</span>
                     </div>
                 </div>
                 <button

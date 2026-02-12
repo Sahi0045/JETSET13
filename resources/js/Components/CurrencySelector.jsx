@@ -1,57 +1,64 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import currencyService from '../Services/CurrencyService';
 
 const CurrencySelector = () => {
   const [selectedCurrency, setSelectedCurrency] = useState(currencyService.getCurrency());
   const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   // Currency options
   const currencies = [
-    { code: 'USD', symbol: '$', name: 'US Dollar' },
-    { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
-    { code: 'EUR', symbol: '€', name: 'Euro' },
-    { code: 'GBP', symbol: '£', name: 'British Pound' },
+    { code: 'USD', symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
+    { code: 'INR', symbol: '₹', name: 'Indian Rupee', flag: '🇮🇳' },
+    { code: 'EUR', symbol: '€', name: 'Euro', flag: '🇪🇺' },
+    { code: 'GBP', symbol: '£', name: 'British Pound', flag: '🇬🇧' },
+    { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham', flag: '🇦🇪' },
+    { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar', flag: '🇸🇬' },
+    { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', flag: '🇦🇺' },
+    { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar', flag: '🇨🇦' },
+    { code: 'JPY', symbol: '¥', name: 'Japanese Yen', flag: '🇯🇵' },
+    { code: 'THB', symbol: '฿', name: 'Thai Baht', flag: '🇹🇭' },
   ];
 
   useEffect(() => {
-    // Listen for currency changes from other parts of the app
     const handleCurrencyChange = (e) => {
       setSelectedCurrency(e.detail.currency);
     };
-
     window.addEventListener('currencyChanged', handleCurrencyChange);
-
-    return () => {
-      window.removeEventListener('currencyChanged', handleCurrencyChange);
-    };
+    return () => window.removeEventListener('currencyChanged', handleCurrencyChange);
   }, []);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
   const handleCurrencyChange = (currencyCode) => {
-    currencyService.setCurrency(currencyCode);
+    currencyService.setCurrency(currencyCode, true);
     setSelectedCurrency(currencyCode);
     setIsOpen(false);
-
-    // Reload the page to reflect the new currency
-    window.location.reload();
   };
 
-  const toggleDropdown = () => {
-    setIsOpen(!isOpen);
-  };
-
-  // Get the selected currency details
   const currentCurrency = currencies.find(c => c.code === selectedCurrency) || currencies[0];
 
   return (
-    <div className="relative">
+    <div className="relative" ref={dropdownRef}>
       <button
-        onClick={toggleDropdown}
+        onClick={() => setIsOpen(!isOpen)}
         className="flex items-center space-x-1 text-sm text-gray-700 hover:text-[#055B75] py-1.5 px-3 rounded-md hover:bg-gray-100 transition-colors border border-gray-200"
       >
         <span className="font-medium">{currentCurrency.symbol}</span>
         <span>{currentCurrency.code}</span>
         <svg
-          className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'transform rotate-180' : ''}`}
+          className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -61,19 +68,23 @@ const CurrencySelector = () => {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-50 py-1 ring-1 ring-black ring-opacity-5">
+        <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl z-50 py-1 ring-1 ring-black ring-opacity-5 max-h-72 overflow-y-auto">
           {currencies.map((currency) => (
             <button
               key={currency.code}
               onClick={() => handleCurrencyChange(currency.code)}
-              className={`block w-full text-left px-4 py-2 text-sm ${selectedCurrency === currency.code
-                ? 'bg-gray-100 text-gray-900'
-                : 'text-gray-700 hover:bg-gray-50'
-                }`}
+              className={`block w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                selectedCurrency === currency.code
+                  ? 'bg-[#055B75]/10 text-[#055B75] font-medium'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
             >
               <div className="flex items-center justify-between">
-                <span>{currency.name}</span>
-                <span className="font-medium">{currency.symbol}</span>
+                <div className="flex items-center gap-2">
+                  <span>{currency.flag}</span>
+                  <span>{currency.name}</span>
+                </div>
+                <span className="font-medium text-gray-500">{currency.symbol}</span>
               </div>
             </button>
           ))}
@@ -83,4 +94,4 @@ const CurrencySelector = () => {
   );
 };
 
-export default CurrencySelector; 
+export default CurrencySelector;

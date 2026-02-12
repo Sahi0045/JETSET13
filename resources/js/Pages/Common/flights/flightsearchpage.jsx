@@ -1621,36 +1621,41 @@ function FlightSearchPage() {
                             </div>
                           </div>
                         </div>
-                        {/* Slider track */}
-                        <div className="relative h-1.5 bg-gray-200 rounded-full mx-1">
-                          <div
-                            className="absolute h-full bg-[#055B75] rounded-full"
-                            style={{
-                              left: `${(filters.price[0] / 50000) * 100}%`,
-                              right: `${100 - (filters.price[1] / 50000) * 100}%`
-                            }}
-                          />
-                          <input
-                            type="range"
-                            min="0"
-                            max="50000"
-                            step="500"
-                            value={filters.price[0]}
-                            onChange={(e) => handleFilterChange('price', [Math.min(parseInt(e.target.value), filters.price[1] - 500), filters.price[1]])}
-                            className="absolute w-full h-full opacity-0 cursor-pointer z-10"
-                            style={{ pointerEvents: 'auto' }}
-                          />
-                          <input
-                            type="range"
-                            min="0"
-                            max="50000"
-                            step="500"
-                            value={filters.price[1]}
-                            onChange={(e) => handleFilterChange('price', [filters.price[0], Math.max(parseInt(e.target.value), filters.price[0] + 500)])}
-                            className="absolute w-full h-full opacity-0 cursor-pointer z-10"
-                            style={{ pointerEvents: 'auto' }}
-                          />
-                        </div>
+                          {/* Dual Range Slider */}
+                          <div className="relative h-6 mx-1">
+                            {/* Background track */}
+                            <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1.5 bg-gray-200 rounded-full" />
+                            {/* Active track */}
+                            <div
+                              className="absolute top-1/2 -translate-y-1/2 h-1.5 bg-[#055B75] rounded-full"
+                              style={{
+                                left: `${(filters.price[0] / 50000) * 100}%`,
+                                right: `${100 - (filters.price[1] / 50000) * 100}%`
+                              }}
+                            />
+                            {/* Min thumb */}
+                            <input
+                              type="range"
+                              min="0"
+                              max="50000"
+                              step="500"
+                              value={filters.price[0]}
+                              onChange={(e) => handleFilterChange('price', [Math.min(parseInt(e.target.value), filters.price[1] - 500), filters.price[1]])}
+                              className="absolute top-0 left-0 w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#055B75] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-30 [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#055B75] [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:cursor-pointer"
+                              style={{ zIndex: filters.price[0] > 25000 ? 20 : 10 }}
+                            />
+                            {/* Max thumb */}
+                            <input
+                              type="range"
+                              min="0"
+                              max="50000"
+                              step="500"
+                              value={filters.price[1]}
+                              onChange={(e) => handleFilterChange('price', [filters.price[0], Math.max(parseInt(e.target.value), filters.price[0] + 500)])}
+                              className="absolute top-0 left-0 w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#055B75] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-30 [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#055B75] [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:cursor-pointer"
+                              style={{ zIndex: filters.price[1] < 25000 ? 20 : 10 }}
+                            />
+                          </div>
                         <div className="flex justify-between mt-1.5">
                           <span className="text-[10px] text-gray-400">{currencyService.getCurrencySymbol()}0</span>
                           <span className="text-[10px] text-gray-400">{currencyService.getCurrencySymbol()}50,000</span>

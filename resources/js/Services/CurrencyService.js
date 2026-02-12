@@ -6,38 +6,30 @@
 // Exchange rates (simplified for demonstration)
 // In a production app, these would be fetched from a currency API
 const EXCHANGE_RATES = {
-  USD: 1, // Base currency
-  INR: 83.35, // 1 USD = 83.35 INR
-  EUR: 0.92, // 1 USD = 0.92 EUR
-  GBP: 0.79, // 1 USD = 0.79 GBP
+  USD: 1,
+  INR: 83.35,
+  EUR: 0.92,
+  GBP: 0.79,
+  AED: 3.67,
+  SGD: 1.34,
+  AUD: 1.53,
+  CAD: 1.36,
+  JPY: 149.50,
+  THB: 35.50,
 };
 
 // Currency symbols and formats
 const CURRENCY_CONFIG = {
-  USD: {
-    symbol: '$',
-    code: 'USD',
-    placement: 'before', // symbol before number
-    format: (value) => `$${value}`
-  },
-  INR: {
-    symbol: '₹',
-    code: 'INR',
-    placement: 'before',
-    format: (value) => `₹${value}`
-  },
-  EUR: {
-    symbol: '€',
-    code: 'EUR',
-    placement: 'before',
-    format: (value) => `€${value}`
-  },
-  GBP: {
-    symbol: '£',
-    code: 'GBP',
-    placement: 'before',
-    format: (value) => `£${value}`
-  }
+  USD: { symbol: '$', code: 'USD', placement: 'before', format: (value) => `$${value}` },
+  INR: { symbol: '₹', code: 'INR', placement: 'before', format: (value) => `₹${value}` },
+  EUR: { symbol: '€', code: 'EUR', placement: 'before', format: (value) => `€${value}` },
+  GBP: { symbol: '£', code: 'GBP', placement: 'before', format: (value) => `£${value}` },
+  AED: { symbol: 'د.إ', code: 'AED', placement: 'before', format: (value) => `د.إ${value}` },
+  SGD: { symbol: 'S$', code: 'SGD', placement: 'before', format: (value) => `S$${value}` },
+  AUD: { symbol: 'A$', code: 'AUD', placement: 'before', format: (value) => `A$${value}` },
+  CAD: { symbol: 'C$', code: 'CAD', placement: 'before', format: (value) => `C$${value}` },
+  JPY: { symbol: '¥', code: 'JPY', placement: 'before', format: (value) => `¥${value}` },
+  THB: { symbol: '฿', code: 'THB', placement: 'before', format: (value) => `฿${value}` },
 };
 
 // Country to currency mapping
@@ -45,13 +37,15 @@ const COUNTRY_CURRENCY = {
   'US': 'USD',
   'IN': 'INR',
   'GB': 'GBP',
-  'UK': 'GBP', // Alias for Great Britain
-  'IE': 'EUR',
-  'FR': 'EUR',
-  'DE': 'EUR',
-  'IT': 'EUR',
-  'ES': 'EUR',
-  // Add more country codes as needed
+  'UK': 'GBP',
+  'IE': 'EUR', 'FR': 'EUR', 'DE': 'EUR', 'IT': 'EUR', 'ES': 'EUR',
+  'NL': 'EUR', 'BE': 'EUR', 'AT': 'EUR', 'PT': 'EUR', 'GR': 'EUR', 'FI': 'EUR',
+  'AE': 'AED', 'SA': 'AED', 'QA': 'AED', 'BH': 'AED', 'KW': 'AED', 'OM': 'AED',
+  'SG': 'SGD',
+  'AU': 'AUD', 'NZ': 'AUD',
+  'CA': 'CAD',
+  'JP': 'JPY',
+  'TH': 'THB',
 };
 
 // Default currency
@@ -140,18 +134,28 @@ class CurrencyService {
   }
 
   /**
-   * Set currency manually
+   * Set currency manually (user choice)
    */
-  setCurrency(currencyCode) {
+  setCurrency(currencyCode, isManual = false) {
     if (CURRENCY_CONFIG[currencyCode]) {
       this.currentCurrency = currencyCode;
       localStorage.setItem('userCurrency', currencyCode);
+      if (isManual) {
+        localStorage.setItem('userCurrencyManual', 'true');
+      }
 
       // Dispatch an event so components can update
       window.dispatchEvent(new CustomEvent('currencyChanged', {
         detail: { currency: currencyCode }
       }));
     }
+  }
+
+  /**
+   * Check if user has manually chosen a currency
+   */
+  isManuallySet() {
+    return localStorage.getItem('userCurrencyManual') === 'true';
   }
 
   /**
@@ -180,15 +184,16 @@ class CurrencyService {
     // Round to 2 decimal places
     let formattedValue = Math.round(price * 100) / 100;
 
-    // For INR, round to whole numbers
-    if (currency === 'INR') {
+    // For INR and JPY, round to whole numbers
+    const noDecimals = ['INR', 'JPY', 'THB'].includes(currency);
+    if (noDecimals) {
       formattedValue = Math.round(formattedValue);
     }
 
     // Format with thousand separators
     formattedValue = formattedValue.toLocaleString('en-US', {
-      minimumFractionDigits: currency === 'INR' ? 0 : 2,
-      maximumFractionDigits: currency === 'INR' ? 0 : 2
+      minimumFractionDigits: noDecimals ? 0 : 2,
+      maximumFractionDigits: noDecimals ? 0 : 2
     });
 
     // Apply currency-specific formatting

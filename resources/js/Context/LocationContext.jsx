@@ -8,19 +8,23 @@ const LocationContext = createContext();
 export const useLocationContext = () => {
     const context = useContext(LocationContext);
     if (!context) {
-        throw new Error('useLocationContext must be used within a LocationProvider');
+        // Return safe defaults instead of throwing during HMR
+        return {
+            country: '', countryCode: '', city: '', currency: '',
+            callingCode: '', region: '', loaded: false, loading: true
+        };
     }
     return context;
 };
 
 export const LocationProvider = ({ children }) => {
     const [location, setLocation] = useState({
-        country: 'India',
-        countryCode: 'IN',
-        city: 'New Delhi',
-        currency: 'INR',
-        callingCode: '+91',
-        region: 'Delhi',
+        country: '',
+        countryCode: '',
+        city: '',
+        currency: '',
+        callingCode: '',
+        region: '',
         loaded: false,
         loading: true
     });
@@ -50,8 +54,8 @@ export const LocationProvider = ({ children }) => {
     const updateLocation = (newLocation) => {
         setLocation(prev => ({ ...prev, ...newLocation, loaded: true, loading: false }));
 
-        // Update Currency Service
-        if (newLocation.currency) {
+        // Only auto-set currency from geo if user hasn't manually chosen one
+        if (newLocation.currency && !currencyService.isManuallySet()) {
             currencyService.setCurrency(newLocation.currency);
         }
     };

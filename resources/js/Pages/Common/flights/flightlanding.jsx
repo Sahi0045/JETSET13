@@ -111,15 +111,15 @@ function FlightLanding() {
 
   // Handle navigation to destination search
   const handleExploreDestinations = () => {
-    const defaultOrigin = city || "New Delhi";
-    const defaultOriginCode = cityCode || "DEL";
+      const defaultOrigin = city || "";
+      const defaultOriginCode = cityCode || "";
 
-    // Navigate to search page with default search parameters
-    navigate('/flights/search', {
-      state: {
-        searchData: {
-          from: defaultOrigin, // Dynamic source
-          fromCode: defaultOriginCode,
+      // Navigate to search page with default search parameters
+      navigate('/flights/search', {
+        state: {
+          searchData: {
+            from: defaultOrigin,
+            fromCode: defaultOriginCode,
           to: "",  // Empty destination for exploring all
           tripType: "oneWay",
           departDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from today
@@ -132,11 +132,11 @@ function FlightLanding() {
 
   // Handle book flight for a specific destination
   const handleBookFlight = (destination) => {
-    const defaultOrigin = city || "New Delhi";
+    const defaultOrigin = city || "";
 
     // Create a search request with the selected destination
     const searchData = {
-      from: defaultOrigin, // Dynamic source
+      from: defaultOrigin,
       to: destination,
       tripType: "oneWay",
       departDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from today

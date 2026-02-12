@@ -85,18 +85,24 @@ export default function CheapestFlights({ onBookFlight }) {
   useEffect(() => {
     let isMounted = true;
 
-    const fetchCheapestFlights = async () => {
-      // Wait for location context to be loaded
-      if (locationLoading) return;
+      const fetchCheapestFlights = async () => {
+        // Wait for location context to be loaded
+        if (locationLoading) return;
 
-      try {
-        setLoading(true);
-        setError(null);
+        // Don't fetch if no origin city detected
+        if (!cityCode) {
+          setLoading(false);
+          return;
+        }
 
-        // Get user's origin city from context
-        const userOriginCode = cityCode || 'DEL';
-        const userOriginCity = city || 'New Delhi';
-        const userCountryCode = countryCode || 'IN';
+        try {
+          setLoading(true);
+          setError(null);
+
+          // Get user's origin city from context
+          const userOriginCode = cityCode;
+          const userOriginCity = city || '';
+          const userCountryCode = countryCode || 'IN';
 
         if (isMounted) {
           setOriginCode(userOriginCode);
@@ -129,52 +135,67 @@ export default function CheapestFlights({ onBookFlight }) {
             .map(c => ({ destination: c }));
         }
 
-        // Step 2: For each discovered destination, fetch cheapest flight dates in parallel
-        const promises = destinationCodes
-          .slice(0, 6) // Limit parallel API calls to avoid timeouts
-          .map(async (item) => {
-            const destCode = item.destination;
-            const airport = airportByCode[destCode];
-            const cityName = airport?.name || destCode;
-            const country = airport?.country || "International";
+          // Step 2: Fetch cheapest flight dates sequentially in batches to avoid rate limits
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const depDate = tomorrow.toISOString().split('T')[0];
 
-            try {
-              const data = await FlightAnalyticsService.getCheapestFlightDates(
-                userOriginCode,
-                destCode,
-                { oneWay: true }
-              );
+          const destinations = destinationCodes.slice(0, 6);
+          const validFlights = [];
 
-              if (data && data.length > 0) {
-                // Get the cheapest option
-                const cheapest = data.reduce((min, curr) =>
-                  parseFloat(curr.price?.total || Infinity) < parseFloat(min.price?.total || Infinity) ? curr : min
-                  , data[0]);
+          // Process 2 at a time with delay between batches
+          for (let i = 0; i < destinations.length; i += 2) {
+            const batch = destinations.slice(i, i + 2);
+            const batchResults = await Promise.allSettled(
+              batch.map(async (item) => {
+                const destCode = item.destination;
+                const airport = airportByCode[destCode];
+                const cityName = airport?.name || destCode;
+                const country = airport?.country || "International";
 
-                return {
-                  id: destCode,
-                  destination: cityName,
-                  destinationCode: destCode,
-                  region: country,
-                  price: parseFloat(cheapest.price?.total || 0),
-                  currency: cheapest.price?.currency || 'USD',
-                  date: formatDate(cheapest.departureDate),
-                  image: getCityImage(cityName),
-                  isApiData: true,
-                };
+                try {
+                  const data = await FlightAnalyticsService.getCheapestFlightDates(
+                    userOriginCode,
+                    destCode,
+                    { oneWay: true, departureDate: depDate }
+                  );
+
+                  if (data && data.length > 0) {
+                    const cheapest = data.reduce((min, curr) =>
+                      parseFloat(curr.price?.total || Infinity) < parseFloat(min.price?.total || Infinity) ? curr : min
+                      , data[0]);
+
+                    return {
+                      id: destCode,
+                      destination: cityName,
+                      destinationCode: destCode,
+                      region: country,
+                      price: parseFloat(cheapest.price?.total || 0),
+                      currency: cheapest.price?.currency || 'USD',
+                      date: formatDate(cheapest.departureDate),
+                      image: getCityImage(cityName),
+                      isApiData: true,
+                    };
+                  }
+                  return null;
+                } catch (err) {
+                  console.warn(`Failed to get cheapest for ${cityName}:`, err.message);
+                  return null;
+                }
+              })
+            );
+
+            for (const r of batchResults) {
+              if (r.status === 'fulfilled' && r.value) {
+                validFlights.push(r.value);
               }
-              return null;
-            } catch (err) {
-              console.warn(`⚠️ Failed to get cheapest for ${cityName}:`, err.message);
-              return null;
             }
-          });
 
-        // Use allSettled so partial successes still display
-        const settled = await Promise.allSettled(promises);
-        const validFlights = settled
-          .filter(r => r.status === 'fulfilled' && r.value)
-          .map(r => r.value);
+            // Small delay between batches to respect rate limits
+            if (i + 2 < destinations.length) {
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+          }
 
         if (isMounted) {
           if (validFlights.length > 0) {
@@ -270,9 +291,11 @@ export default function CheapestFlights({ onBookFlight }) {
     <div className="bg-[#B9D0DC] rounded-xl p-8 shadow-lg border border-white/20">
       <div className="flex flex-col md:flex-row md:items-center mb-8 gap-4">
         <h3 className="text-[#055B75] text-2xl font-bold">Cheapest Fares From</h3>
-        <div className="bg-white text-[#055B75] px-4 py-1.5 rounded-full border border-[#055B75]/30 text-base font-semibold">
-          {originCity} ({originCode})
-        </div>
+          {originCity && originCode && (
+            <div className="bg-white text-[#055B75] px-4 py-1.5 rounded-full border border-[#055B75]/30 text-base font-semibold">
+              {originCity} ({originCode})
+            </div>
+          )}
         <div className="ml-auto flex items-center text-sm text-[#055B75]/70">
           <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
           Live prices from Amadeus

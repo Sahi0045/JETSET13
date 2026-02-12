@@ -30,3 +30,10 @@
 2026-02-12T15:05:12.802Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
 2026-02-12T15:05:14.139Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
 2026-02-12T15:05:14.141Z [console][log] searchData: {"from":"DEL","to":"London","tripType":"oneWay","departDate":"2026-02-19","returnDate":"","travelers":"1"}
+2026-02-12T16:50:24.478Z [console][log] Auth state changed: INITIAL_SESSION undefined
+2026-02-12T16:50:24.499Z [console][log] Environment detection: {"hostname":"localhost","isLocal":true,"viteApiUrl":"http://localhost:5004/api","viteProdUrl":"https://prod-six-phi.vercel.app/api"}
+2026-02-12T16:50:24.499Z [console][log] Using local API URL from env: http://localhost:5004/api
+2026-02-12T16:50:24.547Z [console][log] 📊 Fetching most booked destinations from DEL
+2026-02-12T16:50:24.547Z [console][log] 💰 Discovering destinations from New Delhi (DEL)
+2026-02-12T16:50:25.171Z [console][log] 📊 API returned no destinations, using curated fallback for country: IN
+2026-02-12T16:50:25.973Z [console][log] Supabase connection successful! [{"id":"3a777e87-cefa-4748-87b9-433d1862a600"}]

@@ -54,49 +54,11 @@ export default function FlightSearchForm({ initialData, onSearch }) {
     }
   }, [initialData]);
 
-  // Set default "From" location based on user's location
-  useEffect(() => {
-    const setDefaultFrom = async () => {
-      if (loaded && !initialData?.from && !formData.from && city) {
-        // 1. Try local match first for instant result
-        let match = allAirports.find(d => d.name.toLowerCase() === city.toLowerCase());
-
-        if (!match) {
-          // 2. Try loose local match
-          match = allAirports.find(d =>
-            d.name.toLowerCase().includes(city.toLowerCase()) ||
-            city.toLowerCase().includes(d.name.toLowerCase())
-          );
-        }
-
-        if (match) {
-          setFormData(prev => ({
-            ...prev,
-            from: `${match.name} (${match.code})`,
-            fromCode: match.code,
-            fromCountry: match.country,
-            fromType: match.type
-          }));
-        } else {
-          // 3. Last resort: Dynamic search via API
-          try {
-            const dynamicResults = await AirportService.searchAirports(city, { limit: 1 });
-            if (dynamicResults && dynamicResults.length > 0) {
-              const bestMatch = dynamicResults[0];
-              setFormData(prev => ({
-                ...prev,
-                from: `${bestMatch.name} (${bestMatch.code})`,
-                fromCode: bestMatch.code,
-                fromCountry: bestMatch.country,
-                fromType: bestMatch.type || 'international'
-              }));
-            }
-          } catch (e) {
-            console.warn('Failed to fetch dynamic default from location', e);
-          }
-        }
-      }
-    };
+    // Geo-location auto-fill disabled - "From" field starts blank
+    useEffect(() => {
+      const setDefaultFrom = async () => {
+        // Keep blank - user must select origin manually
+      };
 
     setDefaultFrom();
   }, [loaded, city, initialData]);
