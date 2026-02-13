@@ -28,6 +28,8 @@ const BookingsList = () => {
 
     // Success/Error messages
     const [actionMessage, setActionMessage] = useState(null);
+    // Refund result after cancel
+    const [cancelResult, setCancelResult] = useState(null);
 
     const getAuthHeaders = () => {
         const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
@@ -76,7 +78,7 @@ const BookingsList = () => {
         setCurrentPage(1);
     };
 
-    // Cancel booking
+    // Cancel booking with ARC Pay refund
     const handleCancel = async () => {
         if (!cancelModal) return;
         setCancelProcessing(true);
@@ -89,18 +91,41 @@ const BookingsList = () => {
             });
             const result = await response.json();
             if (result.success) {
-                setActionMessage({ type: 'success', text: result.message });
+                const cancellation = result.data?.cancellation || {};
+                const refundAmount = cancellation.refundAmount || result.data?.refundAmount;
+                const paymentAction = cancellation.paymentAction || result.data?.paymentAction;
+                const refundPending = result.data?.refundPending;
+
+                // Build detailed success message
+                let message = `Booking ${cancelModal.bookingReference} cancelled successfully.`;
+                if (paymentAction === 'REFUND' && refundAmount) {
+                    message += ` Refund of ${formatCurrency(refundAmount)} has been processed.`;
+                } else if (paymentAction === 'VOID') {
+                    message += ` Payment has been voided (reversed).`;
+                } else if (refundPending) {
+                    message += ` Refund is pending manual processing.`;
+                }
+
+                setCancelResult({
+                    booking: cancelModal,
+                    refundAmount,
+                    paymentAction,
+                    refundPending,
+                    amadeusCancelled: cancellation.amadeusCancelled
+                });
+
+                setActionMessage({ type: 'success', text: message });
                 fetchBookings();
             } else {
-                setActionMessage({ type: 'error', text: result.error });
+                setActionMessage({ type: 'error', text: result.error || 'Failed to cancel booking' });
             }
         } catch (error) {
-            setActionMessage({ type: 'error', text: 'Failed to cancel booking' });
+            setActionMessage({ type: 'error', text: 'Failed to cancel booking: ' + error.message });
         } finally {
             setCancelProcessing(false);
             setCancelModal(null);
             setCancelReason('');
-            setTimeout(() => setActionMessage(null), 5000);
+            setTimeout(() => setActionMessage(null), 10000);
         }
     };
 
@@ -564,39 +589,174 @@ const BookingsList = () => {
             {/* Cancel Modal */}
             {cancelModal && (
                 <div style={modalOverlayStyle}>
-                    <div style={modalStyle}>
+                    <div style={{ ...modalStyle, maxWidth: '500px' }}>
                         <h3 style={{ margin: '0 0 4px', fontSize: '18px', color: '#1e293b' }}>
-                            ❌ Cancel Booking
+                            ❌ Cancel Booking & Process Refund
                         </h3>
                         <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 16px' }}>
-                            Cancel booking <strong>{cancelModal.bookingReference}</strong>?
-                            {cancelModal.paymentStatus === 'paid' && (
-                                <span style={{ display: 'block', marginTop: '4px', color: '#d97706' }}>
-                                    ⚠️ Payment will be marked as refund pending.
-                                </span>
-                            )}
+                            This will cancel the booking and automatically process a refund through ARC Pay.
                         </p>
-                        <textarea
+
+                        {/* Booking Summary */}
+                        <div style={{
+                            backgroundColor: '#f8fafc', borderRadius: '8px', padding: '12px 16px',
+                            marginBottom: '16px', border: '1px solid #e2e8f0'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Booking Ref</span>
+                                <span style={{ fontSize: '13px', fontWeight: '600', fontFamily: 'monospace' }}>{cancelModal.bookingReference}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Customer</span>
+                                <span style={{ fontSize: '13px', fontWeight: '500' }}>{cancelModal.customerName}</span>
+                            </div>
+                            {cancelModal.customerEmail && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                    <span style={{ fontSize: '12px', color: '#64748b' }}>Email</span>
+                                    <span style={{ fontSize: '13px' }}>{cancelModal.customerEmail}</span>
+                                </div>
+                            )}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Amount</span>
+                                <span style={{ fontSize: '14px', fontWeight: '700', color: '#1e293b' }}>{formatCurrency(cancelModal.totalAmount)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Payment Status</span>
+                                {getPaymentBadge(cancelModal.paymentStatus)}
+                            </div>
+                        </div>
+
+                        {/* Refund Info */}
+                        {cancelModal.paymentStatus === 'paid' && (
+                            <div style={{
+                                backgroundColor: '#fef3c7', borderRadius: '8px', padding: '10px 14px',
+                                marginBottom: '16px', border: '1px solid #fbbf24', fontSize: '13px', color: '#92400e'
+                            }}>
+                                💰 <strong>Refund will be processed automatically.</strong> The payment of {formatCurrency(cancelModal.totalAmount)} will be refunded via ARC Pay.
+                            </div>
+                        )}
+
+                        {/* Reason Dropdown */}
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                            Cancellation Reason
+                        </label>
+                        <select
                             value={cancelReason}
                             onChange={(e) => setCancelReason(e.target.value)}
-                            placeholder="Reason for cancellation (optional)"
                             style={{
                                 width: '100%', padding: '10px', borderRadius: '8px',
                                 border: '1px solid #e2e8f0', fontSize: '13px',
-                                minHeight: '80px', resize: 'vertical', marginBottom: '16px',
+                                marginBottom: '12px', cursor: 'pointer', boxSizing: 'border-box'
+                            }}
+                        >
+                            <option value="">Select a reason...</option>
+                            <option value="Customer requested cancellation">Customer requested cancellation</option>
+                            <option value="Payment issue">Payment issue</option>
+                            <option value="Duplicate booking">Duplicate booking</option>
+                            <option value="Flight schedule change">Flight schedule change</option>
+                            <option value="Service unavailable">Service unavailable</option>
+                            <option value="Admin cancellation">Admin cancellation (other)</option>
+                        </select>
+
+                        {/* Optional notes */}
+                        <textarea
+                            value={cancelReason === '' || ['Customer requested cancellation', 'Payment issue', 'Duplicate booking', 'Flight schedule change', 'Service unavailable', 'Admin cancellation'].includes(cancelReason) ? '' : cancelReason}
+                            onChange={(e) => setCancelReason(e.target.value)}
+                            placeholder="Additional notes (optional)"
+                            style={{
+                                width: '100%', padding: '10px', borderRadius: '8px',
+                                border: '1px solid #e2e8f0', fontSize: '13px',
+                                minHeight: '60px', resize: 'vertical', marginBottom: '16px',
                                 boxSizing: 'border-box'
                             }}
                         />
+
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                             <button
                                 onClick={() => { setCancelModal(null); setCancelReason(''); }}
                                 style={modalBtnSecondary}
-                            >Cancel</button>
+                            >Keep Booking</button>
                             <button
                                 onClick={handleCancel}
                                 disabled={cancelProcessing}
-                                style={{ ...modalBtnPrimary, backgroundColor: '#dc2626' }}
-                            >{cancelProcessing ? 'Processing...' : 'Confirm Cancellation'}</button>
+                                style={{ ...modalBtnPrimary, backgroundColor: '#dc2626', minWidth: '160px' }}
+                            >{cancelProcessing ? '⏳ Processing Refund...' : '❌ Cancel & Refund'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Refund Result Modal */}
+            {cancelResult && (
+                <div style={modalOverlayStyle}>
+                    <div style={{ ...modalStyle, maxWidth: '450px' }}>
+                        <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                            <div style={{ fontSize: '48px', marginBottom: '8px' }}>
+                                {cancelResult.paymentAction === 'REFUND' ? '💰' : cancelResult.paymentAction === 'VOID' ? '🔄' : '✅'}
+                            </div>
+                            <h3 style={{ margin: '0 0 4px', fontSize: '20px', color: '#1e293b' }}>
+                                Booking Cancelled
+                            </h3>
+                            <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>
+                                {cancelResult.booking?.bookingReference}
+                            </p>
+                        </div>
+
+                        <div style={{
+                            backgroundColor: '#f0fdf4', borderRadius: '8px', padding: '16px',
+                            marginBottom: '16px', border: '1px solid #bbf7d0'
+                        }}>
+                            {cancelResult.paymentAction === 'REFUND' && (
+                                <>
+                                    <div style={{ fontSize: '13px', color: '#15803d', fontWeight: '600', marginBottom: '4px' }}>
+                                        💰 Refund Processed
+                                    </div>
+                                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#166534' }}>
+                                        {formatCurrency(cancelResult.refundAmount)}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#16a34a', marginTop: '4px' }}>
+                                        Refund has been initiated to the customer's payment method
+                                    </div>
+                                </>
+                            )}
+                            {cancelResult.paymentAction === 'VOID' && (
+                                <>
+                                    <div style={{ fontSize: '13px', color: '#15803d', fontWeight: '600', marginBottom: '4px' }}>
+                                        🔄 Payment Voided
+                                    </div>
+                                    <div style={{ fontSize: '14px', color: '#166534' }}>
+                                        The payment authorization has been reversed. No charge will appear on the customer's account.
+                                    </div>
+                                </>
+                            )}
+                            {!cancelResult.paymentAction && cancelResult.refundPending && (
+                                <>
+                                    <div style={{ fontSize: '13px', color: '#d97706', fontWeight: '600', marginBottom: '4px' }}>
+                                        ⏳ Refund Pending
+                                    </div>
+                                    <div style={{ fontSize: '14px', color: '#92400e' }}>
+                                        Automatic refund could not be processed. Manual refund of {formatCurrency(cancelResult.booking?.totalAmount)} is required.
+                                    </div>
+                                </>
+                            )}
+                            {!cancelResult.paymentAction && !cancelResult.refundPending && (
+                                <div style={{ fontSize: '14px', color: '#166534' }}>
+                                    Booking has been cancelled successfully.
+                                </div>
+                            )}
+                        </div>
+
+                        {cancelResult.amadeusCancelled && (
+                            <div style={{ fontSize: '12px', color: '#64748b', textAlign: 'center', marginBottom: '12px' }}>
+                                ✈️ Flight order also cancelled with Amadeus
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                            <button
+                                onClick={() => setCancelResult(null)}
+                                style={{ ...modalBtnPrimary, backgroundColor: '#16a34a', minWidth: '120px' }}
+                            >Done</button>
                         </div>
                     </div>
                 </div>
