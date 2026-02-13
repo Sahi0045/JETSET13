@@ -26,6 +26,64 @@ if (supabase) {
   console.error('   - SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
 }
 
+// Helper function to build the booking row object for insert
+function buildBookingRow(bookingData, userId) {
+  return {
+    user_id: userId || null,
+    booking_reference: bookingData.bookingReference,
+    travel_type: 'flight',
+    status: 'confirmed',
+    total_amount: parseFloat(bookingData.totalAmount) || 0,
+    payment_status: 'paid',
+    booking_details: {
+      pnr: bookingData.pnr,
+      order_id: bookingData.orderId,
+      transaction_id: bookingData.transactionId,
+      amount: parseFloat(bookingData.totalAmount) || 0,
+      currency: bookingData.currency || 'USD',
+      origin: bookingData.origin,
+      destination: bookingData.destination,
+      departure_date: bookingData.departureDate,
+      departure_time: bookingData.departureTime,
+      arrival_time: bookingData.arrivalTime,
+      airline: bookingData.airline,
+      airline_name: bookingData.airlineName,
+      flight_number: bookingData.flightNumber,
+      duration: bookingData.duration,
+      cabin_class: bookingData.cabinClass,
+      // Amadeus enriched fields
+      departure_terminal: bookingData.departureTerminal || '',
+      arrival_terminal: bookingData.arrivalTerminal || '',
+      aircraft: bookingData.aircraft || '',
+      stops: bookingData.stops ?? 0,
+      stop_details: bookingData.stopDetails || [],
+      branded_fare: bookingData.brandedFare || null,
+      branded_fare_label: bookingData.brandedFareLabel || null,
+      operating_carrier: bookingData.operatingCarrier || null,
+      operating_airline_name: bookingData.operatingAirlineName || null,
+      last_ticketing_date: bookingData.lastTicketingDate || null,
+      number_of_bookable_seats: bookingData.numberOfBookableSeats || null,
+      refundable: bookingData.refundable || false,
+      baggage_details: bookingData.baggageDetails || null,
+      baggage: bookingData.baggage || null,
+      origin_city: bookingData.originCity || '',
+      destination_city: bookingData.destinationCity || '',
+      departure_date_full: bookingData.departureDateFull || '',
+      arrival_date: bookingData.arrivalDate || '',
+      price_base: bookingData.priceBase || null,
+      price_grand_total: bookingData.priceGrandTotal || null,
+      price_fees: bookingData.priceFees || [],
+      flight_offer: bookingData.flightOffer,
+      // Fare breakdown for itemized display & refund support
+      fare_breakdown: bookingData.fareBreakdown || null,
+      // Store the original userId in booking_details so we can identify the user
+      // even if user_id column is null (FK constraint fallback)
+      original_user_id: bookingData.userId || null
+    },
+    passenger_details: bookingData.passengerDetails || bookingData.travelers
+  };
+}
+
 // Helper function to save booking to database
 async function saveBookingToDatabase(bookingData) {
   if (!supabase) {
@@ -40,59 +98,11 @@ async function saveBookingToDatabase(bookingData) {
   console.log('   PNR:', bookingData.pnr);
 
   try {
+    // First attempt: insert with the provided userId
+    const row = buildBookingRow(bookingData, bookingData.userId);
     const { data, error } = await supabase
       .from('bookings')
-      .insert({
-        user_id: bookingData.userId || null,
-        booking_reference: bookingData.bookingReference,
-        travel_type: 'flight',
-        status: 'confirmed',
-        total_amount: parseFloat(bookingData.totalAmount) || 0,
-        payment_status: 'paid',
-        booking_details: {
-          pnr: bookingData.pnr,
-          order_id: bookingData.orderId,
-          transaction_id: bookingData.transactionId,
-          amount: parseFloat(bookingData.totalAmount) || 0,
-          currency: bookingData.currency || 'USD',
-          origin: bookingData.origin,
-          destination: bookingData.destination,
-          departure_date: bookingData.departureDate,
-          departure_time: bookingData.departureTime,
-          arrival_time: bookingData.arrivalTime,
-          airline: bookingData.airline,
-          airline_name: bookingData.airlineName,
-          flight_number: bookingData.flightNumber,
-          duration: bookingData.duration,
-          cabin_class: bookingData.cabinClass,
-          // Amadeus enriched fields
-          departure_terminal: bookingData.departureTerminal || '',
-          arrival_terminal: bookingData.arrivalTerminal || '',
-          aircraft: bookingData.aircraft || '',
-          stops: bookingData.stops ?? 0,
-          stop_details: bookingData.stopDetails || [],
-          branded_fare: bookingData.brandedFare || null,
-          branded_fare_label: bookingData.brandedFareLabel || null,
-          operating_carrier: bookingData.operatingCarrier || null,
-          operating_airline_name: bookingData.operatingAirlineName || null,
-          last_ticketing_date: bookingData.lastTicketingDate || null,
-          number_of_bookable_seats: bookingData.numberOfBookableSeats || null,
-          refundable: bookingData.refundable || false,
-          baggage_details: bookingData.baggageDetails || null,
-          baggage: bookingData.baggage || null,
-          origin_city: bookingData.originCity || '',
-          destination_city: bookingData.destinationCity || '',
-          departure_date_full: bookingData.departureDateFull || '',
-          arrival_date: bookingData.arrivalDate || '',
-          price_base: bookingData.priceBase || null,
-          price_grand_total: bookingData.priceGrandTotal || null,
-          price_fees: bookingData.priceFees || [],
-          flight_offer: bookingData.flightOffer,
-          // Fare breakdown for itemized display & refund support
-          fare_breakdown: bookingData.fareBreakdown || null
-        },
-        passenger_details: bookingData.passengerDetails || bookingData.travelers
-      })
+      .insert(row)
       .select()
       .single();
 
@@ -102,6 +112,30 @@ async function saveBookingToDatabase(bookingData) {
       console.error('   Error Message:', error.message);
       console.error('   Error Details:', JSON.stringify(error, null, 2));
       console.error('   User ID that was attempted:', bookingData.userId || 'null');
+
+      // If the error is a FK violation (user_id not in auth.users) or RLS policy
+      // violation, retry without user_id so the booking is still saved
+      if (bookingData.userId && (error.code === '23503' || error.code === '42501' || error.message?.includes('violates foreign key') || error.message?.includes('row-level security'))) {
+        console.log('🔄 Retrying booking save without user_id (FK/RLS constraint issue)...');
+        const fallbackRow = buildBookingRow(bookingData, null);
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('bookings')
+          .insert(fallbackRow)
+          .select()
+          .single();
+
+        if (fallbackError) {
+          console.error('❌ Fallback save also failed:', fallbackError.message);
+          return null;
+        }
+
+        console.log('✅ SUCCESS (fallback)! Booking saved without user_id:');
+        console.log('   Database ID:', fallbackData.id);
+        console.log('   Original User ID stored in booking_details:', bookingData.userId);
+        console.log('   Booking Reference:', fallbackData.booking_reference);
+        return fallbackData;
+      }
+
       return null;
     }
 
@@ -1147,8 +1181,9 @@ router.get('/bookings', async (req, res) => {
       query = query.eq('travel_type', type);
     }
 
-    // Always filter by user_id
-    query = query.eq('user_id', userId);
+    // Filter by user_id OR by original_user_id stored in booking_details
+    // (fallback bookings where FK constraint prevented storing user_id directly)
+    query = query.or(`user_id.eq.${userId},booking_details->>original_user_id.eq.${userId}`);
 
     // Order by created_at descending (newest first)
     query = query.order('created_at', { ascending: false });
