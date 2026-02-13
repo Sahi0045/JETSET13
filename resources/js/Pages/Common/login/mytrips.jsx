@@ -795,6 +795,85 @@ export default function TravelDashboard() {
               </div>
             )}
 
+            {/* Enriched Flight Details - Airline, Terminal, Duration, etc. */}
+            {isFlightBooking && (booking.airlineName || booking.flightNumber || booking.departureTime || booking.duration || booking.pnr) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+                {(booking.airlineName || booking.flightNumber) && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Airline / Flight</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {booking.airlineName || booking.airline || ''}{booking.flightNumber ? ` • ${booking.flightNumber}` : ''}
+                    </p>
+                    {booking.aircraft && <p className="text-xs text-gray-500 mt-0.5">{booking.aircraft}</p>}
+                    {booking.operatingAirlineName && booking.operatingAirlineName !== booking.airlineName && (
+                      <p className="text-xs text-gray-400 mt-0.5">Operated by {booking.operatingAirlineName}</p>
+                    )}
+                  </div>
+                )}
+                {(booking.departureTime || booking.departureTerminal) && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Departure</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {booking.departureTime || ''}
+                      {booking.departureTerminal ? ` • Terminal ${booking.departureTerminal}` : ''}
+                    </p>
+                  </div>
+                )}
+                {(booking.arrivalTime || booking.arrivalTerminal) && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Arrival</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {booking.arrivalTime || ''}
+                      {booking.arrivalTerminal ? ` • Terminal ${booking.arrivalTerminal}` : ''}
+                    </p>
+                  </div>
+                )}
+                {(booking.duration || booking.stops !== undefined) && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Duration</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {booking.duration || ''}
+                      {booking.stops !== undefined && booking.stops !== null && (
+                        <span className="text-xs text-gray-500 ml-1">
+                          • {booking.stops === 0 ? 'Direct' : `${booking.stops} Stop${booking.stops > 1 ? 's' : ''}`}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* PNR, Cabin Class, Baggage, Fare Type */}
+            {isFlightBooking && (booking.pnr || booking.cabinClass || booking.baggage || booking.brandedFareLabel) && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                {booking.pnr && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">PNR</p>
+                    <p className="text-sm font-bold text-gray-900 tracking-wider">{booking.pnr}</p>
+                  </div>
+                )}
+                {booking.cabinClass && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Cabin Class</p>
+                    <p className="text-sm font-bold text-gray-900 capitalize">{booking.cabinClass.replace('_', ' ')}</p>
+                  </div>
+                )}
+                {booking.baggage && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Baggage</p>
+                    <p className="text-sm font-bold text-gray-900">{typeof booking.baggage === 'object' ? JSON.stringify(booking.baggage) : booking.baggage}</p>
+                  </div>
+                )}
+                {booking.brandedFareLabel && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Fare Type</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.brandedFareLabel}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {isHotelBooking && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {booking.hotelDestination && (
