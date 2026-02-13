@@ -6,7 +6,6 @@ import { getApiUrl } from '../../../utils/apiHelper'
 import Navbar from '../Navbar'
 import Footer from '../Footer'
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext'
-import ArcPayService from '../../../Services/ArcPayService'
 
 // Empty State Component
 const EmptyState = ({ icon, title, description, actionLabel, onAction }) => (
@@ -43,13 +42,6 @@ export default function TravelDashboard() {
   const [isLoadingBookings, setIsLoadingBookings] = useState(false)
   const [emailSending, setEmailSending] = useState({}) // Track email sending state by ID
   const [emailSuccess, setEmailSuccess] = useState({}) // Track email success by ID
-
-  // Cancel booking state
-  const [showCancelModal, setShowCancelModal] = useState(false)
-  const [cancellingBooking, setCancellingBooking] = useState(null)
-  const [cancelReason, setCancelReason] = useState('Change of plans')
-  const [cancelProcessing, setCancelProcessing] = useState(false)
-  const [cancelResult, setCancelResult] = useState(null)
 
   // Get user from Supabase auth context
   const { user } = useSupabaseAuth()
@@ -1277,26 +1269,6 @@ export default function TravelDashboard() {
               )}
             </span>
           </button>
-
-          {/* Cancel Ticket Button - show for non-cancelled, non-past bookings */}
-          {booking.status !== 'CANCELLED' && booking.status !== 'FAILED' && (
-            <button
-              onClick={() => {
-                setCancellingBooking(booking)
-                setCancelReason('Change of plans')
-                setCancelResult(null)
-                setShowCancelModal(true)
-              }}
-              className="flex-1 sm:flex-none px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-400"
-            >
-              <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                Cancel Ticket
-              </span>
-            </button>
-          )}
         </div>
       </div>
     )
@@ -1940,184 +1912,6 @@ export default function TravelDashboard() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Cancel Booking Confirmation Modal */}
-      {showCancelModal && cancellingBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
-            {cancelResult ? (
-              // Result screen
-              <div className="text-center">
-                {cancelResult.success ? (
-                  <>
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">Booking Cancelled</h3>
-                    <p className="text-gray-600 text-sm mb-4">
-                      Your booking has been successfully cancelled.
-                    </p>
-                    {cancelResult.refundAmount && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-                        <p className="text-green-800 font-semibold">
-                          💰 Refund of ${Number(cancelResult.refundAmount).toFixed(2)} will be processed
-                        </p>
-                        <p className="text-green-600 text-xs mt-1">
-                          {cancelResult.paymentAction === 'REFUND' ? 'Refund will appear in 5-10 business days' : 'Payment has been voided'}
-                        </p>
-                      </div>
-                    )}
-                    {cancelResult.note && (
-                      <p className="text-amber-600 text-xs mb-4">{cancelResult.note}</p>
-                    )}
-                    <button
-                      onClick={() => {
-                        setShowCancelModal(false)
-                        setCancellingBooking(null)
-                        setCancelResult(null)
-                        loadBookings()
-                      }}
-                      className="w-full py-3 bg-[#055B75] text-white font-medium rounded-lg hover:bg-[#034457] transition-colors"
-                    >
-                      Done
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">Cancellation Failed</h3>
-                    <p className="text-gray-600 text-sm mb-4">{cancelResult.error}</p>
-                    <button
-                      onClick={() => {
-                        setShowCancelModal(false)
-                        setCancellingBooking(null)
-                        setCancelResult(null)
-                      }}
-                      className="w-full py-3 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition-colors"
-                    >
-                      Close
-                    </button>
-                  </>
-                )}
-              </div>
-            ) : (
-              // Confirmation screen
-              <>
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">Cancel This Booking?</h2>
-                  <p className="text-gray-600 text-sm">
-                    This will cancel your ticket and initiate a refund if eligible.
-                  </p>
-                </div>
-
-                <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Booking</p>
-                  <p className="text-sm font-bold text-gray-900">
-                    {cancellingBooking.title || cancellingBooking.bookingReference || cancellingBooking.orderId}
-                  </p>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Reason for cancellation</label>
-                  <select
-                    value={cancelReason}
-                    onChange={(e) => setCancelReason(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#055B75] focus:border-transparent"
-                  >
-                    <option value="Change of plans">Change of plans</option>
-                    <option value="Found a better deal">Found a better deal</option>
-                    <option value="Travel dates changed">Travel dates changed</option>
-                    <option value="Personal reasons">Personal reasons</option>
-                    <option value="Flight schedule change">Flight schedule change</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6">
-                  <p className="text-amber-800 text-xs font-medium">
-                    ⚠️ Cancellation is subject to airline policy. Refund amount may vary based on the fare rules.
-                  </p>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowCancelModal(false)
-                      setCancellingBooking(null)
-                    }}
-                    disabled={cancelProcessing}
-                    className="flex-1 py-3 text-gray-700 font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                  >
-                    Keep Booking
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!cancellingBooking) return
-                      setCancelProcessing(true)
-                      try {
-                        const bookingRef = cancellingBooking.orderId || cancellingBooking.bookingReference || cancellingBooking.bookingDetails?.bookingId
-                        const result = await ArcPayService.cancelBooking(
-                          bookingRef,
-                          cancellingBooking.email || cancellingBooking.bookingDetails?.contact?.email || null,
-                          cancelReason
-                        )
-                        if (result.success) {
-                          setCancelResult({
-                            success: true,
-                            refundAmount: result.cancellation?.refundAmount || result.booking?.refundAmount,
-                            paymentAction: result.cancellation?.paymentAction || result.booking?.paymentAction
-                          })
-                        } else {
-                          // API failed — still mark as cancelled locally
-                          setCancelResult({
-                            success: true,
-                            refundAmount: null,
-                            paymentAction: null,
-                            note: 'Booking marked as cancelled. Refund will be processed by our support team.'
-                          })
-                        }
-                      } catch (err) {
-                        console.error('Cancel booking error:', err)
-                        setCancelResult({
-                          success: false,
-                          error: 'Failed to cancel booking. Please contact support.'
-                        })
-                      } finally {
-                        setCancelProcessing(false)
-                      }
-                    }}
-                    disabled={cancelProcessing}
-                    className="flex-1 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {cancelProcessing ? (
-                      <>
-                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                        </svg>
-                        Processing...
-                      </>
-                    ) : (
-                      'Yes, Cancel Ticket'
-                    )}
-                  </button>
-                </div>
-              </>
-            )}
           </div>
         </div>
       )}
