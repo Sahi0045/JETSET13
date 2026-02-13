@@ -68,9 +68,8 @@ const AuthCallback = () => {
 
               if (role === 'admin') {
                 localStorage.setItem('adminToken', data.session.access_token);
-              } else {
-                localStorage.removeItem('adminToken');
               }
+              // Don't remove adminToken — it may have been set by custom admin login
             }
 
             // Check if profile is complete
@@ -138,9 +137,8 @@ const AuthCallback = () => {
 
               if (role === 'admin') {
                 localStorage.setItem('adminToken', data.session.access_token);
-              } else {
-                localStorage.removeItem('adminToken');
               }
+              // Don't remove adminToken — it may have been set by custom admin login
             }
 
             // Check if profile is complete

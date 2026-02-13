@@ -54,15 +54,22 @@ export const SupabaseAuthProvider = ({ children }) => {
 
               if (role === 'admin') {
                 localStorage.setItem('adminToken', session.access_token);
-              } else {
-                localStorage.removeItem('adminToken');
               }
+              // Don't remove adminToken for non-admin Supabase users — it may have been set by custom admin login
             }
           } else {
-            localStorage.removeItem('isAuthenticated');
-            localStorage.removeItem('user');
-            localStorage.removeItem('token');
-            localStorage.removeItem('adminToken');
+            // No Supabase session — only clear Supabase-specific auth
+            // Preserve adminToken/adminUser if admin logged in via custom login
+            const customAdminToken = localStorage.getItem('adminToken');
+            const customAdminUser = localStorage.getItem('adminUser');
+            const hasCustomAdminLogin = customAdminToken && customAdminUser;
+
+            if (!hasCustomAdminLogin) {
+              localStorage.removeItem('isAuthenticated');
+              localStorage.removeItem('user');
+              localStorage.removeItem('token');
+              localStorage.removeItem('adminToken');
+            }
             localStorage.removeItem('supabase_token');
           }
         }
@@ -105,9 +112,8 @@ export const SupabaseAuthProvider = ({ children }) => {
 
           if (role === 'admin') {
             localStorage.setItem('adminToken', session.access_token);
-          } else {
-            localStorage.removeItem('adminToken');
           }
+          // Don't remove adminToken for non-admin Supabase users — it may have been set by custom admin login
         }
 
         // 📧 Send login notification for OAuth (Google) sign-ins
@@ -144,10 +150,18 @@ export const SupabaseAuthProvider = ({ children }) => {
           }
         }
       } else {
-        localStorage.removeItem('isAuthenticated');
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-        localStorage.removeItem('adminToken');
+        // No Supabase session — only clear Supabase-specific auth
+        // Preserve adminToken/adminUser if admin logged in via custom login
+        const customAdminToken = localStorage.getItem('adminToken');
+        const customAdminUser = localStorage.getItem('adminUser');
+        const hasCustomAdminLogin = customAdminToken && customAdminUser;
+
+        if (!hasCustomAdminLogin) {
+          localStorage.removeItem('isAuthenticated');
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+          localStorage.removeItem('adminToken');
+        }
         localStorage.removeItem('supabase_token');
       }
     });
@@ -221,9 +235,8 @@ export const SupabaseAuthProvider = ({ children }) => {
 
           if (role === 'admin') {
             localStorage.setItem('adminToken', data.session.access_token);
-          } else {
-            localStorage.removeItem('adminToken');
           }
+          // Don't remove adminToken for non-admin Supabase users — it may have been set by custom admin login
         }
 
         // 📧 Send login notification email
