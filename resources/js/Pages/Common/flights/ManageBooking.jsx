@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Plane, Calendar, Clock, User, CreditCard,
-  AlertCircle, CheckCircle, Info, Phone, Mail, Edit3,
+  AlertCircle, AlertTriangle, CheckCircle, Info, Phone, Mail, Edit3,
   Download, X, Wifi, Utensils, Luggage, Flame, Zap, Ban, Skull, Battery, Scissors, Droplet, Briefcase
 } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -78,7 +78,9 @@ function ManageBooking() {
         setShowCancelModal(false);
         setCancelResult({
           success: true,
-          refundAmount: result.booking?.refundAmount,
+          refundAmount: result.booking?.refundAmount || result.booking?.netRefund || 0,
+          cancellationFee: result.booking?.cancellationFee || 0,
+          netRefund: result.booking?.netRefund || result.booking?.refundAmount || 0,
           paymentAction: result.booking?.paymentAction
         });
       } else {
@@ -531,9 +533,23 @@ function ManageBooking() {
               <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
               <div>
                 <h4 className="font-semibold text-green-800">Booking Cancelled Successfully</h4>
-                {cancelResult.refundAmount ? (
+                {cancelResult.paymentAction === 'PARTIAL_REFUND' && cancelResult.refundAmount > 0 ? (
                   <p className="text-green-700 text-sm mt-1">
-                    A {cancelResult.paymentAction === 'REFUND' ? 'refund' : 'reversal'} of <strong>${parseFloat(cancelResult.refundAmount).toFixed(2)}</strong> has been initiated.
+                    Net refund of <strong>${parseFloat(cancelResult.refundAmount).toFixed(2)}</strong> has been initiated (after ${parseFloat(cancelResult.cancellationFee || 0).toFixed(2)} cancellation fee).
+                    It may take 5-7 business days to appear in your account.
+                  </p>
+                ) : (cancelResult.paymentAction === 'FEE_CHARGED' || cancelResult.paymentAction === 'FULL_FEE') ? (
+                  <p className="text-yellow-700 text-sm mt-1">
+                    A cancellation fee of <strong>${parseFloat(cancelResult.cancellationFee || 0).toFixed(2)}</strong> has been charged.
+                    {cancelResult.paymentAction === 'FULL_FEE' ? ' No refund is due as the fee covers the full booking amount.' : ' No additional refund is due.'}
+                  </p>
+                ) : cancelResult.paymentAction === 'VOID_AND_FEE' ? (
+                  <p className="text-green-700 text-sm mt-1">
+                    Original payment has been voided and a cancellation fee of <strong>${parseFloat(cancelResult.cancellationFee || 0).toFixed(2)}</strong> has been charged.
+                  </p>
+                ) : cancelResult.refundAmount ? (
+                  <p className="text-green-700 text-sm mt-1">
+                    A {cancelResult.paymentAction === 'REFUND' ? 'full refund' : 'reversal'} of <strong>${parseFloat(cancelResult.refundAmount).toFixed(2)}</strong> has been initiated.
                     It may take 5-10 business days to appear in your account.
                   </p>
                 ) : cancelResult.note ? (
@@ -560,6 +576,20 @@ function ManageBooking() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-4">Cancel Booking</h3>
+            
+            {/* Cancellation Fee Warning */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <div className="flex items-start">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 mr-2 flex-shrink-0" />
+                <div className="text-sm text-yellow-700">
+                  <p className="font-medium mb-2">Cancellation Policy</p>
+                  <p>• A cancellation fee will be deducted from your refund</p>
+                  <p>• Estimated net refund will be calculated at processing time</p>
+                  <p>• Processing time: 5-7 business days</p>
+                </div>
+              </div>
+            </div>
+            
             <p className="text-gray-600 mb-4">
               Are you sure you want to cancel this booking? This action cannot be undone.
             </p>

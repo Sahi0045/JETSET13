@@ -130,17 +130,23 @@ export default function Login() {
     return (
         <div>
             <div className="login-container">
-                <div className="login-card">
+                <div className="login-wrapper">
                     {/* Image Section */}
                     <div
-                        className="login-image"
+                        className="login-image-section"
                         style={{
                             backgroundImage: `url('/images/Rectangle 1434 (1).png')`,
                         }}
-                    ></div>
+                    >
+                        <div className="image-overlay">
+                            <h2 className="image-title">Welcome Back</h2>
+                            <p className="image-subtitle">Sign in to access your trips and bookings</p>
+                        </div>
+                    </div>
 
                     {/* Login Form Section */}
-                    <div className="login-content">
+                    <div className="login-form-section">
+                      <div className="login-form-container">
                         <h2 className="login-title">Login</h2>
                         {errors.login && (
                             <div className="error-message mb-4 p-3 bg-red-50 text-red-700 rounded">
@@ -217,6 +223,7 @@ export default function Login() {
                         <p className="login-footer">
                             By proceeding, you agree to our <Link to="/privacy" className="text-link">Privacy Policy</Link> and <Link to="/terms" className="text-link">Terms of Service</Link>.
                         </p>
+                      </div>
                     </div>
                 </div>
             </div>

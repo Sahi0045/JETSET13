@@ -1580,7 +1580,7 @@ function FlightSearchPage() {
           ) : (
             <div className="flex flex-col md:flex-row gap-6">
               {/* Professional OTA-Style Filter Sidebar */}
-              <div className="w-full md:w-[280px] lg:w-[300px] flex-shrink-0">
+              <div className="hidden md:block w-full md:w-[280px] lg:w-[300px] flex-shrink-0">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
 
                   {/* Filter Header */}
@@ -1990,14 +1990,14 @@ function FlightSearchPage() {
                             {/* Price and Book Button */}
                             <div className="flex flex-col items-end">
                               <div className="text-right mb-3">
-                                <div className="text-3xl font-bold text-[#055B75] flex items-center">
+                                <div className="text-xl sm:text-2xl md:text-3xl font-bold text-[#055B75] flex items-center">
                                   <Price amount={flight.price} showCode={true} />
                                 </div>
                                 <div className="text-xs text-gray-500">per passenger</div>
                               </div>
                               <button
                                 onClick={() => handleBookFlight(flight)}
-                                className="px-8 py-3 bg-[#055B75] hover:bg-[#034457] text-white rounded-lg font-semibold shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+                                className="w-full md:w-auto px-8 py-3 bg-[#055B75] hover:bg-[#034457] text-white rounded-lg font-semibold shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5"
                               >
                                 Book Now
                               </button>
@@ -2005,7 +2005,7 @@ function FlightSearchPage() {
                           </div>
 
                           {/* Flight Details */}
-                          <div className="mt-6 grid grid-cols-4 gap-4 text-sm text-gray-600">
+                          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
                             <div>
                               <div className="font-medium text-gray-500 mb-1">Departure</div>
                               <div className="font-bold text-gray-800 text-lg">{flight.departure?.time || 'N/A'}</div>

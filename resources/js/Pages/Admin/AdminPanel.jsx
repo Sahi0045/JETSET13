@@ -4,8 +4,10 @@ import AdminDashboard from './AdminDashboard';
 import InquiryList from './InquiryList';
 import InquiryDetail from './InquiryDetail';
 import FeatureFlags from './FeatureFlags';
+import PriceSettings from './PriceSettings';
 import QuoteCreate from './QuoteCreate';
 import QuoteDetail from './QuoteDetail';
+import BookingsList from './BookingsList';
 import './AdminPanel.css';
 
 const AdminPanel = () => {
@@ -18,7 +20,8 @@ const AdminPanel = () => {
         <Route path="/inquiries/:inquiryId/quote" element={<QuoteCreate />} />
         <Route path="/quotes/:id" element={<QuoteDetail />} />
         <Route path="/feature-flags" element={<FeatureFlags />} />
-        {/* Add more admin routes here as needed */}
+        <Route path="/price-settings" element={<PriceSettings />} />
+        <Route path="/bookings" element={<BookingsList />} />
       </Routes>
     </div>
   );

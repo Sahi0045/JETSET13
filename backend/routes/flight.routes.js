@@ -9,79 +9,145 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
+// Log Supabase configuration status on module load
+if (supabase) {
+  console.log('✅ Supabase client initialized successfully');
+  console.log('   URL:', supabaseUrl);
+  console.log('   Key source:', supabaseKey ? (process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SUPABASE_SERVICE_ROLE_KEY' : 
+                                                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'NEXT_PUBLIC_SUPABASE_ANON_KEY' : 
+                                                 'SUPABASE_ANON_KEY') : 'None');
+} else {
+  console.error('❌ CRITICAL: Supabase client NOT initialized! Database saves will fail!');
+  console.error('   Available env vars:');
+  console.error('   - SUPABASE_URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
+  console.error('   - NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'NOT SET');
+  console.error('   - SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SET' : 'NOT SET');
+  console.error('   - NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
+  console.error('   - SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
+}
+
+// Helper function to build the booking row object for insert
+function buildBookingRow(bookingData, userId) {
+  return {
+    user_id: userId || null,
+    booking_reference: bookingData.bookingReference,
+    travel_type: 'flight',
+    status: 'confirmed',
+    total_amount: parseFloat(bookingData.totalAmount) || 0,
+    payment_status: 'paid',
+    booking_details: {
+      pnr: bookingData.pnr,
+      order_id: bookingData.orderId,
+      transaction_id: bookingData.transactionId,
+      amount: parseFloat(bookingData.totalAmount) || 0,
+      currency: bookingData.currency || 'USD',
+      origin: bookingData.origin,
+      destination: bookingData.destination,
+      departure_date: bookingData.departureDate,
+      departure_time: bookingData.departureTime,
+      arrival_time: bookingData.arrivalTime,
+      airline: bookingData.airline,
+      airline_name: bookingData.airlineName,
+      flight_number: bookingData.flightNumber,
+      duration: bookingData.duration,
+      cabin_class: bookingData.cabinClass,
+      // Amadeus enriched fields
+      departure_terminal: bookingData.departureTerminal || '',
+      arrival_terminal: bookingData.arrivalTerminal || '',
+      aircraft: bookingData.aircraft || '',
+      stops: bookingData.stops ?? 0,
+      stop_details: bookingData.stopDetails || [],
+      branded_fare: bookingData.brandedFare || null,
+      branded_fare_label: bookingData.brandedFareLabel || null,
+      operating_carrier: bookingData.operatingCarrier || null,
+      operating_airline_name: bookingData.operatingAirlineName || null,
+      last_ticketing_date: bookingData.lastTicketingDate || null,
+      number_of_bookable_seats: bookingData.numberOfBookableSeats || null,
+      refundable: bookingData.refundable || false,
+      baggage_details: bookingData.baggageDetails || null,
+      baggage: bookingData.baggage || null,
+      origin_city: bookingData.originCity || '',
+      destination_city: bookingData.destinationCity || '',
+      departure_date_full: bookingData.departureDateFull || '',
+      arrival_date: bookingData.arrivalDate || '',
+      price_base: bookingData.priceBase || null,
+      price_grand_total: bookingData.priceGrandTotal || null,
+      price_fees: bookingData.priceFees || [],
+      flight_offer: bookingData.flightOffer,
+      // Fare breakdown for itemized display & refund support
+      fare_breakdown: bookingData.fareBreakdown || null,
+      // Store the original userId in booking_details so we can identify the user
+      // even if user_id column is null (FK constraint fallback)
+      original_user_id: bookingData.userId || null
+    },
+    passenger_details: bookingData.passengerDetails || bookingData.travelers
+  };
+}
+
 // Helper function to save booking to database
 async function saveBookingToDatabase(bookingData) {
   if (!supabase) {
-    console.log('⚠️ Supabase not configured, skipping database save');
+    console.error('❌ CRITICAL: Supabase not configured! Bookings will NOT be saved to database!');
+    console.error('   Please check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables');
     return null;
   }
 
+  console.log('💾 Attempting to save booking to database...');
+  console.log('   User ID:', bookingData.userId || 'NULL (GUEST USER)');
+  console.log('   Booking Reference:', bookingData.bookingReference);
+  console.log('   PNR:', bookingData.pnr);
+
   try {
+    // First attempt: insert with the provided userId
+    const row = buildBookingRow(bookingData, bookingData.userId);
     const { data, error } = await supabase
       .from('bookings')
-      .insert({
-        user_id: bookingData.userId || null,
-        booking_reference: bookingData.bookingReference,
-        travel_type: 'flight',
-        status: 'confirmed',
-        total_amount: parseFloat(bookingData.totalAmount) || 0,
-        payment_status: 'paid',
-        booking_details: {
-          pnr: bookingData.pnr,
-          order_id: bookingData.orderId,
-          transaction_id: bookingData.transactionId,
-          amount: parseFloat(bookingData.totalAmount) || 0,
-          currency: bookingData.currency || 'USD',
-          origin: bookingData.origin,
-          destination: bookingData.destination,
-          departure_date: bookingData.departureDate,
-          departure_time: bookingData.departureTime,
-          arrival_time: bookingData.arrivalTime,
-          airline: bookingData.airline,
-          airline_name: bookingData.airlineName,
-          flight_number: bookingData.flightNumber,
-          duration: bookingData.duration,
-          cabin_class: bookingData.cabinClass,
-          // Amadeus enriched fields
-          departure_terminal: bookingData.departureTerminal || '',
-          arrival_terminal: bookingData.arrivalTerminal || '',
-          aircraft: bookingData.aircraft || '',
-          stops: bookingData.stops ?? 0,
-          stop_details: bookingData.stopDetails || [],
-          branded_fare: bookingData.brandedFare || null,
-          branded_fare_label: bookingData.brandedFareLabel || null,
-          operating_carrier: bookingData.operatingCarrier || null,
-          operating_airline_name: bookingData.operatingAirlineName || null,
-          last_ticketing_date: bookingData.lastTicketingDate || null,
-          number_of_bookable_seats: bookingData.numberOfBookableSeats || null,
-          refundable: bookingData.refundable || false,
-          baggage_details: bookingData.baggageDetails || null,
-          baggage: bookingData.baggage || null,
-          origin_city: bookingData.originCity || '',
-          destination_city: bookingData.destinationCity || '',
-          departure_date_full: bookingData.departureDateFull || '',
-          arrival_date: bookingData.arrivalDate || '',
-          price_base: bookingData.priceBase || null,
-          price_grand_total: bookingData.priceGrandTotal || null,
-          price_fees: bookingData.priceFees || [],
-          flight_offer: bookingData.flightOffer,
-          // Fare breakdown for itemized display & refund support
-          fare_breakdown: bookingData.fareBreakdown || null
-        },
-        passenger_details: bookingData.passengerDetails || bookingData.travelers
-      })
+      .insert(row)
       .select()
       .single();
 
     if (error) {
-      console.error('❌ Error saving booking to database:', error);
+      console.error('❌ ERROR saving booking to database:');
+      console.error('   Error Code:', error.code);
+      console.error('   Error Message:', error.message);
+      console.error('   Error Details:', JSON.stringify(error, null, 2));
+      console.error('   User ID that was attempted:', bookingData.userId || 'null');
+
+      // If the error is a FK violation (user_id not in auth.users) or RLS policy
+      // violation, retry without user_id so the booking is still saved
+      if (bookingData.userId && (error.code === '23503' || error.code === '42501' || error.message?.includes('violates foreign key') || error.message?.includes('row-level security'))) {
+        console.log('🔄 Retrying booking save without user_id (FK/RLS constraint issue)...');
+        const fallbackRow = buildBookingRow(bookingData, null);
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('bookings')
+          .insert(fallbackRow)
+          .select()
+          .single();
+
+        if (fallbackError) {
+          console.error('❌ Fallback save also failed:', fallbackError.message);
+          return null;
+        }
+
+        console.log('✅ SUCCESS (fallback)! Booking saved without user_id:');
+        console.log('   Database ID:', fallbackData.id);
+        console.log('   Original User ID stored in booking_details:', bookingData.userId);
+        console.log('   Booking Reference:', fallbackData.booking_reference);
+        return fallbackData;
+      }
+
       return null;
     }
 
-    console.log('✅ Booking saved to database:', data.id);
+    console.log('✅ SUCCESS! Booking saved to database:');
+    console.log('   Database ID:', data.id);
+    console.log('   User ID:', data.user_id);
+    console.log('   Booking Reference:', data.booking_reference);
     return data;
   } catch (err) {
-    console.error('❌ Database save error:', err);
+    console.error('❌ EXCEPTION in database save:');
+    console.error('   Error:', err.message);
+    console.error('   Stack:', err.stack);
     return null;
   }
 }
@@ -487,7 +553,7 @@ router.post('/order', async (req, res) => {
     console.log('📋 Flight order creation request received');
     console.log('Request body keys:', Object.keys(req.body));
 
-    const { flightOffer, flightOffers, travelers, payments, contactInfo, totalAmount, transactionId, amount, fareBreakdown, passengerDetails } = req.body;
+    const { flightOffer, flightOffers, travelers, payments, contactInfo, totalAmount, transactionId, amount, fareBreakdown, passengerDetails, userId } = req.body;
 
     // Accept both flightOffer (singular) and flightOffers (plural)
     const offers = flightOffers || (flightOffer ? [flightOffer] : null);
@@ -501,7 +567,8 @@ router.post('/order', async (req, res) => {
       hasTravelers: !!travelers,
       travelersListCount: travelersList.length,
       hasContactInfo: !!contactInfo,
-      totalAmount: totalAmount || amount
+      totalAmount: totalAmount || amount,
+      userId: userId || 'Not provided'
     });
 
     if (!offers) {
@@ -565,6 +632,7 @@ router.post('/order', async (req, res) => {
 
         // Save booking to database with all Amadeus fields
         const dbBooking = await saveBookingToDatabase({
+          userId: userId || null,
           bookingReference: bookingReference,
           pnr: mockPNR,
           orderId: orderId,
@@ -760,6 +828,7 @@ router.post('/order', async (req, res) => {
       console.log('🆘 Creating emergency fallback booking with mock PNR');
 
       const dbBooking = await saveBookingToDatabase({
+        userId: userId || null,
         bookingReference: bookingReference,
         pnr: mockPNR,
         orderId: orderId,
@@ -838,6 +907,7 @@ router.post('/order', async (req, res) => {
 
     // Save real Amadeus booking to database with all fields
     const dbBooking = await saveBookingToDatabase({
+      userId: userId || null,
       bookingReference: orderIdValue,
       pnr: pnrValue,
       orderId: orderIdValue,
@@ -919,46 +989,66 @@ router.post('/order', async (req, res) => {
   }
 });
 
-// Cancel a flight order
+// Cancel a flight order — delegates to the orchestrated cancel-booking
+// handler in payment.routes.js via internal request, which properly handles
+// Amadeus cancellation + ARC Pay refund/void + DB update
 router.delete('/order/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
     console.log(`🗑️ Cancel flight order request: ${orderId}`);
 
-    // Try real Amadeus cancellation first
-    try {
-      const result = await AmadeusService.cancelFlightOrder(orderId);
-      if (result.success) {
-        // Also update database status if available
-        if (supabase) {
-          await supabase
-            .from('bookings')
-            .update({ status: 'cancelled', payment_status: 'refunded' })
-            .or(`booking_reference.eq.${orderId},booking_details->>` + `order_id.eq.${orderId}`);
-        }
+    // Use the same orchestrated cancel flow as ArcPayService.cancelBooking()
+    // This ensures ARC Pay refund/void is properly called
+    const paymentApiUrl = `${req.protocol}://${req.get('host')}/api/payments?action=cancel-booking`;
 
+    try {
+      const cancelResponse = await fetch(paymentApiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingReference: orderId,
+          reason: 'Customer cancellation via flight order API'
+        })
+      });
+
+      const cancelResult = await cancelResponse.json();
+
+      if (cancelResult.success) {
         return res.json({
           success: true,
-          message: result.message,
-          mode: result.mode || 'AMADEUS_CANCELLATION'
+          message: cancelResult.message || `Order ${orderId} cancelled`,
+          cancellation: cancelResult.cancellation,
+          booking: cancelResult.booking,
+          mode: 'ORCHESTRATED_CANCELLATION'
         });
       }
-    } catch (cancelError) {
-      console.log('⚠️ Amadeus cancellation failed, updating database status:', cancelError.error || cancelError.message);
+
+      // If the orchestrated cancel returned an error (e.g. booking not found),
+      // pass it through
+      console.warn('⚠️ Orchestrated cancel returned error:', cancelResult.error);
+    } catch (fetchError) {
+      console.warn('⚠️ Could not reach orchestrated cancel endpoint:', fetchError.message);
     }
 
-    // Fallback: just mark as cancelled in our database
+    // Fallback: direct Amadeus cancel + DB update (no ARC Pay refund)
+    console.log('🔄 Falling back to direct cancellation (no ARC Pay refund)...');
+    try {
+      await AmadeusService.cancelFlightOrder(orderId);
+    } catch (e) {
+      console.warn('⚠️ Amadeus cancel failed:', e.message);
+    }
+
     if (supabase) {
       const { error } = await supabase
         .from('bookings')
-        .update({ status: 'cancelled', payment_status: 'refunded' })
+        .update({ status: 'cancelled', payment_status: 'refund_pending' })
         .or(`booking_reference.eq.${orderId},booking_details->>` + `order_id.eq.${orderId}`);
 
       if (!error) {
         return res.json({
           success: true,
-          message: `Order ${orderId} has been cancelled in the system`,
-          mode: 'DATABASE_CANCELLATION'
+          message: `Order ${orderId} has been cancelled (refund pending manual processing)`,
+          mode: 'FALLBACK_CANCELLATION'
         });
       }
     }
@@ -1095,15 +1185,25 @@ router.get('/bookings', async (req, res) => {
     // Filter by travel type if provided
     const { type, userId } = req.query;
 
+    // SECURITY: Require userId to prevent exposing all bookings
+    if (!userId) {
+      return res.json({
+        success: true,
+        data: [],
+        count: 0,
+        message: 'No user ID provided'
+      });
+    }
+
     let query = supabase.from('bookings').select('*');
 
     if (type) {
       query = query.eq('travel_type', type);
     }
 
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
+    // Filter by user_id OR by original_user_id stored in booking_details
+    // (fallback bookings where FK constraint prevented storing user_id directly)
+    query = query.or(`user_id.eq.${userId},booking_details->>original_user_id.eq.${userId}`);
 
     // Order by created_at descending (newest first)
     query = query.order('created_at', { ascending: false });
@@ -1513,6 +1613,241 @@ router.get('/price-analysis', async (req, res) => {
   } catch (error) {
     console.error('❌ Price analysis error:', error);
     res.json({ success: false, data: [], error: error.message });
+  }
+});
+
+// ============================================
+// ADMIN BOOKINGS ENDPOINTS
+// For viewing and managing all direct bookings
+// ============================================
+
+// GET all bookings for admin (no userId filter)
+router.get('/admin-bookings', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+
+    const { type, status, payment_status, search, page = 1, limit = 50 } = req.query;
+
+    let query = supabase.from('bookings').select('*', { count: 'exact' });
+
+    if (type && type !== 'all') {
+      query = query.eq('travel_type', type);
+    }
+    if (status && status !== 'all') {
+      query = query.eq('status', status);
+    }
+    if (payment_status && payment_status !== 'all') {
+      query = query.eq('payment_status', payment_status);
+    }
+    if (search) {
+      query = query.ilike('booking_reference', `%${search}%`);
+    }
+
+    // Pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    query = query.order('created_at', { ascending: false })
+      .range(offset, offset + parseInt(limit) - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('❌ Error fetching admin bookings:', error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    // Transform bookings for admin view
+    const bookings = (data || []).map(booking => {
+      const amount = booking.total_amount ||
+        booking.booking_details?.amount ||
+        booking.booking_details?.flight_offer?.price?.total || 0;
+
+      // Extract customer info from passenger_details or booking_details
+      let customerName = 'N/A';
+      let customerEmail = '';
+      if (booking.passenger_details && Array.isArray(booking.passenger_details) && booking.passenger_details.length > 0) {
+        const p = booking.passenger_details[0];
+        customerName = `${p.firstName || p.first_name || ''} ${p.lastName || p.last_name || ''}`.trim() || 'N/A';
+        customerEmail = p.email || '';
+      } else if (booking.booking_details?.contact?.email) {
+        customerEmail = booking.booking_details.contact.email;
+      }
+
+      return {
+        id: booking.id,
+        userId: booking.user_id,
+        type: booking.travel_type,
+        bookingReference: booking.booking_reference,
+        status: booking.status,
+        totalAmount: parseFloat(amount) || 0,
+        currency: booking.booking_details?.currency || 'USD',
+        paymentStatus: booking.payment_status,
+        bookingDate: booking.created_at,
+        customerName,
+        customerEmail,
+        // Flight fields
+        pnr: booking.booking_details?.pnr || '',
+        origin: booking.booking_details?.origin || '',
+        destination: booking.booking_details?.destination || '',
+        departureDate: booking.booking_details?.departure_date || '',
+        airline: booking.booking_details?.airline_name || booking.booking_details?.airline || '',
+        // Cruise fields
+        cruiseName: booking.booking_details?.cruise_name || '',
+        cruiseDeparture: booking.booking_details?.departure || '',
+        cruiseArrival: booking.booking_details?.arrival || '',
+        // Raw details for expandable view
+        bookingDetails: booking.booking_details,
+        passengerDetails: booking.passenger_details
+      };
+    });
+
+    res.json({
+      success: true,
+      data: bookings,
+      count: count || bookings.length,
+      page: parseInt(page),
+      totalPages: Math.ceil((count || bookings.length) / parseInt(limit))
+    });
+  } catch (error) {
+    console.error('❌ Admin bookings error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT update booking status (admin)
+router.put('/admin-bookings/:id', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+
+    const { id } = req.params;
+    const { status, payment_status, notes } = req.body;
+
+    const updateData = {};
+    if (status) updateData.status = status;
+    if (payment_status) updateData.payment_status = payment_status;
+    if (notes) updateData.admin_notes = notes;
+    updateData.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    res.json({ success: true, data, message: 'Booking updated successfully' });
+  } catch (error) {
+    console.error('❌ Admin booking update error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST cancel booking (admin) — cancel via Amadeus + ARC Pay refund/void + DB update
+router.post('/admin-bookings/:id/cancel', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+
+    const { id } = req.params;
+    const { reason = 'Admin cancellation' } = req.body;
+
+    // Fetch booking
+    const { data: booking, error: fetchError } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !booking) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+
+    if (booking.status === 'cancelled') {
+      return res.status(400).json({ success: false, error: 'Booking is already cancelled' });
+    }
+
+    // Try the orchestrated cancel-booking flow (Amadeus + ARC Pay + DB)
+    const bookingRef = booking.booking_reference || booking.booking_details?.order_id;
+    try {
+      const paymentApiUrl = `${req.protocol}://${req.get('host')}/api/payments?action=cancel-booking`;
+      const cancelResponse = await fetch(paymentApiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingReference: bookingRef,
+          reason: reason
+        })
+      });
+
+      const cancelResult = await cancelResponse.json();
+
+      if (cancelResult.success) {
+        return res.json({
+          success: true,
+          message: `Booking ${bookingRef} cancelled successfully`,
+          data: {
+            bookingId: id,
+            bookingReference: bookingRef,
+            previousStatus: booking.status,
+            newStatus: 'cancelled',
+            reason,
+            cancellation: cancelResult.cancellation
+          }
+        });
+      }
+
+      console.warn('⚠️ Orchestrated cancel returned error for admin cancel:', cancelResult.error);
+    } catch (fetchError) {
+      console.warn('⚠️ Could not reach orchestrated cancel endpoint:', fetchError.message);
+    }
+
+    // Fallback: just update DB (ARC Pay refund will need manual processing)
+    console.log('🔄 Admin cancel fallback: updating DB only (refund pending)');
+    const { error: updateError } = await supabase
+      .from('bookings')
+      .update({
+        status: 'cancelled',
+        payment_status: booking.payment_status === 'paid' ? 'refund_pending' : 'cancelled',
+        booking_details: {
+          ...booking.booking_details,
+          cancellation: {
+            cancelledAt: new Date().toISOString(),
+            reason,
+            adminCancelled: true,
+            refundPending: booking.payment_status === 'paid'
+          }
+        },
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (updateError) {
+      return res.status(500).json({ success: false, error: updateError.message });
+    }
+
+    res.json({
+      success: true,
+      message: `Booking ${bookingRef} cancelled (refund pending manual processing)`,
+      data: {
+        bookingId: id,
+        bookingReference: bookingRef,
+        previousStatus: booking.status,
+        newStatus: 'cancelled',
+        reason,
+        refundPending: booking.payment_status === 'paid'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Admin booking cancel error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

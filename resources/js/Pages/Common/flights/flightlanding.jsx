@@ -6,6 +6,7 @@ import CheapestFlights from "./cheapest-flight"
 import SubscribeSection from "./subscribe-section"
 import Navbar from "../Navbar"
 import Footer from "../Footer"
+import LoadingSpinner from "../../../Components/LoadingSpinner"
 import withPageElements from "../PageWrapper"
 import axios from 'axios';
 import { useState, useEffect } from "react";
@@ -31,8 +32,10 @@ const cityToIATACode = allAirports.reduce((acc, airport) => {
 function FlightLanding() {
   const navigate = useNavigate();
   const { city, cityCode } = useLocationContext();
+  const [isSearching, setIsSearching] = useState(false);
 
   const handleSearch = async (formData) => {
+    setIsSearching(true);
     try {
       // Use IATA codes from formData (set when user selects from suggestions)
       // Fall back to cityToIATACode map, then raw input as last resort
@@ -106,20 +109,22 @@ function FlightLanding() {
           }
         }
       });
+    } finally {
+      setIsSearching(false);
     }
   };
 
   // Handle navigation to destination search
   const handleExploreDestinations = () => {
-      const defaultOrigin = city || "";
-      const defaultOriginCode = cityCode || "";
+    const defaultOrigin = city || "";
+    const defaultOriginCode = cityCode || "";
 
-      // Navigate to search page with default search parameters
-      navigate('/flights/search', {
-        state: {
-          searchData: {
-            from: defaultOrigin,
-            fromCode: defaultOriginCode,
+    // Navigate to search page with default search parameters
+    navigate('/flights/search', {
+      state: {
+        searchData: {
+          from: defaultOrigin,
+          fromCode: defaultOriginCode,
           to: "",  // Empty destination for exploring all
           tripType: "oneWay",
           departDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from today
@@ -169,6 +174,13 @@ function FlightLanding() {
 
   return (
     <div className="min-h-screen">
+      {/* Loading Overlay */}
+      {isSearching && (
+        <div className="fixed inset-0 z-[999] bg-white/80 backdrop-blur-sm">
+          <LoadingSpinner fullScreen={true} text="Searching for the best flights..." />
+        </div>
+      )}
+
       <Navbar />
 
       {/* Enhanced Hero Section */}
@@ -191,26 +203,25 @@ function FlightLanding() {
             <div className="max-w-[900px] xl:max-w-[1100px] animate-fade-in-up mx-auto lg:mx-0">
               {/* Hero/Header Section */}
               <div className="mb-8 md:mb-12">
-                {typeof window !== 'undefined' && window.innerWidth < 1024 ? (
-                  <div className="mb-6 text-center">
-                    <p className="text-[#055B75] text-lg md:text-xl font-semibold italic drop-shadow-sm">Travel is the only thing you buy that makes you richer.</p>
+                {/* Mobile hero - shown below lg */}
+                <div className="block lg:hidden mb-6 text-center">
+                  <p className="text-[#055B75] text-lg md:text-xl font-semibold italic drop-shadow-sm">Travel is the only thing you buy that makes you richer.</p>
+                </div>
+                {/* Desktop hero - shown at lg and above */}
+                <div className="hidden lg:block">
+                  <div className="flex items-center mb-4 text-left">
+                    <div className="h-0.5 w-16 bg-[#055B75] mr-4"></div>
+                    <h2 className="text-[#055B75] text-xl font-light tracking-wider uppercase">
+                      <span className="font-script">Explore the World</span>
+                    </h2>
                   </div>
-                ) : (
-                  <>
-                    <div className="flex items-center mb-4 text-left">
-                      <div className="h-0.5 w-16 bg-[#055B75] mr-4"></div>
-                      <h2 className="text-[#055B75] text-xl font-light tracking-wider uppercase">
-                        <span className="font-script">Explore the World</span>
-                      </h2>
-                    </div>
-                    <h1 className="text-gray-900 text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-4 md:mb-6 leading-tight text-center">
-                      Find Your <span className="text-[#055B75]">Perfect Flight</span> Today
-                    </h1>
-                    <p className="text-gray-600 text-base sm:text-lg md:text-xl mb-6 md:mb-10 max-w-3xl font-medium mx-auto text-center">
-                      Discover amazing deals on flights to destinations worldwide. Book with confidence and travel with peace of mind.
-                    </p>
-                  </>
-                )}
+                  <h1 className="text-gray-900 text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-4 md:mb-6 leading-tight text-center">
+                    Find Your <span className="text-[#055B75]">Perfect Flight</span> Today
+                  </h1>
+                  <p className="text-gray-600 text-base sm:text-lg md:text-xl mb-6 md:mb-10 max-w-3xl font-medium mx-auto text-center">
+                    Discover amazing deals on flights to destinations worldwide. Book with confidence and travel with peace of mind.
+                  </p>
+                </div>
               </div>
 
               {/* <div className="bg-white/10 backdrop-blur-md p-8 rounded-xl shadow-2xl border border-white/20 transform hover:scale-[1.01] transition-transform duration-300"> */}

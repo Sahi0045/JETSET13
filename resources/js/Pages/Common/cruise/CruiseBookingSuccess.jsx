@@ -186,7 +186,7 @@ function CruiseBookingSuccess() {
 
                         {/* ── Route Section (Boarding Pass Style) ── */}
                         {(cruise.departure || cruise.arrival) && (
-                            <div className="px-8 py-8 border-b-2 border-dashed border-gray-200" style={{ background: 'linear-gradient(to right, #f0f9ff, #f8fafc, #f0f9ff)' }}>
+                            <div className="px-4 sm:px-8 py-6 sm:py-8 border-b-2 border-dashed border-gray-200" style={{ background: 'linear-gradient(to right, #f0f9ff, #f8fafc, #f0f9ff)' }}>
                                 <div className="flex items-center justify-between gap-4">
                                     {/* Departure */}
                                     <div className="flex-1 text-center">
@@ -250,8 +250,8 @@ function CruiseBookingSuccess() {
                         </div>
 
                         {/* ── Booking Info Grid ── */}
-                        <div className="px-8 py-8">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div className="px-4 sm:px-8 py-6 sm:py-8">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
                                 {/* Booking Reference */}
                                 <div className="space-y-1">
                                     <p className="text-[10px] text-gray-400 uppercase tracking-[2px] font-bold">Booking Ref</p>
@@ -296,7 +296,7 @@ function CruiseBookingSuccess() {
 
                         {/* ── Passenger Cards ── */}
                         {(adults.length > 0 || children.length > 0) && (
-                            <div className="px-8 pb-8">
+                            <div className="px-4 sm:px-8 pb-6 sm:pb-8">
                                 <div className="flex items-center gap-3 mb-5">
                                     <div className="w-8 h-8 rounded-lg flex items-center justify-center"
                                         style={{ background: 'linear-gradient(135deg, #055B75, #0a3d5c)' }}>
@@ -350,7 +350,7 @@ function CruiseBookingSuccess() {
                         )}
 
                         {/* ── Payment Summary Section ── */}
-                        <div className="px-8 pb-8">
+                        <div className="px-4 sm:px-8 pb-6 sm:pb-8">
                             <div className="rounded-2xl overflow-hidden border-2 border-gray-100"
                                 style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
 
@@ -403,7 +403,7 @@ function CruiseBookingSuccess() {
                         </div>
 
                         {/* ── Important Information ── */}
-                        <div className="px-8 pb-8">
+                        <div className="px-4 sm:px-8 pb-6 sm:pb-8">
                             <div className="rounded-2xl overflow-hidden border-2 border-amber-100"
                                 style={{ background: 'linear-gradient(135deg, #fffbeb, #fefce8)' }}>
                                 <div className="p-6">
@@ -454,7 +454,7 @@ function CruiseBookingSuccess() {
                         </div>
 
                         {/* ── Footer Confirmation ── */}
-                        <div className="px-8 pb-8 text-center">
+                        <div className="px-4 sm:px-8 pb-6 sm:pb-8 text-center">
                             <p className="text-sm text-gray-400 mb-1">🎉 A confirmation email has been sent with all the details of your booking.</p>
                             <p className="text-xs text-gray-300">JetSetters Travel • Booking #{bookingData.orderId}</p>
                         </div>

@@ -139,6 +139,18 @@ function FlightCreateOrders() {
 
       const fareBreakdown = orderData.calculatedFare || null;
 
+      // Get user ID from localStorage
+      let userId = null;
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          userId = user.id;
+        } catch (e) {
+          console.error('Error parsing user from localStorage:', e);
+        }
+      }
+
       // Proceed with creating the flight order
       // Prioritize originalOffer (full Amadeus API data) over transformed flight data
       const flightBookingData = {
@@ -168,7 +180,8 @@ function FlightCreateOrders() {
           email: orderData.bookingDetails?.contact?.email || orderData.customerEmail || "test@jetsetgo.com",
           countryCode: orderData.bookingDetails?.contact?.countryCode || "1",
           phoneNumber: orderData.bookingDetails?.contact?.phone || "1234567890"
-        }
+        },
+        userId: userId
       };
 
       console.log('Sending flight booking data:', flightBookingData);
@@ -254,6 +267,36 @@ function FlightCreateOrders() {
         };
 
         console.log('📝 Saving completed flight booking:', completedFlightBooking);
+        // Store as array so previous bookings are not overwritten
+        let existingBookings = [];
+        try {
+          const raw = localStorage.getItem('completedFlightBookings');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            existingBookings = Array.isArray(parsed) ? parsed : [parsed];
+          } else {
+            // Migrate legacy single-booking key if it exists
+            const legacy = localStorage.getItem('completedFlightBooking');
+            if (legacy) {
+              const legacyParsed = JSON.parse(legacy);
+              existingBookings = Array.isArray(legacyParsed) ? legacyParsed : [legacyParsed];
+            }
+          }
+        } catch (e) { /* ignore parse errors */ }
+        // Avoid duplicates by booking reference
+        const isDuplicate = existingBookings.some(b =>
+          b.bookingReference === completedFlightBooking.bookingReference ||
+          b.pnr === completedFlightBooking.pnr
+        );
+        if (!isDuplicate) {
+          existingBookings.push(completedFlightBooking);
+        }
+        // Keep last 50 bookings max to avoid localStorage bloat
+        if (existingBookings.length > 50) {
+          existingBookings = existingBookings.slice(-50);
+        }
+        localStorage.setItem('completedFlightBookings', JSON.stringify(existingBookings));
+        // Also keep legacy key for backward compat (latest booking)
         localStorage.setItem('completedFlightBooking', JSON.stringify(completedFlightBooking));
 
         // Navigate to booking confirmation page after a delay
@@ -363,7 +406,7 @@ function FlightCreateOrders() {
         {/* Progress Bar */}
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 overflow-x-auto">
           <div className={`transition-opacity duration-500 ${pageLoaded ? 'opacity-100' : 'opacity-0'}`}>
-            <div className="flex items-center justify-between max-w-3xl mx-auto min-w-[500px]">
+            <div className="flex items-center justify-between max-w-3xl mx-auto">
               {[
                 { icon: <Check />, label: "Flight Selection", completed: true },
                 { icon: <Check />, label: "Passenger Details", completed: true },

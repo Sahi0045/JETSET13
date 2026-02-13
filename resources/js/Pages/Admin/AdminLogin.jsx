@@ -66,6 +66,7 @@ const AdminLogin = () => {
 
       // Also set for general authentication
       localStorage.setItem('token', data.token);
+      localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('user', JSON.stringify({
         id: data.id,
         email: data.email,

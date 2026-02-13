@@ -6,6 +6,7 @@ import { getApiUrl } from '../../../utils/apiHelper'
 import Navbar from '../Navbar'
 import Footer from '../Footer'
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext'
+import ArcPayService from '../../../Services/ArcPayService'
 
 // Empty State Component
 const EmptyState = ({ icon, title, description, actionLabel, onAction }) => (
@@ -40,156 +41,8 @@ export default function TravelDashboard() {
   const [requests, setRequests] = useState([])
   const [isLoadingRequests, setIsLoadingRequests] = useState(false)
   const [isLoadingBookings, setIsLoadingBookings] = useState(false)
-  const [emailSending, setEmailSending] = useState({}) // Track email sending state by ID
-  const [emailSuccess, setEmailSuccess] = useState({}) // Track email success by ID
-
-  // Get user from Supabase auth context
-  const { user } = useSupabaseAuth()
-
-  // Email notification functions
-  const sendBookingUpdateEmail = async (booking) => {
-    const emailKey = `booking-${booking.id || booking.bookingReference}`;
-    setEmailSending(prev => ({ ...prev, [emailKey]: true }));
-
-    try {
-      const customerEmail = booking.passengerDetails?.[0]?.email ||
-        booking.email ||
-        user?.email;
-
-      if (!customerEmail) {
-        alert('No email address found for this booking');
-        return;
-      }
-
-      const response = await fetch(getApiUrl('email/booking-confirmation'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerEmail,
-          customerName: booking.passengerDetails?.[0]?.firstName || booking.customerName || 'Valued Customer',
-          bookingReference: booking.bookingReference || booking.pnr || booking.id?.slice(-8).toUpperCase(),
-          bookingType: booking.type || 'travel',
-          paymentAmount: booking.totalPrice || booking.amount,
-          currency: booking.currency || 'USD',
-          travelDate: booking.departureDate || booking.checkinDate,
-          passengers: booking.passengers?.length || 1,
-          bookingDetails: {
-            origin: booking.origin,
-            destination: booking.destination,
-            hotelName: booking.hotelName,
-            cruiseLine: booking.cruiseLine
-          }
-        })
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        setEmailSuccess(prev => ({ ...prev, [emailKey]: true }));
-        setTimeout(() => setEmailSuccess(prev => ({ ...prev, [emailKey]: false })), 3000);
-        alert('✅ Booking confirmation email sent successfully!');
-      } else {
-        throw new Error(result.error || 'Failed to send email');
-      }
-    } catch (error) {
-      console.error('Error sending booking email:', error);
-      alert('❌ Failed to send email: ' + error.message);
-    } finally {
-      setEmailSending(prev => ({ ...prev, [emailKey]: false }));
-    }
-  };
-
-  const sendQuoteReminderEmail = async (request, quote) => {
-    const emailKey = `quote-${quote.id}`;
-    setEmailSending(prev => ({ ...prev, [emailKey]: true }));
-
-    try {
-      const customerEmail = request.customer_email || user?.email;
-
-      if (!customerEmail) {
-        alert('No email address found for this request');
-        return;
-      }
-
-      const response = await fetch(getApiUrl('email/send'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'quote_reminder',
-          to: customerEmail,
-          data: {
-            customerName: request.customer_name || 'Valued Customer',
-            quoteNumber: quote.quote_number,
-            totalAmount: quote.total_amount,
-            currency: quote.currency || 'USD',
-            expiresAt: quote.expires_at,
-            inquiryType: request.inquiry_type,
-            quoteUrl: `${window.location.origin}/inquiry/${request.id}`
-          }
-        })
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        setEmailSuccess(prev => ({ ...prev, [emailKey]: true }));
-        setTimeout(() => setEmailSuccess(prev => ({ ...prev, [emailKey]: false })), 3000);
-        alert('✅ Quote reminder email sent successfully!');
-      } else {
-        throw new Error(result.error || 'Failed to send email');
-      }
-    } catch (error) {
-      console.error('Error sending quote reminder:', error);
-      alert('❌ Failed to send reminder: ' + error.message);
-    } finally {
-      setEmailSending(prev => ({ ...prev, [emailKey]: false }));
-    }
-  };
-
-  const sendInquiryStatusEmail = async (request) => {
-    const emailKey = `inquiry-${request.id}`;
-    setEmailSending(prev => ({ ...prev, [emailKey]: true }));
-
-    try {
-      const customerEmail = request.customer_email || user?.email;
-
-      if (!customerEmail) {
-        alert('No email address found for this request');
-        return;
-      }
-
-      const response = await fetch(getApiUrl('email/send'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'inquiry_status',
-          to: customerEmail,
-          data: {
-            customerName: request.customer_name || 'Valued Customer',
-            inquiryId: request.id,
-            inquiryType: request.inquiry_type,
-            status: request.status,
-            createdAt: request.created_at,
-            updatedAt: request.updated_at,
-            hasQuotes: request.quotes?.length > 0,
-            viewUrl: `${window.location.origin}/inquiry/${request.id}`
-          }
-        })
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        setEmailSuccess(prev => ({ ...prev, [emailKey]: true }));
-        setTimeout(() => setEmailSuccess(prev => ({ ...prev, [emailKey]: false })), 3000);
-        alert('✅ Status update email sent to ' + customerEmail);
-      } else {
-        throw new Error(result.error || 'Failed to send email');
-      }
-    } catch (error) {
-      console.error('Error sending status email:', error);
-      alert('❌ Failed to send email: ' + error.message);
-    } finally {
-      setEmailSending(prev => ({ ...prev, [emailKey]: false }));
-    }
-  };
+  const [cancellingBookingId, setCancellingBookingId] = useState(null)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(null)
 
   useEffect(() => {
     // Check if user is authenticated
@@ -271,7 +124,21 @@ export default function TravelDashboard() {
     // First, try to load bookings from database
     try {
       console.log('🔍 Fetching bookings from database...')
-      const response = await fetch(getApiUrl('flights/bookings'), {
+      // Get user ID from localStorage so backend can filter by user
+      let currentUserId = ''
+      try {
+        const storedUser = localStorage.getItem('user')
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser)
+          currentUserId = parsed.id || parsed.uid || ''
+        }
+      } catch (e) { /* ignore parse errors */ }
+
+      const bookingsUrl = currentUserId
+        ? getApiUrl(`flights/bookings?userId=${encodeURIComponent(currentUserId)}`)
+        : getApiUrl('flights/bookings')
+
+      const response = await fetch(bookingsUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -297,25 +164,29 @@ export default function TravelDashboard() {
     }
 
     // Load flight bookings from localStorage (as fallback/supplement)
-    const flightBooking = localStorage.getItem('completedFlightBooking')
-    console.log('Flight booking from localStorage:', flightBooking ? 'Found' : 'Not found')
+    // Support both array format (new) and single object format (legacy)
+    const flightBookingRaw = localStorage.getItem('completedFlightBookings') || localStorage.getItem('completedFlightBooking')
+    console.log('Flight booking from localStorage:', flightBookingRaw ? 'Found' : 'Not found')
 
-    if (flightBooking) {
+    if (flightBookingRaw) {
       try {
-        const booking = JSON.parse(flightBooking)
-        console.log('Parsed flight booking:', booking)
-        // Check if this booking already exists in database bookings
-        const exists = allBookings.some(b =>
-          b.bookingReference === booking.bookingReference ||
-          b.pnr === booking.pnr
-        )
-        if (!exists) {
-          allBookings.push({
-            ...booking,
-            type: 'flight',
-            bookingDate: booking.orderCreatedAt || new Date().toISOString(),
-            source: 'localStorage'
-          })
+        const parsed = JSON.parse(flightBookingRaw)
+        const flightBookingsArr = Array.isArray(parsed) ? parsed : [parsed]
+        console.log(`Parsed ${flightBookingsArr.length} flight booking(s) from localStorage`)
+        for (const booking of flightBookingsArr) {
+          // Check if this booking already exists in database bookings
+          const exists = allBookings.some(b =>
+            b.bookingReference === booking.bookingReference ||
+            b.pnr === booking.pnr
+          )
+          if (!exists) {
+            allBookings.push({
+              ...booking,
+              type: 'flight',
+              bookingDate: booking.orderCreatedAt || new Date().toISOString(),
+              source: 'localStorage'
+            })
+          }
         }
       } catch (error) {
         console.error('Error parsing flight booking:', error)
@@ -726,10 +597,14 @@ export default function TravelDashboard() {
     }
 
     // Filter by status (tab) - Now properly using travel dates
+    // Normalize status to uppercase for consistent comparison
+    const normalizeStatus = (s) => (s || '').toUpperCase();
+
     if (activeTab === "Upcoming") {
       // Show confirmed bookings with travel date in the future (or no date set)
       filtered = filtered.filter(booking => {
-        const isCancelled = booking.status === 'CANCELLED' || booking.status === 'FAILED';
+        const status = normalizeStatus(booking.status);
+        const isCancelled = status === 'CANCELLED' || status === 'FAILED';
         const isPast = isTravelDatePast(booking);
         const isUpcoming = !isCancelled && !isPast;
         console.log(`Booking ${booking.orderId}: status=${booking.status}, travelDate=${getTravelDateFromBooking(booking)}, isPast=${isPast}, isUpcoming=${isUpcoming}`);
@@ -738,15 +613,16 @@ export default function TravelDashboard() {
     } else if (activeTab === "Past") {
       // Show bookings where travel date has passed
       filtered = filtered.filter(booking => {
-        const isCancelled = booking.status === 'CANCELLED' || booking.status === 'FAILED';
+        const status = normalizeStatus(booking.status);
+        const isCancelled = status === 'CANCELLED' || status === 'FAILED';
         const isPast = isTravelDatePast(booking);
         console.log(`Booking ${booking.orderId}: isPast=${isPast}`);
         return !isCancelled && isPast;
       });
     } else if (activeTab === "Cancelled") {
-      filtered = filtered.filter(booking => booking.status === 'CANCELLED')
+      filtered = filtered.filter(booking => normalizeStatus(booking.status) === 'CANCELLED')
     } else if (activeTab === "Failed") {
-      filtered = filtered.filter(booking => booking.status === 'FAILED')
+      filtered = filtered.filter(booking => normalizeStatus(booking.status) === 'FAILED')
     }
 
     console.log(`Final filtered bookings for ${activeTab}:`, filtered.length)
@@ -876,11 +752,11 @@ export default function TravelDashboard() {
           </div>
 
           <div className="flex flex-col items-start sm:items-end gap-2">
-            <span className={`inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg ${booking.status === 'CONFIRMED' || booking.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-              booking.status === 'CANCELLED' ? 'bg-red-50 text-red-700 border border-red-200' :
+            <span className={`inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg ${booking.status?.toUpperCase() === 'CONFIRMED' || booking.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+              booking.status?.toUpperCase() === 'CANCELLED' ? 'bg-red-50 text-red-700 border border-red-200' :
                 'bg-[#B9D0DC] text-[#055B75] border border-[#65B3CF]'
               }`}>
-              {booking.status === 'paid' ? '✓ Paid' : booking.status === 'CONFIRMED' ? '✓ Confirmed' : (booking.status || 'Confirmed')}
+              {booking.status === 'paid' ? '✓ Paid' : booking.status?.toUpperCase() === 'CONFIRMED' ? '✓ Confirmed' : booking.status?.toUpperCase() === 'CANCELLED' ? '✗ Cancelled' : (booking.status || 'Confirmed')}
             </span>
 
             {/* Mobile-friendly status indicator */}
@@ -894,7 +770,7 @@ export default function TravelDashboard() {
         </div>
 
         {/* Show travel details for database bookings - ENHANCED DISPLAY */}
-        {(booking.origin || booking.destination || booking.departureDate || booking.hotelDestination || booking.cruiseDestination || booking.cruiseName || booking.cruiseDeparture || booking.returnDate || booking.checkinDate || booking.checkoutDate || booking.cruiseDepartureDate) && (
+        {(booking.origin || booking.destination || booking.departureDate || booking.hotelDestination || booking.cruiseDestination || booking.returnDate || booking.checkinDate || booking.checkoutDate || booking.cruiseDepartureDate) && (
           <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
             <div className="flex items-center gap-2 mb-3">
               <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -905,63 +781,112 @@ export default function TravelDashboard() {
             </div>
 
             {isFlightBooking && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {(booking.origin || booking.destination) && (
-                    <div className="bg-white rounded-lg p-3 border border-blue-200">
-                      <p className="text-xs text-blue-600 font-semibold mb-1">Route</p>
-                      <p className="text-sm font-bold text-gray-900">{booking.origin || 'N/A'} → {booking.destination || 'N/A'}</p>
-                    </div>
-                  )}
-                  {booking.departureDate && (
-                    <div className="bg-white rounded-lg p-3 border border-blue-200">
-                      <p className="text-xs text-blue-600 font-semibold mb-1">Departure</p>
-                      <p className="text-sm font-bold text-gray-900">{new Date(booking.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                      {booking.departureTime && <p className="text-xs text-gray-500 mt-0.5">{booking.departureTime}{booking.departureTerminal ? ` • Terminal ${booking.departureTerminal}` : ''}</p>}
-                    </div>
-                  )}
-                  {(booking.airlineName || booking.flightNumber) && (
-                    <div className="bg-white rounded-lg p-3 border border-blue-200">
-                      <p className="text-xs text-blue-600 font-semibold mb-1">Flight</p>
-                      <p className="text-sm font-bold text-gray-900">{booking.airlineName || booking.airline || ''}</p>
-                      {booking.flightNumber && <p className="text-xs text-gray-500 mt-0.5">{booking.flightNumber}{booking.aircraft ? ` • ${booking.aircraft}` : ''}</p>}
-                    </div>
-                  )}
-                  {booking.duration && (
-                    <div className="bg-white rounded-lg p-3 border border-blue-200">
-                      <p className="text-xs text-blue-600 font-semibold mb-1">Duration</p>
-                      <p className="text-sm font-bold text-gray-900">{booking.duration.startsWith('PT') ? booking.duration.replace('PT', '').replace('H', 'h ').replace('M', 'm') : booking.duration}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{booking.stops === 0 ? 'Direct' : `${booking.stops} Stop(s)`}{booking.cabinClass ? ` • ${booking.cabinClass.replace('_', ' ')}` : ''}</p>
-                    </div>
-                  )}
-                </div>
-                {(booking.baggage || booking.brandedFareLabel || booking.arrivalTime) && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {booking.arrivalTime && (
-                      <div className="bg-white rounded-lg p-3 border border-blue-200">
-                        <p className="text-xs text-blue-600 font-semibold mb-1">Arrival</p>
-                        <p className="text-sm font-bold text-gray-900">{booking.arrivalTime}</p>
-                        {booking.arrivalTerminal && <p className="text-xs text-gray-500 mt-0.5">Terminal {booking.arrivalTerminal}</p>}
-                      </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {(booking.origin || booking.destination) && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Route</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.origin || 'N/A'} → {booking.destination || 'N/A'}</p>
+                  </div>
+                )}
+                {booking.departureDate && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Departure</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(booking.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  </div>
+                )}
+                {booking.returnDate && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Return</p>
+                    <p className="text-sm font-bold text-gray-900">{new Date(booking.returnDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  </div>
+                )}
+                {(booking.passengers || booking.travelClass) && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">{booking.travelClass ? 'Class & Passengers' : 'Passengers'}</p>
+                    <p className="text-sm font-bold text-gray-900 capitalize">
+                      {booking.travelClass && booking.travelClass.replace('_', ' ')}
+                      {booking.travelClass && booking.passengers && ' • '}
+                      {booking.passengers && `${booking.passengers} ${booking.passengers === 1 ? 'Traveler' : 'Travelers'}`}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Enriched Flight Details - Airline, Terminal, Duration, etc. */}
+            {isFlightBooking && (booking.airlineName || booking.flightNumber || booking.departureTime || booking.duration || booking.pnr) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+                {(booking.airlineName || booking.flightNumber) && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Airline / Flight</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {booking.airlineName || booking.airline || ''}{booking.flightNumber ? ` • ${booking.flightNumber}` : ''}
+                    </p>
+                    {booking.aircraft && <p className="text-xs text-gray-500 mt-0.5">{booking.aircraft}</p>}
+                    {booking.operatingAirlineName && booking.operatingAirlineName !== booking.airlineName && (
+                      <p className="text-xs text-gray-400 mt-0.5">Operated by {booking.operatingAirlineName}</p>
                     )}
-                    {booking.baggage && (
-                      <div className="bg-white rounded-lg p-3 border border-blue-200">
-                        <p className="text-xs text-blue-600 font-semibold mb-1">Baggage</p>
-                        <p className="text-sm font-bold text-gray-900">{booking.baggage}</p>
-                      </div>
-                    )}
-                    {booking.brandedFareLabel && (
-                      <div className="bg-white rounded-lg p-3 border border-blue-200">
-                        <p className="text-xs text-blue-600 font-semibold mb-1">Fare Type</p>
-                        <p className="text-sm font-bold text-gray-900">{booking.brandedFareLabel}</p>
-                      </div>
-                    )}
-                    {booking.pnr && (
-                      <div className="bg-white rounded-lg p-3 border border-blue-200">
-                        <p className="text-xs text-blue-600 font-semibold mb-1">PNR</p>
-                        <p className="text-sm font-bold text-blue-700 font-mono">{booking.pnr}</p>
-                      </div>
-                    )}
+                  </div>
+                )}
+                {(booking.departureTime || booking.departureTerminal) && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Departure</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {booking.departureTime || ''}
+                      {booking.departureTerminal ? ` • Terminal ${booking.departureTerminal}` : ''}
+                    </p>
+                  </div>
+                )}
+                {(booking.arrivalTime || booking.arrivalTerminal) && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Arrival</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {booking.arrivalTime || ''}
+                      {booking.arrivalTerminal ? ` • Terminal ${booking.arrivalTerminal}` : ''}
+                    </p>
+                  </div>
+                )}
+                {(booking.duration || booking.stops !== undefined) && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Duration</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {booking.duration || ''}
+                      {booking.stops !== undefined && booking.stops !== null && (
+                        <span className="text-xs text-gray-500 ml-1">
+                          • {booking.stops === 0 ? 'Direct' : `${booking.stops} Stop${booking.stops > 1 ? 's' : ''}`}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* PNR, Cabin Class, Baggage, Fare Type */}
+            {isFlightBooking && (booking.pnr || booking.cabinClass || booking.baggage || booking.brandedFareLabel) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+                {booking.pnr && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">PNR</p>
+                    <p className="text-sm font-bold text-gray-900 tracking-wider">{booking.pnr}</p>
+                  </div>
+                )}
+                {booking.cabinClass && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Cabin Class</p>
+                    <p className="text-sm font-bold text-gray-900 capitalize">{booking.cabinClass.replace('_', ' ')}</p>
+                  </div>
+                )}
+                {booking.baggage && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Baggage</p>
+                    <p className="text-sm font-bold text-gray-900">{typeof booking.baggage === 'object' ? JSON.stringify(booking.baggage) : booking.baggage}</p>
+                  </div>
+                )}
+                {booking.brandedFareLabel && (
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold mb-1">Fare Type</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.brandedFareLabel}</p>
                   </div>
                 )}
               </div>
@@ -1002,16 +927,10 @@ export default function TravelDashboard() {
 
             {isCruiseBooking && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {(booking.cruiseName || booking.cruiseDestination) && (
+                {booking.cruiseDestination && (
                   <div className="bg-white rounded-lg p-3 border border-cyan-200">
-                    <p className="text-xs text-cyan-600 font-semibold mb-1">{booking.cruiseName ? 'Cruise' : 'Destination'}</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.cruiseName || booking.cruiseDestination}</p>
-                  </div>
-                )}
-                {(booking.cruiseDeparture || booking.cruiseArrival) && (
-                  <div className="bg-white rounded-lg p-3 border border-cyan-200">
-                    <p className="text-xs text-cyan-600 font-semibold mb-1">Route</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.cruiseDeparture || 'N/A'} → {booking.cruiseArrival || 'N/A'}</p>
+                    <p className="text-xs text-cyan-600 font-semibold mb-1">Destination</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.cruiseDestination}</p>
                   </div>
                 )}
                 {booking.cruiseDepartureDate && (
@@ -1020,10 +939,10 @@ export default function TravelDashboard() {
                     <p className="text-sm font-bold text-gray-900">{new Date(booking.cruiseDepartureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
                   </div>
                 )}
-                {(booking.cruiseDuration || booking.duration) && (
+                {booking.cruiseDuration && (
                   <div className="bg-white rounded-lg p-3 border border-cyan-200">
                     <p className="text-xs text-cyan-600 font-semibold mb-1">Duration</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.cruiseDuration || booking.duration}</p>
+                    <p className="text-sm font-bold text-gray-900">{booking.cruiseDuration} {booking.cruiseDuration === 1 ? 'Day' : 'Days'}</p>
                   </div>
                 )}
                 {(booking.cruisePassengers || booking.cruiseCabinType) && (
@@ -1105,29 +1024,7 @@ export default function TravelDashboard() {
         )}
 
         <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
-          {isCruiseBooking && (
-            <button
-              onClick={() => navigate('/cruise-booking-success', {
-                state: {
-                  bookingData: {
-                    ...booking,
-                    passengerDetails: booking.travelers, // Map travelers back to passengerDetails
-                    basePrice: booking.basePrice,
-                    taxesAndFees: booking.taxesAndFees,
-                    portCharges: booking.portCharges,
-                    totalAmount: booking.totalAmount || booking.amount
-                  }
-                }
-              })}
-              className="flex-1 bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-700 transition-colors font-semibold flex items-center justify-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-              </svg>
-              View Boarding Pass
-            </button>
-          )}
-          {isDatabaseBooking && !isCruiseBooking ? (
+          {isDatabaseBooking ? (
             <button
               onClick={async () => {
                 try {
@@ -1213,43 +1110,67 @@ export default function TravelDashboard() {
               </span>
             </button>
           )}
-          {/* Email Confirmation Button */}
-          <button
-            onClick={() => sendBookingUpdateEmail(booking)}
-            disabled={emailSending[`booking-${booking.id || booking.bookingReference}`]}
-            className={`flex-1 sm:flex-none px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${emailSuccess[`booking-${booking.id || booking.bookingReference}`]
-              ? 'bg-green-100 text-green-700 border border-green-300'
-              : emailSending[`booking-${booking.id || booking.bookingReference}`]
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'border-2 border-[#B9D0DC] text-[#055B75] hover:bg-[#B9D0DC]/20 hover:border-[#055B75]'
-              }`}
-          >
-            <span className="flex items-center justify-center gap-2">
-              {emailSending[`booking-${booking.id || booking.bookingReference}`] ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                  </svg>
-                  Sending...
-                </>
-              ) : emailSuccess[`booking-${booking.id || booking.bookingReference}`] ? (
-                <>
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                  Email Sent!
-                </>
+          {/* Cancel Booking Button — only for non-cancelled upcoming bookings */}
+          {(booking.status || '').toUpperCase() !== 'CANCELLED' && (booking.status || '').toUpperCase() !== 'FAILED' && (
+            <>
+              {showCancelConfirm === booking.id ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-red-600 font-medium">Cancel this booking?</span>
+                  <button
+                    disabled={cancellingBookingId === booking.id}
+                    onClick={async () => {
+                      const ref = booking.bookingReference || booking.booking_reference || booking.orderId
+                      if (!ref) {
+                        alert('No booking reference found')
+                        setShowCancelConfirm(null)
+                        return
+                      }
+                      setCancellingBookingId(booking.id)
+                      try {
+                        const userStr = localStorage.getItem('user')
+                        const userEmail = userStr ? JSON.parse(userStr).email : null
+                        const result = await ArcPayService.cancelBooking(ref, userEmail, 'Customer request')
+                        if (result.success) {
+                          alert(result.message || 'Booking cancelled successfully' + (result.cancellation?.refundAmount ? `. Refund: $${result.cancellation.refundAmount}` : ''))
+                          // Reload bookings to reflect the cancellation
+                          loadBookings()
+                        } else {
+                          alert(result.error || 'Failed to cancel booking. Please try again.')
+                        }
+                      } catch (err) {
+                        console.error('Cancel error:', err)
+                        alert('An error occurred while cancelling. Please contact support.')
+                      } finally {
+                        setCancellingBookingId(null)
+                        setShowCancelConfirm(null)
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {cancellingBookingId === booking.id ? 'Cancelling...' : 'Yes, Cancel'}
+                  </button>
+                  <button
+                    onClick={() => setShowCancelConfirm(null)}
+                    className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    No
+                  </button>
+                </div>
               ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                  📧 Resend Confirmation
-                </>
+                <button
+                  onClick={() => setShowCancelConfirm(booking.id)}
+                  className="flex-1 sm:flex-none px-5 py-2.5 border-2 border-red-200 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 hover:border-red-400 transition-all duration-200"
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Cancel Booking
+                  </span>
+                </button>
               )}
-            </span>
-          </button>
+            </>
+          )}
         </div>
       </div>
     )
@@ -1453,56 +1374,22 @@ export default function TravelDashboard() {
             </p>
             {request.quotes
               .filter(q => q.status === 'sent' || q.status === 'accepted')
-              .map((quote) => {
-                // Calculate days until expiry
-                const getDaysUntilExpiry = () => {
-                  if (!quote.expires_at) return null;
-                  const expiryDate = new Date(quote.expires_at);
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  expiryDate.setHours(0, 0, 0, 0);
-                  return Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-                };
-                const daysUntilExpiry = getDaysUntilExpiry();
-                const isExpiringSoon = daysUntilExpiry !== null && daysUntilExpiry <= 3;
-                const isExpired = daysUntilExpiry !== null && daysUntilExpiry < 0;
-
-                return (
-                  <div key={quote.id} className={`bg-white bg-opacity-50 rounded-md p-3 mb-2 border ${isExpiringSoon && !isExpired ? 'border-orange-300 bg-orange-50' : isExpired ? 'border-red-300 bg-red-50' : 'border-green-200'}`}>
-                    <div className="flex justify-between items-start mb-2">
-                      <p className="text-sm font-semibold text-gray-900">Quote #{quote.quote_number}</p>
-                      <p className="text-lg font-bold text-green-600">${quote.total_amount} {quote.currency}</p>
-                    </div>
-                    {quote.expires_at && (
-                      <div className={`flex items-center gap-2 ${isExpired ? 'text-red-600' : isExpiringSoon ? 'text-orange-600' : 'text-gray-600'}`}>
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0 1 1 0 012 0zM8 9a1 1 0 000 2h2a1 1 0 100 0H8z" clipRule="evenodd" />
-                        </svg>
-                        {isExpired ? (
-                          <span className="text-xs font-semibold">❌ Quote Expired</span>
-                        ) : isExpiringSoon ? (
-                          <span className="text-xs font-bold animate-pulse">⚠️ Expires in {daysUntilExpiry} day{daysUntilExpiry !== 1 ? 's' : ''} - Act now!</span>
-                        ) : daysUntilExpiry !== null ? (
-                          <span className="text-xs">Expires in {daysUntilExpiry} days ({new Date(quote.expires_at).toLocaleDateString()})</span>
-                        ) : (
-                          <span className="text-xs">Expires: {new Date(quote.expires_at).toLocaleDateString()}</span>
-                        )}
-                      </div>
-                    )}
-                    {/* Pay Now button for expiring quotes */}
-                    {!isExpired && quote.status === 'sent' && (
-                      <button
-                        onClick={() => navigate('/quote-detail', { state: { quoteData: quote, inquiryData: request } })}
-                        className={`mt-3 w-full py-2 text-sm font-bold rounded-lg transition-all ${isExpiringSoon
-                          ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 animate-pulse shadow-lg'
-                          : 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'}`}
-                      >
-                        {isExpiringSoon ? '⚡ Pay Now Before It Expires!' : '💳 View & Pay Quote'}
-                      </button>
-                    )}
+              .map((quote) => (
+                <div key={quote.id} className="bg-white bg-opacity-50 rounded-md p-3 mb-2 border border-green-200">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="text-sm font-semibold text-gray-900">Quote #{quote.quote_number}</p>
+                    <p className="text-lg font-bold text-green-600">${quote.total_amount} {quote.currency}</p>
                   </div>
-                );
-              })}
+                  {quote.expires_at && (
+                    <p className="text-xs text-gray-600 flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0 1 1 0 002 0zM8 9a1 1 0 000 2h2a1 1 0 100 0H8z" clipRule="evenodd" />
+                      </svg>
+                      Expires: {new Date(quote.expires_at).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              ))}
           </div>
         )}
 
@@ -1535,43 +1422,6 @@ export default function TravelDashboard() {
               </span>
             </button>
           )}
-          {/* Email Status Update Button */}
-          <button
-            onClick={() => sendInquiryStatusEmail(request)}
-            disabled={emailSending[`inquiry-${request.id}`]}
-            className={`flex-1 sm:flex-none px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${emailSuccess[`inquiry-${request.id}`]
-              ? 'bg-green-100 text-green-700 border border-green-300'
-              : emailSending[`inquiry-${request.id}`]
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'border-2 border-[#B9D0DC] text-[#055B75] hover:bg-[#B9D0DC]/20 hover:border-[#055B75]'
-              }`}
-          >
-            <span className="flex items-center justify-center gap-2">
-              {emailSending[`inquiry-${request.id}`] ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                  </svg>
-                  Sending...
-                </>
-              ) : emailSuccess[`inquiry-${request.id}`] ? (
-                <>
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                  Sent!
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                  📧 Email Me Update
-                </>
-              )}
-            </span>
-          </button>
         </div>
       </div>
     )
@@ -1594,63 +1444,10 @@ export default function TravelDashboard() {
         </div>
       )}
 
-      {/* Pending Actions Banner - Shows when user has quotes awaiting action */}
-      {isAuthenticated && requests.length > 0 && (() => {
-        // Count pending quotes (sent but not paid)
-        const pendingQuotes = requests.flatMap(r =>
-          (r.quotes || []).filter(q => q.status === 'sent')
-        );
-        const expiringQuotes = pendingQuotes.filter(q => {
-          if (!q.expires_at) return false;
-          const daysLeft = Math.ceil((new Date(q.expires_at) - new Date()) / (1000 * 60 * 60 * 24));
-          return daysLeft >= 0 && daysLeft <= 3;
-        });
-
-        if (pendingQuotes.length === 0) return null;
-
-        return (
-          <div className={`border-b ${expiringQuotes.length > 0 ? 'bg-gradient-to-r from-orange-50 to-red-50 border-orange-200' : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'}`}>
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-full ${expiringQuotes.length > 0 ? 'bg-orange-100 animate-pulse' : 'bg-blue-100'}`}>
-                    <svg className={`w-5 h-5 ${expiringQuotes.length > 0 ? 'text-orange-600' : 'text-blue-600'}`} fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className={`font-bold text-sm ${expiringQuotes.length > 0 ? 'text-orange-800' : 'text-blue-800'}`}>
-                      🔔 {pendingQuotes.length} Quote{pendingQuotes.length !== 1 ? 's' : ''} Awaiting Your Action
-                    </p>
-                    <p className={`text-xs ${expiringQuotes.length > 0 ? 'text-orange-600' : 'text-blue-600'}`}>
-                      {expiringQuotes.length > 0
-                        ? `⚠️ ${expiringQuotes.length} expiring soon - complete payment now!`
-                        : 'Review and pay your quotes to confirm your bookings'
-                      }
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setActiveSidebarItem('Requests');
-                    setActiveTab('Upcoming');
-                  }}
-                  className={`text-xs font-bold px-4 py-2 rounded-lg transition-all ${expiringQuotes.length > 0
-                    ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-md'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-                >
-                  View Pending Quotes →
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* Tab Navigation - Underline Style */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-8 overflow-x-auto hide-scrollbar">
+          <div className="flex gap-4 sm:gap-8 overflow-x-auto hide-scrollbar">
             {["Upcoming", "Past", "Cancelled", "Failed"].map((tab) => (
               <button
                 key={tab}
@@ -1671,12 +1468,19 @@ export default function TravelDashboard() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex gap-6">
+            {/* Mobile sidebar backdrop */}
+            {isMobileMenuOpen && (
+              <div 
+                className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+                onClick={toggleMobileMenu}
+              />
+            )}
             {/* Sidebar */}
             <aside className={`
-            fixed lg:relative inset-y-0 left-0 z-40 w-72 bg-white lg:bg-transparent
+            fixed lg:relative inset-y-0 left-0 z-40 w-[85vw] max-w-72 bg-white lg:bg-transparent
             transform transition-transform duration-300 lg:transform-none
             ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-            lg:block flex-shrink-0
+            lg:block flex-shrink-0 shadow-xl lg:shadow-none
           `}>
               <div className="h-full lg:h-auto overflow-y-auto lg:overflow-visible p-4 lg:p-0">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:sticky lg:top-36">
@@ -1757,6 +1561,17 @@ export default function TravelDashboard() {
 
             {/* Main Content */}
             <main className="flex-1 min-w-0">
+              {/* Mobile sidebar toggle button */}
+              <button
+                onClick={toggleMobileMenu}
+                className="lg:hidden mb-4 flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                Categories
+              </button>
+
               {activeSidebarItem === "Requests" ? (
                 /* Requests Section */
                 isAuthenticated ? (

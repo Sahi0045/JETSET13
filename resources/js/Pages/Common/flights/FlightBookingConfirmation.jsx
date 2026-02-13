@@ -11,6 +11,7 @@ import supabase from "../../../lib/supabase";
 import ArcPayService from "../../../Services/ArcPayService";
 import { useLocationContext } from '../../../Context/LocationContext';
 import { allAirports } from './airports';
+import PricingService from '../../../Services/PricingService';
 import "./booking-confirmation.css";
 
 
@@ -27,6 +28,7 @@ function FlightBookingConfirmation() {
   const [passengerData, setPassengerData] = useState([]);
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [vipService, setVipService] = useState(false);
+  const [priceConfig, setPriceConfig] = useState(null);
   const [calculatedFare, setCalculatedFare] = useState({
     baseFare: 0,
     countryTax: 0,
@@ -152,15 +154,16 @@ function FlightBookingConfirmation() {
   };
 
   // Transform Amadeus API booking data to our format
-  const transformBookingData = (apiData) => {
+  const transformBookingData = (apiData, config) => {
     // Check if it's already in our format (has flight.price)
     if (apiData.flight?.price) return apiData;
 
     // Transform from data.js format to UI format
     const basePrice = apiData.payment?.amount || 0;
-    const platformFee = basePrice * 0.10; // Mock calculation
-    const countryTax = basePrice * 0.05;
-    const totalTaxes = platformFee + countryTax;
+    // Use admin price settings instead of hardcoded values
+    const fixedFee = config?.flight_taxes_fees || 0;
+    const percentageFee = basePrice * ((config?.flight_taxes_fees_percentage || 0) / 100);
+    const totalTaxes = fixedFee + percentageFee;
 
     return {
       bookingId: apiData.bookingId,
@@ -175,8 +178,8 @@ function FlightBookingConfirmation() {
         arrivalAirport: `${apiData.flight.arrivalCity} Airport`,
         price: {
           base: basePrice,
-          platformFee: platformFee,
-          countryTax: countryTax,
+          fixedFee: fixedFee,
+          percentageFee: percentageFee,
           totalTaxes: totalTaxes,
           total: basePrice + totalTaxes,
           currency: apiData.payment?.currency || "USD"
@@ -195,7 +198,7 @@ function FlightBookingConfirmation() {
   };
 
   // Transform flight data from search page to booking format
-  const transformFlightData = (flightData) => {
+  const transformFlightData = (flightData, config) => {
     if (!flightData) return null;
 
     // Use the same price displayed on the search results page (price.amount = Amadeus grandTotal)
@@ -209,28 +212,10 @@ function FlightBookingConfirmation() {
       0
     );
 
-    // Country-specific tax rates
-    const countryTaxRates = {
-      'US': 0.075,  // 7.5%
-      'GB': 0.20,   // 20% VAT
-      'FR': 0.20,   // 20% VAT
-      'DE': 0.19,   // 19% VAT
-      'IN': 0.18,   // 18% GST
-      // Add more countries as needed
-    };
-
-    // Get country code from departure airport or default to standard rate
-    const departureCountry = flightData.departure?.country || 'IN';
-    const taxRate = countryTaxRates[departureCountry] || 0.05;
-
-    // Calculate platform fee (10% of base price)
-    const platformFee = basePrice * 0.10;
-
-    // Calculate country tax
-    const countryTax = basePrice * taxRate;
-
-    // Total taxes = platform fee + country tax
-    const totalTaxes = countryTax + platformFee;
+    // Use admin-configured price settings
+    const fixedFee = config?.flight_taxes_fees || 0;
+    const percentageFee = basePrice * ((config?.flight_taxes_fees_percentage || 0) / 100);
+    const totalTaxes = fixedFee + percentageFee;
 
       return {
         bookingId: bookingId || `BOOK-${Date.now()}`,
@@ -260,8 +245,8 @@ function FlightBookingConfirmation() {
           stopDetails: flightData.stopDetails || [],
           basePrice: basePrice,
           tax: totalTaxes,
-          platformFee: platformFee,
-          countryTax: countryTax,
+          fixedFee: fixedFee,
+          percentageFee: percentageFee,
           totalPrice: basePrice + totalTaxes,
           departureAirport: flightData.departure.terminal
             ? `${flightData.departure.airport} Terminal ${flightData.departure.terminal}`
@@ -297,8 +282,8 @@ function FlightBookingConfirmation() {
           })),
         price: {
           base: basePrice,
-          platformFee: platformFee,
-          countryTax: countryTax,
+          fixedFee: fixedFee,
+          percentageFee: percentageFee,
           totalTaxes: totalTaxes,
           total: basePrice + totalTaxes, // Base fare + taxes
           currency: flightData.price?.currency || flightData.originalOffer?.price?.currency || 'USD'
@@ -357,16 +342,28 @@ function FlightBookingConfirmation() {
         let bookingData;
 
         // Check if flight data was passed from search page
+        // Fetch admin price settings first
+        let config = priceConfig;
+        if (!config) {
+          try {
+            config = await PricingService.getPriceConfig('all');
+            setPriceConfig(config);
+          } catch (err) {
+            console.warn('Could not fetch price config, using defaults');
+            config = PricingService.getDefaultSettings('all');
+          }
+        }
+
         if (routerLocation.state?.flightData) {
           console.log("Using flight data from search page", routerLocation.state.flightData);
-          bookingData = transformFlightData(routerLocation.state.flightData);
+          bookingData = transformFlightData(routerLocation.state.flightData, config);
         } else {
           // Fallback: Use mock data when no search-page state is available
           const targetId = bookingId || "TEST_BOOKING_123";
           console.log("No state data, using mock data for ID:", targetId);
           const mockData = fetchBookingFromMockData(targetId);
           if (mockData) {
-            bookingData = transformBookingData(mockData);
+            bookingData = transformBookingData(mockData, config);
           } else {
             setError("No flight data available. Please return to the search page and try again.");
             return;
@@ -432,9 +429,7 @@ function FlightBookingConfirmation() {
     // Get base fare from flight data
     const baseFare = parseFloat(bookingData.flight.price.base) || 0;
 
-    // Get taxes and platform fee
-    const countryTax = bookingData.flight.price.countryTax || 0;
-    const platformFee = bookingData.flight.price.platformFee || 0;
+    // Get taxes from price data (set by admin settings)
     const totalTaxes = bookingData.flight.price.totalTaxes || 0;
 
     // Calculate add-ons total
@@ -454,8 +449,6 @@ function FlightBookingConfirmation() {
 
     setCalculatedFare({
       baseFare: totalBaseFare,
-      countryTax: countryTax * effectivePassengerCount,
-      platformFee: platformFee * effectivePassengerCount,
       totalTax: totalTax,
       addonsTotal,
       vipServiceFee,

@@ -376,6 +376,11 @@
       padding: 8px;
     }
 
+    /* Mobile profile icon - hidden on desktop */
+    .mobile-profile-icon {
+      display: none;
+    }
+
     .mobile-menu-button svg {
       width: 24px;
       height: 24px;
@@ -523,6 +528,36 @@
 
       .profile-container {
         display: none;
+      }
+
+      .mobile-profile-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: rgba(5, 91, 117, 0.1);
+        border: none;
+        cursor: pointer;
+        color: #055B75;
+        margin-right: 8px;
+        transition: background 0.2s ease, color 0.2s ease;
+      }
+
+      .mobile-profile-icon:hover {
+        background: rgba(5, 91, 117, 0.2);
+      }
+
+      .navbar.scrolled .mobile-profile-icon,
+      .navbar.transparent .mobile-profile-icon {
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+      }
+
+      .navbar.scrolled .mobile-profile-icon:hover,
+      .navbar.transparent .mobile-profile-icon:hover {
+        background: rgba(255, 255, 255, 0.2);
       }
 
       .mobile-menu-button {
