@@ -864,7 +864,7 @@ export default function TravelDashboard() {
 
             {/* PNR, Cabin Class, Baggage, Fare Type */}
             {isFlightBooking && (booking.pnr || booking.cabinClass || booking.baggage || booking.brandedFareLabel) && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                 {booking.pnr && (
                   <div className="bg-white rounded-lg p-3 border border-blue-200">
                     <p className="text-xs text-blue-600 font-semibold mb-1">PNR</p>
@@ -1447,7 +1447,7 @@ export default function TravelDashboard() {
       {/* Tab Navigation - Underline Style */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-8 overflow-x-auto hide-scrollbar">
+          <div className="flex gap-4 sm:gap-8 overflow-x-auto hide-scrollbar">
             {["Upcoming", "Past", "Cancelled", "Failed"].map((tab) => (
               <button
                 key={tab}
@@ -1468,12 +1468,19 @@ export default function TravelDashboard() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex gap-6">
+            {/* Mobile sidebar backdrop */}
+            {isMobileMenuOpen && (
+              <div 
+                className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+                onClick={toggleMobileMenu}
+              />
+            )}
             {/* Sidebar */}
             <aside className={`
-            fixed lg:relative inset-y-0 left-0 z-40 w-72 bg-white lg:bg-transparent
+            fixed lg:relative inset-y-0 left-0 z-40 w-[85vw] max-w-72 bg-white lg:bg-transparent
             transform transition-transform duration-300 lg:transform-none
             ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-            lg:block flex-shrink-0
+            lg:block flex-shrink-0 shadow-xl lg:shadow-none
           `}>
               <div className="h-full lg:h-auto overflow-y-auto lg:overflow-visible p-4 lg:p-0">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:sticky lg:top-36">
@@ -1554,6 +1561,17 @@ export default function TravelDashboard() {
 
             {/* Main Content */}
             <main className="flex-1 min-w-0">
+              {/* Mobile sidebar toggle button */}
+              <button
+                onClick={toggleMobileMenu}
+                className="lg:hidden mb-4 flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                Categories
+              </button>
+
               {activeSidebarItem === "Requests" ? (
                 /* Requests Section */
                 isAuthenticated ? (

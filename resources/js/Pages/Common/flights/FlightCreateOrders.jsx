@@ -406,7 +406,7 @@ function FlightCreateOrders() {
         {/* Progress Bar */}
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 overflow-x-auto">
           <div className={`transition-opacity duration-500 ${pageLoaded ? 'opacity-100' : 'opacity-0'}`}>
-            <div className="flex items-center justify-between max-w-3xl mx-auto min-w-[500px]">
+            <div className="flex items-center justify-between max-w-3xl mx-auto">
               {[
                 { icon: <Check />, label: "Flight Selection", completed: true },
                 { icon: <Check />, label: "Passenger Details", completed: true },

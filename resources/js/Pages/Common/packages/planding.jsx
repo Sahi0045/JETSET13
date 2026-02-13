@@ -759,21 +759,21 @@ const TravelPackages = () => {
       {/* Stats Section */}
       <section className="py-8 bg-[#B9D0DC]">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
             <div className="text-center">
-              <div className="text-4xl font-bold text-[#055B75] mb-2">{packagesData.stats.destinations}</div>
+              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#055B75] mb-2">{packagesData.stats.destinations}</div>
               <div className="text-[#055B75] font-medium">Destinations</div>
             </div>
             <div className="text-center">
-              <div className="text-4xl font-bold text-[#055B75] mb-2">{packagesData.stats.happyTravelers}</div>
+              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#055B75] mb-2">{packagesData.stats.happyTravelers}</div>
               <div className="text-[#055B75] font-medium">Happy Travelers</div>
             </div>
             <div className="text-center">
-              <div className="text-4xl font-bold text-[#055B75] mb-2">{packagesData.stats.packages}</div>
+              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#055B75] mb-2">{packagesData.stats.packages}</div>
               <div className="text-[#055B75] font-medium">Travel Packages</div>
             </div>
             <div className="text-center">
-              <div className="text-4xl font-bold text-[#055B75] mb-2">{packagesData.stats.support}</div>
+              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#055B75] mb-2">{packagesData.stats.support}</div>
               <div className="text-[#055B75] font-medium">Support</div>
             </div>
           </div>
@@ -1040,7 +1040,7 @@ const TravelPackages = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <p className="text-[#055B75] mb-2 uppercase tracking-wider font-medium">{packagesData.kashmir.title}</p>
-            <h2 className="text-4xl font-bold text-[#055B75] mb-4">{packagesData.kashmir.subtitle}</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-[#055B75] mb-4">{packagesData.kashmir.subtitle}</h2>
             <div className="w-20 h-1 bg-[#055B75] mx-auto"></div>
           </div>
 
@@ -1173,7 +1173,7 @@ const TravelPackages = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <p className="text-[#055B75] mb-2 uppercase tracking-wider font-medium">{packagesData.northEast.title}</p>
-            <h2 className="text-4xl font-bold text-[#055B75] mb-4">{packagesData.northEast.subtitle}</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-[#055B75] mb-4">{packagesData.northEast.subtitle}</h2>
             <div className="w-20 h-1 bg-[#055B75] mx-auto"></div>
           </div>
 

@@ -503,7 +503,7 @@ const HotelDetailsPage = () => {
                             {/* Price */}
                             <div className="text-center mb-6 pb-6 border-b">
                                 <div className="text-gray-500 mb-1">Starting from</div>
-                                <div className="text-4xl font-bold text-gray-900">
+                                <div className="text-3xl md:text-4xl font-bold text-gray-900">
                                     <Price amount={selectedRoom?.price || hotel.price} />
                                 </div>
                                 <div className="text-gray-500">per night</div>

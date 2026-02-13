@@ -68,7 +68,7 @@ const TrustIndicators = () => {
         </div>
 
         <div className="mt-6 md:mt-8 flex justify-center">
-          <div className="grid grid-cols-3 gap-4 md:flex md:gap-8 justify-center items-center">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 md:flex md:gap-8 justify-center items-center">
             <img src="/images/logos/forbes.svg" alt="Forbes" className="h-8 md:h-10 opacity-90" />
             <img src="/images/logos/travelandleisure.svg" alt="Travel+Leisure" className="h-8 md:h-10 opacity-90" />
             <img src="/images/logos/cruisecritic.svg" alt="Cruise Critic" className="h-8 md:h-10 opacity-90" />

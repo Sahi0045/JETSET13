@@ -167,7 +167,7 @@ function BookingConfirmation() {
                 <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
                   <div className="flex items-center justify-between">
                     <div className="text-center">
-                      <p className="text-3xl font-bold">{bookingData.origin || bookingData.flightData?.origin || 'DEP'}</p>
+                      <p className="text-xl sm:text-3xl font-bold">{bookingData.origin || bookingData.flightData?.origin || 'DEP'}</p>
                       <p className="text-blue-200 text-sm">{bookingData.originCity || 'Departure'}</p>
                       {(bookingData.departureTime || bookingData.flightData?.departureTime) && (
                         <p className="text-white font-semibold mt-1">{bookingData.departureTime || bookingData.flightData?.departureTime}</p>
@@ -185,7 +185,7 @@ function BookingConfirmation() {
                       )}
                     </div>
                     <div className="text-center">
-                      <p className="text-3xl font-bold">{bookingData.destination || bookingData.flightData?.destination || 'ARR'}</p>
+                      <p className="text-xl sm:text-3xl font-bold">{bookingData.destination || bookingData.flightData?.destination || 'ARR'}</p>
                       <p className="text-blue-200 text-sm">{bookingData.destinationCity || 'Arrival'}</p>
                       {(bookingData.arrivalTime || bookingData.flightData?.arrivalTime) && (
                         <p className="text-white font-semibold mt-1">{bookingData.arrivalTime || bookingData.flightData?.arrivalTime}</p>
@@ -229,7 +229,7 @@ function BookingConfirmation() {
                 Travel Details
               </h3>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 {/* Travel Date */}
                 {getTravelDate() && (
                   <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">

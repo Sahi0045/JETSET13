@@ -199,17 +199,23 @@ export default function Signup() {
     return (
         <div>
             <div className="login-container">
-                <div className="login-card">
+                <div className="login-wrapper">
                     {/* Image Section */}
                     <div
-                        className="login-image"
+                        className="login-image-section"
                         style={{
                             backgroundImage: `url('/images/Rectangle 1434 (1).png')`,
                         }}
-                    ></div>
+                    >
+                        <div className="image-overlay">
+                            <h2 className="image-title">Join JetSet</h2>
+                            <p className="image-subtitle">Create an account to start booking your trips</p>
+                        </div>
+                    </div>
 
                     {/* Signup Form Section */}
-                    <div className="login-content">
+                    <div className="login-form-section">
+                      <div className="login-form-container">
                         <h2 className="login-title">Sign Up</h2>
                         <form className="login-form" onSubmit={submit}>
                             <div className="form-group">
@@ -323,6 +329,7 @@ export default function Signup() {
                         <p className="login-footer">
                             By proceeding, you agree to our <Link to="/privacy" className="text-link">Privacy Policy</Link> and <Link to="/terms" className="text-link">Terms of Service</Link>.
                         </p>
+                      </div>
                     </div>
                 </div>
             </div>

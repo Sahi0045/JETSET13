@@ -177,8 +177,21 @@ const Navbar = ({ forceScrolled }) => {
             </div>
           </div>
         ) : isAuthenticated ? (
-          <div className="profile-container">
+          <>
+            {/* Mobile profile icon - visible only on small screens */}
             <button
+              className="mobile-profile-icon"
+              onClick={() => navigate('/my-trips')}
+              title="My Profile"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </button>
+            {/* Desktop profile dropdown */}
+            <div className="profile-container">
+              <button
               className="profile-button"
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             >
@@ -241,10 +254,26 @@ const Navbar = ({ forceScrolled }) => {
               </div>
             )}
           </div>
+          </>
         ) : (
-          <button className="login-button" onClick={handleLogin}>
-            Login/Signup
-          </button>
+          <>
+            {/* Mobile login icon - visible only on small screens */}
+            <button
+              className="mobile-profile-icon"
+              onClick={handleLogin}
+              title="Login"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                <polyline points="10 17 15 12 10 7"></polyline>
+                <line x1="15" y1="12" x2="3" y2="12"></line>
+              </svg>
+            </button>
+            {/* Desktop login button */}
+            <button className="login-button" onClick={handleLogin}>
+              Login/Signup
+            </button>
+          </>
         )}
 
         {/* Mobile menu button */}

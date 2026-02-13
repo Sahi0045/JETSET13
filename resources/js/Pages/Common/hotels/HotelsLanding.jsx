@@ -413,7 +413,7 @@ const HotelsLanding = () => {
                     <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-4">
                         <div className="max-w-2xl">
                             <span className="text-[#65B3CF] font-semibold tracking-wider text-sm uppercase mb-2 block">Luxury Stays</span>
-                            <h2 className="text-4xl font-bold text-[#055B75] mb-4">
+                            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#055B75] mb-4">
                                 {loaded && city ? `Featured Hotels in ${city}` : 'Featured Hotels'}
                             </h2>
                             <p className="text-gray-600 text-lg">Discover our handpicked collection of the world's most stunning luxury hotels and resorts.</p>
