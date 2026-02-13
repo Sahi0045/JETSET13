@@ -267,6 +267,36 @@ function FlightCreateOrders() {
         };
 
         console.log('📝 Saving completed flight booking:', completedFlightBooking);
+        // Store as array so previous bookings are not overwritten
+        let existingBookings = [];
+        try {
+          const raw = localStorage.getItem('completedFlightBookings');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            existingBookings = Array.isArray(parsed) ? parsed : [parsed];
+          } else {
+            // Migrate legacy single-booking key if it exists
+            const legacy = localStorage.getItem('completedFlightBooking');
+            if (legacy) {
+              const legacyParsed = JSON.parse(legacy);
+              existingBookings = Array.isArray(legacyParsed) ? legacyParsed : [legacyParsed];
+            }
+          }
+        } catch (e) { /* ignore parse errors */ }
+        // Avoid duplicates by booking reference
+        const isDuplicate = existingBookings.some(b =>
+          b.bookingReference === completedFlightBooking.bookingReference ||
+          b.pnr === completedFlightBooking.pnr
+        );
+        if (!isDuplicate) {
+          existingBookings.push(completedFlightBooking);
+        }
+        // Keep last 50 bookings max to avoid localStorage bloat
+        if (existingBookings.length > 50) {
+          existingBookings = existingBookings.slice(-50);
+        }
+        localStorage.setItem('completedFlightBookings', JSON.stringify(existingBookings));
+        // Also keep legacy key for backward compat (latest booking)
         localStorage.setItem('completedFlightBooking', JSON.stringify(completedFlightBooking));
 
         // Navigate to booking confirmation page after a delay

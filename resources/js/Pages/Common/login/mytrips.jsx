@@ -124,7 +124,21 @@ export default function TravelDashboard() {
     // First, try to load bookings from database
     try {
       console.log('🔍 Fetching bookings from database...')
-      const response = await fetch(getApiUrl('flights/bookings'), {
+      // Get user ID from localStorage so backend can filter by user
+      let currentUserId = ''
+      try {
+        const storedUser = localStorage.getItem('user')
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser)
+          currentUserId = parsed.id || parsed.uid || ''
+        }
+      } catch (e) { /* ignore parse errors */ }
+
+      const bookingsUrl = currentUserId
+        ? getApiUrl(`flights/bookings?userId=${encodeURIComponent(currentUserId)}`)
+        : getApiUrl('flights/bookings')
+
+      const response = await fetch(bookingsUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -150,25 +164,29 @@ export default function TravelDashboard() {
     }
 
     // Load flight bookings from localStorage (as fallback/supplement)
-    const flightBooking = localStorage.getItem('completedFlightBooking')
-    console.log('Flight booking from localStorage:', flightBooking ? 'Found' : 'Not found')
+    // Support both array format (new) and single object format (legacy)
+    const flightBookingRaw = localStorage.getItem('completedFlightBookings') || localStorage.getItem('completedFlightBooking')
+    console.log('Flight booking from localStorage:', flightBookingRaw ? 'Found' : 'Not found')
 
-    if (flightBooking) {
+    if (flightBookingRaw) {
       try {
-        const booking = JSON.parse(flightBooking)
-        console.log('Parsed flight booking:', booking)
-        // Check if this booking already exists in database bookings
-        const exists = allBookings.some(b =>
-          b.bookingReference === booking.bookingReference ||
-          b.pnr === booking.pnr
-        )
-        if (!exists) {
-          allBookings.push({
-            ...booking,
-            type: 'flight',
-            bookingDate: booking.orderCreatedAt || new Date().toISOString(),
-            source: 'localStorage'
-          })
+        const parsed = JSON.parse(flightBookingRaw)
+        const flightBookingsArr = Array.isArray(parsed) ? parsed : [parsed]
+        console.log(`Parsed ${flightBookingsArr.length} flight booking(s) from localStorage`)
+        for (const booking of flightBookingsArr) {
+          // Check if this booking already exists in database bookings
+          const exists = allBookings.some(b =>
+            b.bookingReference === booking.bookingReference ||
+            b.pnr === booking.pnr
+          )
+          if (!exists) {
+            allBookings.push({
+              ...booking,
+              type: 'flight',
+              bookingDate: booking.orderCreatedAt || new Date().toISOString(),
+              source: 'localStorage'
+            })
+          }
         }
       } catch (error) {
         console.error('Error parsing flight booking:', error)
