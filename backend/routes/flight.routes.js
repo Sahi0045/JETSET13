@@ -9,12 +9,35 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
+// Log Supabase configuration status on module load
+if (supabase) {
+  console.log('✅ Supabase client initialized successfully');
+  console.log('   URL:', supabaseUrl);
+  console.log('   Key source:', supabaseKey ? (process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SUPABASE_SERVICE_ROLE_KEY' : 
+                                                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'NEXT_PUBLIC_SUPABASE_ANON_KEY' : 
+                                                 'SUPABASE_ANON_KEY') : 'None');
+} else {
+  console.error('❌ CRITICAL: Supabase client NOT initialized! Database saves will fail!');
+  console.error('   Available env vars:');
+  console.error('   - SUPABASE_URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
+  console.error('   - NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'NOT SET');
+  console.error('   - SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SET' : 'NOT SET');
+  console.error('   - NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
+  console.error('   - SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
+}
+
 // Helper function to save booking to database
 async function saveBookingToDatabase(bookingData) {
   if (!supabase) {
-    console.log('⚠️ Supabase not configured, skipping database save');
+    console.error('❌ CRITICAL: Supabase not configured! Bookings will NOT be saved to database!');
+    console.error('   Please check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables');
     return null;
   }
+
+  console.log('💾 Attempting to save booking to database...');
+  console.log('   User ID:', bookingData.userId || 'NULL (GUEST USER)');
+  console.log('   Booking Reference:', bookingData.bookingReference);
+  console.log('   PNR:', bookingData.pnr);
 
   try {
     const { data, error } = await supabase
@@ -74,14 +97,23 @@ async function saveBookingToDatabase(bookingData) {
       .single();
 
     if (error) {
-      console.error('❌ Error saving booking to database:', error);
+      console.error('❌ ERROR saving booking to database:');
+      console.error('   Error Code:', error.code);
+      console.error('   Error Message:', error.message);
+      console.error('   Error Details:', JSON.stringify(error, null, 2));
+      console.error('   User ID that was attempted:', bookingData.userId || 'null');
       return null;
     }
 
-    console.log('✅ Booking saved to database:', data.id);
+    console.log('✅ SUCCESS! Booking saved to database:');
+    console.log('   Database ID:', data.id);
+    console.log('   User ID:', data.user_id);
+    console.log('   Booking Reference:', data.booking_reference);
     return data;
   } catch (err) {
-    console.error('❌ Database save error:', err);
+    console.error('❌ EXCEPTION in database save:');
+    console.error('   Error:', err.message);
+    console.error('   Stack:', err.stack);
     return null;
   }
 }
