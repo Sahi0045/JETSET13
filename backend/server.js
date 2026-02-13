@@ -56,13 +56,10 @@ app.use((req, res, next) => {
 });
 
 // CORS configuration
-const corsOrigins = (process.env.CORS_ORIGIN || process.env.ALLOWED_ORIGIN || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const rawCorsOrigin = (process.env.CORS_ORIGIN || process.env.ALLOWED_ORIGIN || '').trim();
 
 const corsOptions = {
-  origin: corsOrigins.length > 0 ? corsOrigins : ['https://www.jetsetterss.com'],
+  origin: rawCorsOrigin === '*' ? true : (rawCorsOrigin ? rawCorsOrigin.split(',').map(o => o.trim()).filter(Boolean) : ['https://www.jetsetterss.com']),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
