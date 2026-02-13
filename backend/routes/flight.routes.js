@@ -487,7 +487,7 @@ router.post('/order', async (req, res) => {
     console.log('📋 Flight order creation request received');
     console.log('Request body keys:', Object.keys(req.body));
 
-    const { flightOffer, flightOffers, travelers, payments, contactInfo, totalAmount, transactionId, amount, fareBreakdown, passengerDetails } = req.body;
+    const { flightOffer, flightOffers, travelers, payments, contactInfo, totalAmount, transactionId, amount, fareBreakdown, passengerDetails, userId } = req.body;
 
     // Accept both flightOffer (singular) and flightOffers (plural)
     const offers = flightOffers || (flightOffer ? [flightOffer] : null);
@@ -501,7 +501,8 @@ router.post('/order', async (req, res) => {
       hasTravelers: !!travelers,
       travelersListCount: travelersList.length,
       hasContactInfo: !!contactInfo,
-      totalAmount: totalAmount || amount
+      totalAmount: totalAmount || amount,
+      userId: userId || 'Not provided'
     });
 
     if (!offers) {
@@ -565,6 +566,7 @@ router.post('/order', async (req, res) => {
 
         // Save booking to database with all Amadeus fields
         const dbBooking = await saveBookingToDatabase({
+          userId: userId || null,
           bookingReference: bookingReference,
           pnr: mockPNR,
           orderId: orderId,
@@ -760,6 +762,7 @@ router.post('/order', async (req, res) => {
       console.log('🆘 Creating emergency fallback booking with mock PNR');
 
       const dbBooking = await saveBookingToDatabase({
+        userId: userId || null,
         bookingReference: bookingReference,
         pnr: mockPNR,
         orderId: orderId,
@@ -838,6 +841,7 @@ router.post('/order', async (req, res) => {
 
     // Save real Amadeus booking to database with all fields
     const dbBooking = await saveBookingToDatabase({
+      userId: userId || null,
       bookingReference: orderIdValue,
       pnr: pnrValue,
       orderId: orderIdValue,
