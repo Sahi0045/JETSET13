@@ -989,46 +989,66 @@ router.post('/order', async (req, res) => {
   }
 });
 
-// Cancel a flight order
+// Cancel a flight order — delegates to the orchestrated cancel-booking
+// handler in payment.routes.js via internal request, which properly handles
+// Amadeus cancellation + ARC Pay refund/void + DB update
 router.delete('/order/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
     console.log(`🗑️ Cancel flight order request: ${orderId}`);
 
-    // Try real Amadeus cancellation first
-    try {
-      const result = await AmadeusService.cancelFlightOrder(orderId);
-      if (result.success) {
-        // Also update database status if available
-        if (supabase) {
-          await supabase
-            .from('bookings')
-            .update({ status: 'cancelled', payment_status: 'refunded' })
-            .or(`booking_reference.eq.${orderId},booking_details->>` + `order_id.eq.${orderId}`);
-        }
+    // Use the same orchestrated cancel flow as ArcPayService.cancelBooking()
+    // This ensures ARC Pay refund/void is properly called
+    const paymentApiUrl = `${req.protocol}://${req.get('host')}/api/payments?action=cancel-booking`;
 
+    try {
+      const cancelResponse = await fetch(paymentApiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingReference: orderId,
+          reason: 'Customer cancellation via flight order API'
+        })
+      });
+
+      const cancelResult = await cancelResponse.json();
+
+      if (cancelResult.success) {
         return res.json({
           success: true,
-          message: result.message,
-          mode: result.mode || 'AMADEUS_CANCELLATION'
+          message: cancelResult.message || `Order ${orderId} cancelled`,
+          cancellation: cancelResult.cancellation,
+          booking: cancelResult.booking,
+          mode: 'ORCHESTRATED_CANCELLATION'
         });
       }
-    } catch (cancelError) {
-      console.log('⚠️ Amadeus cancellation failed, updating database status:', cancelError.error || cancelError.message);
+
+      // If the orchestrated cancel returned an error (e.g. booking not found),
+      // pass it through
+      console.warn('⚠️ Orchestrated cancel returned error:', cancelResult.error);
+    } catch (fetchError) {
+      console.warn('⚠️ Could not reach orchestrated cancel endpoint:', fetchError.message);
     }
 
-    // Fallback: just mark as cancelled in our database
+    // Fallback: direct Amadeus cancel + DB update (no ARC Pay refund)
+    console.log('🔄 Falling back to direct cancellation (no ARC Pay refund)...');
+    try {
+      await AmadeusService.cancelFlightOrder(orderId);
+    } catch (e) {
+      console.warn('⚠️ Amadeus cancel failed:', e.message);
+    }
+
     if (supabase) {
       const { error } = await supabase
         .from('bookings')
-        .update({ status: 'cancelled', payment_status: 'refunded' })
+        .update({ status: 'cancelled', payment_status: 'refund_pending' })
         .or(`booking_reference.eq.${orderId},booking_details->>` + `order_id.eq.${orderId}`);
 
       if (!error) {
         return res.json({
           success: true,
-          message: `Order ${orderId} has been cancelled in the system`,
-          mode: 'DATABASE_CANCELLATION'
+          message: `Order ${orderId} has been cancelled (refund pending manual processing)`,
+          mode: 'FALLBACK_CANCELLATION'
         });
       }
     }
@@ -1729,7 +1749,7 @@ router.put('/admin-bookings/:id', async (req, res) => {
   }
 });
 
-// POST cancel booking (admin) — updates status + triggers ARC Pay refund/void
+// POST cancel booking (admin) — cancel via Amadeus + ARC Pay refund/void + DB update
 router.post('/admin-bookings/:id/cancel', async (req, res) => {
   try {
     if (!supabase) {
@@ -1754,12 +1774,57 @@ router.post('/admin-bookings/:id/cancel', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Booking is already cancelled' });
     }
 
-    // Update booking status
+    // Try the orchestrated cancel-booking flow (Amadeus + ARC Pay + DB)
+    const bookingRef = booking.booking_reference || booking.booking_details?.order_id;
+    try {
+      const paymentApiUrl = `${req.protocol}://${req.get('host')}/api/payments?action=cancel-booking`;
+      const cancelResponse = await fetch(paymentApiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingReference: bookingRef,
+          reason: reason
+        })
+      });
+
+      const cancelResult = await cancelResponse.json();
+
+      if (cancelResult.success) {
+        return res.json({
+          success: true,
+          message: `Booking ${bookingRef} cancelled successfully`,
+          data: {
+            bookingId: id,
+            bookingReference: bookingRef,
+            previousStatus: booking.status,
+            newStatus: 'cancelled',
+            reason,
+            cancellation: cancelResult.cancellation
+          }
+        });
+      }
+
+      console.warn('⚠️ Orchestrated cancel returned error for admin cancel:', cancelResult.error);
+    } catch (fetchError) {
+      console.warn('⚠️ Could not reach orchestrated cancel endpoint:', fetchError.message);
+    }
+
+    // Fallback: just update DB (ARC Pay refund will need manual processing)
+    console.log('🔄 Admin cancel fallback: updating DB only (refund pending)');
     const { error: updateError } = await supabase
       .from('bookings')
       .update({
         status: 'cancelled',
         payment_status: booking.payment_status === 'paid' ? 'refund_pending' : 'cancelled',
+        booking_details: {
+          ...booking.booking_details,
+          cancellation: {
+            cancelledAt: new Date().toISOString(),
+            reason,
+            adminCancelled: true,
+            refundPending: booking.payment_status === 'paid'
+          }
+        },
         updated_at: new Date().toISOString()
       })
       .eq('id', id);
@@ -1770,13 +1835,14 @@ router.post('/admin-bookings/:id/cancel', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Booking ${booking.booking_reference} cancelled successfully`,
+      message: `Booking ${bookingRef} cancelled (refund pending manual processing)`,
       data: {
         bookingId: id,
-        bookingReference: booking.booking_reference,
+        bookingReference: bookingRef,
         previousStatus: booking.status,
         newStatus: 'cancelled',
-        reason
+        reason,
+        refundPending: booking.payment_status === 'paid'
       }
     });
   } catch (error) {

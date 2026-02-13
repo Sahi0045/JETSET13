@@ -6,6 +6,7 @@ import { getApiUrl } from '../../../utils/apiHelper'
 import Navbar from '../Navbar'
 import Footer from '../Footer'
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext'
+import ArcPayService from '../../../Services/ArcPayService'
 
 // Empty State Component
 const EmptyState = ({ icon, title, description, actionLabel, onAction }) => (
@@ -40,6 +41,8 @@ export default function TravelDashboard() {
   const [requests, setRequests] = useState([])
   const [isLoadingRequests, setIsLoadingRequests] = useState(false)
   const [isLoadingBookings, setIsLoadingBookings] = useState(false)
+  const [cancellingBookingId, setCancellingBookingId] = useState(null)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(null)
 
   useEffect(() => {
     // Check if user is authenticated
@@ -1009,6 +1012,67 @@ export default function TravelDashboard() {
                 Manage Booking
               </span>
             </button>
+          )}
+          {/* Cancel Booking Button — only for non-cancelled upcoming bookings */}
+          {(booking.status || '').toUpperCase() !== 'CANCELLED' && (booking.status || '').toUpperCase() !== 'FAILED' && (
+            <>
+              {showCancelConfirm === booking.id ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-red-600 font-medium">Cancel this booking?</span>
+                  <button
+                    disabled={cancellingBookingId === booking.id}
+                    onClick={async () => {
+                      const ref = booking.bookingReference || booking.booking_reference || booking.orderId
+                      if (!ref) {
+                        alert('No booking reference found')
+                        setShowCancelConfirm(null)
+                        return
+                      }
+                      setCancellingBookingId(booking.id)
+                      try {
+                        const userStr = localStorage.getItem('user')
+                        const userEmail = userStr ? JSON.parse(userStr).email : null
+                        const result = await ArcPayService.cancelBooking(ref, userEmail, 'Customer request')
+                        if (result.success) {
+                          alert(result.message || 'Booking cancelled successfully' + (result.cancellation?.refundAmount ? `. Refund: $${result.cancellation.refundAmount}` : ''))
+                          // Reload bookings to reflect the cancellation
+                          loadBookings()
+                        } else {
+                          alert(result.error || 'Failed to cancel booking. Please try again.')
+                        }
+                      } catch (err) {
+                        console.error('Cancel error:', err)
+                        alert('An error occurred while cancelling. Please contact support.')
+                      } finally {
+                        setCancellingBookingId(null)
+                        setShowCancelConfirm(null)
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {cancellingBookingId === booking.id ? 'Cancelling...' : 'Yes, Cancel'}
+                  </button>
+                  <button
+                    onClick={() => setShowCancelConfirm(null)}
+                    className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    No
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowCancelConfirm(booking.id)}
+                  className="flex-1 sm:flex-none px-5 py-2.5 border-2 border-red-200 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 hover:border-red-400 transition-all duration-200"
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Cancel Booking
+                  </span>
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
