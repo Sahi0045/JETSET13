@@ -30,6 +30,28 @@ const BookingsList = () => {
     const [actionMessage, setActionMessage] = useState(null);
     // Refund result after cancel
     const [cancelResult, setCancelResult] = useState(null);
+    // Dynamic cancellation fee from price settings
+    const [cancellationFeeConfig, setCancellationFeeConfig] = useState(50.00);
+
+    // Fetch cancellation fee from price settings
+    useEffect(() => {
+        const fetchCancelFee = async () => {
+            try {
+                const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+                const response = await fetch(getApiUrl('admin/price-config/general'), {
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                if (data.success && data.data?.cancellation_fee) {
+                    setCancellationFeeConfig(data.data.cancellation_fee);
+                }
+            } catch (e) {
+                console.warn('Could not fetch cancellation fee config, using default');
+            }
+        };
+        fetchCancelFee();
+    }, []);
 
     const getAuthHeaders = () => {
         const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
@@ -92,25 +114,35 @@ const BookingsList = () => {
             const result = await response.json();
             if (result.success) {
                 const cancellation = result.data?.cancellation || {};
-                const refundAmount = cancellation.refundAmount || result.data?.refundAmount;
+                const refundAmount = cancellation.refundAmount || result.data?.refundAmount || 0;
+                const cancellationFee = cancellation.cancellationFee || result.data?.cancellationFee || 0;
                 const paymentAction = cancellation.paymentAction || result.data?.paymentAction;
-                const refundPending = result.data?.refundPending;
+                const netRefund = result.data?.netRefund || refundAmount;
 
                 // Build detailed success message
                 let message = `Booking ${cancelModal.bookingReference} cancelled successfully.`;
-                if (paymentAction === 'REFUND' && refundAmount) {
-                    message += ` Refund of ${formatCurrency(refundAmount)} has been processed.`;
+                
+                if (paymentAction === 'PARTIAL_REFUND' && refundAmount > 0) {
+                    message += ` Net refund of ${formatCurrency(refundAmount)} processed (${formatCurrency(cancellationFee)} cancellation fee applied).`;
+                } else if (paymentAction === 'FEE_CHARGED' || paymentAction === 'FULL_FEE') {
+                    message += ` Cancellation fee of ${formatCurrency(cancellationFee)} has been charged. No refund issued.`;
+                } else if (paymentAction === 'VOID_AND_FEE') {
+                    message += ` Payment voided and cancellation fee of ${formatCurrency(cancellationFee)} charged.`;
+                } else if (paymentAction === 'REFUND' && refundAmount) {
+                    message += ` Full refund of ${formatCurrency(refundAmount)} has been processed.`;
                 } else if (paymentAction === 'VOID') {
                     message += ` Payment has been voided (reversed).`;
-                } else if (refundPending) {
+                } else if (result.data?.refundPending) {
                     message += ` Refund is pending manual processing.`;
                 }
 
                 setCancelResult({
                     booking: cancelModal,
                     refundAmount,
+                    cancellationFee,
+                    netRefund,
                     paymentAction,
-                    refundPending,
+                    refundPending: result.data?.refundPending,
                     amadeusCancelled: cancellation.amadeusCancelled
                 });
 
@@ -626,13 +658,21 @@ const BookingsList = () => {
                             </div>
                         </div>
 
-                        {/* Refund Info */}
+                        {/* Cancellation Fee Warning */}
                         {cancelModal.paymentStatus === 'paid' && (
                             <div style={{
                                 backgroundColor: '#fef3c7', borderRadius: '8px', padding: '10px 14px',
                                 marginBottom: '16px', border: '1px solid #fbbf24', fontSize: '13px', color: '#92400e'
                             }}>
-                                💰 <strong>Refund will be processed automatically.</strong> The payment of {formatCurrency(cancelModal.totalAmount)} will be refunded via ARC Pay.
+                                💰 <strong>Refund will be processed automatically.</strong> A cancellation fee of {formatCurrency(cancellationFeeConfig)} will be deducted. Net refund: <strong>{formatCurrency(Math.max(0, cancelModal.totalAmount - cancellationFeeConfig))}</strong>
+                            </div>
+                        )}
+                        {cancelModal.paymentStatus === 'pending' && (
+                            <div style={{
+                                backgroundColor: '#fef3c7', borderRadius: '8px', padding: '10px 14px',
+                                marginBottom: '16px', border: '1px solid #fbbf24', fontSize: '13px', color: '#92400e'
+                            }}>
+                                🔄 <strong>Payment will be voided and cancellation fee charged.</strong> Customer will be charged a {formatCurrency(cancellationFeeConfig)} cancellation fee.
                             </div>
                         )}
 
@@ -706,16 +746,55 @@ const BookingsList = () => {
                             backgroundColor: '#f0fdf4', borderRadius: '8px', padding: '16px',
                             marginBottom: '16px', border: '1px solid #bbf7d0'
                         }}>
-                            {cancelResult.paymentAction === 'REFUND' && (
+                            {cancelResult.paymentAction === 'PARTIAL_REFUND' && (
                                 <>
                                     <div style={{ fontSize: '13px', color: '#15803d', fontWeight: '600', marginBottom: '4px' }}>
-                                        💰 Refund Processed
+                                        💰 Net Refund Processed
                                     </div>
                                     <div style={{ fontSize: '24px', fontWeight: '700', color: '#166534' }}>
                                         {formatCurrency(cancelResult.refundAmount)}
                                     </div>
                                     <div style={{ fontSize: '12px', color: '#16a34a', marginTop: '4px' }}>
-                                        Refund has been initiated to the customer's payment method
+                                        Net refund after {formatCurrency(cancelResult.cancellationFee)} cancellation fee
+                                    </div>
+                                </>
+                            )}
+                            {(cancelResult.paymentAction === 'FEE_CHARGED' || cancelResult.paymentAction === 'FULL_FEE') && (
+                                <>
+                                    <div style={{ fontSize: '13px', color: '#d97706', fontWeight: '600', marginBottom: '4px' }}>
+                                        💳 Cancellation Fee Charged
+                                    </div>
+                                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#92400e' }}>
+                                        {formatCurrency(cancelResult.cancellationFee)}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#92400e', marginTop: '4px' }}>
+                                        {cancelResult.paymentAction === 'FULL_FEE' ? 'Full booking amount charged as cancellation fee' : 'Cancellation fee has been processed'}
+                                    </div>
+                                </>
+                            )}
+                            {cancelResult.paymentAction === 'VOID_AND_FEE' && (
+                                <>
+                                    <div style={{ fontSize: '13px', color: '#d97706', fontWeight: '600', marginBottom: '4px' }}>
+                                        🔄 Payment Voided + Fee Charged
+                                    </div>
+                                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#92400e' }}>
+                                        {formatCurrency(cancelResult.cancellationFee)}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#92400e', marginTop: '4px' }}>
+                                        Original payment voided, cancellation fee charged separately
+                                    </div>
+                                </>
+                            )}
+                            {cancelResult.paymentAction === 'REFUND' && (
+                                <>
+                                    <div style={{ fontSize: '13px', color: '#15803d', fontWeight: '600', marginBottom: '4px' }}>
+                                        💰 Full Refund Processed
+                                    </div>
+                                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#166534' }}>
+                                        {formatCurrency(cancelResult.refundAmount)}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#16a34a', marginTop: '4px' }}>
+                                        Full refund has been initiated to the customer's payment method
                                     </div>
                                 </>
                             )}

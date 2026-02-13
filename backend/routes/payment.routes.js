@@ -1384,7 +1384,8 @@ async function handleCancelBookingAction(req, res) {
             amadeusCancelled: false,
             paymentProcessed: false,
             refundAmount: null,
-            paymentAction: null
+            paymentAction: null,
+            cancellationFee: 0
         };
 
         // 2. Cancel flight via Amadeus API
@@ -1430,7 +1431,23 @@ async function handleCancelBookingAction(req, res) {
             }
         }
 
-        // 3. Process refund/void via ARC Pay
+        // 3. Process cancellation fee and refund/void via ARC Pay
+        let cancellationFee = 0;
+        let netRefundAmount = 0;
+        
+        // Get cancellation fee from price settings
+        try {
+            const { data: priceSettings } = await supabase
+                .from('price_settings')
+                .select('settings')
+                .single();
+            
+            cancellationFee = priceSettings?.settings?.cancellation_fee || 50.00;
+        } catch (error) {
+            console.warn('Could not fetch cancellation fee, using default:', error.message);
+            cancellationFee = 50.00;
+        }
+
         if (booking.payment_status === 'paid' || booking.payment_status === 'completed') {
             try {
                 const { data: payment } = await supabase
@@ -1443,32 +1460,91 @@ async function handleCancelBookingAction(req, res) {
 
                 if (payment) {
                     const authConfig = getArcPayAuthConfig();
-                    const refundAmount = parseFloat(payment.amount || booking.total_amount || 0);
+                    const originalAmount = parseFloat(payment.amount || booking.total_amount || 0);
+                    netRefundAmount = Math.max(0, originalAmount - cancellationFee);
 
                     if (payment.payment_status === 'completed') {
-                        const refundTxnId = `refund-cancel-${Date.now()}`;
-                        const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}/transaction/${refundTxnId}`;
-
-                        const refundResponse = await fetch(refundUrl, {
-                            method: 'PUT',
-                            headers: authConfig.headers,
-                            body: JSON.stringify({
-                                apiOperation: 'REFUND',
-                                transaction: {
-                                    amount: refundAmount.toFixed(2),
-                                    currency: payment.currency || 'USD',
-                                    reference: `Cancellation: ${reason}`
+                        // Process cancellation fee as a separate charge (if amount allows)
+                        if (originalAmount > cancellationFee) {
+                            // Charge cancellation fee
+                            const feeTxnId = `cancel-fee-${Date.now()}`;
+                            const feeUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}-fee/transaction/${feeTxnId}`;
+                            
+                            try {
+                                const feeResponse = await fetch(feeUrl, {
+                                    method: 'PUT',
+                                    headers: authConfig.headers,
+                                    body: JSON.stringify({
+                                        apiOperation: 'PAY',
+                                        transaction: {
+                                            amount: cancellationFee.toFixed(2),
+                                            currency: payment.currency || 'USD',
+                                            reference: `Cancellation fee: ${reason}`
+                                        },
+                                        sourceOfFunds: {
+                                            type: 'CARD',
+                                            provided: {
+                                                card: {
+                                                    // Re-use stored payment method from original transaction
+                                                    stored: payment.arc_transaction_id
+                                                }
+                                            }
+                                        }
+                                    })
+                                });
+                                
+                                if (feeResponse.ok) {
+                                    console.log('✅ Cancellation fee charged:', cancellationFee);
+                                } else {
+                                    console.warn('⚠️ Cancellation fee charge failed, will be deducted from refund');
                                 }
-                            })
-                        });
+                            } catch (feeError) {
+                                console.warn('⚠️ Cancellation fee processing error:', feeError.message);
+                            }
+                            
+                            // Process partial refund (original amount - cancellation fee)
+                            if (netRefundAmount > 0) {
+                                const refundTxnId = `refund-cancel-${Date.now()}`;
+                                const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}/transaction/${refundTxnId}`;
 
-                        if (refundResponse.ok) {
+                                const refundResponse = await fetch(refundUrl, {
+                                    method: 'PUT',
+                                    headers: authConfig.headers,
+                                    body: JSON.stringify({
+                                        apiOperation: 'REFUND',
+                                        transaction: {
+                                            amount: netRefundAmount.toFixed(2),
+                                            currency: payment.currency || 'USD',
+                                            reference: `Cancellation refund (after fee): ${reason}`
+                                        }
+                                    })
+                                });
+
+                                if (refundResponse.ok) {
+                                    cancellationResult.paymentProcessed = true;
+                                    cancellationResult.paymentAction = 'PARTIAL_REFUND';
+                                    cancellationResult.refundAmount = netRefundAmount;
+                                    cancellationResult.cancellationFee = cancellationFee;
+                                    await supabase.from('payments').update({ payment_status: 'partially_refunded' }).eq('id', payment.id);
+                                }
+                            } else {
+                                // No refund needed, just cancellation fee
+                                cancellationResult.paymentProcessed = true;
+                                cancellationResult.paymentAction = 'FEE_CHARGED';
+                                cancellationResult.refundAmount = 0;
+                                cancellationResult.cancellationFee = cancellationFee;
+                                await supabase.from('payments').update({ payment_status: 'cancelled_fee_charged' }).eq('id', payment.id);
+                            }
+                        } else {
+                            // Cancellation fee >= original amount, charge full amount as cancellation fee
                             cancellationResult.paymentProcessed = true;
-                            cancellationResult.paymentAction = 'REFUND';
-                            cancellationResult.refundAmount = refundAmount;
-                            await supabase.from('payments').update({ payment_status: 'refunded' }).eq('id', payment.id);
+                            cancellationResult.paymentAction = 'FULL_FEE';
+                            cancellationResult.refundAmount = 0;
+                            cancellationResult.cancellationFee = originalAmount;
+                            await supabase.from('payments').update({ payment_status: 'cancelled_fee_charged' }).eq('id', payment.id);
                         }
                     } else if (payment.payment_status === 'pending' || payment.payment_status === 'authorized') {
+                        // For pending/authorized payments, void the authorization and charge cancellation fee separately
                         const voidTxnId = `void-cancel-${Date.now()}`;
                         const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}/transaction/${voidTxnId}`;
 
@@ -1482,15 +1558,45 @@ async function handleCancelBookingAction(req, res) {
                         });
 
                         if (voidResponse.ok) {
-                            cancellationResult.paymentProcessed = true;
-                            cancellationResult.paymentAction = 'VOID';
-                            cancellationResult.refundAmount = refundAmount;
-                            await supabase.from('payments').update({ payment_status: 'cancelled' }).eq('id', payment.id);
+                            // Now charge cancellation fee as new transaction
+                            const feeTxnId = `cancel-fee-${Date.now()}`;
+                            const feeUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}-fee/transaction/${feeTxnId}`;
+                            
+                            const feeResponse = await fetch(feeUrl, {
+                                method: 'PUT',
+                                headers: authConfig.headers,
+                                body: JSON.stringify({
+                                    apiOperation: 'PAY',
+                                    transaction: {
+                                        amount: cancellationFee.toFixed(2),
+                                        currency: payment.currency || 'USD',
+                                        reference: `Cancellation fee: ${reason}`
+                                    }
+                                })
+                            });
+                            
+                            if (feeResponse.ok) {
+                                cancellationResult.paymentProcessed = true;
+                                cancellationResult.paymentAction = 'VOID_AND_FEE';
+                                cancellationResult.refundAmount = 0;
+                                cancellationResult.cancellationFee = cancellationFee;
+                                await supabase.from('payments').update({ payment_status: 'voided_fee_charged' }).eq('id', payment.id);
+                            } else {
+                                cancellationResult.paymentProcessed = true;
+                                cancellationResult.paymentAction = 'VOID';
+                                cancellationResult.refundAmount = 0;
+                                cancellationResult.cancellationFee = 0; // Fee charge failed
+                                await supabase.from('payments').update({ payment_status: 'cancelled' }).eq('id', payment.id);
+                            }
                         }
                     }
                 }
             } catch (paymentError) {
                 console.warn('⚠️ Payment refund/void error:', paymentError.message);
+                // Fallback: mark as refund pending with cancellation fee noted
+                cancellationResult.refundAmount = 0;
+                cancellationResult.cancellationFee = cancellationFee;
+                cancellationResult.paymentAction = 'MANUAL_PROCESS_REQUIRED';
             }
         }
 
@@ -1499,7 +1605,13 @@ async function handleCancelBookingAction(req, res) {
             .from('bookings')
             .update({
                 status: 'cancelled',
-                payment_status: cancellationResult.paymentProcessed ? 'refunded' : booking.payment_status,
+                payment_status: cancellationResult.paymentProcessed ? 
+                    (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded' : 
+                     cancellationResult.paymentAction === 'FEE_CHARGED' ? 'cancelled_fee_charged' :
+                     cancellationResult.paymentAction === 'FULL_FEE' ? 'cancelled_fee_charged' :
+                     cancellationResult.paymentAction === 'VOID_AND_FEE' ? 'voided_fee_charged' :
+                     cancellationResult.paymentAction === 'VOID' ? 'cancelled' : 'refunded') : 
+                    booking.payment_status,
                 booking_details: {
                     ...booking.booking_details,
                     cancellation: {
@@ -1507,7 +1619,9 @@ async function handleCancelBookingAction(req, res) {
                         reason,
                         amadeusCancelled: cancellationResult.amadeusCancelled,
                         paymentAction: cancellationResult.paymentAction,
-                        refundAmount: cancellationResult.refundAmount
+                        refundAmount: cancellationResult.refundAmount,
+                        cancellationFee: cancellationResult.cancellationFee || 0,
+                        netRefund: (cancellationResult.refundAmount || 0)
                     }
                 }
             })
@@ -1529,6 +1643,8 @@ async function handleCancelBookingAction(req, res) {
                 status: 'cancelled',
                 previousStatus: booking.status,
                 refundAmount: cancellationResult.refundAmount,
+                cancellationFee: cancellationResult.cancellationFee,
+                netRefund: (cancellationResult.refundAmount || 0),
                 paymentAction: cancellationResult.paymentAction
             }
         });

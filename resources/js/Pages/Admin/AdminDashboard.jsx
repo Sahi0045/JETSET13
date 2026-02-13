@@ -453,6 +453,15 @@ const AdminDashboard = () => {
               <div className="action-arrow">→</div>
             </Link>
 
+            <Link to="/admin/price-settings" className="action-card">
+              <div className="action-icon">💰</div>
+              <div className="action-content">
+                <h4>Price Settings</h4>
+                <p>Configure taxes, fees & markup for flights, cruises & hotels</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </Link>
+
             <Link to="/admin/quotes" className="action-card">
               <div className="action-icon">💰</div>
               <div className="action-content">
