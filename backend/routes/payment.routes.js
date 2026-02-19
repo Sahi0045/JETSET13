@@ -476,7 +476,7 @@ async function handleHostedCheckout(req, res) {
                             country: 'USA',
                             date: new Date().toISOString().split('T')[0],
                             travelAgentCode: travelAgentCode,
-                            travelAgentName: travelAgentName.toUpperCase().replace(/[^A-Z0-9\s]/g, '').substring(0, 25)
+                            travelAgentName: travelAgentName.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 25)
                         },
                         ticketNumber: ticketNumber,
                         totalFare: parseFloat(amount).toFixed(2),
