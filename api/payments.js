@@ -1965,20 +1965,22 @@ async function handleHostedCheckout(req, res) {
         // Note: classOfService is NOT supported by the MPGS API (returns UNSUPPORTED error)
         // ARC certification requires it, but the gateway API does not accept it at leg level
         
-        // Helper to extract departure time in HHmm format (MPGS required format, no colon)
+        // Helper to extract departure time — try ISO time format 'HH:mm:ss'
         const extractDepartureTime = (segment) => {
             try {
                 const dateStr = segment?.departure?.at;
                 if (dateStr && dateStr.includes('T')) {
                     const timePart = dateStr.split('T')[1]; // e.g. "14:30:00"
-                    const [hours, minutes] = timePart.split(':');
+                    const [hours, minutes, seconds] = timePart.split(':');
                     const hh = String(hours).padStart(2, '0');
                     const mm = String(minutes || '00').padStart(2, '0');
-                    // Avoid 0000 — use 1200 as safe fallback if midnight
-                    return (hh === '00' && mm === '00') ? '1200' : `${hh}${mm}`;
+                    const ss = String((seconds || '00').split(/[^0-9]/)[0]).padStart(2, '0');
+                    // Avoid exact midnight — shift to 00:01:00
+                    if (hh === '00' && mm === '00' && ss === '00') return '00:01:00';
+                    return `${hh}:${mm}:${ss}`;
                 }
             } catch (e) { /* fallback */ }
-            return '1200'; // Safe default (noon)
+            return '12:00:00'; // Safe default (noon)
         };
 
         const legArray = segments.length > 0
@@ -1994,7 +1996,7 @@ async function handleHostedCheckout(req, res) {
             carrierCode: 'XD',
             departureAirport: (flight?.origin || bookingData?.origin || 'XXX').substring(0, 3),
             departureDate: new Date().toISOString().split('T')[0],
-            departureTime: '1200',
+            departureTime: '12:00:00',
             destinationAirport: (flight?.destination || bookingData?.destination || 'XXX').substring(0, 3),
             flightNumber: '0001'
           }];
