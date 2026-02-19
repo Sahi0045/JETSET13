@@ -426,15 +426,34 @@ async function handleHostedCheckout(req, res) {
                         lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
                     }];
 
-                // Build minimal leg array — only fields accepted by ARC Pay API
+                // Build leg array with all ARC certification required fields
+                // Note: classOfService is NOT supported by the MPGS API (returns UNSUPPORTED error)
+                // ARC certification requires it, but the gateway API does not accept it at leg level
                 const origin = flight?.origin || bookingData?.origin || 'XXX';
                 const destination = flight?.destination || bookingData?.destination || 'XXX';
+
+                // Helper to extract departure time in HHmm format (MPGS required format, no colon)
+                const extractDepartureTime = (segment) => {
+                    try {
+                        const dateStr = segment?.departure?.at;
+                        if (dateStr && dateStr.includes('T')) {
+                            const timePart = dateStr.split('T')[1]; // e.g. "14:30:00"
+                            const [hours, minutes] = timePart.split(':');
+                            const hh = String(hours).padStart(2, '0');
+                            const mm = String(minutes || '00').padStart(2, '0');
+                            // Avoid 0000 — use 1200 as safe fallback if midnight
+                            return (hh === '00' && mm === '00') ? '1200' : `${hh}${mm}`;
+                        }
+                    } catch (e) { /* fallback */ }
+                    return '1200'; // Safe default (noon)
+                };
 
                 const legArray = segments.length > 0
                     ? segments.map((segment, index) => ({
                         carrierCode: 'XD',
                         departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3),
                         departureDate: (segment?.departure?.at || new Date().toISOString()).split('T')[0],
+                        departureTime: extractDepartureTime(segment),
                         destinationAirport: (segment?.arrival?.iataCode || destination).substring(0, 3),
                         flightNumber: String(segment?.number || segment?.flightNumber || index + 1).padStart(4, '0').substring(0, 6)
                     }))
@@ -442,6 +461,7 @@ async function handleHostedCheckout(req, res) {
                         carrierCode: 'XD',
                         departureAirport: origin.substring(0, 3),
                         departureDate: new Date().toISOString().split('T')[0],
+                        departureTime: '1200',
                         destinationAirport: destination.substring(0, 3),
                         flightNumber: '0001'
                     }];
@@ -451,6 +471,7 @@ async function handleHostedCheckout(req, res) {
 
                 requestBody.airline = {
                     bookingReference: bookingRef,
+                    documentType: 'PASSENGER_TICKET',
                     itinerary: { leg: legArray, numberInParty: String(passengerList.length) },
                     passenger: passengerList,
                     ticket: {
