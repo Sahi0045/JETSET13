@@ -2011,7 +2011,7 @@ async function handleHostedCheckout(req, res) {
         // Build airline object with ALL ARC Pay certification required fields
         requestBody.airline = {
           bookingReference: bookingRef,
-          documentType: 'MCO', // MCO recommended per ARC Pay certification email
+          documentType: 'TICKET',
           itinerary: {
             leg: legArray,
             numberInParty: String(passengerList.length)

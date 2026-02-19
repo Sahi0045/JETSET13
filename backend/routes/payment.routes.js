@@ -479,7 +479,7 @@ async function handleHostedCheckout(req, res) {
 
                 requestBody.airline = {
                     bookingReference: bookingRef,
-                    documentType: 'MCO',
+                    documentType: 'TICKET',
                     itinerary: { leg: legArray, numberInParty: String(passengerList.length) },
                     passenger: passengerList,
                     ticket: {
