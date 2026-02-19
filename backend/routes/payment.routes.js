@@ -351,14 +351,11 @@ async function handleHostedCheckout(req, res) {
         const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
         let arcBaseUrl = ARC_PAY_CONFIG.BASE_URL;
 
-        // Upgrade to v100 if using v77
-        if (arcBaseUrl && arcBaseUrl.includes('version/77')) {
-            arcBaseUrl = arcBaseUrl.replace('version/77', 'version/100');
-        }
+        // Use configured API version (v77) — do NOT upgrade, merchant is configured for v77
         if (arcBaseUrl && arcBaseUrl.includes('/merchant/')) {
             arcBaseUrl = arcBaseUrl.split('/merchant/')[0];
         }
-        arcBaseUrl = arcBaseUrl || 'https://api.arcpay.travel/api/rest/version/100';
+        arcBaseUrl = arcBaseUrl || 'https://api.arcpay.travel/api/rest/version/77';
 
         const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
         const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
