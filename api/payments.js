@@ -1934,27 +1934,22 @@ async function handleHostedCheckout(req, res) {
       // Will re-enable after basic payment works
     };
 
-    // ARC Pay Certification: Required Airline Data for Card Brand Interchange
-    // NOTE: Set ARC_ENABLE_AIRLINE_DATA=true in environment to enable
+    // ARC Pay Airline Data for Card Brand Interchange
     const enableAirlineData = process.env.ARC_ENABLE_AIRLINE_DATA === 'true';
 
     if (bookingType === 'flight' && enableAirlineData) {
       try {
-        console.log('🔍 Processing airline data for ARC Pay certification...');
+        console.log('🔍 Processing airline data for ARC Pay...');
 
-        // Extract flight details from flightData or bookingData
         const flight = flightData || bookingData?.selectedFlight || bookingData?.flightData || {};
         const itinerary = flight?.itineraries?.[0] || flight?.itinerary || {};
         const segments = Array.isArray(itinerary?.segments) ? itinerary.segments :
           Array.isArray(flight?.segments) ? flight.segments : [];
 
-        console.log('   Segments count:', segments.length);
-
-        // Travel Agent Info - Required by ARC Pay
         const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || 'JETSET001';
         const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'JETSETTERS';
 
-        // Get passenger info - format as array per ARC Pay docs
+        // Passenger info
         const passengers = bookingData?.passengerData || bookingData?.travelers || [];
         const passengerList = passengers.length > 0
           ? passengers.map(p => ({
@@ -1966,51 +1961,34 @@ async function handleHostedCheckout(req, res) {
             lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
           }];
 
-        // Helper: Map cabin class to ARC Pay Class of Service (Y=Economy, W=Premium)
-        const mapClassOfService = (cabinClass) => {
-          if (!cabinClass) return 'Y';
-          const upper = cabinClass.toUpperCase();
-          if (upper.includes('PREMIUM') || upper.includes('BUSINESS') || upper.includes('FIRST') || upper === 'W') {
-            return 'W';
-          }
-          return 'Y';
-        };
-
-        // Build leg array with ALL required ARC Pay fields
+        // Build minimal leg array — only fields accepted by ARC Pay API
         const legArray = segments.length > 0
           ? segments.map((segment, index) => ({
             carrierCode: 'XD',
-            classOfService: mapClassOfService(segment?.cabin || flight?.cabin || bookingData?.cabinClass),
             departureAirport: (segment?.departure?.iataCode || 'XXX').substring(0, 3),
             departureDate: (segment?.departure?.at || new Date().toISOString()).split('T')[0],
             destinationAirport: (segment?.arrival?.iataCode || 'XXX').substring(0, 3),
-            flightNumber: String(segment?.number || segment?.flightNumber || `${index + 1}`).substring(0, 6)
+            flightNumber: String(segment?.number || segment?.flightNumber || `${index + 1}`).padStart(4, '0').substring(0, 6)
           }))
           : [{
             carrierCode: 'XD',
-            classOfService: 'Y',
             departureAirport: (flight?.origin || bookingData?.origin || 'XXX').substring(0, 3),
             departureDate: new Date().toISOString().split('T')[0],
             destinationAirport: (flight?.destination || bookingData?.destination || 'XXX').substring(0, 3),
-            flightNumber: '001'
+            flightNumber: '0001'
           }];
 
-        // Generate ticket number (889 prefix as per ARC) and booking reference
         const ticketNumber = `889${Date.now().toString().slice(-10)}`.substring(0, 13);
         const bookingRef = (flight?.pnr || flight?.bookingReference || orderId || '').toString().substring(0, 6).toUpperCase() || 'JETSET';
 
-        // Build airline object with ALL ARC Pay certification required fields
         requestBody.airline = {
           bookingReference: bookingRef,
-          itinerary: {
-            leg: legArray,
-            numberInParty: String(passengerList.length)
-          },
+          itinerary: { leg: legArray, numberInParty: String(passengerList.length) },
           passenger: passengerList,
           ticket: {
             issue: {
-              carrierCode: 'XD', // ARC Pay requires "889 or XD"
-              carrierName: 'JETSETTERS', // DBA name
+              carrierCode: 'XD',
+              carrierName: 'JETSETTERS',
               city: 'ONLINE',
               country: 'USA',
               date: new Date().toISOString().split('T')[0],
@@ -2024,11 +2002,10 @@ async function handleHostedCheckout(req, res) {
           }
         };
 
-        console.log('✈️ ARC Pay Certification - Airline Data:', JSON.stringify(requestBody.airline, null, 2));
+        console.log('✈️ ARC Pay Airline Data:', JSON.stringify(requestBody.airline, null, 2));
 
       } catch (airlineError) {
         console.error('⚠️ Error constructing airline data:', airlineError);
-        // Don't fail the payment - airline data is for interchange optimization
       }
     }
 
