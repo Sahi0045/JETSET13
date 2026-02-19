@@ -1966,13 +1966,6 @@ async function handleHostedCheckout(req, res) {
             lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
           }];
 
-        // Helper: Extract time from ISO string (HH:MM format)
-        const extractTime = (isoString) => {
-          if (!isoString) return '00:00';
-          const timePart = isoString.split('T')[1];
-          return timePart ? timePart.substring(0, 5) : '00:00';
-        };
-
         // Helper: Map cabin class to ARC Pay Class of Service (Y=Economy, W=Premium)
         const mapClassOfService = (cabinClass) => {
           if (!cabinClass) return 'Y';
@@ -1986,11 +1979,10 @@ async function handleHostedCheckout(req, res) {
         // Build leg array with ALL required ARC Pay fields
         const legArray = segments.length > 0
           ? segments.map((segment, index) => ({
-            carrierCode: 'XD', // ARC Pay requires "889 or XD" - using XD
+            carrierCode: 'XD',
             classOfService: mapClassOfService(segment?.cabin || flight?.cabin || bookingData?.cabinClass),
             departureAirport: (segment?.departure?.iataCode || 'XXX').substring(0, 3),
             departureDate: (segment?.departure?.at || new Date().toISOString()).split('T')[0],
-            departureTime: extractTime(segment?.departure?.at),
             destinationAirport: (segment?.arrival?.iataCode || 'XXX').substring(0, 3),
             flightNumber: String(segment?.number || segment?.flightNumber || `${index + 1}`).substring(0, 6)
           }))
@@ -1999,7 +1991,6 @@ async function handleHostedCheckout(req, res) {
             classOfService: 'Y',
             departureAirport: (flight?.origin || bookingData?.origin || 'XXX').substring(0, 3),
             departureDate: new Date().toISOString().split('T')[0],
-            departureTime: '00:00',
             destinationAirport: (flight?.destination || bookingData?.destination || 'XXX').substring(0, 3),
             flightNumber: '001'
           }];

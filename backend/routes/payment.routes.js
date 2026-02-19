@@ -424,21 +424,12 @@ async function handleHostedCheckout(req, res) {
                 const passengerList = passengers.length > 0
                     ? passengers.map(p => ({
                         firstName: (p.firstName || p.name?.firstName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
-                        lastName: (p.lastName || p.name?.lastName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
-                        dateOfBirth: p.dateOfBirth || p.dob || null
+                        lastName: (p.lastName || p.name?.lastName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
                     }))
                     : [{
                         firstName: (firstName || 'GUEST').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
-                        lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
-                        dateOfBirth: null
+                        lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
                     }];
-
-                // Helper functions
-                const extractTime = (isoString) => {
-                    if (!isoString) return '00:00';
-                    const timePart = isoString.split('T')[1];
-                    return timePart ? timePart.substring(0, 5) : '00:00';
-                };
 
                 const mapCabinClass = (cabinClass) => {
                     if (!cabinClass) return 'Y';
@@ -456,11 +447,10 @@ async function handleHostedCheckout(req, res) {
 
                 const legArray = segments.length > 0
                     ? segments.map((segment, index) => ({
-                        carrierCode: 'XD', // ARC Pay requires "889 or XD" - using XD
+                        carrierCode: 'XD',
                         classOfService: mapCabinClass(segment?.cabin || flight?.cabin || bookingData?.cabinClass),
                         departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3),
                         departureDate: (segment?.departure?.at || new Date().toISOString()).split('T')[0],
-                        departureTime: extractTime(segment?.departure?.at),
                         destinationAirport: (segment?.arrival?.iataCode || destination).substring(0, 3),
                         flightNumber: String(segment?.number || segment?.flightNumber || index + 1).substring(0, 6)
                     }))
@@ -469,7 +459,6 @@ async function handleHostedCheckout(req, res) {
                         classOfService: 'Y',
                         departureAirport: origin.substring(0, 3),
                         departureDate: new Date().toISOString().split('T')[0],
-                        departureTime: '00:00',
                         destinationAirport: destination.substring(0, 3),
                         flightNumber: '001'
                     }];
