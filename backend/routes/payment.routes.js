@@ -397,7 +397,11 @@ async function handleHostedCheckout(req, res) {
         };
 
         // ARC Pay Airline Data for Card Brand Interchange
-        const enableAirlineData = process.env.ARC_ENABLE_AIRLINE_DATA === 'true';
+        // TEMPORARILY DISABLED: airline data causes "transaction unsuccessful" on ARC Pay checkout
+        // The session creates fine but payment fails at acquirer level with airline data attached.
+        // Needs ARC support to confirm which fields their gateway accepts on INITIATE_CHECKOUT.
+        // Set ARC_ENABLE_AIRLINE_DATA=true in .env to re-enable once confirmed.
+        const enableAirlineData = false; // process.env.ARC_ENABLE_AIRLINE_DATA === 'true';
 
         if (bookingType === 'flight' && enableAirlineData) {
             try {
