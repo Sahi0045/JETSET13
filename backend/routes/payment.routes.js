@@ -431,6 +431,13 @@ async function handleHostedCheckout(req, res) {
                         lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
                     }];
 
+                // ARC Pay requires departureTime in 'hhmm' format (e.g. '0800' for 08:00)
+                const extractTime = (isoString) => {
+                    if (!isoString) return '0000';
+                    const timePart = isoString.split('T')[1];
+                    return timePart ? timePart.substring(0, 5).replace(':', '') : '0000';
+                };
+
                 const mapCabinClass = (cabinClass) => {
                     if (!cabinClass) return 'Y';
                     const classUpper = cabinClass.toUpperCase();
@@ -451,16 +458,18 @@ async function handleHostedCheckout(req, res) {
                         classOfService: mapCabinClass(segment?.cabin || flight?.cabin || bookingData?.cabinClass),
                         departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3),
                         departureDate: (segment?.departure?.at || new Date().toISOString()).split('T')[0],
+                        departureTime: extractTime(segment?.departure?.at),
                         destinationAirport: (segment?.arrival?.iataCode || destination).substring(0, 3),
-                        flightNumber: String(segment?.number || segment?.flightNumber || index + 1).substring(0, 6)
+                        flightNumber: String(segment?.number || segment?.flightNumber || index + 1).padStart(4, '0').substring(0, 6)
                     }))
                     : [{
                         carrierCode: 'XD',
                         classOfService: 'Y',
                         departureAirport: origin.substring(0, 3),
                         departureDate: new Date().toISOString().split('T')[0],
+                        departureTime: '0000',
                         destinationAirport: destination.substring(0, 3),
-                        flightNumber: '001'
+                        flightNumber: '0001'
                     }];
 
                 const ticketNumber = `889${Date.now().toString().slice(-10)}`.substring(0, 13);
@@ -468,6 +477,7 @@ async function handleHostedCheckout(req, res) {
 
                 requestBody.airline = {
                     bookingReference: bookingRef,
+                    documentType: 'PASSENGER_TICKET',
                     itinerary: { leg: legArray, numberInParty: String(passengerList.length) },
                     passenger: passengerList,
                     ticket: {
@@ -1422,14 +1432,14 @@ async function handleCancelBookingAction(req, res) {
         // 3. Process cancellation fee and refund/void via ARC Pay
         let cancellationFee = 0;
         let netRefundAmount = 0;
-        
+
         // Get cancellation fee from price settings
         try {
             const { data: priceSettings } = await supabase
                 .from('price_settings')
                 .select('settings')
                 .single();
-            
+
             cancellationFee = priceSettings?.settings?.cancellation_fee || 50.00;
         } catch (error) {
             console.warn('Could not fetch cancellation fee, using default:', error.message);
@@ -1457,7 +1467,7 @@ async function handleCancelBookingAction(req, res) {
                             // Charge cancellation fee
                             const feeTxnId = `cancel-fee-${Date.now()}`;
                             const feeUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}-fee/transaction/${feeTxnId}`;
-                            
+
                             try {
                                 const feeResponse = await fetch(feeUrl, {
                                     method: 'PUT',
@@ -1480,7 +1490,7 @@ async function handleCancelBookingAction(req, res) {
                                         }
                                     })
                                 });
-                                
+
                                 if (feeResponse.ok) {
                                     console.log('✅ Cancellation fee charged:', cancellationFee);
                                 } else {
@@ -1489,7 +1499,7 @@ async function handleCancelBookingAction(req, res) {
                             } catch (feeError) {
                                 console.warn('⚠️ Cancellation fee processing error:', feeError.message);
                             }
-                            
+
                             // Process partial refund (original amount - cancellation fee)
                             if (netRefundAmount > 0) {
                                 const refundTxnId = `refund-cancel-${Date.now()}`;
@@ -1549,7 +1559,7 @@ async function handleCancelBookingAction(req, res) {
                             // Now charge cancellation fee as new transaction
                             const feeTxnId = `cancel-fee-${Date.now()}`;
                             const feeUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}-fee/transaction/${feeTxnId}`;
-                            
+
                             const feeResponse = await fetch(feeUrl, {
                                 method: 'PUT',
                                 headers: authConfig.headers,
@@ -1562,7 +1572,7 @@ async function handleCancelBookingAction(req, res) {
                                     }
                                 })
                             });
-                            
+
                             if (feeResponse.ok) {
                                 cancellationResult.paymentProcessed = true;
                                 cancellationResult.paymentAction = 'VOID_AND_FEE';
@@ -1593,12 +1603,12 @@ async function handleCancelBookingAction(req, res) {
             .from('bookings')
             .update({
                 status: 'cancelled',
-                payment_status: cancellationResult.paymentProcessed ? 
-                    (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded' : 
-                     cancellationResult.paymentAction === 'FEE_CHARGED' ? 'cancelled_fee_charged' :
-                     cancellationResult.paymentAction === 'FULL_FEE' ? 'cancelled_fee_charged' :
-                     cancellationResult.paymentAction === 'VOID_AND_FEE' ? 'voided_fee_charged' :
-                     cancellationResult.paymentAction === 'VOID' ? 'cancelled' : 'refunded') : 
+                payment_status: cancellationResult.paymentProcessed ?
+                    (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded' :
+                        cancellationResult.paymentAction === 'FEE_CHARGED' ? 'cancelled_fee_charged' :
+                            cancellationResult.paymentAction === 'FULL_FEE' ? 'cancelled_fee_charged' :
+                                cancellationResult.paymentAction === 'VOID_AND_FEE' ? 'voided_fee_charged' :
+                                    cancellationResult.paymentAction === 'VOID' ? 'cancelled' : 'refunded') :
                     booking.payment_status,
                 booking_details: {
                     ...booking.booking_details,
