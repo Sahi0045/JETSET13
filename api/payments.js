@@ -1961,34 +1961,22 @@ async function handleHostedCheckout(req, res) {
             lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
           }];
 
-        // Build leg array with all ARC certification required fields
-        // Note: classOfService is NOT supported by the MPGS API (returns UNSUPPORTED error)
-        // ARC certification requires it, but the gateway API does not accept it at leg level
-        
-        // Helper to extract departure time — try ISO time format 'HH:mm:ss'
-        const extractDepartureTime = (segment) => {
-            try {
-                const dateStr = segment?.departure?.at;
-                if (dateStr && dateStr.includes('T')) {
-                    const timePart = dateStr.split('T')[1]; // e.g. "14:30:00"
-                    const [hours, minutes, seconds] = timePart.split(':');
-                    const hh = String(hours).padStart(2, '0');
-                    const mm = String(minutes || '00').padStart(2, '0');
-                    const ss = String((seconds || '00').split(/[^0-9]/)[0]).padStart(2, '0');
-                    // Avoid exact midnight — shift to 00:01:00
-                    if (hh === '00' && mm === '00' && ss === '00') return '00:01:00';
-                    return `${hh}:${mm}:${ss}`;
-                }
-            } catch (e) { /* fallback */ }
-            return '12:00:00'; // Safe default (noon)
+        // NOTE: departureTime is NOT supported by ARC Pay INITIATE_CHECKOUT.
+        // Tested formats: 'HHmm', 'HH:mm', 'HH:mm:ss' — ALL rejected.
+        // Only include: carrierCode, departureAirport, departureDate, destinationAirport, flightNumber
+
+        // Helper: ensure departureDate is YYYY-MM-DD, not a time string
+        const safeDepartureDate = (atValue) => {
+          if (!atValue) return new Date().toISOString().split('T')[0];
+          const dateCandidate = atValue.includes('T') ? atValue.split('T')[0] : atValue;
+          return /^\d{4}-\d{2}-\d{2}$/.test(dateCandidate) ? dateCandidate : new Date().toISOString().split('T')[0];
         };
 
         const legArray = segments.length > 0
           ? segments.map((segment, index) => ({
             carrierCode: 'XD',
             departureAirport: (segment?.departure?.iataCode || 'XXX').substring(0, 3),
-            departureDate: (segment?.departure?.at || new Date().toISOString()).split('T')[0],
-            departureTime: extractDepartureTime(segment),
+            departureDate: safeDepartureDate(segment?.departure?.at),
             destinationAirport: (segment?.arrival?.iataCode || 'XXX').substring(0, 3),
             flightNumber: String(segment?.number || segment?.flightNumber || `${index + 1}`).padStart(4, '0').substring(0, 6)
           }))
@@ -1996,7 +1984,6 @@ async function handleHostedCheckout(req, res) {
             carrierCode: 'XD',
             departureAirport: (flight?.origin || bookingData?.origin || 'XXX').substring(0, 3),
             departureDate: new Date().toISOString().split('T')[0],
-            departureTime: '12:00:00',
             destinationAirport: (flight?.destination || bookingData?.destination || 'XXX').substring(0, 3),
             flightNumber: '0001'
           }];
