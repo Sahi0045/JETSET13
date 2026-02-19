@@ -25,6 +25,10 @@ const BookingsList = () => {
     const [newStatus, setNewStatus] = useState('');
     const [statusProcessing, setStatusProcessing] = useState(false);
     const [expandedBooking, setExpandedBooking] = useState(null);
+    // Void modal
+    const [voidModal, setVoidModal] = useState(null);
+    const [voidReason, setVoidReason] = useState('');
+    const [voidProcessing, setVoidProcessing] = useState(false);
 
     // Success/Error messages
     const [actionMessage, setActionMessage] = useState(null);
@@ -157,6 +161,47 @@ const BookingsList = () => {
             setCancelProcessing(false);
             setCancelModal(null);
             setCancelReason('');
+            setTimeout(() => setActionMessage(null), 10000);
+        }
+    };
+
+    // Void payment (reverses authorization before settlement)
+    const handleVoid = async () => {
+        if (!voidModal) return;
+        setVoidProcessing(true);
+        try {
+            // First try to find payment by booking reference from bookings table
+            const bookingRef = voidModal.bookingReference;
+            const orderId = voidModal.arcOrderId || voidModal.bookingDetails?.arc_order_id || voidModal.bookingDetails?.order_id || bookingRef;
+
+            const response = await fetch(getApiUrl(`payments?action=payment-void`), {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                credentials: 'include',
+                body: JSON.stringify({
+                    paymentId: orderId,
+                    reason: voidReason || 'Admin initiated void'
+                })
+            });
+            const result = await response.json();
+            if (result.success) {
+                setCancelResult({
+                    booking: voidModal,
+                    paymentAction: 'VOID',
+                    refundAmount: 0,
+                    cancellationFee: 0
+                });
+                setActionMessage({ type: 'success', text: `Payment for ${bookingRef} has been voided successfully.` });
+                fetchBookings();
+            } else {
+                setActionMessage({ type: 'error', text: result.error || 'Failed to void payment. It may have already settled — try Cancel & Refund instead.' });
+            }
+        } catch (error) {
+            setActionMessage({ type: 'error', text: 'Failed to void payment: ' + error.message });
+        } finally {
+            setVoidProcessing(false);
+            setVoidModal(null);
+            setVoidReason('');
             setTimeout(() => setActionMessage(null), 10000);
         }
     };
@@ -487,9 +532,16 @@ const BookingsList = () => {
                                                         <>
                                                             <button
                                                                 onClick={() => setCancelModal(booking)}
-                                                                title="Cancel Booking"
+                                                                title="Cancel & Refund"
                                                                 style={actionBtnStyle('#dc2626')}
                                                             >❌</button>
+                                                            {booking.paymentStatus === 'paid' && (
+                                                                <button
+                                                                    onClick={() => setVoidModal(booking)}
+                                                                    title="Void Payment (reverse before settlement)"
+                                                                    style={actionBtnStyle('#be185d')}
+                                                                >🚫</button>
+                                                            )}
                                                             <button
                                                                 onClick={() => { setStatusModal(booking); setNewStatus(booking.status); }}
                                                                 title="Modify Status"
@@ -836,6 +888,85 @@ const BookingsList = () => {
                                 onClick={() => setCancelResult(null)}
                                 style={{ ...modalBtnPrimary, backgroundColor: '#16a34a', minWidth: '120px' }}
                             >Done</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Void Payment Modal */}
+            {voidModal && (
+                <div style={modalOverlayStyle}>
+                    <div style={{ ...modalStyle, maxWidth: '500px' }}>
+                        <h3 style={{ margin: '0 0 4px', fontSize: '18px', color: '#1e293b' }}>
+                            🚫 Void Payment
+                        </h3>
+                        <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 16px' }}>
+                            Void reverses the payment authorization <strong>before</strong> it settles. No charge will appear on the customer's account. Use this for recent payments that haven't settled yet.
+                        </p>
+
+                        {/* Booking Summary */}
+                        <div style={{
+                            backgroundColor: '#f8fafc', borderRadius: '8px', padding: '12px 16px',
+                            marginBottom: '16px', border: '1px solid #e2e8f0'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Booking Ref</span>
+                                <span style={{ fontSize: '13px', fontWeight: '600', fontFamily: 'monospace' }}>{voidModal.bookingReference}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Customer</span>
+                                <span style={{ fontSize: '13px', fontWeight: '500' }}>{voidModal.customerName}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Amount</span>
+                                <span style={{ fontSize: '14px', fontWeight: '700', color: '#1e293b' }}>{formatCurrency(voidModal.totalAmount)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Payment Status</span>
+                                {getPaymentBadge(voidModal.paymentStatus)}
+                            </div>
+                        </div>
+
+                        {/* Warning */}
+                        <div style={{
+                            backgroundColor: '#fce7f3', borderRadius: '8px', padding: '10px 14px',
+                            marginBottom: '16px', border: '1px solid #f9a8d4', fontSize: '13px', color: '#9d174d'
+                        }}>
+                            ⚠️ <strong>Void only works before settlement</strong> (typically same day). If the payment has already settled, use <strong>Cancel & Refund</strong> instead.
+                        </div>
+
+                        {/* Reason */}
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                            Void Reason
+                        </label>
+                        <select
+                            value={voidReason}
+                            onChange={(e) => setVoidReason(e.target.value)}
+                            style={{
+                                width: '100%', padding: '10px', borderRadius: '8px',
+                                border: '1px solid #e2e8f0', fontSize: '13px',
+                                marginBottom: '16px', cursor: 'pointer', boxSizing: 'border-box'
+                            }}
+                        >
+                            <option value="">Select a reason...</option>
+                            <option value="Customer requested cancellation">Customer requested cancellation</option>
+                            <option value="Duplicate payment">Duplicate payment</option>
+                            <option value="Wrong amount charged">Wrong amount charged</option>
+                            <option value="Test transaction">Test transaction</option>
+                            <option value="Fraudulent transaction">Fraudulent transaction</option>
+                            <option value="Admin void">Admin void (other)</option>
+                        </select>
+
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => { setVoidModal(null); setVoidReason(''); }}
+                                style={modalBtnSecondary}
+                            >Keep Payment</button>
+                            <button
+                                onClick={handleVoid}
+                                disabled={voidProcessing}
+                                style={{ ...modalBtnPrimary, backgroundColor: '#be185d', minWidth: '160px' }}
+                            >{voidProcessing ? '⏳ Processing Void...' : '🚫 Void Payment'}</button>
                         </div>
                     </div>
                 </div>

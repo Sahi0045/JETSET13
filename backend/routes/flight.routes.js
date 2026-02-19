@@ -1698,7 +1698,9 @@ router.get('/admin-bookings', async (req, res) => {
         cruiseArrival: booking.booking_details?.arrival || '',
         // Raw details for expandable view
         bookingDetails: booking.booking_details,
-        passengerDetails: booking.passenger_details
+        passengerDetails: booking.passenger_details,
+        // Payment details for void/refund operations
+        arcOrderId: booking.booking_details?.arc_order_id || booking.booking_details?.order_id || booking.booking_reference
       };
     });
 
