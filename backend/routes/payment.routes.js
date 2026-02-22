@@ -1609,20 +1609,16 @@ async function handleCancelBookingAction(req, res) {
                             const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}/transaction/${voidTxnId}`;
 
                             console.log('🚫 Issuing VOID for transaction:', targetTxnId);
-                            const voidResponse = await fetch(voidUrl, {
-                                method: 'PUT',
-                                headers: authConfig.headers,
-                                body: JSON.stringify({
-                                    apiOperation: 'VOID',
-                                    transaction: {
-                                        targetTransactionId: targetTxnId,
-                                        reference: `Cancellation: ${reason}`
-                                    }
-                                })
-                            });
+                            const voidResp = await axios.put(voidUrl, {
+                                apiOperation: 'VOID',
+                                transaction: {
+                                    targetTransactionId: targetTxnId,
+                                    reference: `Cancellation: ${reason}`
+                                }
+                            }, { headers: authConfig.headers });
 
-                            if (voidResponse.ok) {
-                                const voidData = await voidResponse.json();
+                            if (voidResp.status === 200 || voidResp.status === 201) {
+                                const voidData = voidResp.data;
                                 console.log('✅ ARC Pay VOID successful:', voidData.result);
                                 cancellationResult.paymentProcessed = true;
                                 cancellationResult.paymentAction = 'VOID';
@@ -1633,8 +1629,7 @@ async function handleCancelBookingAction(req, res) {
                                     metadata: { ...payment.metadata, void: { transactionId: voidTxnId, targetTxnId, reason, at: new Date().toISOString() } }
                                 }).eq('id', payment.id);
                             } else {
-                                const errText = await voidResponse.text();
-                                console.error('❌ ARC Pay VOID failed:', voidResponse.status, errText);
+                                console.error('❌ ARC Pay VOID failed:', voidResp.status);
                                 cancellationResult.paymentAction = 'VOID_FAILED';
                             }
                         } else {
@@ -1656,27 +1651,22 @@ async function handleCancelBookingAction(req, res) {
                         const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderIdForArc}/transaction/${refundTxnId}`;
                         console.log('💸 Issuing REFUND (no payment record):', netRefundAmount.toFixed(2));
 
-                        const refundResp = await fetch(refundUrl, {
-                            method: 'PUT',
-                            headers: authConfig.headers,
-                            body: JSON.stringify({
-                                apiOperation: 'REFUND',
-                                transaction: {
-                                    amount: netRefundAmount.toFixed(2),
-                                    currency: 'USD',
-                                    reference: `Cancel refund (fee: ${cancellationFee}): ${reason}`
-                                }
-                            })
-                        });
+                        const refundResp = await axios.put(refundUrl, {
+                            apiOperation: 'REFUND',
+                            transaction: {
+                                amount: netRefundAmount.toFixed(2),
+                                currency: 'USD',
+                                reference: `Cancel refund (fee: ${cancellationFee}): ${reason}`
+                            }
+                        }, { headers: authConfig.headers });
 
-                        if (refundResp.ok) {
+                        if (refundResp.status === 200 || refundResp.status === 201) {
                             console.log('✅ ARC Pay REFUND successful (no payment record)');
                             cancellationResult.paymentProcessed = true;
                             cancellationResult.paymentAction = 'PARTIAL_REFUND';
                             cancellationResult.refundAmount = netRefundAmount;
                         } else {
-                            const errText = await refundResp.text();
-                            console.error('❌ ARC Pay REFUND failed:', refundResp.status, errText);
+                            console.error('❌ ARC Pay REFUND failed:', refundResp.status);
                             cancellationResult.paymentAction = 'REFUND_FAILED';
                         }
                     } else {
