@@ -43,34 +43,52 @@ export default function PaymentCallback() {
           console.log(`🎫 Processing ${bookingType} booking callback for order:`, orderId);
           setStatus(`Verifying ${bookingType} payment...`);
 
-          // Retrieve stored booking data from localStorage
-          const pendingBookingKey = `pending${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)}Booking`;
-          const storedBookingData = localStorage.getItem(pendingBookingKey);
-          const pendingSession = localStorage.getItem('pendingPaymentSession');
-
-          console.log('📦 Looking for localStorage key:', pendingBookingKey);
-          console.log('📦 All localStorage keys:', Object.keys(localStorage));
-          console.log('📦 Retrieved booking data:', storedBookingData ? `Found (${storedBookingData.length} chars)` : 'Not found');
-          console.log('📦 Retrieved session data:', pendingSession ? 'Found' : 'Not found');
-
-          // Debug: Log raw localStorage values
-          if (storedBookingData) {
-            console.log('📦 Raw booking data preview:', storedBookingData.substring(0, 200) + '...');
-          }
-
+          // Retrieve booking data: DB first, localStorage fallback
           let bookingData = {};
           let sessionData = {};
 
+          // 1. Try retrieving from database (survives browser clears/device changes)
           try {
-            if (storedBookingData) {
-              bookingData = JSON.parse(storedBookingData);
+            console.log('🗄️ Fetching pending booking from DB for orderId:', orderId);
+            const dbResponse = await fetch(`/api/payments?action=get-pending-booking&orderId=${orderId}`);
+            if (dbResponse.ok) {
+              const dbResult = await dbResponse.json();
+              if (dbResult.success && dbResult.pendingBookingData) {
+                bookingData = dbResult.pendingBookingData;
+                sessionData = {
+                  sessionId: dbResult.booking?.booking_details?.session_id,
+                  orderId: orderId,
+                  bookingType: bookingType,
+                  amount: dbResult.booking?.total_amount
+                };
+                console.log('✅ Booking data retrieved from DB');
+              }
             }
-            if (pendingSession) {
-              sessionData = JSON.parse(pendingSession);
-            }
-          } catch (parseError) {
-            console.warn('Could not parse stored booking data:', parseError);
+          } catch (dbError) {
+            console.warn('⚠️ DB fetch failed, falling back to localStorage:', dbError.message);
           }
+
+          // 2. Fallback to localStorage if DB didn't have data
+          if (!bookingData?.selectedFlight && !bookingData?.flightData && !bookingData?.amount) {
+            console.log('📦 Falling back to localStorage...');
+            const pendingBookingKey = `pending${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)}Booking`;
+            const storedBookingData = localStorage.getItem(pendingBookingKey);
+            const pendingSession = localStorage.getItem('pendingPaymentSession');
+
+            try {
+              if (storedBookingData) {
+                bookingData = JSON.parse(storedBookingData);
+                console.log('📦 Booking data retrieved from localStorage');
+              }
+              if (pendingSession) {
+                sessionData = JSON.parse(pendingSession);
+              }
+            } catch (parseError) {
+              console.warn('Could not parse stored booking data:', parseError);
+            }
+          }
+
+          console.log('📋 Final booking data source:', bookingData?.selectedFlight ? 'has flight data' : 'no flight data');
 
           // For flights, navigate to FlightCreateOrders to complete the booking
           if (bookingType === 'flight') {

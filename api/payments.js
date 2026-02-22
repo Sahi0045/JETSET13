@@ -80,6 +80,14 @@ export default async function handler(req, res) {
         return handlePaymentRetrieve(req, res);
       case 'cancel-booking':
         return handleCancelBooking(req, res);
+      case 'get-pending-booking': {
+        const pendingOrderId = req.query.orderId || req.body?.orderId;
+        if (!pendingOrderId) return res.status(400).json({ success: false, error: 'orderId is required' });
+        const { data: pendingBooking, error: pendingErr } = await supabase
+          .from('bookings').select('*').eq('booking_reference', pendingOrderId).single();
+        if (pendingErr || !pendingBooking) return res.status(404).json({ success: false, error: 'Pending booking not found' });
+        return res.json({ success: true, booking: pendingBooking, pendingBookingData: pendingBooking.booking_details?.pending_booking_data || null });
+      }
       case 'test':
         return handleTest(req, res);
       case 'health':
@@ -89,7 +97,7 @@ export default async function handler(req, res) {
       default:
         return res.status(400).json({
           success: false,
-          error: 'Invalid action. Supported actions: initiate-payment, payment-callback, get-payment-details, gateway-status, session-create, order-create, hosted-checkout, payment-process, payment-verify, payment-refund, payment-void, payment-capture, payment-retrieve, cancel-booking, test, health, debug'
+          error: 'Invalid action. Supported actions: initiate-payment, payment-callback, get-payment-details, gateway-status, session-create, order-create, hosted-checkout, payment-process, payment-verify, payment-refund, payment-void, payment-capture, payment-retrieve, cancel-booking, get-pending-booking, test, health, debug'
         });
     }
   } catch (error) {
@@ -2144,6 +2152,31 @@ async function handleHostedCheckout(req, res) {
     const paymentPageUrl = `${gatewayDomain}/checkout/pay/${sessionId}`;
 
     console.log('🔗 Payment Page URL:', paymentPageUrl);
+
+    // Save pending booking data to DB so callback can retrieve it even if localStorage is cleared
+    try {
+      const passengerDetails = bookingData?.passengerData || bookingData?.travelers || [];
+      await supabase.from('bookings').upsert({
+        booking_reference: orderId,
+        travel_type: bookingType || 'flight',
+        status: 'pending',
+        total_amount: parseFloat(amount) || 0,
+        payment_status: 'unpaid',
+        customer_email: customerEmail || null,
+        booking_details: {
+          order_id: orderId,
+          session_id: sessionId,
+          success_indicator: successIndicator,
+          pending_booking_data: req.body,
+          arc_pay_checkout_url: paymentPageUrl,
+          checkout_created_at: new Date().toISOString()
+        },
+        passenger_details: Array.isArray(passengerDetails) ? passengerDetails : []
+      }, { onConflict: 'booking_reference' });
+      console.log('💾 Pending booking saved to DB:', orderId);
+    } catch (dbError) {
+      console.warn('⚠️ Failed to save pending booking to DB (non-blocking):', dbError.message);
+    }
 
     return res.status(200).json({
       success: true,

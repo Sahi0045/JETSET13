@@ -87,6 +87,8 @@ router.all('/', async (req, res) => {
                 return handleSessionCreate(req, res);
             case 'cancel-booking':
                 return handleCancelBookingAction(req, res);
+            case 'get-pending-booking':
+                return handleGetPendingBooking(req, res);
             case 'payment-refund':
                 return handlePaymentRefund(req, res);
             case 'payment-void':
@@ -529,6 +531,32 @@ async function handleHostedCheckout(req, res) {
 
         const paymentPageUrl = `https://api.arcpay.travel/checkout/pay/${sessionId}`;
 
+        // Save pending booking data to DB so callback can retrieve it even if localStorage is cleared
+        try {
+            const passengerDetails = bookingData?.passengerData || bookingData?.travelers || [];
+            await supabase.from('bookings').upsert({
+                booking_reference: orderId,
+                travel_type: bookingType || 'flight',
+                status: 'pending',
+                total_amount: parseFloat(amount) || 0,
+                payment_status: 'unpaid',
+                customer_email: customerEmail || null,
+                booking_details: {
+                    order_id: orderId,
+                    session_id: sessionId,
+                    success_indicator: successIndicator,
+                    pending_booking_data: req.body,
+                    arc_pay_checkout_url: paymentPageUrl,
+                    checkout_created_at: new Date().toISOString()
+                },
+                passenger_details: Array.isArray(passengerDetails) ? passengerDetails : []
+            }, { onConflict: 'booking_reference' });
+            console.log('💾 Pending booking saved to DB:', orderId);
+        } catch (dbError) {
+            console.warn('⚠️ Failed to save pending booking to DB (non-blocking):', dbError.message);
+            // Non-blocking: localStorage still works as fallback
+        }
+
         return res.status(200).json({
             success: true,
             sessionId,
@@ -548,6 +576,35 @@ async function handleHostedCheckout(req, res) {
             error: 'Failed to create hosted checkout',
             details: error.response?.data?.error?.explanation || error.message
         });
+    }
+}
+
+// Get Pending Booking - Retrieve saved booking data from DB
+async function handleGetPendingBooking(req, res) {
+    try {
+        const orderId = req.query.orderId || req.body?.orderId;
+        if (!orderId) {
+            return res.status(400).json({ success: false, error: 'orderId is required' });
+        }
+
+        const { data: booking, error } = await supabase
+            .from('bookings')
+            .select('*')
+            .eq('booking_reference', orderId)
+            .single();
+
+        if (error || !booking) {
+            return res.status(404).json({ success: false, error: 'Pending booking not found' });
+        }
+
+        return res.json({
+            success: true,
+            booking: booking,
+            pendingBookingData: booking.booking_details?.pending_booking_data || null
+        });
+    } catch (error) {
+        console.error('Get pending booking error:', error);
+        return res.status(500).json({ success: false, error: error.message });
     }
 }
 
