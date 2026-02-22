@@ -84,6 +84,49 @@ function buildBookingRow(bookingData, userId) {
   };
 }
 
+// Helper to handle duplicate booking_reference
+async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
+  console.log('🔄 Booking reference already exists, updating with merged data...');
+
+  // Fetch existing booking to get ARC Pay session data
+  const { data: existingBooking } = await supabase
+    .from('bookings')
+    .select('booking_details')
+    .eq('booking_reference', bookingData.bookingReference)
+    .single();
+
+  // Merge: keep ARC Pay fields from existing booking_details, add new flight data
+  const mergedDetails = {
+    ...rowTemplate.booking_details,
+    // Preserve ARC Pay data from the pending booking
+    session_id: existingBooking?.booking_details?.session_id || rowTemplate.booking_details.session_id,
+    success_indicator: existingBooking?.booking_details?.success_indicator || rowTemplate.booking_details.success_indicator,
+    arc_pay_checkout_url: existingBooking?.booking_details?.arc_pay_checkout_url || rowTemplate.booking_details.arc_pay_checkout_url,
+    checkout_created_at: existingBooking?.booking_details?.checkout_created_at || rowTemplate.booking_details.checkout_created_at,
+  };
+
+  const { data: updatedData, error: updateError } = await supabase
+    .from('bookings')
+    .update({
+      ...rowTemplate,
+      booking_details: mergedDetails,
+    })
+    .eq('booking_reference', bookingData.bookingReference)
+    .select()
+    .single();
+
+  if (updateError) {
+    console.error('❌ Update with merged data failed:', updateError.message);
+    return null;
+  }
+
+  console.log('✅ SUCCESS (merged)! Booking updated with ARC Pay data preserved:');
+  console.log('   Database ID:', updatedData.id);
+  console.log('   Session ID preserved:', mergedDetails.session_id || 'NONE');
+  console.log('   Booking Reference:', updatedData.booking_reference);
+  return updatedData;
+}
+
 // Helper function to save booking to database
 async function saveBookingToDatabase(bookingData) {
   if (!supabase) {
@@ -112,6 +155,11 @@ async function saveBookingToDatabase(bookingData) {
       console.error('   Error Message:', error.message);
       console.error('   User ID that was attempted:', bookingData.userId || 'null');
 
+      // If duplicate key right away
+      if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('unique constraint')) {
+        return await handleDuplicateBookingMerge(bookingData, row);
+      }
+
       // If the error is a FK violation (user_id not in auth.users) or RLS policy
       // violation, retry without user_id so the booking is still saved
       if (bookingData.userId && (error.code === '23503' || error.code === '42501' || error.message?.includes('violates foreign key') || error.message?.includes('row-level security'))) {
@@ -124,6 +172,10 @@ async function saveBookingToDatabase(bookingData) {
           .single();
 
         if (fallbackError) {
+          // If the fallback hits duplicate key
+          if (fallbackError.code === '23505' || fallbackError.message?.includes('duplicate key') || fallbackError.message?.includes('unique constraint')) {
+            return await handleDuplicateBookingMerge(bookingData, fallbackRow);
+          }
           console.error('❌ Fallback save also failed:', fallbackError.message);
           return null;
         }
@@ -133,50 +185,6 @@ async function saveBookingToDatabase(bookingData) {
         console.log('   Original User ID stored in booking_details:', bookingData.userId);
         console.log('   Booking Reference:', fallbackData.booking_reference);
         return fallbackData;
-      }
-
-      // If the error is a duplicate booking_reference (from hosted checkout pending flow),
-      // UPDATE the existing booking and MERGE booking_details to preserve ARC Pay data
-      if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('unique constraint')) {
-        console.log('🔄 Booking reference already exists, updating with merged data...');
-
-        // Fetch existing booking to get ARC Pay session data
-        const { data: existingBooking } = await supabase
-          .from('bookings')
-          .select('booking_details')
-          .eq('booking_reference', bookingData.bookingReference)
-          .single();
-
-        // Merge: keep ARC Pay fields from existing booking_details, add new flight data
-        const mergedDetails = {
-          ...row.booking_details,
-          // Preserve ARC Pay data from the pending booking
-          session_id: existingBooking?.booking_details?.session_id || row.booking_details.session_id,
-          success_indicator: existingBooking?.booking_details?.success_indicator || row.booking_details.success_indicator,
-          arc_pay_checkout_url: existingBooking?.booking_details?.arc_pay_checkout_url || row.booking_details.arc_pay_checkout_url,
-          checkout_created_at: existingBooking?.booking_details?.checkout_created_at || row.booking_details.checkout_created_at,
-        };
-
-        const { data: updatedData, error: updateError } = await supabase
-          .from('bookings')
-          .update({
-            ...row,
-            booking_details: mergedDetails,
-          })
-          .eq('booking_reference', bookingData.bookingReference)
-          .select()
-          .single();
-
-        if (updateError) {
-          console.error('❌ Update with merged data failed:', updateError.message);
-          return null;
-        }
-
-        console.log('✅ SUCCESS (merged)! Booking updated with ARC Pay data preserved:');
-        console.log('   Database ID:', updatedData.id);
-        console.log('   Session ID preserved:', mergedDetails.session_id || 'NONE');
-        console.log('   Booking Reference:', updatedData.booking_reference);
-        return updatedData;
       }
 
       return null;
