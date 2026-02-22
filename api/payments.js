@@ -3110,91 +3110,119 @@ async function handleCancelBooking(req, res) {
 
           const refundAmount = parseFloat(payment.amount || booking.total_amount || 0);
 
+          // Get cancellation fee
+          let cancellationFee = 50.00;
+          try {
+            const { data: priceSettings } = await supabase.from('price_settings').select('settings').single();
+            cancellationFee = priceSettings?.settings?.cancellation_fee || 50.00;
+          } catch (e) { /* use default */ }
+
+          const netRefundAmount = Math.max(0, refundAmount - cancellationFee);
+
           if (payment.payment_status === 'completed') {
-            // Payment was captured → REFUND
-            const refundTransactionId = `refund-cancel-${Date.now()}`;
-            const refundUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${arcPayOrderId}/transaction/${refundTransactionId}`;
+            // === COMPLETED PAYMENT: Issue partial REFUND (original - fee) ===
+            // Per ARC Pay docs: REFUND uses same orderId, new transactionId, amount to refund
+            if (netRefundAmount > 0) {
+              const refundTxnId = `refund-${Date.now()}`;
+              const refundUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${arcPayOrderId}/transaction/${refundTxnId}`;
 
-            console.log('💸 Initiating ARC Pay REFUND for cancellation...');
-            const refundResponse = await fetch(refundUrl, {
-              method: 'PUT',
-              headers: {
-                'Authorization': authHeader,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              },
-              body: JSON.stringify({
-                apiOperation: 'REFUND',
-                transaction: {
-                  amount: refundAmount.toFixed(2),
-                  currency: payment.currency || 'USD',
-                  reference: `Cancellation: ${reason}`
-                }
-              })
-            });
-
-            if (refundResponse.ok) {
-              console.log('✅ ARC Pay refund processed');
-              cancellationResult.paymentProcessed = true;
-              cancellationResult.paymentAction = 'REFUND';
-              cancellationResult.refundAmount = refundAmount;
-
-              // Update payment record
-              await supabase.from('payments').update({
-                payment_status: 'refunded',
-                metadata: {
-                  ...payment.metadata,
-                  cancellationRefund: {
-                    transactionId: refundTransactionId,
-                    amount: refundAmount,
-                    reason,
-                    refundedAt: new Date().toISOString()
+              console.log('💸 Issuing partial REFUND:', netRefundAmount.toFixed(2), '(original:', refundAmount, '- fee:', cancellationFee, ')');
+              const refundResponse = await fetch(refundUrl, {
+                method: 'PUT',
+                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({
+                  apiOperation: 'REFUND',
+                  transaction: {
+                    amount: netRefundAmount.toFixed(2),
+                    currency: payment.currency || 'USD',
+                    reference: `Cancellation refund (fee: ${cancellationFee}): ${reason}`
                   }
-                }
-              }).eq('id', payment.id);
+                })
+              });
+
+              if (refundResponse.ok) {
+                const refundData = await refundResponse.json();
+                console.log('✅ ARC Pay REFUND successful:', refundData.result);
+                cancellationResult.paymentProcessed = true;
+                cancellationResult.paymentAction = 'PARTIAL_REFUND';
+                cancellationResult.refundAmount = netRefundAmount;
+                cancellationResult.cancellationFee = cancellationFee;
+                await supabase.from('payments').update({
+                  payment_status: 'partially_refunded',
+                  metadata: { ...payment.metadata, refund: { transactionId: refundTxnId, amount: netRefundAmount, fee: cancellationFee, reason, at: new Date().toISOString() } }
+                }).eq('id', payment.id);
+              } else {
+                const errText = await refundResponse.text();
+                console.error('❌ ARC Pay REFUND failed:', refundResponse.status, errText);
+                cancellationResult.paymentAction = 'REFUND_FAILED';
+              }
             } else {
-              console.warn('⚠️ ARC Pay refund failed:', await refundResponse.text());
+              // Cancellation fee >= amount → no refund due
+              console.log('💰 No refund due: fee (', cancellationFee, ') >= amount (', refundAmount, ')');
+              cancellationResult.paymentProcessed = true;
+              cancellationResult.paymentAction = 'NO_REFUND_FEE_COVERS';
+              cancellationResult.refundAmount = 0;
+              cancellationResult.cancellationFee = Math.min(cancellationFee, refundAmount);
+              await supabase.from('payments').update({ payment_status: 'cancelled' }).eq('id', payment.id);
             }
           } else if (payment.payment_status === 'pending' || payment.payment_status === 'authorized') {
-            // Payment not captured yet → VOID
-            const voidTransactionId = `void-cancel-${Date.now()}`;
-            const voidUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${arcPayOrderId}/transaction/${voidTransactionId}`;
+            // === AUTHORIZED/PENDING: VOID the full transaction ===
+            // Per ARC Pay docs: VOID requires transaction.targetTransactionId
+            let targetTxnId = payment.arc_transaction_id;
 
-            console.log('🚫 Initiating ARC Pay VOID for cancellation...');
-            const voidResponse = await fetch(voidUrl, {
-              method: 'PUT',
-              headers: {
-                'Authorization': authHeader,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              },
-              body: JSON.stringify({
-                apiOperation: 'VOID',
-                transaction: {
-                  targetTransactionId: payment.arc_transaction_id
+            // If we don't have it, retrieve from the order
+            if (!targetTxnId) {
+              try {
+                const orderUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${arcPayOrderId}`;
+                const orderResp = await fetch(orderUrl, { method: 'GET', headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+                if (orderResp.ok) {
+                  const orderData = await orderResp.json();
+                  const txns = orderData.transaction || [];
+                  const payTxn = txns.find(t => t.transaction?.type === 'PAYMENT' || t.transaction?.type === 'AUTHORIZATION');
+                  targetTxnId = payTxn?.transaction?.id || txns[txns.length - 1]?.transaction?.id;
+                  console.log('🔍 Retrieved target transaction ID:', targetTxnId);
                 }
-              })
-            });
+              } catch (orderErr) {
+                console.warn('⚠️ Could not retrieve order:', orderErr.message);
+              }
+            }
 
-            if (voidResponse.ok) {
-              console.log('✅ ARC Pay void processed');
-              cancellationResult.paymentProcessed = true;
-              cancellationResult.paymentAction = 'VOID';
-              cancellationResult.refundAmount = refundAmount;
+            if (targetTxnId) {
+              const voidTxnId = `void-${Date.now()}`;
+              const voidUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${arcPayOrderId}/transaction/${voidTxnId}`;
 
-              await supabase.from('payments').update({
-                payment_status: 'cancelled',
-                metadata: {
-                  ...payment.metadata,
-                  cancellationVoid: {
-                    transactionId: voidTransactionId,
-                    reason,
-                    voidedAt: new Date().toISOString()
+              console.log('🚫 Issuing VOID for transaction:', targetTxnId);
+              const voidResponse = await fetch(voidUrl, {
+                method: 'PUT',
+                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({
+                  apiOperation: 'VOID',
+                  transaction: {
+                    targetTransactionId: targetTxnId,
+                    reference: `Cancellation: ${reason}`
                   }
-                }
-              }).eq('id', payment.id);
+                })
+              });
+
+              if (voidResponse.ok) {
+                const voidData = await voidResponse.json();
+                console.log('✅ ARC Pay VOID successful:', voidData.result);
+                cancellationResult.paymentProcessed = true;
+                cancellationResult.paymentAction = 'VOID';
+                cancellationResult.refundAmount = refundAmount;
+                cancellationResult.cancellationFee = 0;
+                await supabase.from('payments').update({
+                  payment_status: 'voided',
+                  metadata: { ...payment.metadata, void: { transactionId: voidTxnId, targetTxnId, reason, at: new Date().toISOString() } }
+                }).eq('id', payment.id);
+              } else {
+                const errText = await voidResponse.text();
+                console.error('❌ ARC Pay VOID failed:', voidResponse.status, errText);
+                cancellationResult.paymentAction = 'VOID_FAILED';
+              }
             } else {
-              console.warn('⚠️ ARC Pay void failed:', await voidResponse.text());
+              console.error('❌ Cannot void: no target transaction ID found');
+              cancellationResult.paymentAction = 'VOID_MISSING_TXN_ID';
             }
           }
         } else {
@@ -3210,7 +3238,10 @@ async function handleCancelBooking(req, res) {
       .from('bookings')
       .update({
         status: 'cancelled',
-        payment_status: cancellationResult.paymentProcessed ? 'refunded' : booking.payment_status,
+        payment_status: cancellationResult.paymentProcessed ?
+          (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded' :
+            cancellationResult.paymentAction === 'VOID' ? 'voided' : 'cancelled') :
+          booking.payment_status,
         booking_details: {
           ...booking.booking_details,
           cancellation: {
