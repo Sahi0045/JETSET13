@@ -1552,7 +1552,7 @@ async function handleCancelBookingAction(req, res) {
             cancellationFee = 50.00;
         }
 
-        if (booking.payment_status === 'paid' || booking.payment_status === 'completed') {
+        if (['paid', 'completed', 'authorized', 'pending', 'partial'].includes(booking.payment_status) || booking.payment_id) {
             try {
                 const { data: payment } = await supabase
                     .from('payments')
@@ -2168,6 +2168,8 @@ async function handlePaymentRetrieve(req, res) {
                     localStatus = 'completed';
                 } else if (arcStatus === 'REFUNDED' && localStatus !== 'refunded') {
                     localStatus = 'refunded';
+                } else if (arcStatus === 'PARTIALLY_REFUNDED' && localStatus !== 'partially_refunded') {
+                    localStatus = 'partially_refunded';
                 } else if (arcStatus === 'VOID' && localStatus !== 'voided') {
                     localStatus = 'voided';
                 }
