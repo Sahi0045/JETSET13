@@ -279,9 +279,9 @@ function ManageBooking() {
 
                     {/* Circle Icon */}
                     <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center border-2 ${step.status === 'complete' ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30' :
-                        step.status === 'current' ? 'bg-white border-blue-500 text-blue-500 shadow-lg shadow-blue-500/30' :
-                          step.status === 'error' ? 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-500/30' :
-                            'bg-white border-slate-200 text-slate-300'
+                      step.status === 'current' ? 'bg-white border-blue-500 text-blue-500 shadow-lg shadow-blue-500/30' :
+                        step.status === 'error' ? 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-500/30' :
+                          'bg-white border-slate-200 text-slate-300'
                       } transition-all duration-300 md:mb-4 relative z-20 bg-white`}>
                       {step.status === 'complete' ? <CheckCircle className="w-5 h-5" /> :
                         step.status === 'error' ? <AlertCircle className="w-5 h-5" /> :
@@ -297,9 +297,9 @@ function ManageBooking() {
 
                     <div className="ml-5 md:ml-0 md:text-center mt-0.5 md:mt-0 relative z-20 bg-white/50 md:bg-transparent px-1 rounded">
                       <h4 className={`text-sm md:text-base font-bold ${step.status === 'complete' ? 'text-slate-800' :
-                          step.status === 'current' ? 'text-blue-700' :
-                            step.status === 'error' ? 'text-rose-700' :
-                              'text-slate-400'
+                        step.status === 'current' ? 'text-blue-700' :
+                          step.status === 'error' ? 'text-rose-700' :
+                            'text-slate-400'
                         }`}>{step.title}</h4>
                       <p className="text-xs md:text-sm text-slate-500 mt-1 font-medium">{step.description}</p>
                     </div>
@@ -324,6 +324,40 @@ function ManageBooking() {
                 </div>
               </div>
             )}
+
+            {/* Refund Financial Breakdown */}
+            <div className="mt-8 pt-6 border-t border-slate-200">
+              <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-slate-500" />
+                Refund Breakdown
+              </h3>
+              <div className="bg-slate-50 rounded-xl p-5 md:p-6 border border-slate-200/60 max-w-2xl">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
+                    <span className="text-slate-600 font-medium">Original Booking Amount</span>
+                    <span className="font-semibold text-slate-800">
+                      ${(bookingData?.totalAmount || bookingData?.amount || bookingData?.total_amount || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
+                    <span className="text-slate-600 flex items-center gap-1.5 font-medium">
+                      Cancellation Fee
+                      <span className="text-xs px-2 py-0.5 bg-slate-200 text-slate-600 rounded-full font-bold">Standard</span>
+                    </span>
+                    <span className="text-rose-600 font-semibold">
+                      -${(cancelData.cancellationFee || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-lg font-bold text-slate-800">Net Refund Total</span>
+                    <span className={`text-xl font-bold ${isRefundFailed || isNoRefund ? 'text-slate-400' : 'text-emerald-600'}`}>
+                      ${(cancelData.refundAmount || cancelData.netRefund || 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
