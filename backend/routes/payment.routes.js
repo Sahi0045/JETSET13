@@ -1588,7 +1588,7 @@ async function handleCancelBookingAction(req, res) {
                                 transaction: {
                                     amount: netRefundAmount.toFixed(2),
                                     currency: payment.currency || 'USD',
-                                    reference: `Cancellation refund (fee: ${cancellationFee}): ${reason}`
+                                    reference: `Cancel refund (fee: ${cancellationFee}): ${reason}`.substring(0, 40)
                                 }
                             }, { headers: authConfig.headers, validateStatus: () => true });
 
@@ -1652,7 +1652,7 @@ async function handleCancelBookingAction(req, res) {
                                 apiOperation: 'VOID',
                                 transaction: {
                                     targetTransactionId: targetTxnId,
-                                    reference: `Cancellation: ${reason}`
+                                    reference: `Cancellation: ${reason}`.substring(0, 40)
                                 }
                             }, { headers: authConfig.headers, validateStatus: () => true });
 
@@ -1697,7 +1697,7 @@ async function handleCancelBookingAction(req, res) {
                             transaction: {
                                 amount: netRefundAmount.toFixed(2),
                                 currency: 'USD',
-                                reference: `Cancel refund (fee: ${cancellationFee}): ${reason}`
+                                reference: `Cancel refund (fee: ${cancellationFee}): ${reason}`.substring(0, 40)
                             }
                         }, { headers: authConfig.headers, validateStatus: () => true });
 

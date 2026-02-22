@@ -3116,7 +3116,7 @@ async function handleCancelBooking(req, res) {
                 transaction: {
                   amount: refundAmount.toFixed(2),
                   currency: payment.currency || 'USD',
-                  reference: `Cancellation: ${reason}`
+                  reference: `Cancellation: ${reason}`.substring(0, 40)
                 }
               })
             });
