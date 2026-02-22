@@ -187,19 +187,20 @@ function ManageBooking() {
   }
 
   const renderStatusBanner = () => {
-    if (bookingData?.status !== 'CANCELLED' && bookingData?.status !== 'CANCEL_REQUESTED') {
+    const currentStatus = bookingData?.status?.toUpperCase() || '';
+    if (currentStatus !== 'CANCELLED' && currentStatus !== 'CANCEL_REQUESTED') {
       return (
-        <div className={`p-4 rounded-lg mb-6 ${bookingData?.status === 'CONFIRMED' ? 'bg-emerald-50 border border-emerald-200' :
-          bookingData?.status === 'FAILED' ? 'bg-red-50 border border-red-200' :
+        <div className={`p-4 rounded-lg mb-6 ${currentStatus === 'CONFIRMED' ? 'bg-emerald-50 border border-emerald-200' :
+          currentStatus === 'FAILED' ? 'bg-red-50 border border-red-200' :
             'bg-blue-50 border border-blue-200'
           }`}>
           <div className="flex items-center">
-            {bookingData?.status === 'CONFIRMED' ? (
+            {currentStatus === 'CONFIRMED' ? (
               <CheckCircle className="w-5 h-5 text-emerald-600 mr-2" />
             ) : (
               <Info className="w-5 h-5 text-blue-600 mr-2" />
             )}
-            <span className={`font-medium ${bookingData?.status === 'CONFIRMED' ? 'text-emerald-800' : 'text-blue-800'}`}>
+            <span className={`font-medium ${currentStatus === 'CONFIRMED' ? 'text-emerald-800' : 'text-blue-800'}`}>
               Booking Status: {bookingData?.status || 'Confirmed'}
             </span>
           </div>
