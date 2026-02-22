@@ -1224,6 +1224,63 @@ router.get('/health', async (req, res) => {
   }
 });
 
+// Get a single booking by bookingReference (For Manage Booking page)
+router.get('/bookings/:bookingRef', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured'
+      });
+    }
+
+    const { bookingRef } = req.params;
+
+    if (!bookingRef) {
+      return res.status(400).json({
+        success: false,
+        error: 'No booking reference provided'
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('booking_reference', bookingRef)
+      .single();
+
+    if (error) {
+      console.error(`❌ Error fetching booking ${bookingRef}:`, error.message);
+      return res.status(error.code === 'PGRST116' ? 404 : 500).json({
+        success: false,
+        error: error.code === 'PGRST116' ? 'Booking not found' : error.message
+      });
+    }
+
+    // Format for frontend
+    const formattedBooking = {
+      ...data.booking_details,
+      status: data.status,
+      payment_status: data.payment_status,
+      bookingReference: data.booking_reference,
+      type: data.travel_type,
+      bookingDate: data.created_at,
+      source: 'database'
+    };
+
+    res.json({
+      success: true,
+      data: formattedBooking
+    });
+  } catch (error) {
+    console.error('❌ Get single booking check error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve booking'
+    });
+  }
+});
+
 // Get all bookings from database (for My Trips page)
 router.get('/bookings', async (req, res) => {
   try {

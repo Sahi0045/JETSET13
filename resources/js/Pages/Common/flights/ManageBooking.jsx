@@ -11,6 +11,7 @@ import Navbar from '../Navbar';
 import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
 import ArcPayService from '../../../Services/ArcPayService';
+import { getApiUrl } from '../../../utils/apiHelper';
 
 function ManageBooking() {
   const navigate = useNavigate();
@@ -27,29 +28,52 @@ function ManageBooking() {
   const [cancelResult, setCancelResult] = useState(null);
 
   useEffect(() => {
-    // Get booking data from location state or localStorage
-    let booking = null;
+    // Completely skip localStorage and fetch directly from database
+    const loadLiveBooking = async () => {
+      setLoading(true);
 
-    if (location.state?.bookingData) {
-      booking = location.state.bookingData;
-    } else if (bookingId) {
-      // Try to find booking by ID in localStorage
-      const flightBooking = localStorage.getItem('completedFlightBooking');
-      if (flightBooking) {
-        const parsed = JSON.parse(flightBooking);
-        if (parsed.orderId === bookingId || parsed.bookingReference === bookingId) {
-          booking = parsed;
-        }
+      if (location.state?.bookingData && location.state.bookingData.source !== 'localStorage') {
+        // If we received recent live data from My Trips routing
+        setBookingData(location.state.bookingData);
+        setLoading(false);
+        return;
       }
-    }
 
-    if (booking) {
-      setBookingData(booking);
-    } else {
-      setError('Booking not found');
-    }
+      if (!bookingId) {
+        setError('No booking ID provided');
+        setLoading(false);
+        return;
+      }
 
-    setLoading(false);
+      try {
+        console.log(`📡 Fetching live database row for Booking Ref: ${bookingId}...`);
+        const response = await fetch(getApiUrl(`flights/bookings/${encodeURIComponent(bookingId)}`), {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data) {
+            console.log('✅ Live booking data received:', result.data);
+            setBookingData(result.data);
+          } else {
+            setError(result.error || 'Booking not found in database');
+          }
+        } else {
+          setError(`Server error ${response.status}: Failed to retrieve live booking`);
+        }
+      } catch (err) {
+        console.error('❌ Live fetch error:', err);
+        setError('Network error: Could not reach the server to fetch live booking status');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadLiveBooking();
   }, [location.state, bookingId]);
 
   const handleCancelBooking = () => {
