@@ -109,7 +109,7 @@ const emailService = {
 
       // Send the email using Resend
       const response = await resend.emails.send({
-        from: 'JetSetGo <onboarding@resend.dev>',
+        from: 'Jetsetters <noreply@jetsetterss.com>',
         to: [registeredEmail], // Send to the email registered with Resend
         subject,
         html,
