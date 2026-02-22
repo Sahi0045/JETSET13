@@ -1699,7 +1699,7 @@ async function handleCancelBookingAction(req, res) {
                 status: 'cancelled',
                 payment_status: cancellationResult.paymentProcessed ?
                     (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded' : 'refunded') :
-                    booking.payment_status,
+                    (booking.payment_status === 'paid' ? 'partially_refunded' : booking.payment_status),
                 booking_details: {
                     ...booking.booking_details,
                     cancellation: {

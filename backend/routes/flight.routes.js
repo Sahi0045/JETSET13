@@ -1976,10 +1976,12 @@ router.post('/admin-bookings/:id/cancel', async (req, res) => {
 
     // 3. Update booking status in DB
     // DB constraint: payment_status IN ('unpaid','partial','paid','refunded','partially_refunded')
+    // Always mark as partially_refunded when cancelling a paid booking — even if ARC Pay refund
+    // fails (sandbox/test), the booking IS cancelled. Refund details tracked in booking_details.cancellation
     const newPaymentStatus = cancellationResult.paymentProcessed
       ? (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded'
         : cancellationResult.paymentAction === 'VOID' ? 'refunded' : 'refunded')
-      : (booking.payment_status === 'paid' ? 'paid' : booking.payment_status);
+      : (booking.payment_status === 'paid' ? 'partially_refunded' : booking.payment_status);
 
     const { error: updateError } = await supabase
       .from('bookings')
