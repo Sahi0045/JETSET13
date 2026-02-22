@@ -400,8 +400,7 @@ async function handleHostedCheckout(req, res) {
         };
 
         // ARC Pay Airline Data for Card Brand Interchange
-        // Enabled per ARC Support feedback (travelClass, departureTime format, etc. fixed)
-        const enableAirlineData = process.env.ARC_ENABLE_AIRLINE_DATA !== 'false'; // Default to true now
+        const enableAirlineData = process.env.ARC_ENABLE_AIRLINE_DATA !== 'false';
 
         if (bookingType === 'flight' && enableAirlineData) {
             try {
@@ -412,17 +411,17 @@ async function handleHostedCheckout(req, res) {
                 const segments = Array.isArray(itinerary?.segments) ? itinerary.segments :
                     Array.isArray(flight?.segments) ? flight.segments : [];
 
-                // Extract origin and destination from flight data (fix: these were undefined before)
                 const origin = flight?.origin || flight?.departureAirport || segments?.[0]?.departure?.iataCode || 'XXX';
                 const destination = flight?.destination || flight?.arrivalAirport || segments?.[segments.length - 1]?.arrival?.iataCode || 'XXX';
 
-                // Extract actual carrier code from flight data
                 const actualCarrierCode = (flight?.carrierCode || segments?.[0]?.carrierCode || segments?.[0]?.carrier || 'XX').substring(0, 2).toUpperCase();
+                // Acquirer may reject if carrierName doesn't match a real airline when airline data is present
+                const fallbackAirlineName = flight?.airline || flight?.airlineName || segments?.[0]?.carrierName || 'AIRLINE';
+                const actualCarrierName = typeof fallbackAirlineName === 'string' ? fallbackAirlineName : 'AIRLINE';
 
                 const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || arcMerchantId.replace('TESTARC', '').substring(0, 8) || '05511704';
                 const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'Jetsetters';
 
-                // Passenger info
                 const passengers = bookingData?.passengerData || bookingData?.travelers || [];
                 const passengerList = passengers.length > 0
                     ? passengers.map(p => ({
@@ -434,14 +433,12 @@ async function handleHostedCheckout(req, res) {
                         lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
                     }];
 
-                // Helper: ensure departureDate is YYYY-MM-DD
                 const safeDepartureDate = (atValue) => {
                     if (!atValue) return new Date().toISOString().split('T')[0];
                     const dateCandidate = atValue.includes('T') ? atValue.split('T')[0] : atValue;
                     return /^\d{4}-\d{2}-\d{2}$/.test(dateCandidate) ? dateCandidate : new Date().toISOString().split('T')[0];
                 };
 
-                // Helper: format departureTime to ISO 8601 extended time format (hh:mm+hh:mm or hh:mmZ)
                 const extractDepartureTime = (atValue) => {
                     if (!atValue || !atValue.includes('T')) return '00:00+00:00';
                     const timePart = atValue.split('T')[1];
@@ -467,14 +464,16 @@ async function handleHostedCheckout(req, res) {
                 const legArray = segments.length > 0
                     ? segments.map((segment, index) => {
                         const segCarrier = (segment?.carrierCode || segment?.carrier || actualCarrierCode).substring(0, 2).toUpperCase();
+                        // MPGS Max length for flight number is 5
+                        const fNum = String(segment?.number || segment?.flightNumber || index + 1).replace(/[^0-9A-Z]/gi, '').padEnd(4, '0').substring(0, 5);
                         return {
                             carrierCode: segCarrier,
                             departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3),
                             departureDate: safeDepartureDate(segment?.departure?.at),
                             departureTime: extractDepartureTime(segment?.departure?.at),
                             destinationAirport: (segment?.arrival?.iataCode || destination).substring(0, 3),
-                            flightNumber: String(segment?.number || segment?.flightNumber || index + 1).padEnd(4, '0').substring(0, 6),
-                            travelClass: 'Y' // Support confirmed 'Y' or 'W'
+                            flightNumber: fNum,
+                            travelClass: 'Y'
                         }
                     })
                     : [{
@@ -492,13 +491,13 @@ async function handleHostedCheckout(req, res) {
 
                 requestBody.airline = {
                     bookingReference: bookingRef,
-                    documentType: 'AGENCY_MISCELLANEOUS_CHARGE_ORDER',
+                    documentType: 'TICKET',
                     itinerary: { leg: legArray, numberInParty: String(passengerList.length) },
                     passenger: passengerList,
                     ticket: {
                         issue: {
                             carrierCode: actualCarrierCode,
-                            carrierName: 'JETSETTERS',
+                            carrierName: actualCarrierName.toUpperCase().replace(/[^A-Z0-9\s]/g, '').trim().substring(0, 20) || 'AIRLINE',
                             city: 'ONLINE',
                             country: 'USA',
                             date: new Date().toISOString().split('T')[0],
