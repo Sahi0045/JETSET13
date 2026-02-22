@@ -1461,25 +1461,20 @@ async function handleCancelBookingAction(req, res) {
                 const amadeus_base_url = process.env.AMADEUS_BASE_URL || 'https://test.api.amadeus.com';
 
                 if (amadeus_client_id && amadeus_client_secret) {
-                    const tokenResponse = await fetch(`${amadeus_base_url}/v1/security/oauth2/token`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: `grant_type=client_credentials&client_id=${amadeus_client_id}&client_secret=${amadeus_client_secret}`
+                    const tokenResponse = await axios.post(`${amadeus_base_url}/v1/security/oauth2/token`, `grant_type=client_credentials&client_id=${amadeus_client_id}&client_secret=${amadeus_client_secret}`, {
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
                     });
 
-                    if (tokenResponse.ok) {
-                        const tokenData = await tokenResponse.json();
-                        const cancelResponse = await fetch(
-                            `${amadeus_base_url}/v1/booking/flight-orders/${orderId}`,
-                            {
-                                method: 'DELETE',
-                                headers: {
-                                    'Authorization': `Bearer ${tokenData.access_token}`,
-                                    'Accept': 'application/vnd.amadeus+json'
-                                }
-                            }
-                        );
-                        if (cancelResponse.ok || cancelResponse.status === 204) {
+                    if (tokenResponse.status === 200 || tokenResponse.status === 201) {
+                        const tokenData = tokenResponse.data;
+                        const cancelResponse = await axios.delete(`${amadeus_base_url}/v1/booking/flight-orders/${orderId}`, {
+                            headers: {
+                                'Authorization': `Bearer ${tokenData.access_token}`,
+                                'Accept': 'application/vnd.amadeus+json'
+                            },
+                            validateStatus: () => true // Prevent throw on 4xx/5xx
+                        });
+                        if (cancelResponse.status >= 200 && cancelResponse.status < 300) {
                             console.log('✅ Amadeus flight order cancelled');
                             cancellationResult.amadeusCancelled = true;
                         } else {
@@ -1540,21 +1535,17 @@ async function handleCancelBookingAction(req, res) {
                             const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}/transaction/${refundTxnId}`;
 
                             console.log('💸 Issuing partial REFUND:', netRefundAmount.toFixed(2), '(original:', originalAmount, '- fee:', cancellationFee, ')');
-                            const refundResponse = await fetch(refundUrl, {
-                                method: 'PUT',
-                                headers: authConfig.headers,
-                                body: JSON.stringify({
-                                    apiOperation: 'REFUND',
-                                    transaction: {
-                                        amount: netRefundAmount.toFixed(2),
-                                        currency: payment.currency || 'USD',
-                                        reference: `Cancellation refund (fee: ${cancellationFee}): ${reason}`
-                                    }
-                                })
-                            });
+                            const refundResponse = await axios.put(refundUrl, {
+                                apiOperation: 'REFUND',
+                                transaction: {
+                                    amount: netRefundAmount.toFixed(2),
+                                    currency: payment.currency || 'USD',
+                                    reference: `Cancellation refund (fee: ${cancellationFee}): ${reason}`
+                                }
+                            }, { headers: authConfig.headers, validateStatus: () => true });
 
-                            if (refundResponse.ok) {
-                                const refundData = await refundResponse.json();
+                            if (refundResponse.status >= 200 && refundResponse.status < 300) {
+                                const refundData = refundResponse.data;
                                 console.log('✅ ARC Pay REFUND successful:', refundData.result);
                                 cancellationResult.paymentProcessed = true;
                                 cancellationResult.paymentAction = 'PARTIAL_REFUND';
@@ -1565,8 +1556,7 @@ async function handleCancelBookingAction(req, res) {
                                     metadata: { ...payment.metadata, refund: { transactionId: refundTxnId, amount: netRefundAmount, fee: cancellationFee, reason, at: new Date().toISOString() } }
                                 }).eq('id', payment.id);
                             } else {
-                                const errText = await refundResponse.text();
-                                console.error('❌ ARC Pay REFUND failed:', refundResponse.status, errText);
+                                console.error('❌ ARC Pay REFUND failed:', refundResponse.status, refundResponse.data);
                                 cancellationResult.paymentAction = 'REFUND_FAILED';
                                 cancellationResult.refundAmount = 0;
                                 cancellationResult.cancellationFee = cancellationFee;
@@ -1590,9 +1580,9 @@ async function handleCancelBookingAction(req, res) {
                         if (!targetTxnId) {
                             try {
                                 const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}`;
-                                const orderResp = await fetch(orderUrl, { method: 'GET', headers: authConfig.headers });
-                                if (orderResp.ok) {
-                                    const orderData = await orderResp.json();
+                                const orderResp = await axios.get(orderUrl, { headers: authConfig.headers, validateStatus: () => true });
+                                if (orderResp.status === 200) {
+                                    const orderData = orderResp.data;
                                     // Find the last successful PAY or AUTHORIZE transaction
                                     const txns = orderData.transaction || [];
                                     const payTxn = txns.find(t => t.transaction?.type === 'PAYMENT' || t.transaction?.type === 'AUTHORIZATION');
