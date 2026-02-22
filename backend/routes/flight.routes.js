@@ -81,7 +81,7 @@ function buildBookingRow(bookingData, userId) {
       // even if user_id column is null (FK constraint fallback)
       original_user_id: bookingData.userId || null
     },
-    passenger_details: bookingData.passengerDetails || bookingData.travelers
+    passenger_details: bookingData.passengerData || bookingData.passengerDetails || bookingData.travelers || []
   };
 }
 
