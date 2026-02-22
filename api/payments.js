@@ -3141,7 +3141,14 @@ async function handleCancelBooking(req, res) {
                 }
               }).eq('id', payment.id);
             } else {
-              console.warn('⚠️ ARC Pay refund failed:', await refundResponse.text());
+              const errorText = await refundResponse.text();
+              console.warn('⚠️ ARC Pay refund failed:', errorText);
+              cancellationResult.paymentAction = 'REFUND_FAILED';
+              try {
+                cancellationResult.errorDetails = JSON.parse(errorText);
+              } catch (e) {
+                cancellationResult.errorDetails = errorText;
+              }
             }
           } else if (payment.payment_status === 'pending' || payment.payment_status === 'authorized') {
             // Payment not captured yet → VOID
@@ -3182,7 +3189,14 @@ async function handleCancelBooking(req, res) {
                 }
               }).eq('id', payment.id);
             } else {
-              console.warn('⚠️ ARC Pay void failed:', await voidResponse.text());
+              const errorText = await voidResponse.text();
+              console.warn('⚠️ ARC Pay void failed:', errorText);
+              cancellationResult.paymentAction = 'VOID_FAILED';
+              try {
+                cancellationResult.errorDetails = JSON.parse(errorText);
+              } catch (e) {
+                cancellationResult.errorDetails = errorText;
+              }
             }
           }
         } else {

@@ -1604,10 +1604,11 @@ async function handleCancelBookingAction(req, res) {
                                     metadata: { ...payment.metadata, refund: { transactionId: refundTxnId, amount: netRefundAmount, fee: cancellationFee, reason, at: new Date().toISOString() } }
                                 }).eq('id', payment.id);
                             } else {
-                                console.error('❌ ARC Pay REFUND failed:', refundResponse.status, refundResponse.data);
+                                console.error('❌ ARC Pay REFUND failed:', refundResponse.status, JSON.stringify(refundResponse.data));
                                 cancellationResult.paymentAction = 'REFUND_FAILED';
                                 cancellationResult.refundAmount = 0;
                                 cancellationResult.cancellationFee = cancellationFee;
+                                cancellationResult.errorDetails = refundResponse.data;
                             }
                         } else {
                             // Cancellation fee >= original amount → no refund due
@@ -1706,10 +1707,11 @@ async function handleCancelBookingAction(req, res) {
                             cancellationResult.paymentAction = 'PARTIAL_REFUND';
                             cancellationResult.refundAmount = netRefundAmount;
                         } else {
-                            console.error('❌ ARC Pay REFUND failed:', refundResp.status);
+                            console.error('❌ ARC Pay REFUND failed:', refundResp.status, JSON.stringify(refundResp.data));
                             cancellationResult.paymentAction = 'REFUND_FAILED';
                             cancellationResult.refundAmount = 0;
                             cancellationResult.cancellationFee = cancellationFee;
+                            cancellationResult.errorDetails = refundResp.data;
                         }
                     } else {
                         cancellationResult.paymentProcessed = true;
