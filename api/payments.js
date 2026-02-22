@@ -80,14 +80,6 @@ export default async function handler(req, res) {
         return handlePaymentRetrieve(req, res);
       case 'cancel-booking':
         return handleCancelBooking(req, res);
-      case 'get-pending-booking': {
-        const pendingOrderId = req.query.orderId || req.body?.orderId;
-        if (!pendingOrderId) return res.status(400).json({ success: false, error: 'orderId is required' });
-        const { data: pendingBooking, error: pendingErr } = await supabase
-          .from('bookings').select('*').eq('booking_reference', pendingOrderId).single();
-        if (pendingErr || !pendingBooking) return res.status(404).json({ success: false, error: 'Pending booking not found' });
-        return res.json({ success: true, booking: pendingBooking, pendingBookingData: pendingBooking.booking_details?.pending_booking_data || null });
-      }
       case 'test':
         return handleTest(req, res);
       case 'health':
@@ -97,7 +89,7 @@ export default async function handler(req, res) {
       default:
         return res.status(400).json({
           success: false,
-          error: 'Invalid action. Supported actions: initiate-payment, payment-callback, get-payment-details, gateway-status, session-create, order-create, hosted-checkout, payment-process, payment-verify, payment-refund, payment-void, payment-capture, payment-retrieve, cancel-booking, get-pending-booking, test, health, debug'
+          error: 'Invalid action. Supported actions: initiate-payment, payment-callback, get-payment-details, gateway-status, session-create, order-create, hosted-checkout, payment-process, payment-verify, payment-refund, payment-void, payment-capture, payment-retrieve, cancel-booking, test, health, debug'
         });
     }
   } catch (error) {
@@ -1943,7 +1935,8 @@ async function handleHostedCheckout(req, res) {
     };
 
     // ARC Pay Airline Data for Card Brand Interchange
-    const enableAirlineData = process.env.ARC_ENABLE_AIRLINE_DATA === 'true';
+    // Enabled per ARC Support feedback (travelClass, departureTime format, etc. fixed)
+    const enableAirlineData = process.env.ARC_ENABLE_AIRLINE_DATA !== 'false'; // Default to true now
 
     if (bookingType === 'flight' && enableAirlineData) {
       try {
@@ -1954,7 +1947,7 @@ async function handleHostedCheckout(req, res) {
         const segments = Array.isArray(itinerary?.segments) ? itinerary.segments :
           Array.isArray(flight?.segments) ? flight.segments : [];
 
-        const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || 'JETSET001';
+        const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || arcMerchantId.replace('TESTARC', '').substring(0, 8) || '05511704';
         const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'JETSETTERS';
 
         // Passenger info
@@ -1969,15 +1962,34 @@ async function handleHostedCheckout(req, res) {
             lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
           }];
 
-        // NOTE: departureTime is NOT supported by ARC Pay INITIATE_CHECKOUT.
-        // Tested formats: 'HHmm', 'HH:mm', 'HH:mm:ss' — ALL rejected.
-        // Only include: carrierCode, departureAirport, departureDate, destinationAirport, flightNumber
-
-        // Helper: ensure departureDate is YYYY-MM-DD, not a time string
+        // Helper: ensure departureDate is YYYY-MM-DD
         const safeDepartureDate = (atValue) => {
           if (!atValue) return new Date().toISOString().split('T')[0];
           const dateCandidate = atValue.includes('T') ? atValue.split('T')[0] : atValue;
           return /^\d{4}-\d{2}-\d{2}$/.test(dateCandidate) ? dateCandidate : new Date().toISOString().split('T')[0];
+        };
+
+        // Helper: format departureTime to ISO 8601 extended time format (hh:mm+hh:mm or hh:mmZ)
+        const extractDepartureTime = (atValue) => {
+          if (!atValue || !atValue.includes('T')) return '00:00+00:00';
+          const timePart = atValue.split('T')[1];
+          if (timePart.includes('+') || timePart.includes('-')) {
+            const offsetIdx = timePart.includes('+') ? timePart.indexOf('+') : timePart.indexOf('-');
+            const rawTime = timePart.substring(0, offsetIdx);
+            const offset = timePart.substring(offsetIdx);
+            const timeParts = rawTime.split(':');
+            const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
+            return `${hhmm}${offset}`;
+          } else if (timePart.endsWith('Z')) {
+            const rawTime = timePart.replace('Z', '');
+            const timeParts = rawTime.split(':');
+            const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
+            return `${hhmm}Z`;
+          } else {
+            const timeParts = timePart.split(':');
+            const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
+            return `${hhmm}+00:00`;
+          }
         };
 
         const legArray = segments.length > 0
@@ -1985,15 +1997,19 @@ async function handleHostedCheckout(req, res) {
             carrierCode: 'XD',
             departureAirport: (segment?.departure?.iataCode || 'XXX').substring(0, 3),
             departureDate: safeDepartureDate(segment?.departure?.at),
+            departureTime: extractDepartureTime(segment?.departure?.at),
             destinationAirport: (segment?.arrival?.iataCode || 'XXX').substring(0, 3),
-            flightNumber: String(segment?.number || segment?.flightNumber || `${index + 1}`).padStart(4, '0').substring(0, 6)
+            flightNumber: String(segment?.number || segment?.flightNumber || `${index + 1}`).padEnd(4, '0').substring(0, 6),
+            travelClass: 'Y'
           }))
           : [{
             carrierCode: 'XD',
             departureAirport: (flight?.origin || bookingData?.origin || 'XXX').substring(0, 3),
             departureDate: new Date().toISOString().split('T')[0],
+            departureTime: '00:00+00:00',
             destinationAirport: (flight?.destination || bookingData?.destination || 'XXX').substring(0, 3),
-            flightNumber: '0001'
+            flightNumber: '0001',
+            travelClass: 'Y'
           }];
 
         const ticketNumber = `889${Date.now().toString().slice(-10)}`.substring(0, 13);
@@ -2001,7 +2017,7 @@ async function handleHostedCheckout(req, res) {
 
         requestBody.airline = {
           bookingReference: bookingRef,
-          documentType: 'PASSENGER_TICKET',
+          documentType: 'AGENCY_MISCELLANEOUS_CHARGE_ORDER',
           itinerary: { leg: legArray, numberInParty: String(passengerList.length) },
           passenger: passengerList,
           ticket: {
@@ -2152,31 +2168,6 @@ async function handleHostedCheckout(req, res) {
     const paymentPageUrl = `${gatewayDomain}/checkout/pay/${sessionId}`;
 
     console.log('🔗 Payment Page URL:', paymentPageUrl);
-
-    // Save pending booking data to DB so callback can retrieve it even if localStorage is cleared
-    try {
-      const passengerDetails = bookingData?.passengerData || bookingData?.travelers || [];
-      await supabase.from('bookings').upsert({
-        booking_reference: orderId,
-        travel_type: bookingType || 'flight',
-        status: 'pending',
-        total_amount: parseFloat(amount) || 0,
-        payment_status: 'unpaid',
-        customer_email: customerEmail || null,
-        booking_details: {
-          order_id: orderId,
-          session_id: sessionId,
-          success_indicator: successIndicator,
-          pending_booking_data: req.body,
-          arc_pay_checkout_url: paymentPageUrl,
-          checkout_created_at: new Date().toISOString()
-        },
-        passenger_details: Array.isArray(passengerDetails) ? passengerDetails : []
-      }, { onConflict: 'booking_reference' });
-      console.log('💾 Pending booking saved to DB:', orderId);
-    } catch (dbError) {
-      console.warn('⚠️ Failed to save pending booking to DB (non-blocking):', dbError.message);
-    }
 
     return res.status(200).json({
       success: true,
@@ -2377,7 +2368,9 @@ async function handlePaymentRefund(req, res) {
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
     const refundTransactionId = transactionId || `refund-${Date.now()}`;
-    const refundUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${refundTransactionId}`;
+    // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
+    const arcOrderId = payment.arc_order_id || payment.id;
+    const refundUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${arcOrderId}/transaction/${refundTransactionId}`;
 
     console.log('🔄 Calling ARC Pay REFUND API:', refundUrl);
     console.log('Refund Amount:', refundAmount);
@@ -2585,7 +2578,9 @@ async function handlePaymentVoid(req, res) {
     const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
     const voidTransactionId = transactionId || `void-${Date.now()}`;
-    const voidUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${voidTransactionId}`;
+    // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
+    const arcOrderId = payment.arc_order_id || payment.id;
+    const voidUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${arcOrderId}/transaction/${voidTransactionId}`;
 
     console.log('🔄 Calling ARC Pay VOID API:', voidUrl);
 
@@ -3101,128 +3096,93 @@ async function handleCancelBooking(req, res) {
           const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
           const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
-          // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
-          const arcPayOrderId = booking.booking_details?.order_id ||
-            payment.arc_order_id ||
-            booking.booking_reference ||
-            payment.id; // Last resort fallback
-          console.log('\ud83d\udd11 ARC Pay Order ID for refund/void:', arcPayOrderId);
-
           const refundAmount = parseFloat(payment.amount || booking.total_amount || 0);
 
-          // Get cancellation fee
-          let cancellationFee = 50.00;
-          try {
-            const { data: priceSettings } = await supabase.from('price_settings').select('settings').single();
-            cancellationFee = priceSettings?.settings?.cancellation_fee || 50.00;
-          } catch (e) { /* use default */ }
-
-          const netRefundAmount = Math.max(0, refundAmount - cancellationFee);
-
           if (payment.payment_status === 'completed') {
-            // === COMPLETED PAYMENT: Issue partial REFUND (original - fee) ===
-            // Per ARC Pay docs: REFUND uses same orderId, new transactionId, amount to refund
-            if (netRefundAmount > 0) {
-              const refundTxnId = `refund-${Date.now()}`;
-              const refundUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${arcPayOrderId}/transaction/${refundTxnId}`;
+            // Payment was captured → REFUND
+            const refundTransactionId = `refund-cancel-${Date.now()}`;
+            const refundUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${refundTransactionId}`;
 
-              console.log('💸 Issuing partial REFUND:', netRefundAmount.toFixed(2), '(original:', refundAmount, '- fee:', cancellationFee, ')');
-              const refundResponse = await fetch(refundUrl, {
-                method: 'PUT',
-                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({
-                  apiOperation: 'REFUND',
-                  transaction: {
-                    amount: netRefundAmount.toFixed(2),
-                    currency: payment.currency || 'USD',
-                    reference: `Cancellation refund (fee: ${cancellationFee}): ${reason}`
-                  }
-                })
-              });
+            console.log('💸 Initiating ARC Pay REFUND for cancellation...');
+            const refundResponse = await fetch(refundUrl, {
+              method: 'PUT',
+              headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({
+                apiOperation: 'REFUND',
+                transaction: {
+                  amount: refundAmount.toFixed(2),
+                  currency: payment.currency || 'USD',
+                  reference: `Cancellation: ${reason}`
+                }
+              })
+            });
 
-              if (refundResponse.ok) {
-                const refundData = await refundResponse.json();
-                console.log('✅ ARC Pay REFUND successful:', refundData.result);
-                cancellationResult.paymentProcessed = true;
-                cancellationResult.paymentAction = 'PARTIAL_REFUND';
-                cancellationResult.refundAmount = netRefundAmount;
-                cancellationResult.cancellationFee = cancellationFee;
-                await supabase.from('payments').update({
-                  payment_status: 'partially_refunded',
-                  metadata: { ...payment.metadata, refund: { transactionId: refundTxnId, amount: netRefundAmount, fee: cancellationFee, reason, at: new Date().toISOString() } }
-                }).eq('id', payment.id);
-              } else {
-                const errText = await refundResponse.text();
-                console.error('❌ ARC Pay REFUND failed:', refundResponse.status, errText);
-                cancellationResult.paymentAction = 'REFUND_FAILED';
-              }
-            } else {
-              // Cancellation fee >= amount → no refund due
-              console.log('💰 No refund due: fee (', cancellationFee, ') >= amount (', refundAmount, ')');
+            if (refundResponse.ok) {
+              console.log('✅ ARC Pay refund processed');
               cancellationResult.paymentProcessed = true;
-              cancellationResult.paymentAction = 'NO_REFUND_FEE_COVERS';
-              cancellationResult.refundAmount = 0;
-              cancellationResult.cancellationFee = Math.min(cancellationFee, refundAmount);
-              await supabase.from('payments').update({ payment_status: 'cancelled' }).eq('id', payment.id);
+              cancellationResult.paymentAction = 'REFUND';
+              cancellationResult.refundAmount = refundAmount;
+
+              // Update payment record
+              await supabase.from('payments').update({
+                payment_status: 'refunded',
+                metadata: {
+                  ...payment.metadata,
+                  cancellationRefund: {
+                    transactionId: refundTransactionId,
+                    amount: refundAmount,
+                    reason,
+                    refundedAt: new Date().toISOString()
+                  }
+                }
+              }).eq('id', payment.id);
+            } else {
+              console.warn('⚠️ ARC Pay refund failed:', await refundResponse.text());
             }
           } else if (payment.payment_status === 'pending' || payment.payment_status === 'authorized') {
-            // === AUTHORIZED/PENDING: VOID the full transaction ===
-            // Per ARC Pay docs: VOID requires transaction.targetTransactionId
-            let targetTxnId = payment.arc_transaction_id;
+            // Payment not captured yet → VOID
+            const voidTransactionId = `void-cancel-${Date.now()}`;
+            const voidUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${voidTransactionId}`;
 
-            // If we don't have it, retrieve from the order
-            if (!targetTxnId) {
-              try {
-                const orderUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${arcPayOrderId}`;
-                const orderResp = await fetch(orderUrl, { method: 'GET', headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-                if (orderResp.ok) {
-                  const orderData = await orderResp.json();
-                  const txns = orderData.transaction || [];
-                  const payTxn = txns.find(t => t.transaction?.type === 'PAYMENT' || t.transaction?.type === 'AUTHORIZATION');
-                  targetTxnId = payTxn?.transaction?.id || txns[txns.length - 1]?.transaction?.id;
-                  console.log('🔍 Retrieved target transaction ID:', targetTxnId);
+            console.log('🚫 Initiating ARC Pay VOID for cancellation...');
+            const voidResponse = await fetch(voidUrl, {
+              method: 'PUT',
+              headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({
+                apiOperation: 'VOID',
+                transaction: {
+                  targetTransactionId: payment.arc_transaction_id
                 }
-              } catch (orderErr) {
-                console.warn('⚠️ Could not retrieve order:', orderErr.message);
-              }
-            }
+              })
+            });
 
-            if (targetTxnId) {
-              const voidTxnId = `void-${Date.now()}`;
-              const voidUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${arcPayOrderId}/transaction/${voidTxnId}`;
+            if (voidResponse.ok) {
+              console.log('✅ ARC Pay void processed');
+              cancellationResult.paymentProcessed = true;
+              cancellationResult.paymentAction = 'VOID';
+              cancellationResult.refundAmount = refundAmount;
 
-              console.log('🚫 Issuing VOID for transaction:', targetTxnId);
-              const voidResponse = await fetch(voidUrl, {
-                method: 'PUT',
-                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({
-                  apiOperation: 'VOID',
-                  transaction: {
-                    targetTransactionId: targetTxnId,
-                    reference: `Cancellation: ${reason}`
+              await supabase.from('payments').update({
+                payment_status: 'cancelled',
+                metadata: {
+                  ...payment.metadata,
+                  cancellationVoid: {
+                    transactionId: voidTransactionId,
+                    reason,
+                    voidedAt: new Date().toISOString()
                   }
-                })
-              });
-
-              if (voidResponse.ok) {
-                const voidData = await voidResponse.json();
-                console.log('✅ ARC Pay VOID successful:', voidData.result);
-                cancellationResult.paymentProcessed = true;
-                cancellationResult.paymentAction = 'VOID';
-                cancellationResult.refundAmount = refundAmount;
-                cancellationResult.cancellationFee = 0;
-                await supabase.from('payments').update({
-                  payment_status: 'voided',
-                  metadata: { ...payment.metadata, void: { transactionId: voidTxnId, targetTxnId, reason, at: new Date().toISOString() } }
-                }).eq('id', payment.id);
-              } else {
-                const errText = await voidResponse.text();
-                console.error('❌ ARC Pay VOID failed:', voidResponse.status, errText);
-                cancellationResult.paymentAction = 'VOID_FAILED';
-              }
+                }
+              }).eq('id', payment.id);
             } else {
-              console.error('❌ Cannot void: no target transaction ID found');
-              cancellationResult.paymentAction = 'VOID_MISSING_TXN_ID';
+              console.warn('⚠️ ARC Pay void failed:', await voidResponse.text());
             }
           }
         } else {
@@ -3238,10 +3198,7 @@ async function handleCancelBooking(req, res) {
       .from('bookings')
       .update({
         status: 'cancelled',
-        payment_status: cancellationResult.paymentProcessed ?
-          (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded' :
-            cancellationResult.paymentAction === 'VOID' ? 'voided' : 'cancelled') :
-          booking.payment_status,
+        payment_status: cancellationResult.paymentProcessed ? 'refunded' : booking.payment_status,
         booking_details: {
           ...booking.booking_details,
           cancellation: {

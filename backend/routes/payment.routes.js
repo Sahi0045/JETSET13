@@ -399,11 +399,8 @@ async function handleHostedCheckout(req, res) {
         };
 
         // ARC Pay Airline Data for Card Brand Interchange
-        // TEMPORARILY DISABLED: airline data causes "transaction unsuccessful" on ARC Pay checkout
-        // The session creates fine but payment fails at acquirer level with airline data attached.
-        // Needs ARC support to confirm which fields their gateway accepts on INITIATE_CHECKOUT.
-        // Set ARC_ENABLE_AIRLINE_DATA=true in .env to re-enable once confirmed.
-        const enableAirlineData = false; // process.env.ARC_ENABLE_AIRLINE_DATA === 'true';
+        // Enabled per ARC Support feedback (travelClass, departureTime format, etc. fixed)
+        const enableAirlineData = process.env.ARC_ENABLE_AIRLINE_DATA !== 'false'; // Default to true now
 
         if (bookingType === 'flight' && enableAirlineData) {
             try {
@@ -414,7 +411,7 @@ async function handleHostedCheckout(req, res) {
                 const segments = Array.isArray(itinerary?.segments) ? itinerary.segments :
                     Array.isArray(flight?.segments) ? flight.segments : [];
 
-                const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || 'JETSET001';
+                const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || arcMerchantId.replace('TESTARC', '').substring(0, 8) || '05511704';
                 const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'Jetsetters';
 
                 // Passenger info
@@ -429,38 +426,56 @@ async function handleHostedCheckout(req, res) {
                         lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
                     }];
 
-                // Build leg array with all ARC certification required fields
-                // Note: classOfService is NOT supported by the MPGS API (returns UNSUPPORTED error)
-                // ARC certification requires it, but the gateway API does not accept it at leg level
-                const origin = flight?.origin || bookingData?.origin || 'XXX';
-                const destination = flight?.destination || bookingData?.destination || 'XXX';
-
-                // NOTE: departureTime is NOT supported by ARC Pay INITIATE_CHECKOUT.
-                // Tested formats: 'HHmm', 'HH:mm', 'HH:mm:ss' — ALL rejected.
-                // Only include: carrierCode, departureAirport, departureDate, destinationAirport, flightNumber
-
-                // Helper: ensure departureDate is YYYY-MM-DD, not a time string
+                // Helper: ensure departureDate is YYYY-MM-DD
                 const safeDepartureDate = (atValue) => {
                     if (!atValue) return new Date().toISOString().split('T')[0];
                     const dateCandidate = atValue.includes('T') ? atValue.split('T')[0] : atValue;
-                    // Validate YYYY-MM-DD pattern
                     return /^\d{4}-\d{2}-\d{2}$/.test(dateCandidate) ? dateCandidate : new Date().toISOString().split('T')[0];
                 };
 
+                // Helper: format departureTime to ISO 8601 extended time format (hh:mm+hh:mm or hh:mmZ)
+                const extractDepartureTime = (atValue) => {
+                    if (!atValue || !atValue.includes('T')) return '00:00+00:00';
+                    const timePart = atValue.split('T')[1];
+                    if (timePart.includes('+') || timePart.includes('-')) {
+                        const offsetIdx = timePart.includes('+') ? timePart.indexOf('+') : timePart.indexOf('-');
+                        const rawTime = timePart.substring(0, offsetIdx);
+                        const offset = timePart.substring(offsetIdx);
+                        const timeParts = rawTime.split(':');
+                        const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
+                        return `${hhmm}${offset}`;
+                    } else if (timePart.endsWith('Z')) {
+                        const rawTime = timePart.replace('Z', '');
+                        const timeParts = rawTime.split(':');
+                        const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
+                        return `${hhmm}Z`;
+                    } else {
+                        const timeParts = timePart.split(':');
+                        const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
+                        return `${hhmm}+00:00`;
+                    }
+                };
+
                 const legArray = segments.length > 0
-                    ? segments.map((segment, index) => ({
-                        carrierCode: 'XD',
-                        departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3),
-                        departureDate: safeDepartureDate(segment?.departure?.at),
-                        destinationAirport: (segment?.arrival?.iataCode || destination).substring(0, 3),
-                        flightNumber: String(segment?.number || segment?.flightNumber || index + 1).padStart(4, '0').substring(0, 6)
-                    }))
+                    ? segments.map((segment, index) => {
+                        return {
+                            carrierCode: 'XD',
+                            departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3),
+                            departureDate: safeDepartureDate(segment?.departure?.at),
+                            departureTime: extractDepartureTime(segment?.departure?.at),
+                            destinationAirport: (segment?.arrival?.iataCode || destination).substring(0, 3),
+                            flightNumber: String(segment?.number || segment?.flightNumber || index + 1).padEnd(4, '0').substring(0, 6),
+                            travelClass: 'Y' // Support confirmed 'Y' or 'W'
+                        }
+                    })
                     : [{
                         carrierCode: 'XD',
                         departureAirport: origin.substring(0, 3),
                         departureDate: new Date().toISOString().split('T')[0],
+                        departureTime: '00:00+00:00',
                         destinationAirport: destination.substring(0, 3),
-                        flightNumber: '0001'
+                        flightNumber: '0001',
+                        travelClass: 'Y'
                     }];
 
                 const ticketNumber = `889${Date.now().toString().slice(-10)}`.substring(0, 13);
@@ -468,7 +483,7 @@ async function handleHostedCheckout(req, res) {
 
                 requestBody.airline = {
                     bookingReference: bookingRef,
-                    documentType: 'PASSENGER_TICKET',
+                    documentType: 'AGENCY_MISCELLANEOUS_CHARGE_ORDER',
                     itinerary: { leg: legArray, numberInParty: String(passengerList.length) },
                     passenger: passengerList,
                     ticket: {
@@ -1830,9 +1845,12 @@ async function handlePaymentRefund(req, res) {
         }
 
         // Process refund via ARC Pay
+        // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
+        const arcOrderId = payment.arc_order_id || paymentId;
+        console.log('🔑 ARC Pay Order ID for refund:', arcOrderId, '(Supabase ID:', paymentId, ')');
         const authConfig = getArcPayAuthConfig();
         const refundTxnId = `refund-admin-${Date.now()}`;
-        const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${paymentId}/transaction/${refundTxnId}`;
+        const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}/transaction/${refundTxnId}`;
 
         try {
             const refundResponse = await fetch(refundUrl, {
@@ -1946,9 +1964,12 @@ async function handlePaymentVoid(req, res) {
         }
 
         // Process void via ARC Pay
+        // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
+        const arcOrderId = payment.arc_order_id || paymentId;
+        console.log('🔑 ARC Pay Order ID for void:', arcOrderId, '(Supabase ID:', paymentId, ')');
         const authConfig = getArcPayAuthConfig();
         const voidTxnId = `void-admin-${Date.now()}`;
-        const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${paymentId}/transaction/${voidTxnId}`;
+        const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}/transaction/${voidTxnId}`;
 
         try {
             const voidResponse = await fetch(voidUrl, {
