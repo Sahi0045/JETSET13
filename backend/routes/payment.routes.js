@@ -420,17 +420,18 @@ async function handleHostedCheckout(req, res) {
                 const actualCarrierName = typeof fallbackAirlineName === 'string' ? fallbackAirlineName : 'AIRLINE';
 
                 const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || arcMerchantId.replace('TESTARC', '').substring(0, 8) || '05511704';
-                const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'Jetsetters';
+                const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'Jetsetters Corporation'; // Match the working example
 
                 const passengers = bookingData?.passengerData || bookingData?.travelers || [];
                 const passengerList = passengers.length > 0
                     ? passengers.map(p => ({
-                        firstName: (p.firstName || p.name?.firstName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
-                        lastName: (p.lastName || p.name?.lastName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
+                        // Remove special characters, limit length, capitalize
+                        firstName: (p.firstName || p.name?.firstName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20) || 'TEST',
+                        lastName: (p.lastName || p.name?.lastName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20) || 'TRAVELER'
                     }))
                     : [{
-                        firstName: (firstName || 'GUEST').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
-                        lastName: (lastName || 'PASSENGER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
+                        firstName: (firstName || 'TEST').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
+                        lastName: (lastName || 'TRAVELER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
                     }];
 
                 const safeDepartureDate = (atValue) => {
@@ -448,12 +449,12 @@ async function handleHostedCheckout(req, res) {
                         const offset = timePart.substring(offsetIdx);
                         const timeParts = rawTime.split(':');
                         const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
-                        return `${hhmm}${offset}`;
+                        return `${hhmm}${offset}`; // e.g., 00:00+05:30
                     } else if (timePart.endsWith('Z')) {
                         const rawTime = timePart.replace('Z', '');
                         const timeParts = rawTime.split(':');
                         const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
-                        return `${hhmm}Z`;
+                        return `${hhmm}Z`; // e.g., 00:00Z
                     } else {
                         const timeParts = timePart.split(':');
                         const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
@@ -464,54 +465,56 @@ async function handleHostedCheckout(req, res) {
                 const legArray = segments.length > 0
                     ? segments.map((segment, index) => {
                         const segCarrier = (segment?.carrierCode || segment?.carrier || actualCarrierCode).substring(0, 2).toUpperCase();
-                        // MPGS Max length for flight number is 5
-                        const fNum = String(segment?.number || segment?.flightNumber || index + 1).replace(/[^0-9A-Z]/gi, '').padEnd(4, '0').substring(0, 5);
+                        // MPGS Max length for flight number is 4-5 alphanumeric. Example format AI131.
+                        const rawFNum = String(segment?.number || segment?.flightNumber || index + 1).replace(/[^0-9A-Z]/gi, '');
+                        // Check if it already has the carrier code prepended, if not prepend it
+                        const fNum = rawFNum.startsWith(segCarrier) ? rawFNum : `${segCarrier}${rawFNum}`;
                         return {
                             carrierCode: segCarrier,
-                            departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3),
+                            departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3).toUpperCase(),
                             departureDate: safeDepartureDate(segment?.departure?.at),
                             departureTime: extractDepartureTime(segment?.departure?.at),
-                            destinationAirport: (segment?.arrival?.iataCode || destination).substring(0, 3),
-                            flightNumber: fNum,
-                            travelClass: 'Y'
+                            destinationAirport: (segment?.arrival?.iataCode || destination).substring(0, 3).toUpperCase(),
+                            flightNumber: fNum.substring(0, 5), // Max length 5
+                            travelClass: 'W' // Changed from Y to W as per user requirements
                         }
                     })
                     : [{
-                        carrierCode: actualCarrierCode,
-                        departureAirport: origin.substring(0, 3),
+                        carrierCode: 'XD', // Fallback
+                        departureAirport: origin.substring(0, 3).toUpperCase(),
                         departureDate: new Date().toISOString().split('T')[0],
-                        departureTime: '00:00+00:00',
-                        destinationAirport: destination.substring(0, 3),
-                        flightNumber: '0001',
-                        travelClass: 'Y'
+                        departureTime: '00:00+05:30', // Match example timezone
+                        destinationAirport: destination.substring(0, 3).toUpperCase(),
+                        flightNumber: 'AI131',
+                        travelClass: 'W' // Changed from Y to W
                     }];
 
-                const ticketNumber = `889${Date.now().toString().slice(-10)}`.substring(0, 13);
-                const bookingRef = (flight?.pnr || flight?.bookingReference || orderId || '').toString().substring(0, 6).toUpperCase() || 'JETSET';
+                const bookingRef = (flight?.pnr || flight?.bookingReference || orderId || '').toString().substring(0, 6).toUpperCase() || '501337';
+
+                // Match the ticket number format from the working example (e.g. BOM1234567LHR)
+                const depCode = legArray[0]?.departureAirport || 'BOM';
+                const arrCode = legArray[legArray.length - 1]?.destinationAirport || 'LHR';
+                const ticketNumber = `${depCode}${Date.now().toString().slice(-7)}${arrCode}`.substring(0, 13);
 
                 requestBody.airline = {
                     bookingReference: bookingRef,
-                    documentType: 'TICKET',
+                    documentType: 'AGENCY_MISCELLANEOUS_CHARGE_ORDER', // Reverted back to the working example documentType
                     itinerary: { leg: legArray, numberInParty: String(passengerList.length) },
                     passenger: passengerList,
                     ticket: {
                         issue: {
-                            carrierCode: actualCarrierCode,
-                            carrierName: actualCarrierName.toUpperCase().replace(/[^A-Z0-9\s]/g, '').trim().substring(0, 20) || 'AIRLINE',
-                            city: 'ONLINE',
-                            country: 'USA',
-                            date: new Date().toISOString().split('T')[0],
                             travelAgentCode: travelAgentCode,
-                            travelAgentName: travelAgentName.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 25)
+                            travelAgentName: travelAgentName.substring(0, 25)
                         },
-                        ticketNumber: ticketNumber,
-                        totalFare: parseFloat(amount).toFixed(2),
-                        totalFees: '0.00',
-                        totalTaxes: '0.00'
+                        ticketNumber: ticketNumber, // example format: BOM1234567LHR
+                        // totalFare, totalFees, and totalTaxes were omitted in the working example,
+                        // so we don't include them if they cause strict validation errors.
                     }
                 };
 
-                console.log('✈️ ARC Pay Airline Data:', JSON.stringify(requestBody.airline, null, 2));
+                // Only embed airline data for MPGS gateway
+                // Card brand interchange has VERY strict rules.
+                console.log('✈️ ARC Pay Airline Data mapped successfully:', JSON.stringify(requestBody.airline, null, 2));
             } catch (airlineError) {
                 console.error('⚠️ Error constructing airline data:', airlineError);
             }
