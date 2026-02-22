@@ -13,9 +13,9 @@ const supabase = supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 if (supabase) {
   console.log('✅ Supabase client initialized successfully');
   console.log('   URL:', supabaseUrl);
-  console.log('   Key source:', supabaseKey ? (process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SUPABASE_SERVICE_ROLE_KEY' : 
-                                                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'NEXT_PUBLIC_SUPABASE_ANON_KEY' : 
-                                                 'SUPABASE_ANON_KEY') : 'None');
+  console.log('   Key source:', supabaseKey ? (process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SUPABASE_SERVICE_ROLE_KEY' :
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'NEXT_PUBLIC_SUPABASE_ANON_KEY' :
+      'SUPABASE_ANON_KEY') : 'None');
 } else {
   console.error('❌ CRITICAL: Supabase client NOT initialized! Database saves will fail!');
   console.error('   Available env vars:');
@@ -1932,10 +1932,11 @@ router.post('/admin-bookings/:id/cancel', async (req, res) => {
     }
 
     // 3. Update booking status in DB
+    // DB constraint: payment_status IN ('unpaid', 'partial', 'paid', 'refunded')
     const newPaymentStatus = cancellationResult.paymentProcessed
-      ? (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded'
-        : cancellationResult.paymentAction === 'VOID' ? 'voided' : 'cancelled')
-      : (booking.payment_status === 'paid' ? 'refund_pending' : 'cancelled');
+      ? (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'refunded'
+        : cancellationResult.paymentAction === 'VOID' ? 'refunded' : 'refunded')
+      : (booking.payment_status === 'paid' ? 'paid' : booking.payment_status);
 
     const { error: updateError } = await supabase
       .from('bookings')
