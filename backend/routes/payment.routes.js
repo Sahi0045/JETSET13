@@ -1450,12 +1450,19 @@ async function handleCancelBookingAction(req, res) {
                     const originalAmount = parseFloat(payment.amount || booking.total_amount || 0);
                     netRefundAmount = Math.max(0, originalAmount - cancellationFee);
 
+                    // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
+                    const arcPayOrderId = booking.booking_details?.order_id ||
+                        payment.arc_order_id ||
+                        booking.booking_reference ||
+                        payment.id; // Last resort fallback
+                    console.log('🔑 ARC Pay Order ID for refund/void:', arcPayOrderId);
+
                     if (payment.payment_status === 'completed') {
                         // Process cancellation fee as a separate charge (if amount allows)
                         if (originalAmount > cancellationFee) {
                             // Charge cancellation fee
                             const feeTxnId = `cancel-fee-${Date.now()}`;
-                            const feeUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}-fee/transaction/${feeTxnId}`;
+                            const feeUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}-fee/transaction/${feeTxnId}`;
 
                             try {
                                 const feeResponse = await fetch(feeUrl, {
@@ -1492,7 +1499,7 @@ async function handleCancelBookingAction(req, res) {
                             // Process partial refund (original amount - cancellation fee)
                             if (netRefundAmount > 0) {
                                 const refundTxnId = `refund-cancel-${Date.now()}`;
-                                const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}/transaction/${refundTxnId}`;
+                                const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}/transaction/${refundTxnId}`;
 
                                 const refundResponse = await fetch(refundUrl, {
                                     method: 'PUT',
@@ -1533,7 +1540,7 @@ async function handleCancelBookingAction(req, res) {
                     } else if (payment.payment_status === 'pending' || payment.payment_status === 'authorized') {
                         // For pending/authorized payments, void the authorization and charge cancellation fee separately
                         const voidTxnId = `void-cancel-${Date.now()}`;
-                        const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}/transaction/${voidTxnId}`;
+                        const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}/transaction/${voidTxnId}`;
 
                         const voidResponse = await fetch(voidUrl, {
                             method: 'PUT',
@@ -1547,7 +1554,7 @@ async function handleCancelBookingAction(req, res) {
                         if (voidResponse.ok) {
                             // Now charge cancellation fee as new transaction
                             const feeTxnId = `cancel-fee-${Date.now()}`;
-                            const feeUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${payment.id}-fee/transaction/${feeTxnId}`;
+                            const feeUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}-fee/transaction/${feeTxnId}`;
 
                             const feeResponse = await fetch(feeUrl, {
                                 method: 'PUT',

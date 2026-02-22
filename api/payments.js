@@ -3068,12 +3068,19 @@ async function handleCancelBooking(req, res) {
           const arcBaseUrl = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
           const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
+          // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
+          const arcPayOrderId = booking.booking_details?.order_id ||
+            payment.arc_order_id ||
+            booking.booking_reference ||
+            payment.id; // Last resort fallback
+          console.log('\ud83d\udd11 ARC Pay Order ID for refund/void:', arcPayOrderId);
+
           const refundAmount = parseFloat(payment.amount || booking.total_amount || 0);
 
           if (payment.payment_status === 'completed') {
             // Payment was captured → REFUND
             const refundTransactionId = `refund-cancel-${Date.now()}`;
-            const refundUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${refundTransactionId}`;
+            const refundUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${arcPayOrderId}/transaction/${refundTransactionId}`;
 
             console.log('💸 Initiating ARC Pay REFUND for cancellation...');
             const refundResponse = await fetch(refundUrl, {
@@ -3118,7 +3125,7 @@ async function handleCancelBooking(req, res) {
           } else if (payment.payment_status === 'pending' || payment.payment_status === 'authorized') {
             // Payment not captured yet → VOID
             const voidTransactionId = `void-cancel-${Date.now()}`;
-            const voidUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${payment.id}/transaction/${voidTransactionId}`;
+            const voidUrl = `${arcBaseUrl}/merchant/${arcMerchantId}/order/${arcPayOrderId}/transaction/${voidTransactionId}`;
 
             console.log('🚫 Initiating ARC Pay VOID for cancellation...');
             const voidResponse = await fetch(voidUrl, {
