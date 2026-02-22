@@ -1932,9 +1932,9 @@ router.post('/admin-bookings/:id/cancel', async (req, res) => {
     }
 
     // 3. Update booking status in DB
-    // DB constraint: payment_status IN ('unpaid', 'partial', 'paid', 'refunded')
+    // DB constraint: payment_status IN ('unpaid','partial','paid','refunded','partially_refunded')
     const newPaymentStatus = cancellationResult.paymentProcessed
-      ? (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'refunded'
+      ? (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded'
         : cancellationResult.paymentAction === 'VOID' ? 'refunded' : 'refunded')
       : (booking.payment_status === 'paid' ? 'paid' : booking.payment_status);
 

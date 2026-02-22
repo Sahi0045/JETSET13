@@ -1651,13 +1651,13 @@ async function handleCancelBookingAction(req, res) {
         }
 
         // 4. Update booking status
-        // DB constraint: payment_status IN ('unpaid', 'partial', 'paid', 'refunded')
+        // DB constraint: payment_status IN ('unpaid','partial','paid','refunded','partially_refunded')
         const { error: updateError } = await supabase
             .from('bookings')
             .update({
                 status: 'cancelled',
                 payment_status: cancellationResult.paymentProcessed ?
-                    'refunded' :
+                    (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded' : 'refunded') :
                     booking.payment_status,
                 booking_details: {
                     ...booking.booking_details,
