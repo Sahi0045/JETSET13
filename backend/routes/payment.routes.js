@@ -468,7 +468,15 @@ async function handleHostedCheckout(req, res) {
                         // MPGS Max length for flight number is 4-5 alphanumeric. Example format AI131.
                         const rawFNum = String(segment?.number || segment?.flightNumber || index + 1).replace(/[^0-9A-Z]/gi, '');
                         // Check if it already has the carrier code prepended, if not prepend it
-                        const fNum = rawFNum.startsWith(segCarrier) ? rawFNum : `${segCarrier}${rawFNum}`;
+                        let fNum = rawFNum.startsWith(segCarrier) ? rawFNum : `${segCarrier}${rawFNum}`;
+
+                        // Enforce minimum 4 characters (ARC Pay strictly requires length 4 to 5)
+                        if (fNum.length < 4) {
+                            const letters = fNum.replace(/[0-9]/g, '');
+                            const numbers = fNum.replace(/[^0-9]/g, '');
+                            fNum = `${letters}${numbers.padStart(4 - letters.length, '0')}`;
+                        }
+
                         return {
                             carrierCode: segCarrier,
                             departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3).toUpperCase(),
