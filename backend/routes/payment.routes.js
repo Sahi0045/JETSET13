@@ -1529,7 +1529,7 @@ async function handleCancelBookingAction(req, res) {
                         payment.id; // Last resort fallback
                     console.log('🔑 ARC Pay Order ID for refund/void:', arcPayOrderId);
 
-                    if (payment.payment_status === 'completed') {
+                    if (payment.payment_status === 'completed' || payment.payment_status === 'paid') {
                         // === COMPLETED PAYMENT: Issue partial REFUND (original - fee) ===
                         // Per ARC Pay docs: REFUND uses same orderId, new transactionId, amount to refund
                         // No separate PAY for fee — just refund less than the full amount

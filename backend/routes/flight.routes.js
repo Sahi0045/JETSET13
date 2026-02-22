@@ -1853,7 +1853,7 @@ router.post('/admin-bookings/:id/cancel', async (req, res) => {
           const orderIdForArc = booking.booking_details?.order_id || payment.arc_order_id || booking.booking_reference || payment.id;
           console.log('🔑 ARC Pay Order ID for refund/void:', orderIdForArc);
 
-          if (payment.payment_status === 'completed' && netRefundAmount > 0) {
+          if ((payment.payment_status === 'completed' || payment.payment_status === 'paid') && netRefundAmount > 0) {
             // Issue partial REFUND (original - cancellation fee)
             const refundTxnId = `refund-admin-${Date.now()}`;
             const refundUrl = `${ARC_BASE_URL}/merchant/${ARC_MERCHANT_ID}/order/${orderIdForArc}/transaction/${refundTxnId}`;
@@ -1918,7 +1918,7 @@ router.post('/admin-bookings/:id/cancel', async (req, res) => {
                 cancellationResult.paymentAction = 'VOID_FAILED';
               }
             }
-          } else if (payment.payment_status === 'completed' && netRefundAmount <= 0) {
+          } else if ((payment.payment_status === 'completed' || payment.payment_status === 'paid') && netRefundAmount <= 0) {
             cancellationResult.paymentProcessed = true;
             cancellationResult.paymentAction = 'NO_REFUND_FEE_COVERS';
             cancellationResult.refundAmount = 0;
