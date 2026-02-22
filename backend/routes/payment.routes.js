@@ -1621,6 +1621,8 @@ async function handleCancelBookingAction(req, res) {
                             } else {
                                 console.error('❌ ARC Pay VOID failed:', voidResp.status);
                                 cancellationResult.paymentAction = 'VOID_FAILED';
+                                cancellationResult.refundAmount = 0;
+                                cancellationResult.cancellationFee = 0; // Void failed, fee is not strictly determined but typically no fee applies yet
                             }
                         } else {
                             console.error('❌ Cannot void: no target transaction ID found');
@@ -1658,11 +1660,14 @@ async function handleCancelBookingAction(req, res) {
                         } else {
                             console.error('❌ ARC Pay REFUND failed:', refundResp.status);
                             cancellationResult.paymentAction = 'REFUND_FAILED';
+                            cancellationResult.refundAmount = 0;
+                            cancellationResult.cancellationFee = cancellationFee;
                         }
                     } else {
                         cancellationResult.paymentProcessed = true;
                         cancellationResult.paymentAction = 'NO_REFUND_FEE_COVERS';
                         cancellationResult.refundAmount = 0;
+                        cancellationResult.cancellationFee = Math.min(cancellationFee, originalAmount);
                     }
                 }
             } catch (paymentError) {

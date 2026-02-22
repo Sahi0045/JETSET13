@@ -376,7 +376,7 @@ function ManageBooking() {
                   <div className="flex justify-between items-center pt-2">
                     <span className="text-lg font-bold text-slate-800">Net Refund Total</span>
                     <span className={`text-xl font-bold ${isRefundFailed || isNoRefund ? 'text-slate-400' : 'text-emerald-600'}`}>
-                      ${(cancelData.refundAmount || cancelData.netRefund || 0).toFixed(2)}
+                      ${(cancelData.refundAmount || cancelData.netRefund || (isRefundFailed ? Math.max(0, (bookingData?.totalAmount || bookingData?.amount || bookingData?.total_amount || 0) - (cancelData.cancellationFee || 0)) : 0)).toFixed(2)}
                     </span>
                   </div>
                 </div>
