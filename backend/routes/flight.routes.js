@@ -1,6 +1,7 @@
 import express from 'express';
 import AmadeusService from '../services/amadeusService.js';
 import { createClient } from '@supabase/supabase-js';
+import fetch from 'node-fetch';
 
 const router = express.Router();
 
