@@ -1041,7 +1041,7 @@ router.delete('/order/:orderId', async (req, res) => {
     if (supabase) {
       const { error } = await supabase
         .from('bookings')
-        .update({ status: 'cancelled', payment_status: 'refund_pending' })
+        .update({ status: 'cancelled', payment_status: 'paid' })
         .or(`booking_reference.eq.${orderId},booking_details->>` + `order_id.eq.${orderId}`);
 
       if (!error) {

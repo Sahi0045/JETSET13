@@ -253,7 +253,7 @@ async function handleInitiatePayment(req, res) {
 
         // HPP (Hosted Payment Page) Redirect URL - simple GET redirect with session ID
         // This matches the format in api/payments.js
-        const paymentPageUrl = `https://na.gateway.mastercard.com/checkout/pay/${sessionId}`;
+        const paymentPageUrl = `https://api.arcpay.travel/checkout/pay/${sessionId}`;
 
         console.log('✅ Payment session created:', sessionId);
 
