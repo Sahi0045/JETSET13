@@ -185,10 +185,10 @@ function FlightBookingConfirmation() {
           currency: apiData.payment?.currency || "USD"
         }
       },
-        baggage: {
-          checkIn: apiData.flight?.baggage || "23 KG",
-          cabin: apiData.flight?.cabinBaggage || null
-        },
+      baggage: {
+        checkIn: apiData.flight?.baggage || "23 KG",
+        cabin: apiData.flight?.cabinBaggage || null
+      },
       passengers: apiData.passengers,
       contact: { email: "", phone: "" },
       addOns: [], // Initialize empty
@@ -217,69 +217,69 @@ function FlightBookingConfirmation() {
     const percentageFee = basePrice * ((config?.flight_taxes_fees_percentage || 0) / 100);
     const totalTaxes = fixedFee + percentageFee;
 
-      return {
-        bookingId: bookingId || `BOOK-${Date.now()}`,
-        flight: {
-          airline: flightData.airline.name,
-          airlineCode: flightData.airline.code,
-          airlineLogo: flightData.airline.logo,
-          flightNumber: `${flightData.airline.code} ${flightData.id}`,
-          departureCode: flightData.departure.airport,
-          arrivalCode: flightData.arrival.airport,
-          departureCity: flightData.departure.cityName || flightData.departure.airport,
-          arrivalCity: flightData.arrival.cityName || flightData.arrival.airport,
-          departureTime: flightData.departure.time,
-          arrivalTime: flightData.arrival.time,
-          duration: flightData.duration,
-          departureDate: flightData.departure.rawDate || flightData.departure.date,
-            arrivalDate: flightData.arrival.rawDate || flightData.arrival.date,
-          cabin: flightData.cabin,
-          fareType: flightData.class,
-          brandedFare: flightData.brandedFare || null,
-          brandedFareLabel: flightData.brandedFareLabel || null,
-          operatingCarrier: flightData.operatingCarrier || null,
-          operatingAirlineName: flightData.operatingAirlineName || null,
-          numberOfBookableSeats: flightData.numberOfBookableSeats || null,
-          lastTicketingDate: flightData.lastTicketingDate || null,
-          stops: flightData.stops,
-          stopDetails: flightData.stopDetails || [],
-          basePrice: basePrice,
-          tax: totalTaxes,
-          fixedFee: fixedFee,
-          percentageFee: percentageFee,
-          totalPrice: basePrice + totalTaxes,
-          departureAirport: flightData.departure.terminal
-            ? `${flightData.departure.airport} Terminal ${flightData.departure.terminal}`
-            : flightData.departure.airport,
-          arrivalAirport: flightData.arrival.terminal
-            ? `${flightData.arrival.airport} Terminal ${flightData.arrival.terminal}`
-            : flightData.arrival.airport,
-          departureTerminal: flightData.departure.terminal || '',
-          arrivalTerminal: flightData.arrival.terminal || '',
+    return {
+      bookingId: bookingId || `BOOK-${Date.now()}`,
+      flight: {
+        airline: flightData.airline.name,
+        airlineCode: flightData.airline.code,
+        airlineLogo: flightData.airline.logo,
+        flightNumber: `${flightData.airline.code} ${flightData.id}`,
+        departureCode: flightData.departure.airport,
+        arrivalCode: flightData.arrival.airport,
+        departureCity: flightData.departure.cityName || flightData.departure.airport,
+        arrivalCity: flightData.arrival.cityName || flightData.arrival.airport,
+        departureTime: flightData.departure.time,
+        arrivalTime: flightData.arrival.time,
+        duration: flightData.duration,
+        departureDate: flightData.departure.rawDate || flightData.departure.date,
+        arrivalDate: flightData.arrival.rawDate || flightData.arrival.date,
+        cabin: flightData.cabin,
+        fareType: flightData.class,
+        brandedFare: flightData.brandedFare || null,
+        brandedFareLabel: flightData.brandedFareLabel || null,
+        operatingCarrier: flightData.operatingCarrier || null,
+        operatingAirlineName: flightData.operatingAirlineName || null,
+        numberOfBookableSeats: flightData.numberOfBookableSeats || null,
+        lastTicketingDate: flightData.lastTicketingDate || null,
+        stops: flightData.stops,
+        stopDetails: flightData.stopDetails || [],
+        basePrice: basePrice,
+        tax: totalTaxes,
+        fixedFee: fixedFee,
+        percentageFee: percentageFee,
+        totalPrice: basePrice + totalTaxes,
+        departureAirport: flightData.departure.terminal
+          ? `${flightData.departure.airport} Terminal ${flightData.departure.terminal}`
+          : flightData.departure.airport,
+        arrivalAirport: flightData.arrival.terminal
+          ? `${flightData.arrival.airport} Terminal ${flightData.arrival.terminal}`
+          : flightData.arrival.airport,
+        departureTerminal: flightData.departure.terminal || '',
+        arrivalTerminal: flightData.arrival.terminal || '',
         segments: flightData.segments.map(segment => ({
-            departure: {
-              airport: segment.departure.airport,
-              terminal: segment.departure.terminal,
-              time: segment.departure.time,
-              at: segment.departure.at || null,
-              cityName: segment.departure.cityName || getCityName(segment.departure.airport) || segment.departure.airport
-            },
-            arrival: {
-              airport: segment.arrival.airport,
-              terminal: segment.arrival.terminal,
-              time: segment.arrival.time,
-              at: segment.arrival.at || null,
-              cityName: segment.arrival.cityName || getCityName(segment.arrival.airport) || segment.arrival.airport
-            },
-            duration: segment.duration,
-            aircraft: segment.aircraft || 'Unknown',
-            carrier: segment.airline?.code || flightData.airline.code,
-            carrierName: segment.airline?.name || flightData.airline.name,
-            carrierLogo: segment.airline?.logo || flightData.airline.logo,
-            operatingCarrier: segment.operatingCarrier || null,
-            operatingAirlineName: segment.operatingAirlineName || null,
-            number: segment.flightNumber
-          })),
+          departure: {
+            airport: segment.departure.airport,
+            terminal: segment.departure.terminal,
+            time: segment.departure.time,
+            at: segment.departure.at || null,
+            cityName: segment.departure.cityName || getCityName(segment.departure.airport) || segment.departure.airport
+          },
+          arrival: {
+            airport: segment.arrival.airport,
+            terminal: segment.arrival.terminal,
+            time: segment.arrival.time,
+            at: segment.arrival.at || null,
+            cityName: segment.arrival.cityName || getCityName(segment.arrival.airport) || segment.arrival.airport
+          },
+          duration: segment.duration,
+          aircraft: segment.aircraft || 'Unknown',
+          carrier: segment.airline?.code || flightData.airline.code,
+          carrierName: segment.airline?.name || flightData.airline.name,
+          carrierLogo: segment.airline?.logo || flightData.airline.logo,
+          operatingCarrier: segment.operatingCarrier || null,
+          operatingAirlineName: segment.operatingAirlineName || null,
+          number: segment.flightNumber
+        })),
         price: {
           base: basePrice,
           fixedFee: fixedFee,
@@ -400,25 +400,25 @@ function FlightBookingConfirmation() {
   useEffect(() => {
     if (passengerData.length === 0 && bookingDetails) {
       const defaultPassenger = {
-            id: 1,
-            type: "Adult",
-            title: "Mr",
-            firstName: "",
-            lastName: "",
-            dateOfBirth: "",
-            seatNumber: "",
-            meal: "Regular",
-            baggage: "15 Kg",
-            mobile: "",
-            email: "",
-            gender: "male",
-            requiresWheelchair: false,
-            nationality: "",
-            passportNumber: "",
-            passportExpiry: "",
-            countryCode: callingCode || '+91'
-          };
-        setPassengerData([defaultPassenger]);
+        id: 1,
+        type: "Adult",
+        title: "Mr",
+        firstName: "",
+        lastName: "",
+        dateOfBirth: "",
+        seatNumber: "",
+        meal: "Regular",
+        baggage: "15 Kg",
+        mobile: "",
+        email: "",
+        gender: "male",
+        requiresWheelchair: false,
+        nationality: "",
+        passportNumber: "",
+        passportExpiry: "",
+        countryCode: callingCode || '+91'
+      };
+      setPassengerData([defaultPassenger]);
     }
   }, [bookingDetails, passengerData.length]);
 
@@ -490,40 +490,40 @@ function FlightBookingConfirmation() {
     return duration;
   };
 
-    // Format just month and day
-    const formatShortDate = (dateString) => {
-      const date = new Date(dateString);
-      const options = { day: 'numeric', month: 'short' };
-      return date.toLocaleDateString('en-US', options);
-    };
+  // Format just month and day
+  const formatShortDate = (dateString) => {
+    const date = new Date(dateString);
+    const options = { day: 'numeric', month: 'short' };
+    return date.toLocaleDateString('en-US', options);
+  };
 
-    // Format full date with day of week: "Fri, 13 Feb 2026"
-    const formatFullDate = (dateString) => {
-      if (!dateString) return '';
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '';
-      return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-    };
+  // Format full date with day of week: "Fri, 13 Feb 2026"
+  const formatFullDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  };
 
-    // Format time from ISO datetime: "11:20"
-    const formatTimeFromISO = (isoString) => {
-      if (!isoString) return '';
-      const date = new Date(isoString);
-      if (isNaN(date.getTime())) return '';
-      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-    };
+  // Format time from ISO datetime: "11:20"
+  const formatTimeFromISO = (isoString) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return '';
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  };
 
-    // Calculate layover duration between two ISO datetimes
-    const calcLayover = (arrivalAt, departureAt) => {
-      if (!arrivalAt || !departureAt) return '';
-      const arr = new Date(arrivalAt);
-      const dep = new Date(departureAt);
-      const diffMs = dep - arr;
-      if (diffMs <= 0) return '';
-      const hours = Math.floor(diffMs / 3600000);
-      const minutes = Math.floor((diffMs % 3600000) / 60000);
-      return `${hours}h ${minutes}m`;
-    };
+  // Calculate layover duration between two ISO datetimes
+  const calcLayover = (arrivalAt, departureAt) => {
+    if (!arrivalAt || !departureAt) return '';
+    const arr = new Date(arrivalAt);
+    const dep = new Date(departureAt);
+    const diffMs = dep - arr;
+    if (diffMs <= 0) return '';
+    const hours = Math.floor(diffMs / 3600000);
+    const minutes = Math.floor((diffMs % 3600000) / 60000);
+    return `${hours}h ${minutes}m`;
+  };
 
   const handleLogin = () => {
     // In a real app, this would trigger a login flow
@@ -560,23 +560,23 @@ function FlightBookingConfirmation() {
   const handleAddPassenger = () => {
     const newPassenger = {
       id: passengerData.length + 1,
-          type: "Adult",
-          title: "Mr",
-          firstName: "",
-          lastName: "",
-          dateOfBirth: "",
-          seatNumber: "",
-          meal: "Regular",
-          baggage: "15 Kg",
-          mobile: "",
-          email: "",
-          gender: "male",
-          requiresWheelchair: false,
-          nationality: "",
-          passportNumber: "",
-          passportExpiry: "",
-          countryCode: callingCode || '+91'
-        };
+      type: "Adult",
+      title: "Mr",
+      firstName: "",
+      lastName: "",
+      dateOfBirth: "",
+      seatNumber: "",
+      meal: "Regular",
+      baggage: "15 Kg",
+      mobile: "",
+      email: "",
+      gender: "male",
+      requiresWheelchair: false,
+      nationality: "",
+      passportNumber: "",
+      passportExpiry: "",
+      countryCode: callingCode || '+91'
+    };
     const updatedPassengers = [...passengerData, newPassenger];
     setPassengerData(updatedPassengers);
     updateFareSummary(updatedPassengers.length);
@@ -650,7 +650,7 @@ function FlightBookingConfirmation() {
       const carrierCode = rawFlightData?.airline?.code || 'XX';
       const departureAirport = rawFlightData?.departure?.airport || 'XXX';
       const arrivalAirport = rawFlightData?.arrival?.airport || 'XXX';
-        const departureDate = rawFlightData?.departure?.rawDate || rawFlightData?.departure?.date || new Date().toISOString().split('T')[0];
+      const departureDate = rawFlightData?.departure?.rawDate || rawFlightData?.departure?.date || new Date().toISOString().split('T')[0];
       const segments = rawFlightData?.segments || [];
 
       // Build flight data for ARC Pay
@@ -727,6 +727,8 @@ function FlightBookingConfirmation() {
         description: description,
         returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=flight`,
         cancelUrl: `${window.location.origin}/flights?cancelled=true`,
+        flightData: flightDataForArcPay,
+        bookingData: bookingDataForStorage,
       });
 
       if (checkoutResponse.success && checkoutResponse.checkoutUrl) {
@@ -823,25 +825,25 @@ function FlightBookingConfirmation() {
             {/* Flight Details Card (Boarding Pass Style) */}
             <div className="booking-card flight-card">
               <div className="booking-card-header">
-                  <h2>
-                    <div className="airline-logo-placeholder">
-                      {bookingDetails?.flight?.airlineCode || bookingDetails?.flight?.airline?.substring(0, 2).toUpperCase() || "JS"}
-                    </div>
-                    {bookingDetails?.flight?.airline || 'JetSetters Airlines'}
-                    <span className="opacity-70 font-normal ml-2 text-sm">
-                      #{bookingDetails?.flight?.flightNumber}
-                    </span>
-                  </h2>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {bookingDetails?.flight?.brandedFareLabel && (
-                      <span className="text-xs px-2 py-1 bg-white/20 rounded font-medium">
-                        {bookingDetails.flight.brandedFareLabel}
-                      </span>
-                    )}
-                    <span className="cabin-class-badge">
-                      {bookingDetails?.flight?.cabin || 'Economy Class'}
-                    </span>
+                <h2>
+                  <div className="airline-logo-placeholder">
+                    {bookingDetails?.flight?.airlineCode || bookingDetails?.flight?.airline?.substring(0, 2).toUpperCase() || "JS"}
                   </div>
+                  {bookingDetails?.flight?.airline || 'JetSetters Airlines'}
+                  <span className="opacity-70 font-normal ml-2 text-sm">
+                    #{bookingDetails?.flight?.flightNumber}
+                  </span>
+                </h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {bookingDetails?.flight?.brandedFareLabel && (
+                    <span className="text-xs px-2 py-1 bg-white/20 rounded font-medium">
+                      {bookingDetails.flight.brandedFareLabel}
+                    </span>
+                  )}
+                  <span className="cabin-class-badge">
+                    {bookingDetails?.flight?.cabin || 'Economy Class'}
+                  </span>
+                </div>
               </div>
 
               <div className="booking-card-body">
@@ -978,38 +980,38 @@ function FlightBookingConfirmation() {
                   </div>
                 )}
 
-                  <div className="flight-info-grid">
-                    <div className="info-box">
-                      <span className="label">Date</span>
-                      <span className="value">{formatFullDate(bookingDetails?.flight?.departureDate)}</span>
-                    </div>
-                    <div className="info-box">
-                      <span className="label">Flight No</span>
-                      <span className="value">{bookingDetails?.flight?.flightNumber}</span>
-                    </div>
-                      <div className="info-box">
-                        <span className="label">Baggage</span>
-                        <span className="value">{formatBaggage(bookingDetails?.baggage?.checkIn) || 'Included'}</span>
-                      </div>
-                    {bookingDetails?.flight?.operatingAirlineName && bookingDetails.flight.operatingAirlineName !== bookingDetails.flight.airline && (
-                      <div className="info-box">
-                        <span className="label">Operated by</span>
-                        <span className="value">{bookingDetails.flight.operatingAirlineName}</span>
-                      </div>
-                    )}
-                    {bookingDetails?.flight?.numberOfBookableSeats && bookingDetails.flight.numberOfBookableSeats <= 9 && (
-                      <div className="info-box">
-                        <span className="label">Seats Left</span>
-                        <span className="value text-red-600">{bookingDetails.flight.numberOfBookableSeats}</span>
-                      </div>
-                    )}
-                    {bookingDetails?.flight?.lastTicketingDate && (
-                      <div className="info-box">
-                        <span className="label">Book By</span>
-                        <span className="value">{formatShortDate(bookingDetails.flight.lastTicketingDate)}</span>
-                      </div>
-                    )}
+                <div className="flight-info-grid">
+                  <div className="info-box">
+                    <span className="label">Date</span>
+                    <span className="value">{formatFullDate(bookingDetails?.flight?.departureDate)}</span>
                   </div>
+                  <div className="info-box">
+                    <span className="label">Flight No</span>
+                    <span className="value">{bookingDetails?.flight?.flightNumber}</span>
+                  </div>
+                  <div className="info-box">
+                    <span className="label">Baggage</span>
+                    <span className="value">{formatBaggage(bookingDetails?.baggage?.checkIn) || 'Included'}</span>
+                  </div>
+                  {bookingDetails?.flight?.operatingAirlineName && bookingDetails.flight.operatingAirlineName !== bookingDetails.flight.airline && (
+                    <div className="info-box">
+                      <span className="label">Operated by</span>
+                      <span className="value">{bookingDetails.flight.operatingAirlineName}</span>
+                    </div>
+                  )}
+                  {bookingDetails?.flight?.numberOfBookableSeats && bookingDetails.flight.numberOfBookableSeats <= 9 && (
+                    <div className="info-box">
+                      <span className="label">Seats Left</span>
+                      <span className="value text-red-600">{bookingDetails.flight.numberOfBookableSeats}</span>
+                    </div>
+                  )}
+                  {bookingDetails?.flight?.lastTicketingDate && (
+                    <div className="info-box">
+                      <span className="label">Book By</span>
+                      <span className="value">{formatShortDate(bookingDetails.flight.lastTicketingDate)}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1110,19 +1112,19 @@ function FlightBookingConfirmation() {
                           required
                         />
                       </div>
-                        <div className="form-group">
-                          <label>Date of Birth <span className="required">*</span></label>
-                          <input
-                            type="date"
-                            className="form-input"
-                            value={passenger.dateOfBirth}
-                            onChange={(e) => handlePassengerChange(passenger.id, 'dateOfBirth', e.target.value)}
-                            readOnly={!editMode}
-                            required
-                            max={today}
-                            min={minDOB}
-                          />
-                        </div>
+                      <div className="form-group">
+                        <label>Date of Birth <span className="required">*</span></label>
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={passenger.dateOfBirth}
+                          onChange={(e) => handlePassengerChange(passenger.id, 'dateOfBirth', e.target.value)}
+                          readOnly={!editMode}
+                          required
+                          max={today}
+                          min={minDOB}
+                        />
+                      </div>
                       <div className="form-group">
                         <label>Gender <span className="required">*</span></label>
                         <div className="gender-toggle">
@@ -1143,33 +1145,33 @@ function FlightBookingConfirmation() {
                         </div>
                       </div>
 
-                        {/* New Row */}
-                        <div className="form-group">
-                          <label>Mobile No <span className="required">*</span></label>
-                          <div style={{ display: 'flex', gap: '0' }}>
-                              <select
-                                className="form-input"
-                                style={{ width: '90px', minWidth: '90px', borderRadius: '6px 0 0 6px', borderRight: 'none', padding: '10px 4px', fontSize: '14px', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 2px center', backgroundSize: '16px' }}
-                              value={passenger.countryCode || selectedCountryCode}
-                              onChange={(e) => handlePassengerChange(passenger.id, 'countryCode', e.target.value)}
-                              disabled={!editMode}
-                            >
-                              {countries.map(c => (
-                                <option key={c.code + c.dial} value={c.dial}>{c.dial} {c.code}</option>
-                              ))}
-                            </select>
-                            <input
-                              type="tel"
-                              className="form-input"
-                              style={{ borderRadius: '0 6px 6px 0', flex: 1 }}
-                              placeholder="9876543210"
-                              value={passenger.mobile}
-                              onChange={(e) => handlePassengerChange(passenger.id, 'mobile', e.target.value.replace(/[^0-9]/g, ''))}
-                              readOnly={!editMode}
-                              required
-                            />
-                          </div>
+                      {/* New Row */}
+                      <div className="form-group">
+                        <label>Mobile No <span className="required">*</span></label>
+                        <div style={{ display: 'flex', gap: '0' }}>
+                          <select
+                            className="form-input"
+                            style={{ width: '90px', minWidth: '90px', borderRadius: '6px 0 0 6px', borderRight: 'none', padding: '10px 4px', fontSize: '14px', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 2px center', backgroundSize: '16px' }}
+                            value={passenger.countryCode || selectedCountryCode}
+                            onChange={(e) => handlePassengerChange(passenger.id, 'countryCode', e.target.value)}
+                            disabled={!editMode}
+                          >
+                            {countries.map(c => (
+                              <option key={c.code + c.dial} value={c.dial}>{c.dial} {c.code}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="tel"
+                            className="form-input"
+                            style={{ borderRadius: '0 6px 6px 0', flex: 1 }}
+                            placeholder="9876543210"
+                            value={passenger.mobile}
+                            onChange={(e) => handlePassengerChange(passenger.id, 'mobile', e.target.value.replace(/[^0-9]/g, ''))}
+                            readOnly={!editMode}
+                            required
+                          />
                         </div>
+                      </div>
                       <div className="form-group">
                         <label>Email (Optional)</label>
                         <input
@@ -1179,92 +1181,92 @@ function FlightBookingConfirmation() {
                           value={passenger.email}
                           onChange={(e) => handlePassengerChange(passenger.id, 'email', e.target.value)}
                           readOnly={!editMode}
-                          />
-                        </div>
-                          {/* Passport / Travel Document Fields */}
-                          <div className="form-group" style={{ position: 'relative' }}>
-                            <label>Nationality</label>
-                            <input
-                              type="text"
-                              className="form-input"
-                              placeholder="Search country..."
-                              value={nationalitySearch[passenger.id] !== undefined ? nationalitySearch[passenger.id] : (
-                                countries.find(c => c.code === passenger.nationality)?.name || passenger.nationality || ''
-                              )}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setNationalitySearch(prev => ({ ...prev, [passenger.id]: val }));
-                                setNationalityDropdown({ open: true, passengerId: passenger.id });
-                                if (!val) handlePassengerChange(passenger.id, 'nationality', '');
-                              }}
-                              onFocus={() => setNationalityDropdown({ open: true, passengerId: passenger.id })}
-                              onBlur={() => setTimeout(() => setNationalityDropdown({ open: false, passengerId: null }), 200)}
-                              readOnly={!editMode}
-                            />
-                            {nationalityDropdown.open && nationalityDropdown.passengerId === passenger.id && (
-                              <div style={{
-                                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-                                background: '#fff', border: '1px solid #ddd', borderRadius: '6px',
-                                maxHeight: '180px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                              }}>
-                                {countries
-                                  .filter(c => {
-                                    const search = (nationalitySearch[passenger.id] || '').toLowerCase();
-                                    return !search || c.name.toLowerCase().includes(search) || c.code.toLowerCase().includes(search);
-                                  })
-                                  .map(c => (
-                                    <div
-                                      key={c.code}
-                                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '14px', borderBottom: '1px solid #f0f0f0' }}
-                                      onMouseDown={() => {
-                                        handlePassengerChange(passenger.id, 'nationality', c.code);
-                                        setNationalitySearch(prev => ({ ...prev, [passenger.id]: c.name }));
-                                        setNationalityDropdown({ open: false, passengerId: null });
-                                      }}
-                                      onMouseEnter={(e) => e.target.style.background = '#f0f9ff'}
-                                      onMouseLeave={(e) => e.target.style.background = '#fff'}
-                                    >
-                                      <span style={{ fontWeight: 500 }}>{c.name}</span>{' '}
-                                      <span style={{ color: '#888', fontSize: '12px' }}>({c.code})</span>
-                                    </div>
-                                  ))}
-                              </div>
-                            )}
-                          </div>
-                        <div className="form-group">
-                          <label>Passport Number</label>
-                          <input
-                            type="text"
-                            className="form-input"
-                            placeholder="e.g. P12345678"
-                            value={passenger.passportNumber || ''}
-                            onChange={(e) => handlePassengerChange(passenger.id, 'passportNumber', e.target.value.toUpperCase())}
-                            readOnly={!editMode}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label>Passport Expiry Date</label>
-                          <input
-                            type="date"
-                            className="form-input"
-                            value={passenger.passportExpiry || ''}
-                            onChange={(e) => handlePassengerChange(passenger.id, 'passportExpiry', e.target.value)}
-                            readOnly={!editMode}
-                          />
-                        </div>
-                        <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
-                          <label className="flex items-center cursor-pointer select-none gap-2">
-                            <input
-                              type="checkbox"
-                              style={{ width: '18px', height: '18px', minWidth: '18px', accentColor: '#055B75', borderRadius: '4px', cursor: 'pointer' }}
-                              checked={passenger.requiresWheelchair}
-                              onChange={(e) => handlePassengerChange(passenger.id, 'requiresWheelchair', e.target.checked)}
-                              disabled={!editMode}
-                            />
-                            <span className="text-sm font-medium text-[#626363]">Request Wheelchair Assistance</span>
-                          </label>
-                        </div>
+                        />
                       </div>
+                      {/* Passport / Travel Document Fields */}
+                      <div className="form-group" style={{ position: 'relative' }}>
+                        <label>Nationality</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Search country..."
+                          value={nationalitySearch[passenger.id] !== undefined ? nationalitySearch[passenger.id] : (
+                            countries.find(c => c.code === passenger.nationality)?.name || passenger.nationality || ''
+                          )}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNationalitySearch(prev => ({ ...prev, [passenger.id]: val }));
+                            setNationalityDropdown({ open: true, passengerId: passenger.id });
+                            if (!val) handlePassengerChange(passenger.id, 'nationality', '');
+                          }}
+                          onFocus={() => setNationalityDropdown({ open: true, passengerId: passenger.id })}
+                          onBlur={() => setTimeout(() => setNationalityDropdown({ open: false, passengerId: null }), 200)}
+                          readOnly={!editMode}
+                        />
+                        {nationalityDropdown.open && nationalityDropdown.passengerId === passenger.id && (
+                          <div style={{
+                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                            background: '#fff', border: '1px solid #ddd', borderRadius: '6px',
+                            maxHeight: '180px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                          }}>
+                            {countries
+                              .filter(c => {
+                                const search = (nationalitySearch[passenger.id] || '').toLowerCase();
+                                return !search || c.name.toLowerCase().includes(search) || c.code.toLowerCase().includes(search);
+                              })
+                              .map(c => (
+                                <div
+                                  key={c.code}
+                                  style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '14px', borderBottom: '1px solid #f0f0f0' }}
+                                  onMouseDown={() => {
+                                    handlePassengerChange(passenger.id, 'nationality', c.code);
+                                    setNationalitySearch(prev => ({ ...prev, [passenger.id]: c.name }));
+                                    setNationalityDropdown({ open: false, passengerId: null });
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.background = '#f0f9ff'}
+                                  onMouseLeave={(e) => e.target.style.background = '#fff'}
+                                >
+                                  <span style={{ fontWeight: 500 }}>{c.name}</span>{' '}
+                                  <span style={{ color: '#888', fontSize: '12px' }}>({c.code})</span>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="form-group">
+                        <label>Passport Number</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="e.g. P12345678"
+                          value={passenger.passportNumber || ''}
+                          onChange={(e) => handlePassengerChange(passenger.id, 'passportNumber', e.target.value.toUpperCase())}
+                          readOnly={!editMode}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Passport Expiry Date</label>
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={passenger.passportExpiry || ''}
+                          onChange={(e) => handlePassengerChange(passenger.id, 'passportExpiry', e.target.value)}
+                          readOnly={!editMode}
+                        />
+                      </div>
+                      <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
+                        <label className="flex items-center cursor-pointer select-none gap-2">
+                          <input
+                            type="checkbox"
+                            style={{ width: '18px', height: '18px', minWidth: '18px', accentColor: '#055B75', borderRadius: '4px', cursor: 'pointer' }}
+                            checked={passenger.requiresWheelchair}
+                            onChange={(e) => handlePassengerChange(passenger.id, 'requiresWheelchair', e.target.checked)}
+                            disabled={!editMode}
+                          />
+                          <span className="text-sm font-medium text-[#626363]">Request Wheelchair Assistance</span>
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 ))}
 

@@ -185,11 +185,11 @@ function FlightPayment() {
             ? `${paymentData.passengerData[0].firstName} ${paymentData.passengerData[0].lastName}`
             : 'Guest User',
           customerPhone: paymentData?.passengerData?.[0]?.phone || paymentData?.passengerData?.[0]?.mobile,
-          description: `Flight Booking ${orderId}`,
+          description: description,
           returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=flight`,
           cancelUrl: `${window.location.origin}/flights?cancelled=true`,
-          // Removed flightData and bookingData - was causing payment failures
-          // Will re-add after basic payment works
+          flightData: flightDataForArcPay,
+          bookingData: bookingData,
         });
 
         if (checkoutResponse.success && checkoutResponse.checkoutUrl) {

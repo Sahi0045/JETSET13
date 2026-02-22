@@ -412,6 +412,13 @@ async function handleHostedCheckout(req, res) {
                 const segments = Array.isArray(itinerary?.segments) ? itinerary.segments :
                     Array.isArray(flight?.segments) ? flight.segments : [];
 
+                // Extract origin and destination from flight data (fix: these were undefined before)
+                const origin = flight?.origin || flight?.departureAirport || segments?.[0]?.departure?.iataCode || 'XXX';
+                const destination = flight?.destination || flight?.arrivalAirport || segments?.[segments.length - 1]?.arrival?.iataCode || 'XXX';
+
+                // Extract actual carrier code from flight data
+                const actualCarrierCode = (flight?.carrierCode || segments?.[0]?.carrierCode || segments?.[0]?.carrier || 'XX').substring(0, 2).toUpperCase();
+
                 const travelAgentCode = process.env.ARC_TRAVEL_AGENT_CODE || arcMerchantId.replace('TESTARC', '').substring(0, 8) || '05511704';
                 const travelAgentName = process.env.ARC_TRAVEL_AGENT_NAME || 'Jetsetters';
 
@@ -459,8 +466,9 @@ async function handleHostedCheckout(req, res) {
 
                 const legArray = segments.length > 0
                     ? segments.map((segment, index) => {
+                        const segCarrier = (segment?.carrierCode || segment?.carrier || actualCarrierCode).substring(0, 2).toUpperCase();
                         return {
-                            carrierCode: 'XD',
+                            carrierCode: segCarrier,
                             departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3),
                             departureDate: safeDepartureDate(segment?.departure?.at),
                             departureTime: extractDepartureTime(segment?.departure?.at),
@@ -470,7 +478,7 @@ async function handleHostedCheckout(req, res) {
                         }
                     })
                     : [{
-                        carrierCode: 'XD',
+                        carrierCode: actualCarrierCode,
                         departureAirport: origin.substring(0, 3),
                         departureDate: new Date().toISOString().split('T')[0],
                         departureTime: '00:00+00:00',
@@ -489,7 +497,7 @@ async function handleHostedCheckout(req, res) {
                     passenger: passengerList,
                     ticket: {
                         issue: {
-                            carrierCode: 'XD',
+                            carrierCode: actualCarrierCode,
                             carrierName: 'JETSETTERS',
                             city: 'ONLINE',
                             country: 'USA',
