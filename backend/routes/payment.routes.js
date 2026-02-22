@@ -509,8 +509,8 @@ async function handleHostedCheckout(req, res) {
                         return {
                             carrierCode: segCarrier,
                             departureAirport: (segment?.departure?.iataCode || origin).substring(0, 3).toUpperCase(),
-                            departureDate: safeDepartureDate(segment?.departure?.at),
-                            departureTime: extractDepartureTime(segment?.departure?.at),
+                            departureDate: safeDepartureDate(segment?.departure),
+                            departureTime: extractDepartureTime(segment?.departure),
                             destinationAirport: (segment?.arrival?.iataCode || destination).substring(0, 3).toUpperCase(),
                             flightNumber: fNum.substring(0, 5), // Max length 5
                             travelClass: 'W' // Changed from Y to W as per user requirements
