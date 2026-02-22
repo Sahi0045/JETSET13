@@ -1651,13 +1651,14 @@ async function handleCancelBookingAction(req, res) {
                     console.log('🔑 ARC Pay Order ID (from booking):', orderIdForArc, 'Amount:', originalAmount, 'Net refund:', netRefundAmount);
 
                     if (netRefundAmount > 0) {
+                        const authConfig = getArcPayAuthConfig();
                         const refundTxnId = `refund-cancel-${Date.now()}`;
-                        const refundUrl = `${arcPayBaseUrl}/merchant/${arcMerchantId}/order/${orderIdForArc}/transaction/${refundTxnId}`;
+                        const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderIdForArc}/transaction/${refundTxnId}`;
                         console.log('💸 Issuing REFUND (no payment record):', netRefundAmount.toFixed(2));
 
                         const refundResp = await fetch(refundUrl, {
                             method: 'PUT',
-                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': arcAuthHeader },
+                            headers: authConfig.headers,
                             body: JSON.stringify({
                                 apiOperation: 'REFUND',
                                 transaction: {
