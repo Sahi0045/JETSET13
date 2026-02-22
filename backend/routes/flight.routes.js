@@ -660,8 +660,8 @@ router.post('/order', async (req, res) => {
 
       try {
         const mockPNR = generateMockPNR();
-        const orderId = `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-        const bookingReference = `BOOK-${Date.now().toString(36).toUpperCase()}`;
+        const orderId = req.body.orderId || `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const bookingReference = req.body.bookingReference || `BOOK-${Date.now().toString(36).toUpperCase()}`;
 
         // Extract price - prioritize from destructured request body, then from flight offer
         const finalAmount = totalAmount || amount || firstOffer?.price?.total || firstOffer?.price?.amount || firstOffer?.totalPrice?.amount || '0';
@@ -873,8 +873,8 @@ router.post('/order', async (req, res) => {
 
       // If Amadeus service completely fails, create a mock booking as ultimate fallback
       const mockPNR = generateMockPNR();
-      const orderId = `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const bookingReference = `BOOK-${Date.now().toString(36).toUpperCase()}`;
+      const orderId = req.body.orderId || `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const bookingReference = req.body.bookingReference || `BOOK-${Date.now().toString(36).toUpperCase()}`;
 
       console.log('🆘 Creating emergency fallback booking with mock PNR');
 
@@ -959,9 +959,9 @@ router.post('/order', async (req, res) => {
     // Save real Amadeus booking to database with all fields
     const dbBooking = await saveBookingToDatabase({
       userId: userId || null,
-      bookingReference: orderIdValue,
+      bookingReference: req.body.bookingReference || orderIdValue,
       pnr: pnrValue,
-      orderId: orderIdValue,
+      orderId: req.body.orderId || orderIdValue,
       transactionId: req.body.transactionId || `TXN-${Date.now()}`,
       totalAmount: firstOffer?.price?.total || '0',
       currency: firstOffer?.price?.currency || 'USD',

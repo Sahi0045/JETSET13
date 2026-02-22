@@ -167,6 +167,8 @@ function FlightCreateOrders() {
         // Include totalAmount for database storage
         totalAmount: orderData.amount || orderData.calculatedFare?.totalAmount || orderData.selectedFlight?.price?.total || orderData.originalOffer?.price?.total || "0",
         transactionId: orderData.transactionId || `TXN-${Date.now()}`,
+        orderId: orderData.orderId || null,
+        bookingReference: orderData.orderId || null,
         travelers: passengerDetails.map(p => ({
           id: p.id,
           firstName: p.firstName,
