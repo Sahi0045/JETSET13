@@ -434,32 +434,61 @@ async function handleHostedCheckout(req, res) {
                         lastName: (lastName || 'TRAVELER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
                     }];
 
-                const safeDepartureDate = (atValue) => {
-                    if (!atValue) return new Date().toISOString().split('T')[0];
-                    const dateCandidate = atValue.includes('T') ? atValue.split('T')[0] : atValue;
-                    return /^\d{4}-\d{2}-\d{2}$/.test(dateCandidate) ? dateCandidate : new Date().toISOString().split('T')[0];
+                const safeDepartureDate = (segmentDeparture) => {
+                    if (!segmentDeparture) return new Date().toISOString().split('T')[0];
+
+                    // Direct 'at' ISO string
+                    const atValue = segmentDeparture.at || segmentDeparture.rawDate;
+                    if (atValue) {
+                        const dateCandidate = atValue.includes('T') ? atValue.split('T')[0] : atValue;
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(dateCandidate)) return dateCandidate;
+                    }
+
+                    return new Date().toISOString().split('T')[0];
                 };
 
-                const extractDepartureTime = (atValue) => {
-                    if (!atValue || !atValue.includes('T')) return '00:00+00:00';
-                    const timePart = atValue.split('T')[1];
-                    if (timePart.includes('+') || timePart.includes('-')) {
-                        const offsetIdx = timePart.includes('+') ? timePart.indexOf('+') : timePart.indexOf('-');
-                        const rawTime = timePart.substring(0, offsetIdx);
-                        const offset = timePart.substring(offsetIdx);
-                        const timeParts = rawTime.split(':');
-                        const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
-                        return `${hhmm}${offset}`; // e.g., 00:00+05:30
-                    } else if (timePart.endsWith('Z')) {
-                        const rawTime = timePart.replace('Z', '');
-                        const timeParts = rawTime.split(':');
-                        const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
-                        return `${hhmm}Z`; // e.g., 00:00Z
-                    } else {
-                        const timeParts = timePart.split(':');
-                        const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
-                        return `${hhmm}+00:00`;
+                const extractDepartureTime = (segmentDeparture) => {
+                    if (!segmentDeparture) return '00:00+00:00';
+
+                    // 1. Try 'at' ISO string first: 2026-04-13T10:30:00+05:30
+                    if (segmentDeparture.at && segmentDeparture.at.includes('T')) {
+                        const timePart = segmentDeparture.at.split('T')[1];
+                        if (timePart.includes('+') || timePart.includes('-')) {
+                            const offsetIdx = timePart.includes('+') ? timePart.indexOf('+') : timePart.indexOf('-');
+                            const rawTime = timePart.substring(0, offsetIdx);
+                            const offset = timePart.substring(offsetIdx);
+                            const timeParts = rawTime.split(':');
+                            const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
+                            return `${hhmm}${offset}`;
+                        } else if (timePart.endsWith('Z')) {
+                            const rawTime = timePart.replace('Z', '');
+                            const timeParts = rawTime.split(':');
+                            const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
+                            return `${hhmm}Z`;
+                        } else {
+                            const timeParts = timePart.split(':');
+                            const hhmm = `${timeParts[0] || '00'}:${timeParts[1] || '00'}`;
+                            return `${hhmm}+00:00`;
+                        }
                     }
+
+                    // 2. Try flattened 'time' property: "10:30 AM" or "22:30"
+                    if (segmentDeparture.time) {
+                        let timeStr = segmentDeparture.time;
+                        let isPM = timeStr.toLowerCase().includes('pm');
+                        let isAM = timeStr.toLowerCase().includes('am');
+                        timeStr = timeStr.replace(/[^0-9:]/g, ''); // Extract just '10:30'
+
+                        let [hours = '00', minutes = '00'] = timeStr.split(':');
+                        let h = parseInt(hours, 10);
+                        if (isPM && h < 12) h += 12;
+                        if (isAM && h === 12) h = 0;
+
+                        const hhmm = `${String(h).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                        return `${hhmm}+00:00`; // Assume UTC if no offset available
+                    }
+
+                    return '00:00+00:00';
                 };
 
                 const legArray = segments.length > 0
