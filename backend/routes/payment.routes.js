@@ -1702,6 +1702,38 @@ async function handleCancelBookingAction(req, res) {
             return res.status(500).json({ success: false, error: 'Failed to update booking status', details: updateError.message });
         }
 
+        // --- Send Cancellation Email ---
+        try {
+            const { sendCancellationNotificationEmails } = await import('../services/emailService.js');
+            console.log('📧 Sending cancellation confirmation email...');
+
+            // Extract email from passenger_details if available
+            let passengerEmail = null;
+            if (Array.isArray(booking.passenger_details) && booking.passenger_details.length > 0) {
+                passengerEmail = booking.passenger_details[0]?.email || booking.passenger_details[0]?.contact?.emailAddress;
+            }
+
+            const cancelEmailData = {
+                customerEmail: booking.customer_email || booking.booking_details?.customer_email || passengerEmail || email || 'test@jetsetterss.com',
+                customerName: booking.customer_name || (Array.isArray(booking.passenger_details) && booking.passenger_details[0]?.firstName ? `${booking.passenger_details[0].firstName} ${booking.passenger_details[0].lastName || ''}`.trim() : 'Valued Customer'),
+                bookingReference: booking.booking_reference,
+                bookingType: booking.travel_type || 'flight',
+                refundAmount: cancellationResult.refundAmount,
+                cancellationFee: cancellationResult.cancellationFee,
+                currency: 'USD'
+            };
+
+            const emailResult = await sendCancellationNotificationEmails(cancelEmailData);
+            if (emailResult.success) {
+                console.log('✅ Cancellation email sent successfully');
+            } else {
+                console.warn('⚠️ Cancellation email sent with issues:', emailResult.error);
+            }
+        } catch (emailError) {
+            console.error('❌ Failed to send cancellation email:', emailError.message);
+        }
+        // -------------------------------
+
         console.log('✅ Booking cancelled successfully:', booking.id);
 
         return res.status(200).json({

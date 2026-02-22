@@ -742,6 +742,50 @@ router.post('/order', async (req, res) => {
 
         console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
 
+        // --- Send Booking Confirmation Email ---
+        if (dbBooking) {
+          try {
+            const { sendBookingNotificationEmails } = await import('../services/emailService.js');
+            console.log('📧 Sending booking confirmation email (Mock)...');
+
+            const firstTraveler = travelersList && travelersList.length > 0 ? travelersList[0] : null;
+            let customerFirstName = firstTraveler?.firstName || 'Valued';
+            let customerLastName = firstTraveler?.lastName || 'Customer';
+            const customerName = `${customerFirstName} ${customerLastName}`.trim();
+
+            // Find a valid email address (avoid empty strings)
+            let finalEmail = contactInfo?.email || req.body.customerEmail || '';
+            if (!finalEmail && firstTraveler?.email) finalEmail = firstTraveler.email;
+            if (!finalEmail) finalEmail = 'guest@jetsetterss.com';
+
+            const bookingEmailData = {
+              customerEmail: finalEmail,
+              customerName: customerName,
+              bookingReference: dbBooking.booking_reference,
+              bookingType: 'flight',
+              paymentAmount: finalAmount,
+              currency: currency,
+              travelDate: dbBooking.booking_details?.departure_date_full || firstSegment?.departure?.date || '',
+              passengers: travelersList.length || 1,
+              bookingDetails: {
+                origin: dbBooking.booking_details?.origin_city || firstSegment?.departure?.airport,
+                destination: dbBooking.booking_details?.destination_city || lastSegment?.arrival?.airport,
+                airline: dbBooking.booking_details?.airline_name || firstSegment?.airline?.name
+              }
+            };
+
+            const emailResult = await sendBookingNotificationEmails(bookingEmailData);
+            if (emailResult.success) {
+              console.log('✅ Booking confirmation email sent successfully (Mock)');
+            } else {
+              console.warn('⚠️ Booking confirmation email sent with issues:', emailResult.error);
+            }
+          } catch (emailError) {
+            console.error('❌ Failed to send booking confirmation email:', emailError.message);
+          }
+        }
+        // ---------------------------------------
+
         return res.json({
           success: true,
           data: {
@@ -907,6 +951,50 @@ router.post('/order', async (req, res) => {
         userId: req.body.userId || null
       });
 
+      // --- Send Booking Confirmation Email ---
+      if (dbBooking) {
+        try {
+          const { sendBookingNotificationEmails } = await import('../services/emailService.js');
+          console.log('📧 Sending booking confirmation email (Fallback)...');
+
+          const mainTraveler = (amadeusTravelers && amadeusTravelers.length > 0) ? amadeusTravelers[0] : null;
+          let customerFirstName = mainTraveler?.name?.firstName || 'Valued';
+          let customerLastName = mainTraveler?.name?.lastName || 'Customer';
+          const customerName = `${customerFirstName} ${customerLastName}`.trim();
+
+          // Find a valid email address (avoid empty strings)
+          let finalEmail = contactInfo?.email || req.body.customerEmail || '';
+          if (!finalEmail && mainTraveler?.contact?.emailAddress) finalEmail = mainTraveler.contact.emailAddress;
+          if (!finalEmail) finalEmail = 'guest@jetsetterss.com';
+
+          const bookingEmailData = {
+            customerEmail: finalEmail,
+            customerName: customerName,
+            bookingReference: dbBooking.booking_reference,
+            bookingType: 'flight',
+            paymentAmount: totalAmount || amount || '0',
+            currency: 'USD',
+            travelDate: dbBooking.booking_details?.departure_date_full || firstOffer?.itineraries?.[0]?.segments?.[0]?.departure?.at?.split('T')[0] || '',
+            passengers: amadeusTravelers.length || 1,
+            bookingDetails: {
+              origin: dbBooking.booking_details?.origin_city || firstOffer?.itineraries?.[0]?.segments?.[0]?.departure?.iataCode,
+              destination: dbBooking.booking_details?.destination_city || firstOffer?.itineraries?.[0]?.segments?.[firstOffer.itineraries[0].segments.length - 1]?.arrival?.iataCode,
+              airline: dbBooking.booking_details?.airline_name || firstOffer?.validatingAirlineCodes?.[0]
+            }
+          };
+
+          const emailResult = await sendBookingNotificationEmails(bookingEmailData);
+          if (emailResult.success) {
+            console.log('✅ Booking confirmation email sent successfully (Fallback)');
+          } else {
+            console.warn('⚠️ Booking confirmation email sent with issues:', emailResult.error);
+          }
+        } catch (emailError) {
+          console.error('❌ Failed to send booking confirmation email:', emailError.message);
+        }
+      }
+      // ---------------------------------------
+
       return res.json({
         success: true,
         data: {
@@ -1012,6 +1100,62 @@ router.post('/order', async (req, res) => {
     });
 
     console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
+
+    // --- Send Booking Confirmation Email ---
+    if (dbBooking) {
+      try {
+        const { sendBookingNotificationEmails } = await import('../services/emailService.js');
+        console.log('📧 Sending booking confirmation email...');
+
+        // Extract traveler info
+        const mainTraveler = (amadeusTravelers && amadeusTravelers.length > 0) ? amadeusTravelers[0] : null;
+        const fallbackTraveler = (travelersList && travelersList.length > 0) ? travelersList[0] : null;
+
+        let customerFirstName = 'Valued';
+        let customerLastName = 'Customer';
+
+        if (mainTraveler?.name?.firstName) {
+          customerFirstName = mainTraveler.name.firstName;
+          customerLastName = mainTraveler.name.lastName || '';
+        } else if (fallbackTraveler?.firstName) {
+          customerFirstName = fallbackTraveler.firstName;
+          customerLastName = fallbackTraveler.lastName || '';
+        }
+
+        const customerName = `${customerFirstName} ${customerLastName}`.trim();
+
+        // Find a valid email address (avoid empty strings)
+        let finalEmail = contactInfo?.email || req.body.customerEmail || '';
+        if (!finalEmail && fallbackTraveler?.email) finalEmail = fallbackTraveler.email;
+        if (!finalEmail) finalEmail = 'guest@jetsetterss.com';
+
+        const bookingEmailData = {
+          customerEmail: finalEmail,
+          customerName: customerName,
+          bookingReference: dbBooking.booking_reference,
+          bookingType: 'flight',
+          paymentAmount: dbBooking.total_amount || firstOffer?.price?.total || '0',
+          currency: dbBooking.currency || firstOffer?.price?.currency || 'USD',
+          travelDate: dbBooking.booking_details?.departure_date_full || firstSegment?.departure?.at?.split('T')[0],
+          passengers: amadeusTravelers.length || travelersList.length || 1,
+          bookingDetails: {
+            origin: dbBooking.booking_details?.origin_city || firstSegment?.departure?.iataCode,
+            destination: dbBooking.booking_details?.destination_city || lastSegment?.arrival?.iataCode,
+            airline: dbBooking.booking_details?.airline_name || firstOffer?.validatingAirlineCodes?.[0]
+          }
+        };
+
+        const emailResult = await sendBookingNotificationEmails(bookingEmailData);
+        if (emailResult.success) {
+          console.log('✅ Booking confirmation email sent successfully');
+        } else {
+          console.warn('⚠️ Booking confirmation email sent with issues:', emailResult.error);
+        }
+      } catch (emailError) {
+        console.error('❌ Failed to send booking confirmation email:', emailError.message);
+      }
+    }
+    // ---------------------------------------
 
     res.json({
       success: true,

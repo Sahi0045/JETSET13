@@ -1843,5 +1843,229 @@ export const sendBookingNotificationEmails = async (bookingData) => {
   }
 };
 
+/**
+ * Generate professional cancellation email template
+ * @param {Object} data - Cancellation data
+ * @returns {string} - HTML email content
+ */
+export function generateCancellationTemplate(data) {
+  const {
+    customerName,
+    bookingReference,
+    bookingType = 'travel',
+    refundAmount,
+    cancellationFee,
+    currency = 'USD'
+  } = data;
+
+  const getBookingIcon = () => {
+    switch (bookingType.toLowerCase()) {
+      case 'flight': return '✈️';
+      case 'hotel': return '🏨';
+      case 'cruise': return '🚢';
+      case 'package': return '🎒';
+      default: return '🌍';
+    }
+  };
+
+  const getBookingTitle = () => {
+    switch (bookingType.toLowerCase()) {
+      case 'flight': return 'Flight';
+      case 'hotel': return 'Hotel';
+      case 'cruise': return 'Cruise';
+      case 'package': return 'Package';
+      default: return 'Travel';
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    // Check if amount is undefined, null, or somehow a string that can't be parsed
+    const numAmount = Number(amount);
+    if (isNaN(numAmount)) {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(0);
+    }
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency
+    }).format(numAmount);
+  };
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; background-color: #f4f4f4; }
+        .container { background-color: white; margin: 20px auto; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #c13515 0%, #a52811 100%); padding: 40px 25px; text-align: center; color: white; }
+        .header h1 { margin: 0; font-size: 32px; font-weight: 700; }
+        .header p { margin: 15px 0 0; font-size: 16px; opacity: 0.9; }
+        .content { padding: 35px 30px; }
+        .cancellation-card { background: #fff8f6; border-radius: 12px; padding: 25px; margin: 25px 0; text-align: center; border: 2px solid #ffccc7; }
+        .cancellation-icon { font-size: 48px; margin-bottom: 10px; }
+        .booking-ref { font-size: 14px; color: #666; margin-bottom: 5px; }
+        .booking-ref-value { font-size: 24px; font-weight: 700; color: #c13515; letter-spacing: 2px; }
+        .amount-box { background-color: #fff; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #f0f0f0; }
+        .amount-row { display: flex; justify-content: space-between; padding: 5px 0; }
+        .amount-label { font-size: 14px; color: #666; }
+        .amount-value { font-size: 14px; font-weight: 600; color: #333; }
+        .total-refund { border-top: 1px solid #e0e0e0; margin-top: 10px; padding-top: 10px; font-size: 16px; color: #2e7d32; font-weight: 700; }
+        .details-section { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .contact-box { background-color: #e3f2fd; padding: 20px; border-radius: 8px; text-align: center; margin: 25px 0; }
+        .contact-box h4 { color: #1565c0; margin: 0 0 10px; }
+        .footer { background-color: #055B75; padding: 25px; text-align: center; color: white; }
+        .footer p { margin: 5px 0; font-size: 13px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Booking Cancelled</h1>
+          <p>Your ${getBookingTitle().toLowerCase()} booking has been successfully cancelled.</p>
+        </div>
+        
+        <div class="content">
+          <p>Dear ${customerName},</p>
+          
+          <p>This email is to confirm that your ${getBookingTitle().toLowerCase()} booking has been cancelled per your request.</p>
+          
+          <div class="cancellation-card">
+            <div class="cancellation-icon">${getBookingIcon()}</div>
+            <div class="booking-ref">Booking Reference</div>
+            <div class="booking-ref-value">${bookingReference}</div>
+            
+            <div class="amount-box">
+              <div class="amount-row">
+                <span class="amount-label">Estimated Refund:</span>
+                <span class="amount-value total-refund">${formatCurrency(refundAmount)}</span>
+              </div>
+              <div class="amount-row">
+                <span class="amount-label">Cancellation Fee:</span>
+                <span class="amount-value">${formatCurrency(cancellationFee)}</span>
+              </div>
+            </div>
+            <p style="font-size: 12px; color: #666; margin-top: 10px;">Please allow 5-10 business days for the refund to reflect in your account.</p>
+          </div>
+          
+          <p>If you have any questions about this cancellation or your refund, our support team is ready to assist you.</p>
+          
+          <div class="contact-box">
+            <h4>Need Assistance?</h4>
+            <p>Our travel experts are here to help 24/7</p>
+            <p>📧 support@jetsetterss.com | 📞 (877) 538-7380</p>
+          </div>
+        </div>
+        
+        <div class="footer">
+          <p><strong>Jetsetters Travel</strong></p>
+          <p>Your trusted partner for unforgettable journeys</p>
+          <p>© 2026 Jetsetters. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Send cancellation confirmation to both customer and admin
+ * @param {Object} cancellationData - Cancellation information
+ * @returns {Promise} - Combined email send response
+ */
+export const sendCancellationNotificationEmails = async (cancellationData) => {
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL || 'jetsetters721@gmail.com';
+    const { customerEmail, customerName, bookingReference, bookingType, refundAmount, cancellationFee, currency } = cancellationData;
+
+    if (!customerEmail) {
+      console.warn('⚠️ No customer email provided for cancellation confirmation');
+      return { success: false, error: 'No email address' };
+    }
+
+    // Send confirmation to customer
+    const html = generateCancellationTemplate({
+      customerName: customerName || 'Valued Customer',
+      bookingReference,
+      bookingType,
+      refundAmount,
+      cancellationFee,
+      currency
+    });
+
+    const customerResult = await resend.emails.send({
+      from: 'Jetsetters <noreply@jetsetterss.com>',
+      to: [customerEmail],
+      subject: `⚠️ Booking Cancelled - ${bookingReference} | Jetsetters`,
+      html,
+      text: stripHtml(html)
+    });
+
+    // Send notification to admin
+    const adminHtml = `
+      < !DOCTYPE html >
+    <html>
+      <head>
+        <style>
+          body {font - family: Arial, sans-serif; line-height: 1.6; max-width: 600px; margin: 0 auto; }
+          .header {background: #c13515; color: white; padding: 20px; text-align: center; }
+          .content {padding: 20px; background: #f9f9f9; }
+          .info-row {padding: 10px 0; border-bottom: 1px solid #ddd; }
+          .label {color: #666; font-size: 12px; }
+          .value {font - weight: bold; color: #333; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h2>⚠️ Booking Cancellation!</h2>
+        </div>
+        <div class="content">
+          <div class="info-row">
+            <div class="label">Customer</div>
+            <div class="value">${customerName} (${customerEmail})</div>
+          </div>
+          <div class="info-row">
+            <div class="label">Booking Reference</div>
+            <div class="value">${bookingReference}</div>
+          </div>
+          <div class="info-row">
+            <div class="label">Type</div>
+            <div class="value">${bookingType}</div>
+          </div>
+          <div class="info-row">
+            <div class="label">Refund Amount</div>
+            <div class="value">${currency || 'USD'} ${refundAmount || 0}</div>
+          </div>
+          <div class="info-row">
+            <div class="label">Cancellation Fee</div>
+            <div class="value">${currency || 'USD'} ${cancellationFee || 0}</div>
+          </div>
+        </div>
+      </body>
+    </html>
+    `;
+
+    const adminResult = await resend.emails.send({
+      from: 'Jetsetters <noreply@jetsetterss.com>',
+      to: [adminEmail],
+      subject: `⚠️ Cancellation: ${bookingReference} - ${customerName}`,
+      html: adminHtml,
+      text: stripHtml(adminHtml)
+    });
+
+    console.log('✅ Cancellation notification sent to:', customerEmail, 'and admin');
+
+    return {
+      success: true,
+      customerEmail: customerResult,
+      adminNotification: { success: true, data: adminResult }
+    };
+  } catch (error) {
+    console.error('❌ Error sending cancellation notification emails:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 export default emailService;
 
