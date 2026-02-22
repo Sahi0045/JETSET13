@@ -1605,7 +1605,7 @@ async function handleCancelBookingAction(req, res) {
                                     targetTransactionId: targetTxnId,
                                     reference: `Cancellation: ${reason}`
                                 }
-                            }, { headers: authConfig.headers });
+                            }, { headers: authConfig.headers, validateStatus: () => true });
 
                             if (voidResp.status === 200 || voidResp.status === 201) {
                                 const voidData = voidResp.data;
@@ -1648,7 +1648,7 @@ async function handleCancelBookingAction(req, res) {
                                 currency: 'USD',
                                 reference: `Cancel refund (fee: ${cancellationFee}): ${reason}`
                             }
-                        }, { headers: authConfig.headers });
+                        }, { headers: authConfig.headers, validateStatus: () => true });
 
                         if (refundResp.status === 200 || refundResp.status === 201) {
                             console.log('✅ ARC Pay REFUND successful (no payment record)');
