@@ -54,14 +54,15 @@ export default function PaymentCallback() {
             if (dbResponse.ok) {
               const dbResult = await dbResponse.json();
               if (dbResult.success && dbResult.pendingBookingData) {
-                bookingData = dbResult.pendingBookingData;
+                // The DB stores req.body which has bookingData nested inside it
+                bookingData = dbResult.pendingBookingData.bookingData || dbResult.pendingBookingData;
                 sessionData = {
                   sessionId: dbResult.booking?.booking_details?.session_id,
                   orderId: orderId,
                   bookingType: bookingType,
                   amount: dbResult.booking?.total_amount
                 };
-                console.log('✅ Booking data retrieved from DB');
+                console.log('✅ Booking data retrieved from DB', bookingData);
               }
             }
           } catch (dbError) {
