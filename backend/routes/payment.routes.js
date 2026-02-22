@@ -1516,7 +1516,7 @@ async function handleCancelBookingAction(req, res) {
                     .or(`quote_id.eq.${booking.id},id.eq.${booking.payment_id || 'none'}`)
                     .order('created_at', { ascending: false })
                     .limit(1)
-                    .single();
+                    .maybeSingle();
 
                 if (payment) {
                     const authConfig = getArcPayAuthConfig();

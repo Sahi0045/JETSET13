@@ -1895,7 +1895,7 @@ router.post('/admin-bookings/:id/cancel', async (req, res) => {
           .or(`quote_id.eq.${booking.id},id.eq.${booking.payment_id || 'none'}`)
           .order('created_at', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (payment) {
           const originalAmount = parseFloat(payment.amount || booking.total_amount || 0);
