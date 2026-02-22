@@ -472,12 +472,13 @@ async function handleHostedCheckout(req, res) {
                         }
                     }
 
-                    // 2. Try flattened 'time' property: "10:30 AM" or "22:30"
-                    if (segmentDeparture.time) {
-                        let timeStr = segmentDeparture.time;
+                    // 2. Try flattened 'time' property OR 'at' without 'T': "10:30 AM" or "22:30"
+                    const timeStrRaw = segmentDeparture.time || segmentDeparture.at || segmentDeparture.rawTime;
+                    if (timeStrRaw && typeof timeStrRaw === 'string' && timeStrRaw.includes(':')) {
+                        let timeStr = timeStrRaw;
                         let isPM = timeStr.toLowerCase().includes('pm');
                         let isAM = timeStr.toLowerCase().includes('am');
-                        timeStr = timeStr.replace(/[^0-9:]/g, ''); // Extract just '10:30'
+                        timeStr = timeStr.replace(/[^0-9:]/g, ''); // Extract just '10:30' from '10:30 AM'
 
                         let [hours = '00', minutes = '00'] = timeStr.split(':');
                         let h = parseInt(hours, 10);
