@@ -186,6 +186,150 @@ function ManageBooking() {
     );
   }
 
+  const renderStatusBanner = () => {
+    if (bookingData?.status !== 'CANCELLED' && bookingData?.status !== 'CANCEL_REQUESTED') {
+      return (
+        <div className={`p-4 rounded-lg mb-6 ${bookingData?.status === 'CONFIRMED' ? 'bg-emerald-50 border border-emerald-200' :
+          bookingData?.status === 'FAILED' ? 'bg-red-50 border border-red-200' :
+            'bg-blue-50 border border-blue-200'
+          }`}>
+          <div className="flex items-center">
+            {bookingData?.status === 'CONFIRMED' ? (
+              <CheckCircle className="w-5 h-5 text-emerald-600 mr-2" />
+            ) : (
+              <Info className="w-5 h-5 text-blue-600 mr-2" />
+            )}
+            <span className={`font-medium ${bookingData?.status === 'CONFIRMED' ? 'text-emerald-800' : 'text-blue-800'}`}>
+              Booking Status: {bookingData?.status || 'Confirmed'}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // Cancellation Logic
+    const cancelData = cancelResult || bookingData?.bookingDetails?.cancellation || {};
+    const paymentAction = cancelData.paymentAction || bookingData?.paymentAction;
+    const isRefundFailed = paymentAction === 'REFUND_FAILED';
+    const isManual = paymentAction === 'MANUAL_PROCESS_REQUIRED';
+    const isNoRefund = paymentAction === 'NO_REFUND_FEE_COVERS';
+    const isRefunded = paymentAction === 'PARTIAL_REFUND' || paymentAction === 'REFUNDED' || bookingData?.payment_status === 'partially_refunded' || bookingData?.payment_status === 'refunded';
+
+    // Default to pending if we have cancel data but it's not explicitly terminal
+    const isPending = !isRefunded && !isRefundFailed && !isNoRefund && !isManual;
+
+    // Timeline Steps
+    const steps = [
+      {
+        title: 'Cancellation Requested',
+        description: cancelData.cancelledAt ? new Date(cancelData.cancelledAt).toLocaleDateString() : 'Received',
+        status: 'complete',
+      },
+      {
+        title: 'Processing Refund',
+        description: isRefunded ? 'Approved' : (isRefundFailed || isNoRefund || isManual) ? 'Reviewed' : 'In Progress',
+        status: isRefunded || isRefundFailed || isNoRefund || isManual ? 'complete' : 'current',
+      },
+      {
+        title: 'Refund Status',
+        description: isRefunded ? `Successful ($${(cancelData.refundAmount || cancelData.netRefund || 0).toFixed(2)})` :
+          isRefundFailed ? 'Failed (Sandbox)' :
+            isNoRefund ? 'No Refund Due' :
+              isManual ? 'Manual Review' : 'Pending',
+        status: isRefunded ? 'complete' : (isRefundFailed || isNoRefund || isManual) ? 'error' : 'upcoming',
+      }
+    ];
+
+    return (
+      <div className="mb-8">
+        <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-slate-200/60 bg-gradient-to-br from-white to-slate-50 relative overflow-hidden">
+          {/* Glassmorphism background effect */}
+          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-rose-100/50 rounded-full blur-3xl opacity-50 mix-blend-multiply pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 bg-slate-100/50 rounded-full blur-3xl opacity-50 mix-blend-multiply pointer-events-none"></div>
+
+          <div className="relative z-10">
+            <div className="flex items-start md:items-center justify-between mb-8 flex-col md:flex-row gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <X className="w-6 h-6 text-rose-500" />
+                  Booking Cancelled
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  Reason: {cancelData.reason || 'Requested by user'}
+                </p>
+              </div>
+              <div className="text-left md:text-right">
+                <span className="inline-flex items-center px-4 py-1.5 rounded-full text-sm font-semibold bg-rose-100 text-rose-700 border border-rose-200 shadow-sm">
+                  Status: Cancelled
+                </span>
+              </div>
+            </div>
+
+            {/* Custom Tracking Timeline */}
+            <div className="relative pt-6 pb-2">
+              <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 rounded-full hidden md:block"></div>
+
+              <div className="relative flex flex-col md:flex-row justify-between gap-8 md:gap-0">
+                {steps.map((step, index) => (
+                  <div key={index} className="flex flex-row md:flex-col items-start md:items-center relative z-10 md:w-1/3">
+                    {/* Progress Connecting Line (Mobile) */}
+                    {index !== steps.length - 1 && (
+                      <div className="absolute left-[19px] top-[40px] bottom-[-30px] w-1 bg-slate-100 md:hidden rounded-full"></div>
+                    )}
+
+                    {/* Circle Icon */}
+                    <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center border-2 ${step.status === 'complete' ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30' :
+                        step.status === 'current' ? 'bg-white border-blue-500 text-blue-500 shadow-lg shadow-blue-500/30' :
+                          step.status === 'error' ? 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-500/30' :
+                            'bg-white border-slate-200 text-slate-300'
+                      } transition-all duration-300 md:mb-4 relative z-20 bg-white`}>
+                      {step.status === 'complete' ? <CheckCircle className="w-5 h-5" /> :
+                        step.status === 'error' ? <AlertCircle className="w-5 h-5" /> :
+                          step.status === 'current' ? <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div> :
+                            <div className="w-2.5 h-2.5 rounded-full bg-slate-200"></div>}
+                    </div>
+
+                    {/* Desktop Connecting Line (Dynamic coloring) */}
+                    {index !== steps.length - 1 && (
+                      <div className={`absolute top-5 left-[50%] w-full h-1 -translate-y-1/2 hidden md:block ${step.status === 'complete' ? 'bg-emerald-500' : 'bg-transparent'
+                        }`} style={{ width: '100%' }}></div>
+                    )}
+
+                    <div className="ml-5 md:ml-0 md:text-center mt-0.5 md:mt-0 relative z-20 bg-white/50 md:bg-transparent px-1 rounded">
+                      <h4 className={`text-sm md:text-base font-bold ${step.status === 'complete' ? 'text-slate-800' :
+                          step.status === 'current' ? 'text-blue-700' :
+                            step.status === 'error' ? 'text-rose-700' :
+                              'text-slate-400'
+                        }`}>{step.title}</h4>
+                      <p className="text-xs md:text-sm text-slate-500 mt-1 font-medium">{step.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Error/Notice Message for Sandbox */}
+            {(isRefundFailed || isNoRefund || isManual) && (
+              <div className="mt-10 p-5 bg-amber-50/80 backdrop-blur-sm rounded-xl border border-amber-200/60 flex items-start gap-4 shadow-inner">
+                <AlertCircle className="w-6 h-6 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <h5 className="text-base font-bold text-amber-900">
+                    {isRefundFailed ? 'Test Environment Notice' : isManual ? 'Manual Review Required' : 'No Refund Due'}
+                  </h5>
+                  <p className="text-sm text-amber-700/90 mt-1.5 leading-relaxed font-medium">
+                    {isRefundFailed ? "Refunds for test cards in the Sandbox environment deliberately return a failed status because real funds were never captured. In a live production environment, this step would process completely." :
+                      isManual ? "The automated refund could not be processed fully. Our support team has been notified and will manually review this transaction offline." :
+                        "The cancellation fee for this booking exceeds or equals the original amount paid. Therefore, no refund relies are due to this account."}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -207,28 +351,8 @@ function ManageBooking() {
             </div>
           </div>
 
-          {/* Status Banner */}
-          <div className={`p-4 rounded-lg mb-6 ${bookingData?.status === 'CONFIRMED' ? 'bg-green-50 border border-green-200' :
-            bookingData?.status === 'CANCELLED' ? 'bg-red-50 border border-red-200' :
-              bookingData?.status === 'FAILED' ? 'bg-red-50 border border-red-200' :
-                'bg-blue-50 border border-blue-200'
-            }`}>
-            <div className="flex items-center">
-              {bookingData?.status === 'CONFIRMED' ? (
-                <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-              ) : bookingData?.status === 'CANCELLED' ? (
-                <X className="w-5 h-5 text-red-600 mr-2" />
-              ) : (
-                <Info className="w-5 h-5 text-blue-600 mr-2" />
-              )}
-              <span className={`font-medium ${bookingData?.status === 'CONFIRMED' ? 'text-green-800' :
-                bookingData?.status === 'CANCELLED' ? 'text-red-800' :
-                  'text-blue-800'
-                }`}>
-                Booking Status: {bookingData?.status || 'Confirmed'}
-              </span>
-            </div>
-          </div>
+          {/* Status Banner / Cancellation Tracker */}
+          {renderStatusBanner()}
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-3 mb-6">
@@ -576,7 +700,7 @@ function ManageBooking() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-4">Cancel Booking</h3>
-            
+
             {/* Cancellation Fee Warning */}
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
               <div className="flex items-start">
@@ -589,7 +713,7 @@ function ManageBooking() {
                 </div>
               </div>
             </div>
-            
+
             <p className="text-gray-600 mb-4">
               Are you sure you want to cancel this booking? This action cannot be undone.
             </p>
