@@ -555,12 +555,12 @@ async function handleHostedCheckout(req, res) {
                 status: 'pending',
                 total_amount: parseFloat(amount) || 0,
                 payment_status: 'unpaid',
-                customer_email: customerEmail || null,
                 booking_details: {
                     order_id: orderId,
                     session_id: sessionId,
                     success_indicator: successIndicator,
                     pending_booking_data: req.body,
+                    customer_email: customerEmail || null,
                     arc_pay_checkout_url: paymentPageUrl,
                     checkout_created_at: new Date().toISOString()
                 },
@@ -568,7 +568,8 @@ async function handleHostedCheckout(req, res) {
             }, { onConflict: 'booking_reference' });
             console.log('💾 Pending booking saved to DB:', orderId);
         } catch (dbError) {
-            console.warn('⚠️ Failed to save pending booking to DB (non-blocking):', dbError.message);
+            console.error('⚠️ Failed to save pending booking to DB:', dbError.message);
+            console.error('   Error details:', typeof dbError === 'object' ? JSON.stringify(dbError) : dbError);
             // Non-blocking: localStorage still works as fallback
         }
 
