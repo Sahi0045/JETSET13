@@ -1924,6 +1924,49 @@ router.post('/admin-bookings/:id/cancel', async (req, res) => {
             cancellationResult.refundAmount = 0;
             await supabase.from('payments').update({ payment_status: 'cancelled' }).eq('id', payment.id);
           }
+        } else {
+          // No payment record found — direct booking via hosted checkout
+          // Use booking data directly for ARC Pay refund
+          console.log('⚠️ No payment record found, using booking data for refund');
+          const originalAmount = parseFloat(booking.total_amount || 0);
+          const netRefundAmount = Math.max(0, originalAmount - cancellationFee);
+          const orderIdForArc = booking.booking_details?.order_id || booking.booking_reference;
+          console.log('🔑 ARC Pay Order ID (from booking):', orderIdForArc, 'Amount:', originalAmount, 'Net refund:', netRefundAmount);
+
+          if (netRefundAmount > 0) {
+            const refundTxnId = `refund-admin-${Date.now()}`;
+            const refundUrl = `${ARC_BASE_URL}/merchant/${ARC_MERCHANT_ID}/order/${orderIdForArc}/transaction/${refundTxnId}`;
+            console.log('💸 Issuing REFUND (no payment record):', netRefundAmount.toFixed(2));
+
+            const refundResp = await fetch(refundUrl, {
+              method: 'PUT',
+              headers: arcHeaders,
+              body: JSON.stringify({
+                apiOperation: 'REFUND',
+                transaction: {
+                  amount: netRefundAmount.toFixed(2),
+                  currency: 'USD',
+                  reference: `Admin cancel refund (fee: ${cancellationFee}): ${reason}`
+                }
+              })
+            });
+
+            if (refundResp.ok) {
+              console.log('✅ ARC Pay REFUND successful (no payment record)');
+              cancellationResult.paymentProcessed = true;
+              cancellationResult.paymentAction = 'PARTIAL_REFUND';
+              cancellationResult.refundAmount = netRefundAmount;
+            } else {
+              const errText = await refundResp.text();
+              console.error('❌ ARC Pay REFUND failed:', refundResp.status, errText);
+              cancellationResult.paymentAction = 'REFUND_FAILED';
+            }
+          } else {
+            // Fee covers the full amount
+            cancellationResult.paymentProcessed = true;
+            cancellationResult.paymentAction = 'NO_REFUND_FEE_COVERS';
+            cancellationResult.refundAmount = 0;
+          }
         }
       } catch (paymentError) {
         console.warn('⚠️ Payment refund/void error:', paymentError.message);

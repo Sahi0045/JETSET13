@@ -1640,6 +1640,47 @@ async function handleCancelBookingAction(req, res) {
                             cancellationResult.paymentAction = 'VOID_MISSING_TXN_ID';
                         }
                     }
+                } else {
+                    // No payment record found — direct booking via hosted checkout
+                    console.log('⚠️ No payment record found, using booking data for refund');
+                    const originalAmount = parseFloat(booking.total_amount || 0);
+                    const netRefundAmount = Math.max(0, originalAmount - cancellationFee);
+                    const orderIdForArc = booking.booking_details?.order_id || booking.booking_reference;
+                    console.log('🔑 ARC Pay Order ID (from booking):', orderIdForArc, 'Amount:', originalAmount, 'Net refund:', netRefundAmount);
+
+                    if (netRefundAmount > 0) {
+                        const refundTxnId = `refund-cancel-${Date.now()}`;
+                        const refundUrl = `${arcPayBaseUrl}/merchant/${arcMerchantId}/order/${orderIdForArc}/transaction/${refundTxnId}`;
+                        console.log('💸 Issuing REFUND (no payment record):', netRefundAmount.toFixed(2));
+
+                        const refundResp = await fetch(refundUrl, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': arcAuthHeader },
+                            body: JSON.stringify({
+                                apiOperation: 'REFUND',
+                                transaction: {
+                                    amount: netRefundAmount.toFixed(2),
+                                    currency: 'USD',
+                                    reference: `Cancel refund (fee: ${cancellationFee}): ${reason}`
+                                }
+                            })
+                        });
+
+                        if (refundResp.ok) {
+                            console.log('✅ ARC Pay REFUND successful (no payment record)');
+                            cancellationResult.paymentProcessed = true;
+                            cancellationResult.paymentAction = 'PARTIAL_REFUND';
+                            cancellationResult.refundAmount = netRefundAmount;
+                        } else {
+                            const errText = await refundResp.text();
+                            console.error('❌ ARC Pay REFUND failed:', refundResp.status, errText);
+                            cancellationResult.paymentAction = 'REFUND_FAILED';
+                        }
+                    } else {
+                        cancellationResult.paymentProcessed = true;
+                        cancellationResult.paymentAction = 'NO_REFUND_FEE_COVERS';
+                        cancellationResult.refundAmount = 0;
+                    }
                 }
             } catch (paymentError) {
                 console.warn('⚠️ Payment refund/void error:', paymentError.message);
