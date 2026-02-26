@@ -8,9 +8,12 @@ import * as amadeusUtils from '../Pages/Common/rentals/amadeusUtils';
 // Production API URL from environment variables
 const PRODUCTION_API_URL = import.meta.env.VITE_APP_URL || 'https://www.jetsetterss.com/api';
 
-// Amadeus API credentials from environment variables (TEST keys)
-const API_KEY = import.meta.env.VITE_AMADEUS_API_KEY || 'rsGqoSAv1h9JE70yQVrHwtal1o8R0UAk';
-const API_SECRET = import.meta.env.VITE_AMADEUS_API_SECRET || 'onMEn9iLGPNYAAVE';
+// Amadeus API credentials from environment variables only - never hardcode secrets
+const API_KEY = import.meta.env.VITE_AMADEUS_API_KEY;
+const API_SECRET = import.meta.env.VITE_AMADEUS_API_SECRET;
+if (!API_KEY || !API_SECRET) {
+  console.error('[DirectAmadeusService] Amadeus API credentials not configured. Set VITE_AMADEUS_API_KEY and VITE_AMADEUS_API_SECRET in your .env file.');
+}
 
 // Amadeus API URLs - Using TEST environment
 const AMADEUS_AUTH_URL = 'https://test.api.amadeus.com/v1/security/oauth2/token';

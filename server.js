@@ -36,7 +36,7 @@ console.log('Environment:', {
   REACT_APP_KEYS_SET: !!(process.env.REACT_APP_AMADEUS_API_KEY && process.env.REACT_APP_AMADEUS_API_SECRET)
 });
 
-const PORT = process.env.PORT || 5005;
+const PORT = process.env.PORT || 5004;
 
 // Middleware
 app.use(express.json());
