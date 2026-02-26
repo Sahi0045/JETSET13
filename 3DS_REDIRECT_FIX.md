@@ -10,7 +10,7 @@ The `INITIATE_CHECKOUT` session was missing the **authentication configuration**
 
 ### Updated Session Creation Request
 
-Added authentication parameters to the checkout session:
+Added authentication parameters to the checkout sessionn:
 
 ```javascript
 const requestBody = {
