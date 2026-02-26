@@ -810,6 +810,45 @@ async function handlePaymentCallback(req, res) {
                 .update({ status: 'paid' })
                 .eq('id', payment.inquiry_id);
 
+            // 🎉 Send booking confirmation email
+            try {
+                const { sendBookingNotificationEmails } = await import('../services/emailService.js');
+                console.log('📧 Sending booking confirmation email...');
+
+                // Fetch inquiry data for email
+                let inquiry = null;
+                if (payment.inquiry_id) {
+                    const { data: inqData } = await supabase.from('inquiries').select('*').eq('id', payment.inquiry_id).single();
+                    inquiry = inqData;
+                }
+
+                const bookingEmailData = {
+                    customerEmail: payment.customer_email || inquiry?.customer_email,
+                    customerName: payment.customer_name || inquiry?.customer_name || 'Valued Customer',
+                    bookingReference: payment.quote?.quote_number || payment.id.slice(-8).toUpperCase(),
+                    bookingType: inquiry?.inquiry_type || 'travel',
+                    paymentAmount: payment.amount,
+                    currency: payment.currency || 'USD',
+                    travelDate: inquiry?.flight_departure_date || inquiry?.hotel_checkin_date || inquiry?.cruise_departure_date || inquiry?.package_start_date,
+                    passengers: inquiry?.flight_passengers || inquiry?.hotel_guests || inquiry?.cruise_passengers || inquiry?.package_travelers || 1,
+                    bookingDetails: {
+                        origin: inquiry?.flight_origin,
+                        destination: inquiry?.flight_destination,
+                        hotelName: inquiry?.hotel_destination,
+                        cruiseLine: inquiry?.cruise_destination
+                    }
+                };
+
+                const emailResult = await sendBookingNotificationEmails(bookingEmailData);
+                if (emailResult.success) {
+                    console.log('✅ Booking confirmation email sent successfully');
+                } else {
+                    console.warn('⚠️ Booking email sent with issues:', emailResult.error);
+                }
+            } catch (emailError) {
+                console.error('❌ Failed to send booking confirmation email:', emailError.message);
+            }
+
             return res.redirect(`/payment/success?paymentId=${payment.id}`);
         } else if (result === 'PENDING' || orderStatus === 'AUTHENTICATED') {
             console.log('⏳ Payment pending or needs PAY call');
@@ -841,6 +880,44 @@ async function handlePaymentCallback(req, res) {
 
                             await supabase.from('quotes').update({ payment_status: 'paid', status: 'paid' }).eq('id', payment.quote_id);
                             await supabase.from('inquiries').update({ status: 'paid' }).eq('id', payment.inquiry_id);
+
+                            // 🎉 Send booking confirmation email (after PAY)
+                            try {
+                                const { sendBookingNotificationEmails } = await import('../services/emailService.js');
+                                console.log('📧 Sending booking confirmation email (after PAY)...');
+
+                                let inquiry2 = null;
+                                if (payment.inquiry_id) {
+                                    const { data: inqData2 } = await supabase.from('inquiries').select('*').eq('id', payment.inquiry_id).single();
+                                    inquiry2 = inqData2;
+                                }
+
+                                const bookingEmailData2 = {
+                                    customerEmail: payment.customer_email || inquiry2?.customer_email,
+                                    customerName: payment.customer_name || inquiry2?.customer_name || 'Valued Customer',
+                                    bookingReference: payment.quote?.quote_number || payment.id.slice(-8).toUpperCase(),
+                                    bookingType: inquiry2?.inquiry_type || 'travel',
+                                    paymentAmount: payment.amount,
+                                    currency: payment.currency || 'USD',
+                                    travelDate: inquiry2?.flight_departure_date || inquiry2?.hotel_checkin_date || inquiry2?.cruise_departure_date || inquiry2?.package_start_date,
+                                    passengers: inquiry2?.flight_passengers || inquiry2?.hotel_guests || inquiry2?.cruise_passengers || inquiry2?.package_travelers || 1,
+                                    bookingDetails: {
+                                        origin: inquiry2?.flight_origin,
+                                        destination: inquiry2?.flight_destination,
+                                        hotelName: inquiry2?.hotel_destination,
+                                        cruiseLine: inquiry2?.cruise_destination
+                                    }
+                                };
+
+                                const emailResult2 = await sendBookingNotificationEmails(bookingEmailData2);
+                                if (emailResult2.success) {
+                                    console.log('✅ Booking confirmation email sent successfully (after PAY)');
+                                } else {
+                                    console.warn('⚠️ Booking email sent with issues (after PAY):', emailResult2.error);
+                                }
+                            } catch (emailError2) {
+                                console.error('❌ Failed to send booking confirmation email (after PAY):', emailError2.message);
+                            }
 
                             return res.redirect(`/payment/success?paymentId=${payment.id}`);
                         }
