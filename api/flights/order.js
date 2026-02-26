@@ -1,6 +1,7 @@
 import AmadeusService from '../../backend/services/amadeusService.js';
 import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
+import { sendBookingNotificationEmails } from '../../backend/services/emailService.js';
 
 // Initialize Supabase client for database storage
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://qqmagqwumjipdqvxbiqu.supabase.co';
@@ -285,6 +286,37 @@ async function createFlightOrder(req, res) {
             };
 
             console.log(`✅ Mock booking created: PNR=${mockPNR}, OrderID=${orderId}, Amount=${totalAmount}`);
+
+            // Send booking confirmation email
+            try {
+                console.log('📧 Sending booking confirmation email...');
+                const firstSegment2 = segments[0] || {};
+                const lastSegment2 = segments[segments.length - 1] || firstSegment2;
+                const bookingEmailData = {
+                    customerEmail: finalContactInfo.email,
+                    customerName: `${finalTravelers[0]?.firstName || 'Guest'} ${finalTravelers[0]?.lastName || 'User'}`,
+                    bookingReference: bookingReference,
+                    bookingType: 'flight',
+                    paymentAmount: totalAmount,
+                    currency: currency,
+                    travelDate: firstSegment2.departure?.at?.split('T')[0] || '',
+                    passengers: finalTravelers.length,
+                    bookingDetails: {
+                        origin: firstSegment2.departure?.iataCode || flightOffer?.origin || '',
+                        destination: lastSegment2.arrival?.iataCode || flightOffer?.destination || '',
+                        airline: firstSegment2.carrierCode || ''
+                    }
+                };
+                const emailResult = await sendBookingNotificationEmails(bookingEmailData);
+                if (emailResult.success) {
+                    console.log('✅ Booking confirmation email sent successfully');
+                } else {
+                    console.warn('⚠️ Booking email sent with issues:', emailResult.error);
+                }
+            } catch (emailError) {
+                console.error('❌ Failed to send booking confirmation email:', emailError.message);
+            }
+
             return res.status(200).json(response);
         }
 
@@ -423,6 +455,36 @@ async function createFlightOrder(req, res) {
         };
 
         console.log(`✅ Order created: ID=${response.data.orderId}, PNR=${response.data.pnr}`);
+
+        // Send booking confirmation email
+        try {
+            console.log('📧 Sending booking confirmation email...');
+            const seg0 = pricedOffer?.itineraries?.[0]?.segments?.[0] || {};
+            const segLast = pricedOffer?.itineraries?.[0]?.segments?.slice(-1)[0] || seg0;
+            const bookingEmailData = {
+                customerEmail: contactInfo?.email || formattedTravelers[0]?.contact?.emailAddress,
+                customerName: `${formattedTravelers[0]?.name?.firstName || 'Guest'} ${formattedTravelers[0]?.name?.lastName || 'User'}`,
+                bookingReference: response.data.bookingReference || pnr,
+                bookingType: 'flight',
+                paymentAmount: response.data.totalPrice?.amount,
+                currency: response.data.totalPrice?.currency || 'USD',
+                travelDate: seg0.departure?.at?.split('T')[0] || '',
+                passengers: formattedTravelers.length,
+                bookingDetails: {
+                    origin: seg0.departure?.iataCode || '',
+                    destination: segLast.arrival?.iataCode || '',
+                    airline: seg0.carrierCode || ''
+                }
+            };
+            const emailResult = await sendBookingNotificationEmails(bookingEmailData);
+            if (emailResult.success) {
+                console.log('✅ Booking confirmation email sent successfully');
+            } else {
+                console.warn('⚠️ Booking email sent with issues:', emailResult.error);
+            }
+        } catch (emailError) {
+            console.error('❌ Failed to send booking confirmation email:', emailError.message);
+        }
 
         return res.status(200).json(response);
 
