@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { normalizeCountryCode, normalizeBillingAddress } from './utils/countryCodeNormalizer.js';
-import { sendBookingNotificationEmails } from '../backend/services/emailService.js';
+import { sendBookingNotificationEmails, sendCancellationNotificationEmails } from '../backend/services/emailService.js';
 
 // Initialize Supabase client with proper error handling
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -3236,6 +3236,37 @@ async function handleCancelBooking(req, res) {
     }
 
     console.log('✅ Booking cancelled successfully:', booking.id);
+
+    // --- Send Cancellation Email ---
+    try {
+      console.log('📧 Sending cancellation confirmation email...');
+
+      // Extract email from passenger_details if available
+      let passengerEmail = null;
+      if (Array.isArray(booking.passenger_details) && booking.passenger_details.length > 0) {
+        passengerEmail = booking.passenger_details[0]?.email || booking.passenger_details[0]?.contact?.emailAddress;
+      }
+
+      const cancelEmailData = {
+        customerEmail: booking.customer_email || booking.booking_details?.customer_email || passengerEmail || email || 'test@jetsetterss.com',
+        customerName: booking.customer_name || (Array.isArray(booking.passenger_details) && booking.passenger_details[0]?.firstName ? `${booking.passenger_details[0].firstName} ${booking.passenger_details[0].lastName || ''}`.trim() : 'Valued Customer'),
+        bookingReference: booking.booking_reference,
+        bookingType: booking.travel_type || 'flight',
+        refundAmount: cancellationResult.refundAmount,
+        cancellationFee: cancellationResult.cancellationFee,
+        currency: 'USD'
+      };
+
+      const emailResult = await sendCancellationNotificationEmails(cancelEmailData);
+      if (emailResult.success) {
+        console.log('✅ Cancellation email sent successfully');
+      } else {
+        console.warn('⚠️ Cancellation email sent with issues:', emailResult.error);
+      }
+    } catch (emailError) {
+      console.error('❌ Failed to send cancellation email:', emailError.message);
+    }
+    // -------------------------------
 
     return res.status(200).json({
       success: true,
