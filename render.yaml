@@ -19,6 +19,12 @@ services:
         value: https://qqmagqwumjipdqvxbiqu.supabase.co
       - key: SUPABASE_ANON_KEY
         sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
       - key: VITE_API_URL
         value: /api
       - key: VITE_APP_NAME

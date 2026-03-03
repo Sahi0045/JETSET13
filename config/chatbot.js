@@ -3,7 +3,7 @@ export default {
   // Model Configuration
   model: {
     name: process.env.GEMINI_MODEL || "gemini-2.5-flash",
-    embeddingModel: 'text-embedding-004',
+    embeddingModel: "text-embedding-004",
     temperature: 0.7,
     maxOutputTokens: 2048,
     topP: 0.95,
@@ -14,7 +14,7 @@ export default {
   context: {
     maxTurns: 10, // Maximum conversation history turns to include
     maxContextLength: 8000, // Maximum tokens for context
-    systemPrompt: `You are a helpful travel assistant for JetSetters, a premium travel booking platform. 
+    systemPrompt: `You are a helpful travel assistant for JetSetters, a premium travel booking platform.
 You help users with:
 - Flight and hotel bookings
 - Travel recommendations
@@ -45,17 +45,17 @@ Always be friendly, professional, and concise. If you don't know something, offe
     topK: 3, // Number of similar chunks to retrieve
     similarityThreshold: 0.7, // Minimum cosine similarity
     crawlUrls: [
-      '/faq',
-      '/policies/cancellation',
-      '/policies/refund',
-      '/help',
-      '/about',
+      "/faq",
+      "/policies/cancellation",
+      "/policies/refund",
+      "/help",
+      "/about",
     ],
   },
 
   // API Configuration
   api: {
-    timeout: 30000, // 30 seconds
+    timeout: 55000, // 55 seconds (aligned with 60s serverless maxDuration)
     retryAttempts: 3,
     retryDelay: 1000, // 1 second
   },

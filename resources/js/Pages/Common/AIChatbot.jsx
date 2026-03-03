@@ -37,7 +37,7 @@ const AIChatbot = () => {
     setInputValue(e.target.value);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!inputValue.trim()) return;
@@ -45,76 +45,67 @@ const AIChatbot = () => {
     // Add user message
     const userMessage = { type: 'user', content: inputValue };
     setMessages(prev => [...prev, userMessage]);
+
+    // Store current input value and clear it
+    const currentInput = inputValue;
     setInputValue('');
 
     // Show typing indicator
     setIsTyping(true);
 
-    // Simulate AI response based on authentication status
-    setTimeout(() => {
-      let botResponse;
+    try {
+      // Get auth token if available
+      const token = localStorage.getItem('token') ||
+        localStorage.getItem('adminToken') ||
+        localStorage.getItem('supabase_token');
 
-      // Very basic AI logic - in a real app this would call an API or more sophisticated logic
-      const input = inputValue.toLowerCase();
+      // Get or initialize session ID
+      const sessionId = localStorage.getItem('chatSessionId');
 
-      if (input.includes('flight') || input.includes('fly')) {
-        botResponse = {
-          type: 'bot',
-          content: 'We offer flights to over 100 destinations worldwide. Would you like me to help you find the best flight options for your trip?'
-        };
-      } else if (input.includes('cruise')) {
-        botResponse = {
-          type: 'bot',
-          content: 'Our cruise packages include luxury amenities and visits to the most beautiful destinations. What type of cruise experience are you looking for?'
-        };
-      } else if (input.includes('rental') || input.includes('car')) {
-        botResponse = {
-          type: 'bot',
-          content: 'We offer car rentals in partnership with leading providers. Would you like me to check availability for a specific location and date?'
-        };
-      } else if (input.includes('package') || input.includes('deal')) {
-        botResponse = {
-          type: 'bot',
-          content: 'Our vacation packages combine flights, accommodations, and activities at discounted rates. Are you interested in any specific destination?'
-        };
-      } else if (input.includes('cancel') || input.includes('refund')) {
-        if (isAuthenticated) {
-          botResponse = {
-            type: 'bot',
-            content: 'I can help you with your cancellation request. Since you\'re logged in, I can see your bookings. Please let me know which reservation you\'d like to cancel.'
-          };
+      const headers = {
+        'Content-Type': 'application/json',
+      };
 
-        } else {
-          botResponse = {
-            type: 'bot',
-            content: 'For cancellation requests, you\'ll need to log in to your account. Once logged in, I can assist you with your specific bookings.'
-          };
-        }
-      } else if (input.includes('account') || input.includes('login')) {
-        if (isAuthenticated) {
-          botResponse = {
-            type: 'bot',
-            content: 'You\'re currently logged in to your Jetsetterss account. Would you like me to help you manage your profile or view your trip history?'
-          };
-        } else {
-          botResponse = {
-            type: 'bot',
-            content: 'You can login or create an account by clicking the Login/Signup button in the top right corner of the page.'
-          };
-        }
-      } else {
-        // Default response
-        botResponse = {
-          type: 'bot',
-          content: isAuthenticated ?
-            'Thank you for your question. As a logged-in customer, I can provide personalized assistance. How else can I help with your travel plans?' :
-            'Thanks for your question. For more personalized assistance, consider logging in or creating an account. How else can I help you today?'
-        };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
 
-      setIsTyping(false);
+      const response = await fetch('/api/chat/message', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          sessionId: sessionId || undefined,
+          message: currentInput
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      const data = await response.json();
+
+      // Save session ID if provided by the backend and not already saved
+      if (data.sessionId && !sessionId) {
+        localStorage.setItem('chatSessionId', data.sessionId);
+      }
+
+      const botResponse = {
+        type: 'bot',
+        content: data.message || 'I\'m sorry, I couldn\'t process that right now.'
+      };
+
       setMessages(prev => [...prev, botResponse]);
-    }, 1500);
+    } catch (error) {
+      console.error('Chat API Error:', error);
+      const errorResponse = {
+        type: 'bot',
+        content: 'I\'m sorry, I am having trouble connecting to my servers right now. Please try again later.'
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   return (

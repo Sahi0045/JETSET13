@@ -1,18 +1,21 @@
-import axios from 'axios';
+import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5006/api';
+// In production the frontend is served from the same origin as the API,
+// so a relative path (/api) is correct and works on any domain.
+// VITE_API_URL can be set explicitly (e.g. for a separate backend host).
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 // Create axios instance with default config
 const chatApi = axios.create({
   baseURL: `${API_URL}/chat`,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
 // Add auth token to requests if available
 chatApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -23,9 +26,10 @@ chatApi.interceptors.request.use((config) => {
 chatApi.interceptors.response.use(
   (response) => response,
   (error) => {
-    const message = error.response?.data?.error || error.message || 'An error occurred';
+    const message =
+      error.response?.data?.error || error.message || "An error occurred";
     return Promise.reject(new Error(message));
-  }
+  },
 );
 
 /**
@@ -33,7 +37,7 @@ chatApi.interceptors.response.use(
  */
 export const sendMessage = async (message, sessionId = null) => {
   try {
-    const response = await chatApi.post('/message', {
+    const response = await chatApi.post("/message", {
       message,
       sessionId,
     });
@@ -48,7 +52,7 @@ export const sendMessage = async (message, sessionId = null) => {
  */
 export const createSession = async (metadata = {}) => {
   try {
-    const response = await chatApi.post('/session', { metadata });
+    const response = await chatApi.post("/session", { metadata });
     return response.data;
   } catch (error) {
     throw error;
@@ -84,9 +88,14 @@ export const getHistory = async (sessionId, limit = 50) => {
 /**
  * Submit feedback for a message
  */
-export const submitFeedback = async (messageId, sessionId, rating, comment = null) => {
+export const submitFeedback = async (
+  messageId,
+  sessionId,
+  rating,
+  comment = null,
+) => {
   try {
-    const response = await chatApi.post('/feedback', {
+    const response = await chatApi.post("/feedback", {
       messageId,
       sessionId,
       rating,
@@ -101,19 +110,25 @@ export const submitFeedback = async (messageId, sessionId, rating, comment = nul
 /**
  * Send a message with streaming response
  */
-export const sendStreamingMessage = async (message, sessionId, onChunk, onComplete, onError) => {
+export const sendStreamingMessage = async (
+  message,
+  sessionId,
+  onChunk,
+  onComplete,
+  onError,
+) => {
   try {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     const headers = {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     };
-    
+
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
 
     const response = await fetch(`${API_URL}/chat/stream`, {
-      method: 'POST',
+      method: "POST",
       headers,
       body: JSON.stringify({ message, sessionId }),
     });
@@ -127,26 +142,26 @@ export const sendStreamingMessage = async (message, sessionId, onChunk, onComple
 
     while (true) {
       const { done, value } = await reader.read();
-      
+
       if (done) break;
 
       const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
+      const lines = chunk.split("\n");
 
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
+        if (line.startsWith("data: ")) {
           const data = JSON.parse(line.slice(6));
-          
+
           if (data.error) {
             onError(new Error(data.error));
             return;
           }
-          
+
           if (data.done) {
             onComplete(data.sessionId);
             return;
           }
-          
+
           if (data.text) {
             onChunk(data.text);
           }
