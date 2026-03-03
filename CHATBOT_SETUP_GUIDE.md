@@ -41,14 +41,14 @@ Your `.env` file already has the Gemini API key, but you need to add it to your 
 ```bash
 # Go to: https://vercel.com/your-project/settings/environment-variables
 # Add:
-GEMINI_API_KEY=AIzaSyAyfVRijjqks7783MsIQNVChQh7jjf9ceQ
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 **For Render:**
 ```bash
 # Go to your Render dashboard → Environment
 # Add:
-GEMINI_API_KEY=AIzaSyAyfVRijjqks7783MsIQNVChQh7jjf9ceQ
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 ### Step 3: Test Locally

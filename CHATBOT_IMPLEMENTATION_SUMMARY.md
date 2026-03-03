@@ -105,7 +105,7 @@
 ### Already Configured
 
 ```env
-GEMINI_API_KEY=AIzaSyAyfVRijjqks7783MsIQNVChQh7jjf9ceQ
+GEMINI_API_KEY=your_gemini_api_key_here
 SUPABASE_URL=https://qqmagqwumjipdqvxbiqu.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 JWT_SECRET=e4f8a2b5c9d3f7e1a0b5c8d2e6f3a9b7d1e0f5a2c4b8e3d7f9a1c5b0e2d4f8

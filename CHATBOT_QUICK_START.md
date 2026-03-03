@@ -110,13 +110,13 @@ rateLimit: {
 **Vercel:**
 ```
 Dashboard → Settings → Environment Variables
-Add: GEMINI_API_KEY=AIzaSyAyfVRijjqks7783MsIQNVChQh7jjf9ceQ
+Add: GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 **Render:**
 ```
 Dashboard → Environment
-Add: GEMINI_API_KEY=AIzaSyAyfVRijjqks7783MsIQNVChQh7jjf9ceQ
+Add: GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 ### Deploy

@@ -41,7 +41,7 @@
   - Found in `dependencies` — existing Supabase client can be reused
 
 - ✅ **Add `GEMINI_API_KEY` to `.env`**
-  - Added: `GEMINI_API_KEY=AIzaSyAyfVRijjqks7783MsIQNVChQh7jjf9ceQ`
+  - Added: `GEMINI_API_KEY=your_gemini_api_key_here`
   - Remember to add to Vercel / Render environment variable dashboards for production
 
 - ✅ **Create `/config/chatbot.js` — Chatbot configuration file**
