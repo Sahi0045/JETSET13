@@ -7,6 +7,11 @@ import chatbotConfig from '../../config/chatbot.js';
 class ChatController {
   /**
    * Process incoming message
+   * 
+   * Designed for reliability in serverless (Vercel) environments:
+   * - Uses fast keyword classification (no extra Gemini API call)
+   * - DB operations are non-blocking — failures don't prevent AI response
+   * - Skips expensive embedding/content retrieval for simple queries
    */
   async processMessage(req, res) {
     try {
@@ -17,34 +22,48 @@ class ChatController {
         return res.status(400).json({ error: 'Message is required' });
       }
 
-      // Get or create session
-      let session;
-      if (sessionId) {
-        session = await chatModel.getSession(sessionId);
-        if (!session) {
-          return res.status(404).json({ error: 'Session not found' });
-        }
-      } else {
-        session = await chatModel.createSession(userId);
-      }
-
-      // Save user message
-      await chatModel.addMessage(session.id, 'user', message);
-
-      // Classify query
-      const classification = await queryClassifier.classify(message);
+      // Use fast keyword-based classification (no API call needed)
+      const classification = queryClassifier.classifyWithKeywords(message);
       const route = queryClassifier.route(classification);
 
-      // Get conversation history
-      const history = await chatModel.getHistory(
-        session.id,
-        chatbotConfig.context.maxTurns
-      );
+      // Get or create session (non-blocking — don't fail if DB is down)
+      let session = null;
+      try {
+        if (sessionId) {
+          session = await chatModel.getSession(sessionId);
+        }
+        if (!session) {
+          session = await chatModel.createSession(userId);
+        }
+      } catch (dbError) {
+        console.warn('DB session operation failed, using in-memory session:', dbError.message);
+        session = { id: sessionId || `temp-${Date.now()}` };
+      }
 
-      // Build context
+      // Save user message (non-blocking — fire and forget)
+      if (session?.id && !session.id.startsWith('temp-')) {
+        chatModel.addMessage(session.id, 'user', message).catch(err =>
+          console.warn('Failed to save user message:', err.message)
+        );
+      }
+
+      // Get conversation history (non-blocking — use empty if fails)
+      let history = [];
+      try {
+        if (session?.id && !session.id.startsWith('temp-')) {
+          history = await chatModel.getHistory(
+            session.id,
+            chatbotConfig.context.maxTurns
+          );
+        }
+      } catch (historyError) {
+        console.warn('Failed to fetch history:', historyError.message);
+      }
+
+      // Build context (skip expensive embedding retrieval for simple queries)
       const context = await this._buildContext(userId, classification, route);
 
-      // Generate response
+      // Generate response from Gemini
       const aiResponse = await geminiService.generateResponse(
         message,
         context,
@@ -59,26 +78,35 @@ class ChatController {
         })) || [],
       });
 
-      // Save assistant message
-      const assistantMessage = await chatModel.addMessage(
-        session.id,
-        'assistant',
-        formattedResponse.content,
-        aiResponse.tokensUsed
-      );
+      // Save assistant message (non-blocking — fire and forget)
+      let assistantMessageId = null;
+      if (session?.id && !session.id.startsWith('temp-')) {
+        chatModel.addMessage(
+          session.id,
+          'assistant',
+          formattedResponse.content,
+          aiResponse.tokensUsed
+        ).then(msg => {
+          assistantMessageId = msg?.id;
+        }).catch(err =>
+          console.warn('Failed to save assistant message:', err.message)
+        );
 
-      // Log analytics
-      await chatModel.logAnalytics(session.id, 'message_processed', {
-        intent: classification.intent,
-        confidence: classification.confidence,
-        route,
-        tokensUsed: aiResponse.tokensUsed,
-      });
+        // Log analytics (non-blocking)
+        chatModel.logAnalytics(session.id, 'message_processed', {
+          intent: classification.intent,
+          confidence: classification.confidence,
+          route,
+          tokensUsed: aiResponse.tokensUsed,
+        }).catch(err =>
+          console.warn('Failed to log analytics:', err.message)
+        );
+      }
 
       res.json({
         sessionId: session.id,
         message: formattedResponse.content,
-        messageId: assistantMessage.id,
+        messageId: assistantMessageId,
         metadata: {
           intent: classification.intent,
           confidence: classification.confidence,
@@ -87,13 +115,21 @@ class ChatController {
       });
     } catch (error) {
       console.error('Error processing message:', error);
-      
-      const errorResponse = responseGenerator.createErrorResponse(error);
-      
-      res.status(500).json({
-        error: 'Failed to process message',
-        message: errorResponse.content,
-      });
+
+      // Try to return a graceful error response
+      try {
+        const errorResponse = responseGenerator.createErrorResponse(error);
+        res.status(500).json({
+          error: 'Failed to process message',
+          message: errorResponse.content,
+        });
+      } catch (formatError) {
+        // Ultimate fallback
+        res.status(500).json({
+          error: 'Failed to process message',
+          message: 'I\'m experiencing some technical difficulties. Please try again in a moment.',
+        });
+      }
     }
   }
 
@@ -114,31 +150,54 @@ class ChatController {
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
 
-      // Get or create session
-      let session;
-      if (sessionId) {
-        session = await chatModel.getSession(sessionId);
-      } else {
-        session = await chatModel.createSession(userId);
+      // Get or create session (non-blocking)
+      let session = null;
+      try {
+        if (sessionId) {
+          session = await chatModel.getSession(sessionId);
+        }
+        if (!session) {
+          session = await chatModel.createSession(userId);
+        }
+      } catch (dbError) {
+        console.warn('DB session operation failed for streaming:', dbError.message);
+        session = { id: sessionId || `temp-${Date.now()}` };
       }
 
-      // Save user message
-      await chatModel.addMessage(session.id, 'user', message);
+      // Save user message (non-blocking)
+      if (session?.id && !session.id.startsWith('temp-')) {
+        chatModel.addMessage(session.id, 'user', message).catch(err =>
+          console.warn('Failed to save user message:', err.message)
+        );
+      }
 
-      // Classify and build context
-      const classification = await queryClassifier.classify(message);
+      // Classify and build context using fast keyword classification
+      const classification = queryClassifier.classifyWithKeywords(message);
       const route = queryClassifier.route(classification);
-      const history = await chatModel.getHistory(session.id, chatbotConfig.context.maxTurns);
+
+      let history = [];
+      try {
+        if (session?.id && !session.id.startsWith('temp-')) {
+          history = await chatModel.getHistory(session.id, chatbotConfig.context.maxTurns);
+        }
+      } catch (historyError) {
+        console.warn('Failed to fetch history for streaming:', historyError.message);
+      }
+
       const context = await this._buildContext(userId, classification, route);
 
       // Stream response
       let fullResponse = '';
-      
+
       for await (const chunk of geminiService.generateStreamingResponse(message, context, history)) {
         if (chunk.done) {
-          // Save complete response
-          await chatModel.addMessage(session.id, 'assistant', fullResponse);
-          
+          // Save complete response (non-blocking)
+          if (session?.id && !session.id.startsWith('temp-')) {
+            chatModel.addMessage(session.id, 'assistant', fullResponse).catch(err =>
+              console.warn('Failed to save streamed response:', err.message)
+            );
+          }
+
           res.write(`data: ${JSON.stringify({ done: true, sessionId: session.id })}\n\n`);
           break;
         }
@@ -165,10 +224,10 @@ class ChatController {
 
       const session = await chatModel.createSession(userId, metadata);
 
-      await chatModel.logAnalytics(session.id, 'session_created', {
+      chatModel.logAnalytics(session.id, 'session_created', {
         userId,
         metadata,
-      });
+      }).catch(err => console.warn('Failed to log session creation:', err.message));
 
       res.json({
         sessionId: session.id,
@@ -189,7 +248,9 @@ class ChatController {
 
       await chatModel.endSession(sessionId);
 
-      await chatModel.logAnalytics(sessionId, 'session_ended');
+      chatModel.logAnalytics(sessionId, 'session_ended').catch(err =>
+        console.warn('Failed to log session end:', err.message)
+      );
 
       res.json({ message: 'Session ended successfully' });
     } catch (error) {
@@ -227,14 +288,14 @@ class ChatController {
       const { messageId, sessionId, rating, comment } = req.body;
 
       if (!messageId || !sessionId || !rating) {
-        return res.status(400).json({ 
-          error: 'messageId, sessionId, and rating are required' 
+        return res.status(400).json({
+          error: 'messageId, sessionId, and rating are required'
         });
       }
 
       if (rating < 1 || rating > 5) {
-        return res.status(400).json({ 
-          error: 'Rating must be between 1 and 5' 
+        return res.status(400).json({
+          error: 'Rating must be between 1 and 5'
         });
       }
 
@@ -245,11 +306,11 @@ class ChatController {
         comment
       );
 
-      await chatModel.logAnalytics(sessionId, 'feedback_submitted', {
+      chatModel.logAnalytics(sessionId, 'feedback_submitted', {
         messageId,
         rating,
         hasComment: !!comment,
-      });
+      }).catch(err => console.warn('Failed to log feedback:', err.message));
 
       res.json({
         message: 'Feedback submitted successfully',
@@ -262,7 +323,8 @@ class ChatController {
   }
 
   /**
-   * Build context for AI response
+   * Build context for AI response.
+   * Skips expensive embedding retrieval for simple queries (greetings, etc.)
    * @private
    */
   async _buildContext(userId, classification, route) {
@@ -270,20 +332,24 @@ class ChatController {
 
     // Add user information if authenticated
     if (userId) {
-      // TODO: Fetch user profile and bookings
       context.user = {
         id: userId,
-        // Add user details here
       };
     }
 
-    // Retrieve relevant content based on classification
+    // Skip expensive content retrieval for simple queries
+    const skipContentRoutes = ['greeting', 'general', 'support'];
+    if (skipContentRoutes.includes(route)) {
+      return context;
+    }
+
+    // Only retrieve content for content/policy/booking queries
     if (route === 'content' || classification.confidence < 0.7) {
       try {
         const queryEmbedding = await geminiService.generateEmbedding(
           classification.entities.destination || 'general travel'
         );
-        
+
         const similarContent = await chatModel.searchSimilar(
           queryEmbedding,
           chatbotConfig.indexing.topK,
@@ -297,7 +363,7 @@ class ChatController {
           similarity: item.similarity,
         }));
       } catch (error) {
-        console.error('Error retrieving content:', error);
+        console.warn('Error retrieving content (non-fatal):', error.message);
       }
     }
 

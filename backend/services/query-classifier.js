@@ -60,7 +60,9 @@ class QueryClassifier {
   }
 
   /**
-   * Classify user query intent using Gemini
+   * Classify user query intent using Gemini (slower, more accurate).
+   * NOTE: This makes an extra Gemini API call. For latency-sensitive paths
+   * (e.g. serverless functions), prefer classifyWithKeywords() instead.
    * @param {string} query - User message
    * @param {Object} context - Additional context
    * @returns {Promise<Object>} Classification result
@@ -75,6 +77,16 @@ class QueryClassifier {
       // Fall back to keyword-based classification
       return this._classifyWithKeywords(query);
     }
+  }
+
+  /**
+   * Fast keyword-based classification (no API call).
+   * Use this in latency-sensitive paths like serverless functions.
+   * @param {string} query - User message
+   * @returns {Object} Classification result
+   */
+  classifyWithKeywords(query) {
+    return this._classifyWithKeywords(query);
   }
 
   /**

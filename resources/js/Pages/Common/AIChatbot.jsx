@@ -37,6 +37,35 @@ const AIChatbot = () => {
     setInputValue(e.target.value);
   };
 
+  /**
+   * Fetch with timeout and automatic retry.
+   * Prevents hanging requests on serverless cold starts.
+   */
+  const fetchWithRetry = async (url, options, { timeout = 25000, retries = 1 } = {}) => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        return response;
+      } catch (err) {
+        clearTimeout(timeoutId);
+
+        // If this was the last attempt, throw
+        if (attempt >= retries) throw err;
+
+        // Wait briefly before retrying (cold start may have warmed up)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log(`Chat API retry attempt ${attempt + 1}…`);
+      }
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -70,17 +99,17 @@ const AIChatbot = () => {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch('/api/chat/message', {
+      const response = await fetchWithRetry('/api/chat/message', {
         method: 'POST',
         headers,
         body: JSON.stringify({
           sessionId: sessionId || undefined,
           message: currentInput
         })
-      });
+      }, { timeout: 28000, retries: 1 });
 
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        throw new Error(`Server responded with ${response.status}`);
       }
 
       const data = await response.json();
@@ -98,9 +127,17 @@ const AIChatbot = () => {
       setMessages(prev => [...prev, botResponse]);
     } catch (error) {
       console.error('Chat API Error:', error);
+
+      let errorMessage;
+      if (error.name === 'AbortError') {
+        errorMessage = 'The request took too long. Please try again — it should be faster now.';
+      } else {
+        errorMessage = 'I\'m sorry, I am having trouble connecting to my servers right now. Please try again later.';
+      }
+
       const errorResponse = {
         type: 'bot',
-        content: 'I\'m sorry, I am having trouble connecting to my servers right now. Please try again later.'
+        content: errorMessage,
       };
       setMessages(prev => [...prev, errorResponse]);
     } finally {

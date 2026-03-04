@@ -56,7 +56,7 @@ Always be friendly, professional, and concise. If you don't know something, offe
   // API Configuration
   api: {
     timeout: 55000, // 55 seconds (aligned with 60s serverless maxDuration)
-    retryAttempts: 3,
+    retryAttempts: 2, // Reduced from 3 to avoid exceeding serverless timeout
     retryDelay: 1000, // 1 second
   },
 
