@@ -50,11 +50,11 @@ async function verifyRS256Token(token, header) {
   // Decode token to check issuer
   const decodedPayload = jwt.decode(token, { complete: false });
   const isFirebase = decodedPayload?.iss?.includes('securetoken.google.com');
-  
+
   // Try Google OAuth certs first (works for both Google OAuth and most Firebase tokens)
   let certs = await getGoogleCerts();
   let matchingKey = certs.find(k => k.kid === header.kid);
-  
+
   if (matchingKey) {
     const pem = x5cToPem(matchingKey?.x5c);
     if (pem) {
@@ -70,12 +70,12 @@ async function verifyRS256Token(token, header) {
       }
     }
   }
-  
+
   // Try Firebase certs if Google didn't work (for Firebase-specific certs)
   if (isFirebase) {
     certs = await getFirebaseCerts();
     matchingKey = certs.find(k => k.kid === header.kid);
-    
+
     if (matchingKey) {
       const pem = x5cToPem(matchingKey?.x5c);
       if (pem) {
@@ -87,13 +87,13 @@ async function verifyRS256Token(token, header) {
       }
     }
   }
-  
+
   // If certs don't match, try forcing a refresh (cert rotation may have occurred)
   if (isFirebase) {
     console.log('Forcing cert refresh due to kid mismatch...');
     googleCertsCache = { certs: null, fetchedAt: 0 };
     firebaseCertsCache = { certs: null, fetchedAt: 0 };
-    
+
     certs = await getGoogleCerts();
     matchingKey = certs.find(k => k.kid === header.kid);
     if (matchingKey) {
@@ -107,7 +107,7 @@ async function verifyRS256Token(token, header) {
       }
     }
   }
-  
+
   throw new Error(`No matching certificate found for kid: ${header.kid} (tried both Google OAuth and Firebase endpoints)`);
 }
 
@@ -131,7 +131,7 @@ async function verifySupabaseToken(token) {
   // Fallback: Verify using Supabase API
   try {
     const { data: { user }, error } = await supabase.auth.getUser(token);
-    
+
     if (error || !user) {
       console.log('❌ Supabase API token verification failed:', error?.message || 'No user returned');
       return null;
@@ -208,17 +208,17 @@ export const protect = async (req, res, next) => {
       // Get token from header
       token = req.headers.authorization.split(' ')[1];
       console.log('🔐 Auth middleware: Token received, length:', token?.length);
-      
+
       // Decode token header to see what type it is
       try {
         const header = jwt.decode(token, { complete: true })?.header;
         console.log('🔐 Token header:', { alg: header?.alg, kid: header?.kid, typ: header?.typ });
         const payload = jwt.decode(token, { complete: false });
-        console.log('🔐 Token payload preview:', { 
-          email: payload?.email, 
-          user_id: payload?.user_id, 
+        console.log('🔐 Token payload preview:', {
+          email: payload?.email,
+          user_id: payload?.user_id,
           sub: payload?.sub,
-          iss: payload?.iss 
+          iss: payload?.iss
         });
       } catch (decodeErr) {
         console.log('🔐 Could not decode token:', decodeErr.message);
@@ -232,37 +232,37 @@ export const protect = async (req, res, next) => {
         decoded = await verifySupabaseToken(token);
 
         if (!decoded) {
-        // If HS verification fails, try RS256 (e.g., Google/Firebase token)
-        try {
-          const header = jwt.decode(token, { complete: true })?.header || {};
-          if (header.alg && header.alg.startsWith('RS')) {
-            decoded = await verifyRS256Token(token, header);
-            console.log('Successfully verified RS256 token for user:', decoded.email || decoded.user_id);
-          } else {
-            throw hsErr;
-          }
-        } catch (rsErr) {
-          console.error('RS256 verification error:', rsErr.message);
-          
-          // Development fallback: If it's a Firebase token with valid structure but cert verification failed,
-          // allow it through (cert rotation or network issues). Remove this in production!
-          if (process.env.NODE_ENV !== 'production') {
-            try {
-              const header = jwt.decode(token, { complete: true })?.header || {};
-              const payload = jwt.decode(token, { complete: false });
-              
-              if (header.alg === 'RS256' && payload?.iss?.includes('securetoken.google.com') && payload?.email) {
-                console.warn('⚠️ DEVELOPMENT MODE: Allowing Firebase token through without cert verification');
-                console.warn('⚠️ Token has valid structure but cert verification failed:', rsErr.message);
-                decoded = payload; // Use decoded payload as-is
-              } else {
+          // If HS verification fails, try RS256 (e.g., Google/Firebase token)
+          try {
+            const header = jwt.decode(token, { complete: true })?.header || {};
+            if (header.alg && header.alg.startsWith('RS')) {
+              decoded = await verifyRS256Token(token, header);
+              console.log('Successfully verified RS256 token for user:', decoded.email || decoded.user_id);
+            } else {
+              throw hsErr;
+            }
+          } catch (rsErr) {
+            console.error('RS256 verification error:', rsErr.message);
+
+            // Development fallback: If it's a Firebase token with valid structure but cert verification failed,
+            // allow it through (cert rotation or network issues). Remove this in production!
+            if (process.env.NODE_ENV !== 'production') {
+              try {
+                const header = jwt.decode(token, { complete: true })?.header || {};
+                const payload = jwt.decode(token, { complete: false });
+
+                if (header.alg === 'RS256' && payload?.iss?.includes('securetoken.google.com') && payload?.email) {
+                  console.warn('⚠️ DEVELOPMENT MODE: Allowing Firebase token through without cert verification');
+                  console.warn('⚠️ Token has valid structure but cert verification failed:', rsErr.message);
+                  decoded = payload; // Use decoded payload as-is
+                } else {
+                  throw rsErr;
+                }
+              } catch (fallbackErr) {
                 throw rsErr;
               }
-            } catch (fallbackErr) {
+            } else {
               throw rsErr;
-            }
-          } else {
-            throw rsErr;
             }
           }
         }
@@ -271,7 +271,7 @@ export const protect = async (req, res, next) => {
       // Get user from token. For RS256 (Google/Firebase) tokens, map by email or user_id/sub.
       let user = null;
       const userId = decoded?.id || decoded?.user_id || decoded?.sub;
-      
+
       if (userId) {
         console.log('Finding user by id/user_id/sub:', userId);
         try {
@@ -280,7 +280,7 @@ export const protect = async (req, res, next) => {
           console.log('User.findById failed, trying email lookup:', err.message);
         }
       }
-      
+
       if (!user && decoded?.email) {
         console.log('Finding user by email:', decoded.email);
         try {
@@ -289,7 +289,7 @@ export const protect = async (req, res, next) => {
           console.log('User.findByEmail failed:', err.message);
         }
       }
-      
+
       if (!user && decoded) {
         try {
           user = await autoProvisionSupabaseUser(decoded);
@@ -298,16 +298,16 @@ export const protect = async (req, res, next) => {
           // Continue to check if user exists - provisioning failure shouldn't block auth
         }
       }
-      
+
       if (!user) {
-        console.error('User not found for token:', { 
-          id: decoded?.id, 
+        console.error('User not found for token:', {
+          id: decoded?.id,
           user_id: decoded?.user_id,
           sub: decoded?.sub,
           email: decoded?.email,
           iss: decoded?.iss
         });
-        return res.status(401).json({ 
+        return res.status(401).json({
           success: false,
           message: 'User not found',
           error: 'No user found matching token credentials'
@@ -318,16 +318,19 @@ export const protect = async (req, res, next) => {
 
       // Remove password from user object and ensure role is included
       const { password, ...userWithoutPassword } = user;
-      
+
       // Check if Supabase token has role in user_metadata (takes precedence)
       const supabaseRole = decoded?.user_metadata?.role;
       const finalRole = supabaseRole || user.role || 'user';
-      
+
       req.user = {
         ...userWithoutPassword,
-        role: finalRole
+        role: finalRole,
+        // Store the Supabase auth UUID so booking queries (which reference auth.users.id) work correctly.
+        // req.user.id is the local DB users table id which may differ from auth.users.id (decoded.sub).
+        authUserId: decoded?.sub || decoded?.user_id || userWithoutPassword.id,
       };
-      
+
       console.log('Auth middleware: Setting req.user with role:', {
         dbRole: user.role,
         supabaseRole: supabaseRole,
@@ -338,18 +341,18 @@ export const protect = async (req, res, next) => {
     } catch (error) {
       console.error('Auth middleware error:', error.message);
       console.error('Error stack:', error.stack);
-      res.status(401).json({ 
+      res.status(401).json({
         success: false,
         message: 'Not authorized, token failed',
-        error: error.message 
+        error: error.message
       });
     }
   }
 
   if (!token) {
-    res.status(401).json({ 
+    res.status(401).json({
       success: false,
-      message: 'Not authorized, no token' 
+      message: 'Not authorized, no token'
     });
   }
 };
@@ -381,16 +384,16 @@ export const optionalProtect = async (req, res, next) => {
         decoded = await verifySupabaseToken(token);
 
         if (!decoded) {
-        try {
-          const header = jwt.decode(token, { complete: true })?.header || {};
-          if (header.alg && header.alg.startsWith('RS')) {
-            decoded = await verifyRS256Token(token, header);
-          } else {
-            throw hsErr;
-          }
-        } catch (rsErr) {
-          // Silently fail for optional protect
-          console.log('Optional auth: RS256 verification failed:', rsErr.message);
+          try {
+            const header = jwt.decode(token, { complete: true })?.header || {};
+            if (header.alg && header.alg.startsWith('RS')) {
+              decoded = await verifyRS256Token(token, header);
+            } else {
+              throw hsErr;
+            }
+          } catch (rsErr) {
+            // Silently fail for optional protect
+            console.log('Optional auth: RS256 verification failed:', rsErr.message);
           }
         }
       }
@@ -398,7 +401,7 @@ export const optionalProtect = async (req, res, next) => {
       // Get user from token. For RS256 (Google/Firebase) tokens, map by email or user_id/sub.
       let user = null;
       const userId = decoded?.id || decoded?.user_id || decoded?.sub;
-      
+
       if (userId) {
         try {
           user = await User.findById(userId);
@@ -406,7 +409,7 @@ export const optionalProtect = async (req, res, next) => {
           // Continue to email lookup
         }
       }
-      
+
       if (!user && decoded?.email) {
         try {
           user = await User.findByEmail(decoded.email);
@@ -414,7 +417,7 @@ export const optionalProtect = async (req, res, next) => {
           // User not found
         }
       }
-      
+
       if (!user && decoded) {
         try {
           user = await autoProvisionSupabaseUser(decoded);
@@ -423,18 +426,19 @@ export const optionalProtect = async (req, res, next) => {
           // Continue as guest - don't fail the request
         }
       }
-      
+
       if (user) {
         // Remove password from user object and ensure role is included
         const { password, ...userWithoutPassword } = user;
-        
+
         // Check if Supabase token has role in user_metadata (takes precedence)
         const supabaseRole = decoded?.user_metadata?.role;
         const finalRole = supabaseRole || user.role || 'user';
-        
+
         req.user = {
           ...userWithoutPassword,
-          role: finalRole
+          role: finalRole,
+          authUserId: decoded?.sub || decoded?.user_id || userWithoutPassword.id,
         };
         console.log('Optional auth: User authenticated:', {
           email: req.user.email,

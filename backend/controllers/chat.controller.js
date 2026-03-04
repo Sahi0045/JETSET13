@@ -79,7 +79,7 @@ class ChatController {
       }
 
       // Build context with booking data for authenticated users
-      const context = await this._buildContext(userId, userEmail, userName, classification, route);
+      const context = await this._buildContext(userId, req.user?.authUserId, userEmail, userName, classification, route);
 
       // Generate response from Gemini
       const aiResponse = await geminiService.generateResponse(
@@ -216,7 +216,7 @@ class ChatController {
         console.warn('Failed to fetch history for streaming:', historyError.message);
       }
 
-      const context = await this._buildContext(userId, userEmail, userName, classification, route);
+      const context = await this._buildContext(userId, req.user?.authUserId, userEmail, userName, classification, route);
 
       // Stream response
       let fullResponse = '';
@@ -360,14 +360,14 @@ class ChatController {
    * - Skips expensive embedding retrieval for simple queries
    * @private
    */
-  async _buildContext(userId, userEmail, userName, classification, route) {
+  async _buildContext(userId, authUserId, userEmail, userName, classification, route) {
     const context = {};
 
     // Add user information and booking data if authenticated
     if (userId) {
       try {
-        // Fetch comprehensive booking context in parallel
-        const bookingContext = await bookingDataService.getBookingContext(userId);
+        // Pass all possible IDs + email so the service can find bookings regardless of ID format
+        const bookingContext = await bookingDataService.getBookingContext(userId, authUserId, userEmail);
 
         context.user = {
           id: userId,

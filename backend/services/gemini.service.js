@@ -168,7 +168,15 @@ class GeminiService {
 
     // Authentication status
     if (context.authenticated === false) {
-      systemContext += "\n\n[User Status: Guest (not logged in). If they ask about their bookings, let them know they need to log in first to see their booking information.]";
+      systemContext += "\n\n[User Status: Guest (not logged in). If they ask about their bookings, direct them to log in at the top-right corner of the website to access their booking information.]";
+    } else if (context.authenticated === true) {
+      // Authenticated — tell AI definitively so it never tells a logged-in user to "log in"
+      const bookingCount = (context.bookings?.length || 0) + (context.upcomingBookings?.length || 0);
+      if (bookingCount === 0) {
+        systemContext += `\n\n[User Status: LOGGED IN ✓. No bookings found in the database for this user yet. Do NOT tell them to log in — they already are. If they ask about bookings, say you checked and found no bookings on their account, and suggest they visit the Manage Booking page or contact support if they believe there is an error.]`;
+      } else {
+        systemContext += `\n\n[User Status: LOGGED IN ✓. Booking data is provided below — use it to answer their questions accurately.]`;
+      }
     }
 
     // User information

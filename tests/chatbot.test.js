@@ -1074,11 +1074,13 @@ describe("ChatController", () => {
       expect(res.status).toHaveBeenCalledWith(400);
     });
 
-    it("returns 404 when a provided sessionId does not exist", async () => {
-      chain.single.mockResolvedValueOnce({
-        data: null,
-        error: new Error("not found"),
-      });
+    it("falls back to a new session when a provided sessionId does not exist", async () => {
+      // Session lookup returns not-found — controller should create a new session as fallback
+      chain.single
+        .mockResolvedValueOnce({ data: null, error: new Error("not found") }) // getSession fails
+        .mockResolvedValueOnce({ data: { id: "new-sess-fallback", is_active: true, created_at: new Date().toISOString() }, error: null }); // createSession succeeds
+
+      chain.limit.mockResolvedValueOnce({ data: [], error: null }); // history
 
       const req = mockReq({
         body: { message: "Hello", sessionId: "nonexistent-sess" },
@@ -1087,7 +1089,17 @@ describe("ChatController", () => {
 
       await controller.processMessage(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(404);
+      // Controller must NOT return 404 — it creates a new session and responds normally
+      const statusCalls = res.status.mock.calls.map((c) => c[0]);
+      expect(statusCalls.every((s) => s < 400)).toBe(true);
+
+      // Should return a valid AI response
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: expect.any(String),
+          message: expect.any(String),
+        }),
+      );
     });
 
     it("processes a valid message and returns AI response", async () => {
