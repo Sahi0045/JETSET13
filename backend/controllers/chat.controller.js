@@ -27,11 +27,17 @@ class ChatController {
         return res.status(400).json({ error: 'Message is required' });
       }
 
+      // Sanitize session ID
+      const safeSessionId = chatSecurityService.validateSessionId(sessionId);
+      if (sessionId && !safeSessionId) {
+        return res.status(400).json({ error: 'Invalid session ID format' });
+      }
+
       // Security validation — block prompt injection, SQL injection, XSS, spam
-      const securityCheck = chatSecurityService.validateMessage(message, sessionId);
+      const securityCheck = chatSecurityService.validateMessage(message, safeSessionId);
       if (!securityCheck.safe) {
         if (securityCheck.securityEvent) {
-          console.warn(`🛡️ Security event [${securityCheck.securityEvent}] from session ${sessionId}, user ${userId}`);
+          console.warn(`🛡️ Security event [${securityCheck.securityEvent}] from session ${safeSessionId}, user ${userId}`);
         }
         return res.status(400).json({
           error: securityCheck.reason,
@@ -47,15 +53,15 @@ class ChatController {
       // Get or create session (non-blocking — don't fail if DB is down)
       let session = null;
       try {
-        if (sessionId) {
-          session = await chatModel.getSession(sessionId);
+        if (safeSessionId) {
+          session = await chatModel.getSession(safeSessionId);
         }
         if (!session) {
           session = await chatModel.createSession(userId);
         }
       } catch (dbError) {
         console.warn('DB session operation failed, using in-memory session:', dbError.message);
-        session = { id: sessionId || `temp-${Date.now()}` };
+        session = { id: safeSessionId || `temp-${Date.now()}` };
       }
 
       // Save user message (non-blocking — fire and forget)
@@ -170,8 +176,14 @@ class ChatController {
         return res.status(400).json({ error: 'Message is required' });
       }
 
+      // Sanitize session ID
+      const safeSessionId = chatSecurityService.validateSessionId(sessionId);
+      if (sessionId && !safeSessionId) {
+        return res.status(400).json({ error: 'Invalid session ID format' });
+      }
+
       // Security validation
-      const securityCheck = chatSecurityService.validateMessage(message, sessionId);
+      const securityCheck = chatSecurityService.validateMessage(message, safeSessionId);
       if (!securityCheck.safe) {
         return res.status(400).json({ error: securityCheck.reason, message: securityCheck.reason });
       }

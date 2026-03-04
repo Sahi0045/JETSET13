@@ -5,6 +5,7 @@
  * This service is strictly read-only — no write/edit operations are exposed.
  */
 import supabase from '../config/supabase.js';
+import chatSecurityService from './chat-security.service.js';
 
 class BookingDataService {
     /**
@@ -21,11 +22,18 @@ class BookingDataService {
 
         try {
             // Build OR filter using all available IDs to handle any ID format
+            // Validate UUIDs to prevent filter injection vulnerabilities
             const orFilters = [];
-            if (userId) orFilters.push(`user_id.eq.${userId}`);
-            if (authUserId && authUserId !== userId) orFilters.push(`user_id.eq.${authUserId}`);
-            if (userId) orFilters.push(`booking_details->>'original_user_id'.eq.${userId}`);
-            if (authUserId && authUserId !== userId) orFilters.push(`booking_details->>'original_user_id'.eq.${authUserId}`);
+            if (userId && chatSecurityService.validateUUID(userId)) {
+                orFilters.push(`user_id.eq.${userId}`);
+                orFilters.push(`booking_details->>'original_user_id'.eq.${userId}`);
+            }
+            if (authUserId && authUserId !== userId && chatSecurityService.validateUUID(authUserId)) {
+                orFilters.push(`user_id.eq.${authUserId}`);
+                orFilters.push(`booking_details->>'original_user_id'.eq.${authUserId}`);
+            }
+
+            if (orFilters.length === 0) return []; // No valid UUIDs provided
 
             const { data, error } = await supabase
                 .from('bookings')
@@ -67,7 +75,7 @@ class BookingDataService {
                 .eq('email', userEmail)
                 .single();
 
-            if (userData?.id) {
+            if (userData?.id && chatSecurityService.validateUUID(userData.id)) {
                 const { data, error } = await supabase
                     .from('bookings')
                     .select('*')
@@ -97,8 +105,14 @@ class BookingDataService {
 
         try {
             const orFilters = [];
-            if (userId) orFilters.push(`user_id.eq.${userId}`);
-            if (authUserId && authUserId !== userId) orFilters.push(`user_id.eq.${authUserId}`);
+            if (userId && chatSecurityService.validateUUID(userId)) {
+                orFilters.push(`user_id.eq.${userId}`);
+            }
+            if (authUserId && authUserId !== userId && chatSecurityService.validateUUID(authUserId)) {
+                orFilters.push(`user_id.eq.${authUserId}`);
+            }
+
+            if (orFilters.length === 0) return [];
 
             const { data, error } = await supabase
                 .from('bookings')
@@ -139,8 +153,14 @@ class BookingDataService {
 
         try {
             const orFilters = [];
-            if (userId) orFilters.push(`user_id.eq.${userId}`);
-            if (authUserId && authUserId !== userId) orFilters.push(`user_id.eq.${authUserId}`);
+            if (userId && chatSecurityService.validateUUID(userId)) {
+                orFilters.push(`user_id.eq.${userId}`);
+            }
+            if (authUserId && authUserId !== userId && chatSecurityService.validateUUID(authUserId)) {
+                orFilters.push(`user_id.eq.${authUserId}`);
+            }
+
+            if (orFilters.length === 0) return [];
 
             const { data, error } = await supabase
                 .from('bookings')

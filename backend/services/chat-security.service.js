@@ -130,6 +130,42 @@ class ChatSecurityService {
         this.recentMessages = new Map();
         this.spamWindowMs = 60000; // 1 minute
         this.maxDuplicatesInWindow = 3;
+
+        // UUID v4 format — used to validate user IDs before Supabase queries
+        this.UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+        // Session ID: UUID or temp-<digits> format only
+        this.SESSION_ID_REGEX = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|temp-[0-9]+)$/i;
+    }
+
+    /**
+     * Validate that a value is a properly-formatted UUID.
+     * MUST be called before using any user/auth ID in a Supabase query string.
+     * Prevents Supabase filter string injection via crafted JWTs.
+     * @param {string} id
+     * @returns {boolean}
+     */
+    validateUUID(id) {
+        if (!id || typeof id !== 'string') return false;
+        return this.UUID_REGEX.test(id.trim());
+    }
+
+    /**
+     * Sanitize a session ID from the request body.
+     * Returns the sanitized ID if valid, or null if it looks malicious.
+     * @param {string} sessionId
+     * @returns {string|null}
+     */
+    validateSessionId(sessionId) {
+        if (!sessionId) return null;
+        if (typeof sessionId !== 'string') return null;
+        const trimmed = sessionId.trim();
+        if (trimmed.length > 100) return null; // Suspicious length
+        if (this.SESSION_ID_REGEX.test(trimmed)) return trimmed;
+        // Allowed: alphanumeric + hyphens only (no SQL chars, no quotes, no brackets)
+        if (/^[a-zA-Z0-9\-_]{1,100}$/.test(trimmed)) return trimmed;
+        console.warn(`⚠️ Suspicious session ID rejected: ${trimmed.substring(0, 30)}`);
+        return null;
     }
 
     /**
