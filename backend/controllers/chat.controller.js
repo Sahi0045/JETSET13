@@ -2,6 +2,8 @@ import chatModel from '../models/chat.model.js';
 import geminiService from '../services/gemini.service.js';
 import queryClassifier from '../services/query-classifier.js';
 import responseGenerator from '../services/response-generator.js';
+import bookingDataService from '../services/booking-data.service.js';
+import chatSecurityService from '../services/chat-security.service.js';
 import chatbotConfig from '../../config/chatbot.js';
 
 class ChatController {
@@ -11,19 +13,35 @@ class ChatController {
    * Designed for reliability in serverless (Vercel) environments:
    * - Uses fast keyword classification (no extra Gemini API call)
    * - DB operations are non-blocking — failures don't prevent AI response
+   * - Fetches booking data for authenticated users (read-only)
    * - Skips expensive embedding/content retrieval for simple queries
    */
   async processMessage(req, res) {
     try {
       const { sessionId, message } = req.body;
       const userId = req.user?.id || null;
+      const userEmail = req.user?.email || null;
+      const userName = req.user?.name || req.user?.first_name || null;
 
       if (!message || !message.trim()) {
         return res.status(400).json({ error: 'Message is required' });
       }
 
+      // Security validation — block prompt injection, SQL injection, XSS, spam
+      const securityCheck = chatSecurityService.validateMessage(message, sessionId);
+      if (!securityCheck.safe) {
+        if (securityCheck.securityEvent) {
+          console.warn(`🛡️ Security event [${securityCheck.securityEvent}] from session ${sessionId}, user ${userId}`);
+        }
+        return res.status(400).json({
+          error: securityCheck.reason,
+          message: securityCheck.reason,
+        });
+      }
+      const sanitizedMessage = securityCheck.sanitized;
+
       // Use fast keyword-based classification (no API call needed)
-      const classification = queryClassifier.classifyWithKeywords(message);
+      const classification = queryClassifier.classifyWithKeywords(sanitizedMessage);
       const route = queryClassifier.route(classification);
 
       // Get or create session (non-blocking — don't fail if DB is down)
@@ -42,7 +60,7 @@ class ChatController {
 
       // Save user message (non-blocking — fire and forget)
       if (session?.id && !session.id.startsWith('temp-')) {
-        chatModel.addMessage(session.id, 'user', message).catch(err =>
+        chatModel.addMessage(session.id, 'user', sanitizedMessage).catch(err =>
           console.warn('Failed to save user message:', err.message)
         );
       }
@@ -60,15 +78,18 @@ class ChatController {
         console.warn('Failed to fetch history:', historyError.message);
       }
 
-      // Build context (skip expensive embedding retrieval for simple queries)
-      const context = await this._buildContext(userId, classification, route);
+      // Build context with booking data for authenticated users
+      const context = await this._buildContext(userId, userEmail, userName, classification, route);
 
       // Generate response from Gemini
       const aiResponse = await geminiService.generateResponse(
-        message,
+        sanitizedMessage,
         context,
         history
       );
+
+      // Sanitize AI response — strip any accidentally leaked secrets/tokens
+      aiResponse.text = chatSecurityService.sanitizeResponse(aiResponse.text);
 
       // Format response
       const formattedResponse = responseGenerator.format(aiResponse.text, {
@@ -98,6 +119,7 @@ class ChatController {
           confidence: classification.confidence,
           route,
           tokensUsed: aiResponse.tokensUsed,
+          authenticated: !!userId,
         }).catch(err =>
           console.warn('Failed to log analytics:', err.message)
         );
@@ -110,6 +132,7 @@ class ChatController {
         metadata: {
           intent: classification.intent,
           confidence: classification.confidence,
+          authenticated: !!userId,
           ...formattedResponse.metadata,
         },
       });
@@ -140,9 +163,17 @@ class ChatController {
     try {
       const { sessionId, message } = req.body;
       const userId = req.user?.id || null;
+      const userEmail = req.user?.email || null;
+      const userName = req.user?.name || req.user?.first_name || null;
 
       if (!message || !message.trim()) {
         return res.status(400).json({ error: 'Message is required' });
+      }
+
+      // Security validation
+      const securityCheck = chatSecurityService.validateMessage(message, sessionId);
+      if (!securityCheck.safe) {
+        return res.status(400).json({ error: securityCheck.reason, message: securityCheck.reason });
       }
 
       // Set up SSE
@@ -166,13 +197,14 @@ class ChatController {
 
       // Save user message (non-blocking)
       if (session?.id && !session.id.startsWith('temp-')) {
-        chatModel.addMessage(session.id, 'user', message).catch(err =>
+        chatModel.addMessage(session.id, 'user', securityCheck.sanitized).catch(err =>
           console.warn('Failed to save user message:', err.message)
         );
       }
 
       // Classify and build context using fast keyword classification
-      const classification = queryClassifier.classifyWithKeywords(message);
+      const sanitizedMessage = securityCheck.sanitized;
+      const classification = queryClassifier.classifyWithKeywords(sanitizedMessage);
       const route = queryClassifier.route(classification);
 
       let history = [];
@@ -184,7 +216,7 @@ class ChatController {
         console.warn('Failed to fetch history for streaming:', historyError.message);
       }
 
-      const context = await this._buildContext(userId, classification, route);
+      const context = await this._buildContext(userId, userEmail, userName, classification, route);
 
       // Stream response
       let fullResponse = '';
@@ -324,17 +356,58 @@ class ChatController {
 
   /**
    * Build context for AI response.
-   * Skips expensive embedding retrieval for simple queries (greetings, etc.)
+   * - Fetches booking data for authenticated users (read-only)
+   * - Skips expensive embedding retrieval for simple queries
    * @private
    */
-  async _buildContext(userId, classification, route) {
+  async _buildContext(userId, userEmail, userName, classification, route) {
     const context = {};
 
-    // Add user information if authenticated
+    // Add user information and booking data if authenticated
     if (userId) {
-      context.user = {
-        id: userId,
-      };
+      try {
+        // Fetch comprehensive booking context in parallel
+        const bookingContext = await bookingDataService.getBookingContext(userId);
+
+        context.user = {
+          id: userId,
+          name: userName || bookingContext.user?.name || 'User',
+          email: userEmail || bookingContext.user?.email || 'Not provided',
+          phone: bookingContext.user?.phone || 'Not provided',
+          memberSince: bookingContext.user?.memberSince || null,
+        };
+
+        context.authenticated = true;
+
+        // Add booking data
+        if (bookingContext.recentBookings?.length > 0) {
+          context.bookings = bookingContext.recentBookings;
+        }
+
+        if (bookingContext.upcomingBookings?.length > 0) {
+          context.upcomingBookings = bookingContext.upcomingBookings;
+        }
+
+        if (bookingContext.inquiries?.length > 0) {
+          context.inquiries = bookingContext.inquiries;
+        }
+
+        if (bookingContext.quotes?.length > 0) {
+          context.quotes = bookingContext.quotes;
+        }
+
+        context.totalBookings = bookingContext.totalBookings || 0;
+      } catch (error) {
+        console.warn('Failed to fetch booking context (non-fatal):', error.message);
+        context.user = {
+          id: userId,
+          name: userName || 'User',
+          email: userEmail || 'Not provided',
+        };
+        context.authenticated = true;
+      }
+    } else {
+      context.authenticated = false;
     }
 
     // Skip expensive content retrieval for simple queries

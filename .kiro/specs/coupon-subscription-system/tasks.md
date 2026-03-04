@@ -686,3 +686,409 @@ The system integrates with the existing Jetsetters platform (Express.js backend,
     - Add error handling with user-friendly messages
     - _Requirements: 3.1, 3.6_
 
+
+  - [ ] 18.3 Create discount API client
+    - Create `frontend/utils/discount-api.js`
+    - Implement price calculation and preview functions
+    - Add real-time price updates on coupon changes
+    - _Requirements: 4.5_
+
+  - [ ] 18.4 Create gamification API client
+    - Create `frontend/utils/gamification-api.js`
+    - Implement functions for profile, points, leaderboard, redemption
+    - Add WebSocket support for real-time leaderboard updates
+    - _Requirements: 8.1, 8.3, 8.5_
+
+  - [ ] 18.5 Create custom React hooks
+    - Create `frontend/hooks/useSubscription.js` - manage subscription state
+    - Create `frontend/hooks/useCoupons.js` - manage available coupons
+    - Create `frontend/hooks/useDiscount.js` - calculate and preview discounts
+    - Create `frontend/hooks/useGamification.js` - manage points and badges
+    - Add optimistic updates for better UX
+    - _Requirements: 1.2, 3.1, 4.5, 8.1_
+
+- [ ] 19. Notification System Integration
+  - [ ] 19.1 Create notification service
+    - Create `backend/services/notification.js`
+    - Implement email notification methods using Resend
+    - Implement push notification methods (if mobile app exists)
+    - Add notification templates for all event types
+    - _Requirements: 1.4, 7.6, 14.4_
+
+  - [ ] 19.2 Implement subscription notifications
+    - Send confirmation email on subscription creation
+    - Send renewal reminders at 7 days and 1 day before expiry
+    - Send expiration notice when subscription expires
+    - Send upgrade/downgrade confirmation emails
+    - _Requirements: 1.4, 14.4_
+
+  - [ ] 19.3 Implement coupon notifications
+    - Send email when personalized offers available
+    - Send push notification for flash sales (VIP early access)
+    - Send expiry reminders for unused coupons (24 hours before)
+    - _Requirements: 7.6, 11.7_
+
+  - [ ] 19.4 Implement gamification notifications
+    - Send notification when points earned
+    - Send notification when badge unlocked
+    - Send notification when leaderboard rank improves
+    - Send notification when referral completes first booking
+    - _Requirements: 8.2, 9.3_
+
+
+- [ ] 20. Admin Dashboard Components
+  - [ ] 20.1 Create coupon management admin panel
+    - Create `frontend/components/Admin/CouponManagement.jsx`
+    - Add form to create new coupons with all configuration options
+    - Display list of all coupons with status, usage, analytics
+    - Add search and filter by status, campaign, partner
+    - Add emergency deactivation button
+    - Add bulk operations (activate, deactivate, export)
+    - _Requirements: 2.1, 2.8, 13.1, 15.6_
+
+  - [ ] 20.2 Create subscription analytics dashboard
+    - Create `frontend/components/Admin/SubscriptionAnalytics.jsx`
+    - Display total active subscriptions by tier
+    - Show monthly/annual recurring revenue
+    - Display churn rate and retention metrics
+    - Show new subscriptions and cancellations trends
+    - Add date range filters and export functionality
+    - _Requirements: 13.2, 13.3_
+
+  - [ ] 20.3 Create coupon analytics dashboard
+    - Create `frontend/components/Admin/CouponAnalytics.jsx`
+    - Display redemption rates by coupon
+    - Show total discounts given and revenue impact
+    - Display conversion rates and ROI metrics
+    - Show top-performing coupons and campaigns
+    - Add real-time usage tracking
+    - _Requirements: 13.1, 13.4, 13.7_
+
+  - [ ] 20.4 Create customer support tools
+    - Create `frontend/components/Admin/SupportTools.jsx`
+    - Add customer subscription lookup by user ID or email
+    - Display full subscription history and benefits usage
+    - Add manual subscription extension capability
+    - Add one-time compensation coupon generator
+    - Show coupon redemption logs for troubleshooting
+    - _Requirements: 19.1, 19.2, 19.4, 19.6_
+
+- [ ] 21. Checkpoint - Frontend Implementation Complete
+  - Ensure all frontend components render correctly
+  - Test responsive design on mobile devices
+  - Verify API integration works end-to-end
+  - Test user flows: subscription, coupon application, gamification
+  - Ask the user if questions arise
+
+
+- [ ] 22. Scheduled Jobs and Background Tasks
+  - [ ] 22.1 Create subscription renewal job
+    - Create `backend/jobs/subscription-renewal.js`
+    - Check for subscriptions expiring in 24 hours
+    - Process auto-renewal payments
+    - Retry failed payments (3 attempts over 72 hours)
+    - Update subscription status to expired if all retries fail
+    - Run daily at 2 AM UTC
+    - _Requirements: 1.7, 12.5, 12.6_
+
+  - [ ] 22.2 Create renewal reminder job
+    - Create `backend/jobs/renewal-reminders.js`
+    - Send reminders 7 days before expiry
+    - Send reminders 1 day before expiry
+    - Track sent reminders to avoid duplicates
+    - Run daily at 10 AM user's local time
+    - _Requirements: 14.4_
+
+  - [ ] 22.3 Create coupon expiry job
+    - Create `backend/jobs/coupon-expiry.js`
+    - Mark expired coupons as 'expired' status
+    - Send expiry notifications for unused coupons (24 hours before)
+    - Invalidate coupon cache for expired codes
+    - Run every hour
+    - _Requirements: 7.4_
+
+  - [ ] 22.4 Create leaderboard update job
+    - Create `backend/jobs/leaderboard-update.js`
+    - Recalculate leaderboard rankings
+    - Update Redis cache with new rankings
+    - Send notifications to users who improved rank
+    - Run daily at midnight UTC
+    - _Requirements: 8.5_
+
+  - [ ] 22.5 Create analytics aggregation job
+    - Create `backend/jobs/analytics-aggregation.js`
+    - Aggregate daily subscription metrics
+    - Aggregate daily coupon redemption metrics
+    - Calculate revenue impact and ROI
+    - Store aggregated data for reporting
+    - Run daily at 3 AM UTC
+    - _Requirements: 13.1, 13.2, 13.3_
+
+- [ ] 23. Performance Optimization
+  - [ ] 23.1 Implement Redis caching strategy
+    - Cache membership tiers (1-hour TTL)
+    - Cache user subscriptions (10-minute TTL)
+    - Cache coupon codes (5-minute TTL)
+    - Cache available coupons per user (3-minute TTL)
+    - Cache leaderboard data (24-hour TTL)
+    - Implement cache invalidation on updates
+    - _Requirements: 20.6_
+
+
+  - [ ] 23.2 Add database query optimization
+    - Add composite indexes for common query patterns
+    - Optimize subscription lookup by user_id and status
+    - Optimize coupon validation queries
+    - Add database connection pooling
+    - Implement query result pagination for large datasets
+    - _Requirements: 20.1, 20.2, 20.4_
+
+  - [ ] 23.3 Implement rate limiting
+    - Add rate limiting for coupon validation (5 requests/minute per user)
+    - Add rate limiting for API endpoints (100 requests/minute per user)
+    - Use Redis for distributed rate limiting
+    - Return 429 status with retry-after header
+    - _Requirements: 15.1, 20.1_
+
+  - [ ] 23.4 Add response time monitoring
+    - Add performance logging for all service methods
+    - Track 95th percentile response times
+    - Alert if coupon validation exceeds 2 seconds
+    - Alert if discount calculation exceeds 1 second
+    - _Requirements: 20.1, 20.2_
+
+- [ ] 24. Security and Compliance
+  - [ ] 24.1 Implement audit logging
+    - Create `backend/services/audit-logger.js`
+    - Log all subscription actions (create, upgrade, cancel, pause)
+    - Log all coupon redemptions with IP address and user agent
+    - Log all support agent actions on customer accounts
+    - Store audit logs for 7 years
+    - _Requirements: 18.5, 19.5_
+
+  - [ ]* 24.2 Write property test for audit log creation
+    - **Property 45: Audit Log Creation**
+    - **Validates: Requirements 18.5, 19.5**
+
+  - [ ] 24.3 Implement fraud detection
+    - Detect rapid coupon redemption attempts (>5 per minute)
+    - Flag suspicious patterns (multiple accounts, same IP)
+    - Implement velocity checks for subscription payments
+    - Add device fingerprinting for fraud prevention
+    - _Requirements: 15.1, 15.2, 15.7_
+
+  - [ ] 24.4 Add data encryption
+    - Encrypt payment method IDs at rest
+    - Encrypt sensitive user data (PII)
+    - Use HTTPS for all API communications
+    - Implement secure session management
+    - _Requirements: 12.8_
+
+
+  - [ ] 24.5 Implement age verification
+    - Add age verification for restricted subscription tiers
+    - Validate user's date of birth against minimum age requirement
+    - Reject subscription creation if age requirement not met
+    - _Requirements: 18.6_
+
+  - [ ]* 24.6 Write property test for age verification
+    - **Property 46: Age Verification for Restricted Subscriptions**
+    - **Validates: Requirements 18.6**
+
+  - [ ] 24.7 Add terms and conditions management
+    - Store terms and conditions for each coupon
+    - Display terms prominently during coupon application
+    - Require acceptance of subscription terms before payment
+    - Implement data retention policies for promotional data
+    - _Requirements: 18.1, 18.2, 18.3, 18.7_
+
+- [ ] 25. Integration Testing
+  - [ ]* 25.1 Write integration tests for subscription lifecycle
+    - Test complete subscription flow: create → upgrade → pause → resume → cancel
+    - Test payment integration with ARC Pay
+    - Test renewal process with successful and failed payments
+    - Test subscription reactivation within 30 days
+    - _Requirements: 1.2, 1.6, 1.7, 12.1, 14.1, 14.2, 14.7_
+
+  - [ ]* 25.2 Write integration tests for coupon redemption flow
+    - Test coupon validation → application → booking completion
+    - Test coupon cancellation and usage restoration
+    - Test duplicate redemption prevention
+    - Test stacking rules enforcement
+    - _Requirements: 3.1, 3.6, 3.7, 3.8, 4.2_
+
+  - [ ]* 25.3 Write integration tests for discount calculation
+    - Test membership discount + stackable coupon
+    - Test non-stackable coupon rejection
+    - Test maximum discount limit enforcement
+    - Test multi-currency calculations
+    - _Requirements: 4.1, 4.2, 4.4, 5.5, 16.3_
+
+  - [ ]* 25.4 Write integration tests for gamification flow
+    - Test points award on booking completion
+    - Test milestone badge unlocking
+    - Test points redemption for coupon
+    - Test leaderboard updates
+    - _Requirements: 8.1, 8.2, 8.3, 8.5_
+
+  - [ ]* 25.5 Write integration tests for referral flow
+    - Test referral code generation and application
+    - Test reward distribution on first booking
+    - Test self-referral prevention
+    - Test campaign bonus application
+    - _Requirements: 9.1, 9.2, 9.3, 9.6, 9.7_
+
+
+- [ ] 26. End-to-End Testing
+  - [ ]* 26.1 Write E2E test for VIP subscription journey
+    - User views membership tiers
+    - User subscribes to Gold tier
+    - User sees instant discount on search results
+    - User completes booking with VIP discount
+    - User views total savings in dashboard
+    - _Requirements: 1.1, 1.2, 5.1, 5.3, 5.6_
+
+  - [ ]* 26.2 Write E2E test for coupon redemption journey
+    - User searches for flights
+    - User views available coupons
+    - User applies coupon at checkout
+    - User sees price breakdown with discount
+    - User completes payment with discounted price
+    - _Requirements: 3.1, 3.6, 4.5, 12.3_
+
+  - [ ]* 26.3 Write E2E test for gamification journey
+    - User completes booking and earns points
+    - User unlocks achievement badge
+    - User views leaderboard rank
+    - User redeems points for coupon
+    - User applies generated coupon to next booking
+    - _Requirements: 8.1, 8.2, 8.3, 8.5_
+
+  - [ ]* 26.4 Write E2E test for referral journey
+    - User A generates referral code
+    - User B signs up with referral code
+    - User B completes first booking
+    - Both users receive rewards
+    - User A sees updated referral stats
+    - _Requirements: 9.1, 9.2, 9.3, 9.5_
+
+- [ ] 27. Performance Testing
+  - [ ]* 27.1 Load test coupon validation endpoint
+    - Simulate 10,000 concurrent validation requests
+    - Verify 95th percentile response time < 2 seconds
+    - Verify no errors or timeouts
+    - _Requirements: 20.1, 20.4_
+
+  - [ ]* 27.2 Load test discount calculation endpoint
+    - Simulate 1,000 concurrent calculation requests
+    - Verify 95th percentile response time < 1 second
+    - Verify calculation accuracy under load
+    - _Requirements: 20.2_
+
+  - [ ]* 27.3 Load test subscription creation endpoint
+    - Simulate 1,000 concurrent subscription transactions
+    - Verify no degradation in response time
+    - Verify payment gateway integration stability
+    - _Requirements: 20.3_
+
+
+- [ ] 28. Documentation
+  - [ ] 28.1 Create API documentation
+    - Document all subscription API endpoints with request/response examples
+    - Document all coupon API endpoints with validation rules
+    - Document all discount calculation endpoints
+    - Document all gamification and referral endpoints
+    - Include authentication requirements and error codes
+    - Use OpenAPI/Swagger format
+    - _Requirements: All API endpoints_
+
+  - [ ] 28.2 Create admin user guide
+    - Document how to create and manage coupons
+    - Document how to view analytics and reports
+    - Document how to use support tools
+    - Document emergency procedures (coupon deactivation, subscription extension)
+    - Include screenshots and examples
+    - _Requirements: 2.1, 13.1, 19.1, 19.4_
+
+  - [ ] 28.3 Create developer integration guide
+    - Document database schema and relationships
+    - Document service architecture and dependencies
+    - Document caching strategy and invalidation rules
+    - Document scheduled jobs and their schedules
+    - Document fraud detection rules
+    - _Requirements: All backend services_
+
+  - [ ] 28.4 Create user help documentation
+    - Document how to subscribe and manage membership
+    - Document how to apply coupons and view discounts
+    - Document gamification features (points, badges, leaderboard)
+    - Document referral program
+    - Include FAQs and troubleshooting
+    - _Requirements: 1.1, 3.1, 8.1, 9.1_
+
+- [ ] 29. Deployment and Configuration
+  - [ ] 29.1 Create environment configuration
+    - Add environment variables for payment gateway credentials
+    - Add environment variables for Redis connection
+    - Add environment variables for email service (Resend)
+    - Add environment variables for feature flags
+    - Document all required environment variables
+    - _Requirements: 12.1, 12.8_
+
+  - [ ] 29.2 Set up database migrations
+    - Create migration scripts for production deployment
+    - Add rollback scripts for each migration
+    - Test migrations on staging environment
+    - Document migration order and dependencies
+    - _Requirements: All database tables_
+
+
+  - [ ] 29.3 Configure scheduled jobs
+    - Set up cron jobs or task scheduler for background tasks
+    - Configure job monitoring and alerting
+    - Test job execution on staging
+    - Document job schedules and dependencies
+    - _Requirements: 1.7, 7.4, 8.5, 14.4_
+
+  - [ ] 29.4 Set up monitoring and alerting
+    - Configure application performance monitoring (APM)
+    - Set up alerts for slow API responses
+    - Set up alerts for failed payments
+    - Set up alerts for high error rates
+    - Configure log aggregation and search
+    - _Requirements: 20.1, 20.2_
+
+  - [ ] 29.5 Create deployment checklist
+    - Database migrations executed
+    - Environment variables configured
+    - Scheduled jobs configured
+    - Monitoring and alerting active
+    - Seed data loaded (membership tiers)
+    - Payment gateway integration tested
+    - Cache warming completed
+    - _Requirements: All deployment tasks_
+
+- [ ] 30. Final Checkpoint and Launch Preparation
+  - Verify all tasks completed
+  - Run full test suite (unit, property, integration, E2E)
+  - Verify all 46 correctness properties pass
+  - Test on staging environment with production-like data
+  - Perform security audit
+  - Review performance metrics
+  - Ensure all documentation complete
+  - Ask the user if questions arise before production deployment
+
+## Notes
+
+- Tasks marked with `*` are optional testing tasks and can be skipped for faster MVP delivery
+- Each task references specific requirements for traceability
+- Checkpoints ensure incremental validation at major milestones
+- Property tests validate universal correctness properties across all inputs
+- Unit tests validate specific examples, edge cases, and error conditions
+- Integration tests validate component interactions and data flow
+- E2E tests validate complete user journeys
+- The implementation follows a phased approach: database → backend → frontend → integration → testing
+- All code should be production-ready with proper error handling, logging, and security measures
+- Performance requirements: coupon validation <2s, discount calculation <1s at 95th percentile
+- The system integrates with existing Jetsetters platform and ARC Pay payment gateway
+

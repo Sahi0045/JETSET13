@@ -1,24 +1,67 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './AIChatbot.css';
+
+const MAX_MESSAGE_LENGTH = 2000;
+
+// Strip HTML tags client-side before sending to backend
+const sanitizeInput = (text) => text.replace(/<[^>]*>/g, '').trim();
 
 const AIChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      type: 'bot',
-      content: 'Hi there! I\'m the Jetsetterss AI assistant. How can I help you today?',
-    }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userName, setUserName] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null);
+  const initializedRef = useRef(false);
 
-  // Check authentication status on mount
-  useEffect(() => {
+  // Check authentication status on mount and when chat opens
+  const checkAuth = useCallback(() => {
+    // Check multiple sources for auth state
+    const token = localStorage.getItem('token') ||
+      localStorage.getItem('supabase_token') ||
+      localStorage.getItem('adminToken');
     const authStatus = localStorage.getItem('isAuthenticated');
-    setIsAuthenticated(authStatus === 'true');
+    const userStr = localStorage.getItem('user');
+
+    const isLoggedIn = !!(token && (authStatus === 'true' || userStr));
+    setIsAuthenticated(isLoggedIn);
+
+    if (isLoggedIn && userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setUserName(user.firstName || user.name || user.email?.split('@')[0] || '');
+      } catch {
+        setUserName('');
+      }
+    } else {
+      setUserName('');
+    }
+
+    return isLoggedIn;
   }, []);
+
+  // Initialize welcome message
+  useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      const isLoggedIn = checkAuth();
+
+      const welcomeMessage = isLoggedIn && userName
+        ? `Hi ${userName}! I'm the Jetsetterss AI assistant. I can help you with your bookings, travel plans, and more. What would you like to know?`
+        : 'Hi there! I\'m the Jetsetterss AI assistant. How can I help you today?';
+
+      setMessages([{ type: 'bot', content: welcomeMessage }]);
+    }
+  }, [checkAuth, userName]);
+
+  // Re-check auth when chat opens
+  useEffect(() => {
+    if (isOpen) {
+      checkAuth();
+    }
+  }, [isOpen, checkAuth]);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -70,9 +113,17 @@ const AIChatbot = () => {
     e.preventDefault();
 
     if (!inputValue.trim()) return;
+    if (inputValue.length > MAX_MESSAGE_LENGTH) return;
+
+    // Re-check auth before sending (user may have logged in/out)
+    checkAuth();
+
+    // Client-side sanitize
+    const cleanMessage = sanitizeInput(inputValue);
+    if (!cleanMessage) return;
 
     // Add user message
-    const userMessage = { type: 'user', content: inputValue };
+    const userMessage = { type: 'user', content: cleanMessage };
     setMessages(prev => [...prev, userMessage]);
 
     // Store current input value and clear it
@@ -83,10 +134,10 @@ const AIChatbot = () => {
     setIsTyping(true);
 
     try {
-      // Get auth token if available
+      // Get auth token if available — try all possible token sources
       const token = localStorage.getItem('token') ||
-        localStorage.getItem('adminToken') ||
-        localStorage.getItem('supabase_token');
+        localStorage.getItem('supabase_token') ||
+        localStorage.getItem('adminToken');
 
       // Get or initialize session ID
       const sessionId = localStorage.getItem('chatSessionId');
@@ -104,9 +155,20 @@ const AIChatbot = () => {
         headers,
         body: JSON.stringify({
           sessionId: sessionId || undefined,
-          message: currentInput
+          message: cleanMessage
         })
       }, { timeout: 28000, retries: 1 });
+
+      // Handle security validation errors from backend
+      if (response.status === 400) {
+        const errData = await response.json();
+        const botResponse = {
+          type: 'bot',
+          content: errData.message || 'I couldn\'t process that message. Please try rephrasing.',
+        };
+        setMessages(prev => [...prev, botResponse]);
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(`Server responded with ${response.status}`);
@@ -218,12 +280,23 @@ const AIChatbot = () => {
           </div>
 
           <form className="chatbot-input" onSubmit={handleSubmit}>
-            <input
-              type="text"
-              placeholder="Type your message..."
-              value={inputValue}
-              onChange={handleInputChange}
-            />
+            <div className="input-wrapper">
+              <input
+                type="text"
+                placeholder="Type your message..."
+                value={inputValue}
+                onChange={handleInputChange}
+                maxLength={MAX_MESSAGE_LENGTH}
+              />
+              {inputValue.length > MAX_MESSAGE_LENGTH - 200 && (
+                <span className="char-counter" style={{
+                  position: 'absolute', right: '50px', bottom: '8px',
+                  fontSize: '11px', color: inputValue.length >= MAX_MESSAGE_LENGTH ? '#e74c3c' : '#999'
+                }}>
+                  {inputValue.length}/{MAX_MESSAGE_LENGTH}
+                </span>
+              )}
+            </div>
             <button type="submit">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -237,4 +310,4 @@ const AIChatbot = () => {
   );
 };
 
-export default AIChatbot; 
+export default AIChatbot;

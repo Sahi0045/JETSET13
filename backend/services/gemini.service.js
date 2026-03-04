@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import chatbotConfig from "../../config/chatbot.js";
+import chatSecurityService from "./chat-security.service.js";
 
 class GeminiService {
   constructor() {
@@ -159,28 +160,137 @@ class GeminiService {
 
   /**
    * Build a system-level context block injected at the top of every prompt.
+   * Includes user profile, booking data, inquiries, and quotes for authenticated users.
    * @private
    */
   _buildSystemContext(context) {
     let systemContext = chatbotConfig.context.systemPrompt;
 
-    if (context.user) {
-      systemContext += `\n\nUser Information:\n- Name: ${context.user.name ?? "Guest"}\n- Email: ${context.user.email ?? "Not provided"}`;
+    // Authentication status
+    if (context.authenticated === false) {
+      systemContext += "\n\n[User Status: Guest (not logged in). If they ask about their bookings, let them know they need to log in first to see their booking information.]";
     }
 
-    if (context.bookings?.length > 0) {
-      systemContext += "\n\nActive Bookings:";
-      context.bookings.forEach((booking, idx) => {
-        systemContext += `\n${idx + 1}. ${booking.type} — ${booking.destination} (${booking.date})`;
+    // User information
+    if (context.user) {
+      systemContext += `\n\nUser Information:\n- Name: ${context.user.name ?? "Guest"}\n- Email: ${context.user.email ?? "Not provided"}\n- Phone: ${context.user.phone ?? "Not provided"}`;
+      if (context.user.memberSince) {
+        systemContext += `\n- Member since: ${new Date(context.user.memberSince).toLocaleDateString()}`;
+      }
+    }
+
+    // Upcoming bookings (future travel)
+    if (context.upcomingBookings?.length > 0) {
+      systemContext += "\n\nUpcoming Travel (future bookings):";
+      context.upcomingBookings.forEach((booking, idx) => {
+        systemContext += `\n${idx + 1}. [${booking.travelType?.toUpperCase()}] Booking Ref: ${booking.bookingReference || 'N/A'}`;
+        systemContext += `\n   Status: ${booking.status} | Payment: ${booking.paymentStatus}`;
+        if (booking.origin && booking.destination) {
+          systemContext += `\n   Route: ${booking.originCity || booking.origin} → ${booking.destinationCity || booking.destination}`;
+        }
+        if (booking.departureDate) {
+          systemContext += `\n   Departure: ${booking.departureDate}${booking.departureTime ? ' at ' + booking.departureTime : ''}`;
+        }
+        if (booking.arrivalDate || booking.arrivalTime) {
+          systemContext += `\n   Arrival: ${booking.arrivalDate || ''}${booking.arrivalTime ? ' at ' + booking.arrivalTime : ''}`;
+        }
+        if (booking.airline) {
+          systemContext += `\n   Airline: ${booking.airline}${booking.flightNumber ? ' (' + booking.flightNumber + ')' : ''}`;
+        }
+        if (booking.duration) {
+          systemContext += `\n   Duration: ${booking.duration}`;
+        }
+        if (booking.cabinClass) {
+          systemContext += `\n   Class: ${booking.cabinClass}`;
+        }
+        if (booking.stops !== null && booking.stops !== undefined) {
+          systemContext += `\n   Stops: ${booking.stops === 0 ? 'Non-stop' : booking.stops + ' stop(s)'}`;
+        }
+        if (booking.pnr) {
+          systemContext += `\n   PNR: ${booking.pnr}`;
+        }
+        if (booking.cruiseName) {
+          systemContext += `\n   Cruise: ${booking.cruiseName}`;
+        }
+        systemContext += `\n   Amount: ${booking.currency} ${booking.totalAmount}`;
+        if (booking.passengerCount > 0) {
+          systemContext += `\n   Passengers (${booking.passengerCount}): ${booking.passengerNames.join(', ')}`;
+        }
       });
     }
 
+    // Recent bookings (all bookings including past)
+    if (context.bookings?.length > 0) {
+      systemContext += "\n\nRecent Bookings (all):";
+      context.bookings.forEach((booking, idx) => {
+        systemContext += `\n${idx + 1}. [${booking.travelType?.toUpperCase()}] Ref: ${booking.bookingReference || 'N/A'} | Status: ${booking.status} | Payment: ${booking.paymentStatus}`;
+        if (booking.origin && booking.destination) {
+          systemContext += ` | ${booking.originCity || booking.origin} → ${booking.destinationCity || booking.destination}`;
+        }
+        if (booking.departureDate) {
+          systemContext += ` | Dep: ${booking.departureDate}${booking.departureTime ? ' ' + booking.departureTime : ''}`;
+        }
+        if (booking.airline) {
+          systemContext += ` | ${booking.airline}${booking.flightNumber ? ' ' + booking.flightNumber : ''}`;
+        }
+        if (booking.pnr) {
+          systemContext += ` | PNR: ${booking.pnr}`;
+        }
+        systemContext += ` | ${booking.currency} ${booking.totalAmount}`;
+        if (booking.bookingDate) {
+          systemContext += ` | Booked: ${new Date(booking.bookingDate).toLocaleDateString()}`;
+        }
+      });
+    }
+
+    // Inquiries
+    if (context.inquiries?.length > 0) {
+      systemContext += "\n\nRecent Inquiries:";
+      context.inquiries.forEach((inquiry, idx) => {
+        systemContext += `\n${idx + 1}. Type: ${inquiry.type} | Status: ${inquiry.status}`;
+        if (inquiry.destination) {
+          systemContext += ` | Destination: ${inquiry.destination}`;
+        }
+        if (inquiry.travelDates) {
+          systemContext += ` | Dates: ${inquiry.travelDates}`;
+        }
+      });
+    }
+
+    // Quotes
+    if (context.quotes?.length > 0) {
+      systemContext += "\n\nRecent Quotes:";
+      context.quotes.forEach((quote, idx) => {
+        systemContext += `\n${idx + 1}. Quote #${quote.quoteNumber} | ${quote.currency} ${quote.amount} | Status: ${quote.status}`;
+        if (quote.validUntil) {
+          systemContext += ` | Valid until: ${new Date(quote.validUntil).toLocaleDateString()}`;
+        }
+      });
+    }
+
+    // Total bookings count
+    if (context.totalBookings !== undefined && context.totalBookings > 0) {
+      systemContext += `\n\nTotal bookings on record: ${context.totalBookings}`;
+    }
+
+    // Retrieved content (RAG)
     if (context.retrievedContent?.length > 0) {
       systemContext += "\n\nRelevant Information:";
       context.retrievedContent.forEach((content, idx) => {
         systemContext += `\n${idx + 1}. ${content.text} (Source: ${content.source})`;
       });
     }
+
+    // Important instructions for the AI
+    systemContext += "\n\nIMPORTANT RULES:";
+    systemContext += "\n- You have READ-ONLY access to the user's booking data shown above.";
+    systemContext += "\n- You CANNOT modify, cancel, or edit any bookings. If the user asks to change/cancel a booking, direct them to the Manage Booking page or customer support.";
+    systemContext += "\n- Only share booking information with the authenticated user who owns it.";
+    systemContext += "\n- If the user is not logged in (Guest), tell them to log in to access their booking information.";
+    systemContext += "\n- Be helpful, accurate, and concise when answering questions about their bookings.";
+
+    // Inject security hardening rules to prevent prompt injection & data exfiltration
+    systemContext += chatSecurityService.getSecurityPromptAdditions();
 
     return systemContext;
   }
