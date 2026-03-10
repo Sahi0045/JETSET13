@@ -2619,38 +2619,41 @@ async function handleProcessPaymentLink(req, res) {
         }).eq('id', paymentLink.id);
 
         // Store pending booking data for callback
-        await supabase.from('bookings').insert({
-            id: orderId,
-            booking_reference: `PL${paymentLink.link_token.slice(0, 6).toUpperCase()}`,
+        const { data: bookingRecord } = await supabase.from('bookings').insert({
+            booking_reference: orderId,
             customer_name: paymentLink.customer_name,
             customer_email: paymentLink.customer_email,
             travel_type: paymentLink.booking_type,
-            total_amount: paymentLink.amount,
-            currency: paymentLink.currency,
+            total_amount: parseFloat(paymentLink.amount),
             status: 'pending',
             booking_details: {
                 source: 'payment_link',
                 payment_link_id: paymentLink.id,
                 payment_link_token: token,
                 travel_details: paymentLink.travel_details,
-                description: paymentLink.description
+                description: paymentLink.description,
+                order_id: orderId,
+                amount: parseFloat(paymentLink.amount),
+                currency: paymentLink.currency,
+                price_grand_total: parseFloat(paymentLink.amount).toFixed(2)
             },
             created_at: new Date().toISOString()
         }).select().single();
 
         // Store payment record
         await supabase.from('payments').insert({
-            id: orderId,
-            amount: paymentLink.amount,
+            amount: parseFloat(paymentLink.amount),
             currency: paymentLink.currency,
             payment_status: 'pending',
             arc_session_id: sessionId,
+            arc_order_id: orderId,
             success_indicator: successIndicator,
             customer_email: paymentLink.customer_email,
             customer_name: paymentLink.customer_name,
             metadata: {
                 payment_link_id: paymentLink.id,
-                payment_link_token: token
+                payment_link_token: token,
+                order_id: orderId
             },
             created_at: new Date().toISOString()
         });
