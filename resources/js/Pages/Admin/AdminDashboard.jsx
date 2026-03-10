@@ -16,6 +16,14 @@ const AdminDashboard = () => {
     totalRevenue: 0,
     monthlyRevenue: 0
   });
+  const [agentStats, setAgentStats] = useState({
+    totalLinks: 0,
+    pending: 0,
+    paid: 0,
+    expired: 0,
+    totalRevenue: 0
+  });
+  const [agentLinks, setAgentLinks] = useState([]);
   const [recentInquiries, setRecentInquiries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('7d');
@@ -55,6 +63,32 @@ const AdminDashboard = () => {
         'Content-Type': 'application/json'
       };
 
+      // Agent-specific data fetch
+      if (userRole === 'agent') {
+        let url = `/api/payments?action=list-payment-links`;
+        if (adminUser.agentId) {
+          url += `&agentId=${adminUser.agentId}`;
+        }
+        const linksRes = await fetch(url, { headers });
+        const linksData = await linksRes.json();
+        if (linksData.success) {
+          const links = linksData.data || [];
+          setAgentLinks(links.slice(0, 5));
+          const paidLinks = links.filter(l => l.status === 'paid');
+          const revenue = paidLinks.reduce((sum, l) => sum + parseFloat(l.amount || 0), 0);
+          setAgentStats({
+            totalLinks: links.length,
+            pending: links.filter(l => l.status === 'pending').length,
+            paid: paidLinks.length,
+            expired: links.filter(l => l.status === 'expired').length,
+            totalRevenue: revenue
+          });
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Admin data fetch
       // Fetch statistics
       const statsResponse = await fetch(getApiUrl('inquiries/stats'), {
         headers,
@@ -71,12 +105,11 @@ const AdminDashboard = () => {
           bookedInquiries: statsData.data.byStatus?.booked || 0,
           cancelledInquiries: statsData.data.byStatus?.cancelled || 0,
           activeQuotes: statsData.data.byStatus?.quoted || 0,
-          expiredQuotes: 0, // TODO: Implement expired quotes count
-          totalRevenue: 0, // TODO: Implement revenue tracking
-          monthlyRevenue: 0 // TODO: Implement monthly revenue
+          expiredQuotes: 0,
+          totalRevenue: 0,
+          monthlyRevenue: 0
         });
       } else {
-        // If stats request failed, keep default values (all zeros)
         console.warn('Failed to fetch stats or invalid response:', statsData);
       }
 
@@ -93,37 +126,27 @@ const AdminDashboard = () => {
       }
 
       const inquiriesData = await inquiriesResponse.json();
-      console.log('Inquiries API response:', inquiriesData);
 
-      // Handle different response structures
       let inquiries = [];
-
       if (inquiriesData && inquiriesData.success) {
         if (Array.isArray(inquiriesData.data)) {
-          // Direct array response: { success: true, data: [...] }
           inquiries = inquiriesData.data;
         } else if (inquiriesData.data && Array.isArray(inquiriesData.data.inquiries)) {
-          // Nested inquiries array: { success: true, data: { inquiries: [...] } }
           inquiries = inquiriesData.data.inquiries;
         } else if (inquiriesData.data && inquiriesData.data.data && Array.isArray(inquiriesData.data.data)) {
-          // Double nested: { success: true, data: { data: [...] } }
           inquiries = inquiriesData.data.data;
         } else if (inquiriesData.inquiries && Array.isArray(inquiriesData.inquiries)) {
-          // Alternative structure: { success: true, inquiries: [...] }
           inquiries = inquiriesData.inquiries;
         }
       }
 
-      // Final safety check - ensure it's always an array
       if (!Array.isArray(inquiries)) {
-        console.warn('Inquiries is not an array, received:', typeof inquiries, inquiries);
         inquiries = [];
       }
 
       setRecentInquiries(inquiries);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      // Ensure arrays are set to empty on error
       setRecentInquiries([]);
     } finally {
       setLoading(false);
@@ -215,8 +238,8 @@ const AdminDashboard = () => {
       <div className="dashboard-header">
         <div className="header-content">
           <div className="header-info">
-            <h1>Dashboard Overview</h1>
-            <p>Welcome back! Here's what's happening with your travel business today.</p>
+            <h1>{userRole === 'agent' ? 'Agent Dashboard' : 'Dashboard Overview'}</h1>
+            <p>{userRole === 'agent' ? `Welcome back, ${adminUser.firstName || 'Agent'}! Here are your stats.` : "Welcome back! Here's what's happening with your travel business today."}</p>
           </div>
           <div className="header-actions">
             <div className="time-display">
@@ -265,116 +288,111 @@ const AdminDashboard = () => {
       </div>
 
       {/* Statistics Grid */}
-      <div className="stats-grid">
-        <StatCard
-          icon="#"
-          title="Total Inquiries"
-          value={stats.totalInquiries}
-          change={12}
-          changeType="positive"
-          color="blue"
-        />
-        <StatCard
-          icon="P"
-          title="Pending"
-          value={stats.pendingInquiries}
-          change={-5}
-          changeType="negative"
-          color="yellow"
-        />
-        <StatCard
-          icon="W"
-          title="Processing"
-          value={stats.processingInquiries}
-          change={8}
-          changeType="positive"
-          color="purple"
-        />
-        <StatCard
-          icon="Q"
-          title="Quoted"
-          value={stats.quotedInquiries}
-          change={15}
-          changeType="positive"
-          color="green"
-        />
-        <StatCard
-          icon="B"
-          title="Booked"
-          value={stats.bookedInquiries}
-          change={22}
-          changeType="positive"
-          color="success"
-        />
-        <StatCard
-          icon="$"
-          title="Revenue"
-          value={formatCurrency(stats.totalRevenue)}
-          change={18}
-          changeType="positive"
-          color="gold"
-        />
-      </div>
-
-      {/* Charts and Analytics Row */}
-      <div className="analytics-row">
-        <div className="analytics-card chart-card">
-          <div className="card-header">
-            <h3>Inquiry Trends</h3>
-            <div className="chart-legend">
-              <span className="legend-item">
-                <span className="legend-dot pending"></span>
-                Pending
-              </span>
-              <span className="legend-item">
-                <span className="legend-dot processing"></span>
-                Processing
-              </span>
-              <span className="legend-item">
-                <span className="legend-dot quoted"></span>
-                Quoted
-              </span>
-            </div>
-          </div>
-          <div className="chart-placeholder">
-            <div className="chart-icon">📈</div>
-            <p>Interactive chart will be displayed here</p>
-            <small>Showing data for last {timeRange}</small>
-          </div>
+      {userRole === 'agent' ? (
+        <div className="stats-grid">
+          <StatCard icon="🔗" title="Total Payment Links" value={agentStats.totalLinks} color="blue" />
+          <StatCard icon="⏳" title="Pending" value={agentStats.pending} color="yellow" />
+          <StatCard icon="✅" title="Paid" value={agentStats.paid} color="green" />
+          <StatCard icon="💰" title="Revenue" value={formatCurrency(agentStats.totalRevenue)} color="gold" />
         </div>
+      ) : (
+        <div className="stats-grid">
+          <StatCard icon="#" title="Total Inquiries" value={stats.totalInquiries} change={12} changeType="positive" color="blue" />
+          <StatCard icon="P" title="Pending" value={stats.pendingInquiries} change={-5} changeType="negative" color="yellow" />
+          <StatCard icon="W" title="Processing" value={stats.processingInquiries} change={8} changeType="positive" color="purple" />
+          <StatCard icon="Q" title="Quoted" value={stats.quotedInquiries} change={15} changeType="positive" color="green" />
+          <StatCard icon="B" title="Booked" value={stats.bookedInquiries} change={22} changeType="positive" color="success" />
+          <StatCard icon="$" title="Revenue" value={formatCurrency(stats.totalRevenue)} change={18} changeType="positive" color="gold" />
+        </div>
+      )}
 
-        <div className="analytics-card conversion-card">
-          <div className="card-header">
-            <h3>Conversion Funnel</h3>
-          </div>
-          <div className="conversion-funnel">
-            <div className="funnel-step">
-              <div className="step-label">Inquiries</div>
-              <div className="step-value">{stats.totalInquiries}</div>
-              <div className="step-bar" style={{ width: '100%' }}></div>
+      {/* Charts / Agent Recent Links */}
+      {userRole === 'agent' ? (
+        <div className="analytics-row">
+          <div className="analytics-card" style={{ width: '100%' }}>
+            <div className="card-header">
+              <h3>Recent Payment Links</h3>
+              <Link to="/admin/payment-links" className="view-all-link">View All →</Link>
             </div>
-            <div className="funnel-step">
-              <div className="step-label">Quoted</div>
-              <div className="step-value">{stats.quotedInquiries}</div>
-              <div className="step-bar" style={{
-                width: `${stats.totalInquiries > 0 ? (stats.quotedInquiries / stats.totalInquiries) * 100 : 0}%`
-              }}></div>
-            </div>
-            <div className="funnel-step">
-              <div className="step-label">Booked</div>
-              <div className="step-value">{stats.bookedInquiries}</div>
-              <div className="step-bar" style={{
-                width: `${stats.totalInquiries > 0 ? (stats.bookedInquiries / stats.totalInquiries) * 100 : 0}%`
-              }}></div>
+            <div style={{ padding: '0 20px 20px' }}>
+              {agentLinks.length === 0 ? (
+                <div className="empty-state" style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔗</div>
+                  <h4>No Payment Links Yet</h4>
+                  <p style={{ color: '#64748b' }}>Create your first payment link</p>
+                  <Link to="/admin/payment-links/create" style={{
+                    display: 'inline-block', marginTop: '12px', background: '#055B75',
+                    color: 'white', padding: '8px 20px', borderRadius: '8px', textDecoration: 'none', fontWeight: 600
+                  }}>+ Create Payment Link</Link>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {agentLinks.map(link => (
+                    <div key={link.id} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '14px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0'
+                    }}>
+                      <div>
+                        <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '14px' }}>{link.customer_name}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>
+                          {link.currency} {parseFloat(link.amount).toFixed(2)} • {link.description || link.booking_type} • {new Date(link.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <span style={{
+                        padding: '4px 12px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
+                        background: link.status === 'paid' ? '#d1fae5' : link.status === 'pending' ? '#fef3c7' : '#fee2e2',
+                        color: link.status === 'paid' ? '#065f46' : link.status === 'pending' ? '#92400e' : '#991b1b'
+                      }}>
+                        {link.status === 'paid' ? '✅ Paid' : link.status === 'pending' ? '⏳ Pending' : '⏰ Expired'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="analytics-row">
+          <div className="analytics-card chart-card">
+            <div className="card-header">
+              <h3>Inquiry Trends</h3>
+              <div className="chart-legend">
+                <span className="legend-item"><span className="legend-dot pending"></span>Pending</span>
+                <span className="legend-item"><span className="legend-dot processing"></span>Processing</span>
+                <span className="legend-item"><span className="legend-dot quoted"></span>Quoted</span>
+              </div>
+            </div>
+            <div className="chart-placeholder">
+              <div className="chart-icon">📈</div>
+              <p>Interactive chart will be displayed here</p>
+              <small>Showing data for last {timeRange}</small>
+            </div>
+          </div>
+          <div className="analytics-card conversion-card">
+            <div className="card-header"><h3>Conversion Funnel</h3></div>
+            <div className="conversion-funnel">
+              <div className="funnel-step">
+                <div className="step-label">Inquiries</div><div className="step-value">{stats.totalInquiries}</div>
+                <div className="step-bar" style={{ width: '100%' }}></div>
+              </div>
+              <div className="funnel-step">
+                <div className="step-label">Quoted</div><div className="step-value">{stats.quotedInquiries}</div>
+                <div className="step-bar" style={{ width: `${stats.totalInquiries > 0 ? (stats.quotedInquiries / stats.totalInquiries) * 100 : 0}%` }}></div>
+              </div>
+              <div className="funnel-step">
+                <div className="step-label">Booked</div><div className="step-value">{stats.bookedInquiries}</div>
+                <div className="step-bar" style={{ width: `${stats.totalInquiries > 0 ? (stats.bookedInquiries / stats.totalInquiries) * 100 : 0}%` }}></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Row */}
       <div className="bottom-row">
-        {/* Recent Inquiries */}
-        <div className="recent-activity-card">
+        {/* Recent Inquiries — Admin only */}
+        {userRole === 'admin' && <div className="recent-activity-card">
           <div className="card-header">
             <h3>Recent Inquiries</h3>
             <Link to="/admin/inquiries" className="view-all-link">
@@ -421,7 +439,7 @@ const AdminDashboard = () => {
               ));
             })()}
           </div>
-        </div>
+        </div>}
 
         {/* Quick Actions */}
         <div className="quick-actions-card">
