@@ -2840,8 +2840,10 @@ async function handleListPaymentLinks(req, res) {
 
         // Agent sees only their own links; admin sees all
         let query = supabase.from('payment_links').select('*').order('created_at', { ascending: false });
-        if (caller.role === 'agent' && caller.agentId) {
-            query = query.eq('agent_id', caller.agentId);
+        const agentIdParam = req.query.agentId;
+        if ((caller.role === 'agent' && caller.agentId) || agentIdParam) {
+            const filterAgentId = caller.agentId || agentIdParam;
+            query = query.eq('agent_id', filterAgentId);
         }
 
         const { data: links, error } = await query;

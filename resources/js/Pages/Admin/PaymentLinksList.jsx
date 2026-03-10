@@ -16,8 +16,15 @@ const PaymentLinksList = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+      const agentId = adminUser.role === 'agent' ? adminUser.agentId : null;
 
-      const response = await fetch('/api/payments?action=list-payment-links', {
+      let url = '/api/payments?action=list-payment-links';
+      if (agentId) {
+        url += `&agentId=${agentId}`;
+      }
+
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

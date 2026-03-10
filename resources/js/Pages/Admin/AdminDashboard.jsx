@@ -21,6 +21,10 @@ const AdminDashboard = () => {
   const [timeRange, setTimeRange] = useState('7d');
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  // Determine user role (admin vs agent)
+  const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+  const userRole = adminUser.role || 'admin';
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -426,24 +430,7 @@ const AdminDashboard = () => {
           </div>
 
           <div className="actions-grid">
-            <Link to="/admin/inquiries" className="action-card">
-              <div className="action-icon">📋</div>
-              <div className="action-content">
-                <h4>Manage Inquiries</h4>
-                <p>View and respond to customer inquiries</p>
-              </div>
-              <div className="action-arrow">→</div>
-            </Link>
-
-            <Link to="/admin/bookings" className="action-card">
-              <div className="action-icon">🎫</div>
-              <div className="action-content">
-                <h4>Manage Bookings</h4>
-                <p>View and control all flight, cruise, hotel & package bookings</p>
-              </div>
-              <div className="action-arrow">→</div>
-            </Link>
-
+            {/* Agent-visible actions */}
             <Link to="/admin/payment-links" className="action-card">
               <div className="action-icon">🔗</div>
               <div className="action-content">
@@ -453,50 +440,73 @@ const AdminDashboard = () => {
               <div className="action-arrow">→</div>
             </Link>
 
-            <Link to="/admin/agents" className="action-card">
-              <div className="action-icon">👥</div>
-              <div className="action-content">
-                <h4>Manage Agents</h4>
-                <p>Create and manage travel agents</p>
-              </div>
-              <div className="action-arrow">→</div>
-            </Link>
+            {/* Admin-only actions */}
+            {userRole === 'admin' && (
+              <>
+                <Link to="/admin/inquiries" className="action-card">
+                  <div className="action-icon">📋</div>
+                  <div className="action-content">
+                    <h4>Manage Inquiries</h4>
+                    <p>View and respond to customer inquiries</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
 
-            <Link to="/admin/feature-flags" className="action-card">
-              <div className="action-icon">⚙️</div>
-              <div className="action-content">
-                <h4>Feature Flags</h4>
-                <p>Control system features and settings</p>
-              </div>
-              <div className="action-arrow">→</div>
-            </Link>
+                <Link to="/admin/bookings" className="action-card">
+                  <div className="action-icon">🎫</div>
+                  <div className="action-content">
+                    <h4>Manage Bookings</h4>
+                    <p>View and control all flight, cruise, hotel & package bookings</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
 
-            <Link to="/admin/price-settings" className="action-card">
-              <div className="action-icon">💰</div>
-              <div className="action-content">
-                <h4>Price Settings</h4>
-                <p>Configure taxes, fees & markup for flights, cruises & hotels</p>
-              </div>
-              <div className="action-arrow">→</div>
-            </Link>
+                <Link to="/admin/agents" className="action-card">
+                  <div className="action-icon">👥</div>
+                  <div className="action-content">
+                    <h4>Manage Agents</h4>
+                    <p>Create and manage travel agents</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
 
-            <Link to="/admin/quotes" className="action-card">
-              <div className="action-icon">💰</div>
-              <div className="action-content">
-                <h4>Create Quotes</h4>
-                <p>Generate and send quotes to customers</p>
-              </div>
-              <div className="action-arrow">→</div>
-            </Link>
+                <Link to="/admin/feature-flags" className="action-card">
+                  <div className="action-icon">⚙️</div>
+                  <div className="action-content">
+                    <h4>Feature Flags</h4>
+                    <p>Control system features and settings</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
 
-            <Link to="/admin/reports" className="action-card">
-              <div className="action-icon">📊</div>
-              <div className="action-content">
-                <h4>Analytics</h4>
-                <p>View detailed reports and insights</p>
-              </div>
-              <div className="action-arrow">→</div>
-            </Link>
+                <Link to="/admin/price-settings" className="action-card">
+                  <div className="action-icon">💰</div>
+                  <div className="action-content">
+                    <h4>Price Settings</h4>
+                    <p>Configure taxes, fees & markup for flights, cruises & hotels</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
+
+                <Link to="/admin/quotes" className="action-card">
+                  <div className="action-icon">💰</div>
+                  <div className="action-content">
+                    <h4>Create Quotes</h4>
+                    <p>Generate and send quotes to customers</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
+
+                <Link to="/admin/reports" className="action-card">
+                  <div className="action-icon">📊</div>
+                  <div className="action-content">
+                    <h4>Analytics</h4>
+                    <p>View detailed reports and insights</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
