@@ -2619,13 +2619,16 @@ async function handleProcessPaymentLink(req, res) {
         }).eq('id', paymentLink.id);
 
         // Store pending booking data for callback
+        const nameParts = (paymentLink.customer_name || '').trim().split(/\s+/);
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+
         const { data: bookingRecord } = await supabase.from('bookings').insert({
             booking_reference: orderId,
-            customer_name: paymentLink.customer_name,
-            customer_email: paymentLink.customer_email,
             travel_type: paymentLink.booking_type,
             total_amount: parseFloat(paymentLink.amount),
             status: 'pending',
+            passenger_details: [{ firstName, lastName, email: paymentLink.customer_email || '' }],
             booking_details: {
                 source: 'payment_link',
                 payment_link_id: paymentLink.id,
@@ -2635,7 +2638,8 @@ async function handleProcessPaymentLink(req, res) {
                 order_id: orderId,
                 amount: parseFloat(paymentLink.amount),
                 currency: paymentLink.currency,
-                price_grand_total: parseFloat(paymentLink.amount).toFixed(2)
+                price_grand_total: parseFloat(paymentLink.amount).toFixed(2),
+                customer_name: paymentLink.customer_name
             },
             created_at: new Date().toISOString()
         }).select().single();
