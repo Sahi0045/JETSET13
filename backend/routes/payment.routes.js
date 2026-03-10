@@ -999,12 +999,38 @@ async function handleGetPaymentDetails(req, res) {
 
         let payment;
         if (paymentId) {
-            const { data } = await supabase
-                .from('payments')
-                .select('*, quote:quotes(*), inquiry:inquiries(*)')
-                .eq('id', paymentId)
-                .single();
-            payment = data;
+            // Strategy 1: Try looking up by UUID id
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(paymentId);
+            if (isUUID) {
+                const { data } = await supabase
+                    .from('payments')
+                    .select('*, quote:quotes(*), inquiry:inquiries(*)')
+                    .eq('id', paymentId)
+                    .single();
+                payment = data;
+            }
+
+            // Strategy 2: Try arc_order_id (for payment link orders like PL-xxx)
+            if (!payment) {
+                const { data } = await supabase
+                    .from('payments')
+                    .select('*')
+                    .eq('arc_order_id', paymentId)
+                    .limit(1)
+                    .single();
+                payment = data;
+            }
+
+            // Strategy 3: Try metadata containing the order_id
+            if (!payment) {
+                const { data } = await supabase
+                    .from('payments')
+                    .select('*')
+                    .contains('metadata', { order_id: paymentId })
+                    .limit(1)
+                    .single();
+                payment = data;
+            }
         } else {
             const { data } = await supabase
                 .from('payments')
@@ -2716,6 +2742,13 @@ async function handleCompletePaymentLink(req, res) {
 
         console.log('🔗 Completing payment link:', paymentLinkToken, 'orderId:', orderId);
 
+        // Get the payment link details
+        const { data: paymentLink } = await supabase
+            .from('payment_links')
+            .select('*')
+            .eq('link_token', paymentLinkToken)
+            .single();
+
         // Update payment link status
         await supabase
             .from('payment_links')
@@ -2728,31 +2761,68 @@ async function handleCompletePaymentLink(req, res) {
             .update({ status: 'confirmed', payment_status: 'paid' })
             .eq('booking_reference', orderId);
 
-        // Find and update payment record
-        const { data: paymentRecords } = await supabase
+        // Find payment record — try arc_order_id first, then metadata
+        let paymentRecord = null;
+        
+        const { data: byOrderId } = await supabase
             .from('payments')
-            .select('id')
+            .select('*')
             .eq('arc_order_id', orderId)
             .limit(1);
+        
+        if (byOrderId && byOrderId.length > 0) {
+            paymentRecord = byOrderId[0];
+        } else {
+            // Fallback: search by metadata containing the payment_link_token
+            const { data: byMetadata } = await supabase
+                .from('payments')
+                .select('*')
+                .contains('metadata', { payment_link_token: paymentLinkToken })
+                .limit(1);
+            if (byMetadata && byMetadata.length > 0) {
+                paymentRecord = byMetadata[0];
+            }
+        }
 
-        let paymentId = orderId;
-        if (paymentRecords && paymentRecords.length > 0) {
-            paymentId = paymentRecords[0].id;
+        let paymentId;
+        if (paymentRecord) {
+            paymentId = paymentRecord.id;
             await supabase
                 .from('payments')
                 .update({
                     payment_status: 'completed',
                     completed_at: new Date().toISOString(),
-                    arc_transaction_id: resultIndicator || null
+                    arc_transaction_id: resultIndicator || null,
+                    arc_order_id: orderId
                 })
                 .eq('id', paymentId);
+        } else {
+            // No payment record found — create one from the payment link data
+            const { data: newPayment } = await supabase.from('payments').insert({
+                amount: paymentLink?.amount || 0,
+                currency: paymentLink?.currency || 'USD',
+                payment_status: 'completed',
+                completed_at: new Date().toISOString(),
+                arc_order_id: orderId,
+                arc_transaction_id: resultIndicator || null,
+                customer_email: paymentLink?.customer_email,
+                customer_name: paymentLink?.customer_name,
+                metadata: {
+                    payment_link_id: paymentLink?.id,
+                    payment_link_token: paymentLinkToken,
+                    order_id: orderId
+                },
+                created_at: new Date().toISOString()
+            }).select().single();
+            paymentId = newPayment?.id || orderId;
         }
 
-        console.log('✅ Payment link completed successfully:', paymentLinkToken);
+        console.log('✅ Payment link completed successfully:', paymentLinkToken, 'paymentId:', paymentId);
 
         return res.json({
             success: true,
             paymentId,
+            paymentLink,
             message: 'Payment link completed successfully'
         });
     } catch (error) {
