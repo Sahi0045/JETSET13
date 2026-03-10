@@ -96,6 +96,14 @@ router.all('/', async (req, res) => {
                 return handlePaymentVoid(req, res);
             case 'payment-retrieve':
                 return handlePaymentRetrieve(req, res);
+            case 'create-payment-link':
+                return handleCreatePaymentLink(req, res);
+            case 'get-payment-link':
+                return handleGetPaymentLink(req, res);
+            case 'process-payment-link':
+                return handleProcessPaymentLink(req, res);
+            case 'list-payment-links':
+                return handleListPaymentLinks(req, res);
             default:
                 return res.status(400).json({
                     success: false,
@@ -809,6 +817,22 @@ async function handlePaymentCallback(req, res) {
                 .from('inquiries')
                 .update({ status: 'paid' })
                 .eq('id', payment.inquiry_id);
+
+            // Update payment link status if this came from a payment link
+            const paymentLinkToken = req.query?.paymentLinkToken || req.body?.paymentLinkToken;
+            if (paymentLinkToken) {
+                console.log('🔗 Updating payment link status to paid:', paymentLinkToken);
+                await supabase
+                    .from('payment_links')
+                    .update({ status: 'paid', paid_at: new Date().toISOString(), payment_id: payment.id })
+                    .eq('link_token', paymentLinkToken);
+            } else if (payment.metadata?.payment_link_token) {
+                console.log('🔗 Updating payment link status to paid from metadata:', payment.metadata.payment_link_token);
+                await supabase
+                    .from('payment_links')
+                    .update({ status: 'paid', paid_at: new Date().toISOString(), payment_id: payment.id })
+                    .eq('link_token', payment.metadata.payment_link_token);
+            }
 
             // 🎉 Send booking confirmation email
             try {
@@ -2272,6 +2296,385 @@ async function handlePaymentRetrieve(req, res) {
     } catch (error) {
         console.error('❌ Payment retrieve error:', error);
         return res.status(500).json({ success: false, error: 'Failed to retrieve payment', details: error.message });
+    }
+}
+
+
+// =====================================================
+// PAYMENT LINK HANDLERS
+// =====================================================
+
+/**
+ * Generate a random alphanumeric token
+ */
+function generateLinkToken(length = 16) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let token = '';
+    for (let i = 0; i < length; i++) {
+        token += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return token;
+}
+
+/**
+ * Create a new payment link (Admin only)
+ */
+async function handleCreatePaymentLink(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const {
+            customerName,
+            customerEmail,
+            customerPhone,
+            bookingType = 'flight',
+            amount,
+            currency = 'USD',
+            description,
+            travelDetails = {},
+            expiryDays = 30
+        } = req.body;
+
+        // Validate
+        if (!customerName || !amount) {
+            return res.status(400).json({
+                success: false,
+                error: 'Customer name and amount are required'
+            });
+        }
+
+        if (parseFloat(amount) <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Amount must be greater than zero'
+            });
+        }
+
+        // Generate unique token
+        let linkToken = generateLinkToken();
+        let attempts = 0;
+        while (attempts < 5) {
+            const { data: existing } = await supabase
+                .from('payment_links')
+                .select('id')
+                .eq('link_token', linkToken)
+                .single();
+            if (!existing) break;
+            linkToken = generateLinkToken();
+            attempts++;
+        }
+
+        // Calculate expiry
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + parseInt(expiryDays));
+
+        const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
+
+        // Insert into DB
+        const { data: paymentLink, error: insertError } = await supabase
+            .from('payment_links')
+            .insert({
+                link_token: linkToken,
+                customer_name: customerName,
+                customer_email: customerEmail || null,
+                customer_phone: customerPhone || null,
+                booking_type: bookingType,
+                amount: parseFloat(amount),
+                currency: currency,
+                description: description || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking Payment`,
+                travel_details: travelDetails,
+                status: 'pending',
+                expires_at: expiresAt.toISOString(),
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+        if (insertError) {
+            console.error('❌ Failed to create payment link:', insertError);
+            return res.status(500).json({ success: false, error: 'Failed to create payment link', details: insertError.message });
+        }
+
+        const paymentUrl = `${frontendBaseUrl}/pay/${linkToken}`;
+
+        console.log('✅ Payment link created:', paymentUrl);
+
+        // Send email to customer if email provided
+        if (customerEmail) {
+            try {
+                const { sendEmail } = await import('../services/emailService.js');
+                await sendEmail({
+                    to: customerEmail,
+                    subject: `Payment Link - ${description || bookingType} | Jetsetters`,
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <div style="background: #055B75; color: white; padding: 20px; text-align: center;">
+                                <h2>💳 Payment Request</h2>
+                            </div>
+                            <div style="padding: 20px; background: #f9f9f9;">
+                                <p>Dear ${customerName},</p>
+                                <p>You have a pending payment for your travel booking:</p>
+                                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                                    <p><strong>Amount:</strong> ${currency} ${parseFloat(amount).toFixed(2)}</p>
+                                    <p><strong>Type:</strong> ${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)}</p>
+                                    ${description ? `<p><strong>Description:</strong> ${description}</p>` : ''}
+                                </div>
+                                <div style="text-align: center; margin: 20px 0;">
+                                    <a href="${paymentUrl}" style="background: #055B75; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold;">
+                                        Pay Now →
+                                    </a>
+                                </div>
+                                <p style="font-size: 12px; color: #888;">This link expires on ${expiresAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.</p>
+                            </div>
+                        </div>
+                    `
+                });
+                console.log('📧 Payment link email sent to:', customerEmail);
+            } catch (emailErr) {
+                console.warn('⚠️ Could not send payment link email:', emailErr.message);
+            }
+        }
+
+        return res.json({
+            success: true,
+            paymentLink: {
+                ...paymentLink,
+                paymentUrl
+            }
+        });
+    } catch (error) {
+        console.error('❌ Create payment link error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to create payment link', details: error.message });
+    }
+}
+
+/**
+ * Get payment link details by token (Public)
+ */
+async function handleGetPaymentLink(req, res) {
+    try {
+        const token = req.query.token;
+        if (!token) {
+            return res.status(400).json({ success: false, error: 'Token is required' });
+        }
+
+        const { data: paymentLink, error } = await supabase
+            .from('payment_links')
+            .select('*')
+            .eq('link_token', token)
+            .single();
+
+        if (error || !paymentLink) {
+            return res.status(404).json({ success: false, error: 'Payment link not found' });
+        }
+
+        // Check if expired
+        if (paymentLink.expires_at && new Date(paymentLink.expires_at) < new Date()) {
+            if (paymentLink.status === 'pending') {
+                await supabase.from('payment_links').update({ status: 'expired' }).eq('id', paymentLink.id);
+                paymentLink.status = 'expired';
+            }
+        }
+
+        return res.json({ success: true, paymentLink });
+    } catch (error) {
+        console.error('❌ Get payment link error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to get payment link', details: error.message });
+    }
+}
+
+/**
+ * Process payment for a payment link — creates ARC Pay Hosted Checkout session
+ */
+async function handleProcessPaymentLink(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const { token } = req.body;
+        if (!token) {
+            return res.status(400).json({ success: false, error: 'Token is required' });
+        }
+
+        const { data: paymentLink, error } = await supabase
+            .from('payment_links')
+            .select('*')
+            .eq('link_token', token)
+            .single();
+
+        if (error || !paymentLink) {
+            return res.status(404).json({ success: false, error: 'Payment link not found' });
+        }
+
+        if (paymentLink.status !== 'pending') {
+            return res.status(400).json({ success: false, error: `Payment link is ${paymentLink.status}` });
+        }
+
+        if (paymentLink.expires_at && new Date(paymentLink.expires_at) < new Date()) {
+            await supabase.from('payment_links').update({ status: 'expired' }).eq('id', paymentLink.id);
+            return res.status(400).json({ success: false, error: 'Payment link has expired' });
+        }
+
+        // Create ARC Pay Hosted Checkout
+        const arcMerchantId = ARC_PAY_CONFIG.MERCHANT_ID;
+        const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
+        let arcBaseUrl = ARC_PAY_CONFIG.BASE_URL;
+        if (arcBaseUrl && arcBaseUrl.includes('/merchant/')) {
+            arcBaseUrl = arcBaseUrl.split('/merchant/')[0];
+        }
+        arcBaseUrl = arcBaseUrl || 'https://api.arcpay.travel/api/rest/version/77';
+
+        const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
+        const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
+
+        const orderId = `PL-${paymentLink.id.slice(0, 8)}-${Date.now().toString().slice(-6)}`;
+        const returnUrl = `${frontendBaseUrl}/payment/callback?orderId=${orderId}&bookingType=${paymentLink.booking_type}&paymentLinkToken=${token}`;
+        const cancelUrl = `${frontendBaseUrl}/pay/${token}?cancelled=true`;
+
+        const sessionUrl = `${arcBaseUrl.replace(/\/$/, '')}/merchant/${arcMerchantId}/session`;
+
+        const requestBody = {
+            apiOperation: 'INITIATE_CHECKOUT',
+            interaction: {
+                operation: 'PURCHASE',
+                returnUrl,
+                cancelUrl,
+                merchant: { name: 'JetSet Travel' },
+                displayControl: {
+                    billingAddress: 'MANDATORY',
+                    customerEmail: 'MANDATORY'
+                },
+                timeout: 900
+            },
+            order: {
+                id: orderId,
+                reference: orderId.substring(0, 40),
+                amount: parseFloat(paymentLink.amount).toFixed(2),
+                currency: paymentLink.currency,
+                description: paymentLink.description || `${paymentLink.booking_type} Payment`
+            }
+        };
+
+        console.log('🔗 Creating ARC Pay session for payment link:', orderId);
+
+        const sessionResponse = await axios.post(sessionUrl, requestBody, {
+            headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const sessionData = sessionResponse.data;
+        const sessionId = sessionData.session?.id;
+        const successIndicator = sessionData.successIndicator;
+
+        if (!sessionId) {
+            console.error('No sessionId in ARC Pay response:', sessionData);
+            return res.status(500).json({ success: false, error: 'Failed to create payment session' });
+        }
+
+        // Update payment link with session info
+        await supabase.from('payment_links').update({
+            arc_session_id: sessionId,
+            updated_at: new Date().toISOString()
+        }).eq('id', paymentLink.id);
+
+        // Store pending booking data for callback
+        await supabase.from('bookings').insert({
+            id: orderId,
+            booking_reference: `PL${paymentLink.link_token.slice(0, 6).toUpperCase()}`,
+            customer_name: paymentLink.customer_name,
+            customer_email: paymentLink.customer_email,
+            travel_type: paymentLink.booking_type,
+            total_amount: paymentLink.amount,
+            currency: paymentLink.currency,
+            status: 'pending',
+            booking_details: {
+                source: 'payment_link',
+                payment_link_id: paymentLink.id,
+                payment_link_token: token,
+                travel_details: paymentLink.travel_details,
+                description: paymentLink.description
+            },
+            created_at: new Date().toISOString()
+        }).select().single();
+
+        // Store payment record
+        await supabase.from('payments').insert({
+            id: orderId,
+            amount: paymentLink.amount,
+            currency: paymentLink.currency,
+            payment_status: 'pending',
+            arc_session_id: sessionId,
+            success_indicator: successIndicator,
+            customer_email: paymentLink.customer_email,
+            customer_name: paymentLink.customer_name,
+            metadata: {
+                payment_link_id: paymentLink.id,
+                payment_link_token: token
+            },
+            created_at: new Date().toISOString()
+        });
+
+        // Build the checkout redirect URL
+        const checkoutUrl = `https://ap-gateway.mastercard.com/checkout/pay/${sessionId}?checkoutVersion=1.0.0`;
+
+        console.log('✅ Payment session created for link:', { orderId, sessionId });
+
+        return res.json({
+            success: true,
+            sessionId,
+            successIndicator,
+            orderId,
+            checkoutUrl,
+            sessionData
+        });
+    } catch (error) {
+        console.error('❌ Process payment link error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to process payment',
+            details: error.response?.data || error.message
+        });
+    }
+}
+
+/**
+ * List all payment links (Admin)
+ */
+async function handleListPaymentLinks(req, res) {
+    try {
+        const { data: links, error } = await supabase
+            .from('payment_links')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            return res.status(500).json({ success: false, error: 'Failed to fetch payment links', details: error.message });
+        }
+
+        // Auto-expire old links
+        const now = new Date();
+        for (const link of links) {
+            if (link.status === 'pending' && link.expires_at && new Date(link.expires_at) < now) {
+                link.status = 'expired';
+                await supabase.from('payment_links').update({ status: 'expired' }).eq('id', link.id);
+            }
+        }
+
+        const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
+        const enrichedLinks = links.map(link => ({
+            ...link,
+            paymentUrl: `${frontendBaseUrl}/pay/${link.link_token}`
+        }));
+
+        return res.json({ success: true, data: enrichedLinks, total: enrichedLinks.length });
+    } catch (error) {
+        console.error('❌ List payment links error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to list payment links', details: error.message });
     }
 }
 

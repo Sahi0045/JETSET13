@@ -444,6 +444,15 @@ const AdminDashboard = () => {
               <div className="action-arrow">→</div>
             </Link>
 
+            <Link to="/admin/payment-links" className="action-card">
+              <div className="action-icon">🔗</div>
+              <div className="action-content">
+                <h4>Payment Links</h4>
+                <p>Generate and share payment links with clients</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </Link>
+
             <Link to="/admin/feature-flags" className="action-card">
               <div className="action-icon">⚙️</div>
               <div className="action-content">
