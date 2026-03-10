@@ -3,6 +3,8 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
@@ -104,6 +106,16 @@ router.all('/', async (req, res) => {
                 return handleProcessPaymentLink(req, res);
             case 'list-payment-links':
                 return handleListPaymentLinks(req, res);
+            case 'agent-login':
+                return handleAgentLogin(req, res);
+            case 'create-agent':
+                return handleCreateAgent(req, res);
+            case 'list-agents':
+                return handleListAgents(req, res);
+            case 'update-agent':
+                return handleUpdateAgent(req, res);
+            case 'delete-agent':
+                return handleDeleteAgent(req, res);
             default:
                 return res.status(400).json({
                     success: false,
@@ -2305,6 +2317,26 @@ async function handlePaymentRetrieve(req, res) {
 // =====================================================
 
 /**
+ * Extract caller info (admin vs agent) from Authorization header
+ */
+function getCallerInfo(req) {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) return { role: 'unknown', agentId: null };
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, JWT_SECRET);
+        return {
+            role: decoded.role || 'user',
+            agentId: decoded.agentId || null,
+            userId: decoded.id || decoded.sub,
+            email: decoded.email
+        };
+    } catch (e) {
+        return { role: 'unknown', agentId: null };
+    }
+}
+
+/**
  * Generate a random alphanumeric token
  */
 function generateLinkToken(length = 16) {
@@ -2336,6 +2368,9 @@ async function handleCreatePaymentLink(req, res) {
             travelDetails = {},
             expiryDays = 30
         } = req.body;
+
+        // Get caller info (admin or agent)
+        const caller = getCallerInfo(req);
 
         // Validate
         if (!customerName || !amount) {
@@ -2387,6 +2422,7 @@ async function handleCreatePaymentLink(req, res) {
                 travel_details: travelDetails,
                 status: 'pending',
                 expires_at: expiresAt.toISOString(),
+                agent_id: caller.agentId || null,
                 created_at: new Date().toISOString()
             })
             .select()
@@ -2649,10 +2685,15 @@ async function handleProcessPaymentLink(req, res) {
  */
 async function handleListPaymentLinks(req, res) {
     try {
-        const { data: links, error } = await supabase
-            .from('payment_links')
-            .select('*')
-            .order('created_at', { ascending: false });
+        const caller = getCallerInfo(req);
+
+        // Agent sees only their own links; admin sees all
+        let query = supabase.from('payment_links').select('*').order('created_at', { ascending: false });
+        if (caller.role === 'agent' && caller.agentId) {
+            query = query.eq('agent_id', caller.agentId);
+        }
+
+        const { data: links, error } = await query;
 
         if (error) {
             return res.status(500).json({ success: false, error: 'Failed to fetch payment links', details: error.message });
@@ -2667,16 +2708,293 @@ async function handleListPaymentLinks(req, res) {
             }
         }
 
+        // Enrich with agent names for admin view
+        let agentsMap = {};
+        if (caller.role !== 'agent') {
+            const agentIds = [...new Set(links.filter(l => l.agent_id).map(l => l.agent_id))];
+            if (agentIds.length > 0) {
+                const { data: agents } = await supabase.from('agents').select('id, name').in('id', agentIds);
+                agentsMap = (agents || []).reduce((m, a) => { m[a.id] = a.name; return m; }, {});
+            }
+        }
+
         const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
         const enrichedLinks = links.map(link => ({
             ...link,
-            paymentUrl: `${frontendBaseUrl}/pay/${link.link_token}`
+            paymentUrl: `${frontendBaseUrl}/pay/${link.link_token}`,
+            agent_name: agentsMap[link.agent_id] || null
         }));
 
         return res.json({ success: true, data: enrichedLinks, total: enrichedLinks.length });
     } catch (error) {
         console.error('❌ List payment links error:', error);
         return res.status(500).json({ success: false, error: 'Failed to list payment links', details: error.message });
+    }
+}
+
+
+// =====================================================
+// AGENT MANAGEMENT HANDLERS
+// =====================================================
+
+const JWT_SECRET = process.env.JWT_SECRET || 'jetset-app-secret-key';
+const JWT_EXPIRE = process.env.JWT_EXPIRE || '30d';
+
+/**
+ * Agent Login
+ */
+async function handleAgentLogin(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ success: false, error: 'Email and password are required' });
+        }
+
+        // Find agent by email
+        const { data: agent, error } = await supabase
+            .from('agents')
+            .select('*')
+            .eq('email', email.toLowerCase().trim())
+            .single();
+
+        if (error || !agent) {
+            return res.status(401).json({ success: false, error: 'Invalid credentials' });
+        }
+
+        if (agent.status !== 'active') {
+            return res.status(403).json({ success: false, error: 'Your account is inactive. Please contact admin.' });
+        }
+
+        // Verify password
+        const isMatch = await bcrypt.compare(password, agent.password_hash);
+        if (!isMatch) {
+            return res.status(401).json({ success: false, error: 'Invalid credentials' });
+        }
+
+        // Generate JWT with agent role
+        const token = jwt.sign(
+            { id: agent.id, agentId: agent.id, role: 'agent', email: agent.email },
+            JWT_SECRET,
+            { expiresIn: JWT_EXPIRE }
+        );
+
+        console.log('✅ Agent logged in:', agent.email);
+
+        return res.json({
+            success: true,
+            id: agent.id,
+            firstName: agent.name.split(' ')[0],
+            lastName: agent.name.split(' ').slice(1).join(' ') || '',
+            email: agent.email,
+            role: 'agent',
+            agentId: agent.id,
+            token
+        });
+    } catch (error) {
+        console.error('❌ Agent login error:', error);
+        return res.status(500).json({ success: false, error: 'Login failed', details: error.message });
+    }
+}
+
+/**
+ * Create Agent (Admin only)
+ */
+async function handleCreateAgent(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const { name, email, password, phone, commissionRate } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({
+                success: false,
+                error: 'Name, email, and password are required'
+            });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'Password must be at least 6 characters'
+            });
+        }
+
+        // Check if email already exists
+        const { data: existing } = await supabase
+            .from('agents')
+            .select('id')
+            .eq('email', email.toLowerCase().trim())
+            .single();
+
+        if (existing) {
+            return res.status(409).json({ success: false, error: 'An agent with this email already exists' });
+        }
+
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+
+        // Insert agent
+        const { data: agent, error: insertError } = await supabase
+            .from('agents')
+            .insert({
+                name: name.trim(),
+                email: email.toLowerCase().trim(),
+                password_hash: passwordHash,
+                phone: phone || null,
+                commission_rate: parseFloat(commissionRate) || 0,
+                status: 'active',
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+        if (insertError) {
+            console.error('❌ Failed to create agent:', insertError);
+            return res.status(500).json({ success: false, error: 'Failed to create agent', details: insertError.message });
+        }
+
+        // Remove password hash from response
+        const { password_hash, ...agentData } = agent;
+
+        console.log('✅ Agent created:', agent.email);
+
+        return res.json({ success: true, agent: agentData });
+    } catch (error) {
+        console.error('❌ Create agent error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to create agent', details: error.message });
+    }
+}
+
+/**
+ * List Agents (Admin only)
+ */
+async function handleListAgents(req, res) {
+    try {
+        const { data: agents, error } = await supabase
+            .from('agents')
+            .select('id, name, email, phone, status, commission_rate, created_at')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            return res.status(500).json({ success: false, error: 'Failed to fetch agents', details: error.message });
+        }
+
+        // Get stats per agent
+        const enrichedAgents = await Promise.all(agents.map(async (agent) => {
+            const { count: linkCount } = await supabase
+                .from('payment_links')
+                .select('*', { count: 'exact', head: true })
+                .eq('agent_id', agent.id);
+
+            const { data: paidLinks } = await supabase
+                .from('payment_links')
+                .select('amount')
+                .eq('agent_id', agent.id)
+                .eq('status', 'paid');
+
+            const totalRevenue = (paidLinks || []).reduce((sum, l) => sum + parseFloat(l.amount || 0), 0);
+
+            return {
+                ...agent,
+                totalLinks: linkCount || 0,
+                totalRevenue: totalRevenue
+            };
+        }));
+
+        return res.json({ success: true, data: enrichedAgents, total: enrichedAgents.length });
+    } catch (error) {
+        console.error('❌ List agents error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to list agents', details: error.message });
+    }
+}
+
+/**
+ * Update Agent (Admin only)
+ */
+async function handleUpdateAgent(req, res) {
+    if (req.method !== 'POST' && req.method !== 'PUT') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const { agentId, name, email, phone, status, commissionRate, password } = req.body;
+
+        if (!agentId) {
+            return res.status(400).json({ success: false, error: 'Agent ID is required' });
+        }
+
+        const updates = { updated_at: new Date().toISOString() };
+        if (name) updates.name = name.trim();
+        if (email) updates.email = email.toLowerCase().trim();
+        if (phone !== undefined) updates.phone = phone;
+        if (status) updates.status = status;
+        if (commissionRate !== undefined) updates.commission_rate = parseFloat(commissionRate);
+
+        // If password is provided, hash it
+        if (password && password.length >= 6) {
+            const salt = await bcrypt.genSalt(10);
+            updates.password_hash = await bcrypt.hash(password, salt);
+        }
+
+        const { data: agent, error } = await supabase
+            .from('agents')
+            .update(updates)
+            .eq('id', agentId)
+            .select('id, name, email, phone, status, commission_rate, created_at, updated_at')
+            .single();
+
+        if (error) {
+            return res.status(500).json({ success: false, error: 'Failed to update agent', details: error.message });
+        }
+
+        console.log('✅ Agent updated:', agent.email);
+        return res.json({ success: true, agent });
+    } catch (error) {
+        console.error('❌ Update agent error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to update agent', details: error.message });
+    }
+}
+
+/**
+ * Delete/Deactivate Agent (Admin only)
+ */
+async function handleDeleteAgent(req, res) {
+    if (req.method !== 'POST' && req.method !== 'DELETE') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const agentId = req.body?.agentId || req.query?.agentId;
+
+        if (!agentId) {
+            return res.status(400).json({ success: false, error: 'Agent ID is required' });
+        }
+
+        // Soft delete — set to inactive
+        const { data: agent, error } = await supabase
+            .from('agents')
+            .update({ status: 'inactive', updated_at: new Date().toISOString() })
+            .eq('id', agentId)
+            .select('id, name, email, status')
+            .single();
+
+        if (error) {
+            return res.status(500).json({ success: false, error: 'Failed to deactivate agent', details: error.message });
+        }
+
+        console.log('✅ Agent deactivated:', agent.email);
+        return res.json({ success: true, agent, message: 'Agent deactivated successfully' });
+    } catch (error) {
+        console.error('❌ Delete agent error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to deactivate agent', details: error.message });
     }
 }
 

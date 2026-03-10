@@ -34,51 +34,65 @@ const AdminLogin = () => {
     setLoading(true);
 
     try {
+      // Try admin login first
       const response = await fetch(getApiUrl('auth/login'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(formData)
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
+      if (response.ok && data.role === 'admin') {
+        // Admin login success
+        localStorage.setItem('adminToken', data.token);
+        localStorage.setItem('adminUser', JSON.stringify({
+          id: data.id, email: data.email,
+          firstName: data.firstName, lastName: data.lastName,
+          role: 'admin'
+        }));
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('user', JSON.stringify({
+          id: data.id, email: data.email,
+          firstName: data.firstName, lastName: data.lastName,
+          role: 'admin'
+        }));
+        navigate('/admin');
+        return;
       }
 
-      // Check if user has admin role
-      if (data.role !== 'admin') {
-        throw new Error('Access denied. Admin privileges required.');
+      // Try agent login
+      const agentResponse = await fetch('/api/payments?action=agent-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      const agentData = await agentResponse.json();
+
+      if (agentResponse.ok && agentData.success) {
+        // Agent login success
+        localStorage.setItem('adminToken', agentData.token);
+        localStorage.setItem('adminUser', JSON.stringify({
+          id: agentData.id, email: agentData.email,
+          firstName: agentData.firstName, lastName: agentData.lastName,
+          role: 'agent', agentId: agentData.agentId
+        }));
+        localStorage.setItem('token', agentData.token);
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('user', JSON.stringify({
+          id: agentData.id, email: agentData.email,
+          firstName: agentData.firstName, lastName: agentData.lastName,
+          role: 'agent', agentId: agentData.agentId
+        }));
+        navigate('/admin');
+        return;
       }
 
-      // Store authentication data
-      localStorage.setItem('adminToken', data.token);
-      localStorage.setItem('adminUser', JSON.stringify({
-        id: data.id,
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        role: data.role
-      }));
-
-      // Also set for general authentication
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('user', JSON.stringify({
-        id: data.id,
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        role: data.role
-      }));
-
-      console.log('Admin login successful:', { email: data.email, role: data.role });
-
-      // Redirect to admin dashboard
-      navigate('/admin');
+      // Both failed
+      throw new Error(agentData.error || data.message || 'Invalid credentials');
     } catch (err) {
       console.error('Login error:', err);
       setError(err.message || 'Invalid email or password');

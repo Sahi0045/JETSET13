@@ -453,6 +453,15 @@ const AdminDashboard = () => {
               <div className="action-arrow">→</div>
             </Link>
 
+            <Link to="/admin/agents" className="action-card">
+              <div className="action-icon">👥</div>
+              <div className="action-content">
+                <h4>Manage Agents</h4>
+                <p>Create and manage travel agents</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </Link>
+
             <Link to="/admin/feature-flags" className="action-card">
               <div className="action-icon">⚙️</div>
               <div className="action-content">

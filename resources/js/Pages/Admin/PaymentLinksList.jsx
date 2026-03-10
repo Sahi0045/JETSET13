@@ -219,6 +219,7 @@ const PaymentLinksList = () => {
                 <div style={{ fontSize: '13px', color: '#64748b', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                   <span>{link.currency} {parseFloat(link.amount).toFixed(2)}</span>
                   {link.customer_email && <span>📧 {link.customer_email}</span>}
+                  {link.agent_name && <span>👤 {link.agent_name}</span>}
                   {link.description && <span>• {link.description.substring(0, 50)}</span>}
                   <span>• {new Date(link.created_at).toLocaleDateString()}</span>
                 </div>
