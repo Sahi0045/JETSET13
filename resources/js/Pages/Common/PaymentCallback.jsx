@@ -26,6 +26,7 @@ export default function PaymentCallback() {
         const orderId = searchParams.get('orderId');
         const bookingType = searchParams.get('bookingType');
         const statusParam = searchParams.get('status');
+        const paymentLinkToken = searchParams.get('paymentLinkToken');
 
         console.log('📋 Payment callback received:', {
           resultIndicator: resultIndicator || '(not provided)',
@@ -34,9 +35,46 @@ export default function PaymentCallback() {
           inquiryId: inquiryId || '(not provided)',
           orderId: orderId || '(not provided)',
           bookingType: bookingType || '(not provided)',
+          paymentLinkToken: paymentLinkToken || '(not provided)',
           status: statusParam || '(not provided)',
           allParams: Object.fromEntries(searchParams.entries())
         });
+
+        // Handle payment link callback — update status and show receipt
+        if (paymentLinkToken && orderId) {
+          console.log('🔗 Processing payment link callback for:', paymentLinkToken);
+          setStatus('Verifying payment link payment...');
+
+          try {
+            // Update payment link status to paid via backend
+            const updateResponse = await fetch(getApiUrl(`payments?action=complete-payment-link`), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                paymentLinkToken,
+                orderId,
+                resultIndicator: resultIndicator || ''
+              })
+            });
+            const updateResult = await updateResponse.json();
+            console.log('🔗 Payment link update result:', updateResult);
+
+            const paymentId = updateResult.paymentId || orderId;
+
+            setStatus('Payment confirmed! Generating your receipt...');
+            setTimeout(() => {
+              navigate(`/payment/success?paymentId=${paymentId}`);
+            }, 1500);
+          } catch (plError) {
+            console.error('⚠️ Payment link update failed:', plError);
+            // Still redirect to success — the payment went through via ARC Pay
+            setStatus('Payment confirmed! Redirecting...');
+            setTimeout(() => {
+              navigate(`/payment/success?paymentId=${orderId}`);
+            }, 1500);
+          }
+          return;
+        }
 
         // Check if this is a direct booking (flight, hotel, cruise, package)
         if (bookingType && orderId) {

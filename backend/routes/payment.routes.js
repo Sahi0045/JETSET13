@@ -116,6 +116,8 @@ router.all('/', async (req, res) => {
                 return handleUpdateAgent(req, res);
             case 'delete-agent':
                 return handleDeleteAgent(req, res);
+            case 'complete-payment-link':
+                return handleCompletePaymentLink(req, res);
             default:
                 return res.status(400).json({
                     success: false,
@@ -1016,6 +1018,19 @@ async function handleGetPaymentDetails(req, res) {
 
         if (!payment) {
             return res.status(404).json({ success: false, error: 'Payment not found' });
+        }
+
+        // If this payment came from a payment link, fetch the link details
+        const paymentLinkToken = payment.metadata?.payment_link_token;
+        if (paymentLinkToken) {
+            const { data: paymentLink } = await supabase
+                .from('payment_links')
+                .select('*')
+                .eq('link_token', paymentLinkToken)
+                .single();
+            if (paymentLink) {
+                payment.payment_link = paymentLink;
+            }
         }
 
         return res.json({ success: true, payment });
@@ -2684,6 +2699,65 @@ async function handleProcessPaymentLink(req, res) {
             error: 'Failed to process payment',
             details: error.response?.data || error.message
         });
+    }
+}
+
+
+/**
+ * Complete a payment link payment — update payment link, booking, and payment status
+ */
+async function handleCompletePaymentLink(req, res) {
+    try {
+        const { paymentLinkToken, orderId, resultIndicator } = req.body;
+
+        if (!paymentLinkToken || !orderId) {
+            return res.status(400).json({ success: false, error: 'paymentLinkToken and orderId required' });
+        }
+
+        console.log('🔗 Completing payment link:', paymentLinkToken, 'orderId:', orderId);
+
+        // Update payment link status
+        await supabase
+            .from('payment_links')
+            .update({ status: 'paid', paid_at: new Date().toISOString() })
+            .eq('link_token', paymentLinkToken);
+
+        // Update booking status
+        await supabase
+            .from('bookings')
+            .update({ status: 'confirmed', payment_status: 'paid' })
+            .eq('booking_reference', orderId);
+
+        // Find and update payment record
+        const { data: paymentRecords } = await supabase
+            .from('payments')
+            .select('id')
+            .eq('arc_order_id', orderId)
+            .limit(1);
+
+        let paymentId = orderId;
+        if (paymentRecords && paymentRecords.length > 0) {
+            paymentId = paymentRecords[0].id;
+            await supabase
+                .from('payments')
+                .update({
+                    payment_status: 'completed',
+                    completed_at: new Date().toISOString(),
+                    arc_transaction_id: resultIndicator || null
+                })
+                .eq('id', paymentId);
+        }
+
+        console.log('✅ Payment link completed successfully:', paymentLinkToken);
+
+        return res.json({
+            success: true,
+            paymentId,
+            message: 'Payment link completed successfully'
+        });
+    } catch (error) {
+        console.error('❌ Complete payment link error:', error);
+        return res.status(500).json({ success: false, error: error.message });
     }
 }
 
