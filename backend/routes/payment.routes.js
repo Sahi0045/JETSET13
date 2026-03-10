@@ -2619,8 +2619,9 @@ async function handleProcessPaymentLink(req, res) {
             created_at: new Date().toISOString()
         });
 
-        // Build the checkout redirect URL
-        const checkoutUrl = `https://ap-gateway.mastercard.com/checkout/pay/${sessionId}?checkoutVersion=1.0.0`;
+        // Build the checkout redirect URL (must use api.arcpay.travel, NOT ap-gateway.mastercard.com)
+        const checkoutUrl = `https://api.arcpay.travel/checkout/pay/${sessionId}`;
+        const paymentPageUrl = checkoutUrl;
 
         console.log('✅ Payment session created for link:', { orderId, sessionId });
 
@@ -2630,6 +2631,7 @@ async function handleProcessPaymentLink(req, res) {
             successIndicator,
             orderId,
             checkoutUrl,
+            paymentPageUrl,
             sessionData
         });
     } catch (error) {
