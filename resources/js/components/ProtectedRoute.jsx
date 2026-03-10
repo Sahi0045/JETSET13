@@ -27,7 +27,7 @@ const ProtectedRoute = ({ children, requireAuth = true, requireAdmin = false }) 
     // Check for admin JWT token
     const adminToken = localStorage.getItem('adminToken');
     const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
-    const isAdminLoggedIn = adminToken && adminUser.role === 'admin';
+    const isAdminLoggedIn = adminToken && (adminUser.role === 'admin' || adminUser.role === 'agent');
 
     // Show loading spinner while checking authentication
     if (loading) {
@@ -42,7 +42,7 @@ const ProtectedRoute = ({ children, requireAuth = true, requireAdmin = false }) 
 
     // If route requires admin access and user is not admin
     // Check both regular user role and admin JWT
-    if (requireAdmin && (!user || user.role !== 'admin') && !isAdminLoggedIn) {
+    if (requireAdmin && (!user || (user.role !== 'admin' && user.role !== 'agent')) && !isAdminLoggedIn) {
         return <Navigate to="/" replace />;
     }
 
