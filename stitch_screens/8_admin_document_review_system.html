@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Admin Document Review System</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1152d4",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Public Sans', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 antialiased">
+<div class="flex h-screen flex-col overflow-hidden">
+<!-- Top Navigation Bar -->
+<header class="flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 shrink-0">
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-3">
+<div class="flex h-8 w-8 items-center justify-center rounded bg-primary text-white">
+<span class="material-symbols-outlined">description</span>
+</div>
+<h1 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white">VisaDirect Admin</h1>
+</div>
+<nav class="hidden md:flex items-center gap-6 ml-4">
+<a class="text-sm font-medium text-slate-500 hover:text-primary transition-colors" href="#">Dashboard</a>
+<a class="text-sm font-semibold text-primary border-b-2 border-primary py-5" href="#">Applicants</a>
+<a class="text-sm font-medium text-slate-500 hover:text-primary transition-colors" href="#">Queue</a>
+<a class="text-sm font-medium text-slate-500 hover:text-primary transition-colors" href="#">Settings</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+<input class="h-9 w-64 rounded-lg border-slate-200 bg-slate-100 pl-9 text-sm focus:border-primary focus:ring-primary dark:border-slate-700 dark:bg-slate-800" placeholder="Search applicant ID..." type="text"/>
+</div>
+<button class="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-slate-900"></span>
+</button>
+<div class="h-8 w-8 overflow-hidden rounded-full bg-slate-200" data-alt="Staff profile picture avatar">
+<img alt="Admin" class="h-full w-full object-cover" data-alt="Profile photo of admin user" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCvLkKtpjMZyzbtn8iJCXOPkMeI0LgintiJtx6wpvI2ahzGb3Ig6nbFiTiUyMkweJOySjn0C9InUZNLWLiYaynAvE5NgYjKpyM3_dJWe9nya9YmF9Z3fVtGq6K2hm0MItmucfGG8Iq-ZB35yJrrOIgoEKfQp94-t6qSg0mcnZ_DU9m5dWmWv6qS_x7NuKkNNdugTcddn_GftMZiQF5LU6XJtLM2SrvbWyY_oujeHfoBBP1WUDmkBOKTqBXZhAGmvZWWWqFzf6GeX5yD"/>
+</div>
+</div>
+</header>
+<main class="flex flex-1 overflow-hidden">
+<!-- Sidebar: Applicant Files -->
+<aside class="w-80 flex-shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col">
+<div class="p-4 border-b border-slate-200 dark:border-slate-800">
+<div class="flex items-center gap-3 mb-4">
+<div class="h-10 w-10 overflow-hidden rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">JD</div>
+<div>
+<h2 class="text-sm font-bold leading-tight">John Doe</h2>
+<p class="text-xs text-slate-500">App ID: #98422 • Germany Visa</p>
+</div>
+</div>
+<div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-400">
+<span>Uploaded Documents</span>
+<span class="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-[10px]">5 Files</span>
+</div>
+</div>
+<nav class="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-1">
+<button class="w-full flex items-center gap-3 px-3 py-3 rounded-lg bg-primary/10 text-primary border border-primary/20">
+<span class="material-symbols-outlined text-xl">badge</span>
+<div class="text-left flex-1">
+<p class="text-sm font-semibold truncate">Passport Scan (Main)</p>
+<p class="text-[10px] opacity-80">Uploaded 2h ago</p>
+</div>
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+<button class="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400">
+<span class="material-symbols-outlined text-xl">account_balance</span>
+<div class="text-left flex-1">
+<p class="text-sm font-medium truncate">Bank Statement - 3 Months</p>
+<p class="text-[10px] text-slate-400">Pending Review</p>
+</div>
+</button>
+<button class="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400">
+<span class="material-symbols-outlined text-xl">image</span>
+<div class="text-left flex-1">
+<p class="text-sm font-medium truncate">Visa Photo</p>
+<p class="text-[10px] text-slate-400">Pending Review</p>
+</div>
+</button>
+<button class="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400">
+<span class="material-symbols-outlined text-xl">work</span>
+<div class="text-left flex-1">
+<p class="text-sm font-medium truncate">Employment Letter</p>
+<p class="text-[10px] text-slate-400">Reviewing...</p>
+</div>
+</button>
+<button class="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 opacity-60">
+<span class="material-symbols-outlined text-xl">mail</span>
+<div class="text-left flex-1">
+<p class="text-sm font-medium truncate">Invitation Letter</p>
+<p class="text-[10px] text-slate-400 italic">Not Uploaded</p>
+</div>
+</button>
+</nav>
+<div class="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800">
+<button class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-2 hover:bg-slate-50">
+<span class="material-symbols-outlined text-base">person</span>
+                    View Full Profile
+                </button>
+</div>
+</aside>
+<!-- Main Viewer: PDF/Image -->
+<section class="flex-1 bg-slate-200 dark:bg-slate-950 p-6 flex flex-col overflow-hidden relative">
+<div class="flex items-center justify-between mb-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-xl border border-white/20 shadow-sm">
+<div class="flex items-center gap-4">
+<span class="text-sm font-bold text-slate-700 dark:text-slate-300">Passport_JohnDoe_FINAL.pdf</span>
+<span class="h-4 w-px bg-slate-300 dark:bg-slate-700"></span>
+<div class="flex items-center gap-1">
+<button class="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><span class="material-symbols-outlined text-xl">zoom_out</span></button>
+<span class="text-xs font-medium w-12 text-center">100%</span>
+<button class="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><span class="material-symbols-outlined text-xl">zoom_in</span></button>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><span class="material-symbols-outlined text-xl">rotate_right</span></button>
+<button class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><span class="material-symbols-outlined text-xl">download</span></button>
+<button class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><span class="material-symbols-outlined text-xl">print</span></button>
+</div>
+</div>
+<div class="flex-1 overflow-auto bg-slate-400 dark:bg-slate-900 flex justify-center p-8 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-800 shadow-inner custom-scrollbar">
+<!-- Document Representation -->
+<div class="bg-white shadow-2xl w-[600px] h-[800px] flex-shrink-0 relative overflow-hidden flex flex-col items-center justify-center text-slate-300" data-alt="Visual representation of a scanned passport document preview">
+<div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1544027993-37dbfe43562a?auto=format&amp;fit=crop&amp;q=80&amp;w=1200')] bg-cover bg-center opacity-90 blur-[1px]"></div>
+<div class="z-10 bg-white/60 backdrop-blur-sm p-4 rounded-lg border border-white/40 shadow-xl text-slate-800 text-center">
+<span class="material-symbols-outlined text-4xl mb-2 text-primary">verified_user</span>
+<p class="font-bold">Document Preview</p>
+<p class="text-xs">Passport: John Doe | Exp: 2028</p>
+</div>
+<!-- Mock Passport data overlay for UI feel -->
+<div class="absolute bottom-10 left-10 right-10 h-32 bg-slate-50/80 rounded border-t-2 border-slate-300 p-4 font-mono text-[10px] text-slate-600">
+                        P&lt; UNITED_STATES &lt;&lt; DOE &lt;&lt; JOHN &lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;<br/>
+                        984224090 &lt; 8USA8501014M2810312&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
+                    </div>
+</div>
+</div>
+</section>
+<!-- Right Sidebar: Controls & History -->
+<aside class="w-80 flex-shrink-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col overflow-hidden">
+<div class="p-5 border-b border-slate-200 dark:border-slate-800">
+<h3 class="text-sm font-bold mb-4">Review Actions</h3>
+<div class="space-y-3">
+<button class="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-sm transition-colors">
+<span class="material-symbols-outlined text-lg">check_circle</span>
+                        Approve Document
+                    </button>
+<button class="w-full flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold py-2.5 rounded-lg text-sm transition-colors">
+<span class="material-symbols-outlined text-lg">history_edu</span>
+                        Request Re-upload
+                    </button>
+</div>
+<div class="mt-6">
+<label class="block text-[10px] font-bold uppercase text-slate-400 mb-2">Rejection Comments</label>
+<textarea class="w-full h-24 rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3" placeholder="Explain why the document is rejected..."></textarea>
+<button class="w-full mt-2 bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 font-bold py-2 rounded-lg text-xs hover:bg-red-100 transition-colors">
+                        Reject with Comment
+                    </button>
+</div>
+</div>
+<div class="flex-1 overflow-hidden flex flex-col">
+<div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Activity History</h3>
+</div>
+<div class="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+<div class="relative pl-6 before:content-[''] before:absolute before:left-0 before:top-1 before:bottom-[-24px] before:w-px before:bg-slate-200 dark:before:bg-slate-800">
+<div class="absolute left-[-4px] top-1.5 h-2 w-2 rounded-full bg-primary ring-4 ring-white dark:ring-slate-900"></div>
+<p class="text-[11px] font-bold">Document Uploaded</p>
+<p class="text-[10px] text-slate-500">Today, 2:14 PM</p>
+<div class="mt-2 p-2 bg-slate-50 dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700 text-[10px]">
+                            John Doe uploaded <span class="text-primary font-medium">Passport_Final.pdf</span> (2.4MB)
+                        </div>
+</div>
+<div class="relative pl-6 before:content-[''] before:absolute before:left-0 before:top-1 before:bottom-[-24px] before:w-px before:bg-slate-200 dark:before:bg-slate-800">
+<div class="absolute left-[-4px] top-1.5 h-2 w-2 rounded-full bg-red-500 ring-4 ring-white dark:ring-slate-900"></div>
+<p class="text-[11px] font-bold">Previous Version Rejected</p>
+<p class="text-[10px] text-slate-500">Oct 24, 11:30 AM</p>
+<div class="mt-2 p-2 bg-red-50 dark:bg-red-900/10 rounded border border-red-100 dark:border-red-900/30 text-[10px] text-red-700 dark:text-red-400">
+                            "Scan is too blurry, edges are cut off. Please provide a clear flat scan." - Agent Sarah
+                        </div>
+</div>
+<div class="relative pl-6">
+<div class="absolute left-[-4px] top-1.5 h-2 w-2 rounded-full bg-slate-300 ring-4 ring-white dark:ring-slate-900"></div>
+<p class="text-[11px] font-bold">System Check Passed</p>
+<p class="text-[10px] text-slate-500">Oct 24, 11:28 AM</p>
+<p class="text-[10px] text-slate-400 mt-1">Automatic OCR data validation complete.</p>
+</div>
+</div>
+</div>
+<div class="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+<button class="w-full flex items-center justify-between text-xs font-semibold text-slate-500 hover:text-primary transition-colors">
+<span>Export Audit Log</span>
+<span class="material-symbols-outlined text-sm">open_in_new</span>
+</button>
+</div>
+</aside>
+</main>
+</div>
+</body></html>

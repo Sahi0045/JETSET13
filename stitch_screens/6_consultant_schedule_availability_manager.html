@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Consultant Schedule &amp; Availability Manager</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1152d4",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100">
+<div class="flex h-screen overflow-hidden">
+<!-- Sidebar Navigation -->
+<aside class="w-64 flex-shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between">
+<div class="p-6">
+<div class="flex items-center gap-3 mb-10 px-2">
+<div class="bg-primary/10 p-2 rounded-lg">
+<span class="material-symbols-outlined text-primary text-2xl">description</span>
+</div>
+<h2 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white leading-none">VisaDocs</h2>
+</div>
+<nav class="space-y-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]">dashboard</span>
+<span class="text-sm font-semibold">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/10 text-primary" href="#">
+<span class="material-symbols-outlined text-[24px] fill-1">calendar_today</span>
+<span class="text-sm font-semibold">My Schedule</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]">group</span>
+<span class="text-sm font-semibold">Clients</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]">settings</span>
+<span class="text-sm font-semibold">Settings</span>
+</a>
+</nav>
+</div>
+<div class="p-4 border-t border-slate-200 dark:border-slate-800">
+<div class="flex items-center gap-3 p-2">
+<div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 bg-cover bg-center" data-alt="Profile picture of a professional consultant" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBFFfYgl65CAC6nJE5BC7X5uZ3I0Jj4GiqEBvpfMza_sp9xIAdxzVbKL9aJ-RgP-cFRgye3g-tb0-DGVS-h1P7H5Pgb1HEWKHAzAoAsRoCGVedrtVUVRvBnIeuczbLw_skFXDkqg3Dad3Pm5aVe56xN3j4GOU2gFR1pl2BwFWBbpfOJB1CI26OajhJYRaQ0xdmBuBkw91RwBVwXAiHM5eTbOHNAWLLXvnYuGY24VCp-NlN_ZrFyKfdyyfl6j02eULpF-3zNIStIp9eK')"></div>
+<div class="flex flex-col overflow-hidden">
+<p class="text-sm font-bold truncate">James Wilson</p>
+<p class="text-xs text-slate-500 truncate">Visa Specialist</p>
+</div>
+</div>
+<button class="w-full mt-4 flex items-center justify-center gap-2 bg-primary text-white py-2.5 rounded-lg font-bold text-sm hover:bg-primary/90 transition-all">
+<span class="material-symbols-outlined text-sm">add</span>
+                    New Appointment
+                </button>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col overflow-hidden">
+<!-- Header -->
+<header class="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between px-8">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Search appointments or clients..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
+</button>
+<button class="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+<span class="material-symbols-outlined">chat_bubble</span>
+</button>
+<div class="h-8 w-px bg-slate-200 dark:border-slate-800 mx-2"></div>
+<span class="text-sm font-medium text-slate-600 dark:text-slate-400">Oct 24, 2023</span>
+</div>
+</header>
+<!-- Dashboard Content -->
+<div class="flex-1 flex overflow-hidden">
+<!-- Calendar View -->
+<div class="flex-1 overflow-y-auto p-8">
+<div class="flex justify-between items-end mb-8">
+<div>
+<h1 class="text-3xl font-black text-slate-900 dark:text-white">Schedule Overview</h1>
+<p class="text-slate-500 mt-1">Manage your visa consultation hours and upcoming client meetings.</p>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-lg">event_repeat</span>
+                                Set Recurring Availability
+                            </button>
+<button class="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-lg">block</span>
+                                Block Out Time
+                            </button>
+</div>
+</div>
+<!-- Weekly Calendar -->
+<div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+<!-- Calendar Header Days -->
+<div class="grid grid-cols-8 border-b border-slate-200 dark:border-slate-800">
+<div class="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-center border-r border-slate-100 dark:border-slate-800">Time</div>
+<div class="p-4 text-center border-r border-slate-100 dark:border-slate-800">
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Mon</p>
+<p class="text-lg font-bold">23</p>
+</div>
+<div class="p-4 text-center border-r border-slate-100 dark:border-slate-800 bg-primary/5">
+<p class="text-xs font-bold text-primary uppercase tracking-wider mb-1">Tue</p>
+<p class="text-lg font-bold text-primary">24</p>
+</div>
+<div class="p-4 text-center border-r border-slate-100 dark:border-slate-800">
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Wed</p>
+<p class="text-lg font-bold">25</p>
+</div>
+<div class="p-4 text-center border-r border-slate-100 dark:border-slate-800">
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Thu</p>
+<p class="text-lg font-bold">26</p>
+</div>
+<div class="p-4 text-center border-r border-slate-100 dark:border-slate-800">
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Fri</p>
+<p class="text-lg font-bold">27</p>
+</div>
+<div class="p-4 text-center border-r border-slate-100 dark:border-slate-800">
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Sat</p>
+<p class="text-lg font-bold">28</p>
+</div>
+<div class="p-4 text-center">
+<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Sun</p>
+<p class="text-lg font-bold">29</p>
+</div>
+</div>
+<!-- Calendar Grid Body -->
+<div class="relative grid grid-cols-8 h-[600px] overflow-y-auto">
+<!-- Time Labels -->
+<div class="col-span-1 border-r border-slate-100 dark:border-slate-800">
+<div class="h-20 border-b border-slate-100 dark:border-slate-800 p-2 text-[10px] font-bold text-slate-400 text-right uppercase">09:00 AM</div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800 p-2 text-[10px] font-bold text-slate-400 text-right uppercase">10:00 AM</div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800 p-2 text-[10px] font-bold text-slate-400 text-right uppercase">11:00 AM</div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800 p-2 text-[10px] font-bold text-slate-400 text-right uppercase">12:00 PM</div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800 p-2 text-[10px] font-bold text-slate-400 text-right uppercase">01:00 PM</div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800 p-2 text-[10px] font-bold text-slate-400 text-right uppercase">02:00 PM</div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800 p-2 text-[10px] font-bold text-slate-400 text-right uppercase">03:00 PM</div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800 p-2 text-[10px] font-bold text-slate-400 text-right uppercase">04:00 PM</div>
+</div>
+<!-- Day Columns -->
+<div class="col-span-7 grid grid-cols-7 relative">
+<!-- Day Grids Background -->
+<div class="absolute inset-0 grid grid-cols-7 h-full">
+<div class="border-r border-slate-100 dark:border-slate-800 h-full"></div>
+<div class="border-r border-slate-100 dark:border-slate-800 h-full bg-primary/5"></div>
+<div class="border-r border-slate-100 dark:border-slate-800 h-full"></div>
+<div class="border-r border-slate-100 dark:border-slate-800 h-full"></div>
+<div class="border-r border-slate-100 dark:border-slate-800 h-full"></div>
+<div class="border-r border-slate-100 dark:border-slate-800 h-full"></div>
+<div class="h-full"></div>
+</div>
+<!-- Horizontal Lines -->
+<div class="absolute inset-0 flex flex-col pointer-events-none">
+<div class="h-20 border-b border-slate-100 dark:border-slate-800"></div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800"></div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800"></div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800"></div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800"></div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800"></div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800"></div>
+<div class="h-20 border-b border-slate-100 dark:border-slate-800"></div>
+</div>
+<!-- Appointment Blocks -->
+<!-- Tuesday 9:30 AM (Col 2) -->
+<div class="absolute left-[14.28%] top-[10%] w-[14.28%] h-24 p-1 z-10">
+<div class="h-full bg-blue-100 dark:bg-blue-900/40 border-l-4 border-blue-500 rounded-lg p-2 overflow-hidden cursor-pointer shadow-sm">
+<p class="text-[10px] font-bold text-blue-700 dark:text-blue-300">09:30 - 10:30</p>
+<p class="text-xs font-bold truncate">Tourist Visa Consultation</p>
+<p class="text-[10px] text-blue-600 dark:text-blue-400 truncate">Elena Gilbert</p>
+</div>
+</div>
+<!-- Wednesday 11:00 AM (Col 3) -->
+<div class="absolute left-[28.56%] top-[25%] w-[14.28%] h-32 p-1 z-10">
+<div class="h-full bg-purple-100 dark:bg-purple-900/40 border-l-4 border-purple-500 rounded-lg p-2 overflow-hidden cursor-pointer shadow-sm">
+<p class="text-[10px] font-bold text-purple-700 dark:text-purple-300">11:00 - 12:30</p>
+<p class="text-xs font-bold truncate">Schengen Review</p>
+<p class="text-[10px] text-purple-600 dark:text-purple-400 truncate">Stefan Salvatore</p>
+</div>
+</div>
+<!-- Thursday 2:00 PM (Col 4) -->
+<div class="absolute left-[42.84%] top-[62.5%] w-[14.28%] h-20 p-1 z-10">
+<div class="h-full bg-emerald-100 dark:bg-emerald-900/40 border-l-4 border-emerald-500 rounded-lg p-2 overflow-hidden cursor-pointer shadow-sm">
+<p class="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">02:00 - 03:00</p>
+<p class="text-xs font-bold truncate">Work Permit Q&amp;A</p>
+<p class="text-[10px] text-emerald-600 dark:text-emerald-400 truncate">Bonnie Bennett</p>
+</div>
+</div>
+<!-- Monday Blocked (Col 1) -->
+<div class="absolute left-0 top-[37.5%] w-[14.28%] h-16 p-1 z-10">
+<div class="h-full bg-slate-100 dark:bg-slate-800/60 border-l-4 border-slate-400 rounded-lg p-2 opacity-60">
+<p class="text-xs font-bold text-slate-500 italic">Personal Time</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Sidebar -->
+<aside class="w-80 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 flex flex-col gap-8">
+<!-- Status Toggle -->
+<div class="p-5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+<div class="flex items-center justify-between mb-2">
+<span class="text-sm font-bold">Online Status</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-500"></div>
+</label>
+</div>
+<p class="text-xs text-slate-500">You are currently appearing as available for instant bookings.</p>
+</div>
+<!-- Upcoming Today -->
+<div>
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-sm font-bold uppercase tracking-wider text-slate-400">Upcoming Today</h3>
+<span class="bg-primary/10 text-primary text-[10px] font-black px-2 py-0.5 rounded-full">3 APPT</span>
+</div>
+<div class="space-y-3">
+<div class="p-3 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-primary/30 transition-colors bg-white dark:bg-slate-900 shadow-sm">
+<div class="flex items-start justify-between mb-2">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-blue-500"></div>
+<span class="text-[10px] font-bold text-slate-400">09:30 AM</span>
+</div>
+<span class="material-symbols-outlined text-slate-300 text-lg">more_horiz</span>
+</div>
+<h4 class="text-sm font-bold mb-1">Tourist Visa Consultation</h4>
+<div class="flex items-center gap-2">
+<div class="w-5 h-5 rounded-full bg-slate-200 bg-cover bg-center" data-alt="Portrait of client Elena Gilbert" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuD2ObIsFy171pD-Xj-4TZEtHPu94w5lSb3ao7PwSnGELJJBUHhnOLHjSiUqa8jG9eIuKmc0VePbdXHOco7uydRY7LrkMXbX254scEi0ZL-WN5MHrK2fKVMvO6CuvRI9ZqR0uS-w6Pw9POfzTtBVMLSssU1KI7u42B7c9oaXXxn1l0bJmfh5Vnpri_5mbSXacCqJiYaknJAQjVFk4Vgj2r5Ueam0fKwbBBRV_hL99fGwHlIUpPhDDRIR_ZsuxgC0apzPfjgwQPo2akei')"></div>
+<span class="text-xs text-slate-600 dark:text-slate-400">Elena Gilbert</span>
+</div>
+</div>
+<div class="p-3 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-primary/30 transition-colors bg-white dark:bg-slate-900 shadow-sm">
+<div class="flex items-start justify-between mb-2">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-purple-500"></div>
+<span class="text-[10px] font-bold text-slate-400">01:00 PM</span>
+</div>
+<span class="material-symbols-outlined text-slate-300 text-lg">more_horiz</span>
+</div>
+<h4 class="text-sm font-bold mb-1">Document Verification</h4>
+<div class="flex items-center gap-2">
+<div class="w-5 h-5 rounded-full bg-slate-200 bg-cover bg-center" data-alt="Portrait of client Jeremy Somes" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBdPlFuIuvAJyfgzbDpNkFCdFlkRU1ptGQCTMHWtAACInu9poWNCIkKXhOwgRIOz7HtGvu3hzWFSOsYriEGywhp4eUduGYruUO5dIXIUx9HQ_-ao9K-wwdmXOMtrFC11XoWDVHk4zykz1ctRMNK9puiPZQziEWY97agV1XmtJ9mj_WmHtJ3Znxt8j0whu3Pih3z31vG0bSN5NfGg4A0VO8pJ4cP5_dyHAgL2UPouIb2dIvBfTllCL2emi1ruJehbPvs0QuV107GexH2')"></div>
+<span class="text-xs text-slate-600 dark:text-slate-400">Jeremy Somes</span>
+</div>
+</div>
+<div class="p-3 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-primary/30 transition-colors bg-white dark:bg-slate-900 shadow-sm">
+<div class="flex items-start justify-between mb-2">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+<span class="text-[10px] font-bold text-slate-400">03:30 PM</span>
+</div>
+<span class="material-symbols-outlined text-slate-300 text-lg">more_horiz</span>
+</div>
+<h4 class="text-sm font-bold mb-1">Schengen Final Review</h4>
+<div class="flex items-center gap-2">
+<div class="w-5 h-5 rounded-full bg-slate-200 bg-cover bg-center" data-alt="Portrait of client Alaric Saltzman" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAHO5LHLDWyoRm94Tfp4UY1WiZ7xu5nelw4vz-97l2I8a7f-6PFdiIwwRuLMfLqAUxrs48esBKqYL_fd14HYj2LxC9MoJeqkZvVDRz0Id34S2ZnWIV3CWvCuawgr2PW2g7kwBp1DbKJKtMvec5SbImKbgrYv43WzRMZUZEXhzbOV6rAqHGepoDPTtsauMfOBYdOUpTHiv4mDpVJUqglOrKv7A4LLtjdtuMRIshRlsYg3PPirH9XNIJLunndivq_13Jc5vXE_wFTRp7_')"></div>
+<span class="text-xs text-slate-600 dark:text-slate-400">Alaric Saltzman</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Quick Stats -->
+<div class="mt-auto pt-6 border-t border-slate-200 dark:border-slate-800">
+<h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4">This Week</h3>
+<div class="grid grid-cols-2 gap-3">
+<div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+<p class="text-[10px] font-bold text-slate-500 uppercase">Consults</p>
+<p class="text-xl font-black">18</p>
+</div>
+<div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+<p class="text-[10px] font-bold text-slate-500 uppercase">Revenue</p>
+<p class="text-xl font-black text-emerald-500">$2.4k</p>
+</div>
+</div>
+</div>
+</aside>
+</div>
+</main>
+</div>
+</body></html>

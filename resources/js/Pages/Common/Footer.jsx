@@ -49,6 +49,16 @@ const Footer = () => {
                     Hotels
                   </Link>
                 </li>
+                <li>
+                  <Link to="/visa" className="footer-nav-link">
+                    Visa Services
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/visa/documents" className="footer-nav-link">
+                    Document Services
+                  </Link>
+                </li>
               </ul>
             </nav>
           </div>

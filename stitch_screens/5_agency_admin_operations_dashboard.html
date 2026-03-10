@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Agency Admin Operations Dashboard</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#1152d4",
+              "background-light": "#f6f6f8",
+              "background-dark": "#101622",
+            },
+            fontFamily: {
+              "display": ["Public Sans"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Public Sans', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display">
+<div class="flex h-screen overflow-hidden">
+<!-- Sidebar -->
+<aside class="w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col shrink-0">
+<div class="p-6 flex items-center gap-3 border-b border-slate-200 dark:border-slate-800">
+<div class="h-10 w-10 rounded-lg bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined">travel_explore</span>
+</div>
+<div>
+<h1 class="text-sm font-bold leading-none">Visa Agency</h1>
+<p class="text-xs text-slate-500 mt-1 uppercase tracking-wider">Admin Portal</p>
+</div>
+</div>
+<nav class="flex-1 p-4 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary font-medium" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span>Overview</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">add_circle</span>
+<span>New Applications</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">flag</span>
+<span>Flagged</span>
+<span class="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">12</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+<span>Completed</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">bar_chart</span>
+<span>Reports</span>
+</a>
+</nav>
+<div class="p-4 border-t border-slate-200 dark:border-slate-800">
+<div class="flex items-center gap-3 px-2">
+<div class="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+<img alt="Admin Avatar" data-alt="Close up portrait of a professional male administrator" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBReuoIywqach48nYyUgNz2L_qo9a-IPY8N2zpPIwyf8UXpltntlZKjObV0bKZbYRb5g9Qio1--N9It5-PDiHrgsjdV9vKekV-1iWVmjQO36QPe_kfRJeXSFBBm1NGGRwtVZKsla81Oyvbfh5vzdmSkPpExm889T2bKwFrT2ojTIxAJPr7zo51fCfbnCDSQiCCdc4BjjQ1I4RDu_RfgNzifiV62GKv1uZxUP5zeyOL2fxRG7N7BdJOBD1kKWAizrxaFGRfu0TFj5e65"/>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-xs font-semibold truncate">Alex Rivera</p>
+<p class="text-[10px] text-slate-500 truncate">Senior Agent</p>
+</div>
+<button class="text-slate-400 hover:text-slate-600">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+</button>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 overflow-y-auto bg-background-light dark:bg-background-dark">
+<!-- Header -->
+<header class="p-8 pb-4">
+<div class="flex items-start justify-between">
+<div>
+<h2 class="text-3xl font-black tracking-tight text-slate-900 dark:text-white">Operations Dashboard</h2>
+<p class="text-slate-500 mt-1">Real-time status tracking for all visa processing workflows.</p>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm font-semibold hover:bg-slate-50">
+<span class="material-symbols-outlined text-[20px]">file_download</span>
+                        Export
+                    </button>
+<button class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary/90">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                        Create Application
+                    </button>
+</div>
+</div>
+<!-- Metric Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+<div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="flex items-center justify-between mb-2">
+<span class="text-slate-500 text-sm font-medium">Total Active</span>
+<span class="material-symbols-outlined text-primary">groups</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-bold">1,284</span>
+<span class="text-emerald-500 text-sm font-semibold">+12%</span>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="flex items-center justify-between mb-2">
+<span class="text-slate-500 text-sm font-medium">Expiring Soon</span>
+<span class="material-symbols-outlined text-orange-500">alarm</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-bold">42</span>
+<span class="text-emerald-500 text-sm font-semibold">+5%</span>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="flex items-center justify-between mb-2">
+<span class="text-slate-500 text-sm font-medium">Pending Review</span>
+<span class="material-symbols-outlined text-red-500">pending_actions</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-bold">156</span>
+<span class="text-red-500 text-sm font-semibold">-8%</span>
+</div>
+</div>
+</div>
+</header>
+<!-- Filters & Table Section -->
+<section class="p-8 pt-4">
+<div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+<!-- Filters Bar -->
+<div class="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap gap-3 items-center">
+<div class="relative flex-1 min-w-[300px]">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Search applicant name, ID, or passport..." type="text"/>
+</div>
+<div class="flex gap-2">
+<button class="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm border border-slate-200 dark:border-slate-700">
+                            Country: All <span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+</button>
+<button class="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm border border-slate-200 dark:border-slate-700">
+                            Visa Type: All <span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+</button>
+<button class="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm border border-slate-200 dark:border-slate-700">
+                            Status: All <span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+</button>
+</div>
+</div>
+<!-- Table -->
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-slate-50 dark:bg-slate-800/50">
+<th class="px-6 py-4 text-xs font-bold uppercase text-slate-500 tracking-wider">Application ID</th>
+<th class="px-6 py-4 text-xs font-bold uppercase text-slate-500 tracking-wider">Applicant Name</th>
+<th class="px-6 py-4 text-xs font-bold uppercase text-slate-500 tracking-wider">Country</th>
+<th class="px-6 py-4 text-xs font-bold uppercase text-slate-500 tracking-wider">Visa Type</th>
+<th class="px-6 py-4 text-xs font-bold uppercase text-slate-500 tracking-wider">Status</th>
+<th class="px-6 py-4 text-xs font-bold uppercase text-slate-500 tracking-wider">Submission Date</th>
+<th class="px-6 py-4 text-xs font-bold uppercase text-slate-500 tracking-wider">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-400">#V-9082</td>
+<td class="px-6 py-4 text-sm font-bold">John Doe</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium">
+<img alt="US Flag" class="w-4 h-3 object-cover rounded-[1px]" data-alt="Miniature flag icon for United States" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-5d2StUMqtSfb8Q6bO4o8UrIwqdMFSovfVBi7SHPudYNS0mV_2a2FzqMteIVp_Prsc8yqQY1mcPzaMHJFPYUt3Tgrd6xD5tzjPC_HrFeC9LMe8oRSCVUm_8kVhXot_XxEBMJSSU-0E5jM3JbTaqoudgaEf57ywnLN__e2vnz2Sss41s3z3xiYVDXEhm4hr2owPtipv234tRGRY7Pse6eHKhfbMAM-jcnVzRxcMBcMCb0BMe8WbGWFEq94b1QMmasEglIpbMENV3HR"/>
+                                        United States
+                                    </span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500">Tourist</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                        Pending
+                                    </span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500">2023-10-24</td>
+<td class="px-6 py-4">
+<button class="text-primary font-bold text-sm hover:underline">Review</button>
+</td>
+</tr>
+<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-400">#V-9081</td>
+<td class="px-6 py-4 text-sm font-bold">Jane Smith</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium">
+<img alt="UK Flag" class="w-4 h-3 object-cover rounded-[1px]" data-alt="Miniature flag icon for United Kingdom" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAH5O38CVtL7WF_2gmdgBcMtZpgaXdSWbA38rdmsiOo4Iyfdrvk8qcoqj-K4p6Kia5uFJhz8NfNm0Ijg_jfkSE9ZndsTqkQwjcl3oZ5XNTA5luVedEKqGyhmJWSSOHUpWVzqV4VaESO44U6Ia-z92fv4TnNLH-TBboNlvScvEvcXXF9bvbPc5DmwMVuAwpxMIEfTUHsoNrxCehYg8o4me3NAxuoRampeKHcg0_iaD0aJef86uiMFyn3Hp-p4l_u0PYoV5WgkBtiYD6M"/>
+                                        United Kingdom
+                                    </span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500">Business</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                        Active
+                                    </span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500">2023-10-23</td>
+<td class="px-6 py-4">
+<button class="text-primary font-bold text-sm hover:underline">View</button>
+</td>
+</tr>
+<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-400">#V-9080</td>
+<td class="px-6 py-4 text-sm font-bold">Alice Brown</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium">
+<img alt="Canada Flag" class="w-4 h-3 object-cover rounded-[1px]" data-alt="Miniature flag icon for Canada" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjYNc2WXNojoIYK8qvIDIm-SN9tZIb4tkZj7-nnnvubAKf99sK7AjaaWa6E2QuGFKxk0PQNldnzxIBRJyRVNoIrlzoFCCuCwbPAqspk_jqwFkthDVh7kOHlQ83T3Xnhla-A6QeJfCNTjGi1jUKwK0NBFh7bc6xbgM8w_T3JMWCtPQqCHYUUtvzelh8YSkSjZsKcyJhIOG4t9FOXdQrJqHDPp5Taf1yLMKoRVk31DwkSUwQCzhxEUu5EQ-MkxnsPpsQxkrkBL64YbHr"/>
+                                        Canada
+                                    </span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500">Student</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+                                        Flagged
+                                    </span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500">2023-10-22</td>
+<td class="px-6 py-4">
+<button class="text-rose-600 font-bold text-sm hover:underline">Resolve</button>
+</td>
+</tr>
+<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-400">#V-9079</td>
+<td class="px-6 py-4 text-sm font-bold">Robert White</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium">
+<img alt="Australia Flag" class="w-4 h-3 object-cover rounded-[1px]" data-alt="Miniature flag icon for Australia" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAOOXExUQPzV61FCA8IdPcJIJBtG1zg5C6SwXsWa3Gp7Hv6Btxmm534EOD5KD7s56P5IKd9ZJ37eLdo-zrLGOYe2ugjMI0h-JL2XQxipvv6-XiIX3OFf9su-lILIiLwKox91bnpEMu4uF6O1GdShzqObJiNuffwOB9aFG4ygnIE0PMn65d2hsJr5ZQwORdQXlSN6iv7lYD4hPiTuZrm0U2WlZT16iuzATIJoeSigZHCr5gBD00_dHITGUjG_Ucx48vUxykyyRRt44oD"/>
+                                        Australia
+                                    </span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500">Work</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                        Completed
+                                    </span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500">2023-10-21</td>
+<td class="px-6 py-4">
+<button class="text-primary font-bold text-sm hover:underline">Archive</button>
+</td>
+</tr>
+<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-400">#V-9078</td>
+<td class="px-6 py-4 text-sm font-bold">Maria Garcia</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium">
+<img alt="Spain Flag" class="w-4 h-3 object-cover rounded-[1px]" data-alt="Miniature flag icon for Spain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDlTCvXiV6Wye9cH-ZOfsULrG8m1e7BVCN6h2YH-5c55JQ_Q7TZB6SsjC3pQxbTquxRF_FYjnIiu19jWDs2ReM2qMHyZTw_TpKcy8P3QZMYwxq5sV5gz4Ydd0BqJyw4tQGQEGEZ-L96wJrZrjPz-pNsj0FO5RIGNtPe7sbqwKgYrd0PvbrtmKQEI2UVlcyATOL3Eiq1f2D_55wT4OYOXeeVI5UhzG9sZ1_LZvn-KBT-4cqZ_s5PoLdz2oPrcXLj7Do7hGhCu3_HgN0r"/>
+                                        Spain
+                                    </span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500">Tourist</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                                        Expiring
+                                    </span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-500">2023-10-20</td>
+<td class="px-6 py-4">
+<button class="text-primary font-bold text-sm hover:underline">Renew</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+<p class="text-xs text-slate-500">Showing 1 to 5 of 1,284 entries</p>
+<div class="flex gap-1">
+<button class="w-8 h-8 flex items-center justify-center rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded bg-primary text-white font-bold text-xs">1</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 font-bold text-xs">2</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 font-bold text-xs">3</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+</div>
+</body></html>

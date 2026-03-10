@@ -495,6 +495,52 @@ const RequestPage = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Requests..." /> }))
 );
 
+// Visa & Document Services Pages (from Stitch MCP Project: Customer Visa Application Portal)
+const VisaLanding = React.lazy(() =>
+  import('./Pages/Common/visa/VisaLanding')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Visa Services..." /> }))
+);
+
+const DocumentServices = React.lazy(() =>
+  import('./Pages/Common/visa/DocumentServices')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Document Services..." /> }))
+);
+
+const VisaApplication = React.lazy(() =>
+  import('./Pages/Common/visa/VisaApplication')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Visa Application..." /> }))
+);
+
+const VisaApplicationSuccess = React.lazy(() =>
+  import('./Pages/Common/visa/VisaApplicationSuccess')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading..." /> }))
+);
+
+const VisaApplicationTracker = React.lazy(() =>
+  import('./Pages/Common/visa/VisaApplicationTracker')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Tracker..." /> }))
+);
+
+const VisaAdminPanel = React.lazy(() =>
+  import('./Pages/Common/visa/admin/VisaAdminPanel')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Visa Admin..." /> }))
+);
+
+const CustomerStatusDashboard = React.lazy(() =>
+  import('./Pages/Common/visa/CustomerStatusDashboard')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Dashboard..." /> }))
+);
+
+const ConsultationBooking = React.lazy(() =>
+  import('./Pages/Common/visa/ConsultationBooking')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Booking..." /> }))
+);
+
+const VideoConsultation = React.lazy(() =>
+  import('./Pages/Common/visa/VideoConsultation')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Video Consultation..." /> }))
+);
+
 // Add Inquiry Detail Page import
 const InquiryDetail = React.lazy(() =>
   import('./Pages/Common/InquiryDetail')
@@ -638,6 +684,17 @@ const App = () => {
           {/* Package Routes */}
           <Route path="/packages/itinerary" element={<ItineraryPackage />} />
           <Route path="/packages/booking-summary" element={<PackageBookingSummary />} />
+
+          {/* Visa & Document Services Routes (Stitch MCP: Customer Visa Application Portal) */}
+          <Route path="/visa" element={<VisaLanding />} />
+          <Route path="/visa/documents" element={<DocumentServices />} />
+          <Route path="/visa/apply" element={<VisaApplication />} />
+          <Route path="/visa/success" element={<VisaApplicationSuccess />} />
+          <Route path="/visa/track" element={<VisaApplicationTracker />} />
+          <Route path="/visa/status" element={<CustomerStatusDashboard />} />
+          <Route path="/visa/booking" element={<ConsultationBooking />} />
+          <Route path="/visa/consultation/:id" element={<VideoConsultation />} />
+          <Route path="/visa/admin/*" element={<VisaAdminPanel />} />
 
           {/* Footer Pages */}
           <Route path="/privacy" element={<Privacy />} />

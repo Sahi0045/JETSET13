@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Customer Status Dashboard - VisaDirect</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1152d4",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        body {
+            font-family: "Public Sans", sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .chat-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .chat-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .chat-scroll::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+        .dark .chat-scroll::-webkit-scrollbar-thumb {
+            background: #334155;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display overflow-hidden">
+<div class="relative flex h-screen w-full flex-col">
+<header class="flex h-16 shrink-0 items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 z-50">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-4 text-primary">
+<span class="material-symbols-outlined text-3xl">language</span>
+<h2 class="text-slate-900 dark:text-slate-100 text-lg font-bold leading-tight tracking-[-0.015em]">VisaDirect</h2>
+</div>
+<div class="hidden md:flex flex-col min-w-40 h-9 max-w-64">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-full">
+<div class="text-slate-500 flex border-none bg-slate-100 dark:bg-slate-800 items-center justify-center pl-4 rounded-l-lg">
+<span class="material-symbols-outlined text-xl">search</span>
+</div>
+<input class="form-input flex w-full min-w-0 flex-1 border-none bg-slate-100 dark:bg-slate-800 focus:outline-0 focus:ring-0 h-full placeholder:text-slate-500 px-4 rounded-r-lg text-sm font-normal" placeholder="Search applications" value=""/>
+</div>
+</div>
+</div>
+<div class="flex flex-1 justify-end gap-6 items-center">
+<nav class="hidden lg:flex items-center gap-6">
+<a class="text-slate-900 dark:text-slate-100 text-sm font-medium hover:text-primary transition-colors" href="#">Dashboard</a>
+<a class="text-slate-900 dark:text-slate-100 text-sm font-medium hover:text-primary transition-colors" href="#">My Applications</a>
+<a class="text-slate-900 dark:text-slate-100 text-sm font-medium hover:text-primary transition-colors" href="#">Documents</a>
+</nav>
+<div class="flex gap-2">
+<button class="flex items-center justify-center rounded-lg h-9 w-9 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-xl">notifications</span>
+</button>
+</div>
+<div class="bg-primary/20 rounded-full size-8 overflow-hidden border border-primary/30">
+<img alt="Profile" class="object-cover w-full h-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-29JPCwtfcGHM14MLf2tNdHtmFgoBwOIGRFfVsFC-70Rto7hV2xfrUaXrRKUwHewBHO66pp-LKQkDa_VcFOf7J572RynNt0W4JbJi7YafV1L1SkWO60DSx5-cy6UB9Q6nqh7BGSDUfawuMWn6LfIKsJkroBRO9dZTsJ7z4mj5NjtcKyEIC5a6jecu0JbzeW807nqFhG-qujeB2dlwDGpxKW0S4YF56yo0iSlS2lL9IGI8uS4skuEgeLt6VYmdQWueL_BVct4wl7Q8"/>
+</div>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<main class="flex-1 overflow-y-auto">
+<div class="max-w-[1000px] mx-auto py-8 px-6">
+<div class="flex flex-wrap justify-between items-end gap-4 mb-8">
+<div class="flex flex-col gap-1">
+<h1 class="text-slate-900 dark:text-white text-2xl font-black leading-tight tracking-tight">Application: Tourist Visa - France</h1>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-normal">Application ID: <span class="font-mono text-primary font-bold">#V-882910</span> • Submitted on Oct 12, 2023</p>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center justify-center rounded-lg h-9 px-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold shadow-sm">
+<span class="material-symbols-outlined mr-2 text-base">download</span>
+                            Download Receipt
+                        </button>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-900 rounded-xl p-8 mb-8 border border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="relative flex justify-between items-center w-full">
+<div class="absolute top-1/2 left-0 w-full h-1 bg-slate-100 dark:bg-slate-800 -translate-y-1/2 z-0"></div>
+<div class="absolute top-1/2 left-0 w-2/3 h-1 bg-primary -translate-y-1/2 z-0"></div>
+<div class="relative z-10 flex flex-col items-center gap-2 group bg-white dark:bg-slate-900 px-2">
+<div class="size-9 rounded-full bg-primary text-white flex items-center justify-center shadow-md">
+<span class="material-symbols-outlined text-lg">check</span>
+</div>
+<div class="text-center">
+<p class="text-slate-900 dark:text-slate-100 text-xs font-bold">Applied</p>
+<p class="text-slate-500 text-[10px]">Oct 12</p>
+</div>
+</div>
+<div class="relative z-10 flex flex-col items-center gap-2 group bg-white dark:bg-slate-900 px-2">
+<div class="size-9 rounded-full bg-primary text-white flex items-center justify-center shadow-md">
+<span class="material-symbols-outlined text-lg">check</span>
+</div>
+<div class="text-center">
+<p class="text-slate-900 dark:text-slate-100 text-xs font-bold">Verified</p>
+<p class="text-slate-500 text-[10px]">Oct 15</p>
+</div>
+</div>
+<div class="relative z-10 flex flex-col items-center gap-2 group bg-white dark:bg-slate-900 px-2">
+<div class="size-11 rounded-full bg-primary text-white flex items-center justify-center shadow-xl ring-4 ring-primary/20">
+<span class="material-symbols-outlined text-xl">account_balance</span>
+</div>
+<div class="text-center">
+<p class="text-primary text-xs font-black">Processing</p>
+<p class="text-primary/70 text-[10px] font-bold">Active</p>
+</div>
+</div>
+<div class="relative z-10 flex flex-col items-center gap-2 group bg-white dark:bg-slate-900 px-2">
+<div class="size-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center">
+<span class="material-symbols-outlined text-lg">verified_user</span>
+</div>
+<div class="text-center">
+<p class="text-slate-400 dark:text-slate-500 text-xs font-medium">Visa Ready</p>
+<p class="text-slate-400 text-[10px]">Est. Oct 30</p>
+</div>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<div class="flex items-center justify-between mb-2">
+<h2 class="text-slate-900 dark:text-slate-100 text-lg font-bold">Action Items</h2>
+<span class="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-3 py-1 rounded-full text-xs font-bold">2 Pending</span>
+</div>
+<div class="flex items-center gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 shrink-0 size-10">
+<span class="material-symbols-outlined">upload_file</span>
+</div>
+<div class="flex flex-1 flex-col justify-center">
+<p class="text-slate-900 dark:text-slate-100 text-sm font-bold">Upload additional bank statement</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs">Financial verification required for last 3 months.</p>
+</div>
+<button class="shrink-0 flex items-center justify-center rounded-lg h-8 px-4 bg-primary text-white text-xs font-bold hover:bg-primary/90">
+                            Upload
+                        </button>
+</div>
+<div class="flex items-center gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 shrink-0 size-10">
+<span class="material-symbols-outlined">calendar_today</span>
+</div>
+<div class="flex flex-1 flex-col justify-center">
+<p class="text-slate-900 dark:text-slate-100 text-sm font-bold">Confirm Biometric Appointment</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs">Slot reserved for Oct 22, 10:30 AM.</p>
+</div>
+<button class="shrink-0 flex items-center justify-center rounded-lg h-8 px-4 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-200">
+                            Confirm
+                        </button>
+</div>
+<div class="bg-primary/5 border border-primary/20 rounded-xl p-5 flex gap-4 mt-2">
+<span class="material-symbols-outlined text-primary text-2xl">info</span>
+<div>
+<h4 class="text-primary font-bold text-sm">Next Steps</h4>
+<p class="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">Once the embassy completes processing, you'll receive an email notification for passport collection.</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<aside class="w-80 lg:w-96 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col shrink-0">
+<div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
+<div class="relative shrink-0">
+<div class="size-10 rounded-full bg-slate-200 overflow-hidden ring-2 ring-primary/10">
+<img alt="Agent" class="object-cover w-full h-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgzWBHCpkCJ-O0NE9fTdDIL4uqJWuniheJiHManl5061g3iEW7ApD_Rltsz_tkNp32qAsbiqAA21fRORYyIDe5-TjeHfFDy5umlWyh5vKPzRIigZraF8gqDWuqjaoFS8qc5taiXh_WHYmIQI3GJ5Z9gEdyWnhEXAt52LvBrv-F-rjojQo3GYolU9A1FNZW2EajsyhAcM4iYbPrSEG237glu1IVLr0g2b2cIK6e4mFV40cABpHGY-mgZbHhJiGmh0paX5pfQ86l_hN7"/>
+</div>
+<div class="absolute bottom-0 right-0 size-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full"></div>
+</div>
+<div class="overflow-hidden">
+<p class="text-slate-900 dark:text-white font-bold text-sm truncate">Sarah Jenkins</p>
+<div class="flex items-center gap-1.5">
+<p class="text-green-600 dark:text-green-500 text-[11px] font-semibold uppercase tracking-wider">Online</p>
+<span class="size-1 bg-slate-300 rounded-full"></span>
+<p class="text-slate-500 text-[11px] font-medium truncate">Assigned Agent</p>
+</div>
+</div>
+<div class="ml-auto flex items-center gap-1">
+<button class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
+<span class="material-symbols-outlined text-xl">shield_lock</span>
+</button>
+<button class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
+<span class="material-symbols-outlined text-xl">more_vert</span>
+</button>
+</div>
+</div>
+<div class="bg-slate-50 dark:bg-slate-800/50 px-4 py-2 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-slate-400 text-sm">lock</span>
+<p class="text-[10px] text-slate-500 font-medium uppercase tracking-tight">Messages are end-to-end encrypted</p>
+</div>
+<div class="flex-1 overflow-y-auto chat-scroll p-4 space-y-4">
+<div class="flex justify-center my-2">
+<span class="text-[10px] text-slate-400 font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full uppercase">Yesterday</span>
+</div>
+<div class="flex flex-col gap-1 max-w-[85%]">
+<div class="bg-slate-100 dark:bg-slate-800 p-3 rounded-2xl rounded-tl-none border border-slate-200 dark:border-slate-700 shadow-sm">
+<p class="text-slate-800 dark:text-slate-200 text-sm">Hello Mark! I've reviewed your latest documents. Everything looks great, but the embassy requested one more bank statement for clarity.</p>
+</div>
+<p class="text-[10px] text-slate-400 ml-1 font-medium">10:15 AM</p>
+</div>
+<div class="flex flex-col gap-1 max-w-[85%] self-end">
+<div class="bg-primary p-3 rounded-2xl rounded-tr-none shadow-md shadow-primary/10">
+<p class="text-white text-sm">Thanks Sarah, I just saw the action item. I'll upload it within the next hour.</p>
+</div>
+<div class="flex items-center self-end gap-1 mr-1">
+<p class="text-[10px] text-slate-400 font-medium">10:22 AM</p>
+<span class="material-symbols-outlined text-[12px] text-primary">done_all</span>
+</div>
+</div>
+<div class="flex flex-col gap-1 max-w-[85%]">
+<div class="bg-slate-100 dark:bg-slate-800 p-3 rounded-2xl rounded-tl-none border border-slate-200 dark:border-slate-700 shadow-sm">
+<p class="text-slate-800 dark:text-slate-200 text-sm">Perfect. I'll notify the embassy as soon as it's received. Let me know if you have any other questions!</p>
+</div>
+<p class="text-[10px] text-slate-400 ml-1 font-medium">10:25 AM</p>
+</div>
+<div class="flex flex-col gap-1 max-w-[85%]">
+<div class="bg-slate-100 dark:bg-slate-800 p-3 rounded-2xl rounded-tl-none border border-slate-200 dark:border-slate-700 shadow-sm">
+<p class="text-slate-800 dark:text-slate-200 text-sm">I've also attached a guide on what to expect at your biometric appointment.</p>
+</div>
+</div>
+<div class="flex flex-col gap-1 max-w-[85%]">
+<div class="bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+<div class="size-9 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-lg flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined">picture_as_pdf</span>
+</div>
+<div class="overflow-hidden">
+<p class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">biometric_guide.pdf</p>
+<p class="text-[10px] text-slate-500">1.2 MB</p>
+</div>
+<button class="ml-auto text-primary p-1">
+<span class="material-symbols-outlined text-lg">download</span>
+</button>
+</div>
+<p class="text-[10px] text-slate-400 ml-1 font-medium">10:26 AM</p>
+</div>
+</div>
+<div class="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+<div class="flex flex-col gap-3">
+<div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+<button class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors shrink-0">
+<span class="material-symbols-outlined text-base text-slate-500">add_circle</span>
+<span class="text-[11px] font-bold text-slate-600 dark:text-slate-300">File</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors shrink-0">
+<span class="material-symbols-outlined text-base text-slate-500">image</span>
+<span class="text-[11px] font-bold text-slate-600 dark:text-slate-300">Photo</span>
+</button>
+</div>
+<div class="flex items-end gap-2 bg-slate-100 dark:bg-slate-800 rounded-2xl px-3 py-2 ring-1 ring-slate-200/50 dark:ring-slate-700/50 focus-within:ring-primary/50 transition-all">
+<textarea class="bg-transparent border-none focus:ring-0 text-sm w-full py-1 placeholder:text-slate-500 text-slate-900 dark:text-slate-100 resize-none max-h-32 min-h-[24px]" placeholder="Type a secure message..." rows="1"></textarea>
+<button class="bg-primary text-white size-8 rounded-full flex items-center justify-center shrink-0 shadow-lg shadow-primary/20 hover:scale-105 transition-transform active:scale-95">
+<span class="material-symbols-outlined text-xl">send</span>
+</button>
+</div>
+</div>
+</div>
+</aside>
+</div>
+</div>
+
+</body></html>

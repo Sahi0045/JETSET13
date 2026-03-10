@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Admin Multi-Chat Messaging Hub - VisaDocs</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1152d4",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Public Sans', sans-serif;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 antialiased overflow-hidden h-screen">
+<div class="flex flex-col h-full">
+<!-- TopNavBar Component -->
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-3 shrink-0">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-3 text-primary">
+<div class="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-2xl">travel_explore</span>
+</div>
+<h2 class="text-slate-900 dark:text-slate-100 text-lg font-bold leading-tight tracking-tight">VisaDocs <span class="text-primary">Admin</span></h2>
+</div>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary text-sm font-semibold transition-colors" href="#">Dashboard</a>
+<a class="text-primary text-sm font-semibold border-b-2 border-primary py-1" href="#">Messaging Hub</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary text-sm font-semibold transition-colors" href="#">Applicants</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary text-sm font-semibold transition-colors" href="#">Settings</a>
+</nav>
+</div>
+<div class="flex flex-1 justify-end gap-4 items-center">
+<div class="relative w-full max-w-xs">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="Search applications..." type="text"/>
+</div>
+<div class="flex gap-2">
+<button class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 transition-colors relative">
+<span class="material-symbols-outlined text-xl">notifications</span>
+<span class="absolute top-1.5 right-1.5 size-2 bg-red-500 rounded-full"></span>
+</button>
+<button class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 transition-colors">
+<span class="material-symbols-outlined text-xl">help</span>
+</button>
+</div>
+<div class="size-9 rounded-full bg-slate-200 border border-slate-300 overflow-hidden" data-alt="Admin user profile avatar">
+<img alt="Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5xaoNhl5sew44ZogxF3KEUgcAC0-MGMVKu9CLxjp4iFm3SmBVCOl-i_idtzrRsqjcIRRoLnMvmNNGlR_GVfKT5xyuPwvUOkZ2LxPK4eMaFME-2K6a0CxAvdmBjX1RDGFvbN4Nunw3JKri_Epq0byqBo6rUN32IVtheZWoN_uHvV62Pw1rPunOq5FGUjP03H8vNIFNqPi-8EmcMyyQMNabVssCG5TIJTnVHUelhkTJwh_IO61YqXgwy-c8VG5AxFoO9xE6kXHekTEn"/>
+</div>
+</div>
+</header>
+<!-- Main Workspace -->
+<main class="flex flex-1 overflow-hidden">
+<!-- Left Pane: Chat List -->
+<aside class="w-80 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col shrink-0">
+<div class="p-4 border-b border-slate-100 dark:border-slate-800">
+<div class="flex items-center justify-between mb-4">
+<h3 class="font-bold text-slate-900 dark:text-slate-100">Messages</h3>
+<span class="bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full">12 New</span>
+</div>
+<div class="flex gap-2 mb-4 overflow-x-auto pb-1 custom-scrollbar">
+<button class="px-3 py-1.5 rounded-full bg-primary text-white text-xs font-medium whitespace-nowrap">Active</button>
+<button class="px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-medium whitespace-nowrap">Unassigned</button>
+<button class="px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-medium whitespace-nowrap">Urgent</button>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar">
+<!-- Chat Item (Active) -->
+<div class="flex items-center gap-3 p-4 bg-primary/5 border-l-4 border-primary cursor-pointer transition-colors">
+<div class="relative shrink-0">
+<div class="size-12 rounded-full overflow-hidden bg-slate-200" data-alt="Applicant portrait placeholder">
+<img alt="John" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAnaPq_0BHu-1IDQ_3qkVtHZFIzo_cMhit6EXjaTkLBlJS8HeXsLx_C2nYq4WraLF-gDzmamgfTsb43r2g_8etbWTGuJ-Lqmwv6riDQ56iiLlXBnAsXq5Nb93v6EvEdbMQtqIx-PzpM_hVaF_aE6hD-6Iy2j8KnjlYHegw-5bh3VRV0zq8W1olQ5xM5XIUYe3Morc_CR22E729r48ARAIV2x77PVlNCAQ8Ji9x3cHRvovHmTOhjCKY1ZtFLTWsqKQn5Sg-liSr3wqZ1"/>
+</div>
+<div class="absolute bottom-0 right-0 size-3 bg-green-500 border-2 border-white rounded-full"></div>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-center mb-0.5">
+<span class="font-bold text-sm text-slate-900 truncate">John Richards</span>
+<span class="text-[10px] text-slate-400">2m ago</span>
+</div>
+<p class="text-xs text-slate-600 truncate font-medium">I've re-uploaded the bank statements.</p>
+</div>
+</div>
+<!-- Chat Item (Unread) -->
+<div class="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b border-slate-50 dark:border-slate-800/50 transition-colors">
+<div class="relative shrink-0">
+<div class="size-12 rounded-full overflow-hidden bg-slate-200" data-alt="Applicant portrait placeholder">
+<img alt="Sarah" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBISlnwwsFU1MZIycm7NaC7F_s7nzn-7gChqezA43smmBluhTX_YrUUn2iM8WUyY0Cev17YDdRcAy42p3cuvUhSp9pBo1_xuMBkLaNa8bTI0QkpTzZubH31_q8dDnmoJdCJzto8E32LoTulCHA7CDQFfTShdez4Gg96LtMjyCqfgou3uxarV_MhjzV_NkIyWDtUUBiX-V8Or8GjbjFe9hLDPQq6oTInIVcdvBfsNxw5tYESEY6OhnI2_6FzVDKDbCzMyTqVWHvKLGtJ"/>
+</div>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-center mb-0.5">
+<span class="font-bold text-sm text-slate-900">Sarah Jenkins</span>
+<span class="text-[10px] text-primary font-bold">5m ago</span>
+</div>
+<p class="text-xs text-slate-900 truncate font-bold">Wait, is my insurance valid?</p>
+</div>
+<div class="size-2 bg-primary rounded-full shrink-0"></div>
+</div>
+<!-- More Chat Items -->
+<div class="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b border-slate-50 dark:border-slate-800/50 transition-colors">
+<div class="size-12 rounded-full overflow-hidden bg-slate-200 shrink-0" data-alt="Applicant portrait placeholder">
+<img alt="Marco" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCv6-zVEnxHzvB8hOo2vmjUmnHi5cjS2DCl24C0fRqfQ5UMcVVMU6PQ4c2SabpEtB8H6PIJ5zanaDEW3hpeKc9U3mpxZukGDxTsekFw3DUoQ69EXGc8LBgBPtdUqYpR8yaKDV7K0SnanL_Tj_D1PzI6GiZG2eZY3472ufFU3rczrH2bSTDzN-gPIoXPxoYKflAZxtLf9TMgoUx7eazp18oD8JkjYkV3wQyRnKZYQeMjMC5H1Exso7EiHrOT4rJSg88I8OLBRg_eBDS0"/>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-center mb-0.5">
+<span class="font-bold text-sm text-slate-900">Marco Rossi</span>
+<span class="text-[10px] text-slate-400">1h ago</span>
+</div>
+<p class="text-xs text-slate-500 truncate">Thank you for the quick update.</p>
+</div>
+</div>
+<div class="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b border-slate-50 dark:border-slate-800/50 transition-colors">
+<div class="size-12 rounded-full overflow-hidden bg-slate-200 shrink-0" data-alt="Applicant portrait placeholder">
+<img alt="Elena" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBvwFC7iDFsPRjQQR9ub_p6jaz3g9XXEtgFzlL2fZWagY7XazIvuh4hSKliN0_6nm5DQN2oLvFeZdon9x3xv3P9BiZcy48Qu0n5FyaK8vxK59S4skGzOwG0HO9Ip9-FllbkiwSGEKl4YehvGxEIjRNX17AF60qRNGVhsMXFGmcFnMyGxBbpRR-Z_Lxdx0TxCJ7MV9EOW7mr5kdarN9wvr0N5cskEtIS8fretXb5Wr7xaiijGmEKthRCQqPq-WX2HqwFoRrNLhEQMTS6"/>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-center mb-0.5">
+<span class="font-bold text-sm text-slate-900">Elena Petrova</span>
+<span class="text-[10px] text-slate-400">3h ago</span>
+</div>
+<p class="text-xs text-slate-500 truncate">I'm having trouble with the SMS code.</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Center Pane: Active Conversation -->
+<section class="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950">
+<!-- Chat Header -->
+<div class="px-6 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="size-10 rounded-full bg-slate-200 overflow-hidden" data-alt="Active chat partner avatar">
+<img alt="John" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDKilr0BHSBrdPhRvsNbKhbrly_wOcJZ5U6w8P-i77JORh-zg8TOS7BrgaJ8K6fv_I9dnxMxylkbGUDtfqg58yxrCL-00dyJ3aY89GqO-JSuCaMyojaE1nKtWjklbsdGbH4G9n0suFHULS3ZWjbtL4yMcWQik6UEguqOn3-fc1fYBL3AUsTQt49M5dAL_LtHRyH7HbrMCfj7Zn39LiPooFEupbm6n0N4Zav2oJ1HTOoXJB5OEgiQs0fG4i7PhGvEOC6cQF4Nw4LqaPa"/>
+</div>
+<div>
+<h4 class="font-bold text-slate-900 dark:text-slate-100">John Richards</h4>
+<div class="flex items-center gap-2">
+<span class="size-2 bg-green-500 rounded-full"></span>
+<span class="text-xs text-slate-500">Active now • ID: #APP-8921-UK</span>
+</div>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">Transfer</button>
+<button class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">Resolve</button>
+</div>
+</div>
+<!-- Messages Area -->
+<div class="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar">
+<!-- Date Separator -->
+<div class="flex justify-center">
+<span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full">Today</span>
+</div>
+<!-- Left Message (Applicant) -->
+<div class="flex gap-3 max-w-[80%]">
+<div class="size-8 rounded-full bg-slate-200 overflow-hidden shrink-0 self-end" data-alt="Applicant small avatar">
+<img alt="John" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCCqiqfwHZ_u-7aZ_AdZHYTlECLCQeEm2D-Y_IdAIMngrq-GjhKCxgUZOVb1H8BhxVe8JHI6F1GaaReoefeqqBNS1deo5_PiW0yPuLbZwT2ziwKElCvHasYUWBM5a-ylUytmCQWdIoS61fi-Y_wv0BwyXPYdNWU1MMl4gr049RVG46Wc2UN1r6Fp7utuwb6SIbsS-yQidQfAzWDQey8z6OzPAzhm6m8NIPUX6e4gniQjvtC3H5ZljKzCXdB5xBJ-2NlnF5que_SDmoX"/>
+</div>
+<div class="flex flex-col gap-1">
+<div class="bg-white dark:bg-slate-800 p-3.5 rounded-2xl rounded-bl-none shadow-sm text-sm border border-slate-100 dark:border-slate-800">
+                                Hi, I received a notification that my Bank Statement was rejected. Could you tell me why? I thought it met all requirements.
+                            </div>
+<span class="text-[10px] text-slate-400 ml-1">10:42 AM</span>
+</div>
+</div>
+<!-- System Message -->
+<div class="flex justify-center">
+<div class="flex items-center gap-3 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20 rounded-xl px-4 py-3 max-w-md">
+<span class="material-symbols-outlined text-red-500">warning</span>
+<div class="text-xs">
+<p class="font-bold text-red-600 dark:text-red-400">Automated Notification: Document Rejected</p>
+<p class="text-slate-600 dark:text-slate-400">Bank Statement_Q3.pdf was rejected by AI Verifier (Incomplete Dates).</p>
+</div>
+</div>
+</div>
+<!-- Right Message (Admin/You) -->
+<div class="flex gap-3 max-w-[80%] self-end flex-row-reverse">
+<div class="size-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0 self-end">
+<span class="material-symbols-outlined text-primary text-lg">support_agent</span>
+</div>
+<div class="flex flex-col gap-1 items-end">
+<div class="bg-primary text-white p-3.5 rounded-2xl rounded-br-none shadow-sm text-sm">
+                                Hello John, I've checked the file. It appears the statement only shows up to the 15th of last month, but we require a full 3-month period ending within the last 7 days.
+                            </div>
+<div class="flex items-center gap-1 mr-1">
+<span class="text-[10px] text-slate-400">10:45 AM</span>
+<span class="material-symbols-outlined text-[14px] text-primary">done_all</span>
+</div>
+</div>
+</div>
+<!-- Left Message (Applicant) -->
+<div class="flex gap-3 max-w-[80%]">
+<div class="size-8 rounded-full bg-slate-200 overflow-hidden shrink-0 self-end" data-alt="Applicant small avatar">
+<img alt="John" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiJckv-nDw2dBzmQNFXnWC_spjiIehAZzTJOJwa6V_7GJv7LsEnDnfpmMi-_SU1sPbsQ26q7bZ8aYmY3Kzrtj-irQ7CmgUrQx9LJ-VUoyjX81sr_tFy2Vo7wMtovxSfThv_wcXGiwB2jxIqsFl8MXeqxAindRtbt5UgRCFhLNM-GXYeLAicBKJ5qwQu7vB4OzxJhKACXw1nX9OUQO8mG8w65ObK8qw1clegWyqk8FxaUntN5jXC4h90IapMr2Si_V3mDElPShdQcpM"/>
+</div>
+<div class="flex flex-col gap-1">
+<div class="bg-white dark:bg-slate-800 p-3.5 rounded-2xl rounded-bl-none shadow-sm text-sm border border-slate-100 dark:border-slate-800">
+                                Ah, I see. I've re-uploaded the bank statements including the current month. Could you take a look?
+                            </div>
+<span class="text-[10px] text-slate-400 ml-1">10:48 AM</span>
+</div>
+</div>
+</div>
+<!-- Input Area -->
+<div class="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+<div class="bg-slate-50 dark:bg-slate-800 rounded-xl p-2 border border-slate-200 dark:border-slate-700">
+<textarea class="w-full bg-transparent border-none focus:ring-0 text-sm py-2 px-3 min-h-[40px] resize-none" placeholder="Type your message here..."></textarea>
+<div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+<div class="flex gap-1">
+<button class="p-2 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">
+<span class="material-symbols-outlined text-xl">attach_file</span>
+</button>
+<button class="p-2 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">
+<span class="material-symbols-outlined text-xl">mood</span>
+</button>
+<button class="p-2 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">
+<span class="material-symbols-outlined text-xl">quick_phrases</span>
+</button>
+</div>
+<button class="bg-primary hover:bg-primary/90 text-white px-5 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                                Send Message
+                                <span class="material-symbols-outlined text-base">send</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Pane: Applicant Details -->
+<aside class="w-72 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hidden xl:flex flex-col overflow-y-auto custom-scrollbar">
+<div class="p-6">
+<h5 class="font-bold text-slate-900 dark:text-slate-100 mb-6">Applicant Details</h5>
+<!-- Quick Stats -->
+<div class="space-y-6">
+<div class="flex flex-col gap-1">
+<span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Visa Type</span>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">card_travel</span>
+<span class="text-sm font-bold text-slate-700 dark:text-slate-300">Tier 2 Skilled Worker</span>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Destination</span>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">location_on</span>
+<span class="text-sm font-bold text-slate-700 dark:text-slate-300">United Kingdom</span>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Application ID</span>
+<div class="text-sm font-mono font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded inline-block">
+                                APP-8921-UK
+                            </div>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Submission Date</span>
+<span class="text-sm font-bold text-slate-700 dark:text-slate-300">Oct 12, 2023</span>
+</div>
+</div>
+<div class="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
+<h6 class="text-xs font-bold text-slate-900 dark:text-slate-100 mb-4">Required Documents</h6>
+<div class="space-y-3">
+<div class="flex items-center justify-between text-xs">
+<span class="text-slate-600 dark:text-slate-400">Passport Copy</span>
+<span class="material-symbols-outlined text-green-500 text-base">check_circle</span>
+</div>
+<div class="flex items-center justify-between text-xs">
+<span class="text-slate-600 dark:text-slate-400">Employment Letter</span>
+<span class="material-symbols-outlined text-green-500 text-base">check_circle</span>
+</div>
+<div class="flex items-center justify-between text-xs">
+<span class="text-slate-900 dark:text-slate-100 font-bold">Bank Statement</span>
+<span class="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[10px] font-bold">RE-UPLOADED</span>
+</div>
+<div class="flex items-center justify-between text-xs">
+<span class="text-slate-400 italic">Insurance Docs</span>
+<span class="material-symbols-outlined text-slate-300 text-base">radio_button_unchecked</span>
+</div>
+</div>
+</div>
+<div class="mt-10">
+<button class="w-full flex items-center justify-center gap-2 py-3 border-2 border-primary text-primary hover:bg-primary/5 rounded-xl font-bold transition-all">
+<span class="material-symbols-outlined text-xl">visibility</span>
+                            View Full Application
+                        </button>
+</div>
+</div>
+</aside>
+</main>
+</div>
+</body></html>

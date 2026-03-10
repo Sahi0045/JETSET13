@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Visa Application Tracker - JetSetters</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#1152d4",
+              "background-light": "#f6f6f8",
+              "background-dark": "#101622",
+            },
+            fontFamily: {
+              "display": ["Public Sans", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 min-h-screen flex flex-col">
+<!-- Top Navigation -->
+<header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+<div class="flex items-center gap-3">
+<div class="bg-primary/10 text-primary p-2 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined">flight_takeoff</span>
+</div>
+<h1 class="text-xl font-bold tracking-tight text-slate-900">JetSetters</h1>
+</div>
+<nav class="hidden md:flex items-center gap-8">
+<a class="text-sm font-medium text-slate-600 hover:text-primary transition-colors" href="#">Dashboard</a>
+<a class="text-sm font-medium text-primary border-b-2 border-primary pb-1" href="#">My Trips</a>
+<a class="text-sm font-medium text-slate-600 hover:text-primary transition-colors" href="#">Applications</a>
+<a class="text-sm font-medium text-slate-600 hover:text-primary transition-colors" href="#">Documents</a>
+<a class="text-sm font-medium text-slate-600 hover:text-primary transition-colors" href="#">Support</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="text-slate-500 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="h-9 w-9 rounded-full bg-slate-200 bg-cover bg-center border border-slate-300" data-alt="User profile avatar of a smiling man" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBzV7_I3y9WZSQrFoVkpv1QPstelSOlIkPqz9wCKNy3sI4-wlWqzfttZWcVjPEeBuz1vJ5Z6G_xtZc1d59saG7a6ZxBTx5g67YPqJKBFHXx3zRW-WTfrI0jbumEmyUzxK1AAQ-E2_HCUu-cZZS1mn_2MCPJVCiKCN8TvrGvRdHb75U_ziLn1MiQrtaE0GeSSEKSd2apmF3hY3NTLeL6rn773OORpLyvV8FkLqxdj8R98ng7k5Nn-i_Oj20KgfRkXliHcJ5XyVLUvfhW');">
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 max-w-5xl w-full mx-auto px-6 py-8 flex flex-col gap-8">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2 mb-2">
+<a class="text-sm text-slate-500 hover:text-primary flex items-center gap-1" href="#">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                        Back to Applications
+                    </a>
+</div>
+<h2 class="text-3xl font-bold text-slate-900 tracking-tight">Visa Application Tracker</h2>
+<div class="flex items-center gap-3 mt-1">
+<span class="text-sm font-medium text-slate-600 bg-slate-200/50 px-2.5 py-1 rounded-md">ID: VISA-2026-00001</span>
+<span class="text-sm font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-md">Japan Tourist Visa</span>
+</div>
+</div>
+<button class="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[20px]">chat</span>
+                Message Agent
+            </button>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<!-- Timeline Section -->
+<div class="lg:col-span-1 bg-white rounded-xl border border-slate-200 p-6 shadow-sm h-fit">
+<h3 class="text-lg font-bold text-slate-900 mb-6">Application Status</h3>
+<div class="relative pl-3">
+<!-- Step 1 -->
+<div class="mb-8 relative">
+<div class="absolute -left-[27px] top-1 bg-white rounded-full">
+<span class="material-symbols-outlined text-primary text-[24px]">check_circle</span>
+</div>
+<div class="absolute left-[-16px] top-7 bottom-[-24px] w-0.5 bg-primary"></div>
+<div class="pl-2">
+<h4 class="text-base font-semibold text-slate-900">Application Submitted</h4>
+<p class="text-sm text-slate-500 mt-0.5">Oct 12, 2023 · 10:00 AM</p>
+</div>
+</div>
+<!-- Step 2 -->
+<div class="mb-8 relative">
+<div class="absolute -left-[27px] top-1 bg-white rounded-full">
+<span class="material-symbols-outlined text-primary text-[24px]">check_circle</span>
+</div>
+<div class="absolute left-[-16px] top-7 bottom-[-24px] w-0.5 bg-slate-200"></div>
+<div class="pl-2">
+<h4 class="text-base font-semibold text-slate-900">Under Review</h4>
+<p class="text-sm text-slate-500 mt-0.5">Oct 14, 2023 · 2:30 PM</p>
+</div>
+</div>
+<!-- Step 3 (Current) -->
+<div class="mb-8 relative">
+<div class="absolute -left-[27px] top-1 bg-white rounded-full">
+<span class="material-symbols-outlined text-amber-500 text-[24px]" style="font-variation-settings: 'FILL' 1;">error</span>
+</div>
+<div class="absolute left-[-16px] top-7 bottom-[-24px] w-0.5 bg-slate-200"></div>
+<div class="pl-2">
+<h4 class="text-base font-semibold text-slate-900">Documents Pending</h4>
+<p class="text-sm text-amber-600 mt-0.5 font-medium">Action required to proceed</p>
+</div>
+</div>
+<!-- Step 4 (Future) -->
+<div class="relative">
+<div class="absolute -left-[27px] top-1 bg-white rounded-full">
+<span class="material-symbols-outlined text-slate-300 text-[24px]">radio_button_unchecked</span>
+</div>
+<div class="pl-2">
+<h4 class="text-base font-medium text-slate-400">Visa Approved</h4>
+<p class="text-sm text-slate-400 mt-0.5">Awaiting completion</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Documents Section -->
+<div class="lg:col-span-2 flex flex-col gap-6">
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+<div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
+<h3 class="text-lg font-bold text-slate-900">Document Status</h3>
+<span class="text-sm text-slate-500">3 Required Documents</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-slate-50/50">
+<th class="px-6 py-4 text-sm font-semibold text-slate-600 w-1/2">Document Name</th>
+<th class="px-6 py-4 text-sm font-semibold text-slate-600 w-1/4">Status</th>
+<th class="px-6 py-4 text-sm font-semibold text-slate-600 w-1/4">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-200">
+<tr class="hover:bg-slate-50/50 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="p-2 bg-slate-100 rounded-lg text-slate-500">
+<span class="material-symbols-outlined text-[20px]">description</span>
+</div>
+<div>
+<p class="text-sm font-medium text-slate-900">Passport Copy</p>
+<p class="text-xs text-slate-500">Scanned ID page</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+<span class="material-symbols-outlined text-[14px]">check</span>
+                                            Verified
+                                        </span>
+</td>
+<td class="px-6 py-4">
+<span class="text-sm text-slate-400 font-medium">-</span>
+</td>
+</tr>
+<tr class="hover:bg-slate-50/50 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="p-2 bg-slate-100 rounded-lg text-slate-500">
+<span class="material-symbols-outlined text-[20px]">photo_camera</span>
+</div>
+<div>
+<p class="text-sm font-medium text-slate-900">Recent Photograph</p>
+<p class="text-xs text-slate-500">2x2 inches, white background</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+<span class="material-symbols-outlined text-[14px]">check</span>
+                                            Verified
+                                        </span>
+</td>
+<td class="px-6 py-4">
+<span class="text-sm text-slate-400 font-medium">-</span>
+</td>
+</tr>
+<tr class="hover:bg-slate-50/50 transition-colors bg-amber-50/30">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="p-2 bg-amber-100 rounded-lg text-amber-600">
+<span class="material-symbols-outlined text-[20px]">account_balance</span>
+</div>
+<div>
+<p class="text-sm font-medium text-slate-900">Bank Statement</p>
+<p class="text-xs text-amber-600">Image blurry, please re-upload</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+<span class="material-symbols-outlined text-[14px]">priority_high</span>
+                                            Action Required
+                                        </span>
+</td>
+<td class="px-6 py-4">
+<button class="text-sm font-medium text-primary hover:text-primary/80 hover:underline flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]">upload</span>
+                                            Re-upload
+                                        </button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Info Card -->
+<div class="bg-primary/5 rounded-xl border border-primary/10 p-5 flex items-start gap-4">
+<span class="material-symbols-outlined text-primary mt-0.5">info</span>
+<div>
+<h4 class="text-sm font-semibold text-slate-900">Need help with your documents?</h4>
+<p class="text-sm text-slate-600 mt-1">Make sure your bank statements are from the last 3 months and clearly show your name, account number, and transactions. <a class="text-primary hover:underline font-medium" href="#">View detailed guidelines</a>.</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

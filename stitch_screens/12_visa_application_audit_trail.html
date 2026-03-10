@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>JetSetters Admin - Application Audit Trail</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#1152d4",
+              "background-light": "#f6f6f8",
+              "background-dark": "#101622",
+            },
+            fontFamily: {
+              "display": ["Public Sans", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 transition-colors duration-200">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<!-- Top Navigation -->
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-10 py-3 sticky top-0 z-50">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-4 text-primary">
+<div class="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
+<span class="material-symbols-outlined">flight_takeoff</span>
+</div>
+<h2 class="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">JetSetters Admin</h2>
+</div>
+<nav class="hidden md:flex items-center gap-9">
+<a class="text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary text-sm font-medium transition-colors" href="#">Dashboard</a>
+<a class="text-primary text-sm font-semibold border-b-2 border-primary py-1" href="#">Applications</a>
+<a class="text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary text-sm font-medium transition-colors" href="#">Compliance</a>
+<a class="text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary text-sm font-medium transition-colors" href="#">Users</a>
+</nav>
+</div>
+<div class="flex flex-1 justify-end gap-4 md:gap-8 items-center">
+<label class="hidden sm:flex flex-col min-w-40 h-10 max-w-64">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-full">
+<div class="text-slate-500 flex border-none bg-slate-100 dark:bg-slate-800 items-center justify-center pl-4 rounded-l-lg">
+<span class="material-symbols-outlined text-xl">search</span>
+</div>
+<input class="form-input flex w-full min-w-0 flex-1 border-none bg-slate-100 dark:bg-slate-800 focus:ring-0 text-slate-900 dark:text-white placeholder:text-slate-500 px-4 rounded-r-lg text-sm font-normal" placeholder="Search applications..."/>
+</div>
+</label>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-500 cursor-pointer">notifications</span>
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 border-2 border-primary/20" data-alt="Admin user profile picture circular" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAF8xI0r9KIyQ5PiifUFEUIdSME8GVQaEQr9G5k5uFSSg5bFCdvbjcq_Ywjf9XnSCxtKOOWbrKOvA7rJSoke1ePHnUV4KW-UXjJ8s-Dw1cmLT9VRedLy-ByHU4tBuq9H9LZTddlEr9mMy_welmpu5uJnG6oHw2J9Cy3qTsnYY_kRGegTXdMMvO82cfq4iG47jxfz1xYUqDJ9mpSsBjyb1TNdhdN5QVZ_GsjP3UQLm0v2iv5fxjeiRoWGNbWR3yMTpS8X81nhiEaMD5m");'></div>
+</div>
+</div>
+</header>
+<main class="flex flex-1 flex-col md:flex-row">
+<!-- Sidebar -->
+<aside class="w-full md:w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shrink-0">
+<div class="flex flex-col gap-2">
+<p class="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Navigation</p>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-sm font-medium">Overview</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="text-sm font-semibold">Timeline</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all" href="#">
+<span class="material-symbols-outlined">description</span>
+<span class="text-sm font-medium">Documents</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all" href="#">
+<span class="material-symbols-outlined">chat</span>
+<span class="text-sm font-medium">Messages</span>
+</a>
+<div class="h-px bg-slate-100 dark:bg-slate-800 my-4"></div>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-sm font-medium">Settings</span>
+</a>
+</div>
+</aside>
+<!-- Content Area -->
+<div class="flex-1 overflow-y-auto px-4 md:px-10 py-8">
+<div class="max-w-[1000px] mx-auto">
+<!-- Header Actions -->
+<div class="flex flex-wrap justify-between items-start gap-6 mb-8">
+<div class="flex flex-col gap-1">
+<nav class="flex text-xs text-slate-500 mb-2 gap-2">
+<a class="hover:text-primary" href="#">Applications</a>
+<span>/</span>
+<span class="text-slate-900 dark:text-slate-300">#VS-90821</span>
+</nav>
+<h1 class="text-slate-900 dark:text-white text-3xl font-black leading-tight tracking-tight">Application #VS-90821</h1>
+<div class="flex items-center gap-3 mt-1">
+<span class="text-slate-500 text-sm font-normal">Applicant: <span class="text-slate-900 dark:text-slate-200 font-semibold underline decoration-primary/30">John Doe</span></span>
+<span class="text-slate-300 dark:text-slate-700">|</span>
+<span class="text-slate-500 text-sm font-normal">Visa Type: <span class="text-slate-900 dark:text-slate-200 font-semibold">Tourist (B2)</span></span>
+</div>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 rounded-lg h-10 px-4 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
+<span class="material-symbols-outlined text-lg">download</span>
+<span>Export Audit Log</span>
+</button>
+<button class="flex items-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all">
+<span class="material-symbols-outlined text-lg">add</span>
+<span>Add Internal Note</span>
+</button>
+</div>
+</div>
+<!-- Summary Stats -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+<div class="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="flex items-center justify-between">
+<p class="text-slate-500 text-xs font-bold uppercase tracking-widest">Current Status</p>
+<span class="size-2 rounded-full bg-amber-500 animate-pulse"></span>
+</div>
+<p class="text-slate-900 dark:text-white text-2xl font-bold">Under Review</p>
+<p class="text-slate-400 text-xs mt-1">Updated 4 hours ago by Sarah K.</p>
+</div>
+<div class="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+<p class="text-slate-500 text-xs font-bold uppercase tracking-widest">Days in Process</p>
+<p class="text-slate-900 dark:text-white text-2xl font-bold">14 Days</p>
+<div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+<div class="bg-primary h-full w-2/3"></div>
+</div>
+</div>
+<div class="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+<p class="text-slate-500 text-xs font-bold uppercase tracking-widest">Priority Level</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-red-500">priority_high</span>
+<p class="text-slate-900 dark:text-white text-2xl font-bold">High</p>
+</div>
+<p class="text-red-500/80 text-xs mt-1 font-medium">SLA Deadline: Oct 24, 2023</p>
+</div>
+</div>
+<!-- Audit Timeline Section -->
+<div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+<div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+<h2 class="text-slate-900 dark:text-white text-xl font-bold">Full Audit Trail</h2>
+<div class="flex gap-2">
+<select class="bg-slate-50 dark:bg-slate-800 border-none rounded-lg text-xs font-semibold py-1.5 pr-8 focus:ring-1 focus:ring-primary">
+<option>All Activities</option>
+<option>Status Changes</option>
+<option>Internal Notes</option>
+<option>Automated Emails</option>
+</select>
+</div>
+</div>
+<div class="p-8">
+<div class="relative">
+<!-- Vertical Line -->
+<div class="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-200 dark:bg-slate-800"></div>
+<!-- Timeline Item: Status Change -->
+<div class="relative flex gap-6 mb-10">
+<div class="z-10 size-10 rounded-full bg-amber-100 dark:bg-amber-900/30 border-4 border-white dark:border-slate-900 flex items-center justify-center text-amber-600">
+<span class="material-symbols-outlined text-lg">sync_alt</span>
+</div>
+<div class="flex-1 pt-1">
+<div class="flex items-center justify-between mb-1">
+<h4 class="text-slate-900 dark:text-white font-bold">Status Updated: Under Review</h4>
+<time class="text-xs font-medium text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">Today, 10:45 AM</time>
+</div>
+<p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Application status moved from <span class="font-semibold text-slate-800 dark:text-slate-200">Documents Pending</span> to <span class="font-semibold text-slate-800 dark:text-slate-200">Under Review</span>.</p>
+<div class="mt-2 flex items-center gap-2">
+<div class="size-5 rounded-full bg-slate-200" data-alt="Staff member Sarah K avatar" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuB_Q8BUTZWifx7AKcZQ2RDDNnPJOl9BktNkP-9QT_LF2BzhGhueRDVrZmdiGXakV6dX979iJVahWCaprfKUpV528e1GLq655FPxlchNAllWIBPG35EREdK5wTBmwivznVkq-XjVWqqFAs7L6ykG2BfSnFY6Wfv0LITsz1n73iLdsfYwGNOL5EP-d_QjSBhHsywTNmAfgx7IthLxE-eL9uYoKfIDOVHnYO3yl8pjrrzmJndu63g2e847KIJ9MJxIDO-J0wKxjqJyf1us');"></div>
+<span class="text-xs text-slate-500 font-medium">Modified by Sarah Jenkins (Senior Reviewer)</span>
+</div>
+</div>
+</div>
+<!-- Timeline Item: Automated Email -->
+<div class="relative flex gap-6 mb-10">
+<div class="z-10 size-10 rounded-full bg-blue-100 dark:bg-blue-900/30 border-4 border-white dark:border-slate-900 flex items-center justify-center text-blue-600">
+<span class="material-symbols-outlined text-lg">mail</span>
+</div>
+<div class="flex-1 pt-1">
+<div class="flex items-center justify-between mb-1">
+<h4 class="text-slate-900 dark:text-white font-bold">System Email Sent</h4>
+<time class="text-xs font-medium text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">Today, 10:46 AM</time>
+</div>
+<div class="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3 mt-2 border border-slate-100 dark:border-slate-800">
+<p class="text-xs font-bold text-slate-500 uppercase mb-1">Subject: Your application is now under review</p>
+<p class="text-slate-600 dark:text-slate-400 text-xs italic">"Dear John, we have received your additional documents and your application #VS-90821 is now being processed..."</p>
+<button class="mt-2 text-primary text-xs font-bold flex items-center gap-1 hover:underline">
+                                                View full message <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Timeline Item: Internal Note -->
+<div class="relative flex gap-6 mb-10">
+<div class="z-10 size-10 rounded-full bg-purple-100 dark:bg-purple-900/30 border-4 border-white dark:border-slate-900 flex items-center justify-center text-purple-600">
+<span class="material-symbols-outlined text-lg">sticky_note_2</span>
+</div>
+<div class="flex-1 pt-1">
+<div class="flex items-center justify-between mb-1">
+<h4 class="text-slate-900 dark:text-white font-bold">Internal Compliance Note</h4>
+<time class="text-xs font-medium text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">Yesterday, 3:20 PM</time>
+</div>
+<div class="bg-primary/5 border-l-4 border-primary p-4 rounded-r-lg">
+<p class="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">Applicant's financial statements for the last 3 months have been verified. Cross-referenced with Bank of America API. Compliance check passed for Section 4B.</p>
+<div class="mt-3 flex items-center gap-2">
+<div class="size-5 rounded-full bg-slate-200" data-alt="Staff member Mike R avatar" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDpAKnc_fUM8ntodfN_Ap-eQcNNTZ8Sgo18GNLHOBXmnPtzSzfNntuL5fUEerM6V0IGX8JcU7A3dGDVQ-x-NEBD77uRWhB4K56EsxD-arHlZlUwTSGzew2PwksGMjnMEtwiENEefxRjRZD2uxQDAVoKULnRlaV1E1ipkG4dHJ-ScrBpI4jRreudQhl5JyQGuReh0CkVF0zPx4O2Hy_Yqji32y0Zxi6TQk7wqWlv9hc19ilSNb_9CXKBdRrehWcP2Wed3-BH0xocFlKB');"></div>
+<span class="text-xs text-slate-500 font-medium">Added by Michael Ross (Compliance Officer)</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Timeline Item: Document Upload -->
+<div class="relative flex gap-6 mb-10">
+<div class="z-10 size-10 rounded-full bg-green-100 dark:bg-green-900/30 border-4 border-white dark:border-slate-900 flex items-center justify-center text-green-600">
+<span class="material-symbols-outlined text-lg">upload_file</span>
+</div>
+<div class="flex-1 pt-1">
+<div class="flex items-center justify-between mb-1">
+<h4 class="text-slate-900 dark:text-white font-bold">New Document Received</h4>
+<time class="text-xs font-medium text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">Oct 10, 2023, 9:12 AM</time>
+</div>
+<div class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-lg max-w-sm">
+<span class="material-symbols-outlined text-slate-400">picture_as_pdf</span>
+<div class="flex-1">
+<p class="text-sm font-semibold text-slate-800 dark:text-slate-200">Additional_Proof_of_Funds.pdf</p>
+<p class="text-xs text-slate-500">2.4 MB • Uploaded by Applicant</p>
+</div>
+<span class="material-symbols-outlined text-slate-400 cursor-pointer hover:text-primary">visibility</span>
+</div>
+</div>
+</div>
+<!-- Timeline Item: Application Created -->
+<div class="relative flex gap-6">
+<div class="z-10 size-10 rounded-full bg-slate-100 dark:bg-slate-800 border-4 border-white dark:border-slate-900 flex items-center justify-center text-slate-600">
+<span class="material-symbols-outlined text-lg">edit_note</span>
+</div>
+<div class="flex-1 pt-1">
+<div class="flex items-center justify-between mb-1">
+<h4 class="text-slate-900 dark:text-white font-bold">Application Created</h4>
+<time class="text-xs font-medium text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">Oct 01, 2023, 11:30 AM</time>
+</div>
+<p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Initial application submission via Public Portal. ID assigned: <span class="bg-slate-100 dark:bg-slate-800 px-1 rounded text-primary font-mono text-xs">APP-2023-90821-X</span></p>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer / Load More -->
+<div class="bg-slate-50 dark:bg-slate-800/50 p-4 border-t border-slate-100 dark:border-slate-800 flex justify-center">
+<button class="text-primary text-sm font-bold hover:underline flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">expand_more</span>
+                                Load Older History
+                            </button>
+</div>
+</div>
+<!-- Compliance Badge Section -->
+<div class="mt-8 p-4 rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="size-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-2xl">verified_user</span>
+</div>
+<div>
+<h3 class="text-slate-900 dark:text-white font-bold text-sm">Compliance Integrity Check</h3>
+<p class="text-slate-600 dark:text-slate-400 text-xs">All records above are cryptographically hashed and immutable.</p>
+</div>
+</div>
+<div class="hidden sm:block text-right">
+<p class="text-[10px] text-slate-400 font-mono">HASH: 8f2d9...e1c02</p>
+<p class="text-[10px] text-slate-400 font-mono">VERIFIED: OCT 20, 2023 11:00 UTC</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</div>
+</body></html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>In-App Video Consultation - VisaConsult Pro</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1152d4",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Public Sans', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .fill-icon { font-variation-settings: 'FILL' 1; }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display h-screen flex flex-col overflow-hidden">
+<!-- Top Navigation Bar -->
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-10 py-3 z-10">
+<div class="flex items-center gap-4 text-primary">
+<div class="size-8">
+<svg fill="none" viewbox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path d="M36.7273 44C33.9891 44 31.6043 39.8386 30.3636 33.69C29.123 39.8386 26.7382 44 24 44C21.2618 44 18.877 39.8386 17.6364 33.69C16.3957 39.8386 14.0109 44 11.2727 44C7.25611 44 4 35.0457 4 24C4 12.9543 7.25611 4 11.2727 4C14.0109 4 16.3957 8.16144 17.6364 14.31C18.877 8.16144 21.2618 4 24 4C26.7382 4 29.123 8.16144 30.3636 14.31C31.6043 8.16144 33.9891 4 36.7273 4C40.7439 4 44 12.9543 44 24C44 35.0457 40.7439 44 36.7273 44Z" fill="currentColor"></path>
+</svg>
+</div>
+<h2 class="text-slate-900 dark:text-slate-100 text-lg font-bold leading-tight tracking-[-0.015em]">VisaConsult Pro</h2>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold animate-pulse">
+<span class="size-2 rounded-full bg-red-600"></span>
+                LIVE CONSULTATION
+            </div>
+<div class="h-6 w-px bg-slate-200 dark:bg-slate-800"></div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<p class="text-xs text-slate-500 dark:text-slate-400">Consultant</p>
+<p class="text-sm font-semibold">Sarah Jenkins</p>
+</div>
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 border-2 border-primary" data-alt="Professional consultant portrait image" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuD69STkKKoMM3lMJRGAKUuTRQkDKqzuX0ZORpACviT1SiR3fPB0mF__NfzGqueabubi2IzqJplh4s85DJZuS0rhcXblG92TwGl_Qvn4wbNE1gPktvMt7lejuILauZY7d1a7i-AkbZnHy4jnpiaXYRdi6uwCF2qserRy3RJAU0zkia42Wz-c0iTR7qMP7LFGo-16fXQNfwVDexPEoHzDL9GSBfnjaJjUQ7SrTIssn4-uhh8yaI2p2brI3R2nACjNoMvYy9ZJc0JREG3s");'></div>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex flex-1 overflow-hidden p-4 gap-4 bg-background-light dark:bg-background-dark">
+<!-- Left Column: Video Feeds -->
+<div class="flex-1 flex flex-col gap-4 relative">
+<!-- Consultant Main Feed -->
+<div class="flex-1 rounded-xl overflow-hidden bg-slate-900 relative border border-slate-200 dark:border-slate-800 shadow-xl">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="Video feed of a consultant in a modern office" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBT9cAFKy_AfvtPN7ln1JQf4rjxuRfU6ymEeP6PXSIVvKtO0PgBpc1PmSXQVyGL2zI4j6PZ6hyzGSPA5VAAGzFAchYUN4-vW2EjV-Bd5Tf6nbD25ZeR3nuwdPC_c7iO5v0txwULND8uVxq25Gb8syZ3tDVeFETnFWi1LpyMN3tWId4dOR40dF2IMKOeJZC8IC2fAlfwIxp04SA2j8VfcS3BJ3swLx_15XgaM_hoix1EMz5wwwXf0-kJ0JdyZC9_PLTL9SLVbLxTnmOQ");'></div>
+<!-- Consultant Name Tag -->
+<div class="absolute bottom-6 left-6 px-4 py-2 rounded-lg bg-black/50 backdrop-blur-md text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">mic</span>
+<span class="text-sm font-medium">Sarah Jenkins (Consultant)</span>
+</div>
+<!-- Self View Overlay -->
+<div class="absolute top-6 right-6 w-48 aspect-video rounded-lg overflow-hidden border-2 border-white/20 shadow-2xl bg-slate-800">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="Self view video feed of user" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAWn6toAdfw2Sy6nKDXk6Py8uC_Mj_8sYR63dVdQ5oSM10IEdS_Q6KPhvuLY6IreEogtwWkfFXwRHgZSgSydJO8qNUo20PPKrPdYDPTuEfGnUOU9zRKqECCw02CbfAI8gRCPNPWcptbRhXaFI-ejLHWiZ3Lh5AgcGqxBo456sIjviZHNoXcpIvma9eBeYtvCbGCBYaKaqdQ83YKYkTi1Od-EBGm8wbdfADV3XhazYP635Q8ASKaXeztPtNBRChUB4lr0OIeNAN_HP9Y");'></div>
+<div class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/50 text-[10px] text-white">You</div>
+</div>
+</div>
+<!-- Bottom Control Bar -->
+<div class="h-20 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 flex items-center justify-center gap-4 px-6">
+<button class="size-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors">
+<span class="material-symbols-outlined">mic</span>
+</button>
+<button class="size-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors">
+<span class="material-symbols-outlined">videocam</span>
+</button>
+<button class="size-12 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined">screen_share</span>
+</button>
+<button class="size-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+<div class="w-px h-8 bg-slate-200 dark:bg-slate-800 mx-2"></div>
+<button class="px-6 h-12 rounded-full bg-red-500 text-white font-bold flex items-center gap-2 hover:bg-red-600 transition-colors">
+<span class="material-symbols-outlined">call_end</span>
+                    End Consultation
+                </button>
+</div>
+</div>
+<!-- Right Column: Sidebar (Document Viewer & Chat) -->
+<div class="w-96 flex flex-col gap-4">
+<!-- Shared Document Viewer -->
+<div class="flex-1 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden">
+<div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">description</span>
+<h3 class="font-bold text-sm">Shared Document</h3>
+</div>
+<span class="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded uppercase">Real-time</span>
+</div>
+<!-- Document Interface -->
+<div class="flex-1 bg-slate-100 dark:bg-slate-950 p-4 overflow-y-auto">
+<div class="bg-white dark:bg-slate-900 aspect-[1/1.41] shadow-sm rounded-sm p-8 flex flex-col gap-4 relative">
+<!-- Red highlighter cursor simulation -->
+<div class="absolute top-[160px] left-12 right-12 h-6 border-2 border-red-500 bg-red-500/10 pointer-events-none">
+<div class="absolute -top-6 left-0 bg-red-500 text-white text-[10px] px-1 rounded">Sarah Jenkins</div>
+</div>
+<div class="h-8 w-48 bg-slate-200 dark:bg-slate-800 rounded"></div>
+<div class="h-3 w-full bg-slate-100 dark:bg-slate-800/50 rounded"></div>
+<div class="h-3 w-5/6 bg-slate-100 dark:bg-slate-800/50 rounded"></div>
+<div class="mt-4 grid grid-cols-2 gap-4">
+<div class="space-y-2">
+<div class="h-2 w-16 bg-slate-200 dark:bg-slate-800 rounded"></div>
+<div class="h-8 w-full bg-slate-50 dark:bg-slate-800/20 border border-slate-200 dark:border-slate-800 rounded px-2 flex items-center text-[10px]">Johnathan</div>
+</div>
+<div class="space-y-2">
+<div class="h-2 w-16 bg-slate-200 dark:bg-slate-800 rounded"></div>
+<div class="h-8 w-full bg-slate-50 dark:bg-slate-800/20 border border-slate-200 dark:border-slate-800 rounded px-2 flex items-center text-[10px]">Doe</div>
+</div>
+</div>
+<div class="mt-4 h-2 w-32 bg-slate-200 dark:bg-slate-800 rounded"></div>
+<div class="h-8 w-full bg-slate-50 dark:bg-slate-800/20 border border-slate-200 dark:border-slate-800 rounded px-2 flex items-center text-[10px]">123 Main St, New York, NY</div>
+<div class="mt-6 flex flex-col gap-2">
+<div class="h-2 w-full bg-slate-100 dark:bg-slate-800/50 rounded"></div>
+<div class="h-2 w-full bg-slate-100 dark:bg-slate-800/50 rounded"></div>
+<div class="h-2 w-3/4 bg-slate-100 dark:bg-slate-800/50 rounded"></div>
+</div>
+</div>
+</div>
+<!-- Document Controls -->
+<div class="p-2 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
+<div class="flex items-center gap-1">
+<button class="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+<button class="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"><span class="material-symbols-outlined text-sm">zoom_out</span></button>
+<span class="text-xs text-slate-500 mx-2">Page 1 of 4</span>
+</div>
+<button class="text-xs text-primary font-bold px-3 py-1 hover:bg-primary/10 rounded">Request Signature</button>
+</div>
+</div>
+<!-- Chat Window -->
+<div class="h-72 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden">
+<div class="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-500">forum</span>
+<h3 class="font-bold text-sm">Consultation Chat</h3>
+</div>
+<!-- Chat Messages -->
+<div class="flex-1 p-4 overflow-y-auto space-y-4">
+<div class="flex flex-col gap-1">
+<span class="text-[10px] text-slate-500 font-medium">Sarah Jenkins • 10:15 AM</span>
+<div class="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg rounded-tl-none text-xs">
+                            Hello! I've opened the application form. Please take a look at the highlighted section.
+                        </div>
+</div>
+<div class="flex flex-col gap-1 items-end">
+<span class="text-[10px] text-slate-500 font-medium">You • 10:16 AM</span>
+<div class="bg-primary text-white p-2 rounded-lg rounded-tr-none text-xs">
+                            Checking it now. Does that address need to match my passport exactly?
+                        </div>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[10px] text-slate-500 font-medium">Sarah Jenkins • 10:17 AM</span>
+<div class="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg rounded-tl-none text-xs">
+                            Yes, exactly. Here is the link to the official guidelines for reference:
+                            <a class="text-primary underline block mt-1" href="#">travel.gov/visa-address-policy</a>
+</div>
+</div>
+</div>
+<!-- Chat Input -->
+<div class="p-3 border-t border-slate-100 dark:border-slate-800 flex gap-2">
+<input class="flex-1 bg-slate-50 dark:bg-slate-800 border-none rounded-lg text-xs focus:ring-1 focus:ring-primary px-3 py-2" placeholder="Type a message..." type="text"/>
+<button class="bg-primary text-white size-8 flex items-center justify-center rounded-lg">
+<span class="material-symbols-outlined text-sm">send</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Status Bar -->
+<footer class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-6 py-2 flex items-center justify-between text-[11px] text-slate-500">
+<div class="flex items-center gap-4">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-green-500 fill-icon">circle</span> Connection: Stable (24ms)</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">encrypted</span> End-to-end encrypted</span>
+</div>
+<div>
+            Consultation ID: #VC-882-991
+        </div>
+</footer>
+</body></html>

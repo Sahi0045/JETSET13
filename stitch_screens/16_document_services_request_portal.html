@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Document Services Request Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1152d4",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        :root {
+            --radio-dot-svg: url('data:image/svg+xml,%3csvg viewBox=%270 0 16 16%27 fill=%27%231152d4%27 xmlns=%27http://www.w3.org/2000/svg%27%3e%3ccircle cx=%278%27 cy=%278%27 r=%273%27/%3e%3c/svg%3e');
+        }
+    </style>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-10 py-4 shadow-sm sticky top-0 z-10">
+<div class="flex items-center gap-4 text-primary">
+<span class="material-symbols-outlined text-3xl">flight_takeoff</span>
+<h2 class="text-slate-900 dark:text-slate-100 text-xl font-bold leading-tight tracking-tight">JetSetters Docs</h2>
+</div>
+<div class="flex flex-1 justify-end gap-8">
+<nav class="hidden md:flex items-center gap-9">
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium" href="#">Visas</a>
+<a class="text-primary text-sm font-bold border-b-2 border-primary pb-1" href="#">Document Services</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium" href="#">My Requests</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium" href="#">Support</a>
+</nav>
+<button class="flex items-center gap-2 cursor-pointer rounded-lg px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-sm font-bold">
+<span class="material-symbols-outlined text-[20px]">person</span>
+<span>Profile</span>
+</button>
+</div>
+</header>
+<main class="flex-1 w-full max-w-4xl mx-auto px-4 py-8 md:py-12">
+<div class="mb-10 text-center md:text-left">
+<h1 class="text-4xl font-black leading-tight tracking-tight mb-3">Document Services Request</h1>
+<p class="text-slate-500 dark:text-slate-400 text-lg">Request passport renewals, travel insurance, and official document attestation.</p>
+</div>
+<div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+<form class="divide-y divide-slate-200 dark:divide-slate-800">
+<div class="p-6 md:p-8">
+<h2 class="text-xl font-bold mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">description</span>
+                            Select Service Type
+                        </h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<label class="relative flex cursor-pointer rounded-lg border border-slate-200 dark:border-slate-700 p-5 hover:border-primary dark:hover:border-primary hover:bg-primary/5 transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:checked]:ring-1 has-[:checked]:ring-primary">
+<input checked="" class="peer sr-only" name="service_type" type="radio" value="passport"/>
+<div class="flex flex-col gap-2 w-full">
+<span class="material-symbols-outlined text-slate-400 peer-checked:text-primary text-3xl mb-1">book</span>
+<p class="font-bold text-slate-900 dark:text-slate-100 text-base">Passport Renewal</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Renew your expiring or damaged passport.</p>
+</div>
+<div class="absolute top-5 right-5 h-5 w-5 rounded-full border-2 border-slate-300 dark:border-slate-600 peer-checked:border-primary peer-checked:bg-[image:var(--radio-dot-svg)]"></div>
+</label>
+<label class="relative flex cursor-pointer rounded-lg border border-slate-200 dark:border-slate-700 p-5 hover:border-primary dark:hover:border-primary hover:bg-primary/5 transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:checked]:ring-1 has-[:checked]:ring-primary">
+<input class="peer sr-only" name="service_type" type="radio" value="insurance"/>
+<div class="flex flex-col gap-2 w-full">
+<span class="material-symbols-outlined text-slate-400 peer-checked:text-primary text-3xl mb-1">health_and_safety</span>
+<p class="font-bold text-slate-900 dark:text-slate-100 text-base">Travel Insurance</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Comprehensive coverage for your upcoming trips.</p>
+</div>
+<div class="absolute top-5 right-5 h-5 w-5 rounded-full border-2 border-slate-300 dark:border-slate-600 peer-checked:border-primary peer-checked:bg-[image:var(--radio-dot-svg)]"></div>
+</label>
+<label class="relative flex cursor-pointer rounded-lg border border-slate-200 dark:border-slate-700 p-5 hover:border-primary dark:hover:border-primary hover:bg-primary/5 transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:checked]:ring-1 has-[:checked]:ring-primary">
+<input class="peer sr-only" name="service_type" type="radio" value="attestation"/>
+<div class="flex flex-col gap-2 w-full">
+<span class="material-symbols-outlined text-slate-400 peer-checked:text-primary text-3xl mb-1">verified</span>
+<p class="font-bold text-slate-900 dark:text-slate-100 text-base">Document Attestation</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Official verification for legal documents.</p>
+</div>
+<div class="absolute top-5 right-5 h-5 w-5 rounded-full border-2 border-slate-300 dark:border-slate-600 peer-checked:border-primary peer-checked:bg-[image:var(--radio-dot-svg)]"></div>
+</label>
+</div>
+</div>
+<div class="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-800/20">
+<h2 class="text-xl font-bold mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">calendar_today</span>
+                            Specific Details
+                        </h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-slate-700 dark:text-slate-300" for="passport_expiry">Current Passport Expiry Date</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-slate-400 text-[20px]">event</span>
+</div>
+<input class="pl-10 block w-full rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm focus:border-primary focus:ring-primary sm:text-sm h-11" id="passport_expiry" name="passport_expiry" type="date"/>
+</div>
+<p class="text-xs text-slate-500 mt-1">Required for passport renewal requests.</p>
+</div>
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-slate-700 dark:text-slate-300" for="travel_dates">Intended Travel Dates</label>
+<div class="relative flex items-center gap-2">
+<input aria-label="Start Date" class="block w-full rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm focus:border-primary focus:ring-primary sm:text-sm h-11" type="date"/>
+<span class="text-slate-400">to</span>
+<input aria-label="End Date" class="block w-full rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm focus:border-primary focus:ring-primary sm:text-sm h-11" type="date"/>
+</div>
+<p class="text-xs text-slate-500 mt-1">Required for travel insurance quotes.</p>
+</div>
+<div class="space-y-2 md:col-span-2">
+<label class="block text-sm font-semibold text-slate-700 dark:text-slate-300" for="additional_notes">Additional Notes</label>
+<textarea class="block w-full rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-3 placeholder-slate-400" id="additional_notes" name="additional_notes" placeholder="Any specific requirements or questions?" rows="3"></textarea>
+</div>
+</div>
+</div>
+<div class="p-6 md:p-8">
+<h2 class="text-xl font-bold mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">bolt</span>
+                            Service Urgency
+                        </h2>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<label class="relative flex cursor-pointer rounded-lg border border-slate-200 dark:border-slate-700 p-4 hover:border-primary dark:hover:border-primary transition-all has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
+<input checked="" class="peer sr-only" name="urgency" type="radio" value="standard"/>
+<div class="flex items-start gap-3 w-full">
+<div class="mt-0.5 flex-shrink-0 h-5 w-5 rounded-full border-2 border-slate-300 dark:border-slate-600 peer-checked:border-primary peer-checked:bg-[image:var(--radio-dot-svg)]"></div>
+<div>
+<p class="font-bold text-slate-900 dark:text-slate-100">Standard Processing</p>
+<p class="text-slate-500 text-sm">10-15 business days</p>
+</div>
+</div>
+</label>
+<label class="relative flex cursor-pointer rounded-lg border border-slate-200 dark:border-slate-700 p-4 hover:border-primary dark:hover:border-primary transition-all has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
+<input class="peer sr-only" name="urgency" type="radio" value="expedited"/>
+<div class="flex items-start gap-3 w-full">
+<div class="mt-0.5 flex-shrink-0 h-5 w-5 rounded-full border-2 border-slate-300 dark:border-slate-600 peer-checked:border-primary peer-checked:bg-[image:var(--radio-dot-svg)]"></div>
+<div>
+<p class="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">Expedited Processing <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary uppercase tracking-wider">Fast</span></p>
+<p class="text-slate-500 text-sm">3-5 business days (+ $50 fee)</p>
+</div>
+</div>
+</label>
+</div>
+</div>
+<div class="p-6 md:p-8 bg-slate-50 dark:bg-slate-800/40 flex flex-col sm:flex-row items-center justify-between gap-6">
+<div class="flex-1 w-full sm:w-auto">
+<p class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">Estimated Total</p>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-black text-slate-900 dark:text-white">$120.00</span>
+<span class="text-sm text-slate-500">USD</span>
+</div>
+<p class="text-xs text-slate-500 mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">info</span>
+                                Final fees may vary based on specific document requirements.
+                            </p>
+</div>
+<div class="w-full sm:w-auto">
+<button class="w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg bg-primary hover:bg-primary/90 text-white px-8 py-3.5 font-bold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2" type="submit">
+<span>Request Service</span>
+<span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</form>
+</div>
+</main>
+<footer class="mt-auto border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6 text-center">
+<p class="text-slate-500 text-sm">© 2024 JetSetters Docs. All rights reserved.</p>
+</footer>
+</div>
+</div>
+</body></html>

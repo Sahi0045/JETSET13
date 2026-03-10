@@ -157,6 +157,9 @@ const Navbar = ({ forceScrolled }) => {
           <Link to="/hotels" className={`nav-link ${isActive('/hotels') ? 'active' : ''}`}>
             Hotels
           </Link>
+          <Link to="/visa" className={`nav-link ${isActive('/visa') ? 'active' : ''}`}>
+            Visa
+          </Link>
           <Link to="/my-trips" className={`nav-link ${isActive('/my-trips') ? 'active' : ''}`}>
             My Trips
           </Link>
@@ -192,35 +195,10 @@ const Navbar = ({ forceScrolled }) => {
             {/* Desktop profile dropdown */}
             <div className="profile-container">
               <button
-              className="profile-button"
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            >
-              <div className="profile-icon">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-              </div>
-              <span className="profile-name">
-                {user?.firstName || user?.email?.split('@')[0] || 'User'}
-              </span>
-            </button>
-            {isDropdownOpen && (
-              <div className="profile-dropdown">
-                <div className="profile-info">
-                  <p className="profile-info-name">{user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.firstName || 'User'}</p>
-                  <p className="profile-info-email">{user?.email}</p>
-                </div>
-                <div className="profile-divider"></div>
-                <button onClick={handleProfile}>
+                className="profile-button"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              >
+                <div className="profile-icon">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
@@ -233,27 +211,52 @@ const Navbar = ({ forceScrolled }) => {
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                     <circle cx="12" cy="7" r="4"></circle>
                   </svg>
-                  Profile
-                </button>
-                <button onClick={handleLogout}>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                    <polyline points="16 17 21 12 16 7"></polyline>
-                    <line x1="21" y1="12" x2="9" y2="12"></line>
-                  </svg>
-                  Logout
-                </button>
-              </div>
-            )}
-          </div>
+                </div>
+                <span className="profile-name">
+                  {user?.firstName || user?.email?.split('@')[0] || 'User'}
+                </span>
+              </button>
+              {isDropdownOpen && (
+                <div className="profile-dropdown">
+                  <div className="profile-info">
+                    <p className="profile-info-name">{user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.firstName || 'User'}</p>
+                    <p className="profile-info-email">{user?.email}</p>
+                  </div>
+                  <div className="profile-divider"></div>
+                  <button onClick={handleProfile}>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    Profile
+                  </button>
+                  <button onClick={handleLogout}>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                      <polyline points="16 17 21 12 16 7"></polyline>
+                      <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <>
@@ -322,6 +325,9 @@ const Navbar = ({ forceScrolled }) => {
           </Link>
           <Link to="/hotels" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
             Hotels
+          </Link>
+          <Link to="/visa" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
+            Visa
           </Link>
           <Link to="/my-trips" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
             My Trips

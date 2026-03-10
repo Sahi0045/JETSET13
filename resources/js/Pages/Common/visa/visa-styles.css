@@ -1,0 +1,288 @@
+/* 
+ * Visa & Document Services Styles
+ * Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
+ * Design Theme: Public Sans font, #1152d4 primary, light mode
+ */
+
+/* Import Google Material Symbols */
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
+/* Primary color variables */
+:root {
+    --visa-primary: #1152d4;
+    --visa-primary-light: rgba(17, 82, 212, 0.1);
+    --visa-primary-hover: #0e42b0;
+    --visa-bg-light: #f6f6f8;
+    --visa-bg-dark: #101622;
+}
+
+/* Material Symbols rendering */
+.material-symbols-outlined {
+    font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 24;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+/* Visa page container */
+.visa-page {
+    min-height: 100vh;
+    background-color: var(--visa-bg-light);
+    font-family: 'Public Sans', sans-serif;
+}
+
+/* Hero section */
+.visa-hero {
+    position: relative;
+    min-height: 500px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.visa-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background-color: rgba(15, 23, 42, 0.6);
+}
+
+/* Eligibility checker widget */
+.visa-eligibility-widget {
+    background: white;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 48rem;
+}
+
+/* Service cards */
+.visa-service-card {
+    background: white;
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
+.visa-service-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.visa-service-icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    background-color: var(--visa-primary-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--visa-primary);
+    margin-bottom: 1rem;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.visa-service-card:hover .visa-service-icon {
+    background-color: var(--visa-primary);
+    color: white;
+}
+
+/* Destination cards */
+.visa-destination-card {
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+    background: white;
+    transition: box-shadow 0.2s ease;
+}
+
+.visa-destination-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.visa-destination-image {
+    height: 10rem;
+    background-size: cover;
+    background-position: center;
+}
+
+/* Step indicator */
+.visa-step-indicator {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.visa-step-indicator.active {
+    background-color: var(--visa-primary-light);
+    border-color: rgba(17, 82, 212, 0.2);
+}
+
+.visa-step-icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.visa-step-icon.completed {
+    background-color: #dcfce7;
+    color: #16a34a;
+}
+
+.visa-step-icon.active {
+    background-color: var(--visa-primary);
+    color: white;
+    box-shadow: 0 4px 12px rgba(17, 82, 212, 0.3);
+}
+
+.visa-step-icon.pending {
+    background-color: #f1f5f9;
+    color: #94a3b8;
+}
+
+/* Document upload cards */
+.visa-upload-card {
+    background: white;
+    border-radius: 0.75rem;
+    padding: 2rem;
+    border: 2px dashed #e2e8f0;
+    transition: border-color 0.2s ease;
+    cursor: pointer;
+}
+
+.visa-upload-card:hover {
+    border-color: rgba(17, 82, 212, 0.5);
+}
+
+.visa-upload-card.uploaded {
+    border-color: #86efac;
+    background-color: rgba(240, 253, 244, 0.3);
+}
+
+/* Primary button */
+.visa-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 2rem;
+    background-color: var(--visa-primary);
+    color: white;
+    border-radius: 0.5rem;
+    font-weight: 700;
+    font-size: 0.875rem;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    box-shadow: 0 4px 12px rgba(17, 82, 212, 0.3);
+}
+
+.visa-btn-primary:hover {
+    background-color: var(--visa-primary-hover);
+}
+
+.visa-btn-primary:active {
+    transform: scale(0.98);
+}
+
+/* Secondary button */
+.visa-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background-color: #f1f5f9;
+    color: #475569;
+    border-radius: 0.5rem;
+    font-weight: 700;
+    font-size: 0.875rem;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.visa-btn-secondary:hover {
+    background-color: #e2e8f0;
+}
+
+/* Progress bar */
+.visa-progress-bar {
+    width: 100%;
+    background-color: #e2e8f0;
+    height: 0.375rem;
+    border-radius: 9999px;
+    overflow: hidden;
+}
+
+.visa-progress-fill {
+    background-color: var(--visa-primary);
+    height: 100%;
+    border-radius: 9999px;
+    transition: width 0.5s ease;
+}
+
+/* Tier cards */
+.visa-tier-card {
+    position: relative;
+    padding: 1.5rem;
+    border-radius: 0.75rem;
+    border: 2px solid #e2e8f0;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.visa-tier-card:hover {
+    border-color: rgba(17, 82, 212, 0.4);
+}
+
+.visa-tier-card.selected {
+    border-color: var(--visa-primary);
+    background-color: var(--visa-primary-light);
+}
+
+/* CTA banner */
+.visa-cta-banner {
+    background-color: var(--visa-primary);
+    border-radius: 0.75rem;
+    padding: 3rem;
+    text-align: center;
+    color: white;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .visa-hero {
+        min-height: 400px;
+    }
+
+    .visa-eligibility-widget {
+        padding: 1rem;
+    }
+
+    .visa-cta-banner {
+        padding: 2rem 1.5rem;
+    }
+}

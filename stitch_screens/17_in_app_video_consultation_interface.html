@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Shared Form Review with Secure e-Signature - JetSetters</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0f766e",
+                        "background-light": "#f8fafc",
+                        "background-dark": "#0f172a",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "sans-serif"],
+                        "signature": ["Dancing Script", "cursive"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Public Sans', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .fill-icon { font-variation-settings: 'FILL' 1; }
+        .cursor-shadow { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3)); }.overlay-bg { background-color: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display h-screen flex flex-col overflow-hidden">
+<div class="fixed inset-0 z-50 flex items-center justify-center overlay-bg hidden" id="signatureOverlay">
+<div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+<div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+<div class="flex items-center gap-3">
+<div class="p-2 bg-primary/10 text-primary rounded-lg">
+<span class="material-symbols-outlined text-[24px]">draw</span>
+</div>
+<div>
+<h2 class="text-lg font-bold text-slate-900 dark:text-white">Secure e-Signature</h2>
+<p class="text-xs text-slate-500">Sign below to finalize DS-160 Nonimmigrant Visa Application</p>
+</div>
+</div>
+<button class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" onclick="document.getElementById('signatureOverlay').classList.add('hidden')">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="p-6 flex-1 flex flex-col gap-6">
+<div class="flex gap-4 border-b border-slate-200 dark:border-slate-700">
+<button class="pb-3 px-2 text-sm font-semibold text-primary border-b-2 border-primary">Draw Signature</button>
+<button class="pb-3 px-2 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Type Signature</button>
+</div>
+<div class="flex-1 bg-slate-50 dark:bg-slate-950 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl flex items-center justify-center min-h-[200px] relative cursor-crosshair">
+<span class="absolute top-4 left-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Sign Here</span>
+<div class="absolute inset-x-8 bottom-8 border-b-2 border-slate-300 dark:border-slate-700"></div>
+<span class="absolute bottom-4 left-8 text-[10px] text-slate-400">X</span>
+<div class="z-10 text-slate-300 flex flex-col items-center gap-2 pointer-events-none">
+<span class="material-symbols-outlined text-4xl">gesture</span>
+<p class="text-sm font-medium">Use your mouse or touch screen to draw</p>
+</div>
+</div>
+<div class="flex items-start gap-3 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800/50">
+<span class="material-symbols-outlined text-blue-500 text-[20px] mt-0.5">verified_user</span>
+<p class="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">By signing this document, you agree that this electronic signature is the legally binding equivalent of your handwritten signature.</p>
+</div>
+</div>
+<div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3 bg-slate-50 dark:bg-slate-800/50">
+<button class="px-5 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick="document.getElementById('signatureOverlay').classList.add('hidden')">Cancel</button>
+<button class="px-5 py-2.5 text-sm font-bold text-slate-500 bg-slate-200 dark:bg-slate-800 rounded-lg cursor-not-allowed flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">lock</span>
+                Apply Signature
+            </button>
+</div>
+</div>
+</div>
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-8 py-3 z-10">
+<div class="flex items-center gap-3 text-primary">
+<span class="material-symbols-outlined fill-icon text-3xl">flight_takeoff</span>
+<h2 class="text-slate-900 dark:text-slate-100 text-xl font-bold leading-tight tracking-tight">JetSetters</h2>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-bold ring-1 ring-red-500/20">
+<span class="size-2 rounded-full bg-red-500 animate-pulse"></span>
+            LIVE CONSULTATION
+        </div>
+<div class="h-6 w-px bg-slate-200 dark:bg-slate-800"></div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Consultant</p>
+<p class="text-sm font-semibold">Sarah Jenkins</p>
+</div>
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ring-2 ring-primary ring-offset-2 ring-offset-white dark:ring-offset-slate-900" data-alt="Professional consultant portrait image" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuD69STkKKoMM3lMJRGAKUuTRQkDKqzuX0ZORpACviT1SiR3fPB0mF__NfzGqueabubi2IzqJplh4s85DJZuS0rhcXblG92TwGl_Qvn4wbNE1gPktvMt7lejuILauZY7d1a7i-AkbZnHy4jnpiaXYRdi6uwCF2qserRy3RJAU0zkia42Wz-c0iTR7qMP7LFGo-16fXQNfwVDexPEoHzDL9GSBfnjaJjUQ7SrTIssn4-uhh8yaI2p2brI3R2nACjNoMvYy9ZJc0JREG3s");'></div>
+</div>
+</div>
+</header>
+<main class="flex flex-1 overflow-hidden p-4 gap-4 bg-background-light dark:bg-background-dark">
+<div class="flex-1 flex flex-col gap-4 relative">
+<div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-3 flex items-center justify-between z-10">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2">
+<div class="p-1.5 bg-primary/10 rounded-lg text-primary">
+<span class="material-symbols-outlined text-[20px]">description</span>
+</div>
+<div>
+<h3 class="font-bold text-sm">DS-160 Nonimmigrant Visa Application</h3>
+<p class="text-[11px] text-slate-500">Applicant: Johnathan Doe</p>
+</div>
+</div>
+<div class="h-8 w-px bg-slate-200 dark:bg-slate-800"></div>
+<span class="text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2.5 py-1 rounded-md uppercase tracking-wide flex items-center gap-1.5 border border-amber-200 dark:border-amber-800">
+<span class="size-1.5 rounded-full bg-amber-500 animate-pulse"></span> 
+                    Shared Review Mode
+                </span>
+<span class="text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-2.5 py-1 rounded-md uppercase tracking-wide flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-800">
+<span class="material-symbols-outlined text-[14px]">task_alt</span>
+                    Ready to Sign
+                </span>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700">
+<button class="p-1 hover:bg-white dark:hover:bg-slate-700 rounded shadow-sm transition-colors text-slate-600 dark:text-slate-300"><span class="material-symbols-outlined text-[18px]">remove</span></button>
+<span class="text-xs font-semibold px-3 w-12 text-center">100%</span>
+<button class="p-1 hover:bg-white dark:hover:bg-slate-700 rounded shadow-sm transition-colors text-slate-600 dark:text-slate-300"><span class="material-symbols-outlined text-[18px]">add</span></button>
+</div>
+<button class="px-5 py-2 bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 text-sm font-bold rounded-lg flex items-center gap-2 transition-colors shadow-md border-2 border-emerald-500 animate-pulse">
+<span class="material-symbols-outlined text-[18px]">draw</span>
+                    Request Signature
+                </button>
+</div>
+</div>
+<div class="flex-1 bg-slate-200/50 dark:bg-slate-950/50 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative flex justify-center p-8 overflow-y-auto custom-scrollbar">
+<div class="bg-white w-full max-w-3xl shadow-xl border border-slate-300 relative p-12 pb-32 text-slate-800 flex flex-col gap-8 aspect-[1/1.41] shrink-0">
+<div class="text-center border-b-2 border-slate-800 pb-6">
+<h1 class="text-2xl font-serif font-bold tracking-tight">U.S. Department of State</h1>
+<h2 class="text-lg font-serif mt-1">NONIMMIGRANT VISA APPLICATION</h2>
+<p class="text-xs text-slate-500 mt-2 font-mono">OMB CONTROL NO. 1405-0182</p>
+</div>
+<div class="grid grid-cols-2 gap-x-12 gap-y-8 text-sm relative z-0">
+<div>
+<label class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1.5">Surnames</label>
+<div class="border-b border-slate-300 pb-1.5 font-mono text-slate-900 bg-slate-50 px-2">DOE</div>
+</div>
+<div>
+<label class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1.5">Given Names</label>
+<div class="border-b border-slate-300 pb-1.5 font-mono text-slate-900 bg-slate-50 px-2">JOHNATHAN</div>
+</div>
+<div class="col-span-2">
+<label class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1.5">Home Address</label>
+<div class="border-b border-slate-300 pb-1.5 font-mono text-slate-900 bg-slate-50 px-2">123 MAIN ST, NEW YORK, NY 10001</div>
+</div>
+<div>
+<label class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1.5">Passport Number</label>
+<div class="border-b border-slate-300 pb-1.5 font-mono text-slate-900 bg-slate-50 px-2">A123456789</div>
+</div>
+<div class="relative group">
+<label class="text-[10px] text-slate-800 font-bold uppercase tracking-wider block mb-1.5">Expiration Date</label>
+<div class="border-b-2 border-slate-300 pb-1.5 font-mono text-slate-900 bg-slate-50 px-2">05/15/2030</div>
+</div>
+</div>
+<div class="absolute bottom-12 left-12 right-12 border-t-2 border-slate-800 pt-8 mt-12 flex justify-between items-end">
+<div>
+<label class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-2">Applicant Signature</label>
+<div class="relative w-64 h-16 border-b-2 border-slate-400 flex items-end justify-center group cursor-pointer" onclick="document.getElementById('signatureOverlay').classList.remove('hidden')">
+<div class="absolute inset-0 bg-yellow-100/50 border-2 border-dashed border-yellow-400 flex items-center justify-center rounded transition-all group-hover:bg-yellow-200/50">
+<span class="text-sm font-bold text-yellow-700 flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[18px]">draw</span> Click to Sign Here
+                                </span>
+</div>
+<span class="absolute -left-4 bottom-2 text-xs font-bold text-slate-400">X</span>
+</div>
+</div>
+<div class="text-right">
+<label class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-2">Date Signed</label>
+<div class="w-32 h-8 border-b-2 border-slate-400 font-mono text-lg text-center flex items-end justify-center pb-1">
+                            10/24/2023
+                        </div>
+</div>
+</div>
+<div class="absolute bottom-48 right-32 z-20 pointer-events-none">
+<svg class="w-5 h-5 text-blue-500 fill-current cursor-shadow" viewBox="0 0 24 24"><path d="M7 2l12 11.2-5.8.5 3.3 7.3-2.2 1-3.2-7.4-4.4 4.8z"></path></svg>
+<div class="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-md whitespace-nowrap mt-1 ml-4 border border-blue-600">You</div>
+</div>
+<div class="absolute bottom-24 left-48 z-20 pointer-events-none">
+<svg class="w-5 h-5 text-rose-500 fill-current cursor-shadow" viewBox="0 0 24 24"><path d="M7 2l12 11.2-5.8.5 3.3 7.3-2.2 1-3.2-7.4-4.4 4.8z"></path></svg>
+<div class="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-md whitespace-nowrap mt-1 ml-4 border border-rose-600">Sarah J.</div>
+</div>
+</div>
+<div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md border border-slate-700/50 p-2.5 rounded-2xl shadow-2xl flex items-center gap-2 z-30">
+<button class="size-11 rounded-xl bg-slate-800/80 flex items-center justify-center text-white hover:bg-slate-700 transition-colors tooltip" title="Mute">
+<span class="material-symbols-outlined text-[20px]">mic</span>
+</button>
+<button class="size-11 rounded-xl bg-slate-800/80 flex items-center justify-center text-white hover:bg-slate-700 transition-colors tooltip" title="Stop Video">
+<span class="material-symbols-outlined text-[20px]">videocam</span>
+</button>
+<button class="size-11 rounded-xl bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 tooltip" title="Stop Sharing">
+<span class="material-symbols-outlined text-[20px]">screen_share</span>
+</button>
+<div class="w-px h-6 bg-slate-700 mx-2"></div>
+<button class="px-5 h-11 rounded-xl bg-red-500 text-white text-sm font-bold flex items-center gap-1.5 hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20">
+<span class="material-symbols-outlined text-[20px]">call_end</span>
+                    End Call
+                </button>
+</div>
+</div>
+</div>
+<div class="w-[340px] flex flex-col gap-4 shrink-0">
+<div class="grid grid-cols-2 gap-3 h-[120px]">
+<div class="rounded-xl overflow-hidden bg-slate-900 relative border border-slate-200 dark:border-slate-800 shadow-sm group">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="Video feed of consultant" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBT9cAFKy_AfvtPN7ln1JQf4rjxuRfU6ymEeP6PXSIVvKtO0PgBpc1PmSXQVyGL2zI4j6PZ6hyzGSPA5VAAGzFAchYUN4-vW2EjV-Bd5Tf6nbD25ZeR3nuwdPC_c7iO5v0txwULND8uVxq25Gb8syZ3tDVeFETnFWi1LpyMN3tWId4dOR40dF2IMKOeJZC8IC2fAlfwIxp04SA2j8VfcS3BJ3swLx_15XgaM_hoix1EMz5wwwXf0-kJ0JdyZC9_PLTL9SLVbLxTnmOQ");'></div>
+<div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent pt-6 pb-1.5 px-2 flex items-center gap-1.5">
+<div class="size-4 rounded-full bg-slate-800/80 flex items-center justify-center backdrop-blur">
+<span class="material-symbols-outlined text-[10px] text-white">mic</span>
+</div>
+<span class="text-[10px] text-white font-medium truncate">Sarah Jenkins</span>
+</div>
+</div>
+<div class="rounded-xl overflow-hidden bg-slate-900 relative border border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="Self view video feed" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAWn6toAdfw2Sy6nKDXk6Py8uC_Mj_8sYR63dVdQ5oSM10IEdS_Q6KPhvuLY6IreEogtwWkfFXwRHgZSgSydJO8qNUo20PPKrPdYDPTuEfGnUOU9zRKqECCw02CbfAI8gRCPNPWcptbRhXaFI-ejLHWiZ3Lh5AgcGqxBo456sIjviZHNoXcpIvma9eBeYtvCbGCBYaKaqdQ83YKYkTi1Od-EBGm8wbdfADV3XhazYP635Q8ASKaXeztPtNBRChUB4lr0OIeNAN_HP9Y");'></div>
+<div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent pt-6 pb-1.5 px-2">
+<span class="text-[10px] text-white font-medium">You</span>
+</div>
+</div>
+</div>
+<div class="flex-none bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col">
+<div class="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 rounded-t-xl">
+<div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+<span class="material-symbols-outlined text-[18px]">verified</span>
+<h3 class="font-bold text-sm text-slate-900 dark:text-white">Form Finalized</h3>
+</div>
+<span class="flex items-center gap-1 text-[10px] font-medium text-emerald-600">
+<span class="material-symbols-outlined text-[14px]">check</span> Ready
+                </span>
+</div>
+<div class="p-4 flex flex-col items-center text-center space-y-3">
+<div class="size-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-1">
+<span class="material-symbols-outlined text-3xl">task</span>
+</div>
+<h4 class="text-sm font-bold">All data confirmed</h4>
+<p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">The consultant has verified all fields. Please review the document and apply your e-Signature to complete the process.</p>
+</div>
+</div>
+<div class="flex-1 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col min-h-0">
+<div class="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 rounded-t-xl">
+<span class="material-symbols-outlined text-[18px] text-slate-500">lock</span>
+<h3 class="font-bold text-sm">Secure Chat</h3>
+</div>
+<div class="flex-1 p-4 overflow-y-auto space-y-4">
+<div class="flex flex-col gap-1 items-end">
+<span class="text-[10px] text-slate-500 font-medium mr-1">You • 10:16 AM</span>
+<div class="bg-primary text-white p-2.5 rounded-xl rounded-tr-sm text-xs leading-relaxed w-fit max-w-[90%] shadow-sm">
+                        I see the highlight on the expiration date. Do I need to renew my passport before we finalize this?
+                    </div>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[10px] text-slate-500 font-medium ml-1">Sarah Jenkins • 10:18 AM</span>
+<div class="bg-slate-100 dark:bg-slate-800 p-2.5 rounded-xl rounded-tl-sm text-xs text-slate-800 dark:text-slate-200 leading-relaxed w-fit max-w-[90%]">
+                        Yes, I've updated the date based on your new passport copy. The form looks perfect now.
+                    </div>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[10px] text-slate-500 font-medium ml-1">Sarah Jenkins • 10:19 AM</span>
+<div class="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-2.5 rounded-xl rounded-tl-sm text-xs text-slate-800 dark:text-slate-200 leading-relaxed w-fit max-w-[90%]">
+<span class="flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-400 mb-1">
+<span class="material-symbols-outlined text-[16px]">draw</span> Signature Requested
+                        </span>
+                        I've locked the form. Please click the yellow box at the bottom of the document to sign. I'll stay on the line.
+                    </div>
+</div>
+</div>
+<div class="p-3 border-t border-slate-100 dark:border-slate-800">
+<div class="relative">
+<input class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-primary focus:border-primary pl-3 pr-10 py-2.5 outline-none transition-shadow" placeholder="Type a message..." type="text"/>
+<button class="absolute right-1 top-1 bottom-1 w-8 flex items-center justify-center text-primary hover:bg-primary/10 rounded-md transition-colors">
+<span class="material-symbols-outlined text-[18px]">send</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<footer class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-8 py-2 flex items-center justify-between text-[11px] text-slate-500 font-medium z-10">
+<div class="flex items-center gap-6">
+<span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-green-500 block"></span> Connection: Excellent (18ms)</span>
+<span class="flex items-center gap-1.5 text-slate-400"><span class="material-symbols-outlined text-[14px]">lock</span> End-to-end encrypted</span>
+</div>
+<div class="text-slate-400">
+        Session ID: #JS-992-004A
+    </div>
+</footer>
+</body></html>
