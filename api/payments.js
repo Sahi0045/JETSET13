@@ -1,3 +1,4 @@
+import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
 import { normalizeCountryCode, normalizeBillingAddress } from './utils/countryCodeNormalizer.js';
 import { sendBookingNotificationEmails, sendCancellationNotificationEmails } from '../backend/services/emailService.js';
@@ -86,6 +87,17 @@ export default async function handler(req, res) {
         return handleHealthCheck(req, res);
       case 'debug':
         return handleDebug(req, res);
+      case 'create-payment-link': return handleCreatePaymentLink(req, res);
+      case 'get-payment-link': return handleGetPaymentLink(req, res);
+      case 'process-payment-link': return handleProcessPaymentLink(req, res);
+      case 'list-payment-links': return handleListPaymentLinks(req, res);
+      case 'complete-payment-link': return handleCompletePaymentLink(req, res);
+      case 'agent-login': return handleAgentLogin(req, res);
+      case 'create-agent': return handleCreateAgent(req, res);
+      case 'list-agents': return handleListAgents(req, res);
+      case 'update-agent': return handleUpdateAgent(req, res);
+      case 'delete-agent': return handleDeleteAgent(req, res);
+
       default:
         return res.status(400).json({
           success: false,
@@ -1657,66 +1669,80 @@ async function handlePaymentCallback(req, res) {
 
 // Get Payment Details
 async function handleGetPaymentDetails(req, res) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+    try {
+        const { paymentId, quoteId } = req.query;
 
-  try {
-    const { paymentId, quoteId } = req.query;
+        if (!paymentId && !quoteId) {
+            return res.status(400).json({ success: false, error: 'paymentId or quoteId required' });
+        }
 
-    if (!paymentId && !quoteId) {
-      return res.status(400).json({
-        success: false,
-        error: 'paymentId or quoteId is required'
-      });
+        let payment;
+        if (paymentId) {
+            // Strategy 1: Try looking up by UUID id
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(paymentId);
+            if (isUUID) {
+                const { data } = await supabase
+                    .from('payments')
+                    .select('*, quote:quotes(*), inquiry:inquiries(*)')
+                    .eq('id', paymentId)
+                    .single();
+                payment = data;
+            }
+
+            // Strategy 2: Try arc_order_id (for payment link orders like PL-xxx)
+            if (!payment) {
+                const { data } = await supabase
+                    .from('payments')
+                    .select('*')
+                    .eq('arc_order_id', paymentId)
+                    .limit(1)
+                    .single();
+                payment = data;
+            }
+
+            // Strategy 3: Try metadata containing the order_id
+            if (!payment) {
+                const { data } = await supabase
+                    .from('payments')
+                    .select('*')
+                    .contains('metadata', { order_id: paymentId })
+                    .limit(1)
+                    .single();
+                payment = data;
+            }
+        } else {
+            const { data } = await supabase
+                .from('payments')
+                .select('*, quote:quotes(*), inquiry:inquiries(*)')
+                .eq('quote_id', quoteId)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+            payment = data;
+        }
+
+        if (!payment) {
+            return res.status(404).json({ success: false, error: 'Payment not found' });
+        }
+
+        // If this payment came from a payment link, fetch the link details
+        const paymentLinkToken = payment.metadata?.payment_link_token;
+        if (paymentLinkToken) {
+            const { data: paymentLink } = await supabase
+                .from('payment_links')
+                .select('*')
+                .eq('link_token', paymentLinkToken)
+                .single();
+            if (paymentLink) {
+                payment.payment_link = paymentLink;
+            }
+        }
+
+        return res.json({ success: true, payment });
+    } catch (error) {
+        console.error('Get payment details error:', error);
+        return res.status(500).json({ success: false, error: error.message });
     }
-
-    let payment;
-    let error;
-
-    if (paymentId) {
-      // Get payment by payment ID
-      const result = await supabase
-        .from('payments')
-        .select('*, quote:quotes(*), inquiry:inquiries(*)')
-        .eq('id', paymentId)
-        .single();
-      payment = result.data;
-      error = result.error;
-    } else if (quoteId) {
-      // Get latest payment by quote ID
-      const result = await supabase
-        .from('payments')
-        .select('*, quote:quotes(*), inquiry:inquiries(*)')
-        .eq('quote_id', quoteId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      payment = result.data;
-      error = result.error;
-    }
-
-    if (error || !payment) {
-      return res.status(404).json({
-        success: false,
-        error: 'Payment not found',
-        details: error?.message || 'No payment found for the provided ID'
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      payment
-    });
-
-  } catch (error) {
-    console.error('Get payment details error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve payment details',
-      details: error.message
-    });
-  }
 }
 
 // ============================================
@@ -3345,3 +3371,770 @@ async function handleDebug(req, res) {
     });
   }
 } // Build trigger: Sun 01 Feb 2026 08:28:07 AM IST
+
+// --- Added from payment.routes.js ---
+function getCallerInfo(req) {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) return { role: 'unknown', agentId: null };
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, JWT_SECRET);
+        return {
+            role: decoded.role || 'user',
+            agentId: decoded.agentId || null,
+            userId: decoded.id || decoded.sub,
+            email: decoded.email
+        };
+    } catch (e) {
+        return { role: 'unknown', agentId: null };
+    }
+}
+
+// --- Added from payment.routes.js ---
+function generateLinkToken(length = 16) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let token = '';
+    for (let i = 0; i < length; i++) {
+        token += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return token;
+}
+
+// --- Added from payment.routes.js ---
+async function handleCreatePaymentLink(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const {
+            customerName,
+            customerEmail,
+            customerPhone,
+            bookingType = 'flight',
+            amount,
+            actualFee,
+            agentFee,
+            currency = 'USD',
+            description,
+            travelDetails = {},
+            expiryDays = 30
+        } = req.body;
+
+        // Get caller info (admin or agent)
+        const caller = getCallerInfo(req);
+
+        // Validate
+        if (!customerName || !amount) {
+            return res.status(400).json({
+                success: false,
+                error: 'Customer name and amount are required'
+            });
+        }
+
+        if (parseFloat(amount) <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Amount must be greater than zero'
+            });
+        }
+
+        // Generate unique token
+        let linkToken = generateLinkToken();
+        let attempts = 0;
+        while (attempts < 5) {
+            const { data: existing } = await supabase
+                .from('payment_links')
+                .select('id')
+                .eq('link_token', linkToken)
+                .single();
+            if (!existing) break;
+            linkToken = generateLinkToken();
+            attempts++;
+        }
+
+        // Calculate expiry
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + parseInt(expiryDays));
+
+        const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
+
+        // Insert into DB
+        const { data: paymentLink, error: insertError } = await supabase
+            .from('payment_links')
+            .insert({
+                link_token: linkToken,
+                customer_name: customerName,
+                customer_email: customerEmail || null,
+                customer_phone: customerPhone || null,
+                booking_type: bookingType,
+                amount: parseFloat(amount),
+                actual_fee: parseFloat(actualFee) || 0,
+                agent_fee: parseFloat(agentFee) || 0,
+                currency: currency,
+                description: description || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking Payment`,
+                travel_details: travelDetails,
+                status: 'pending',
+                expires_at: expiresAt.toISOString(),
+                agent_id: caller.agentId || null,
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+        if (insertError) {
+            console.error('❌ Failed to create payment link:', insertError);
+            return res.status(500).json({ success: false, error: 'Failed to create payment link', details: insertError.message });
+        }
+
+        const paymentUrl = `${frontendBaseUrl}/pay/${linkToken}`;
+
+        console.log('✅ Payment link created:', paymentUrl);
+
+        // Send email to customer if email provided
+        if (customerEmail) {
+            try {
+                const { sendEmail } = await import('../services/emailService.js');
+                await sendEmail({
+                    to: customerEmail,
+                    subject: `Payment Link - ${description || bookingType} | Jetsetters`,
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <div style="background: #055B75; color: white; padding: 20px; text-align: center;">
+                                <h2>💳 Payment Request</h2>
+                            </div>
+                            <div style="padding: 20px; background: #f9f9f9;">
+                                <p>Dear ${customerName},</p>
+                                <p>You have a pending payment for your travel booking:</p>
+                                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                                    <p><strong>Amount:</strong> ${currency} ${parseFloat(amount).toFixed(2)}</p>
+                                    <p><strong>Type:</strong> ${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)}</p>
+                                    ${description ? `<p><strong>Description:</strong> ${description}</p>` : ''}
+                                </div>
+                                <div style="text-align: center; margin: 20px 0;">
+                                    <a href="${paymentUrl}" style="background: #055B75; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold;">
+                                        Pay Now →
+                                    </a>
+                                </div>
+                                <p style="font-size: 12px; color: #888;">This link expires on ${expiresAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.</p>
+                            </div>
+                        </div>
+                    `
+                });
+                console.log('📧 Payment link email sent to:', customerEmail);
+            } catch (emailErr) {
+                console.warn('⚠️ Could not send payment link email:', emailErr.message);
+            }
+        }
+
+        return res.json({
+            success: true,
+            paymentLink: {
+                ...paymentLink,
+                paymentUrl
+            }
+        });
+    } catch (error) {
+        console.error('❌ Create payment link error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to create payment link', details: error.message });
+    }
+}
+
+// --- Added from payment.routes.js ---
+async function handleGetPaymentLink(req, res) {
+    try {
+        const token = req.query.token;
+        if (!token) {
+            return res.status(400).json({ success: false, error: 'Token is required' });
+        }
+
+        const { data: paymentLink, error } = await supabase
+            .from('payment_links')
+            .select('*')
+            .eq('link_token', token)
+            .single();
+
+        if (error || !paymentLink) {
+            return res.status(404).json({ success: false, error: 'Payment link not found' });
+        }
+
+        // Check if expired
+        if (paymentLink.expires_at && new Date(paymentLink.expires_at) < new Date()) {
+            if (paymentLink.status === 'pending') {
+                await supabase.from('payment_links').update({ status: 'expired' }).eq('id', paymentLink.id);
+                paymentLink.status = 'expired';
+            }
+        }
+
+        return res.json({ success: true, paymentLink });
+    } catch (error) {
+        console.error('❌ Get payment link error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to get payment link', details: error.message });
+    }
+}
+
+// --- Added from payment.routes.js ---
+async function handleProcessPaymentLink(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const { token } = req.body;
+        if (!token) {
+            return res.status(400).json({ success: false, error: 'Token is required' });
+        }
+
+        const { data: paymentLink, error } = await supabase
+            .from('payment_links')
+            .select('*')
+            .eq('link_token', token)
+            .single();
+
+        if (error || !paymentLink) {
+            return res.status(404).json({ success: false, error: 'Payment link not found' });
+        }
+
+        if (paymentLink.status !== 'pending') {
+            return res.status(400).json({ success: false, error: `Payment link is ${paymentLink.status}` });
+        }
+
+        if (paymentLink.expires_at && new Date(paymentLink.expires_at) < new Date()) {
+            await supabase.from('payment_links').update({ status: 'expired' }).eq('id', paymentLink.id);
+            return res.status(400).json({ success: false, error: 'Payment link has expired' });
+        }
+
+        // Create ARC Pay Hosted Checkout
+        const arcMerchantId = ARC_PAY_CONFIG.MERCHANT_ID;
+        const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
+        let arcBaseUrl = ARC_PAY_CONFIG.BASE_URL;
+        if (arcBaseUrl && arcBaseUrl.includes('/merchant/')) {
+            arcBaseUrl = arcBaseUrl.split('/merchant/')[0];
+        }
+        arcBaseUrl = arcBaseUrl || 'https://api.arcpay.travel/api/rest/version/77';
+
+        const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
+        const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
+
+        const orderId = `PL-${paymentLink.id.slice(0, 8)}-${Date.now().toString().slice(-6)}`;
+        const returnUrl = `${frontendBaseUrl}/payment/callback?orderId=${orderId}&bookingType=${paymentLink.booking_type}&paymentLinkToken=${token}`;
+        const cancelUrl = `${frontendBaseUrl}/pay/${token}?cancelled=true`;
+
+        const sessionUrl = `${arcBaseUrl.replace(/\/$/, '')}/merchant/${arcMerchantId}/session`;
+
+        const requestBody = {
+            apiOperation: 'INITIATE_CHECKOUT',
+            interaction: {
+                operation: 'PURCHASE',
+                returnUrl,
+                cancelUrl,
+                merchant: { name: 'JetSet Travel' },
+                displayControl: {
+                    billingAddress: 'MANDATORY',
+                    customerEmail: 'MANDATORY'
+                },
+                timeout: 900
+            },
+            order: {
+                id: orderId,
+                reference: orderId.substring(0, 40),
+                amount: parseFloat(paymentLink.amount).toFixed(2),
+                currency: paymentLink.currency,
+                description: paymentLink.description || `${paymentLink.booking_type} Payment`
+            }
+        };
+
+        console.log('🔗 Creating ARC Pay session for payment link:', orderId);
+
+        const sessionResponse = await axios.post(sessionUrl, requestBody, {
+            headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const sessionData = sessionResponse.data;
+        const sessionId = sessionData.session?.id;
+        const successIndicator = sessionData.successIndicator;
+
+        if (!sessionId) {
+            console.error('No sessionId in ARC Pay response:', sessionData);
+            return res.status(500).json({ success: false, error: 'Failed to create payment session' });
+        }
+
+        // Update payment link with session info
+        await supabase.from('payment_links').update({
+            arc_session_id: sessionId,
+            updated_at: new Date().toISOString()
+        }).eq('id', paymentLink.id);
+
+        // Store pending booking data for callback
+        const nameParts = (paymentLink.customer_name || '').trim().split(/\s+/);
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+
+        const { data: bookingRecord } = await supabase.from('bookings').insert({
+            booking_reference: orderId,
+            travel_type: paymentLink.booking_type,
+            total_amount: parseFloat(paymentLink.amount),
+            status: 'pending',
+            passenger_details: [{ firstName, lastName, email: paymentLink.customer_email || '' }],
+            booking_details: {
+                source: 'payment_link',
+                payment_link_id: paymentLink.id,
+                payment_link_token: token,
+                travel_details: paymentLink.travel_details,
+                description: paymentLink.description,
+                order_id: orderId,
+                amount: parseFloat(paymentLink.amount),
+                currency: paymentLink.currency,
+                price_grand_total: parseFloat(paymentLink.amount).toFixed(2),
+                customer_name: paymentLink.customer_name
+            },
+            created_at: new Date().toISOString()
+        }).select().single();
+
+        // Store payment record
+        await supabase.from('payments').insert({
+            amount: parseFloat(paymentLink.amount),
+            currency: paymentLink.currency,
+            payment_status: 'pending',
+            arc_session_id: sessionId,
+            arc_order_id: orderId,
+            success_indicator: successIndicator,
+            customer_email: paymentLink.customer_email,
+            customer_name: paymentLink.customer_name,
+            metadata: {
+                payment_link_id: paymentLink.id,
+                payment_link_token: token,
+                order_id: orderId
+            },
+            created_at: new Date().toISOString()
+        });
+
+        // Build the checkout redirect URL (must use api.arcpay.travel, NOT ap-gateway.mastercard.com)
+        const checkoutUrl = `https://api.arcpay.travel/checkout/pay/${sessionId}`;
+        const paymentPageUrl = checkoutUrl;
+
+        console.log('✅ Payment session created for link:', { orderId, sessionId });
+
+        return res.json({
+            success: true,
+            sessionId,
+            successIndicator,
+            orderId,
+            checkoutUrl,
+            paymentPageUrl,
+            sessionData
+        });
+    } catch (error) {
+        console.error('❌ Process payment link error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to process payment',
+            details: error.response?.data || error.message
+        });
+    }
+}
+
+// --- Added from payment.routes.js ---
+async function handleListPaymentLinks(req, res) {
+    try {
+        const caller = getCallerInfo(req);
+
+        // Agent sees only their own links; admin sees all
+        let query = supabase.from('payment_links').select('*').order('created_at', { ascending: false });
+        const agentIdParam = req.query.agentId;
+        if ((caller.role === 'agent' && caller.agentId) || agentIdParam) {
+            const filterAgentId = caller.agentId || agentIdParam;
+            query = query.eq('agent_id', filterAgentId);
+        }
+
+        const { data: links, error } = await query;
+
+        if (error) {
+            return res.status(500).json({ success: false, error: 'Failed to fetch payment links', details: error.message });
+        }
+
+        // Auto-expire old links
+        const now = new Date();
+        for (const link of links) {
+            if (link.status === 'pending' && link.expires_at && new Date(link.expires_at) < now) {
+                link.status = 'expired';
+                await supabase.from('payment_links').update({ status: 'expired' }).eq('id', link.id);
+            }
+        }
+
+        // Enrich with agent names for admin view
+        let agentsMap = {};
+        if (caller.role !== 'agent') {
+            const agentIds = [...new Set(links.filter(l => l.agent_id).map(l => l.agent_id))];
+            if (agentIds.length > 0) {
+                const { data: agents } = await supabase.from('agents').select('id, name').in('id', agentIds);
+                agentsMap = (agents || []).reduce((m, a) => { m[a.id] = a.name; return m; }, {});
+            }
+        }
+
+        const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
+        const enrichedLinks = links.map(link => ({
+            ...link,
+            paymentUrl: `${frontendBaseUrl}/pay/${link.link_token}`,
+            agent_name: agentsMap[link.agent_id] || null
+        }));
+
+        return res.json({ success: true, data: enrichedLinks, total: enrichedLinks.length });
+    } catch (error) {
+        console.error('❌ List payment links error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to list payment links', details: error.message });
+    }
+}
+
+// --- Added from payment.routes.js ---
+async function handleAgentLogin(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ success: false, error: 'Email and password are required' });
+        }
+
+        // Find agent by email
+        const { data: agent, error } = await supabase
+            .from('agents')
+            .select('*')
+            .eq('email', email.toLowerCase().trim())
+            .single();
+
+        if (error || !agent) {
+            return res.status(401).json({ success: false, error: 'Invalid credentials' });
+        }
+
+        if (agent.status !== 'active') {
+            return res.status(403).json({ success: false, error: 'Your account is inactive. Please contact admin.' });
+        }
+
+        // Verify password
+        const isMatch = await bcrypt.compare(password, agent.password_hash);
+        if (!isMatch) {
+            return res.status(401).json({ success: false, error: 'Invalid credentials' });
+        }
+
+        // Generate JWT with agent role
+        const token = jwt.sign(
+            { id: agent.id, agentId: agent.id, role: 'agent', email: agent.email },
+            JWT_SECRET,
+            { expiresIn: JWT_EXPIRE }
+        );
+
+        console.log('✅ Agent logged in:', agent.email);
+
+        return res.json({
+            success: true,
+            id: agent.id,
+            firstName: agent.name.split(' ')[0],
+            lastName: agent.name.split(' ').slice(1).join(' ') || '',
+            email: agent.email,
+            role: 'agent',
+            agentId: agent.id,
+            token
+        });
+    } catch (error) {
+        console.error('❌ Agent login error:', error);
+        return res.status(500).json({ success: false, error: 'Login failed', details: error.message });
+    }
+}
+
+// --- Added from payment.routes.js ---
+async function handleCreateAgent(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const { name, email, password, phone, commissionRate } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({
+                success: false,
+                error: 'Name, email, and password are required'
+            });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'Password must be at least 6 characters'
+            });
+        }
+
+        // Check if email already exists
+        const { data: existing } = await supabase
+            .from('agents')
+            .select('id')
+            .eq('email', email.toLowerCase().trim())
+            .single();
+
+        if (existing) {
+            return res.status(409).json({ success: false, error: 'An agent with this email already exists' });
+        }
+
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+
+        // Insert agent
+        const { data: agent, error: insertError } = await supabase
+            .from('agents')
+            .insert({
+                name: name.trim(),
+                email: email.toLowerCase().trim(),
+                password_hash: passwordHash,
+                phone: phone || null,
+                commission_rate: parseFloat(commissionRate) || 0,
+                status: 'active',
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+        if (insertError) {
+            console.error('❌ Failed to create agent:', insertError);
+            return res.status(500).json({ success: false, error: 'Failed to create agent', details: insertError.message });
+        }
+
+        // Remove password hash from response
+        const { password_hash, ...agentData } = agent;
+
+        console.log('✅ Agent created:', agent.email);
+
+        return res.json({ success: true, agent: agentData });
+    } catch (error) {
+        console.error('❌ Create agent error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to create agent', details: error.message });
+    }
+}
+
+// --- Added from payment.routes.js ---
+async function handleListAgents(req, res) {
+    try {
+        const { data: agents, error } = await supabase
+            .from('agents')
+            .select('id, name, email, phone, status, commission_rate, created_at')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            return res.status(500).json({ success: false, error: 'Failed to fetch agents', details: error.message });
+        }
+
+        // Get stats per agent
+        const enrichedAgents = await Promise.all(agents.map(async (agent) => {
+            const { count: linkCount } = await supabase
+                .from('payment_links')
+                .select('*', { count: 'exact', head: true })
+                .eq('agent_id', agent.id);
+
+            const { data: paidLinks } = await supabase
+                .from('payment_links')
+                .select('amount')
+                .eq('agent_id', agent.id)
+                .eq('status', 'paid');
+
+            const totalRevenue = (paidLinks || []).reduce((sum, l) => sum + parseFloat(l.amount || 0), 0);
+
+            return {
+                ...agent,
+                totalLinks: linkCount || 0,
+                totalRevenue: totalRevenue
+            };
+        }));
+
+        return res.json({ success: true, data: enrichedAgents, total: enrichedAgents.length });
+    } catch (error) {
+        console.error('❌ List agents error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to list agents', details: error.message });
+    }
+}
+
+// --- Added from payment.routes.js ---
+async function handleUpdateAgent(req, res) {
+    if (req.method !== 'POST' && req.method !== 'PUT') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const { agentId, name, email, phone, status, commissionRate, password } = req.body;
+
+        if (!agentId) {
+            return res.status(400).json({ success: false, error: 'Agent ID is required' });
+        }
+
+        const updates = { updated_at: new Date().toISOString() };
+        if (name) updates.name = name.trim();
+        if (email) updates.email = email.toLowerCase().trim();
+        if (phone !== undefined) updates.phone = phone;
+        if (status) updates.status = status;
+        if (commissionRate !== undefined) updates.commission_rate = parseFloat(commissionRate);
+
+        // If password is provided, hash it
+        if (password && password.length >= 6) {
+            const salt = await bcrypt.genSalt(10);
+            updates.password_hash = await bcrypt.hash(password, salt);
+        }
+
+        const { data: agent, error } = await supabase
+            .from('agents')
+            .update(updates)
+            .eq('id', agentId)
+            .select('id, name, email, phone, status, commission_rate, created_at, updated_at')
+            .single();
+
+        if (error) {
+            return res.status(500).json({ success: false, error: 'Failed to update agent', details: error.message });
+        }
+
+        console.log('✅ Agent updated:', agent.email);
+        return res.json({ success: true, agent });
+    } catch (error) {
+        console.error('❌ Update agent error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to update agent', details: error.message });
+    }
+}
+
+// --- Added from payment.routes.js ---
+async function handleDeleteAgent(req, res) {
+    if (req.method !== 'POST' && req.method !== 'DELETE') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const agentId = req.body?.agentId || req.query?.agentId;
+
+        if (!agentId) {
+            return res.status(400).json({ success: false, error: 'Agent ID is required' });
+        }
+
+        // Soft delete — set to inactive
+        const { data: agent, error } = await supabase
+            .from('agents')
+            .update({ status: 'inactive', updated_at: new Date().toISOString() })
+            .eq('id', agentId)
+            .select('id, name, email, status')
+            .single();
+
+        if (error) {
+            return res.status(500).json({ success: false, error: 'Failed to deactivate agent', details: error.message });
+        }
+
+        console.log('✅ Agent deactivated:', agent.email);
+        return res.json({ success: true, agent, message: 'Agent deactivated successfully' });
+    } catch (error) {
+        console.error('❌ Delete agent error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to deactivate agent', details: error.message });
+    }
+}
+
+// --- Added from payment.routes.js ---
+async function handleCompletePaymentLink(req, res) {
+    try {
+        const { paymentLinkToken, orderId, resultIndicator } = req.body;
+
+        if (!paymentLinkToken || !orderId) {
+            return res.status(400).json({ success: false, error: 'paymentLinkToken and orderId required' });
+        }
+
+        console.log('🔗 Completing payment link:', paymentLinkToken, 'orderId:', orderId);
+
+        // Get the payment link details
+        const { data: paymentLink } = await supabase
+            .from('payment_links')
+            .select('*')
+            .eq('link_token', paymentLinkToken)
+            .single();
+
+        // Update payment link status
+        await supabase
+            .from('payment_links')
+            .update({ status: 'paid', paid_at: new Date().toISOString() })
+            .eq('link_token', paymentLinkToken);
+
+        // Update booking status
+        await supabase
+            .from('bookings')
+            .update({ status: 'confirmed', payment_status: 'paid' })
+            .eq('booking_reference', orderId);
+
+        // Find payment record — try arc_order_id first, then metadata
+        let paymentRecord = null;
+        
+        const { data: byOrderId } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('arc_order_id', orderId)
+            .limit(1);
+        
+        if (byOrderId && byOrderId.length > 0) {
+            paymentRecord = byOrderId[0];
+        } else {
+            // Fallback: search by metadata containing the payment_link_token
+            const { data: byMetadata } = await supabase
+                .from('payments')
+                .select('*')
+                .contains('metadata', { payment_link_token: paymentLinkToken })
+                .limit(1);
+            if (byMetadata && byMetadata.length > 0) {
+                paymentRecord = byMetadata[0];
+            }
+        }
+
+        let paymentId;
+        if (paymentRecord) {
+            paymentId = paymentRecord.id;
+            await supabase
+                .from('payments')
+                .update({
+                    payment_status: 'completed',
+                    completed_at: new Date().toISOString(),
+                    arc_transaction_id: resultIndicator || null,
+                    arc_order_id: orderId
+                })
+                .eq('id', paymentId);
+        } else {
+            // No payment record found — create one from the payment link data
+            const { data: newPayment } = await supabase.from('payments').insert({
+                amount: paymentLink?.amount || 0,
+                currency: paymentLink?.currency || 'USD',
+                payment_status: 'completed',
+                completed_at: new Date().toISOString(),
+                arc_order_id: orderId,
+                arc_transaction_id: resultIndicator || null,
+                customer_email: paymentLink?.customer_email,
+                customer_name: paymentLink?.customer_name,
+                metadata: {
+                    payment_link_id: paymentLink?.id,
+                    payment_link_token: paymentLinkToken,
+                    order_id: orderId
+                },
+                created_at: new Date().toISOString()
+            }).select().single();
+            paymentId = newPayment?.id || orderId;
+        }
+
+        console.log('✅ Payment link completed successfully:', paymentLinkToken, 'paymentId:', paymentId);
+
+        return res.json({
+            success: true,
+            paymentId,
+            paymentLink,
+            message: 'Payment link completed successfully'
+        });
+    } catch (error) {
+        console.error('❌ Complete payment link error:', error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || 'jetset-app-secret-key';
