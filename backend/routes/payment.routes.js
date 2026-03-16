@@ -217,7 +217,7 @@ async function handleInitiatePayment(req, res) {
                 operation: 'PURCHASE',
                 returnUrl: finalReturnUrl,
                 cancelUrl: finalCancelUrl,
-                merchant: { name: 'JetSet Travel' },
+                merchant: { name: 'Jetsetter Travel' },
                 displayControl: { billingAddress: 'MANDATORY', customerEmail: 'MANDATORY' },  // Required for 3DS2
                 action: {
                     '3DSecure': 'MANDATORY'
@@ -404,7 +404,7 @@ async function handleHostedCheckout(req, res) {
                 operation: 'PURCHASE',
                 returnUrl: finalReturnUrl,
                 cancelUrl: finalCancelUrl,
-                merchant: { name: 'JetSet Travel' },
+                merchant: { name: 'Jetsetter Travel' },
                 displayControl: {
                     billingAddress: 'MANDATORY',
                     customerEmail: 'MANDATORY'
@@ -2621,7 +2621,7 @@ async function handleProcessPaymentLink(req, res) {
                 operation: 'PURCHASE',
                 returnUrl,
                 cancelUrl,
-                merchant: { name: 'JetSet Travel' },
+                merchant: { name: 'Jetsetter Travel' },
                 displayControl: {
                     billingAddress: 'MANDATORY',
                     customerEmail: 'MANDATORY'
