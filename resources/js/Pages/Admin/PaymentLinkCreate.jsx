@@ -9,6 +9,8 @@ const PaymentLinkCreate = () => {
     customerPhone: '',
     bookingType: 'flight',
     amount: '',
+    actualFee: '',
+    agentFee: '',
     currency: 'USD',
     description: '',
     expiryDays: 30,
@@ -34,7 +36,19 @@ const PaymentLinkCreate = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    setFormData(prev => {
+      const newState = { ...prev, [name]: value };
+      
+      // Calculate total amount if actualFee or agentFee changes
+      if (name === 'actualFee' || name === 'agentFee') {
+        const actual = parseFloat(name === 'actualFee' ? value : prev.actualFee) || 0;
+        const agent = parseFloat(name === 'agentFee' ? value : prev.agentFee) || 0;
+        newState.amount = (actual + agent).toFixed(2);
+      }
+      
+      return newState;
+    });
   };
 
   const handleTravelDetailChange = (e) => {
@@ -96,6 +110,8 @@ const PaymentLinkCreate = () => {
       customerPhone: '',
       bookingType: 'flight',
       amount: '',
+      actualFee: '',
+      agentFee: '',
       currency: 'USD',
       description: '',
       expiryDays: 30,
@@ -161,7 +177,7 @@ const PaymentLinkCreate = () => {
               </button>
               {generatedLink.customer_email && (
                 <button onClick={() => {
-                  window.open(`mailto:${generatedLink.customer_email}?subject=Payment Link - ${generatedLink.description || 'Booking'}&body=Hi ${generatedLink.customer_name},%0A%0APlease use the following link to complete your payment:%0A%0A${generatedLink.paymentUrl}%0A%0AAmount: ${generatedLink.currency} ${parseFloat(generatedLink.amount).toFixed(2)}%0A%0AThank you,%0AJetsetters Team`);
+                  window.open(`mailto:${generatedLink.customer_email}?subject=Payment Link - ${generatedLink.description || 'Booking'}&body=Hi ${generatedLink.customer_name},%0A%0APlease use the following link to complete your payment:%0A%0A${generatedLink.paymentUrl}%0A%0AFee Breakdown:%0A- Actual Fee: ${generatedLink.currency} ${parseFloat(generatedLink.actual_fee || 0).toFixed(2)}%0A- Agent Fee: ${generatedLink.currency} ${parseFloat(generatedLink.agent_fee || 0).toFixed(2)}%0A- Total Amount: ${generatedLink.currency} ${parseFloat(generatedLink.amount).toFixed(2)}%0A%0AThank you,%0AJetsetters Team`);
                 }} style={{
                   background: 'rgba(255,255,255,0.2)',
                   color: 'white',
@@ -187,7 +203,9 @@ const PaymentLinkCreate = () => {
             <h3 style={{ margin: '0 0 15px', fontSize: '16px', color: '#334155' }}>Link Details</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '14px' }}>
               <div><span style={{ color: '#64748b' }}>Customer:</span> <strong>{generatedLink.customer_name}</strong></div>
-              <div><span style={{ color: '#64748b' }}>Amount:</span> <strong>{generatedLink.currency} {parseFloat(generatedLink.amount).toFixed(2)}</strong></div>
+              <div><span style={{ color: '#64748b' }}>Actual Fee:</span> <strong>{generatedLink.currency} {parseFloat(generatedLink.actual_fee || 0).toFixed(2)}</strong></div>
+              <div><span style={{ color: '#64748b' }}>Agent Fee:</span> <strong>{generatedLink.currency} {parseFloat(generatedLink.agent_fee || 0).toFixed(2)}</strong></div>
+              <div><span style={{ color: '#64748b' }}>Total Fee:</span> <strong>{generatedLink.currency} {parseFloat(generatedLink.amount).toFixed(2)}</strong></div>
               <div><span style={{ color: '#64748b' }}>Type:</span> <strong style={{ textTransform: 'capitalize' }}>{generatedLink.booking_type}</strong></div>
               <div><span style={{ color: '#64748b' }}>Expires:</span> <strong>{new Date(generatedLink.expires_at).toLocaleDateString()}</strong></div>
               {generatedLink.customer_email && (
@@ -272,7 +290,7 @@ const PaymentLinkCreate = () => {
               </div>
               <div className="form-grid">
                 <div className="form-field">
-                  <label>Amount *</label>
+                  <label>Actual Fee *</label>
                   <div className="currency-input">
                     <select name="currency" value={formData.currency} onChange={handleChange} className="currency-select">
                       <option value="USD">USD ($)</option>
@@ -280,8 +298,25 @@ const PaymentLinkCreate = () => {
                       <option value="GBP">GBP (£)</option>
                       <option value="INR">INR (₹)</option>
                     </select>
-                    <input type="number" name="amount" value={formData.amount} onChange={handleChange} placeholder="0.00" step="0.01" min="1" required />
+                    <input type="number" name="actualFee" value={formData.actualFee} onChange={handleChange} placeholder="0.00" step="0.01" required />
                   </div>
+                </div>
+                <div className="form-field">
+                  <label>Agent Fee *</label>
+                  <input type="number" name="agentFee" value={formData.agentFee} onChange={handleChange} placeholder="0.00" step="0.01" required />
+                </div>
+                <div className="form-field">
+                  <label>Total Fee ({formData.currency})</label>
+                  <input 
+                    type="number" 
+                    name="amount" 
+                    value={formData.amount} 
+                    onChange={handleChange} 
+                    placeholder="0.00" 
+                    step="0.01" 
+                    readOnly 
+                    style={{ background: '#f1f5f9', fontWeight: 'bold' }} 
+                  />
                 </div>
                 <div className="form-field">
                   <label>Link Expires In</label>
