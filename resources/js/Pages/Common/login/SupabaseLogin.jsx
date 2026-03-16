@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaGoogle, FaApple, FaGithub, FaEye, FaEyeSlash, FaSpinner, FaLock, FaEnvelope } from 'react-icons/fa';
-import { SiSolana } from 'react-icons/si';
+import { FaGoogle, FaApple, FaEye, FaEyeSlash, FaSpinner, FaLock, FaEnvelope } from 'react-icons/fa';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import supabase from '../../../lib/supabase';
 import './login.css';
@@ -80,55 +79,6 @@ export default function SupabaseLogin() {
             setProcessing(false);
             setErrors({
                 login: error.message || 'Failed to sign in with Apple. Please try again.'
-            });
-        }
-    };
-
-    // Handle GitHub Sign-In
-    const handleGitHubSignIn = async () => {
-        try {
-            setProcessing(true);
-            setErrors({});
-
-            sessionStorage.setItem('auth_redirect', '/my-trips');
-
-            const { error } = await signInWithOAuth('github');
-
-            if (error) {
-                setErrors({ login: error.message || 'Failed to sign in with GitHub. Please try again.' });
-                setProcessing(false);
-            }
-        } catch (error) {
-            console.error('GitHub login error:', error);
-            setProcessing(false);
-            setErrors({
-                login: error.message || 'Failed to sign in with GitHub. Please try again.'
-            });
-        }
-    };
-
-    // Handle Solana Sign-In
-    const handleSolanaSignIn = async () => {
-        try {
-            setProcessing(true);
-            setErrors({});
-
-            sessionStorage.setItem('auth_redirect', '/my-trips');
-
-            // Note: For native Solana wallet login, you typically need wallet adapters.
-            // This assumes Supabase handles the flow or you have a specific setup.
-            // If standard OAuth flow is supported for the "Web3 Wallet" provider:
-            const { error } = await signInWithOAuth('solana'); // Attempting with 'solana' provider ID
-
-            if (error) {
-                setErrors({ login: error.message || 'Failed to sign in with Solana. Please try again.' });
-                setProcessing(false);
-            }
-        } catch (error) {
-            console.error('Solana login error:', error);
-            setProcessing(false);
-            setErrors({
-                login: error.message || 'Failed to sign in with Solana. Please try again.'
             });
         }
     };
@@ -337,26 +287,6 @@ export default function SupabaseLogin() {
                             >
                                 <FaApple size={22} color="#000000" />
                                 <span>Apple</span>
-                            </button>
-                            <button
-                                type="button"
-                                className="social-button github"
-                                onClick={handleGitHubSignIn}
-                                disabled={processing || authLoading}
-                                title="Sign in with GitHub"
-                            >
-                                <FaGithub size={22} color="#333333" />
-                                <span>GitHub</span>
-                            </button>
-                            <button
-                                type="button"
-                                className="social-button solana"
-                                onClick={handleSolanaSignIn}
-                                disabled={processing || authLoading}
-                                title="Sign in with Solana"
-                            >
-                                <SiSolana size={20} color="#9945FF" />
-                                <span>Solana</span>
                             </button>
                         </div>
 
