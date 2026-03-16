@@ -3469,8 +3469,6 @@ async function handleCreatePaymentLink(req, res) {
                 customer_phone: customerPhone || null,
                 booking_type: bookingType,
                 amount: parseFloat(amount),
-                actual_fee: parseFloat(actualFee) || 0,
-                agent_fee: parseFloat(agentFee) || 0,
                 currency: currency,
                 description: description || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking Payment`,
                 travel_details: travelDetails,
