@@ -6,6 +6,7 @@ import { FaShip, FaAnchor, FaStar, FaLifeRing, FaUsers, FaCheckCircle, FaTimes, 
 import { Link } from 'react-router-dom';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
+import { Mail, Phone, ExternalLink, Calendar, MessageSquare, Clock, ArrowLeft, User, CheckCircle2 } from 'lucide-react';
 import withPageElements from '../PageWrapper';
 import WhyChooseUsSection from './WhyChooseUsSection';
 import ContactSection from './ContactSection';
@@ -528,6 +529,58 @@ const HomePage = () => {
   const [subscriptionSubmitted, setSubscriptionSubmitted] = useState(false);
   const [subscriptionError, setSubscriptionError] = useState('');
   const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
+  const [showCruisePopup, setShowCruisePopup] = useState(false);
+  const [popupView, setPopupView] = useState('announcement'); // 'announcement', 'form', 'success'
+  const [formLoading, setFormLoading] = useState(false);
+  const [callbackForm, setCallbackForm] = useState({
+    fullName: '',
+    email: '',
+    phone: '',
+    callTime: '',
+    info: ''
+  });
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setCallbackForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    setFormLoading(true);
+
+    // Simulate API call
+    setTimeout(() => {
+      setFormLoading(false);
+      setPopupView('success');
+      // Auto-close after 3 seconds
+      setTimeout(() => {
+        setShowCruisePopup(false);
+        setPopupView('announcement');
+        setCallbackForm({ fullName: '', email: '', phone: '', callTime: '', info: '' });
+      }, 3000);
+    }, 1500);
+  };
+
+  const emailBody = `Full Name: 
+Email Address: 
+Phone Number: 
+Preferred Call Time: 
+Additional Information: 
+
+--
+Inquiry from JetSetters Cruise Portal`;
+
+  const mailtoLink = `mailto:bookings@jetsetterss.com?subject=${encodeURIComponent('Cruise Booking Inquiry')}&body=${encodeURIComponent(emailBody)}`;
+
+  useEffect(() => {
+    // Show popup after 1.5 seconds delay
+    const timer = setTimeout(() => {
+      setShowCruisePopup(true);
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     // Scroll to top when component mounts
@@ -580,9 +633,237 @@ const HomePage = () => {
     }
   };
 
+  const CruiseBookingPopup = () => {
+    if (!showCruisePopup) return null;
+
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+        <div
+          className="relative w-full max-w-lg bg-white rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 overflow-y-auto max-h-[95vh]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header Image/Gradient Area */}
+          <div className={`transition-all duration-500 ${popupView === 'announcement' ? 'h-32' : 'h-24'} bg-gradient-to-br from-[#055B75] to-[#034457] relative flex items-center justify-center`}>
+            {popupView === 'form' && (
+              <button
+                className="absolute top-4 left-4 text-white/80 hover:text-white transition-colors"
+                onClick={() => setPopupView('announcement')}
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+            )}
+            <div className="absolute top-4 right-4 text-white/80 hover:text-white cursor-pointer transition-colors" onClick={() => setShowCruisePopup(false)}>
+              <FaTimes className="w-6 h-6" />
+            </div>
+            <div className={`transition-all duration-500 ${popupView === 'announcement' ? 'p-4' : 'p-2'} bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-white`}>
+              {popupView === 'success' ? (
+                <CheckCircle2 className="w-10 h-10" />
+              ) : (
+                <FaShip className={`${popupView === 'announcement' ? 'w-10' : 'w-6'} ${popupView === 'announcement' ? 'h-10' : 'h-6'}`} />
+              )}
+            </div>
+          </div>
+
+          {/* Content Area */}
+          <div className="p-6 md:p-8">
+            {popupView === 'announcement' && (
+              <div className="text-center">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-xs font-bold uppercase tracking-wider mb-4">
+                  <Sparkles className="w-3 h-3" /> Special Announcement
+                </div>
+
+                <h2 className="text-3xl font-extrabold text-gray-900 mb-2 tracking-tight">
+                  Cruise Bookings Are <br /><span className="text-[#0066b2]">Now Open!</span>
+                </h2>
+
+                <p className="text-lg text-gray-600 mb-6 leading-relaxed">
+                  Hi! We are excited to announce that bookings are open. <br />
+                  <span className="font-semibold text-gray-800">Contact us directly to avail the best prices</span> for your next ocean adventure.
+                </p>
+
+                {/* Contact Options */}
+                <div className="grid grid-cols-1 gap-4 mb-6">
+                  <button
+                    onClick={() => setPopupView('form')}
+                    className="group flex items-center justify-between p-4 rounded-2xl bg-blue-600 hover:bg-[#005091] transition-all duration-300 transform hover:-translate-y-1 shadow-md hover:shadow-lg"
+                  >
+                    <div className="flex items-center text-left">
+                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center mr-4 group-hover:scale-110 transition-transform shadow-sm">
+                        <Clock className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-blue-100 font-medium uppercase tracking-wider">Fastest Response</div>
+                        <div className="text-base font-bold text-white">REQUEST CALL BACK</div>
+                      </div>
+                    </div>
+                    <ExternalLink className="w-5 h-5 text-white/50 group-hover:text-white" />
+                  </button>
+
+                  <a
+                    href={mailtoLink}
+                    className="group flex items-center justify-between p-4 rounded-2xl bg-gray-50 hover:bg-[#055B75] transition-all duration-300 transform hover:-translate-y-1"
+                  >
+                    <div className="flex items-center text-left">
+                      <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center mr-4 group-hover:scale-110 transition-transform shadow-sm">
+                        <Mail className="w-6 h-6 text-[#055B75]" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 group-hover:text-blue-100 font-medium">Send us an inquiry</div>
+                        <div className="text-base font-bold text-gray-900 group-hover:text-white">EMAIL FOR QUOTE</div>
+                      </div>
+                    </div>
+                    <ExternalLink className="w-5 h-5 text-gray-300 group-hover:text-white" />
+                  </a>
+                </div>
+
+                <div className="flex items-center justify-center gap-4 text-sm font-bold text-gray-700">
+                  <a href="tel:8775387380" className="flex items-center hover:text-blue-600 transition-colors">
+                    <Phone className="w-4 h-4 mr-2" /> (877) 538-7380
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {popupView === 'form' && (
+              <div>
+                <div className="text-center mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">Request a Call Back</h3>
+                  <p className="text-sm text-gray-500 mt-1">Our cruise expert will contact you to discuss options</p>
+                </div>
+
+                <form onSubmit={handleFormSubmit} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700 ml-1">Full Name*</label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <User className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                      </div>
+                      <input
+                        type="text"
+                        name="fullName"
+                        required
+                        value={callbackForm.fullName}
+                        onChange={handleFormChange}
+                        placeholder="John Doe"
+                        className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-bold text-gray-700 ml-1">Email Address*</label>
+                      <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Mail className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        </div>
+                        <input
+                          type="email"
+                          name="email"
+                          required
+                          value={callbackForm.email}
+                          onChange={handleFormChange}
+                          placeholder="john@example.com"
+                          className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-bold text-gray-700 ml-1">Phone Number*</label>
+                      <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Phone className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        </div>
+                        <input
+                          type="tel"
+                          name="phone"
+                          required
+                          value={callbackForm.phone}
+                          onChange={handleFormChange}
+                          placeholder="+1 (123) 456-7890"
+                          className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700 ml-1">Preferred Call Time</label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Calendar className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                      </div>
+                      <input
+                        type="text"
+                        name="callTime"
+                        value={callbackForm.callTime}
+                        onChange={handleFormChange}
+                        placeholder="e.g. Weekdays after 2 PM"
+                        className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700 ml-1">Additional Information</label>
+                    <div className="relative group">
+                      <div className="absolute top-3 left-3 flex items-start pointer-events-none">
+                        <MessageSquare className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                      </div>
+                      <textarea
+                        name="info"
+                        rows="3"
+                        value={callbackForm.info}
+                        onChange={handleFormChange}
+                        placeholder="Any specific questions or requirements?"
+                        className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400 resize-none"
+                      ></textarea>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={formLoading}
+                    className="w-full bg-[#0066b2] hover:bg-[#005091] text-white font-bold py-4 rounded-xl transition-all duration-300 shadow-md flex items-center justify-center disabled:opacity-70"
+                  >
+                    {formLoading ? (
+                      <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : (
+                      <>
+                        <Phone className="w-5 h-5 mr-2" /> Request Call Back
+                      </>
+                    )}
+                  </button>
+
+                  <p className="text-[10px] text-center text-gray-400 mt-2 px-8 leading-tight">
+                    By submitting this form, you agree to our <a href="#" className="underline">Terms & Conditions</a> and <a href="#" className="underline">Privacy Policy</a>
+                  </p>
+                </form>
+              </div>
+            )}
+
+            {popupView === 'success' && (
+              <div className="text-center py-10">
+                <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <CheckCircle2 className="w-12 h-12 text-green-500" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">Request Received!</h3>
+                <p className="text-gray-600">
+                  Our cruise expert will contact you shortly. <br />
+                  Get ready for your next adventure!
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       <Navbar />
+      <CruiseBookingPopup />
       <div className="home-page-wrapper" style={styles.homePageWrapper}>
 
 
