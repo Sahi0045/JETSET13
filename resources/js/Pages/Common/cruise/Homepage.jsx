@@ -12,6 +12,7 @@ import WhyChooseUsSection from './WhyChooseUsSection';
 import ContactSection from './ContactSection';
 import supabase from '../../../lib/supabase';
 import { Sparkles } from 'lucide-react';
+import callbackService from '../../../Services/callbackService';
 
 // CSS for page and section styling
 const styles = {
@@ -549,17 +550,30 @@ const HomePage = () => {
     e.preventDefault();
     setFormLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Use the existing callbackService for actual data submission and email notification
+      await callbackService.createCallbackRequest({
+        name: callbackForm.fullName,
+        email: callbackForm.email,
+        phone: callbackForm.phone,
+        preferredTime: callbackForm.callTime,
+        message: callbackForm.info
+      });
+
       setFormLoading(false);
       setPopupView('success');
+
       // Auto-close after 3 seconds
       setTimeout(() => {
         setShowCruisePopup(false);
         setPopupView('announcement');
         setCallbackForm({ fullName: '', email: '', phone: '', callTime: '', info: '' });
       }, 3000);
-    }, 1500);
+    } catch (error) {
+      console.error('Error submitting callback request:', error);
+      setFormLoading(false);
+      alert('We encountered an issue submitting your request. Please try again or contact us directly at (877) 538-7380.');
+    }
   };
 
   const emailBody = `Full Name: 
@@ -639,88 +653,101 @@ Inquiry from JetSetters Cruise Portal`;
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
         <div
-          className="relative w-full max-w-lg bg-white rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 overflow-y-auto max-h-[95vh]"
+          className="relative w-[300px] sm:w-full sm:max-w-md bg-white rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 overflow-y-auto max-h-[90vh] hide-scrollbar"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header Image/Gradient Area */}
-          <div className={`transition-all duration-500 ${popupView === 'announcement' ? 'h-32' : 'h-24'} bg-gradient-to-br from-[#055B75] to-[#034457] relative flex items-center justify-center`}>
+          <div className={`transition-all duration-500 ${popupView === 'announcement' ? 'h-14 sm:h-20' : 'h-12 sm:h-16'} bg-white relative flex items-center justify-center border-b border-gray-100`}>
             {popupView === 'form' && (
               <button
-                className="absolute top-4 left-4 text-white/80 hover:text-white transition-colors"
+                className="absolute top-3 sm:top-4 left-3 sm:left-4 text-gray-500 hover:text-gray-800 transition-colors"
                 onClick={() => setPopupView('announcement')}
               >
-                <ArrowLeft className="w-6 h-6" />
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             )}
-            <div className="absolute top-4 right-4 text-white/80 hover:text-white cursor-pointer transition-colors" onClick={() => setShowCruisePopup(false)}>
-              <FaTimes className="w-6 h-6" />
+            <div className="absolute top-3 sm:top-4 right-3 sm:right-4 text-gray-400 hover:text-gray-800 cursor-pointer transition-colors" onClick={() => setShowCruisePopup(false)}>
+              <FaTimes className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div className={`transition-all duration-500 ${popupView === 'announcement' ? 'p-4' : 'p-2'} bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-white`}>
+            <div className={`transition-all duration-500 ${popupView === 'announcement' ? 'p-1.5 sm:p-2' : 'p-1 sm:p-1.5'} bg-blue-50 rounded-full border border-blue-100 text-blue-600 shadow-sm`}>
               {popupView === 'success' ? (
-                <CheckCircle2 className="w-10 h-10" />
+                <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8" />
               ) : (
-                <FaShip className={`${popupView === 'announcement' ? 'w-10' : 'w-6'} ${popupView === 'announcement' ? 'h-10' : 'h-6'}`} />
+                <FaShip className={`${popupView === 'announcement' ? 'w-5 sm:w-6' : 'w-3 sm:w-4'} ${popupView === 'announcement' ? 'h-5 sm:h-6' : 'h-3 sm:h-4'}`} />
               )}
             </div>
           </div>
 
           {/* Content Area */}
-          <div className="p-6 md:p-8">
+          <div className="p-5 sm:p-8">
             {popupView === 'announcement' && (
               <div className="text-center">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-xs font-bold uppercase tracking-wider mb-4">
-                  <Sparkles className="w-3 h-3" /> Special Announcement
-                </div>
-
-                <h2 className="text-3xl font-extrabold text-gray-900 mb-2 tracking-tight">
+                <h2 className="text-xl sm:text-3xl font-extrabold text-[#0D1B2A] mb-1.5 sm:mb-3 tracking-tight leading-tight">
                   Cruise Bookings Are <br /><span className="text-[#0066b2]">Now Open!</span>
                 </h2>
 
-                <p className="text-lg text-gray-600 mb-6 leading-relaxed">
+                <p className="text-[10px] sm:text-sm text-gray-500 mb-4 sm:mb-8 leading-relaxed max-w-[220px] sm:max-w-xs mx-auto">
                   Hi! We are excited to announce that bookings are open. <br />
-                  <span className="font-semibold text-gray-800">Contact us directly to avail the best prices</span> for your next ocean adventure.
+                  <span className="font-semibold text-gray-700">Contact us directly to avail the best prices</span>
                 </p>
 
                 {/* Contact Options */}
-                <div className="grid grid-cols-1 gap-4 mb-6">
-                  <button
-                    onClick={() => setPopupView('form')}
-                    className="group flex items-center justify-between p-4 rounded-2xl bg-blue-600 hover:bg-[#005091] transition-all duration-300 transform hover:-translate-y-1 shadow-md hover:shadow-lg"
+                <div className="grid grid-cols-1 gap-2 sm:gap-4 mb-4 sm:mb-8">
+                  {/* Phone Number on Top */}
+                  <a
+                    href="tel:8775387380"
+                    className="group flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-gray-50 hover:bg-blue-600 transition-all duration-300 transform hover:-translate-y-0.5 border border-gray-100 no-underline"
                   >
                     <div className="flex items-center text-left">
-                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center mr-4 group-hover:scale-110 transition-transform shadow-sm">
-                        <Clock className="w-6 h-6 text-white" />
+                      <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-white flex items-center justify-center mr-3 sm:mr-4 group-hover:scale-105 transition-transform shadow-sm">
+                        <Phone className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                       </div>
                       <div>
-                        <div className="text-xs text-blue-100 font-medium uppercase tracking-wider">Fastest Response</div>
-                        <div className="text-base font-bold text-white">REQUEST CALL BACK</div>
+                        <div className="text-[8px] sm:text-[10px] text-gray-400 group-hover:text-blue-100 font-bold uppercase tracking-[0.1em] mb-0.5">Direct Line</div>
+                        <div className="text-sm sm:text-lg font-extrabold text-gray-900 group-hover:text-white leading-none">(877) 538-7380</div>
                       </div>
                     </div>
-                    <ExternalLink className="w-5 h-5 text-white/50 group-hover:text-white" />
-                  </button>
+                    <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5 text-gray-300 group-hover:text-white transition-all" />
+                  </a>
 
+                  {/* Email second */}
                   <a
                     href={mailtoLink}
-                    className="group flex items-center justify-between p-4 rounded-2xl bg-gray-50 hover:bg-[#055B75] transition-all duration-300 transform hover:-translate-y-1"
+                    className="group flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-[#004250] hover:bg-[#00313C] transition-all duration-300 transform hover:-translate-y-0.5 shadow-lg shadow-teal-900/10 no-underline"
                   >
                     <div className="flex items-center text-left">
-                      <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center mr-4 group-hover:scale-110 transition-transform shadow-sm">
-                        <Mail className="w-6 h-6 text-[#055B75]" />
+                      <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-white/10 flex items-center justify-center mr-3 sm:mr-4 group-hover:scale-105 transition-transform shadow-inner border border-white/10">
+                        <Mail className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                       </div>
                       <div>
-                        <div className="text-xs text-gray-500 group-hover:text-blue-100 font-medium">Send us an inquiry</div>
-                        <div className="text-base font-bold text-gray-900 group-hover:text-white">EMAIL FOR QUOTE</div>
+                        <div className="text-[8px] sm:text-[10px] text-teal-100/70 font-bold uppercase tracking-[0.1em] mb-0.5">Send us an inquiry</div>
+                        <div className="text-sm sm:text-base font-extrabold text-white leading-none">EMAIL FOR QUOTE</div>
                       </div>
                     </div>
-                    <ExternalLink className="w-5 h-5 text-gray-300 group-hover:text-white" />
+                    <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5 text-white/40 group-hover:text-white transition-all" />
                   </a>
+
+                  {/* Request Call Back last */}
+                  <button
+                    onClick={() => setPopupView('form')}
+                    className="group flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-[#0066FF] hover:bg-[#0052CC] transition-all duration-300 transform hover:-translate-y-0.5 shadow-lg shadow-blue-200"
+                  >
+                    <div className="flex items-center text-left">
+                      <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-white/20 flex items-center justify-center mr-3 sm:mr-4 group-hover:scale-105 transition-transform shadow-inner">
+                        <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                      </div>
+                      <div>
+                        <div className="text-[8px] sm:text-[10px] text-blue-100 font-bold uppercase tracking-[0.1em] mb-0.5">Fastest Response</div>
+                        <div className="text-sm sm:text-base font-bold text-white leading-none">REQUEST CALL BACK</div>
+                      </div>
+                    </div>
+                    <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5 text-white/50 group-hover:text-white transition-all" />
+                  </button>
                 </div>
 
-                <div className="flex items-center justify-center gap-4 text-sm font-bold text-gray-700">
-                  <a href="tel:8775387380" className="flex items-center hover:text-blue-600 transition-colors">
-                    <Phone className="w-4 h-4 mr-2" /> (877) 538-7380
-                  </a>
-                </div>
+                <p className="text-[9px] sm:text-[10px] text-gray-400 font-medium italic">
+                  Available 24/7 for you
+                </p>
               </div>
             )}
 
