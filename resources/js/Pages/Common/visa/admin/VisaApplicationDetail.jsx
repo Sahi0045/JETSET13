@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { getApiUrl } from "../../../../utils/apiHelper";
+import { getApiUrl, apiGet, apiPost, apiPut, apiDelete } from "../../../../utils/apiHelper";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Admin - Single Application Detail / Review Page — connected to live API
@@ -63,11 +63,9 @@ const VisaApplicationDetail = () => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`${getApiUrl("visa/applications")}/${id}`, {
-        headers: { Accept: "application/json" },
-        credentials: "include",
-      });
-      const data = await response.json();
+      const response = await apiGet(`visa/applications/${id}`);
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`Server error (${response.status})`); }
       if (!response.ok || !data.success) {
         if (response.status === 404) {
           setError("Application not found. It may have been deleted.");
@@ -80,9 +78,7 @@ const VisaApplicationDetail = () => {
       setInternalNote(data.data.notes || "");
     } catch (err) {
       console.error("VisaApplicationDetail fetch error:", err);
-      setError(
-        err.message || "An error occurred while loading the application.",
-      );
+      setError(err.message || "An error occurred while loading the application.");
     } finally {
       setLoading(false);
     }
@@ -110,23 +106,13 @@ const VisaApplicationDetail = () => {
     setStatusUpdating(true);
     setStatusError("");
     try {
-      const response = await fetch(
-        `${getApiUrl("visa/applications")}/${id}/timeline`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify({
-            status: newStatus,
-            note: statusNote.trim() || `Status changed to ${newStatus}.`,
-            by: "Admin",
-          }),
-        },
-      );
-      const data = await response.json();
+      const response = await apiPost(`visa/applications/${id}/timeline`, {
+        status: newStatus,
+        note: statusNote.trim() || `Status changed to ${newStatus}.`,
+        by: "Admin",
+      });
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`Server error (${response.status})`); }
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Failed to update status.");
       }
@@ -145,19 +131,11 @@ const VisaApplicationDetail = () => {
   const quickStatusUpdate = async (status, note) => {
     setStatusUpdating(true);
     try {
-      const response = await fetch(
-        `${getApiUrl("visa/applications")}/${id}/timeline`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify({ status, note, by: "Admin" }),
-        },
-      );
-      const data = await response.json();
+      const response = await apiPost(`visa/applications/${id}/timeline`, {
+        status, note, by: "Admin",
+      });
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`Server error (${response.status})`); }
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Failed to update.");
       }
@@ -176,16 +154,9 @@ const VisaApplicationDetail = () => {
     setNotesSaving(true);
     setNotesSaved(false);
     try {
-      const response = await fetch(`${getApiUrl("visa/applications")}/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({ notes: internalNote }),
-      });
-      const data = await response.json();
+      const response = await apiPut(`visa/applications/${id}`, { notes: internalNote });
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`Server error (${response.status})`); }
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Failed to save notes.");
       }
@@ -204,19 +175,11 @@ const VisaApplicationDetail = () => {
   const handleDocStatusUpdate = async (docName, newDocStatus) => {
     setDocUpdating((prev) => ({ ...prev, [docName]: true }));
     try {
-      const response = await fetch(
-        `${getApiUrl("visa/applications")}/${id}/documents`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify({ docName, status: newDocStatus }),
-        },
-      );
-      const data = await response.json();
+      const response = await apiPost(`visa/applications/${id}/documents`, {
+        docName, status: newDocStatus,
+      });
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`Server error (${response.status})`); }
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Failed to update document.");
       }
@@ -229,16 +192,12 @@ const VisaApplicationDetail = () => {
     }
   };
 
-  // ── Delete application ─────────────────────────────────────────────────────
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const response = await fetch(`${getApiUrl("visa/applications")}/${id}`, {
-        method: "DELETE",
-        headers: { Accept: "application/json" },
-        credentials: "include",
-      });
-      const data = await response.json();
+      const response = await apiDelete(`visa/applications/${id}`);
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`Server error (${response.status})`); }
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Failed to delete application.");
       }
@@ -1047,12 +1006,13 @@ const VisaApplicationDetail = () => {
                 </Link>
                 <Link
                   to="/visa/admin/messages"
-                  className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-100 transition-colors no-underline"
+                  state={{ applicationId: app.id }}
+                  className="flex items-center gap-2 px-3 py-2.5 bg-[#1152d4]/5 text-[#1152d4] rounded-lg font-bold text-sm hover:bg-[#1152d4]/10 transition-colors no-underline"
                 >
                   <span className="material-symbols-outlined text-lg">
                     chat
                   </span>
-                  Message Applicant
+                  Quick Chat with Applicant
                 </Link>
                 <Link
                   to="/visa/admin"

@@ -14,6 +14,11 @@ const CustomerStatusDashboard = () => {
     const [message, setMessage] = useState('');
     const [chatHistory, setChatHistory] = useState([]);
     const [sending, setSending] = useState(false);
+    const [resending, setResending] = useState(false);
+    const [resendStatus, setResendStatus] = useState(null); // 'success' | 'error'
+    const [uploadingDoc, setUploadingDoc] = useState(null);
+    const [uploadError, setUploadError] = useState(null);
+    const scrollRef = React.useRef(null);
 
     const fetchApplication = useCallback(async () => {
         try {
@@ -55,12 +60,87 @@ const CustomerStatusDashboard = () => {
             console.error('fetchMessages error:', err);
         } finally {
             setLoading(false);
+            // Auto scroll to bottom
+            setTimeout(() => {
+                if (scrollRef.current) {
+                    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                }
+            }, 100);
         }
     };
 
     useEffect(() => {
         fetchApplication();
+        
+        // Polling for status updates every 5 seconds for "real-time" sync
+        const interval = setInterval(() => {
+            fetchApplication();
+        }, 5000);
+        
+        return () => clearInterval(interval);
     }, [fetchApplication]);
+
+    const handleResendEmail = async () => {
+        if (!application?.id) return;
+        setResending(true);
+        setResendStatus(null);
+        try {
+            const response = await apiPost(`visa/applications/${application.id}/resend-email`);
+            if (response.ok) {
+                setResendStatus('success');
+            } else {
+                setResendStatus('error');
+            }
+        } catch (err) {
+            console.error('Resend email error:', err);
+            setResendStatus('error');
+        } finally {
+            setResending(false);
+            setTimeout(() => setResendStatus(null), 5000);
+        }
+    };
+
+    const handleFileUpload = async (docName, file) => {
+        if (!file || !application?.id) return;
+        setUploadingDoc(docName);
+        setUploadError(null);
+
+        try {
+            // 1. Upload to storage
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const uploadRes = await apiRequest('visa/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            const uploadData = await uploadRes.json();
+            if (!uploadRes.ok || !uploadData.success) {
+                throw new Error(uploadData.message || 'Upload failed');
+            }
+
+            // 2. Update application record
+            const updateRes = await apiPost(`visa/applications/${application.id}/documents`, {
+                docName,
+                status: 'uploaded',
+                fileUrl: uploadData.data.url
+            });
+
+            if (!updateRes.ok) {
+                throw new Error('Failed to update application record');
+            }
+
+            // 3. Re-fetch application
+            await fetchApplication();
+            alert(`"${docName}" uploaded successfully!`);
+        } catch (err) {
+            console.error('File upload error:', err);
+            setUploadError(`${docName}: ${err.message}`);
+        } finally {
+            setUploadingDoc(null);
+        }
+    };
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
@@ -75,14 +155,8 @@ const CustomerStatusDashboard = () => {
             });
             const data = await response.json();
             if (data.success) {
-                const newMessage = {
-                    id: data.data.id,
-                    type: 'user',
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    content: message
-                };
-                setChatHistory([...chatHistory, newMessage]);
                 setMessage('');
+                fetchMessages(application.id);
             }
         } catch (err) {
             console.error('handleSendMessage error:', err);
@@ -164,10 +238,30 @@ const CustomerStatusDashboard = () => {
                                             Application ID: <span className="font-mono text-[#1152d4] font-bold">#{application.application_ref}</span> • Submitted on {new Date(application.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </p>
                                     </div>
-                                    <button className="flex items-center gap-2 h-10 px-4 bg-white border border-slate-200 rounded-lg text-slate-700 text-sm font-bold shadow-sm hover:bg-slate-50">
-                                        <span className="material-symbols-outlined text-lg">download</span>
-                                        Download Receipt
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            onClick={handleResendEmail}
+                                            disabled={resending}
+                                            className={`flex items-center gap-2 h-10 px-4 bg-white border rounded-lg text-sm font-bold shadow-sm transition-all ${
+                                                resendStatus === 'success' ? 'text-green-600 border-green-200 bg-green-50' :
+                                                resendStatus === 'error' ? 'text-red-600 border-red-200 bg-red-50' :
+                                                'text-slate-700 border-slate-200 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <span className={`material-symbols-outlined text-lg ${resending ? 'animate-spin' : ''}`}>
+                                                {resendStatus === 'success' ? 'check_circle' : 
+                                                 resendStatus === 'error' ? 'error' : 'mail'}
+                                            </span>
+                                            {resending ? 'Resending...' : 
+                                             resendStatus === 'success' ? 'Email Resent!' : 
+                                             resendStatus === 'error' ? 'Failed' : 
+                                             'Resend Email'}
+                                        </button>
+                                        <button className="flex items-center gap-2 h-10 px-4 bg-white border border-slate-200 rounded-lg text-slate-700 text-sm font-bold shadow-sm hover:bg-slate-50">
+                                            <span className="material-symbols-outlined text-lg">download</span>
+                                            Download Receipt
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Progress Stepper */}
@@ -248,8 +342,39 @@ const CustomerStatusDashboard = () => {
                                                     <div className="flex-1">
                                                         <p className="text-sm font-bold text-slate-900">{doc.name}</p>
                                                         <p className="text-xs text-slate-500 mt-0.5">{doc.status === 'rejected' ? 'Previously rejected. Please re-upload.' : 'Upload required for verification.'}</p>
+                                                        {uploadError && uploadError.startsWith(doc.name) && (
+                                                            <p className="text-[10px] text-red-500 font-bold mt-1 line-clamp-1">{uploadError}</p>
+                                                        )}
                                                     </div>
-                                                    <button className="h-9 px-5 bg-[#1152d4] text-white rounded-lg text-xs font-bold hover:bg-[#0e42b0] transition-colors shadow-lg shadow-[#1152d4]/20">Upload</button>
+                                                    <div className="relative">
+                                                        <input 
+                                                            type="file" 
+                                                            id={`upload-${idx}`}
+                                                            className="hidden" 
+                                                            onChange={(e) => handleFileUpload(doc.name, e.target.files[0])}
+                                                            disabled={uploadingDoc === doc.name}
+                                                        />
+                                                        <label 
+                                                            htmlFor={`upload-${idx}`}
+                                                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
+                                                                uploadingDoc === doc.name 
+                                                                ? 'bg-slate-100 text-slate-400' 
+                                                                : 'bg-[#1152d4] text-white shadow-lg shadow-[#1152d4]/20 hover:scale-105 active:scale-95'
+                                                            }`}
+                                                        >
+                                                            {uploadingDoc === doc.name ? (
+                                                                <>
+                                                                    <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+                                                                    Uploading...
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <span className="material-symbols-outlined text-sm">cloud_upload</span>
+                                                                    Upload
+                                                                </>
+                                                            )}
+                                                        </label>
+                                                    </div>
                                                 </div>
                                             ))
                                         }
@@ -311,7 +436,7 @@ const CustomerStatusDashboard = () => {
                         <p className="text-[9px] text-slate-500 font-bold uppercase tracking-tight">Messages are end-to-end encrypted</p>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
                         {chatHistory.map(msg => (
                             <div key={msg.id} className={`flex flex-col gap-1 max-w-[85%] ${msg.type === 'user' ? 'ml-auto items-end' : ''}`}>
                                 <div className={`p-3 rounded-2xl shadow-sm ${msg.type === 'user'

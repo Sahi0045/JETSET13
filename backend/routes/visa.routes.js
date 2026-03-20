@@ -1,4 +1,5 @@
 import express from 'express';
+import multer from 'multer';
 import { protect, admin, optionalProtect } from '../middleware/auth.middleware.js';
 import {
   // Application controllers
@@ -12,6 +13,7 @@ import {
   cancelApplication,
   uploadDocument,
   addTimelineEvent,
+  resendConfirmationEmail,
   deleteApplication,
   // Consultation controllers
   bookConsultation,
@@ -29,7 +31,10 @@ import {
   getRequirements,
   createRequirement,
   updateRequirement,
+  uploadFile,
 } from '../controllers/visa.controller.js';
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
 
@@ -79,7 +84,7 @@ router.get('/applications/:id', optionalProtect, getApplicationById);
  * PUT    /api/visa/applications/:id
  * Update application fields (admin or owner).
  */
-router.put('/applications/:id', protect, updateApplication);
+router.put('/applications/:id', protect, admin, updateApplication);
 
 /**
  * PATCH  /api/visa/applications/:id/cancel
@@ -100,12 +105,19 @@ router.post('/applications/:id/documents', protect, uploadDocument);
  * Body: { status, note, by }
  */
 router.post('/applications/:id/timeline', protect, admin, addTimelineEvent);
+router.post('/applications/:id/resend-email', optionalProtect, resendConfirmationEmail);
 
 /**
  * DELETE /api/visa/applications/:id
  * Permanently delete an application (admin only).
  */
 router.delete('/applications/:id', protect, admin, deleteApplication);
+
+/**
+ * POST /api/visa/upload
+ * Upload a document to storage.
+ */
+router.post('/upload', protect, upload.single('file'), uploadFile);
 
 // ─── Visa Consultations ──────────────────────────────────────────────────────
 

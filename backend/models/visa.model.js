@@ -14,23 +14,39 @@ function isValidUUID(uuid) {
 
 /**
  * Generate a unique application reference in the format VISA-YYYY-NNNNN.
- * Falls back to a timestamp-based ref if the DB query fails.
+ * Uses the highest existing serial for the year and increments it, so it is
+ * safe even when records have been deleted or multiple submissions race.
  */
 async function generateApplicationRef() {
   const year = new Date().getFullYear();
-  // Count existing applications for this year to derive serial number
-  const { count, error } = await supabase
-    .from("visa_applications")
-    .select("*", { count: "exact", head: true })
-    .gte("created_at", `${year}-01-01`)
-    .lt("created_at", `${year + 1}-01-01`);
+  const prefix = `VISA-${year}-`;
 
-  if (error) {
-    // Fallback: use milliseconds tail
-    return `VISA-${year}-${Date.now().toString().slice(-5)}`;
+  try {
+    // Find the highest existing ref for this year
+    const { data, error } = await supabase
+      .from("visa_applications")
+      .select("application_ref")
+      .ilike("application_ref", `${prefix}%`)
+      .order("application_ref", { ascending: false })
+      .limit(1);
+
+    if (error) throw error;
+
+    let nextSerial = 1;
+    if (data && data.length > 0) {
+      const lastRef = data[0].application_ref; // e.g. "VISA-2026-00004"
+      const lastSerial = parseInt(lastRef.replace(prefix, ""), 10);
+      if (!isNaN(lastSerial)) {
+        nextSerial = lastSerial + 1;
+      }
+    }
+
+    return `${prefix}${String(nextSerial).padStart(5, "0")}`;
+  } catch {
+    // Fallback: timestamp + random to avoid collisions
+    const rand = Math.floor(Math.random() * 9000) + 1000;
+    return `${prefix}${Date.now().toString().slice(-4)}${rand.toString().slice(-1)}`;
   }
-  const serial = String((count || 0) + 1).padStart(5, "0");
-  return `VISA-${year}-${serial}`;
 }
 
 // ─── VisaApplication Model ───────────────────────────────────────────────────

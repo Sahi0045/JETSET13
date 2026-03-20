@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { getApiUrl } from "../../../../utils/apiHelper";
+import { getApiUrl, apiGet, apiPut, apiRequest } from "../../../../utils/apiHelper";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Admin - Document Services List — connected to live API (stored as consultations)
@@ -83,15 +83,10 @@ const DocumentServicesList = () => {
       params.set("offset", String((currentPage - 1) * PAGE_SIZE));
       params.set("orderBy", "created_at:desc");
 
-      const response = await fetch(
-        `${getApiUrl("visa/consultations")}?${params.toString()}`,
-        {
-          headers: { Accept: "application/json" },
-          credentials: "include",
-        },
-      );
+      const response = await apiGet(`visa/consultations?${params.toString()}`);
 
-      const data = await response.json();
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`Server error (${response.status})`); }
 
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Failed to fetch document services.");
@@ -150,23 +145,12 @@ const DocumentServicesList = () => {
     setModalUpdating(true);
     setModalError("");
     try {
-      const response = await fetch(
-        `${getApiUrl("visa/consultations")}/${showUpdateModal.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify({ status: newStatus }),
-        },
-      );
-      const data = await response.json();
+      const response = await apiPut(`visa/consultations/${showUpdateModal.id}`, { status: newStatus });
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`Server error (${response.status})`); }
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Failed to update status.");
       }
-      // Optimistically update local state
       setServices((prev) =>
         prev.map((s) =>
           s.id === showUpdateModal.id ? { ...s, status: newStatus } : s,
@@ -186,15 +170,9 @@ const DocumentServicesList = () => {
   const handleCancel = async (id) => {
     if (!window.confirm("Cancel this service request?")) return;
     try {
-      const response = await fetch(
-        `${getApiUrl("visa/consultations")}/${id}/cancel`,
-        {
-          method: "PATCH",
-          headers: { Accept: "application/json" },
-          credentials: "include",
-        },
-      );
-      const data = await response.json();
+      const response = await apiRequest(`visa/consultations/${id}/cancel`, { method: "PATCH" });
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`Server error (${response.status})`); }
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Failed to cancel request.");
       }

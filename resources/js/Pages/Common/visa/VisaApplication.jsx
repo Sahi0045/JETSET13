@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "../Navbar";
 import Footer from "../Footer";
 import { getApiUrl, apiPost } from "../../../utils/apiHelper";
+import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen: Customer Visa Application Portal - Document Upload Step
@@ -16,6 +17,7 @@ const STEPS = [
 
 const VisaApplication = () => {
   const navigate = useNavigate();
+  const { user } = useSupabaseAuth();
   const [searchParams] = useSearchParams();
   const [currentStep, setCurrentStep] = useState(1);
   const [uploadedFiles, setUploadedFiles] = useState({});
@@ -188,7 +190,7 @@ const VisaApplication = () => {
       const docsPayload = documents.map((doc) => ({
         name: doc.title,
         status: uploadedFiles[doc.id] ? "uploaded" : "pending",
-        file_url: null, // In production, upload to storage first and get URL
+        file_url: null,
       }));
 
       const payload = {
@@ -213,26 +215,37 @@ const VisaApplication = () => {
         serviceTier: selectedTier,
         documents: docsPayload,
         paymentStatus: "pending",
+        userId: user?.id || null,
       };
 
       const response = await apiPost("visa/applications", payload);
-      const data = await response.json();
+
+      // Safely parse JSON — server may return HTML on crash/proxy error
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(
+          `Server error (${response.status}). Please try again or contact support.`
+        );
+      }
 
       if (!response.ok || !data.success) {
         throw new Error(
-          data.message || "Failed to submit application. Please try again.",
+          data.message || "Failed to submit application. Please try again."
         );
       }
 
       const appRef = data.data?.applicationRef || "";
+      const appId = data.data?.id || "";
       const dest = travelDetails.destination || destination;
       navigate(
-        `/visa/success?ref=${encodeURIComponent(appRef)}&destination=${encodeURIComponent(dest)}&tier=${selectedTier}`,
+        `/visa/success?id=${encodeURIComponent(appId)}&ref=${encodeURIComponent(appRef)}&destination=${encodeURIComponent(dest)}&tier=${selectedTier}`
       );
     } catch (err) {
       console.error("submitApplication error:", err);
       setSubmitError(
-        err.message || "An unexpected error occurred. Please try again.",
+        err.message || "An unexpected error occurred. Please try again."
       );
     } finally {
       setIsSubmitting(false);

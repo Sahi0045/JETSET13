@@ -1,4 +1,7 @@
 import { VisaApplication, VisaConsultation, VisaRequirements, VisaMessage } from '../models/visa.model.js';
+import { sendVisaApplicationConfirmation } from '../services/emailService.js';
+import supabase from '../config/supabase.js';
+import crypto from 'crypto';
 
 // ═══════════════════════════════════════════════════════════════
 //  APPLICATION CONTROLLERS
@@ -49,6 +52,11 @@ export const submitApplication = async (req, res) => {
     });
 
     console.log(`✅ Visa application created: ${application.application_ref}`);
+
+    // Send confirmation email asynchronously
+    sendVisaApplicationConfirmation(application).catch(err => {
+      console.error('Failed to send initial visa confirmation email:', err);
+    });
 
     return res.status(201).json({
       success: true,
@@ -418,6 +426,38 @@ export const deleteApplication = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/visa/applications/:id/resend-email
+ */
+export const resendConfirmationEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const application = await VisaApplication.findById(id);
+
+    if (!application) {
+      return res.status(404).json({ success: false, message: 'Application not found' });
+    }
+
+    if (!application.personal_info?.email) {
+      return res.status(400).json({ success: false, message: 'No email address found for this application' });
+    }
+
+    await sendVisaApplicationConfirmation(application);
+
+    return res.json({
+      success: true,
+      message: 'Confirmation email resent successfully',
+    });
+  } catch (err) {
+    console.error('resendConfirmationEmail error:', err);
+    const status = err.message === 'Application not found' ? 404 : 500;
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Failed to resend email',
+    });
+  }
+};
+
 // ═══════════════════════════════════════════════════════════════
 //  CONSULTATION CONTROLLERS
 // ═══════════════════════════════════════════════════════════════
@@ -713,5 +753,71 @@ export const updateRequirement = async (req, res) => {
     return res.json({ success: true, data: requirement });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
+  }
+};
+/**
+ * POST /api/visa/upload
+ * Internal utility to upload a file to Supabase Storage and return the URL.
+ * Middleware: multer (req.file)
+ */
+export const uploadFile = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file provided' });
+    }
+
+    const { buffer, originalname, mimetype } = req.file;
+    const fileExt = originalname.split('.').pop();
+    const fileName = `${crypto.randomUUID()}.${fileExt}`;
+    const filePath = `documents/${fileName}`;
+
+    // Upload to 'visa-documents' bucket
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('visa-documents')
+      .upload(filePath, buffer, {
+        contentType: mimetype,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      // If bucket doesn't exist, try to create it (if possible with service role)
+      if (uploadError.message === 'bucket not found') {
+        const { error: createError } = await supabase.storage.createBucket('visa-documents', {
+          public: true,
+        });
+        if (createError) throw createError;
+        
+        // Retry upload
+        const { data: retryData, error: retryError } = await supabase.storage
+          .from('visa-documents')
+          .upload(filePath, buffer, {
+            contentType: mimetype,
+            upsert: true,
+          });
+        if (retryError) throw retryError;
+      } else {
+        throw uploadError;
+      }
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('visa-documents')
+      .getPublicUrl(filePath);
+
+    return res.json({
+      success: true,
+      message: 'File uploaded successfully',
+      data: {
+        url: publicUrl,
+        fileName: originalname,
+      },
+    });
+  } catch (err) {
+    console.error('uploadFile error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to upload file',
+    });
   }
 };

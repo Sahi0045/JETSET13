@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { getApiUrl } from "../../../../utils/apiHelper";
+import { getApiUrl, apiGet } from "../../../../utils/apiHelper";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 11: Admin Visa Stats & Revenue Dashboard — connected to live API
@@ -73,11 +73,9 @@ const VisaAdminDashboard = () => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(getApiUrl("visa/applications/stats"), {
-        headers: { Accept: "application/json" },
-        credentials: "include",
-      });
-      const data = await response.json();
+      const response = await apiGet("visa/applications/stats");
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`Server error (${response.status})`); }
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Failed to load stats.");
       }
@@ -93,14 +91,9 @@ const VisaAdminDashboard = () => {
   const fetchRecentApplications = useCallback(async () => {
     setRecentLoading(true);
     try {
-      const response = await fetch(
-        `${getApiUrl("visa/applications")}?limit=5&orderBy=created_at:desc`,
-        {
-          headers: { Accept: "application/json" },
-          credentials: "include",
-        },
-      );
-      const data = await response.json();
+      const response = await apiGet("visa/applications?limit=5&orderBy=created_at:desc");
+      let data;
+      try { data = await response.json(); } catch { return; }
       if (response.ok && data.success) {
         setRecentApps(data.data || []);
       }

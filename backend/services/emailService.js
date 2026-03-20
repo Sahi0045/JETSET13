@@ -2069,3 +2069,101 @@ export const sendCancellationNotificationEmails = async (cancellationData) => {
 
 export default emailService;
 
+/**
+ * Send visa application confirmation email
+ * @param {Object} appData - Application data
+ * @returns {Promise} - Email send response
+ */
+export const sendVisaApplicationConfirmation = async (appData) => {
+  try {
+    const html = generateVisaApplicationTemplate(appData);
+    const subject = `🛂 Visa Application Received: ${appData.application_ref}`;
+    
+    const response = await sendEmail({
+      to: appData.personal_info.email,
+      subject,
+      html
+    });
+
+    return response;
+  } catch (error) {
+    console.error('Error sending visa confirmation email:', error);
+    throw error;
+  }
+};
+
+/**
+ * Generate HTML template for visa application confirmation
+ */
+function generateVisaApplicationTemplate(data) {
+  const { application_ref, personal_info, travel_details, service_tier, amount } = data;
+  const firstName = personal_info.firstName || 'Valued Customer';
+  const destination = travel_details.destination || 'your destination';
+  
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Circular', -apple-system, system-ui, sans-serif; color: #222; line-height: 1.6; }
+        .container { max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden; }
+        .header { background: #1152d4; color: white; padding: 40px 20px; text-align: center; }
+        .content { padding: 30px; }
+        .ref-box { background: #f8f9fa; border: 2px dashed #1152d4; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0; }
+        .ref-number { font-family: monospace; font-size: 24px; font-weight: bold; color: #1152d4; }
+        .details-table { w-full; border-collapse: collapse; margin-top: 20px; }
+        .details-table td { padding: 10px; border-bottom: 1px solid #eee; }
+        .label { color: #666; font-size: 13px; font-weight: bold; text-transform: uppercase; }
+        .value { text-align: right; font-weight: 500; }
+        .cta-button { display: inline-block; padding: 14px 28px; background: #1152d4; color: white !important; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 20px; }
+        .footer { background: #f4f4f4; padding: 20px; text-align: center; font-size: 12px; color: #888; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Application Received!</h1>
+          <p>Your visa journey to ${destination} has begun.</p>
+        </div>
+        <div class="content">
+          <p>Hi ${firstName},</p>
+          <p>Thank you for choosing JetSetters for your visa application. We've received your documents and our specialists are already reviewing them.</p>
+          
+          <div class="ref-box">
+            <p style="margin: 0; font-size: 12px; color: #666;">YOUR APPLICATION REFERENCE</p>
+            <div class="ref-number">${application_ref}</div>
+          </div>
+
+          <table class="details-table" style="width: 100%;">
+            <tr>
+              <td class="label">Destination</td>
+              <td class="value">${destination}</td>
+            </tr>
+            <tr>
+              <td class="label">Service Tier</td>
+              <td class="value" style="text-transform: capitalize;">${service_tier}</td>
+            </tr>
+            <tr>
+              <td class="label">Payment Status</td>
+              <td class="value">${data.payment_status || 'Pending'}</td>
+            </tr>
+          </table>
+
+          <div style="text-align: center;">
+            <a href="https://www.jetsetterss.com/visa/track?ref=${application_ref}" class="cta-button">Track Your Application</a>
+          </div>
+
+          <p style="margin-top: 30px; font-size: 14px; color: #666;">
+            If you have any questions, simply reply to this email or visit our Help Center.
+          </p>
+        </div>
+        <div class="footer">
+          <p>&copy; 2026 JetSetters. All rights reserved.</p>
+          <p>Premium Travel & Visa Services Worldwide</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}

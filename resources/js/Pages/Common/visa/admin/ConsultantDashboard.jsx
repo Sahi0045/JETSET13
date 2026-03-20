@@ -8,6 +8,7 @@ const ConsultantDashboard = () => {
     const [stats, setStats] = useState({ total: 0, revenue: 0, rating: 4.8 });
     const [isOnline, setIsOnline] = useState(true);
     const [activeView, setActiveView] = useState('week'); // 'week' | 'list'
+    const [complianceQueue, setComplianceQueue] = useState([]);
 
     const fetchConsultations = useCallback(async () => {
         try {
@@ -55,26 +56,55 @@ const ConsultantDashboard = () => {
         }
     }, []);
 
-    const fetchStats = async () => {
+    const fetchRecentCompliance = async () => {
         try {
-            const response = await apiGet('visa/applications/stats');
+            // Fetch applications that need attention
+            const response = await apiGet('visa/applications?limit=3&status=under_review,additional_info_required&orderBy=updated_at:desc');
             const data = await response.json();
             if (data.success) {
-                setStats({
-                    total: data.data.consultations.total,
-                    revenue: data.data.consultations.totalRevenue,
-                    rating: 4.9
-                });
+                setComplianceQueue(data.data.map(app => ({
+                    id: app.id,
+                    name: `${app.personal_info?.firstName || ''} ${app.personal_info?.lastName || ''}`.trim() || 'Anonymous',
+                    stage: app.status === 'under_review' ? 'Reviewing' : 'Awaiting Info'
+                })));
             }
         } catch (err) {
-            console.error('fetchStats error:', err);
+            console.error('fetchRecentCompliance error:', err);
         }
     };
 
     useEffect(() => {
         fetchConsultations();
         fetchStats();
+        fetchRecentCompliance();
+
+        const interval = setInterval(() => {
+            fetchConsultations();
+            fetchStats();
+            fetchRecentCompliance();
+        }, 30000); // 30s polling for dashboard
+        
+        return () => clearInterval(interval);
     }, [fetchConsultations]);
+
+    // Calculate current week range (Mon to Sun)
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 is Sun, 1 is Mon...
+    const diffToMon = today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(diffToMon);
+    
+    const weekDays = [...Array(7)].map((_, i) => {
+        const d = new Date(startOfWeek);
+        d.setDate(startOfWeek.getDate() + i);
+        return {
+            name: d.toLocaleDateString('en-US', { weekday: 'short' }),
+            date: d.getDate(),
+            fullDate: d
+        };
+    });
+
+    const weekRangeStr = `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(new Date(startOfWeek).setDate(startOfWeek.getDate() + 6)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
     const colorMap = {
         blue: { bg: 'bg-blue-50', border: 'border-l-blue-500', text: 'text-blue-700', icon: 'text-blue-400', strip: 'bg-blue-500' },
@@ -139,7 +169,7 @@ const ConsultantDashboard = () => {
                                 </button>
 
                                 <div className="text-center group cursor-pointer">
-                                    <h2 className="text-sm lg:text-base font-black text-slate-900 uppercase tracking-[0.3em]">Oct 23 – Oct 29, 2023</h2>
+                                    <h2 className="text-sm lg:text-base font-black text-slate-900 uppercase tracking-[0.3em]">{weekRangeStr}</h2>
                                     <div className="flex items-center justify-center gap-3 mt-2">
                                         <div className="h-[2px] w-4 bg-slate-200 group-hover:bg-[#1152d4] transition-all" />
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Intelligence Quarter 4</p>
@@ -163,10 +193,10 @@ const ConsultantDashboard = () => {
                                                     <span className="text-[11px] font-black text-slate-900 border-b-2 border-[#1152d4]/40">GMT+5.5</span>
                                                 </div>
                                             </div>
-                                            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
-                                                <div key={day} className={`p-8 text-center border-r border-slate-50 last:border-r-0 ${idx === 1 ? 'bg-[#1152d4]/[0.02]' : ''}`}>
-                                                    <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${idx === 1 ? 'text-[#1152d4]' : 'text-slate-400 group-hover:text-slate-600 transition-colors'}`}>{day}</p>
-                                                    <div className={`size-12 mx-auto rounded-2xl flex items-center justify-center text-base font-black transition-all ${idx === 1 ? 'bg-[#1152d4] text-white shadow-2xl shadow-[#1152d4]/30 scale-110' : 'text-slate-900 hover:bg-slate-50'}`}>{23 + idx}</div>
+                                            {weekDays.map((day, idx) => (
+                                                <div key={day.name} className={`p-8 text-center border-r border-slate-50 last:border-r-0 ${day.date === today.getDate() ? 'bg-[#1152d4]/[0.02]' : ''}`}>
+                                                    <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${day.date === today.getDate() ? 'text-[#1152d4]' : 'text-slate-400 group-hover:text-slate-600 transition-colors'}`}>{day.name}</p>
+                                                    <div className={`size-12 mx-auto rounded-2xl flex items-center justify-center text-base font-black transition-all ${day.date === today.getDate() ? 'bg-[#1152d4] text-white shadow-2xl shadow-[#1152d4]/30 scale-110' : 'text-slate-900 hover:bg-slate-50'}`}>{day.date}</div>
                                                 </div>
                                             ))}
                                         </div>
@@ -240,7 +270,7 @@ const ConsultantDashboard = () => {
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex flex-wrap items-center gap-3 mb-2">
                                                         <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${c.bg} ${c.text} border border-${app.color}-100`}>{app.time}</span>
-                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{app.day}, Oct {app.date}</span>
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{app.day}, {new Date(app.fullDate || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                                                     </div>
                                                     <h3 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight group-hover:text-[#1152d4] transition-all">{app.title}</h3>
                                                     <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-2">
@@ -338,11 +368,10 @@ const ConsultantDashboard = () => {
                             </div>
                             <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40 mb-10">Compliance Queue</h3>
                             <div className="space-y-6">
-                                {[
-                                    { name: 'Marcus Sterling', stage: 'Legal Sync' },
-                                    { name: 'Diana Prince', stage: 'Final Audit' }
-                                ].map(c => (
-                                    <div key={c.name} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all cursor-pointer border border-white/5">
+                                {complianceQueue.length > 0 ? complianceQueue.map(c => (
+                                    <div key={c.id} 
+                                         onClick={() => window.location.href = `/visa/admin/applications/${c.id}`}
+                                         className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all cursor-pointer border border-white/5">
                                         <div className="flex flex-col">
                                             <span className="text-[13px] font-black tracking-tight">{c.name}</span>
                                             <span className="text-[9px] font-black text-indigo-400 uppercase mt-1 tracking-widest">{c.stage}</span>
@@ -351,7 +380,9 @@ const ConsultantDashboard = () => {
                                             <span className="material-symbols-outlined text-sm">open_in_new</span>
                                         </button>
                                     </div>
-                                ))}
+                                )) : (
+                                    <p className="text-[11px] text-white/40 font-bold text-center py-4">No pending dossiers in queue</p>
+                                )}
                                 <button className="w-full py-5 text-[#1152d4] text-[10px] font-black uppercase tracking-[0.25em] bg-[#1152d4]/5 rounded-[1.75rem] hover:bg-[#1152d4] hover:text-white transition-all border border-[#1152d4]/20 shadow-xl shadow-[#1152d4]/5">
                                     Launch Enterprise Feed
                                 </button>

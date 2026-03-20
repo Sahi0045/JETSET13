@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { apiGet, apiPost } from '../../../../utils/apiHelper';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 14: Admin Multi-Chat Messaging Hub
 
 const AdminMessagingHub = () => {
+    const location = useLocation();
     const [threads, setThreads] = useState([]);
-    const [activeChatId, setActiveChatId] = useState(null);
+    const [activeChatId, setActiveChatId] = useState(location.state?.applicationId || null);
     const [messages, setMessages] = useState([]);
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(true);
@@ -46,11 +47,15 @@ const AdminMessagingHub = () => {
 
     useEffect(() => {
         fetchThreads();
+        const interval = setInterval(fetchThreads, 10000); // Poll threads every 10s
+        return () => clearInterval(interval);
     }, [fetchThreads]);
 
     useEffect(() => {
         if (activeChatId) {
             fetchMessages(activeChatId);
+            const interval = setInterval(() => fetchMessages(activeChatId), 5000); // Poll messages every 5s
+            return () => clearInterval(interval);
         }
     }, [activeChatId, fetchMessages]);
 

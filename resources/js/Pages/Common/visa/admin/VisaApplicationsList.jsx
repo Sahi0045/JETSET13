@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
-import { getApiUrl } from "../../../../utils/apiHelper";
+import { getApiUrl, apiGet } from "../../../../utils/apiHelper";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Admin - All Visa Applications List — connected to live API
@@ -63,15 +63,10 @@ const VisaApplicationsList = () => {
       params.set("offset", String((currentPage - 1) * PAGE_SIZE));
       params.set("orderBy", "created_at:desc");
 
-      const response = await fetch(
-        `${getApiUrl("visa/applications")}?${params.toString()}`,
-        {
-          headers: { Accept: "application/json" },
-          credentials: "include",
-        },
-      );
+      const response = await apiGet(`visa/applications?${params.toString()}`);
 
-      const data = await response.json();
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`Server error (${response.status})`); }
 
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Failed to fetch applications.");
@@ -93,11 +88,9 @@ const VisaApplicationsList = () => {
   const fetchStatusCounts = useCallback(async () => {
     setCountsLoading(true);
     try {
-      const response = await fetch(getApiUrl("visa/applications/stats"), {
-        headers: { Accept: "application/json" },
-        credentials: "include",
-      });
-      const data = await response.json();
+      const response = await apiGet("visa/applications/stats");
+      let data;
+      try { data = await response.json(); } catch { return; }
       if (response.ok && data.success) {
         setStatusCounts(data.data?.applications?.byStatus || {});
       }

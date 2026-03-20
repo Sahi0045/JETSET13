@@ -27,10 +27,14 @@ export const apiRequest = async (endpoint, options = {}) => {
   
   // Default headers
   const headers = {
-    'Content-Type': 'application/json',
     'Accept': 'application/json',
     ...options.headers
   };
+
+  // Only set Content-Type if not FormData (browser sets boundary for FormData)
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   // Add auth token if available
   const token = localStorage.getItem('token') || 
