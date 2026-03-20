@@ -1,15 +1,80 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { apiGet, apiPut } from '../../../../utils/apiHelper';
 
 const ConsultantDashboard = () => {
+    const [appointments, setAppointments] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({ total: 0, revenue: 0, rating: 4.8 });
     const [isOnline, setIsOnline] = useState(true);
     const [activeView, setActiveView] = useState('week'); // 'week' | 'list'
 
-    const appointments = [
-        { id: 1, title: 'Japan Tourist Visa Consultation', time: '09:30 - 10:30 AM', client: 'Elena Gilbert', status: 'Docs Pending Review', color: 'blue', type: 'video', day: 'Tue', date: 24, dayIdx: 1, topPct: 12.5, heightPct: 12.5 },
-        { id: 2, title: 'Digital Nomad Visa Strategy', time: '01:00 - 02:30 PM', client: 'Jeremy Somes', status: 'Docs Ready', color: 'indigo', type: 'person', day: 'Tue', date: 24, dayIdx: 1, topPct: 50, heightPct: 18.75 },
-        { id: 3, title: 'Schengen Final Review', time: '03:30 - 04:30 PM', client: 'Alaric Saltzman', status: 'Docs Ready', color: 'emerald', type: 'call', day: 'Tue', date: 24, dayIdx: 1, topPct: 75, heightPct: 12.5 },
-    ];
+    const fetchConsultations = useCallback(async () => {
+        try {
+            const response = await apiGet('visa/consultations');
+            const data = await response.json();
+            if (data.success) {
+                const mapped = data.data.map(c => {
+                    const date = new Date(c.booking_date);
+                    const dayIdx = (date.getDay() + 6) % 7; // Convert Sun=0 to Mon=0
+                    
+                    // Simple parser for "HH:MM AM/PM"
+                    const [timePart, meridiem] = c.booking_time.split(' ');
+                    let [hours, minutes] = timePart.split(':').map(Number);
+                    if (meridiem === 'PM' && hours < 12) hours += 12;
+                    if (meridiem === 'AM' && hours === 12) hours = 0;
+
+                    const startMinutes = hours * 60 + minutes;
+                    const nineAM = 9 * 60;
+                    const totalDayMinutes = 8 * 60; // 9am to 5pm
+                    
+                    const topPct = ((startMinutes - nineAM) / totalDayMinutes) * 100;
+                    const heightPct = (60 / totalDayMinutes) * 100; // assume 1hr
+
+                    return {
+                        id: c.id,
+                        title: `Visa Consultation: ${c.consultant_role}`, // or visa type if added
+                        time: c.booking_time,
+                        client: c.customer_name,
+                        status: c.status,
+                        color: c.status === 'confirmed' ? 'blue' : c.status === 'completed' ? 'emerald' : 'indigo',
+                        type: 'video',
+                        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+                        date: date.getDate(),
+                        dayIdx,
+                        topPct,
+                        heightPct
+                    };
+                });
+                setAppointments(mapped);
+            }
+        } catch (err) {
+            console.error('fetchConsultations error:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    const fetchStats = async () => {
+        try {
+            const response = await apiGet('visa/applications/stats');
+            const data = await response.json();
+            if (data.success) {
+                setStats({
+                    total: data.data.consultations.total,
+                    revenue: data.data.consultations.totalRevenue,
+                    rating: 4.9
+                });
+            }
+        } catch (err) {
+            console.error('fetchStats error:', err);
+        }
+    };
+
+    useEffect(() => {
+        fetchConsultations();
+        fetchStats();
+    }, [fetchConsultations]);
 
     const colorMap = {
         blue: { bg: 'bg-blue-50', border: 'border-l-blue-500', text: 'text-blue-700', icon: 'text-blue-400', strip: 'bg-blue-500' },
@@ -240,23 +305,23 @@ const ConsultantDashboard = () => {
                             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#1152d4] mb-10 border-b border-[#1152d4]/10 pb-4 inline-block">Consultancy Intelligence</h3>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="p-8 bg-slate-50/50 rounded-[2rem] border border-slate-100 group hover:bg-white hover:shadow-2xl hover:shadow-slate-200/40 transition-all duration-500">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Engagement</p>
-                                    <p className="text-4xl font-black text-slate-950 tracking-tighter group-hover:scale-110 transition-transform">+24<span className="text-xl">%</span></p>
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Total Sessions</p>
+                                    <p className="text-4xl font-black text-slate-950 tracking-tighter group-hover:scale-110 transition-transform">{stats.total}</p>
                                 </div>
                                 <div className="p-8 bg-emerald-500 rounded-[2rem] text-white shadow-xl shadow-emerald-500/20 group hover:shadow-2xl transition-all duration-500 active:scale-95 cursor-pointer">
-                                    <p className="text-[9px] font-black text-white/70 uppercase tracking-widest mb-4">Authority</p>
+                                    <p className="text-[9px] font-black text-white/70 uppercase tracking-widest mb-4">Revenue Collected</p>
                                     <div className="flex items-center gap-3">
-                                        <p className="text-4xl font-black tracking-tighter">4.9</p>
-                                        <span className="material-symbols-outlined text-2xl animate-spin-slow">verified_user</span>
+                                        <p className="text-3xl font-black tracking-tighter">${stats.revenue}</p>
+                                        <span className="material-symbols-outlined text-2xl animate-spin-slow">monetization_on</span>
                                     </div>
                                 </div>
                                 <div className="p-10 bg-white rounded-[2.5rem] border border-slate-100 col-span-2 shadow-xl shadow-slate-200/30 group">
                                     <div className="flex items-center justify-between mb-4">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">Client Satisfaction</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">Consultant Rating</p>
                                         <span className="material-symbols-outlined text-[#1152d4]">insights</span>
                                     </div>
                                     <div className="flex items-end gap-5">
-                                        <p className="text-5xl font-black text-slate-950 tracking-tighter leading-none">4.8<span className="text-xl text-[#1152d4]">/5.0</span></p>
+                                        <p className="text-5xl font-black text-slate-950 tracking-tighter leading-none">{stats.rating}<span className="text-xl text-[#1152d4]">/5.0</span></p>
                                         <div className="flex mb-2 gap-0.5">{[...Array(5)].map((_, i) => <span key={i} className="material-symbols-outlined text-xs text-amber-500" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>)}</div>
                                     </div>
                                     <div className="mt-8 h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">

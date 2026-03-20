@@ -1,0 +1,717 @@
+import { VisaApplication, VisaConsultation, VisaRequirements, VisaMessage } from '../models/visa.model.js';
+
+// ═══════════════════════════════════════════════════════════════
+//  APPLICATION CONTROLLERS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/visa/applications
+ * Submit a new visa application.
+ * Body: { personalInfo, travelDetails, serviceTier, userId?, documents?, paymentStatus? }
+ */
+export const submitApplication = async (req, res) => {
+  try {
+    console.log('--- submitApplication request body ---', JSON.stringify(req.body, null, 2));
+    const { personalInfo, travelDetails, serviceTier, userId, documents, paymentStatus, notes } = req.body;
+
+    // Basic validation
+    if (!personalInfo || !travelDetails) {
+      return res.status(400).json({
+        success: false,
+        message: 'personalInfo and travelDetails are required',
+      });
+    }
+
+    const requiredPersonal = ['firstName', 'lastName', 'email', 'nationality', 'passportNumber'];
+    const missing = requiredPersonal.filter((f) => !personalInfo[f]);
+    if (missing.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing required personal info fields: ${missing.join(', ')}`,
+      });
+    }
+
+    if (!travelDetails.destination) {
+      return res.status(400).json({
+        success: false,
+        message: 'travelDetails.destination is required',
+      });
+    }
+
+    const application = await VisaApplication.create({
+      personalInfo,
+      travelDetails,
+      serviceTier: serviceTier || 'standard',
+      userId: userId || null,
+      documents: documents || null,
+      paymentStatus: paymentStatus || 'pending',
+      notes: notes || null,
+    });
+
+    console.log(`✅ Visa application created: ${application.application_ref}`);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Application submitted successfully',
+      data: {
+        id: application.id,
+        applicationRef: application.application_ref,
+        status: application.status,
+        serviceTier: application.service_tier,
+        amount: application.amount,
+        createdAt: application.created_at,
+      },
+    });
+  } catch (err) {
+    console.error('submitApplication error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to submit application',
+      error: process.env.NODE_ENV === 'development' ? err : undefined
+    });
+  }
+};
+
+/**
+ * GET /api/visa/applications
+ * List all applications (admin). Supports query filters:
+ * ?status=&serviceTier=&priority=&destination=&limit=&offset=&orderBy=
+ */
+export const getApplications = async (req, res) => {
+  try {
+    const { status, serviceTier, priority, destination, paymentStatus, limit, offset, orderBy } = req.query;
+
+    const filters = {};
+    if (status) filters.status = status;
+    if (serviceTier) filters.serviceTier = serviceTier;
+    if (priority) filters.priority = priority;
+    if (destination) filters.destination = destination;
+    if (paymentStatus) filters.paymentStatus = paymentStatus;
+
+    const options = {};
+    if (limit) options.limit = limit;
+    if (offset) options.offset = offset;
+    if (orderBy) options.orderBy = orderBy;
+
+    const { applications, total } = await VisaApplication.findAll(filters, options);
+
+    return res.json({
+      success: true,
+      total,
+      count: applications.length,
+      data: applications,
+    });
+  } catch (err) {
+    console.error('getApplications error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to fetch applications',
+    });
+  }
+};
+
+/**
+ * GET /api/visa/applications/stats
+ * Aggregated statistics for admin dashboard.
+ */
+export const getStats = async (req, res) => {
+  try {
+    const [appStats, consultStats] = await Promise.all([
+      VisaApplication.getStats(),
+      VisaConsultation.getStats(),
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        applications: appStats,
+        consultations: consultStats,
+      },
+    });
+  } catch (err) {
+    console.error('getStats error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to fetch stats',
+    });
+  }
+};
+
+/**
+ * GET /api/visa/applications/my
+ * Get all applications for the authenticated user.
+ * Requires userId query param or auth header (simplified — no auth middleware assumed).
+ * ?userId=<uuid> or ?email=<email>
+ */
+export const getUserApplications = async (req, res) => {
+  try {
+    const { userId, email } = req.query;
+    // Use authUserId from protect middleware if available, otherwise fall back to query
+    const effectiveUserId = req.user?.authUserId || userId;
+
+    if (!effectiveUserId && !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId or email query parameter is required (or must be authenticated)',
+      });
+    }
+
+    let applications = [];
+    if (effectiveUserId) {
+      applications = await VisaApplication.findByUserId(effectiveUserId);
+    } else if (email) {
+      applications = await VisaApplication.findByEmail(email);
+    }
+
+    return res.json({
+      success: true,
+      total: applications.length,
+      data: applications,
+    });
+  } catch (err) {
+    console.error('getUserApplications error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to fetch user applications',
+    });
+  }
+};
+
+/**
+ * GET /api/visa/applications/track
+ * Public endpoint to track an application by reference number and optional email.
+ * ?ref=VISA-2026-00001&email=optional@email.com
+ */
+export const trackApplication = async (req, res) => {
+  try {
+    const { ref, email } = req.query;
+
+    if (!ref && !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'ref (application reference) or email is required',
+      });
+    }
+
+    let application = null;
+
+    if (ref) {
+      application = await VisaApplication.findByRef(ref);
+    }
+
+    // If not found by ref but email provided, try by email
+    if (!application && email) {
+      const results = await VisaApplication.findByEmail(email);
+      application = results.length > 0 ? results : null;
+
+      if (Array.isArray(application)) {
+        return res.json({
+          success: true,
+          multiple: true,
+          data: application,
+        });
+      }
+    }
+
+    if (!application) {
+      return res.status(404).json({
+        success: false,
+        message: 'No application found with the provided reference or email',
+      });
+    }
+
+    // Return public-safe fields only
+    return res.json({
+      success: true,
+      data: {
+        id: application.id,
+        applicationRef: application.application_ref,
+        status: application.status,
+        priority: application.priority,
+        serviceTier: application.service_tier,
+        destination: application.travel_details?.destination,
+        visaType: application.travel_details?.visaType,
+        applicantName: `${application.personal_info?.firstName || ''} ${application.personal_info?.lastName || ''}`.trim(),
+        submittedAt: application.created_at,
+        lastUpdate: application.updated_at,
+        timeline: application.timeline,
+        documents: application.documents,
+        amount: application.amount,
+        paymentStatus: application.payment_status,
+      },
+    });
+  } catch (err) {
+    console.error('trackApplication error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to track application',
+    });
+  }
+};
+
+/**
+ * GET /api/visa/applications/:id
+ * Get full application details by UUID (admin or authenticated owner).
+ */
+export const getApplicationById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const application = await VisaApplication.findById(id);
+
+    if (!application) {
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found',
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: application,
+    });
+  } catch (err) {
+    console.error('getApplicationById error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to fetch application',
+    });
+  }
+};
+
+/**
+ * PUT /api/visa/applications/:id
+ * Update application fields (admin).
+ * Body: any updatable fields from the allowed list in the model.
+ */
+export const updateApplication = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updated = await VisaApplication.update(id, req.body);
+
+    return res.json({
+      success: true,
+      message: 'Application updated successfully',
+      data: updated,
+    });
+  } catch (err) {
+    console.error('updateApplication error:', err);
+    const status = err.message === 'Application not found' ? 404 : 500;
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Failed to update application',
+    });
+  }
+};
+
+/**
+ * PATCH /api/visa/applications/:id/cancel
+ * Cancel an application.
+ */
+export const cancelApplication = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updated = await VisaApplication.cancel(id);
+
+    return res.json({
+      success: true,
+      message: 'Application cancelled successfully',
+      data: updated,
+    });
+  } catch (err) {
+    console.error('cancelApplication error:', err);
+    const status = err.message === 'Application not found' ? 404 : 500;
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Failed to cancel application',
+    });
+  }
+};
+
+/**
+ * POST /api/visa/applications/:id/documents
+ * Update / add a document record on an application.
+ * Body: { docName: string, status: 'pending'|'uploaded'|'verified'|'rejected', fileUrl?: string }
+ */
+export const uploadDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { docName, status: docStatus, fileUrl } = req.body;
+
+    if (!docName) {
+      return res.status(400).json({ success: false, message: 'docName is required' });
+    }
+
+    const updated = await VisaApplication.updateDocument(id, docName, {
+      status: docStatus || 'uploaded',
+      file_url: fileUrl || null,
+    });
+
+    return res.json({
+      success: true,
+      message: 'Document updated successfully',
+      data: updated,
+    });
+  } catch (err) {
+    console.error('uploadDocument error:', err);
+    const status = err.message === 'Application not found' ? 404 : 500;
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Failed to update document',
+    });
+  }
+};
+
+/**
+ * POST /api/visa/applications/:id/timeline
+ * Add a timeline event (admin action).
+ * Body: { status, note, by }
+ */
+export const addTimelineEvent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status: eventStatus, note, by } = req.body;
+
+    if (!eventStatus) {
+      return res.status(400).json({ success: false, message: 'status is required in request body' });
+    }
+
+    const updated = await VisaApplication.addTimelineEvent(id, {
+      status: eventStatus,
+      note: note || '',
+      by: by || 'Admin',
+    });
+
+    return res.json({
+      success: true,
+      message: 'Timeline event added successfully',
+      data: updated,
+    });
+  } catch (err) {
+    console.error('addTimelineEvent error:', err);
+    const status = err.message === 'Application not found' ? 404 : 500;
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Failed to add timeline event',
+    });
+  }
+};
+
+/**
+ * DELETE /api/visa/applications/:id
+ * Permanently delete an application (admin only).
+ */
+export const deleteApplication = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await VisaApplication.delete(id);
+
+    return res.json({
+      success: true,
+      message: 'Application deleted successfully',
+    });
+  } catch (err) {
+    console.error('deleteApplication error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to delete application',
+    });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  CONSULTATION CONTROLLERS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/visa/consultations
+ * Book a new consultation slot.
+ * Body: { consultantName, consultantRole, bookingDate, bookingTime, customerName, customerEmail, userId?, amount?, notes? }
+ */
+export const bookConsultation = async (req, res) => {
+  try {
+    const { consultantName, consultantRole, bookingDate, bookingTime, customerName, customerEmail } = req.body;
+
+    const required = { consultantName, consultantRole, bookingDate, bookingTime, customerName, customerEmail };
+    const missing = Object.entries(required).filter(([, v]) => !v).map(([k]) => k);
+    if (missing.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing required fields: ${missing.join(', ')}`,
+      });
+    }
+
+    const consultation = await VisaConsultation.create({
+      ...req.body,
+      userId: req.body.userId || null,
+    });
+
+    console.log(`✅ Visa consultation booked: ${consultation.id} — ${consultantName} on ${bookingDate} at ${bookingTime}`);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Consultation booked successfully',
+      data: {
+        id: consultation.id,
+        consultantName: consultation.consultant_name,
+        consultantRole: consultation.consultant_role,
+        bookingDate: consultation.booking_date,
+        bookingTime: consultation.booking_time,
+        status: consultation.status,
+        amount: consultation.amount,
+        createdAt: consultation.created_at,
+      },
+    });
+  } catch (err) {
+    console.error('bookConsultation error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to book consultation',
+    });
+  }
+};
+
+/**
+ * GET /api/visa/consultations
+ * List all consultations (admin). Supports ?status=&date=&consultantName=&limit=&offset=
+ */
+export const getConsultations = async (req, res) => {
+  try {
+    const { status, date, consultantName, limit, offset, orderBy } = req.query;
+    const filters = {};
+    if (status) filters.status = status;
+    if (date) filters.date = date;
+    if (consultantName) filters.consultantName = consultantName;
+
+    const options = {};
+    if (limit) options.limit = limit;
+    if (offset) options.offset = offset;
+    if (orderBy) options.orderBy = orderBy;
+
+    const { consultations, total } = await VisaConsultation.findAll(filters, options);
+
+    return res.json({
+      success: true,
+      total,
+      count: consultations.length,
+      data: consultations,
+    });
+  } catch (err) {
+    console.error('getConsultations error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to fetch consultations',
+    });
+  }
+};
+
+/**
+ * GET /api/visa/consultations/my
+ * Get consultations for a user. ?userId=<uuid> or ?email=<email>
+ */
+export const getUserConsultations = async (req, res) => {
+  try {
+    const { userId, email } = req.query;
+    const effectiveUserId = req.user?.authUserId || userId;
+
+    if (!effectiveUserId && !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId or email query parameter is required (or must be authenticated)',
+      });
+    }
+
+    let consultations = [];
+    if (effectiveUserId) {
+      consultations = await VisaConsultation.findByUserId(effectiveUserId);
+    } else if (email) {
+      consultations = await VisaConsultation.findByEmail(email);
+    }
+
+    return res.json({
+      success: true,
+      total: consultations.length,
+      data: consultations,
+    });
+  } catch (err) {
+    console.error('getUserConsultations error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to fetch user consultations',
+    });
+  }
+};
+
+/**
+ * GET /api/visa/consultations/:id
+ * Get consultation by UUID.
+ */
+export const getConsultationById = async (req, res) => {
+  try {
+    const consultation = await VisaConsultation.findById(req.params.id);
+
+    if (!consultation) {
+      return res.status(404).json({ success: false, message: 'Consultation not found' });
+    }
+
+    return res.json({ success: true, data: consultation });
+  } catch (err) {
+    console.error('getConsultationById error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to fetch consultation',
+    });
+  }
+};
+
+/**
+ * PUT /api/visa/consultations/:id
+ * Update a consultation (admin). Body: any updatable fields.
+ */
+export const updateConsultation = async (req, res) => {
+  try {
+    const updated = await VisaConsultation.update(req.params.id, req.body);
+
+    return res.json({
+      success: true,
+      message: 'Consultation updated successfully',
+      data: updated,
+    });
+  } catch (err) {
+    console.error('updateConsultation error:', err);
+    const status = err.message === 'Consultation not found' ? 404 : 500;
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Failed to update consultation',
+    });
+  }
+};
+
+/**
+ * PATCH /api/visa/consultations/:id/cancel
+ * Cancel a consultation.
+ */
+export const cancelConsultation = async (req, res) => {
+  try {
+    const updated = await VisaConsultation.cancel(req.params.id);
+
+    return res.json({
+      success: true,
+      message: 'Consultation cancelled successfully',
+      data: updated,
+    });
+  } catch (err) {
+    console.error('cancelConsultation error:', err);
+    const status = err.message === 'Consultation not found' ? 404 : 500;
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Failed to cancel consultation',
+    });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  MESSAGING CONTROLLERS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/visa/applications/:id/messages
+ */
+export const getMessages = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const messages = await VisaMessage.findByApplication(id);
+    return res.json({ success: true, data: messages });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * POST /api/visa/applications/:id/messages
+ */
+export const sendMessage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const message = await VisaMessage.create({
+      ...req.body,
+      applicationId: id,
+    });
+    return res.status(201).json({ success: true, data: message });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * GET /api/visa/messages/threads
+ * Admin messaging hub thread list.
+ */
+export const getMessageThreads = async (req, res) => {
+  try {
+    const threads = await VisaMessage.getThreadSummaries();
+    return res.json({ success: true, data: threads });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  REQUIREMENTS CONTROLLERS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/visa/requirements/check
+ * ?nationality=&destination=
+ */
+export const checkEligibility = async (req, res) => {
+  try {
+    const { nationality, destination } = req.query;
+    if (!nationality || !destination) {
+      return res.status(400).json({ success: false, message: 'nationality and destination are required' });
+    }
+    const requirement = await VisaRequirements.check(nationality, destination);
+    return res.json({ success: true, data: requirement });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * GET /api/visa/requirements
+ */
+export const getRequirements = async (req, res) => {
+  try {
+    const { nationality, destination, active, search, limit, orderBy } = req.query;
+    const { requirements, total } = await VisaRequirements.findAll(
+      { nationality, destination, active: active === 'true' ? true : active === 'false' ? false : undefined, search },
+      { limit, orderBy }
+    );
+    return res.json({ success: true, data: requirements, total });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * POST /api/visa/requirements
+ */
+export const createRequirement = async (req, res) => {
+  try {
+    const requirement = await VisaRequirements.create(req.body);
+    return res.status(201).json({ success: true, data: requirement });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * PUT /api/visa/requirements/:id
+ */
+export const updateRequirement = async (req, res) => {
+  try {
+    const requirement = await VisaRequirements.update(req.params.id, req.body);
+    return res.json({ success: true, data: requirement });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};

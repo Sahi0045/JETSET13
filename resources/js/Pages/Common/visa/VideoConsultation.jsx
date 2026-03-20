@@ -1,14 +1,79 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { apiGet, apiPut } from '../../../utils/apiHelper';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 17: Shared Form Review with Secure e-Signature
 
 const VideoConsultation = () => {
+    const { id } = useParams();
+    const [consultation, setConsultation] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [showSignatureModal, setShowSignatureModal] = useState(false);
     const [signed, setSigned] = useState(false);
     const [zoom, setZoom] = useState(100);
     const [message, setMessage] = useState('');
+
+    useEffect(() => {
+        const fetchConsultation = async () => {
+            try {
+                const response = await apiGet(`visa/consultations/${id}`);
+                const data = await response.json();
+                if (data.success) {
+                    setConsultation(data.data);
+                    if (data.data.status === 'completed') setSigned(true);
+                } else {
+                    throw new Error(data.message || 'Consultation not found');
+                }
+            } catch (err) {
+                console.error('fetchConsultation error:', err);
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchConsultation();
+    }, [id]);
+
+    const handleApplySignature = async () => {
+        try {
+            const response = await apiPut(`visa/consultations/${id}`, {
+                status: 'completed',
+                notes: (consultation.notes || '') + `\n[e-Signed by ${consultation.customer_name} at ${new Date().toLocaleString()}]`
+            });
+            const data = await response.json();
+            if (data.success) {
+                setSigned(true);
+                setShowSignatureModal(false);
+                setConsultation(data.data);
+            } else {
+                throw new Error(data.message || 'Failed to apply signature');
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+
+    if (loading) return (
+        <div className="h-screen flex items-center justify-center bg-slate-50">
+            <div className="text-center">
+                <div className="size-12 border-4 border-[#1152d4]/20 border-t-[#1152d4] rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Initializing Secure Session...</p>
+            </div>
+        </div>
+    );
+
+    if (error) return (
+        <div className="h-screen flex items-center justify-center bg-slate-50">
+            <div className="text-center p-8 bg-white rounded-3xl shadow-xl border border-slate-100 max-w-sm">
+                <span className="material-symbols-outlined text-red-500 text-5xl mb-4">error_outline</span>
+                <h2 className="text-lg font-black text-slate-900 uppercase">Session Error</h2>
+                <p className="text-sm text-slate-500 mt-2 mb-6">{error}</p>
+                <Link to="/visa" className="inline-block px-8 py-3 bg-[#1152d4] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-[#1152d4]/20">Return Home</Link>
+            </div>
+        </div>
+    );
 
     return (
         <div className="flex h-screen bg-[#f8fafc] font-sans text-slate-900 overflow-hidden relative">
@@ -55,7 +120,7 @@ const VideoConsultation = () => {
                         <div className="px-8 py-6 border-t border-slate-50 flex justify-end gap-3 bg-slate-50/50">
                             <button onClick={() => setShowSignatureModal(false)} className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-900">Cancel</button>
                             <button
-                                onClick={() => { setSigned(true); setShowSignatureModal(false); }}
+                                onClick={handleApplySignature}
                                 className="px-8 py-3 text-[10px] font-black uppercase tracking-widest text-white bg-[#1152d4] rounded-2xl shadow-xl shadow-[#1152d4]/20 hover:scale-105 transition-all"
                             >
                                 Apply Signature
@@ -87,9 +152,9 @@ const VideoConsultation = () => {
                     <div className="flex items-center gap-8">
                         <div className="text-right flex flex-col gap-1">
                             <p className="text-[9px] text-slate-300 font-black uppercase tracking-widest">Consultant</p>
-                            <p className="text-[11px] font-black text-slate-900 uppercase">Sarah Jenkins</p>
+                            <p className="text-[11px] font-black text-slate-900 uppercase">{consultation.consultant_name}</p>
                         </div>
-                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah" className="size-10 rounded-2xl border-2 border-[#1152d4]/10 shadow-sm" alt="S" />
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${consultation.consultant_name}`} className="size-10 rounded-2xl border-2 border-[#1152d4]/10 shadow-sm" alt="S" />
                     </div>
                 </header>
 
@@ -104,8 +169,8 @@ const VideoConsultation = () => {
                                         <span className="material-symbols-outlined text-xl">description</span>
                                     </div>
                                     <div>
-                                        <h3 className="text-[11px] font-black text-slate-900 uppercase">DS-160 Nonimmigrant Visa</h3>
-                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Applicant: Johnathan Doe</p>
+                                        <h3 className="text-[11px] font-black text-slate-900 uppercase">{consultation.consultant_role}</h3>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Applicant: {consultation.customer_name}</p>
                                     </div>
                                 </div>
                                 <div className="h-8 w-px bg-slate-100"></div>
@@ -149,11 +214,11 @@ const VideoConsultation = () => {
 
                                 <div className="grid grid-cols-2 gap-x-12 gap-y-10 text-[11px] relative">
                                     {[
-                                        { label: 'Surnames', val: 'DOE' },
-                                        { label: 'Given Names', val: 'JOHNATHAN' },
-                                        { label: 'Home Address', val: '123 MAIN ST, NEW YORK, NY 10001', full: true },
-                                        { label: 'Passport Number', val: 'A123456789' },
-                                        { label: 'Expiration Date', val: '05/15/2030' }
+                                        { label: 'Full Name', val: consultation.customer_name },
+                                        { label: 'Email Address', val: consultation.customer_email },
+                                        { label: 'Booking Date', val: new Date(consultation.booking_date).toLocaleDateString() },
+                                        { label: 'Session Time', val: consultation.booking_time },
+                                        { label: 'Reference ID', val: consultation.id?.split('-')[0].toUpperCase() }
                                     ].map(field => (
                                         <div key={field.label} className={field.full ? 'col-span-2' : ''}>
                                             <label className="text-[9px] font-black text-slate-300 uppercase tracking-widest block mb-2">{field.label}</label>
@@ -177,7 +242,7 @@ const VideoConsultation = () => {
                                                     </span>
                                                 </div>
                                             ) : (
-                                                <p className="font-signature text-4xl text-[#1152d4] opacity-80 rotate-[-1deg] select-none">Johnathan Doe</p>
+                                                <p className="font-signature text-4xl text-[#1152d4] opacity-80 rotate-[-1deg] select-none">{consultation.customer_name}</p>
                                             )}
                                             <span className="absolute -left-6 bottom-3 text-xs font-black text-slate-200">X</span>
                                         </div>
@@ -185,7 +250,7 @@ const VideoConsultation = () => {
                                     <div className="text-right flex flex-col gap-3">
                                         <label className="text-[9px] font-black text-slate-300 uppercase tracking-widest leading-none">Date Signed</label>
                                         <div className="w-32 h-10 border-b-2 border-slate-200 flex items-end justify-center pb-2 font-mono text-xs font-bold text-slate-900">
-                                            10/24/2023
+                                            {signed ? new Date(consultation.updated_at).toLocaleDateString() : '—'}
                                         </div>
                                     </div>
                                 </div>
@@ -193,11 +258,11 @@ const VideoConsultation = () => {
                                 {/* Shared Cursors */}
                                 <div className="absolute bottom-64 right-48 z-20 pointer-events-none transition-all duration-300 ease-out translate-x-12 translate-y-8">
                                     <span className="material-symbols-outlined text-[#1152d4] text-xl drop-shadow-md">near_me</span>
-                                    <div className="bg-[#1152d4] text-white text-[9px] font-black px-2 py-0.5 rounded shadow-xl whitespace-nowrap mt-1 ml-4 border border-[#1152d4]">John (You)</div>
+                                    <div className="bg-[#1152d4] text-white text-[9px] font-black px-2 py-0.5 rounded shadow-xl whitespace-nowrap mt-1 ml-4 border border-[#1152d4]">{consultation.customer_name.split(' ')[0]} (You)</div>
                                 </div>
                                 <div className="absolute bottom-40 left-64 z-20 pointer-events-none transition-all duration-500 ease-out translate-x-[-20px]">
                                     <span className="material-symbols-outlined text-rose-500 text-xl drop-shadow-md">near_me</span>
-                                    <div className="bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded shadow-xl whitespace-nowrap mt-1 ml-4 border border-rose-600">Sarah J.</div>
+                                    <div className="bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded shadow-xl whitespace-nowrap mt-1 ml-4 border border-rose-600">{consultation.consultant_name.split(' ')[0]} J.</div>
                                 </div>
                             </div>
 
@@ -221,7 +286,7 @@ const VideoConsultation = () => {
                             <div className="h-44 rounded-[2rem] overflow-hidden bg-slate-900 relative border-2 border-white shadow-xl group">
                                 <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah" className="absolute inset-0 w-full h-full object-cover scale-150" alt="V" />
                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-5 flex items-center justify-between">
-                                    <span className="text-[10px] text-white font-black uppercase tracking-widest leading-none">Sarah Jenkins</span>
+                                    <span className="text-[10px] text-white font-black uppercase tracking-widest leading-none">{consultation.consultant_name}</span>
                                     <div className="size-5 rounded-lg bg-white/10 flex items-center justify-center backdrop-blur-md"><span className="material-symbols-outlined text-xs text-white">mic</span></div>
                                 </div>
                             </div>

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { apiGet } from '../../../utils/apiHelper';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 
@@ -11,9 +12,28 @@ const VisaLanding = () => {
     const [nationality, setNationality] = useState('');
     const [destination, setDestination] = useState('');
 
-    const handleEligibilityCheck = () => {
-        if (nationality && destination) {
+    const [requirement, setRequirement] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    const handleEligibilityCheck = async () => {
+        if (!nationality || !destination) return;
+        
+        setLoading(true);
+        setRequirement(null);
+        try {
+            const response = await apiGet(`visa/requirements/check?nationality=${encodeURIComponent(nationality)}&destination=${encodeURIComponent(destination)}`);
+            const data = await response.json();
+            if (data.success && data.data) {
+                setRequirement(data.data);
+            } else {
+                // If not in our specific list, we'll still let them proceed to apply
+                navigate(`/visa/apply?nationality=${encodeURIComponent(nationality)}&destination=${encodeURIComponent(destination)}`);
+            }
+        } catch (err) {
+            console.error('Eligibility check error:', err);
             navigate(`/visa/apply?nationality=${encodeURIComponent(nationality)}&destination=${encodeURIComponent(destination)}`);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -130,12 +150,38 @@ const VisaLanding = () => {
                                     <div className="flex items-end mt-4 md:mt-0">
                                         <button
                                             onClick={handleEligibilityCheck}
-                                            className="w-full md:w-auto flex cursor-pointer items-center justify-center rounded-lg h-12 px-8 bg-[#1152d4] text-white text-base font-bold shadow-md hover:bg-[#0e42b0] transition-all"
+                                            disabled={loading}
+                                            className="w-full md:w-auto flex cursor-pointer items-center justify-center rounded-lg h-12 px-8 bg-[#1152d4] text-white text-base font-bold shadow-md hover:bg-[#0e42b0] transition-all disabled:opacity-70"
                                         >
-                                            Check Now
+                                          {loading ? 'Checking...' : 'Check Now'}
                                         </button>
                                     </div>
                                 </div>
+
+                                {requirement && (
+                                    <div className="mt-6 p-5 bg-blue-50 border border-blue-100 rounded-xl animate-in fade-in slide-in-from-top-4 duration-500">
+                                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className={`size-3 rounded-full ${requirement.visa_required ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                                                    <h4 className="font-black text-slate-900 text-sm uppercase tracking-tight">
+                                                        {requirement.visa_required ? `${requirement.visa_type} Required` : 'Visa-Free Entry Available'}
+                                                    </h4>
+                                                </div>
+                                                <p className="text-slate-600 text-xs font-medium">
+                                                    For {requirement.nationality} citizens traveling to {requirement.destination}. 
+                                                    {requirement.max_stay && ` Stay up to ${requirement.max_stay}.`}
+                                                </p>
+                                            </div>
+                                            <button 
+                                                onClick={() => navigate(`/visa/apply?nationality=${encodeURIComponent(nationality)}&destination=${encodeURIComponent(destination)}`)}
+                                                className="bg-[#1152d4] text-white px-6 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-slate-950 transition-all shadow-lg shadow-[#1152d4]/20"
+                                            >
+                                                Start Application
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
