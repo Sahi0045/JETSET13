@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import './AdminLogin.css';
 import { getApiUrl } from '../../utils/apiHelper';
 
@@ -226,7 +226,7 @@ const AdminLogin = () => {
                   <input type="checkbox" />
                   <span>Remember me</span>
                 </label>
-                <a href="#" className="forgot-password">Forgot password?</a>
+                <Link to="/forgot-password" style={{ color: '#055B75', textDecoration: 'none', fontSize: '0.875rem' }}>Forgot password?</Link>
               </div>
 
               <button

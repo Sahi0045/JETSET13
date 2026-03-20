@@ -251,6 +251,15 @@ const VisaAdminLogin = () => {
               Customer Portal
             </Link>
             <Link
+              to="/forgot-password"
+              className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 no-underline transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">
+                lock_reset
+              </span>
+              Forgot Password?
+            </Link>
+            <Link
               to="/admin/login"
               className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 no-underline transition-colors"
             >
