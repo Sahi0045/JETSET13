@@ -126,6 +126,13 @@ const DocumentServicesList = () => {
 
   useEffect(() => {
     fetchServices();
+
+    // ── Real-time Polling (30s) ─────────────────────────────────────────────
+    const pollInterval = setInterval(() => {
+      fetchServices();
+    }, 30000);
+
+    return () => clearInterval(pollInterval);
   }, [fetchServices]);
 
   // ── Debounced search ───────────────────────────────────────────────────────

@@ -145,6 +145,19 @@ const VisaApplicationTracker = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Real-time Polling (30s) ─────────────────────────────────────────────
+  useEffect(() => {
+    let pollInterval;
+    if (hasSearched && applications.length > 0 && !loading) {
+      pollInterval = setInterval(() => {
+        handleSearch();
+      }, 30000);
+    }
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [hasSearched, applications.length, loading, handleSearch]);
+
   return (
     <div className="min-h-screen bg-[#f6f6f8] font-sans text-slate-900">
       <Navbar forceScrolled={true} />

@@ -41,11 +41,14 @@ export const submitApplication = async (req, res) => {
       });
     }
 
+    // Use userId from body, or authUserId from token if available
+    const effectiveUserId = userId || req.user?.authUserId;
+
     const application = await VisaApplication.create({
       personalInfo,
       travelDetails,
       serviceTier: serviceTier || 'standard',
-      userId: userId || null,
+      userId: effectiveUserId || null,
       documents: documents || null,
       paymentStatus: paymentStatus || 'pending',
       notes: notes || null,
@@ -154,22 +157,36 @@ export const getStats = async (req, res) => {
 export const getUserApplications = async (req, res) => {
   try {
     const { userId, email } = req.query;
-    // Use authUserId from protect middleware if available, otherwise fall back to query
+    // Use authUserId and email from protect middleware if available
     const effectiveUserId = req.user?.authUserId || userId;
+    const effectiveEmail = req.user?.email || email;
 
-    if (!effectiveUserId && !email) {
+    if (!effectiveUserId && !effectiveEmail) {
       return res.status(400).json({
         success: false,
         message: 'userId or email query parameter is required (or must be authenticated)',
       });
     }
 
-    let applications = [];
+    // Use a Map to store unique applications by ID (to handle overlaps)
+    const appsMap = new Map();
+
+    // 1. Search by userId
     if (effectiveUserId) {
-      applications = await VisaApplication.findByUserId(effectiveUserId);
-    } else if (email) {
-      applications = await VisaApplication.findByEmail(email);
+      const byId = await VisaApplication.findByUserId(effectiveUserId);
+      byId.forEach(app => appsMap.set(app.id, app));
     }
+
+    // 2. Search by email (as a robust fallback/supplement)
+    if (effectiveEmail) {
+      const byEmail = await VisaApplication.findByEmail(effectiveEmail);
+      byEmail.forEach(app => appsMap.set(app.id, app));
+    }
+
+    // Final list sorted by newest first
+    const applications = Array.from(appsMap.values()).sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at)
+    );
 
     return res.json({
       success: true,
@@ -184,6 +201,8 @@ export const getUserApplications = async (req, res) => {
     });
   }
 };
+
+
 
 /**
  * GET /api/visa/applications/track
@@ -482,7 +501,7 @@ export const bookConsultation = async (req, res) => {
 
     const consultation = await VisaConsultation.create({
       ...req.body,
-      userId: req.body.userId || null,
+      userId: req.body.userId || req.user?.authUserId || null,
     });
 
     console.log(`✅ Visa consultation booked: ${consultation.id} — ${consultantName} on ${bookingDate} at ${bookingTime}`);
@@ -551,27 +570,43 @@ export const getConsultations = async (req, res) => {
 export const getUserConsultations = async (req, res) => {
   try {
     const { userId, email } = req.query;
+    // Use authUserId and email from protect middleware if available
     const effectiveUserId = req.user?.authUserId || userId;
+    const effectiveEmail = req.user?.email || email;
 
-    if (!effectiveUserId && !email) {
+    if (!effectiveUserId && !effectiveEmail) {
       return res.status(400).json({
         success: false,
         message: 'userId or email query parameter is required (or must be authenticated)',
       });
     }
 
-    let consultations = [];
+    // Use a Map to store unique consultations by ID
+    const consultationsMap = new Map();
+
+    // 1. Search by userId
     if (effectiveUserId) {
-      consultations = await VisaConsultation.findByUserId(effectiveUserId);
-    } else if (email) {
-      consultations = await VisaConsultation.findByEmail(email);
+      const byId = await VisaConsultation.findByUserId(effectiveUserId);
+      byId.forEach(c => consultationsMap.set(c.id, c));
     }
+
+    // 2. Search by email
+    if (effectiveEmail) {
+      const byEmail = await VisaConsultation.findByEmail(effectiveEmail);
+      byEmail.forEach(c => consultationsMap.set(c.id, c));
+    }
+
+    // Final list sorted by newest first
+    const consultations = Array.from(consultationsMap.values()).sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at)
+    );
 
     return res.json({
       success: true,
       total: consultations.length,
       data: consultations,
     });
+
   } catch (err) {
     console.error('getUserConsultations error:', err);
     return res.status(500).json({

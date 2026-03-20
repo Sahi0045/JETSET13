@@ -103,10 +103,24 @@ const VisaApplicationsList = () => {
 
   useEffect(() => {
     fetchStatusCounts();
+
+    // ── Real-time Polling (20s) ─────────────────────────────────────────────
+    const pollInterval = setInterval(() => {
+      fetchStatusCounts();
+    }, 20000);
+
+    return () => clearInterval(pollInterval);
   }, [fetchStatusCounts]);
 
   useEffect(() => {
     fetchApplications();
+
+    // ── Real-time Polling (20s) ─────────────────────────────────────────────
+    const pollInterval = setInterval(() => {
+      fetchApplications();
+    }, 20000);
+
+    return () => clearInterval(pollInterval);
   }, [fetchApplications]);
 
   // ── Debounced search ──────────────────────────────────────────────────────

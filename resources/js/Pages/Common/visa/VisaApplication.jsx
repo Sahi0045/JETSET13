@@ -187,10 +187,37 @@ const VisaApplication = () => {
 
     try {
       // Build documents payload
+      // ─── Document Upload Stage ─────────────────────────────────────────────
+      setSubmitError("");
+      const uploadedUrls = {};
+      const uploadEntries = Object.entries(uploadedFiles);
+
+      if (uploadEntries.length > 0) {
+        // We could use Promise.all, but sequential is safer for rate limits/debugging
+        for (const [docId, { file }] of uploadEntries) {
+          try {
+            const formData = new FormData();
+            formData.append("file", file);
+            // Optionally add metadata/path if needed by your backend
+            
+            const uploadRes = await apiPost("visa/upload", formData);
+            const uploadData = await uploadRes.json();
+            
+            if (uploadRes.ok && uploadData.success) {
+              uploadedUrls[docId] = uploadData.data.url;
+            } else {
+              console.warn(`Failed to upload ${docId}:`, uploadData.message);
+            }
+          } catch (uploadErr) {
+            console.error(`Upload error for ${docId}:`, uploadErr);
+          }
+        }
+      }
+
       const docsPayload = documents.map((doc) => ({
         name: doc.title,
         status: uploadedFiles[doc.id] ? "uploaded" : "pending",
-        file_url: null,
+        file_url: uploadedUrls[doc.id] || null,
       }));
 
       const payload = {

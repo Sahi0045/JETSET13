@@ -61,6 +61,13 @@ const VisaRequirementsManager = () => {
 
     useEffect(() => {
         fetchRequirements();
+
+        // ── Real-time Polling (60s) ─────────────────────────────────────────────
+        const pollInterval = setInterval(() => {
+            fetchRequirements();
+        }, 60000);
+
+        return () => clearInterval(pollInterval);
     }, [fetchRequirements]);
 
     const filtered = requirements.filter(r =>

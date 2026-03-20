@@ -32,6 +32,13 @@ const AdminDocumentReview = () => {
 
     useEffect(() => {
         fetchApplication();
+
+        // ── Real-time Polling (10s) ─────────────────────────────────────────────
+        const pollInterval = setInterval(() => {
+            fetchApplication();
+        }, 10000);
+
+        return () => clearInterval(pollInterval);
     }, [fetchApplication]);
 
     const documents = application?.documents || [];

@@ -56,7 +56,23 @@ const ConsultantDashboard = () => {
         }
     }, []);
 
-    const fetchRecentCompliance = async () => {
+    const fetchStats = useCallback(async () => {
+        try {
+            const response = await apiGet('visa/consultations/stats');
+            const data = await response.json();
+            if (data.success && data.data) {
+                setStats({
+                    total: data.data.total || 0,
+                    revenue: data.data.totalRevenue || 0,
+                    rating: 4.8, // Static until a ratings model is added
+                });
+            }
+        } catch (err) {
+            console.error('fetchStats error:', err);
+        }
+    }, []);
+
+    const fetchRecentCompliance = useCallback(async () => {
         try {
             // Fetch applications that need attention
             const response = await apiGet('visa/applications?limit=3&status=under_review,additional_info_required&orderBy=updated_at:desc');
@@ -71,7 +87,8 @@ const ConsultantDashboard = () => {
         } catch (err) {
             console.error('fetchRecentCompliance error:', err);
         }
-    };
+    }, []);
+
 
     useEffect(() => {
         fetchConsultations();

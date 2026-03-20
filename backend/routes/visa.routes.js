@@ -117,7 +117,7 @@ router.delete('/applications/:id', protect, admin, deleteApplication);
  * POST /api/visa/upload
  * Upload a document to storage.
  */
-router.post('/upload', protect, upload.single('file'), uploadFile);
+router.post('/upload', optionalProtect, upload.single('file'), uploadFile);
 
 // ─── Visa Consultations ──────────────────────────────────────────────────────
 

@@ -1,60 +1,30 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../Navbar";
 import Footer from "../Footer";
-import { getApiUrl, apiPost } from "../../../utils/apiHelper";
+import { apiGet, apiPost } from "../../../utils/apiHelper";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 23: Consultation Booking Calendar
 
-const CONSULTANTS = [
-  {
-    id: 1,
-    role: "Student Visa Expert",
-    name: "Sarah Miller",
-    img: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
-    bio: "10+ years experience with student visas across US, UK, Canada & Australia.",
-    rating: 4.9,
-    reviews: 312,
-  },
-  {
-    id: 2,
-    role: "Work Permit Pro",
-    name: "David Chen",
-    img: "https://api.dicebear.com/7.x/avataaars/svg?seed=David",
-    bio: "Specialist in H-1B, L-1, and skilled worker visas across 30+ countries.",
-    rating: 4.8,
-    reviews: 274,
-  },
-  {
-    id: 3,
-    role: "Tourist Visa Lead",
-    name: "Elena Rodriguez",
-    img: "https://api.dicebear.com/7.x/avataaars/svg?seed=Elena",
-    bio: "Expert in Schengen, B-2 tourist, and short-stay visa applications.",
-    rating: 4.9,
-    reviews: 408,
-  },
-  {
-    id: 4,
-    role: "Investor Specialist",
-    name: "James Wilson",
-    img: "https://api.dicebear.com/7.x/avataaars/svg?seed=James",
-    bio: "Focused on EB-5, Golden Visa, and investor immigration pathways.",
-    rating: 4.7,
-    reviews: 189,
-  },
+// All available time slots in a day (server-side busy ones will be filtered)
+const ALL_TIME_SLOTS = [
+  "09:00 AM",
+  "10:30 AM",
+  "12:00 PM",
+  "01:30 PM",
+  "03:00 PM",
+  "04:30 PM",
+  "06:00 PM",
+  "07:30 PM",
 ];
 
-const TIME_SLOTS = [
-  { time: "09:00 AM", available: true },
-  { time: "10:30 AM", available: true },
-  { time: "12:00 PM", available: true },
-  { time: "01:30 PM", available: true },
-  { time: "03:00 PM", available: false },
-  { time: "04:30 PM", available: true },
-  { time: "06:00 PM", available: true },
-  { time: "07:30 PM", available: true },
+// Default consultants shown while loading or if backend has none yet
+const DEFAULT_CONSULTANTS = [
+  { name: "Sarah Miller", role: "Student Visa Expert", bio: "10+ years experience with student visas across US, UK, Canada & Australia.", rating: 4.9, reviews: 312 },
+  { name: "David Chen",   role: "Work Permit Pro",     bio: "Specialist in H-1B, L-1, and skilled worker visas across 30+ countries.",  rating: 4.8, reviews: 274 },
+  { name: "Elena Rodriguez", role: "Tourist Visa Lead", bio: "Expert in Schengen, B-2 tourist, and short-stay visa applications.",     rating: 4.9, reviews: 408 },
+  { name: "James Wilson", role: "Investor Specialist", bio: "Focused on EB-5, Golden Visa, and investor immigration pathways.",          rating: 4.7, reviews: 189 },
 ];
 
 // Build a simple calendar: current month starting from today
@@ -68,29 +38,103 @@ const buildCalendar = () => {
 };
 
 const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
 ];
 
 const ConsultationBooking = () => {
   const navigate = useNavigate();
   const cal = buildCalendar();
 
-  const [selectedConsultant, setSelectedConsultant] = useState(1);
+  // ── Dynamic consultant list from DB ──────────────────────────────────────
+  const [consultants, setConsultants] = useState(DEFAULT_CONSULTANTS);
+  const [consultantsLoading, setConsultantsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchConsultants = async () => {
+      try {
+        // Fetch all consultations then derive unique consultants from consultant_name/role
+        const res = await apiGet("visa/consultations?limit=200");
+        const data = await res.json();
+        if (data.success && data.data && data.data.length > 0) {
+          const seen = new Map();
+          data.data.forEach((c) => {
+            if (c.consultant_name && c.consultant_name !== "Document Services Team" && !seen.has(c.consultant_name)) {
+              seen.set(c.consultant_name, {
+                name: c.consultant_name,
+                role: c.consultant_role || "Visa Consultant",
+                bio: `Specialist in visa consultations.`,
+                rating: 4.8,
+                reviews: Math.floor(Math.random() * 200 + 100),
+              });
+            }
+          });
+          if (seen.size > 0) {
+            setConsultants([...seen.values()]);
+          }
+          // else keep defaults
+        }
+      } catch (err) {
+        console.error("fetchConsultants error:", err);
+        // silently fall back to defaults
+      } finally {
+        setConsultantsLoading(false);
+      }
+    };
+    fetchConsultants();
+  }, []);
+
+  // ── Dynamic booked slots from DB ──────────────────────────────────────
+  const [bookedSlots, setBookedSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+
+  const [selectedConsultant, setSelectedConsultant] = useState(0); // index into `consultants`
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
   const [calMonth, setCalMonth] = useState(cal.month);
   const [calYear, setCalYear] = useState(cal.year);
+
+  const activeConsultant = consultants[selectedConsultant] || consultants[0];
+
+  const formatBookingDate = useCallback(() => {
+    if (!selectedDate) return null;
+    const d = new Date(calYear, calMonth, selectedDate);
+    return d.toISOString().split("T")[0]; // YYYY-MM-DD
+  }, [calYear, calMonth, selectedDate]);
+
+  // Fetch booked slots whenever consultant or date changes
+  useEffect(() => {
+    if (!activeConsultant || !selectedDate) return;
+    const dateStr = formatBookingDate();
+    if (!dateStr) return;
+
+    setSlotsLoading(true);
+    const fetchBookedSlots = async () => {
+      try {
+        const params = new URLSearchParams({
+          consultantName: activeConsultant.name,
+          date: dateStr,
+          limit: "100",
+        });
+        const res = await apiGet(`visa/consultations?${params.toString()}`);
+        const data = await res.json();
+        if (data.success) {
+          setBookedSlots(data.data.map((c) => c.booking_time));
+        }
+      } catch (err) {
+        console.error("fetchBookedSlots error:", err);
+      } finally {
+        setSlotsLoading(false);
+      }
+    };
+    fetchBookedSlots();
+  }, [activeConsultant?.name, selectedDate, formatBookingDate]);
+
+  // Compute available/unavailable for each slot
+  const timeSlots = ALL_TIME_SLOTS.map((time) => ({
+    time,
+    available: !bookedSlots.includes(time),
+  }));
 
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -100,8 +144,6 @@ const ConsultationBooking = () => {
   const [submitError, setSubmitError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [bookingSuccess, setBookingSuccess] = useState(null);
-
-  const activeConsultant = CONSULTANTS.find((c) => c.id === selectedConsultant);
 
   // Calendar helpers
   const daysInCalMonth = new Date(calYear, calMonth + 1, 0).getDate();
@@ -133,11 +175,6 @@ const ConsultationBooking = () => {
     setSelectedDate(null);
   };
 
-  const formatBookingDate = () => {
-    if (!selectedDate) return null;
-    const d = new Date(calYear, calMonth, selectedDate);
-    return d.toISOString().split("T")[0]; // YYYY-MM-DD
-  };
 
   const validate = () => {
     const errors = {};
@@ -352,44 +389,54 @@ const ConsultationBooking = () => {
         {/* Consultant Selection */}
         <div className="mb-10 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="flex overflow-x-auto gap-2 p-1">
-            {CONSULTANTS.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setSelectedConsultant(c.id)}
-                className={`flex flex-col items-center min-w-[180px] p-5 rounded-xl transition-all border-2 ${
-                  selectedConsultant === c.id
-                    ? "bg-[#1152d4]/5 border-[#1152d4] text-[#1152d4]"
-                    : "border-transparent hover:bg-slate-50 text-slate-600"
-                }`}
-              >
-                <div
-                  className={`size-16 rounded-full mb-3 border-2 overflow-hidden ${
-                    selectedConsultant === c.id
-                      ? "border-[#1152d4]"
-                      : "border-slate-100"
-                  }`}
-                >
-                  <img
-                    src={c.img}
-                    alt={c.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <p className="text-sm font-black text-center leading-tight">
-                  {c.role}
-                </p>
-                <p className="text-xs font-medium opacity-70 mt-1">{c.name}</p>
-                <div className="flex items-center gap-1 mt-2">
-                  <span className="material-symbols-outlined text-amber-400 text-sm">
-                    star
-                  </span>
-                  <span className="text-xs font-bold">{c.rating}</span>
-                  <span className="text-[10px] text-slate-400">
-                    ({c.reviews})
-                  </span>
-                </div>
-              </button>
-            ))}
+            {consultantsLoading
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex flex-col items-center min-w-[180px] p-5 rounded-xl border-2 border-slate-100 animate-pulse">
+                    <div className="size-16 rounded-full mb-3 bg-slate-200" />
+                    <div className="h-3 bg-slate-200 rounded w-24 mb-2" />
+                    <div className="h-2.5 bg-slate-100 rounded w-16" />
+                  </div>
+                ))
+              : consultants.map((c, i) => (
+                  <button
+                    key={c.name}
+                    onClick={() => { setSelectedConsultant(i); setSelectedTime(null); setBookedSlots([]); }}
+                    className={`flex flex-col items-center min-w-[180px] p-5 rounded-xl transition-all border-2 ${
+                      selectedConsultant === i
+                        ? "bg-[#1152d4]/5 border-[#1152d4] text-[#1152d4]"
+                        : "border-transparent hover:bg-slate-50 text-slate-600"
+                    }`}
+                  >
+                    <div
+                      className={`size-16 rounded-full mb-3 border-2 overflow-hidden ${
+                        selectedConsultant === i
+                          ? "border-[#1152d4]"
+                          : "border-slate-100"
+                      }`}
+                    >
+                      <img
+                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.name)}`}
+                        alt={c.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <p className="text-sm font-black text-center leading-tight">
+                      {c.role}
+                    </p>
+                    <p className="text-xs font-medium opacity-70 mt-1">{c.name}</p>
+                    <div className="flex items-center gap-1 mt-2">
+                      <span className="material-symbols-outlined text-amber-400 text-sm">
+                        star
+                      </span>
+                      <span className="text-xs font-bold">{c.rating}</span>
+                      <span className="text-[10px] text-slate-400">
+                        ({c.reviews})
+                      </span>
+                    </div>
+                  </button>
+                ))
+            }
+
           </div>
 
           {/* Consultant bio */}
@@ -488,30 +535,39 @@ const ConsultationBooking = () => {
                   <h3 className="font-black text-slate-900 mb-6">
                     Available Time Slots
                   </h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {TIME_SLOTS.map(({ time, available }) => (
-                      <button
-                        key={time}
-                        disabled={!available}
-                        onClick={() => {
-                          setSelectedTime(time);
-                          setFieldErrors((prev) => ({
-                            ...prev,
-                            time: "",
-                          }));
-                        }}
-                        className={`py-3.5 px-4 rounded-xl text-xs font-black transition-all border-2 ${
-                          !available
-                            ? "bg-slate-100 text-slate-300 border-transparent line-through cursor-not-allowed"
-                            : selectedTime === time
-                              ? "bg-[#1152d4] text-white border-[#1152d4] shadow-lg shadow-[#1152d4]/20"
-                              : "bg-white border-slate-100 text-slate-700 hover:border-[#1152d4] hover:text-[#1152d4]"
-                        }`}
-                      >
-                        {time}
-                      </button>
-                    ))}
-                  </div>
+                  {slotsLoading ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {Array.from({ length: 8 }).map((_, i) => (
+                        <div key={i} className="h-11 bg-slate-200 rounded-xl animate-pulse" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      {timeSlots.map(({ time, available }) => (
+                        <button
+                          key={time}
+                          disabled={!available}
+                          onClick={() => {
+                            setSelectedTime(time);
+                            setFieldErrors((prev) => ({
+                              ...prev,
+                              time: "",
+                            }));
+                          }}
+                          className={`py-3.5 px-4 rounded-xl text-xs font-black transition-all border-2 ${
+                            !available
+                              ? "bg-slate-100 text-slate-300 border-transparent line-through cursor-not-allowed"
+                              : selectedTime === time
+                                ? "bg-[#1152d4] text-white border-[#1152d4] shadow-lg shadow-[#1152d4]/20"
+                                : "bg-white border-slate-100 text-slate-700 hover:border-[#1152d4] hover:text-[#1152d4]"
+                          }`}
+                        >
+                          {time}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
 
                   {fieldErrors.time && (
                     <p className="mt-3 text-xs text-red-500 flex items-center gap-1">

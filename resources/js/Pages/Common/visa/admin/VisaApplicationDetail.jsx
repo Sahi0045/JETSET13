@@ -86,6 +86,13 @@ const VisaApplicationDetail = () => {
 
   useEffect(() => {
     fetchApp();
+
+    // ── Real-time Polling (10s) ─────────────────────────────────────────────
+    const pollInterval = setInterval(() => {
+      fetchApp();
+    }, 10000);
+
+    return () => clearInterval(pollInterval);
   }, [fetchApp]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────

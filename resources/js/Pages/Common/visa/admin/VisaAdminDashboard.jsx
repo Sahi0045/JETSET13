@@ -107,6 +107,14 @@ const VisaAdminDashboard = () => {
   useEffect(() => {
     fetchStats();
     fetchRecentApplications();
+
+    // ── Real-time Polling (20s) ─────────────────────────────────────────────
+    const pollInterval = setInterval(() => {
+      fetchStats();
+      fetchRecentApplications();
+    }, 20000);
+
+    return () => clearInterval(pollInterval);
   }, [fetchStats, fetchRecentApplications]);
 
   // ── Derived stats ─────────────────────────────────────────────────────────
