@@ -1,5 +1,7 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
+import Navbar from '../Common/Navbar';
+import Footer from '../Common/Footer';
 import AdminDashboard from './AdminDashboard';
 import InquiryList from './InquiryList';
 import InquiryDetail from './InquiryDetail';
@@ -15,21 +17,25 @@ import './AdminPanel.css';
 
 const AdminPanel = () => {
   return (
-    <div className="admin-panel">
-      <Routes>
-        <Route path="/" element={<AdminDashboard />} />
-        <Route path="/inquiries" element={<InquiryList />} />
-        <Route path="/inquiries/:id" element={<InquiryDetail />} />
-        <Route path="/inquiries/:inquiryId/quote" element={<QuoteCreate />} />
-        <Route path="/quotes/:id" element={<QuoteDetail />} />
-        <Route path="/feature-flags" element={<FeatureFlags />} />
-        <Route path="/price-settings" element={<PriceSettings />} />
-        <Route path="/bookings" element={<BookingsList />} />
-        <Route path="/payment-links" element={<PaymentLinksList />} />
-        <Route path="/payment-links/create" element={<PaymentLinkCreate />} />
-        <Route path="/agents" element={<AgentManagement />} />
-      </Routes>
-    </div>
+    <>
+      <Navbar />
+      <div className="admin-panel">
+        <Routes>
+          <Route path="/" element={<AdminDashboard />} />
+          <Route path="/inquiries" element={<InquiryList />} />
+          <Route path="/inquiries/:id" element={<InquiryDetail />} />
+          <Route path="/inquiries/:inquiryId/quote" element={<QuoteCreate />} />
+          <Route path="/quotes/:id" element={<QuoteDetail />} />
+          <Route path="/feature-flags" element={<FeatureFlags />} />
+          <Route path="/price-settings" element={<PriceSettings />} />
+          <Route path="/bookings" element={<BookingsList />} />
+          <Route path="/payment-links" element={<PaymentLinksList />} />
+          <Route path="/payment-links/create" element={<PaymentLinkCreate />} />
+          <Route path="/agents" element={<AgentManagement />} />
+        </Routes>
+      </div>
+      <Footer />
+    </>
   );
 };
 
