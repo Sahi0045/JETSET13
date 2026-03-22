@@ -1,33 +1,189 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
+import { apiGet, apiPost } from '../../../utils/apiHelper';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 4: Customer Status Dashboard
 
 const CustomerStatusDashboard = () => {
+    const [application, setApplication] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [message, setMessage] = useState('');
-    const [chatHistory, setChatHistory] = useState([
-        { id: 1, type: 'agent', name: 'Sarah Jenkins', time: '10:15 AM', content: "Hello Mark! I've reviewed your latest documents. Everything looks great, but the embassy requested one more bank statement for clarity." },
-        { id: 2, type: 'user', time: '10:22 AM', content: "Thanks Sarah, I just saw the action item. I'll upload it within the next hour." },
-        { id: 3, type: 'agent', name: 'Sarah Jenkins', time: '10:25 AM', content: "Perfect. I'll notify the embassy as soon as it's received. Let me know if you have any other questions!" },
-        { id: 4, type: 'agent', name: 'Sarah Jenkins', time: '10:26 AM', content: "I've also attached a guide on what to expect at your biometric appointment.", isFile: true, fileName: 'biometric_guide.pdf', fileSize: '1.2 MB' }
-    ]);
+    const [chatHistory, setChatHistory] = useState([]);
+    const [sending, setSending] = useState(false);
+    const [resending, setResending] = useState(false);
+    const [resendStatus, setResendStatus] = useState(null); // 'success' | 'error'
+    const [uploadingDoc, setUploadingDoc] = useState(null);
+    const [uploadError, setUploadError] = useState(null);
+    const scrollRef = React.useRef(null);
 
-    const handleSendMessage = (e) => {
+    const fetchApplication = useCallback(async () => {
+        try {
+            const response = await apiGet('visa/applications/my');
+            const data = await response.json();
+            if (data.success && data.data && data.data.length > 0) {
+                // Get the most recent application
+                const app = data.data[0];
+                setApplication(app);
+                fetchMessages(app.id);
+            } else {
+                setLoading(false);
+            }
+        } catch (err) {
+            console.error('fetchApplication error:', err);
+            setError('Failed to load application data.');
+            setLoading(false);
+        }
+    }, []);
+
+    const fetchMessages = async (appId) => {
+        try {
+            const response = await apiGet(`visa/applications/${appId}/messages`);
+            const data = await response.json();
+            if (data.success) {
+                const mappedMessages = data.data.map(m => ({
+                    id: m.id,
+                    type: m.sender_type === 'customer' ? 'user' : 'agent',
+                    name: m.sender_name || 'Agent',
+                    time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    content: m.content,
+                    isFile: !!m.attachment_url,
+                    fileName: m.attachment_name,
+                    fileSize: '—'
+                }));
+                setChatHistory(mappedMessages);
+            }
+        } catch (err) {
+            console.error('fetchMessages error:', err);
+        } finally {
+            setLoading(false);
+            // Auto scroll to bottom
+            setTimeout(() => {
+                if (scrollRef.current) {
+                    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                }
+            }, 100);
+        }
+    };
+
+    useEffect(() => {
+        fetchApplication();
+        
+        // Polling for status updates every 5 seconds for "real-time" sync
+        const interval = setInterval(() => {
+            fetchApplication();
+        }, 5000);
+        
+        return () => clearInterval(interval);
+    }, [fetchApplication]);
+
+    const handleResendEmail = async () => {
+        if (!application?.id) return;
+        setResending(true);
+        setResendStatus(null);
+        try {
+            const response = await apiPost(`visa/applications/${application.id}/resend-email`);
+            if (response.ok) {
+                setResendStatus('success');
+            } else {
+                setResendStatus('error');
+            }
+        } catch (err) {
+            console.error('Resend email error:', err);
+            setResendStatus('error');
+        } finally {
+            setResending(false);
+            setTimeout(() => setResendStatus(null), 5000);
+        }
+    };
+
+    const handleFileUpload = async (docName, file) => {
+        if (!file || !application?.id) return;
+        setUploadingDoc(docName);
+        setUploadError(null);
+
+        try {
+            // 1. Upload to storage
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const uploadRes = await apiRequest('visa/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            const uploadData = await uploadRes.json();
+            if (!uploadRes.ok || !uploadData.success) {
+                throw new Error(uploadData.message || 'Upload failed');
+            }
+
+            // 2. Update application record
+            const updateRes = await apiPost(`visa/applications/${application.id}/documents`, {
+                docName,
+                status: 'uploaded',
+                fileUrl: uploadData.data.url
+            });
+
+            if (!updateRes.ok) {
+                throw new Error('Failed to update application record');
+            }
+
+            // 3. Re-fetch application
+            await fetchApplication();
+            alert(`"${docName}" uploaded successfully!`);
+        } catch (err) {
+            console.error('File upload error:', err);
+            setUploadError(`${docName}: ${err.message}`);
+        } finally {
+            setUploadingDoc(null);
+        }
+    };
+
+    const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (!message.trim()) return;
+        if (!message.trim() || !application || sending) return;
 
-        const newMessage = {
-            id: Date.now(),
-            type: 'user',
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            content: message
-        };
+        setSending(true);
+        try {
+            const response = await apiPost(`visa/applications/${application.id}/messages`, {
+                content: message,
+                senderType: 'customer',
+                senderName: `${application.personal_info?.firstName || ''} ${application.personal_info?.lastName || ''}`.trim()
+            });
+            const data = await response.json();
+            if (data.success) {
+                setMessage('');
+                fetchMessages(application.id);
+            }
+        } catch (err) {
+            console.error('handleSendMessage error:', err);
+        } finally {
+            setSending(false);
+        }
+    };
 
-        setChatHistory([...chatHistory, newMessage]);
-        setMessage('');
+    // Status mapping for stepper
+    const getStepStatus = (step) => {
+        if (!application) return 'pending';
+        const status = application.status;
+        
+        const statusFlow = [
+            { step: 'applied', statuses: ['submitted', 'documents_pending', 'under_review', 'additional_info_required', 'approved', 'completed'] },
+            { step: 'verified', statuses: ['under_review', 'additional_info_required', 'approved', 'completed'] },
+            { step: 'processing', statuses: ['under_review', 'approved', 'completed'] },
+            { step: 'ready', statuses: ['approved', 'completed'] }
+        ];
+
+        const stepConfig = statusFlow.find(s => s.step === step);
+        if (stepConfig.statuses.includes(status)) {
+            // For processing step, if it's the current active one, color it differently
+            if (step === 'processing' && (status === 'under_review' || status === 'additional_info_required')) return 'active';
+            return 'completed';
+        }
+        return 'pending';
     };
 
     return (
@@ -58,109 +214,199 @@ const CustomerStatusDashboard = () => {
                             </Link>
                         </div>
 
-                        <div className="flex justify-between items-end gap-4 mb-8">
-                            <div>
-                                <h1 className="text-2xl font-black text-slate-900 leading-tight">Application: Tourist Visa - France</h1>
-                                <p className="text-slate-500 text-sm mt-1">Application ID: <span className="font-mono text-[#1152d4] font-bold">#V-882910</span> • Submitted on Oct 12, 2023</p>
+                        {loading ? (
+                            <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-sm animate-pulse">
+                                <div className="size-16 bg-slate-100 rounded-full mb-4"></div>
+                                <div className="h-4 bg-slate-100 rounded w-48 mb-2"></div>
+                                <div className="h-3 bg-slate-50 rounded w-32"></div>
                             </div>
-                            <button className="flex items-center gap-2 h-10 px-4 bg-white border border-slate-200 rounded-lg text-slate-700 text-sm font-bold shadow-sm hover:bg-slate-50">
-                                <span className="material-symbols-outlined text-lg">download</span>
-                                Download Receipt
-                            </button>
-                        </div>
+                        ) : !application ? (
+                            <div className="p-20 text-center bg-white rounded-3xl border border-slate-100 shadow-sm">
+                                <span className="material-symbols-outlined text-5xl text-slate-200 block mb-3">folder_open</span>
+                                <h3 className="text-slate-500 font-black uppercase tracking-widest text-sm">No Active Application</h3>
+                                <p className="text-slate-400 text-xs mt-2 font-medium">You don't have any submitted visa applications yet.</p>
+                                <Link to="/visa/apply" className="mt-6 inline-flex items-center gap-2 px-6 py-3 bg-[#1152d4] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#0e42b0] transition-all no-underline shadow-lg shadow-[#1152d4]/20">Start New Application</Link>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex justify-between items-end gap-4 mb-8">
+                                    <div>
+                                        <h1 className="text-2xl font-black text-slate-900 leading-tight">
+                                            Application: {application.travel_details?.visaType} - {application.travel_details?.destination}
+                                        </h1>
+                                        <p className="text-slate-500 text-sm mt-1">
+                                            Application ID: <span className="font-mono text-[#1152d4] font-bold">#{application.application_ref}</span> • Submitted on {new Date(application.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            onClick={handleResendEmail}
+                                            disabled={resending}
+                                            className={`flex items-center gap-2 h-10 px-4 bg-white border rounded-lg text-sm font-bold shadow-sm transition-all ${
+                                                resendStatus === 'success' ? 'text-green-600 border-green-200 bg-green-50' :
+                                                resendStatus === 'error' ? 'text-red-600 border-red-200 bg-red-50' :
+                                                'text-slate-700 border-slate-200 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <span className={`material-symbols-outlined text-lg ${resending ? 'animate-spin' : ''}`}>
+                                                {resendStatus === 'success' ? 'check_circle' : 
+                                                 resendStatus === 'error' ? 'error' : 'mail'}
+                                            </span>
+                                            {resending ? 'Resending...' : 
+                                             resendStatus === 'success' ? 'Email Resent!' : 
+                                             resendStatus === 'error' ? 'Failed' : 
+                                             'Resend Email'}
+                                        </button>
+                                        <button className="flex items-center gap-2 h-10 px-4 bg-white border border-slate-200 rounded-lg text-slate-700 text-sm font-bold shadow-sm hover:bg-slate-50">
+                                            <span className="material-symbols-outlined text-lg">download</span>
+                                            Download Receipt
+                                        </button>
+                                    </div>
+                                </div>
 
-                        {/* Progress Stepper */}
-                        <div className="bg-white rounded-2xl p-8 mb-8 border border-slate-200 shadow-sm relative overflow-hidden">
-                            <div className="flex justify-between items-center relative z-10 font-bold">
-                                {/* Applied */}
-                                <div className="flex flex-col items-center gap-2">
-                                    <div className="size-10 rounded-full bg-[#1152d4] text-white flex items-center justify-center shadow-md">
-                                        <span className="material-symbols-outlined text-xl">check</span>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-xs">Applied</p>
-                                        <p className="text-slate-400 text-[10px]">Oct 12</p>
+                                {/* Progress Stepper */}
+                                <div className="bg-white rounded-2xl p-8 mb-8 border border-slate-200 shadow-sm relative overflow-hidden">
+                                    <div className="flex justify-between items-center relative z-10 font-bold">
+                                        {/* Applied */}
+                                        <div className="flex flex-col items-center gap-2">
+                                            <div className={`size-10 rounded-full flex items-center justify-center shadow-md ${getStepStatus('applied') === 'completed' ? 'bg-[#1152d4] text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                                <span className="material-symbols-outlined text-xl">{getStepStatus('applied') === 'completed' ? 'check' : 'edit_document'}</span>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-xs">Applied</p>
+                                                <p className="text-slate-400 text-[10px]">{new Date(application.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                                            </div>
+                                        </div>
+                                        {/* Progress Line */}
+                                        <div className={`flex-1 h-1 mx-2 -mt-6 ${getStepStatus('verified') === 'completed' ? 'bg-[#1152d4]' : 'bg-slate-100'}`}></div>
+                                        
+                                        {/* Verified */}
+                                        <div className="flex flex-col items-center gap-2">
+                                            <div className={`size-10 rounded-full flex items-center justify-center shadow-md ${getStepStatus('verified') === 'completed' ? 'bg-[#1152d4] text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                                <span className="material-symbols-outlined text-xl">{getStepStatus('verified') === 'completed' ? 'check' : 'verified_user'}</span>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-xs">Verified</p>
+                                                <p className="text-slate-400 text-[10px]">Step 2</p>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Progress Line Active/Empty */}
+                                        <div className="flex-1 h-1 bg-slate-100 mx-2 -mt-6 overflow-hidden">
+                                            <div className={`h-full bg-[#1152d4] transition-all duration-1000 ${getStepStatus('processing') === 'completed' ? 'w-full' : getStepStatus('processing') === 'active' ? 'w-1/2 animate-pulse' : 'w-0'}`}></div>
+                                        </div>
+                                        
+                                        {/* Processing */}
+                                        <div className="flex flex-col items-center gap-2">
+                                            <div className={`size-12 rounded-full flex items-center justify-center shadow-xl ring-4 ring-[#1152d4]/10 ${getStepStatus('processing') === 'completed' ? 'bg-[#1152d4] text-white' : getStepStatus('processing') === 'active' ? 'bg-[#1152d4] text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                                <span className="material-symbols-outlined text-2xl">account_balance</span>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className={`text-xs ${getStepStatus('processing') !== 'pending' ? 'text-[#1152d4]' : 'text-slate-400'}`}>Processing</p>
+                                                <p className="text-slate-400 text-[10px]">{getStepStatus('processing') === 'active' ? 'Active' : 'Embassy'}</p>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Progress Line Empty */}
+                                        <div className={`flex-1 h-1 mx-2 -mt-6 ${getStepStatus('ready') === 'completed' ? 'bg-[#1152d4]' : 'bg-slate-100'}`}></div>
+                                        
+                                        {/* Ready */}
+                                        <div className="flex flex-col items-center gap-2">
+                                            <div className={`size-10 rounded-full flex items-center justify-center shadow-md ${getStepStatus('ready') === 'completed' ? 'bg-[#1152d4] text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                                <span className="material-symbols-outlined text-xl">verified_user</span>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-xs text-slate-400">Visa Ready</p>
+                                                <p className="text-slate-400 text-[10px]">Grant</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                {/* Progress Line */}
-                                <div className="flex-1 h-1 bg-[#1152d4] mx-2 -mt-6"></div>
-                                {/* Verified */}
-                                <div className="flex flex-col items-center gap-2">
-                                    <div className="size-10 rounded-full bg-[#1152d4] text-white flex items-center justify-center shadow-md">
-                                        <span className="material-symbols-outlined text-xl">check</span>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-xs">Verified</p>
-                                        <p className="text-slate-400 text-[10px]">Oct 15</p>
-                                    </div>
-                                </div>
-                                {/* Progress Line Active */}
-                                <div className="flex-1 h-1 bg-slate-100 mx-2 -mt-6 overflow-hidden">
-                                    <div className="w-1/2 h-full bg-[#1152d4]"></div>
-                                </div>
-                                {/* Processing */}
-                                <div className="flex flex-col items-center gap-2">
-                                    <div className="size-12 rounded-full bg-[#1152d4] text-white flex items-center justify-center shadow-xl ring-4 ring-[#1152d4]/10">
-                                        <span className="material-symbols-outlined text-2xl">account_balance</span>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-xs text-[#1152d4]">Processing</p>
-                                        <p className="text-[#1152d4]/70 text-[10px]">Active</p>
-                                    </div>
-                                </div>
-                                {/* Progress Line Empty */}
-                                <div className="flex-1 h-1 bg-slate-100 mx-2 -mt-6"></div>
-                                {/* Ready */}
-                                <div className="flex flex-col items-center gap-2">
-                                    <div className="size-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center">
-                                        <span className="material-symbols-outlined text-xl">verified_user</span>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-xs text-slate-400">Visa Ready</p>
-                                        <p className="text-slate-400 text-[10px]">Est. Oct 30</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Action Items */}
-                        <div className="mb-8">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-lg font-black text-slate-900">Action Items</h2>
-                                <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">2 Pending</span>
-                            </div>
-                            <div className="space-y-4">
-                                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                                    <div className="size-10 bg-[#1152d4]/10 rounded-xl flex items-center justify-center text-[#1152d4]">
-                                        <span className="material-symbols-outlined">upload_file</span>
+                                {/* Action Items */}
+                                <div className="mb-8">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h2 className="text-lg font-black text-slate-900">Action Items</h2>
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${application.documents?.filter(d => d.status === 'pending' || d.status === 'rejected').length > 0 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                                            {application.documents?.filter(d => d.status === 'pending' || d.status === 'rejected').length || 0} Pending
+                                        </span>
                                     </div>
-                                    <div className="flex-1">
-                                        <p className="text-sm font-bold text-slate-900">Upload additional bank statement</p>
-                                        <p className="text-xs text-slate-500 mt-0.5">Financial verification required for last 3 months.</p>
+                                    <div className="space-y-4">
+                                        {(application.documents || [])
+                                            .filter(d => d.status === 'pending' || d.status === 'rejected')
+                                            .map((doc, idx) => (
+                                                <div key={idx} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                                                    <div className="size-10 bg-[#1152d4]/10 rounded-xl flex items-center justify-center text-[#1152d4]">
+                                                        <span className="material-symbols-outlined">upload_file</span>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="text-sm font-bold text-slate-900">{doc.name}</p>
+                                                        <p className="text-xs text-slate-500 mt-0.5">{doc.status === 'rejected' ? 'Previously rejected. Please re-upload.' : 'Upload required for verification.'}</p>
+                                                        {uploadError && uploadError.startsWith(doc.name) && (
+                                                            <p className="text-[10px] text-red-500 font-bold mt-1 line-clamp-1">{uploadError}</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="relative">
+                                                        <input 
+                                                            type="file" 
+                                                            id={`upload-${idx}`}
+                                                            className="hidden" 
+                                                            onChange={(e) => handleFileUpload(doc.name, e.target.files[0])}
+                                                            disabled={uploadingDoc === doc.name}
+                                                        />
+                                                        <label 
+                                                            htmlFor={`upload-${idx}`}
+                                                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
+                                                                uploadingDoc === doc.name 
+                                                                ? 'bg-slate-100 text-slate-400' 
+                                                                : 'bg-[#1152d4] text-white shadow-lg shadow-[#1152d4]/20 hover:scale-105 active:scale-95'
+                                                            }`}
+                                                        >
+                                                            {uploadingDoc === doc.name ? (
+                                                                <>
+                                                                    <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+                                                                    Uploading...
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <span className="material-symbols-outlined text-sm">cloud_upload</span>
+                                                                    Upload
+                                                                </>
+                                                            )}
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        }
+                                        {application.status === 'additional_info_required' && (
+                                             <div className="bg-amber-50 p-5 rounded-2xl border border-amber-200 shadow-sm flex items-center gap-4">
+                                                <div className="size-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
+                                                    <span className="material-symbols-outlined">warning</span>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-bold text-slate-900">Additional Information Required</p>
+                                                    <p className="text-xs text-slate-500 mt-0.5">Please check your messages for details from your agent.</p>
+                                                </div>
+                                                <button onClick={() => document.querySelector('textarea')?.focus()} className="h-9 px-5 bg-white border border-amber-200 text-amber-700 rounded-lg text-xs font-bold hover:bg-amber-100 transition-colors">Reply Now</button>
+                                            </div>
+                                        )}
                                     </div>
-                                    <button className="h-9 px-5 bg-[#1152d4] text-white rounded-lg text-xs font-bold hover:bg-[#0e42b0] transition-colors shadow-lg shadow-[#1152d4]/20">Upload</button>
                                 </div>
-                                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                                    <div className="size-10 bg-[#1152d4]/10 rounded-xl flex items-center justify-center text-[#1152d4]">
-                                        <span className="material-symbols-outlined">calendar_today</span>
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="text-sm font-bold text-slate-900">Confirm Biometric Appointment</p>
-                                        <p className="text-xs text-slate-500 mt-0.5">Slot reserved for Oct 22, 10:30 AM.</p>
-                                    </div>
-                                    <button className="h-9 px-5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors">Confirm</button>
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Info Card */}
-                        <div className="bg-[#1152d4]/5 border border-[#1152d4]/20 rounded-2xl p-5 flex gap-4">
-                            <span className="material-symbols-outlined text-[#1152d4] text-2xl">info</span>
-                            <div>
-                                <h4 className="text-sm font-bold text-[#1152d4]">Next Steps</h4>
-                                <p className="text-xs text-slate-600 mt-1 leading-relaxed">Once the embassy completes processing, you'll receive an email notification for passport collection or visa grant letter.</p>
-                            </div>
-                        </div>
+                                {/* Info Card */}
+                                <div className="bg-[#1152d4]/5 border border-[#1152d4]/20 rounded-2xl p-5 flex gap-4">
+                                    <span className="material-symbols-outlined text-[#1152d4] text-2xl">info</span>
+                                    <div>
+                                        <h4 className="text-sm font-bold text-[#1152d4]">Application Status: {application.status.replace(/_/g, ' ')}</h4>
+                                        <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                                            {application.status === 'under_review' ? 'Your representative has submitted your documents. The embassy is currently reviewing your file.' : 
+                                             application.status === 'submitted' ? 'Your case has been created. Our agents will begin verification shortly.' :
+                                             'Our team is working on your application. We will notify you of any changes.'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </main>
 
@@ -190,7 +436,7 @@ const CustomerStatusDashboard = () => {
                         <p className="text-[9px] text-slate-500 font-bold uppercase tracking-tight">Messages are end-to-end encrypted</p>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
                         {chatHistory.map(msg => (
                             <div key={msg.id} className={`flex flex-col gap-1 max-w-[85%] ${msg.type === 'user' ? 'ml-auto items-end' : ''}`}>
                                 <div className={`p-3 rounded-2xl shadow-sm ${msg.type === 'user'

@@ -21,6 +21,7 @@ import cruiseRoutes from "./backend/routes/cruise.routes.js";
 import supabaseAuthRoutes from "./backend/routes/supabaseAuth.js";
 import geoRoutes from "./backend/routes/geo.routes.js";
 import adminRoutes from "./backend/routes/admin.routes.js";
+import visaRoutes from "./backend/routes/visa.routes.js";
 import chatRoutes from "./api/chat/index.js";
 import supabase from "./backend/config/supabase.js";
 
@@ -75,6 +76,7 @@ app.use("/api/cruises", cruiseRoutes);
 app.use("/api/supabase", supabaseAuthRoutes);
 app.use("/api/geo", geoRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/visa", visaRoutes);
 app.use("/api/chat", chatRoutes);
 
 // Test endpoint

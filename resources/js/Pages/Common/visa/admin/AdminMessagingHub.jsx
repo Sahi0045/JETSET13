@@ -1,23 +1,84 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { apiGet, apiPost } from '../../../../utils/apiHelper';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 14: Admin Multi-Chat Messaging Hub
 
 const AdminMessagingHub = () => {
-    const [activeChat, setActiveChat] = useState(1);
+    const location = useLocation();
+    const [threads, setThreads] = useState([]);
+    const [activeChatId, setActiveChatId] = useState(location.state?.applicationId || null);
+    const [messages, setMessages] = useState([]);
     const [message, setMessage] = useState('');
+    const [loading, setLoading] = useState(true);
     const [view, setView] = useState('list'); // 'list' or 'chat'
     const [showInfo, setShowInfo] = useState(false);
 
-    const chats = [
-        { id: 1, name: 'John Richards', time: '2m ago', lastMsg: "I've re-uploaded the bank statements.", unread: false, online: true, img: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John' },
-        { id: 2, name: 'Sarah Jenkins', time: '5m ago', lastMsg: "Wait, is my insurance valid?", unread: true, online: false, img: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah' },
-        { id: 3, name: 'Marco Rossi', time: '1h ago', lastMsg: "Thank you for the quick update.", unread: false, online: true, img: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Marco' },
-        { id: 4, name: 'Elena Petrova', time: '3h ago', lastMsg: "I'm having trouble with the SMS code.", unread: false, online: false, img: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Elena' }
-    ];
+    const fetchThreads = useCallback(async () => {
+        try {
+            const response = await apiGet('visa/messages/threads');
+            const data = await response.json();
+            if (data.success) {
+                setThreads(data.data || []);
+                if (data.data.length > 0 && !activeChatId) {
+                    setActiveChatId(data.data[0].application_id);
+                }
+            }
+        } catch (err) {
+            console.error('fetchThreads error:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, [activeChatId]);
 
-    const activeUser = chats.find(c => c.id === activeChat);
+    const fetchMessages = useCallback(async (appId) => {
+        if (!appId) return;
+        try {
+            const response = await apiGet(`visa/applications/${appId}/messages`);
+            const data = await response.json();
+            if (data.success) {
+                setMessages(data.data || []);
+            }
+        } catch (err) {
+            console.error('fetchMessages error:', err);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchThreads();
+        const interval = setInterval(fetchThreads, 10000); // Poll threads every 10s
+        return () => clearInterval(interval);
+    }, [fetchThreads]);
+
+    useEffect(() => {
+        if (activeChatId) {
+            fetchMessages(activeChatId);
+            const interval = setInterval(() => fetchMessages(activeChatId), 5000); // Poll messages every 5s
+            return () => clearInterval(interval);
+        }
+    }, [activeChatId, fetchMessages]);
+
+    const handleSendMessage = async (e) => {
+        e.preventDefault();
+        if (!message.trim() || !activeChatId) return;
+
+        try {
+            const response = await apiPost(`visa/applications/${activeChatId}/messages`, {
+                content: message
+            });
+            const data = await response.json();
+            if (data.success) {
+                setMessage('');
+                fetchMessages(activeChatId);
+                fetchThreads(); // Update last message in thread list
+            }
+        } catch (err) {
+            console.error('handleSendMessage error:', err);
+        }
+    };
+
+    const activeThread = threads.find(t => t.application_id === activeChatId);
 
     return (
         <div className="bg-[#f6f6f8] font-sans text-slate-900 flex flex-col h-[calc(100vh-80px)] lg:h-[calc(100vh-130px)] overflow-hidden">
@@ -29,7 +90,7 @@ const AdminMessagingHub = () => {
                     <div className="p-6 border-b border-slate-50 bg-white">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-950 leading-none">Intelligence Inbox</h3>
-                            <span className="bg-[#1152d4] text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-lg shadow-[#1152d4]/20">12 NEW</span>
+                            <span className="bg-[#1152d4] text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-lg shadow-[#1152d4]/20">{threads.length} ACTIVE</span>
                         </div>
                         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none no-scrollbar">
                             <button className="whitespace-nowrap px-5 py-2 rounded-2xl bg-[#1152d4] text-white text-[9px] font-black uppercase tracking-widest shadow-md">Active</button>
@@ -38,27 +99,26 @@ const AdminMessagingHub = () => {
                         </div>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/20">
-                        {chats.map(chat => (
+                        {threads.map(thread => (
                             <div
-                                key={chat.id}
-                                onClick={() => { setActiveChat(chat.id); setView('chat'); }}
-                                className={`flex items-center gap-4 p-6 cursor-pointer transition-all border-b border-slate-50 relative ${activeChat === chat.id ? 'bg-white shadow-xl shadow-slate-200/40 z-10 border-l-4 border-l-[#1152d4]' : 'hover:bg-white/60 border-l-4 border-l-transparent'
+                                key={thread.application_id}
+                                onClick={() => { setActiveChatId(thread.application_id); setView('chat'); }}
+                                className={`flex items-center gap-4 p-6 cursor-pointer transition-all border-b border-slate-50 relative ${activeChatId === thread.application_id ? 'bg-white shadow-xl shadow-slate-200/40 z-10 border-l-4 border-l-[#1152d4]' : 'hover:bg-white/60 border-l-4 border-l-transparent'
                                     }`}
                             >
                                 <div className="relative shrink-0">
-                                    <img src={chat.img} className="size-14 rounded-[1.25rem] border-2 border-white shadow-xl" alt="C" />
-                                    {chat.online && <div className="absolute -bottom-1 -right-1 size-4 bg-emerald-500 border-2 border-white rounded-full shadow-lg"></div>}
+                                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${thread.customer_name}`} className="size-14 rounded-[1.25rem] border-2 border-white shadow-xl" alt="C" />
+                                    <div className="absolute -bottom-1 -right-1 size-4 bg-emerald-500 border-2 border-white rounded-full shadow-lg"></div>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center mb-1.5">
-                                        <span className={`text-xs font-black tracking-tight ${activeChat === chat.id ? 'text-[#1152d4]' : 'text-slate-900'}`}>{chat.name}</span>
-                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{chat.time}</span>
+                                        <span className={`text-xs font-black tracking-tight ${activeChatId === thread.application_id ? 'text-[#1152d4]' : 'text-slate-900'}`}>{thread.customer_name}</span>
+                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{new Date(thread.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                     </div>
-                                    <p className={`text-[10px] truncate leading-tight tracking-tight ${chat.unread ? 'font-black text-slate-900' : 'font-bold text-slate-400 opacity-80'}`}>
-                                        {chat.lastMsg}
+                                    <p className={`text-[10px] truncate leading-tight tracking-tight font-bold text-slate-400 opacity-80`}>
+                                        {thread.last_message}
                                     </p>
                                 </div>
-                                {chat.unread && <div className="size-2.5 bg-[#1152d4] rounded-full shrink-0 shadow-lg shadow-[#1152d4]/30 animate-pulse"></div>}
                             </div>
                         ))}
                     </div>
@@ -74,16 +134,16 @@ const AdminMessagingHub = () => {
                             </button>
                             <div className="relative group cursor-pointer" onClick={() => setShowInfo(!showInfo)}>
                                 <div className="relative">
-                                    <img src={activeUser?.img} className="size-11 rounded-[1.25rem] border-2 border-[#1152d4]/10 shadow-lg shadow-[#1152d4]/5 transition-transform group-hover:scale-105" alt="A" />
+                                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activeThread?.customer_name}`} className="size-11 rounded-[1.25rem] border-2 border-[#1152d4]/10 shadow-lg shadow-[#1152d4]/5 transition-transform group-hover:scale-105" alt="A" />
                                     <div className="absolute -bottom-1 -right-1 size-3.5 bg-emerald-500 border-2 border-white rounded-full shadow-md"></div>
                                 </div>
                             </div>
                             <div className="flex flex-col">
-                                <h4 className="text-[13px] font-black text-slate-900 leading-none mb-1 md:mb-1.5">{activeUser?.name}</h4>
+                                <h4 className="text-[13px] font-black text-slate-900 leading-none mb-1 md:mb-1.5">{activeThread?.customer_name}</h4>
                                 <div className="flex items-center gap-2">
                                     <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                        Live Pulse <span className="mx-1 text-slate-200">|</span> Ref: #APP-8921
+                                        Live Pulse <span className="mx-1 text-slate-200">|</span> Ref: #{activeThread?.application_id?.split('-')[0]}
                                     </p>
                                 </div>
                             </div>
@@ -106,92 +166,54 @@ const AdminMessagingHub = () => {
                             <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] px-8 py-2 bg-white/60 backdrop-blur-xl rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.05)] border border-white/50">Intelligence Horizon • Oct 24</span>
                         </div>
 
-                        {/* Applicant Msg */}
-                        <div className="flex items-end gap-3 lg:gap-5 max-w-[90%] lg:max-w-[75%] group animate-in fade-in slide-in-from-left-4 duration-500">
-                            <div className="relative shrink-0 hidden sm:block">
-                                <img src={activeUser?.img} className="size-9 rounded-xl shadow-lg border-2 border-white" alt="C" />
-                                <div className="absolute -bottom-1 -right-1 size-3 bg-emerald-500 border-2 border-white rounded-full"></div>
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                <div className="bg-white p-5 lg:p-7 rounded-[2rem] rounded-bl-none shadow-2xl shadow-slate-200/30 text-[13px] font-bold text-slate-700 leading-relaxed border border-white relative">
-                                    Hi, I received a notification that my Bank Statement was rejected. Could you tell me why? I thought it met all requirements.
-                                    <div className="absolute left-[-12px] bottom-0 w-4 h-4 bg-white clip-path-triangle-left lg:hidden" />
+                        {messages.map((msg, idx) => (
+                            <div key={msg.id || idx} className={`flex items-end gap-3 lg:gap-5 max-w-[90%] lg:max-w-[75%] ${msg.sender_type === 'admin' ? 'self-end flex-row-reverse animate-in fade-in slide-in-from-right-4 duration-500' : 'group animate-in fade-in slide-in-from-left-4 duration-500'}`}>
+                                <div className="relative shrink-0 hidden sm:block">
+                                    {msg.sender_type === 'admin' ? (
+                                        <div className="size-9 rounded-xl bg-slate-950 flex items-center justify-center text-white shadow-xl shadow-slate-950/20 border-2 border-white">
+                                            <span className="material-symbols-outlined text-sm">robot_2</span>
+                                        </div>
+                                    ) : (
+                                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activeThread?.customer_name}`} className="size-9 rounded-xl shadow-lg border-2 border-white" alt="C" />
+                                    )}
                                 </div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-3">10:42 AM</span>
-                            </div>
-                        </div>
-
-                        {/* System Alert msg */}
-                        <div className="flex justify-center px-4 animate-in fade-in zoom-in-95 duration-700">
-                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 lg:gap-6 bg-red-500/5 backdrop-blur-sm border border-red-500/10 rounded-[2.5rem] p-6 lg:p-8 max-w-2xl shadow-sm relative overflow-hidden group">
-                                <div className="absolute right-0 top-0 p-4 opacity-5">
-                                    <span className="material-symbols-outlined text-[80px]">warning</span>
-                                </div>
-                                <div className="p-3 bg-red-500 text-white rounded-2xl shadow-xl shadow-red-500/20">
-                                    <span className="material-symbols-outlined text-2xl">shield_alert</span>
-                                </div>
-                                <div className="text-center sm:text-left">
-                                    <p className="font-black text-red-600 uppercase tracking-[0.2em] mb-2 leading-none text-[10px]">Security Infrastructure Alert</p>
-                                    <p className="text-slate-500 font-bold leading-relaxed text-[11px] lg:text-xs">Automatic analysis detected a delta in <span className="text-slate-900 font-black">BankStatement_Q3.pdf</span>. Data coverage fails to bridge the requested <span className="text-red-500 underline decoration-red-500/20 underline-offset-4">90-day window</span>.</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Admin Msg */}
-                        <div className="flex items-end gap-3 lg:gap-5 max-w-[90%] lg:max-w-[75%] self-end flex-row-reverse animate-in fade-in slide-in-from-right-4 duration-500">
-                            <div className="relative shrink-0 hidden sm:block">
-                                <div className="size-9 rounded-xl bg-slate-950 flex items-center justify-center text-white shadow-xl shadow-slate-950/20 border-2 border-white">
-                                    <span className="material-symbols-outlined text-sm">robot_2</span>
-                                </div>
-                            </div>
-                            <div className="flex flex-col gap-2 items-end">
-                                <div className="bg-slate-950 text-white p-5 lg:p-7 rounded-[2rem] rounded-br-none shadow-[0_20px_50px_rgba(0,0,0,0.1)] text-[13px] font-bold leading-relaxed border border-white/10">
-                                    Hello John, I've checked the file. It appears the statement only shows up to the 15th of last month, but we require a full 3-month period ending within the last 7 days.
-                                </div>
-                                <div className="flex items-center gap-3 mr-3">
-                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">10:45 AM</span>
-                                    <div className="flex text-[#1152d4]">
-                                        <span className="material-symbols-outlined text-sm">done_all</span>
+                                <div className={`flex flex-col gap-2 ${msg.sender_type === 'admin' ? 'items-end' : ''}`}>
+                                    <div className={`${msg.sender_type === 'admin' ? 'bg-slate-950 text-white rounded-br-none shadow-[0_20px_50px_rgba(0,0,0,0.1)]' : 'bg-white text-slate-700 rounded-bl-none shadow-2xl shadow-slate-200/30'} p-5 lg:p-7 rounded-[2rem] text-[13px] font-bold leading-relaxed border border-white/10 relative`}>
+                                        {msg.content}
+                                    </div>
+                                    <div className={`flex items-center gap-3 ${msg.sender_type === 'admin' ? 'mr-3' : 'ml-3'}`}>
+                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                        {msg.sender_type === 'admin' && (
+                                            <div className="flex text-[#1152d4]">
+                                                <span className="material-symbols-outlined text-sm">done_all</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
-                        {/* Applicant Msg 2 */}
-                        <div className="flex items-end gap-3 lg:gap-5 max-w-[90%] lg:max-w-[75%] group animate-in fade-in slide-in-from-left-4 duration-500">
-                            <div className="relative shrink-0 hidden sm:block">
-                                <img src={activeUser?.img} className="size-9 rounded-xl shadow-lg border-2 border-white" alt="C" />
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                <div className="bg-white p-5 lg:p-7 rounded-[2rem] rounded-bl-none shadow-2xl shadow-slate-200/30 text-[13px] font-bold text-slate-700 leading-relaxed border border-white">
-                                    Ah, I see. I've re-uploaded the bank statements including the current month. Could you take a look?
-                                </div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-3">10:48 AM</span>
-                            </div>
-                        </div>
+                        ))}
                     </div>
 
                     {/* Input Box */}
                     <div className="p-4 lg:p-10 bg-white border-t border-slate-100 lg:bg-transparent z-20">
-                        <div className="bg-white rounded-[2.5rem] p-3 lg:p-4 border border-slate-200/60 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] transition-all focus-within:ring-8 focus-within:ring-[#1152d4]/5 focus-within:border-[#1152d4]/40 max-w-4xl mx-auto w-full">
+                        <form onSubmit={handleSendMessage} className="bg-white rounded-[2.5rem] p-3 lg:p-4 border border-slate-200/60 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] transition-all focus-within:ring-8 focus-within:ring-[#1152d4]/5 focus-within:border-[#1152d4]/40 max-w-4xl mx-auto w-full">
                             <textarea
                                 className="w-full bg-transparent border-none focus:ring-0 text-sm font-bold py-3 px-6 min-h-[50px] lg:min-h-[80px] resize-none placeholder:text-slate-300 custom-scrollbar tracking-tight text-slate-900"
-                                placeholder={`Drafting intelligence report for ${activeUser?.name.split(' ')[0]}...`}
+                                placeholder={`Drafting intelligence report for ${activeThread?.customer_name?.split(' ')[0] || 'Applicant'}...`}
                                 value={message}
                                 onChange={(e) => setMessage(e.target.value)}
                             ></textarea>
                             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-2 pt-4 px-4 border-t border-slate-100">
                                 <div className="flex gap-1.5 lg:gap-3">
-                                    <button className="p-2.5 text-slate-400 hover:text-[#1152d4] hover:bg-[#1152d4]/5 rounded-xl transition-all"><span className="material-symbols-outlined text-xl">attach_file_add</span></button>
-                                    <button className="p-2.5 text-slate-400 hover:text-[#1152d4] hover:bg-[#1152d4]/5 rounded-xl transition-all"><span className="material-symbols-outlined text-xl">face</span></button>
-                                    <button className="hidden lg:flex p-2.5 text-slate-400 hover:text-[#1152d4] hover:bg-[#1152d4]/5 rounded-xl transition-all"><span className="material-symbols-outlined text-xl">history_edu</span></button>
+                                    <button type="button" className="p-2.5 text-slate-400 hover:text-[#1152d4] hover:bg-[#1152d4]/5 rounded-xl transition-all"><span className="material-symbols-outlined text-xl">attach_file_add</span></button>
+                                    <button type="button" className="p-2.5 text-slate-400 hover:text-[#1152d4] hover:bg-[#1152d4]/5 rounded-xl transition-all"><span className="material-symbols-outlined text-xl">face</span></button>
                                 </div>
-                                <button className="w-full sm:w-auto bg-[#1152d4] hover:bg-slate-950 text-white px-10 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-2xl shadow-[#1152d4]/30 transition-all active:scale-95 group">
+                                <button type="submit" className="w-full sm:w-auto bg-[#1152d4] hover:bg-slate-950 text-white px-10 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-2xl shadow-[#1152d4]/30 transition-all active:scale-95 group">
                                     Dispatch Securely
                                     <span className="material-symbols-outlined text-base group-hover:translate-x-1 transition-transform">send</span>
                                 </button>
                             </div>
-                        </div>
+                        </form>
                     </div>
                 </section>
 

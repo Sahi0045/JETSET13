@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { apiGet, apiPost, apiPut, apiDelete } from '../../../../utils/apiHelper';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Visa Requirements Manager - CRUD for country-pair visa requirements
@@ -16,25 +17,82 @@ const MOCK_REQUIREMENTS = [
 ];
 
 const VisaRequirementsManager = () => {
-    const [requirements, setRequirements] = useState(MOCK_REQUIREMENTS);
+    const [requirements, setRequirements] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
+    const [isSaving, setIsSaving] = useState(false);
+
     const [formData, setFormData] = useState({
-        nationality: '', destination: '', visaRequired: true, visaType: '',
-        processing: '', validity: '', maxStay: '', entryType: 'Single', fee: 0, active: true,
+        nationality: '', 
+        destination: '', 
+        visa_required: true, 
+        visa_type: '',
+        processing_time: '', 
+        validity: '', 
+        max_stay: '', 
+        entry_type: 'Single', 
+        fee: 0, 
+        active: true,
+        official_url: '',
+        notes: ''
     });
+
+    const fetchRequirements = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const response = await apiGet('visa/requirements');
+            const data = await response.json();
+            if (data.success) {
+                setRequirements(data.data || []);
+            } else {
+                throw new Error(data.message || 'Failed to fetch requirements');
+            }
+        } catch (err) {
+            console.error('fetchRequirements error:', err);
+            setError(err.message || 'Error loading configurations');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchRequirements();
+
+        // ── Real-time Polling (60s) ─────────────────────────────────────────────
+        const pollInterval = setInterval(() => {
+            fetchRequirements();
+        }, 60000);
+
+        return () => clearInterval(pollInterval);
+    }, [fetchRequirements]);
 
     const filtered = requirements.filter(r =>
         !searchQuery ||
-        r.nationality.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.destination.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.visaType.toLowerCase().includes(searchQuery.toLowerCase())
+        (r.nationality || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (r.destination || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (r.visa_type || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const openAddModal = () => {
         setEditingItem(null);
-        setFormData({ nationality: '', destination: '', visaRequired: true, visaType: '', processing: '', validity: '', maxStay: '', entryType: 'Single', fee: 0, active: true });
+        setFormData({ 
+            nationality: '', 
+            destination: '', 
+            visa_required: true, 
+            visa_type: '', 
+            processing_time: '', 
+            validity: '', 
+            max_stay: '', 
+            entry_type: 'Single', 
+            fee: 0, 
+            active: true,
+            official_url: '',
+            notes: ''
+        });
         setShowAddModal(true);
     };
 
@@ -44,18 +102,45 @@ const VisaRequirementsManager = () => {
         setShowAddModal(true);
     };
 
-    const handleSave = () => {
-        if (editingItem) {
-            setRequirements(prev => prev.map(r => r.id === editingItem.id ? { ...r, ...formData } : r));
-        } else {
-            setRequirements(prev => [...prev, { ...formData, id: Date.now() }]);
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            let response;
+            if (editingItem) {
+                response = await apiPut(`visa/requirements/${editingItem.id}`, formData);
+            } else {
+                response = await apiPost('visa/requirements', formData);
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                fetchRequirements();
+                setShowAddModal(false);
+            } else {
+                throw new Error(data.message || 'Failed to save requirement');
+            }
+        } catch (err) {
+            console.error('handleSave error:', err);
+            alert(err.message || 'Could not save the requirement');
+        } finally {
+            setIsSaving(false);
         }
-        setShowAddModal(false);
     };
 
-    const handleDelete = (id) => {
+    const handleDelete = async (id) => {
         if (confirm('Are you sure you want to delete this requirement?')) {
-            setRequirements(prev => prev.filter(r => r.id !== id));
+            try {
+                const response = await apiDelete(`visa/requirements/${id}`);
+                const data = await response.json();
+                if (data.success) {
+                    setRequirements(prev => prev.filter(r => r.id !== id));
+                } else {
+                    throw new Error(data.message || 'Failed to delete');
+                }
+            } catch (err) {
+                console.error('handleDelete error:', err);
+                alert(err.message || 'Could not delete the requirement');
+            }
         }
     };
 
@@ -70,7 +155,9 @@ const VisaRequirementsManager = () => {
                 <div className="flex flex-col lg:row lg:items-center justify-between gap-6 mb-8 lg:mb-10">
                     <div>
                         <h1 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight">Visa Requirements</h1>
-                        <p className="text-slate-400 text-xs lg:text-sm font-medium mt-1">{requirements.length} country pair configurations</p>
+                        <p className="text-slate-400 text-xs lg:text-sm font-medium mt-1">
+                            {loading ? 'Updating configurations...' : `${requirements.length} country pair configurations`}
+                        </p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
                         <div className="relative flex-1 sm:w-80 group">
@@ -115,16 +202,16 @@ const VisaRequirementsManager = () => {
                                     <tr key={req.id} className="border-t border-slate-100 hover:bg-slate-50/50 transition-colors group">
                                         <td className="px-6 py-4 font-black text-slate-900">{req.nationality}</td>
                                         <td className="px-6 py-4 font-black text-slate-900">{req.destination}</td>
-                                        <td className="px-6 py-4 text-[13px] font-medium text-slate-600">{req.visaType}</td>
+                                        <td className="px-6 py-4 text-[13px] font-medium text-slate-600">{req.visa_type}</td>
                                         <td className="px-6 py-4">
-                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${req.visaRequired ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'
+                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${req.visa_required ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'
                                                 }`}>
-                                                {req.visaRequired ? 'Yes' : 'No'}
+                                                {req.visa_required ? 'Yes' : 'No'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-[13px] font-medium text-slate-500">{req.processing}</td>
+                                        <td className="px-6 py-4 text-[13px] font-medium text-slate-500">{req.processing_time}</td>
                                         <td className="px-6 py-4 font-black text-slate-900">${req.fee}</td>
-                                        <td className="px-6 py-4 text-[13px] font-medium text-slate-500">{req.entryType}</td>
+                                        <td className="px-6 py-4 text-[13px] font-medium text-slate-500">{req.entry_type}</td>
                                         <td className="px-6 py-4">
                                             <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${req.active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'
                                                 }`}>
@@ -144,8 +231,12 @@ const VisaRequirementsManager = () => {
                     </div>
                     {filtered.length === 0 && (
                         <div className="p-20 text-center">
-                            <span className="material-symbols-outlined text-5xl text-slate-200 block mb-3">search_off</span>
-                            <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No requirements found</p>
+                            <span className="material-symbols-outlined text-5xl text-slate-200 block mb-3">
+                                {loading ? 'sync' : 'search_off'}
+                            </span>
+                            <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">
+                                {loading ? 'Loading database...' : (error || 'No requirements found')}
+                            </p>
                         </div>
                     )}
                 </div>
@@ -177,12 +268,12 @@ const VisaRequirementsManager = () => {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Visa Type</label>
-                                    <input type="text" value={formData.visaType} onChange={(e) => setFormData({ ...formData, visaType: e.target.value })}
+                                    <input type="text" value={formData.visa_type} onChange={(e) => setFormData({ ...formData, visa_type: e.target.value })}
                                         className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all placeholder:text-slate-300" placeholder="e.g. B1/B2 Tourist" />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Visa Required</label>
-                                    <select value={formData.visaRequired} onChange={(e) => setFormData({ ...formData, visaRequired: e.target.value === 'true' })}
+                                    <select value={formData.visa_required} onChange={(e) => setFormData({ ...formData, visa_required: e.target.value === 'true' })}
                                         className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all">
                                         <option value="true">Yes, Required</option>
                                         <option value="false">No / Visa-Free</option>
@@ -192,7 +283,7 @@ const VisaRequirementsManager = () => {
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Proc. Time</label>
-                                    <input type="text" value={formData.processing} onChange={(e) => setFormData({ ...formData, processing: e.target.value })}
+                                    <input type="text" value={formData.processing_time} onChange={(e) => setFormData({ ...formData, processing_time: e.target.value })}
                                         className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all placeholder:text-slate-300" placeholder="3-5 weeks" />
                                 </div>
                                 <div>
@@ -202,14 +293,14 @@ const VisaRequirementsManager = () => {
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Max Stay</label>
-                                    <input type="text" value={formData.maxStay} onChange={(e) => setFormData({ ...formData, maxStay: e.target.value })}
+                                    <input type="text" value={formData.max_stay} onChange={(e) => setFormData({ ...formData, max_stay: e.target.value })}
                                         className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all placeholder:text-slate-300" placeholder="180 days" />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Entry Type</label>
-                                    <select value={formData.entryType} onChange={(e) => setFormData({ ...formData, entryType: e.target.value })}
+                                    <select value={formData.entry_type} onChange={(e) => setFormData({ ...formData, entry_type: e.target.value })}
                                         className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all">
                                         <option>Single</option><option>Double</option><option>Multiple</option><option>N/A</option>
                                     </select>
@@ -227,10 +318,19 @@ const VisaRequirementsManager = () => {
                                     </select>
                                 </div>
                             </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Official URL</label>
+                                <input type="url" value={formData.official_url} onChange={(e) => setFormData({ ...formData, official_url: e.target.value })}
+                                    className="w-full rounded-xl border border-slate-200 h-12 px-4 text-sm font-bold text-slate-800 focus:outline-none focus:ring-4 focus:ring-[#1152d4]/10 focus:border-[#1152d4]/50 transition-all" placeholder="https://..." />
+                            </div>
                             <div className="flex flex-col sm:flex-row gap-3 pt-4">
                                 <button onClick={() => setShowAddModal(false)} className="flex-1 py-4 bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all">Back</button>
-                                <button onClick={handleSave} className="flex-1 py-4 bg-[#1152d4] text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-[#0e42b0] transition-all shadow-xl shadow-[#1152d4]/20">
-                                    {editingItem ? 'Update Database' : 'Confirm & Add'}
+                                <button 
+                                    onClick={handleSave} 
+                                    disabled={isSaving}
+                                    className="flex-1 py-4 bg-[#1152d4] text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-[#0e42b0] transition-all shadow-xl shadow-[#1152d4]/20 disabled:opacity-50"
+                                >
+                                    {isSaving ? 'Saving...' : (editingItem ? 'Update Database' : 'Confirm & Add')}
                                 </button>
                             </div>
                         </div>

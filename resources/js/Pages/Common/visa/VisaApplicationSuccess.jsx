@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { apiPost } from '../../../utils/apiHelper';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 
@@ -12,6 +13,10 @@ const VisaApplicationSuccess = () => {
     const applicationNumber = searchParams.get('ref') || `VISA-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
     const destination = searchParams.get('destination') || 'International';
     const tier = searchParams.get('tier') || 'standard';
+    const appId = searchParams.get('id'); // Assume we might pass the UUID too
+
+    const [resending, setResending] = useState(false);
+    const [resendStatus, setResendStatus] = useState(null); // 'success' | 'error'
 
     const estimatedDays = tier === 'premium' ? '1-2' : tier === 'express' ? '2-3' : '5-7';
 
@@ -19,6 +24,29 @@ const VisaApplicationSuccess = () => {
         navigator.clipboard.writeText(applicationNumber);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleResendEmail = async () => {
+        if (!appId) {
+            setResendStatus('error');
+            return;
+        }
+        setResending(true);
+        setResendStatus(null);
+        try {
+            const response = await apiPost(`visa/applications/${appId}/resend-email`);
+            if (response.ok) {
+                setResendStatus('success');
+            } else {
+                setResendStatus('error');
+            }
+        } catch (err) {
+            console.error('Resend email error:', err);
+            setResendStatus('error');
+        } finally {
+            setResending(false);
+            setTimeout(() => setResendStatus(null), 5000);
+        }
     };
 
     useEffect(() => {
@@ -187,6 +215,26 @@ const VisaApplicationSuccess = () => {
                                 A confirmation email has been sent to your registered email address. You can use your reference number
                                 to track the status of your application at any time from the <Link to="/visa/track" className="font-bold underline">Application Tracker</Link>.
                             </p>
+                            {appId && (
+                                <button
+                                    onClick={handleResendEmail}
+                                    disabled={resending}
+                                    className={`mt-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider transition-all ${
+                                        resendStatus === 'success' ? 'text-green-600' :
+                                        resendStatus === 'error' ? 'text-red-600' :
+                                        'text-[#1152d4] hover:underline'
+                                    }`}
+                                >
+                                    <span className={`material-symbols-outlined text-sm ${resending ? 'animate-spin' : ''}`}>
+                                        {resendStatus === 'success' ? 'check_circle' : 
+                                         resendStatus === 'error' ? 'error' : 'mail'}
+                                    </span>
+                                    {resending ? 'Resending...' : 
+                                     resendStatus === 'success' ? 'Email Resent!' : 
+                                     resendStatus === 'error' ? 'Failed to resend' : 
+                                     'Didn\'t receive the email? Resend it now'}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

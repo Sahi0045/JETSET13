@@ -1,36 +1,83 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { apiGet } from '../../../../utils/apiHelper';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 19: Appointment Details & Preparation View
 
 const AppointmentDetail = () => {
     const { id } = useParams();
-    const [notes, setNotes] = useState('');
-    const [autoFollowUp, setAutoFollowUp] = useState(false);
+    const [consultation, setConsultation] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    const fetchConsultation = useCallback(async () => {
+        try {
+            const response = await apiGet(`visa/consultations/${id}`);
+            const data = await response.json();
+            if (data.success) {
+                setConsultation(data.data);
+                if (data.data.notes && !notes) {
+                    setNotes(typeof data.data.notes === 'string' ? data.data.notes : JSON.stringify(data.data.notes));
+                }
+            } else {
+                throw new Error(data.message || 'Consultation not found');
+            }
+        } catch (err) {
+            console.error('fetchConsultation error:', err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [id]);
+
+    useEffect(() => {
+        fetchConsultation();
+        const interval = setInterval(fetchConsultation, 20000);
+        return () => clearInterval(interval);
+    }, [fetchConsultation]);
+
+    if (loading && !consultation) {
+        return (
+            <div className="min-h-screen bg-[#f6f6f8] flex items-center justify-center">
+                <div className="text-center">
+                    <div className="size-16 border-4 border-[#1152d4] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-slate-400 font-black uppercase tracking-widest text-xs">Loading Session...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !consultation) {
+        return (
+            <div className="min-h-screen bg-[#f6f6f8] flex items-center justify-center p-4">
+                <div className="bg-white p-10 rounded-[2.5rem] shadow-xl text-center max-w-md w-full">
+                    <span className="material-symbols-outlined text-6xl text-red-500 mb-4">error</span>
+                    <h2 className="text-xl font-black text-slate-900 mb-2">Sync Error</h2>
+                    <p className="text-slate-500 text-sm mb-6">{error || 'Session data unavailable'}</p>
+                    <Link to="/visa/admin/schedule" className="inline-block px-8 py-3 bg-[#1152d4] text-white rounded-xl font-black text-xs uppercase tracking-widest no-underline">Back to Schedule</Link>
+                </div>
+            </div>
+        );
+    }
 
     const applicant = {
-        name: 'John Doe',
-        type: 'F1 Student Visa - USA',
-        status: 'Document Review Phase',
-        ref: '#VISA-98231',
-        email: 'john.doe@example.com',
-        phone: '+1 (555) 012-3456',
-        nationality: 'Brazil',
-        university: 'Stanford University',
-        img: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John'
+        name: consultation.customer_name || 'Valued Applicant',
+        type: consultation.visa_type || 'Visa Consultation',
+        status: consultation.status || 'Scheduled',
+        ref: `#CONSULT-${consultation.id.split('-')[0].toUpperCase()}`,
+        email: consultation.customer_email || '—',
+        phone: consultation.customer_phone || '—',
+        nationality: consultation.notes?.nationality || 'N/A',
+        university: consultation.notes?.university || 'N/A',
+        img: `https://api.dicebear.com/7.x/avataaars/svg?seed=${consultation.customer_name}`
     };
 
-    const documents = [
-        { name: 'Passport_Copy.pdf', type: 'pdf', size: '2.4 MB', date: '2 days ago', color: 'red', icon: 'picture_as_pdf' },
-        { name: 'I-20_Form_Signed.pdf', type: 'pdf', size: '1.1 MB', date: '2 days ago', color: 'blue', icon: 'description' },
-        { name: 'Financial_Statement_Oct.pdf', type: 'pdf', size: '4.5 MB', date: '1 day ago', color: 'green', icon: 'receipt_long' }
-    ];
-
-    const tasks = [
-        { text: 'Verify I-20 details against passport naming conventions.', completed: true },
-        { text: 'Check financial proof for tuition + living expenses coverage.', completed: true },
-        { text: 'Prepare mock interview questions for "Intent to Return" section.', completed: false }
+    const documents = consultation.notes?.documents || [];
+    const tasks = consultation.notes?.tasks || [
+        { text: 'Review applicant documents for consistency.', completed: false },
+        { text: 'Verify financial proofs and bank statements.', completed: false },
+        { text: 'Assess interview readiness and purpose of visit.', completed: false }
     ];
 
     return (

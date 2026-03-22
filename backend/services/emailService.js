@@ -71,6 +71,83 @@ export const sendEmail = async ({ to, subject, template, data, html, text }) => 
 };
 
 /**
+ * Send a password reset email
+ * @param {string} email - Recipient email
+ * @param {string} resetLink - Link to reset password
+ * @returns {Promise} - Email send response
+ */
+export const sendPasswordResetEmail = async (email, resetLink) => {
+  try {
+    const subject = 'Reset your password - JetSetters';
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body, html { margin: 0; padding: 0; font-family: 'Circular', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; color: #222222; background-color: #f7f7f7; }
+          .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+          .header { padding: 32px 48px 24px; text-align: center; border-bottom: 1px solid #ebebeb; }
+          .logo { font-size: 24px; font-weight: 800; color: #1152d4; text-decoration: none; letter-spacing: -0.5px; }
+          .content { padding: 48px; }
+          .title { font-size: 24px; font-weight: 700; color: #222222; margin: 0 0 16px; line-height: 1.25; }
+          .text { font-size: 16px; color: #484848; margin: 0 0 24px; line-height: 1.6; }
+          .cta-container { text-align: center; margin: 32px 0; }
+          .cta-button { display: inline-block; background-color: #1152d4; color: #ffffff !important; padding: 14px 32px; text-decoration: none; border-radius: 12px; font-size: 16px; font-weight: 700; box-shadow: 0 4px 12px rgba(17, 82, 212, 0.2); }
+          .footer { padding: 32px 48px; text-align: center; border-top: 1px solid #ebebeb; }
+          .footer-text { font-size: 12px; color: #717171; margin: 0 0 8px; }
+          .link-text { font-size: 13px; color: #717171; word-break: break-all; margin-top: 24px; }
+          @media (max-width: 600px) { .header, .content, .footer { padding-left: 24px; padding-right: 24px; } }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <a href="https://jetsetterss.com" class="logo">jetsetters</a>
+          </div>
+          
+          <div class="content">
+            <h1 class="title">Reset your password</h1>
+            <p class="text">
+              We received a request to reset the password for your JetSetters account. Click the button below to choose a new one.
+            </p>
+            
+            <div class="cta-container">
+              <a href="${resetLink}" class="cta-button">Reset Password</a>
+            </div>
+            
+            <p class="text">
+              This link will expire in 1 hour. If you didn't request a password reset, you can safely ignore this email.
+            </p>
+            
+            <div class="link-text">
+              If the button doesn't work, copy and paste this link into your browser:<br>
+              <a href="${resetLink}" style="color: #1152d4;">${resetLink}</a>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <p class="footer-text">Sent with ❤️ from JetSetters Team</p>
+            <p class="footer-text">© 2026 JetSetters Corporation. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return await sendEmail({
+      to: email,
+      subject,
+      html
+    });
+  } catch (error) {
+    console.error('Error in sendPasswordResetEmail:', error);
+    throw error;
+  }
+};
+
+/**
  * Email service for sending notifications
  */
 const emailService = {
@@ -2069,3 +2146,101 @@ export const sendCancellationNotificationEmails = async (cancellationData) => {
 
 export default emailService;
 
+/**
+ * Send visa application confirmation email
+ * @param {Object} appData - Application data
+ * @returns {Promise} - Email send response
+ */
+export const sendVisaApplicationConfirmation = async (appData) => {
+  try {
+    const html = generateVisaApplicationTemplate(appData);
+    const subject = `🛂 Visa Application Received: ${appData.application_ref}`;
+    
+    const response = await sendEmail({
+      to: appData.personal_info.email,
+      subject,
+      html
+    });
+
+    return response;
+  } catch (error) {
+    console.error('Error sending visa confirmation email:', error);
+    throw error;
+  }
+};
+
+/**
+ * Generate HTML template for visa application confirmation
+ */
+function generateVisaApplicationTemplate(data) {
+  const { application_ref, personal_info, travel_details, service_tier, amount } = data;
+  const firstName = personal_info.firstName || 'Valued Customer';
+  const destination = travel_details.destination || 'your destination';
+  
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Circular', -apple-system, system-ui, sans-serif; color: #222; line-height: 1.6; }
+        .container { max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden; }
+        .header { background: #1152d4; color: white; padding: 40px 20px; text-align: center; }
+        .content { padding: 30px; }
+        .ref-box { background: #f8f9fa; border: 2px dashed #1152d4; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0; }
+        .ref-number { font-family: monospace; font-size: 24px; font-weight: bold; color: #1152d4; }
+        .details-table { w-full; border-collapse: collapse; margin-top: 20px; }
+        .details-table td { padding: 10px; border-bottom: 1px solid #eee; }
+        .label { color: #666; font-size: 13px; font-weight: bold; text-transform: uppercase; }
+        .value { text-align: right; font-weight: 500; }
+        .cta-button { display: inline-block; padding: 14px 28px; background: #1152d4; color: white !important; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 20px; }
+        .footer { background: #f4f4f4; padding: 20px; text-align: center; font-size: 12px; color: #888; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Application Received!</h1>
+          <p>Your visa journey to ${destination} has begun.</p>
+        </div>
+        <div class="content">
+          <p>Hi ${firstName},</p>
+          <p>Thank you for choosing JetSetters for your visa application. We've received your documents and our specialists are already reviewing them.</p>
+          
+          <div class="ref-box">
+            <p style="margin: 0; font-size: 12px; color: #666;">YOUR APPLICATION REFERENCE</p>
+            <div class="ref-number">${application_ref}</div>
+          </div>
+
+          <table class="details-table" style="width: 100%;">
+            <tr>
+              <td class="label">Destination</td>
+              <td class="value">${destination}</td>
+            </tr>
+            <tr>
+              <td class="label">Service Tier</td>
+              <td class="value" style="text-transform: capitalize;">${service_tier}</td>
+            </tr>
+            <tr>
+              <td class="label">Payment Status</td>
+              <td class="value">${data.payment_status || 'Pending'}</td>
+            </tr>
+          </table>
+
+          <div style="text-align: center;">
+            <a href="https://www.jetsetterss.com/visa/track?ref=${application_ref}" class="cta-button">Track Your Application</a>
+          </div>
+
+          <p style="margin-top: 30px; font-size: 14px; color: #666;">
+            If you have any questions, simply reply to this email or visit our Help Center.
+          </p>
+        </div>
+        <div class="footer">
+          <p>&copy; 2026 JetSetters. All rights reserved.</p>
+          <p>Premium Travel & Visa Services Worldwide</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}

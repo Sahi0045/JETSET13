@@ -7,6 +7,8 @@ const PaymentLinksList = () => {
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [selectedLink, setSelectedLink] = useState(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     fetchLinks();
@@ -42,10 +44,16 @@ const PaymentLinksList = () => {
     }
   };
 
-  const copyLink = (url, id) => {
+  const copyLink = (e, url, id) => {
+    e.stopPropagation();
     navigator.clipboard.writeText(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleLinkClick = (link) => {
+    setSelectedLink(link);
+    setShowModal(true);
   };
 
   const getStatusBadge = (status) => {
@@ -192,16 +200,26 @@ const PaymentLinksList = () => {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {filteredLinks.map(link => (
-            <div key={link.id} style={{
-              background: 'white',
-              borderRadius: '12px',
-              padding: '20px',
-              border: '1px solid #e2e8f0',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px'
-            }}>
+            <div 
+              key={link.id} 
+              onClick={() => handleLinkClick(link)}
+              style={{
+                background: 'white',
+                borderRadius: '12px',
+                padding: '20px',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  borderColor: '#055B75',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.05)'
+                }
+              }}
+            >
               {/* Type Icon */}
               <div style={{
                 width: '44px',
@@ -234,7 +252,7 @@ const PaymentLinksList = () => {
 
               {/* Actions */}
               <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                <button onClick={() => copyLink(link.paymentUrl, link.id)} style={{
+                <button onClick={(e) => copyLink(e, link.paymentUrl, link.id)} style={{
                   background: copiedId === link.id ? '#d1fae5' : '#f1f5f9',
                   color: copiedId === link.id ? '#065f46' : '#475569',
                   border: 'none',
@@ -250,6 +268,193 @@ const PaymentLinksList = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {showModal && selectedLink && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }} onClick={() => setShowModal(false)}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '600px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '32px',
+            position: 'relative',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)'
+          }} onClick={e => e.stopPropagation()}>
+            <button 
+              onClick={() => setShowModal(false)}
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                background: 'none',
+                border: 'none',
+                fontSize: '24px',
+                cursor: 'pointer',
+                color: '#64748b'
+              }}
+            >✕</button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+              <div style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '12px',
+                background: '#f0f9ff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '32px'
+              }}>
+                {getTypeIcon(selectedLink.booking_type)}
+              </div>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '24px', color: '#1e293b' }}>Payment Details</h2>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  {getStatusBadge(selectedLink.status)}
+                  <span style={{ fontSize: '13px', color: '#64748b' }}>Created on {new Date(selectedLink.created_at).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
+              <div>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Customer Information</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b' }}>{selectedLink.customer_name}</div>
+                  {selectedLink.customer_email && <div style={{ fontSize: '14px', color: '#475569' }}>📧 {selectedLink.customer_email}</div>}
+                  {selectedLink.customer_phone && <div style={{ fontSize: '14px', color: '#475569' }}>📱 {selectedLink.customer_phone}</div>}
+                </div>
+              </div>
+              <div>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payment Information</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 700, color: '#055B75' }}>
+                    {selectedLink.currency} {parseFloat(selectedLink.amount).toFixed(2)}
+                  </div>
+                  {selectedLink.actual_fee && (
+                    <div style={{ fontSize: '13px', color: '#475569' }}>
+                      Actual Fee: {selectedLink.currency} {parseFloat(selectedLink.actual_fee).toFixed(2)}
+                    </div>
+                  )}
+                  {selectedLink.agent_fee && (
+                    <div style={{ fontSize: '13px', color: '#475569' }}>
+                      Agent Fee: {selectedLink.currency} {parseFloat(selectedLink.agent_fee).toFixed(2)}
+                    </div>
+                  )}
+                  <div style={{ fontSize: '13px', color: '#ef4444', fontWeight: 500 }}>
+                    Expires: {new Date(selectedLink.expires_at).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '32px' }}>
+              <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Booking Details</h4>
+              <div style={{ 
+                background: '#f8fafc', 
+                borderRadius: '12px', 
+                padding: '16px',
+                border: '1px solid #e2e8f0'
+              }}>
+                <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '8px', textTransform: 'capitalize' }}>
+                  {selectedLink.booking_type} Reservation
+                </div>
+                <div style={{ fontSize: '14px', color: '#475569', lineHeight: 1.6 }}>
+                  {selectedLink.description || 'No description provided'}
+                </div>
+                
+                {selectedLink.travel_details && Object.keys(selectedLink.travel_details).length > 0 && (
+                  <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8', marginBottom: '8px', textTransform: 'uppercase' }}>Travel Details</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      {Object.entries(selectedLink.travel_details).map(([key, value]) => (
+                        <div key={key}>
+                          <span style={{ fontSize: '12px', color: '#64748b', textTransform: 'capitalize' }}>{key.replace(/_/g, ' ')}:</span>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b', marginLeft: '4px' }}>
+                            {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payment Link</h4>
+              <div style={{ 
+                display: 'flex', 
+                gap: '8px',
+                background: '#f1f5f9',
+                padding: '4px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0'
+              }}>
+                <input 
+                  type="text" 
+                  readOnly 
+                  value={selectedLink.paymentUrl}
+                  style={{
+                    flex: 1,
+                    background: 'none',
+                    border: 'none',
+                    padding: '8px 12px',
+                    fontSize: '13px',
+                    color: '#475569',
+                    fontFamily: 'monospace'
+                  }}
+                />
+                <button 
+                  onClick={(e) => copyLink(e, selectedLink.paymentUrl, selectedLink.id)}
+                  style={{
+                    background: copiedId === selectedLink.id ? '#d1fae5' : '#055B75',
+                    color: copiedId === selectedLink.id ? '#065f46' : 'white',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {copiedId === selectedLink.id ? '✓ Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '32px' }}>
+              <button 
+                onClick={() => setShowModal(false)}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  background: 'white',
+                  color: '#475569',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >Close</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

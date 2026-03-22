@@ -229,6 +229,16 @@ const Login = React.lazy(() =>
     .catch(() => ({ default: LoginFallback }))
 );
 
+const ForgotPassword = React.lazy(() =>
+  import('./Pages/Common/login/ForgotPassword')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Forgot Password..." /> }))
+);
+
+const ResetPassword = React.lazy(() =>
+  import('./Pages/Common/login/ResetPassword')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Reset Password..." /> }))
+);
+
 // Signup page fallback
 const SignupFallback = () => <LoadingSpinner fullScreen={true} text="Loading Sign Up..." />;
 
@@ -649,8 +659,9 @@ const App = () => {
 
           <Route path="/my-trips" element={<MyTripsPage />} />
           <Route path="/manage-booking/:bookingId" element={<ManageBooking />} />
-          <Route path="/manage-booking" element={<ManageBooking />} />
-          <Route path="/forgot-password" element={<Navigate to="/login" />} />
+           <Route path="/manage-booking" element={<ManageBooking />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/booking-confirmation" element={<BookingConfirmation />} />
           <Route path="/cruise" element={<CruiseHomepage />} />
           <Route path="/cruises" element={<CruiseCards />} />

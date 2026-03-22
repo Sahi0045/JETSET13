@@ -1,6 +1,9 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/user.model.js';
 import axios from 'axios';
+import crypto from 'crypto';
+import supabase from '../config/supabase.js';
+import { sendPasswordResetEmail } from '../services/emailService.js';
 // Environment variable for JWT secret (should be in .env file)
 const JWT_SECRET = process.env.JWT_SECRET || 'jetset-app-secret-key';
 const JWT_EXPIRE = process.env.JWT_EXPIRE || '30d';
@@ -479,7 +482,98 @@ export const getMe = async (req, res) => {
       email: user.email
     });
   } catch (error) {
-    console.error('Error in getMe controller:', error);
     res.status(500).json({ message: 'Server error while fetching user data', error: error.message });
+  }
+};
+
+// @desc    Forgot Password - Send reset link
+// @route   POST /api/auth/forgot-password
+// @access  Public
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const user = await User.findByEmail(email);
+    if (!user) {
+      // For security reasons, don't reveal if user exists
+      return res.status(200).json({ success: true, message: 'If an account exists with this email, a reset link has been sent.' });
+    }
+
+    // Generate token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiry = new Date(Date.now() + 3600000); // 1 hour from now
+
+    // Save token to database
+    const { error: dbError } = await supabase
+      .from('password_resets')
+      .insert([{
+        email,
+        token: resetToken,
+        expires_at: expiry
+      }]);
+
+    if (dbError) {
+      console.error('Error saving reset token:', dbError);
+      return res.status(500).json({ message: 'Error processing request' });
+    }
+
+    // Send email
+    const resetLink = `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+    
+    await sendPasswordResetEmail(email, resetLink);
+
+    res.status(200).json({ success: true, message: 'Reset link sent successfully' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Reset Password
+// @route   POST /api/auth/reset-password
+// @access  Public
+export const resetPassword = async (req, res) => {
+  try {
+    const { email, token, newPassword } = req.body;
+
+    if (!email || !token || !newPassword) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // Verify token
+    const { data: resetEntry, error: queryError } = await supabase
+      .from('password_resets')
+      .select('*')
+      .eq('email', email)
+      .eq('token', token)
+      .gt('expires_at', new Date().toISOString())
+      .single();
+
+    if (queryError || !resetEntry) {
+      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    }
+
+    // Update user password
+    const user = await User.findByEmail(email);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    await User.update(user.id, { password: newPassword });
+
+    // Delete used token
+    await supabase
+      .from('password_resets')
+      .delete()
+      .eq('email', email);
+
+    res.status(200).json({ success: true, message: 'Password reset successfully' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };

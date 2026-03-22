@@ -1,15 +1,127 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { apiGet, apiPut } from '../../../../utils/apiHelper';
 
 const ConsultantDashboard = () => {
+    const [appointments, setAppointments] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({ total: 0, revenue: 0, rating: 4.8 });
     const [isOnline, setIsOnline] = useState(true);
     const [activeView, setActiveView] = useState('week'); // 'week' | 'list'
+    const [complianceQueue, setComplianceQueue] = useState([]);
 
-    const appointments = [
-        { id: 1, title: 'Japan Tourist Visa Consultation', time: '09:30 - 10:30 AM', client: 'Elena Gilbert', status: 'Docs Pending Review', color: 'blue', type: 'video', day: 'Tue', date: 24, dayIdx: 1, topPct: 12.5, heightPct: 12.5 },
-        { id: 2, title: 'Digital Nomad Visa Strategy', time: '01:00 - 02:30 PM', client: 'Jeremy Somes', status: 'Docs Ready', color: 'indigo', type: 'person', day: 'Tue', date: 24, dayIdx: 1, topPct: 50, heightPct: 18.75 },
-        { id: 3, title: 'Schengen Final Review', time: '03:30 - 04:30 PM', client: 'Alaric Saltzman', status: 'Docs Ready', color: 'emerald', type: 'call', day: 'Tue', date: 24, dayIdx: 1, topPct: 75, heightPct: 12.5 },
-    ];
+    const fetchConsultations = useCallback(async () => {
+        try {
+            const response = await apiGet('visa/consultations');
+            const data = await response.json();
+            if (data.success) {
+                const mapped = data.data.map(c => {
+                    const date = new Date(c.booking_date);
+                    const dayIdx = (date.getDay() + 6) % 7; // Convert Sun=0 to Mon=0
+                    
+                    // Simple parser for "HH:MM AM/PM"
+                    const [timePart, meridiem] = c.booking_time.split(' ');
+                    let [hours, minutes] = timePart.split(':').map(Number);
+                    if (meridiem === 'PM' && hours < 12) hours += 12;
+                    if (meridiem === 'AM' && hours === 12) hours = 0;
+
+                    const startMinutes = hours * 60 + minutes;
+                    const nineAM = 9 * 60;
+                    const totalDayMinutes = 8 * 60; // 9am to 5pm
+                    
+                    const topPct = ((startMinutes - nineAM) / totalDayMinutes) * 100;
+                    const heightPct = (60 / totalDayMinutes) * 100; // assume 1hr
+
+                    return {
+                        id: c.id,
+                        title: `Visa Consultation: ${c.consultant_role}`, // or visa type if added
+                        time: c.booking_time,
+                        client: c.customer_name,
+                        status: c.status,
+                        color: c.status === 'confirmed' ? 'blue' : c.status === 'completed' ? 'emerald' : 'indigo',
+                        type: 'video',
+                        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+                        date: date.getDate(),
+                        dayIdx,
+                        topPct,
+                        heightPct
+                    };
+                });
+                setAppointments(mapped);
+            }
+        } catch (err) {
+            console.error('fetchConsultations error:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    const fetchStats = useCallback(async () => {
+        try {
+            const response = await apiGet('visa/consultations/stats');
+            const data = await response.json();
+            if (data.success && data.data) {
+                setStats({
+                    total: data.data.total || 0,
+                    revenue: data.data.totalRevenue || 0,
+                    rating: 4.8, // Static until a ratings model is added
+                });
+            }
+        } catch (err) {
+            console.error('fetchStats error:', err);
+        }
+    }, []);
+
+    const fetchRecentCompliance = useCallback(async () => {
+        try {
+            // Fetch applications that need attention
+            const response = await apiGet('visa/applications?limit=3&status=under_review,additional_info_required&orderBy=updated_at:desc');
+            const data = await response.json();
+            if (data.success) {
+                setComplianceQueue(data.data.map(app => ({
+                    id: app.id,
+                    name: `${app.personal_info?.firstName || ''} ${app.personal_info?.lastName || ''}`.trim() || 'Anonymous',
+                    stage: app.status === 'under_review' ? 'Reviewing' : 'Awaiting Info'
+                })));
+            }
+        } catch (err) {
+            console.error('fetchRecentCompliance error:', err);
+        }
+    }, []);
+
+
+    useEffect(() => {
+        fetchConsultations();
+        fetchStats();
+        fetchRecentCompliance();
+
+        const interval = setInterval(() => {
+            fetchConsultations();
+            fetchStats();
+            fetchRecentCompliance();
+        }, 30000); // 30s polling for dashboard
+        
+        return () => clearInterval(interval);
+    }, [fetchConsultations]);
+
+    // Calculate current week range (Mon to Sun)
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 is Sun, 1 is Mon...
+    const diffToMon = today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(diffToMon);
+    
+    const weekDays = [...Array(7)].map((_, i) => {
+        const d = new Date(startOfWeek);
+        d.setDate(startOfWeek.getDate() + i);
+        return {
+            name: d.toLocaleDateString('en-US', { weekday: 'short' }),
+            date: d.getDate(),
+            fullDate: d
+        };
+    });
+
+    const weekRangeStr = `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(new Date(startOfWeek).setDate(startOfWeek.getDate() + 6)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
     const colorMap = {
         blue: { bg: 'bg-blue-50', border: 'border-l-blue-500', text: 'text-blue-700', icon: 'text-blue-400', strip: 'bg-blue-500' },
@@ -74,7 +186,7 @@ const ConsultantDashboard = () => {
                                 </button>
 
                                 <div className="text-center group cursor-pointer">
-                                    <h2 className="text-sm lg:text-base font-black text-slate-900 uppercase tracking-[0.3em]">Oct 23 – Oct 29, 2023</h2>
+                                    <h2 className="text-sm lg:text-base font-black text-slate-900 uppercase tracking-[0.3em]">{weekRangeStr}</h2>
                                     <div className="flex items-center justify-center gap-3 mt-2">
                                         <div className="h-[2px] w-4 bg-slate-200 group-hover:bg-[#1152d4] transition-all" />
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Intelligence Quarter 4</p>
@@ -98,10 +210,10 @@ const ConsultantDashboard = () => {
                                                     <span className="text-[11px] font-black text-slate-900 border-b-2 border-[#1152d4]/40">GMT+5.5</span>
                                                 </div>
                                             </div>
-                                            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
-                                                <div key={day} className={`p-8 text-center border-r border-slate-50 last:border-r-0 ${idx === 1 ? 'bg-[#1152d4]/[0.02]' : ''}`}>
-                                                    <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${idx === 1 ? 'text-[#1152d4]' : 'text-slate-400 group-hover:text-slate-600 transition-colors'}`}>{day}</p>
-                                                    <div className={`size-12 mx-auto rounded-2xl flex items-center justify-center text-base font-black transition-all ${idx === 1 ? 'bg-[#1152d4] text-white shadow-2xl shadow-[#1152d4]/30 scale-110' : 'text-slate-900 hover:bg-slate-50'}`}>{23 + idx}</div>
+                                            {weekDays.map((day, idx) => (
+                                                <div key={day.name} className={`p-8 text-center border-r border-slate-50 last:border-r-0 ${day.date === today.getDate() ? 'bg-[#1152d4]/[0.02]' : ''}`}>
+                                                    <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${day.date === today.getDate() ? 'text-[#1152d4]' : 'text-slate-400 group-hover:text-slate-600 transition-colors'}`}>{day.name}</p>
+                                                    <div className={`size-12 mx-auto rounded-2xl flex items-center justify-center text-base font-black transition-all ${day.date === today.getDate() ? 'bg-[#1152d4] text-white shadow-2xl shadow-[#1152d4]/30 scale-110' : 'text-slate-900 hover:bg-slate-50'}`}>{day.date}</div>
                                                 </div>
                                             ))}
                                         </div>
@@ -175,7 +287,7 @@ const ConsultantDashboard = () => {
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex flex-wrap items-center gap-3 mb-2">
                                                         <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${c.bg} ${c.text} border border-${app.color}-100`}>{app.time}</span>
-                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{app.day}, Oct {app.date}</span>
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{app.day}, {new Date(app.fullDate || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                                                     </div>
                                                     <h3 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight group-hover:text-[#1152d4] transition-all">{app.title}</h3>
                                                     <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-2">
@@ -240,23 +352,23 @@ const ConsultantDashboard = () => {
                             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#1152d4] mb-10 border-b border-[#1152d4]/10 pb-4 inline-block">Consultancy Intelligence</h3>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="p-8 bg-slate-50/50 rounded-[2rem] border border-slate-100 group hover:bg-white hover:shadow-2xl hover:shadow-slate-200/40 transition-all duration-500">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Engagement</p>
-                                    <p className="text-4xl font-black text-slate-950 tracking-tighter group-hover:scale-110 transition-transform">+24<span className="text-xl">%</span></p>
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Total Sessions</p>
+                                    <p className="text-4xl font-black text-slate-950 tracking-tighter group-hover:scale-110 transition-transform">{stats.total}</p>
                                 </div>
                                 <div className="p-8 bg-emerald-500 rounded-[2rem] text-white shadow-xl shadow-emerald-500/20 group hover:shadow-2xl transition-all duration-500 active:scale-95 cursor-pointer">
-                                    <p className="text-[9px] font-black text-white/70 uppercase tracking-widest mb-4">Authority</p>
+                                    <p className="text-[9px] font-black text-white/70 uppercase tracking-widest mb-4">Revenue Collected</p>
                                     <div className="flex items-center gap-3">
-                                        <p className="text-4xl font-black tracking-tighter">4.9</p>
-                                        <span className="material-symbols-outlined text-2xl animate-spin-slow">verified_user</span>
+                                        <p className="text-3xl font-black tracking-tighter">${stats.revenue}</p>
+                                        <span className="material-symbols-outlined text-2xl animate-spin-slow">monetization_on</span>
                                     </div>
                                 </div>
                                 <div className="p-10 bg-white rounded-[2.5rem] border border-slate-100 col-span-2 shadow-xl shadow-slate-200/30 group">
                                     <div className="flex items-center justify-between mb-4">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">Client Satisfaction</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">Consultant Rating</p>
                                         <span className="material-symbols-outlined text-[#1152d4]">insights</span>
                                     </div>
                                     <div className="flex items-end gap-5">
-                                        <p className="text-5xl font-black text-slate-950 tracking-tighter leading-none">4.8<span className="text-xl text-[#1152d4]">/5.0</span></p>
+                                        <p className="text-5xl font-black text-slate-950 tracking-tighter leading-none">{stats.rating}<span className="text-xl text-[#1152d4]">/5.0</span></p>
                                         <div className="flex mb-2 gap-0.5">{[...Array(5)].map((_, i) => <span key={i} className="material-symbols-outlined text-xs text-amber-500" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>)}</div>
                                     </div>
                                     <div className="mt-8 h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
@@ -273,11 +385,10 @@ const ConsultantDashboard = () => {
                             </div>
                             <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40 mb-10">Compliance Queue</h3>
                             <div className="space-y-6">
-                                {[
-                                    { name: 'Marcus Sterling', stage: 'Legal Sync' },
-                                    { name: 'Diana Prince', stage: 'Final Audit' }
-                                ].map(c => (
-                                    <div key={c.name} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all cursor-pointer border border-white/5">
+                                {complianceQueue.length > 0 ? complianceQueue.map(c => (
+                                    <div key={c.id} 
+                                         onClick={() => window.location.href = `/visa/admin/applications/${c.id}`}
+                                         className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all cursor-pointer border border-white/5">
                                         <div className="flex flex-col">
                                             <span className="text-[13px] font-black tracking-tight">{c.name}</span>
                                             <span className="text-[9px] font-black text-indigo-400 uppercase mt-1 tracking-widest">{c.stage}</span>
@@ -286,7 +397,9 @@ const ConsultantDashboard = () => {
                                             <span className="material-symbols-outlined text-sm">open_in_new</span>
                                         </button>
                                     </div>
-                                ))}
+                                )) : (
+                                    <p className="text-[11px] text-white/40 font-bold text-center py-4">No pending dossiers in queue</p>
+                                )}
                                 <button className="w-full py-5 text-[#1152d4] text-[10px] font-black uppercase tracking-[0.25em] bg-[#1152d4]/5 rounded-[1.75rem] hover:bg-[#1152d4] hover:text-white transition-all border border-[#1152d4]/20 shadow-xl shadow-[#1152d4]/5">
                                     Launch Enterprise Feed
                                 </button>

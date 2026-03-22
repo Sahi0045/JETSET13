@@ -6,7 +6,7 @@ The Jetsetters Coupon and Subscription System is a premium membership and promot
 
 ## Glossary
 
-- **Subscription_Manager**: The system component that manages VIP membership tiers, subscriptions, and membership lifecycle
+- **Subscription_Manager**: The System component that manages VIP membership tiers, subscriptions, and membership lifecycle
 - **Coupon_Engine**: The system component that validates, applies, and tracks coupon codes and promotional offers
 - **Discount_Calculator**: The system component that computes final prices after applying discounts, coupons, and membership benefits
 - **Membership_Tier**: A subscription level (e.g., Silver, Gold, Platinum) with associated benefits and pricing

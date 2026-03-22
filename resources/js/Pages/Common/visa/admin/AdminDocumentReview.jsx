@@ -1,28 +1,88 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { apiGet, apiPost } from '../../../../utils/apiHelper';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 8: Admin Document Review System
 
 const AdminDocumentReview = () => {
     const { id } = useParams();
-    const [selectedDoc, setSelectedDoc] = useState(1);
+    const [application, setApplication] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [selectedDocIndex, setSelectedDocIndex] = useState(0);
     const [zoom, setZoom] = useState(100);
     const [rejectionComment, setRejectionComment] = useState('');
     const [showSidebar, setShowSidebar] = useState(false);
     const [showControls, setShowControls] = useState(false);
+    const [actionLoading, setActionLoading] = useState(false);
 
-    const documents = [
-        { id: 1, name: 'Passport Scan (Main)', time: '2h ago', status: 'Reviewing', icon: 'badge' },
-        { id: 2, name: 'Bank Statement - 3 Mo', time: '5h ago', status: 'Pending', icon: 'account_balance' },
-        { id: 3, name: 'Visa Photo', time: '1d ago', status: 'Pending', icon: 'image' },
-        { id: 4, name: 'Employment Letter', time: '1d ago', status: 'Reviewing', icon: 'work' }
-    ];
+    const fetchApplication = useCallback(async () => {
+        try {
+            const response = await apiGet(`visa/applications/${id}`);
+            const data = await response.json();
+            if (data.success) {
+                setApplication(data.data);
+            }
+        } catch (err) {
+            console.error('fetchApplication error:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, [id]);
 
-    const history = [
-        { event: 'Document Uploaded', time: 'Today, 2:14 PM', desc: 'John Doe uploaded Passport_Final.pdf (2.4MB)', type: 'system' },
-        { event: 'Previous Version Rejected', time: 'Oct 24, 11:30 AM', desc: 'Scan is too blurry, edges are cut off. Please provide a clear flat scan. - Agent Sarah', type: 'error' }
-    ];
+    useEffect(() => {
+        fetchApplication();
+
+        // ── Real-time Polling (10s) ─────────────────────────────────────────────
+        const pollInterval = setInterval(() => {
+            fetchApplication();
+        }, 10000);
+
+        return () => clearInterval(pollInterval);
+    }, [fetchApplication]);
+
+    const documents = application?.documents || [];
+    const history = application?.timeline || [];
+    const selectedDoc = documents[selectedDocIndex];
+
+    const handleUpdateDocStatus = async (status) => {
+        if (!selectedDoc || actionLoading) return;
+        setActionLoading(true);
+        try {
+            const response = await apiPost(`visa/applications/${id}/documents`, {
+                docName: selectedDoc.name,
+                status,
+                comment: rejectionComment
+            });
+            const data = await response.json();
+            if (data.success) {
+                // Add timeline event if rejected
+                if (status === 'rejected') {
+                    await apiPost(`visa/applications/${id}/timeline`, {
+                        status: 'additional_info_required',
+                        note: `Document "${selectedDoc.name}" rejected: ${rejectionComment}`,
+                        by: 'Admin'
+                    });
+                } else if (status === 'verified') {
+                    // Check if all other docs are verified
+                    const allVerified = documents.every((d, i) => i === selectedDocIndex || d.status === 'verified');
+                    if (allVerified) {
+                        await apiPost(`visa/applications/${id}/timeline`, {
+                            status: 'under_review',
+                            note: `All documents verified. Application moved to final review.`,
+                            by: 'Admin'
+                        });
+                    }
+                }
+                fetchApplication();
+                setRejectionComment('');
+            }
+        } catch (err) {
+            console.error('handleUpdateDocStatus error:', err);
+        } finally {
+            setActionLoading(false);
+        }
+    };
 
     return (
         <div className="bg-[#f6f6f8] font-sans text-slate-900 flex flex-col h-[calc(100vh-80px)] lg:h-[calc(100vh-130px)] overflow-hidden">
@@ -56,10 +116,16 @@ const AdminDocumentReview = () => {
                             </button>
                         </div>
                         <div className="flex items-center gap-4 mb-8">
-                            <div className="size-12 bg-gradient-to-br from-[#1152d4] to-[#3b82f6] rounded-[1.25rem] flex items-center justify-center text-white font-black text-sm shadow-lg shadow-[#1152d4]/20">JD</div>
+                            <div className="size-12 bg-gradient-to-br from-[#1152d4] to-[#3b82f6] rounded-[1.25rem] flex items-center justify-center text-white font-black text-sm shadow-lg shadow-[#1152d4]/20">
+                                {application?.personal_info?.firstName?.[0]}{application?.personal_info?.lastName?.[0]}
+                            </div>
                             <div>
-                                <h2 className="text-base font-black text-slate-900 leading-none tracking-tight">John Doe</h2>
-                                <p className="text-[10px] font-black text-[#1152d4] uppercase tracking-[0.1em] mt-1.5 opacity-80">Germany • Student Visa</p>
+                                <h2 className="text-base font-black text-slate-900 leading-none tracking-tight">
+                                    {application?.personal_info?.firstName} {application?.personal_info?.lastName}
+                                </h2>
+                                <p className="text-[10px] font-black text-[#1152d4] uppercase tracking-[0.1em] mt-1.5 opacity-80">
+                                    {application?.travel_details?.destination} • {application?.travel_details?.visaType}
+                                </p>
                             </div>
                         </div>
                         <div className="flex items-center justify-between px-1">
@@ -68,23 +134,23 @@ const AdminDocumentReview = () => {
                         </div>
                     </div>
                     <nav className="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-50/20 custom-scrollbar">
-                        {documents.map(doc => (
+                        {documents.map((doc, idx) => (
                             <button
-                                key={doc.id}
-                                onClick={() => { setSelectedDoc(doc.id); setShowSidebar(false); }}
-                                className={`w-full flex items-center gap-4 px-5 py-5 rounded-3xl transition-all border ${selectedDoc === doc.id
+                                key={idx}
+                                onClick={() => { setSelectedDocIndex(idx); setShowSidebar(false); }}
+                                className={`w-full flex items-center gap-4 px-5 py-5 rounded-3xl transition-all border ${selectedDocIndex === idx
                                     ? 'bg-white border-[#1152d4]/20 shadow-xl shadow-[#1152d4]/5 ring-1 ring-[#1152d4]/5'
                                     : 'bg-transparent border-transparent hover:bg-white/60 text-slate-500'
                                     }`}
                             >
-                                <div className={`p-2.5 rounded-xl transition-colors ${selectedDoc === doc.id ? 'bg-[#1152d4]/5 text-[#1152d4]' : 'bg-slate-100 text-slate-400'}`}>
-                                    <span className="material-symbols-outlined text-xl">{doc.icon}</span>
+                                <div className={`p-2.5 rounded-xl transition-colors ${selectedDocIndex === idx ? 'bg-[#1152d4]/5 text-[#1152d4]' : 'bg-slate-100 text-slate-400'}`}>
+                                    <span className="material-symbols-outlined text-xl">description</span>
                                 </div>
                                 <div className="text-left flex-1 min-w-0">
-                                    <p className={`text-[11px] font-black truncate leading-none mb-2 ${selectedDoc === doc.id ? 'text-slate-900' : ''}`}>{doc.name}</p>
-                                    <p className="text-[9px] font-bold uppercase tracking-widest opacity-60">{doc.time} • {doc.status}</p>
+                                    <p className={`text-[11px] font-black truncate leading-none mb-2 ${selectedDocIndex === idx ? 'text-slate-900' : ''}`}>{doc.name}</p>
+                                    <p className="text-[9px] font-bold uppercase tracking-widest opacity-60">{doc.status}</p>
                                 </div>
-                                {selectedDoc === doc.id && <span className="material-symbols-outlined text-base text-[#1152d4]">check_circle</span>}
+                                {doc.status === 'verified' && <span className="material-symbols-outlined text-base text-emerald-500">check_circle</span>}
                             </button>
                         ))}
                     </nav>
@@ -105,8 +171,12 @@ const AdminDocumentReview = () => {
                     <div className="px-4 lg:px-8 py-4 lg:py-6 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/50 backdrop-blur-xl border-b border-slate-200/50 z-10 relative">
                         <div className="flex items-center gap-4 w-full sm:w-auto">
                             <div className="flex-1 sm:flex-none">
-                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest truncate max-w-[200px] lg:max-w-none">Passport_JohnDoe_FINAL.pdf</p>
-                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">2.4 MB • Updated Today, 2:14 PM</p>
+                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest truncate max-w-[200px] lg:max-w-none">
+                                    {selectedDoc?.file_url?.split('/').pop() || 'No file uploaded'}
+                                </p>
+                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                    {selectedDoc?.status || 'Pending'}
+                                </p>
                             </div>
                         </div>
                         <div className="flex items-center gap-6 bg-white px-5 py-2 rounded-2xl border border-slate-100 shadow-sm relative z-20">
@@ -116,9 +186,9 @@ const AdminDocumentReview = () => {
                                 <button onClick={() => setZoom(z => Math.min(200, z + 10))} className="size-8 flex items-center justify-center hover:bg-slate-50 rounded-xl text-slate-400 transition-colors"><span className="material-symbols-outlined text-xl">add</span></button>
                             </div>
                             <div className="w-px h-4 bg-slate-100"></div>
-                            <div className="flex items-center gap-1">
+                             <div className="flex items-center gap-1">
                                 <button className="size-8 flex items-center justify-center hover:bg-slate-50 rounded-xl text-slate-400"><span className="material-symbols-outlined text-xl">rotate_right</span></button>
-                                <button className="size-8 flex items-center justify-center text-[#1152d4] bg-[#1152d4]/5 rounded-xl hover:bg-[#1152d4] hover:text-white transition-all"><span className="material-symbols-outlined text-xl">download</span></button>
+                                <a href={selectedDoc?.file_url} target="_blank" rel="noreferrer" className="size-8 flex items-center justify-center text-[#1152d4] bg-[#1152d4]/5 rounded-xl hover:bg-[#1152d4] hover:text-white transition-all"><span className="material-symbols-outlined text-xl">download</span></a>
                             </div>
                         </div>
                     </div>
@@ -129,7 +199,7 @@ const AdminDocumentReview = () => {
                             style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
                             className="bg-white shadow-[0_40px_100px_-20px_rgba(17,82,212,0.15)] w-full max-w-[800px] min-h-[1100px] flex-shrink-0 relative overflow-hidden transition-all duration-500 rounded-[2rem] border border-white flex flex-col items-center justify-center group"
                         >
-                            <div className="absolute inset-0 bg-cover bg-center opacity-90 blur-[2px] blur-mask grayscale-50 group-hover:grayscale-0 transition-all duration-700" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1544027993-37dbfe43562a?auto=format&fit=crop&q=80&w=1200')" }}></div>
+                            <div className="absolute inset-0 bg-cover bg-center opacity-90 blur-[2px] blur-mask grayscale-50 group-hover:grayscale-0 transition-all duration-700" style={{ backgroundImage: `url('${selectedDoc?.file_url || 'https://images.unsplash.com/photo-1544027993-37dbfe43562a?auto=format&fit=crop&q=80&w=1200'}')` }}></div>
                             <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-slate-900/40 opacity-40"></div>
 
                             <div className="relative z-10 bg-white/95 backdrop-blur-2xl p-10 lg:p-14 rounded-[3rem] border border-white shadow-3xl text-slate-900 text-center max-w-[85%] scale-90 lg:scale-100 transition-transform">
@@ -165,10 +235,18 @@ const AdminDocumentReview = () => {
                         </button>
                         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-8 text-center sm:text-left">Legal Adjudication</h3>
                         <div className="grid grid-cols-1 gap-4">
-                            <button className="w-full flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-5 rounded-[1.5rem] text-[10px] uppercase tracking-[0.2em] transition-all shadow-xl shadow-emerald-500/20 active:scale-95">
-                                <span className="material-symbols-outlined text-xl">verified</span> Approve File
+                            <button 
+                                onClick={() => handleUpdateDocStatus('verified')}
+                                className="w-full flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-5 rounded-[1.5rem] text-[10px] uppercase tracking-[0.2em] transition-all shadow-xl shadow-emerald-500/20 active:scale-95 disabled:opacity-50"
+                                disabled={actionLoading || !selectedDoc || selectedDoc.status === 'verified'}
+                            >
+                                <span className="material-symbols-outlined text-xl">{selectedDoc?.status === 'verified' ? 'done' : 'verified'}</span> {selectedDoc?.status === 'verified' ? 'Verified' : 'Approve File'}
                             </button>
-                            <button className="w-full flex items-center justify-center gap-3 border-2 border-slate-100 bg-white hover:border-[#1152d4]/20 hover:text-[#1152d4] text-slate-400 font-black py-5 rounded-[1.5rem] text-[10px] uppercase tracking-[0.2em] transition-all">
+                            <button 
+                                onClick={() => handleUpdateDocStatus('rejected')}
+                                className="w-full flex items-center justify-center gap-3 border-2 border-slate-100 bg-white hover:border-[#1152d4]/20 hover:text-[#1152d4] text-slate-400 font-black py-5 rounded-[1.5rem] text-[10px] uppercase tracking-[0.2em] transition-all disabled:opacity-50"
+                                disabled={actionLoading || !selectedDoc || !rejectionComment}
+                            >
                                 <span className="material-symbols-outlined text-xl">replay</span> Request Update
                             </button>
                         </div>
@@ -196,16 +274,17 @@ const AdminDocumentReview = () => {
                             <div className="size-2 rounded-full bg-amber-400 animate-pulse"></div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
-                            {history.map((h, i) => (
+                            {history.slice().reverse().map((h, i) => (
                                 <div key={i} className="relative pl-10 group">
-                                    <div className={`absolute left-0 top-1.5 size-3.5 rounded-full border-4 border-white shadow-md transition-all group-hover:scale-125 z-10 ${h.type === 'error' ? 'bg-red-500 shadow-red-500/20' : 'bg-[#1152d4] shadow-[#1152d4]/20'}`}></div>
+                                    <div className={`absolute left-0 top-1.5 size-3.5 rounded-full border-4 border-white shadow-md transition-all group-hover:scale-125 z-10 ${h.status === 'rejected' || h.status === 'cancelled' ? 'bg-red-500 shadow-red-500/20' : 'bg-[#1152d4] shadow-[#1152d4]/20'}`}></div>
                                     {i < history.length - 1 && <div className="absolute left-[6px] top-4 bottom-[-40px] w-px bg-slate-100"></div>}
                                     <div className="flex flex-col gap-1">
-                                        <p className="text-[11px] font-black text-slate-900 leading-tight tracking-tight">{h.event}</p>
-                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{h.time}</p>
+                                        <p className="text-[11px] font-black text-slate-900 leading-tight tracking-tight">{h.status.replace(/_/g, ' ')}</p>
+                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{new Date(h.date).toLocaleString()}</p>
                                     </div>
-                                    <div className={`mt-4 p-4 rounded-2xl border text-[10px] font-bold leading-relaxed tracking-tight ${h.type === 'error' ? 'bg-red-50/20 border-red-50 text-red-600/80' : 'bg-slate-50 border-slate-50 text-slate-500/80'}`}>
-                                        {h.desc}
+                                    <div className={`mt-4 p-4 rounded-2xl border text-[10px] font-bold leading-relaxed tracking-tight ${h.status === 'rejected' ? 'bg-red-50/20 border-red-50 text-red-600/80' : 'bg-slate-50 border-slate-50 text-slate-500/80'}`}>
+                                        {h.note}
+                                        <p className="mt-1 text-[8px] opacity-60">By: {h.by}</p>
                                     </div>
                                 </div>
                             ))}
