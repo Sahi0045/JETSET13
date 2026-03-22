@@ -423,7 +423,8 @@ function ManageBooking() {
               Download E-Ticket
             </button>
 
-            {bookingData?.status?.toUpperCase() !== 'CANCELLED' && (
+            {bookingData?.status?.toUpperCase() !== 'CANCELLED' && 
+             (!bookingData?.departureDate || new Date(bookingData.departureDate) >= new Date(new Date().setHours(0,0,0,0))) && (
               <>
                 <button
                   onClick={modifyBooking}

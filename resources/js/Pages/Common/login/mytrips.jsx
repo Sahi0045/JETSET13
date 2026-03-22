@@ -1111,7 +1111,7 @@ export default function TravelDashboard() {
             </button>
           )}
           {/* Cancel Booking Button — only for non-cancelled upcoming bookings */}
-          {(booking.status || '').toUpperCase() !== 'CANCELLED' && (booking.status || '').toUpperCase() !== 'FAILED' && (
+          {(booking.status || '').toUpperCase() !== 'CANCELLED' && (booking.status || '').toUpperCase() !== 'FAILED' && (daysUntilTrip === null || daysUntilTrip >= 0) && (
             <>
               {showCancelConfirm === booking.id ? (
                 <div className="flex items-center gap-2">
