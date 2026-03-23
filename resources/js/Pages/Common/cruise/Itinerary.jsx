@@ -23,6 +23,284 @@ const reviewers = [
   { id: 5, image: "/images/reviewer5.jpg", isActive: false }
 ];
 
+const ItineraryCallbackPopup = ({ isCallbackModalOpen, setIsCallbackModalOpen, cruiseLine }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    preferredDate: '',
+    message: ''
+  });
+  const [activeField, setActiveField] = useState(null);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [formSubmitError, setFormSubmitError] = useState('');
+  const [formSubmitSuccess, setFormSubmitSuccess] = useState(false);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFocus = (field) => {
+    setActiveField(field);
+  };
+
+  const handleBlur = () => {
+    setActiveField(null);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // Validate form data
+    if (!formData.name || !formData.phone || !formData.email) {
+      setFormSubmitError('Please fill in all required fields');
+      return;
+    }
+
+    setFormSubmitting(true);
+    setFormSubmitError('');
+
+    try {
+      // Call the callback service and wait for a response
+      const result = await callbackService.createCallbackRequest({
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        preferredTime: formData.preferredDate,
+        message: formData.message
+      });
+
+      console.log('Callback request successful:', result);
+
+      // Reset form
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        preferredDate: '',
+        message: ''
+      });
+
+      setFormSubmitting(false);
+      setFormSubmitSuccess(true);
+
+      setTimeout(() => {
+        setIsCallbackModalOpen(false);
+        setFormSubmitSuccess(false);
+      }, 3000);
+    } catch (error) {
+      console.error('Error submitting callback request:', error);
+      setFormSubmitting(false);
+      // Display a more user-friendly error message
+      setFormSubmitError(
+        'We encountered an issue saving your request. Please try again or contact us directly at support@jetsetterss.com'
+      );
+    }
+  };
+
+  if (!isCallbackModalOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={() => setIsCallbackModalOpen(false)}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-0 relative overflow-hidden animate-fadeIn"
+        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+        style={{
+          animation: 'fadeIn 0.3s ease-out',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.2)',
+        }}
+      >
+        <div className="bg-gradient-to-r from-[#0066b2] to-[#1e88e5] pt-6 pb-10 px-5 text-white relative">
+          <button
+            className="absolute top-3 right-3 text-white hover:text-gray-200 transition-colors"
+            onClick={() => setIsCallbackModalOpen(false)}
+            aria-label="Close popup"
+          >
+            <FaTimes size={18} />
+          </button>
+
+          <div className="flex items-center mb-2">
+            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3">
+              <FaPhone className="text-[#0066b2]" size={16} />
+            </div>
+            <h2 className="text-xl font-bold">Request a Call Back</h2>
+          </div>
+
+          <p className="opacity-90 text-xs">
+            Our cruise expert will contact you to discuss {cruiseLine || 'Royal Caribbean'} options
+          </p>
+
+          <div className="absolute -bottom-5 left-0 right-0 h-10 bg-white rounded-t-[50%]"></div>
+        </div>
+
+        <div className="px-5 pb-5 pt-3">
+          {formSubmitSuccess ? (
+            <div className="text-center py-8 px-3 animate-fadeIn" style={{ animation: 'fadeIn 0.5s ease-out' }}>
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FaCheckCircle className="text-green-500" size={32} />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">Thank You!</h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Your call back request has been received. Our travel expert will contact you shortly.
+              </p>
+              <div className="w-12 h-1 bg-green-500 mx-auto"></div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+              <div className={`transition-all duration-200 ${activeField === 'name' ? 'transform -translate-y-1' : ''}`}>
+                <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="name">
+                  Full Name*
+                </label>
+                <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'name' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <FaUser className={`transition-colors ${activeField === 'name' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
+                  </div>
+                  <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFocus('name')}
+                    onBlur={handleBlur}
+                    required
+                    className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none"
+                    placeholder="John Doe"
+                  />
+                </div>
+              </div>
+
+              <div className={`transition-all duration-200 ${activeField === 'email' ? 'transform -translate-y-1' : ''}`}>
+                <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="email">
+                  Email Address*
+                </label>
+                <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'email' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <FaEnvelope className={`transition-colors ${activeField === 'email' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
+                  </div>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFocus('email')}
+                    onBlur={handleBlur}
+                    required
+                    className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none"
+                    placeholder="john@example.com"
+                  />
+                </div>
+              </div>
+
+              <div className={`transition-all duration-200 ${activeField === 'phone' ? 'transform -translate-y-1' : ''}`}>
+                <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="phone">
+                  Phone Number*
+                </label>
+                <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'phone' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <FaPhone className={`transition-colors ${activeField === 'phone' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
+                  </div>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFocus('phone')}
+                    onBlur={handleBlur}
+                    required
+                    className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none"
+                    placeholder="+1 (123) 456-7890"
+                  />
+                </div>
+              </div>
+
+              <div className={`transition-all duration-200 ${activeField === 'preferredDate' ? 'transform -translate-y-1' : ''}`}>
+                <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="preferredDate">
+                  Preferred Call Time
+                </label>
+                <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'preferredDate' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <FaCalendarAlt className={`transition-colors ${activeField === 'preferredDate' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
+                  </div>
+                  <input
+                    type="text"
+                    id="preferredDate"
+                    name="preferredDate"
+                    value={formData.preferredDate}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFocus('preferredDate')}
+                    onBlur={handleBlur}
+                    className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none"
+                    placeholder="E.g. Weekdays after 2 PM"
+                  />
+                </div>
+              </div>
+
+              <div className={`transition-all duration-200 ${activeField === 'message' ? 'transform -translate-y-1' : ''}`}>
+                <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="message">
+                  Additional Information
+                </label>
+                <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'message' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
+                  <div className="absolute top-2.5 left-0 pl-3 flex items-start pointer-events-none">
+                    <FaCommentAlt className={`transition-colors ${activeField === 'message' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
+                  </div>
+                  <textarea
+                    id="message"
+                    name="message"
+                    value={formData.message}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFocus('message')}
+                    onBlur={handleBlur}
+                    rows="2"
+                    className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none resize-none"
+                    placeholder="Any specific questions or requirements?"
+                  ></textarea>
+                </div>
+              </div>
+
+              {formSubmitError && <p className="text-red-500 text-[10px] text-center">{formSubmitError}</p>}
+
+              <button
+                type="submit"
+                disabled={formSubmitting}
+                className="w-full bg-gradient-to-r from-[#0066b2] to-[#1e88e5] text-white font-bold py-3 px-4 rounded-xl hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 mt-4 text-sm disabled:opacity-70"
+              >
+                {formSubmitting ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                ) : (
+                  <>
+                    <FaPhone size={14} /> Request Call Back
+                  </>
+                )}
+              </button>
+
+              <p className="text-[10px] text-center text-gray-500 mt-2">
+                By submitting this form, you agree to our <a href="#" className="text-[#0066b2]">Terms & Conditions</a> and <a href="#" className="text-[#0066b2]">Privacy Policy</a>
+              </p>
+            </form>
+          )}
+        </div>
+      </div>
+
+      <style global>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
+      `}</style>
+    </div>
+  );
+};
+
 const CombinedStyles = () => (
   <style global>{`
     .itinerary-container {
@@ -410,18 +688,6 @@ const Itinerary = () => {
   const cruiseId = searchParams.get('cruiseId');
   const cruiseLine = searchParams.get('cruiseLine');
   const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    preferredDate: '',
-    message: ''
-  });
-  const [formSubmitted, setFormSubmitted] = useState(false);
-  const [activeField, setActiveField] = useState(null);
-  const [formSubmitting, setFormSubmitting] = useState(false);
-  const [formSubmitError, setFormSubmitError] = useState('');
-  const [formSubmitSuccess, setFormSubmitSuccess] = useState(false);
   const [cruiseData, setCruiseData] = useState(null);
 
   useEffect(() => {
@@ -543,6 +809,11 @@ const Itinerary = () => {
   return (
     <>
       <Navbar />
+      <ItineraryCallbackPopup 
+        isCallbackModalOpen={isCallbackModalOpen} 
+        setIsCallbackModalOpen={setIsCallbackModalOpen} 
+        cruiseLine={cruiseData?.name || cruiseLine}
+      />
 
       {/* Hero Header Image */}
       <div className="relative w-full">
@@ -737,196 +1008,6 @@ const Itinerary = () => {
         </div>
       </div>
 
-      {/* Callback Request Popup */}
-      {isCallbackModalOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={() => setIsCallbackModalOpen(false)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-0 relative overflow-hidden animate-fadeIn"
-            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
-            style={{
-              animation: 'fadeIn 0.3s ease-out',
-              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.2)',
-            }}
-          >
-            <div className="bg-gradient-to-r from-[#0066b2] to-[#1e88e5] pt-6 pb-10 px-5 text-white relative">
-              <button
-                className="absolute top-3 right-3 text-white hover:text-gray-200 transition-colors"
-                onClick={() => setIsCallbackModalOpen(false)}
-                aria-label="Close popup"
-              >
-                <FaTimes size={18} />
-              </button>
-
-              <div className="flex items-center mb-2">
-                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3">
-                  <FaPhone className="text-[#0066b2]" size={16} />
-                </div>
-                <h2 className="text-xl font-bold">Request a Call Back</h2>
-              </div>
-
-              <p className="opacity-90 text-xs">
-                Our cruise expert will contact you to discuss {cruiseLine || 'Royal Caribbean'} options
-              </p>
-
-              <div className="absolute -bottom-5 left-0 right-0 h-10 bg-white rounded-t-[50%]"></div>
-            </div>
-
-            <div className="px-5 pb-5 pt-3">
-              {formSubmitSuccess ? (
-                <div className="text-center py-8 px-3 animate-fadeIn" style={{ animation: 'fadeIn 0.5s ease-out' }}>
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FaCheckCircle className="text-green-500" size={32} />
-                  </div>
-                  <h2 className="text-xl font-bold text-gray-800 mb-2">Thank You!</h2>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Your call back request has been received. Our travel expert will contact you shortly.
-                  </p>
-                  <div className="w-12 h-1 bg-green-500 mx-auto"></div>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-                  <div className={`transition-all duration-200 ${activeField === 'name' ? 'transform -translate-y-1' : ''}`}>
-                    <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="name">
-                      Full Name*
-                    </label>
-                    <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'name' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaUser className={`transition-colors ${activeField === 'name' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
-                      </div>
-                      <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFocus('name')}
-                        onBlur={handleBlur}
-                        required
-                        className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none"
-                        placeholder="John Doe"
-                      />
-                    </div>
-                  </div>
-
-                  <div className={`transition-all duration-200 ${activeField === 'email' ? 'transform -translate-y-1' : ''}`}>
-                    <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="email">
-                      Email Address*
-                    </label>
-                    <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'email' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaEnvelope className={`transition-colors ${activeField === 'email' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
-                      </div>
-                      <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFocus('email')}
-                        onBlur={handleBlur}
-                        required
-                        className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none"
-                        placeholder="john@example.com"
-                      />
-                    </div>
-                  </div>
-
-                  <div className={`transition-all duration-200 ${activeField === 'phone' ? 'transform -translate-y-1' : ''}`}>
-                    <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="phone">
-                      Phone Number*
-                    </label>
-                    <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'phone' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaPhone className={`transition-colors ${activeField === 'phone' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
-                      </div>
-                      <input
-                        type="tel"
-                        id="phone"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFocus('phone')}
-                        onBlur={handleBlur}
-                        required
-                        className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none"
-                        placeholder="+1 (123) 456-7890"
-                      />
-                    </div>
-                  </div>
-
-                  <div className={`transition-all duration-200 ${activeField === 'preferredDate' ? 'transform -translate-y-1' : ''}`}>
-                    <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="preferredDate">
-                      Preferred Call Time
-                    </label>
-                    <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'preferredDate' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaCalendarAlt className={`transition-colors ${activeField === 'preferredDate' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
-                      </div>
-                      <input
-                        type="text"
-                        id="preferredDate"
-                        name="preferredDate"
-                        value={formData.preferredDate}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFocus('preferredDate')}
-                        onBlur={handleBlur}
-                        className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none"
-                        placeholder="E.g. Weekdays after 2 PM"
-                      />
-                    </div>
-                  </div>
-
-                  <div className={`transition-all duration-200 ${activeField === 'message' ? 'transform -translate-y-1' : ''}`}>
-                    <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="message">
-                      Additional Information
-                    </label>
-                    <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'message' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                      <div className="absolute top-2.5 left-0 pl-3 flex items-start pointer-events-none">
-                        <FaCommentAlt className={`transition-colors ${activeField === 'message' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
-                      </div>
-                      <textarea
-                        id="message"
-                        name="message"
-                        value={formData.message}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFocus('message')}
-                        onBlur={handleBlur}
-                        rows="2"
-                        className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none resize-none"
-                        placeholder="Any specific questions or requirements?"
-                      ></textarea>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full bg-gradient-to-r from-[#0066b2] to-[#1e88e5] text-white font-bold py-3 px-4 rounded-xl hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 mt-4 text-sm"
-                  >
-                    <FaPhone size={14} /> Request Call Back
-                  </button>
-
-                  <p className="text-[10px] text-center text-gray-500 mt-2">
-                    By submitting this form, you agree to our <a href="#" className="text-[#0066b2]">Terms & Conditions</a> and <a href="#" className="text-[#0066b2]">Privacy Policy</a>
-                  </p>
-                </form>
-              )}
-            </div>
-          </div>
-
-          <style global>{`
-            @keyframes fadeIn {
-              from { opacity: 0; transform: translateY(20px); }
-              to { opacity: 1; transform: translateY(0); }
-            }
-            .animate-fadeIn {
-              animation: fadeIn 0.3s ease-out forwards;
-            }
-          `}</style>
-        </div>
-      )}
 
       <Footer />
     </>
