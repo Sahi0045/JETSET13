@@ -99,6 +99,129 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// Direct send-email endpoint (must be before the /api/* 404 catch-all)
+app.post("/api/send-email", async (req, res) => {
+  try {
+    console.log("📧 Direct email endpoint hit with data:", req.body);
+
+    if (!process.env.RESEND_API_KEY) {
+      console.error("📧 ERROR: Missing Resend API key");
+      return res.status(500).json({ success: false, error: "Missing email API key" });
+    }
+
+    let resend;
+    try {
+      const { Resend } = await import("resend");
+      resend = new Resend(process.env.RESEND_API_KEY);
+    } catch (importError) {
+      console.error("📧 ERROR: Failed to initialize Resend:", importError);
+      return res.status(500).json({ success: false, error: "Failed to initialize email service" });
+    }
+
+    const { name, email, phone, type = "callback", details = {} } = req.body;
+    const adminEmail = "jetsetters721@gmail.com";
+    const preferredTime = details.preferredTime || "Not specified";
+    const message = details.message || "";
+
+    const customerHtml = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #0066b2, #1e88e5); padding: 28px 24px; text-align: center; border-radius: 12px 12px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 22px;">🛳️ Your Callback Request Is Confirmed!</h1>
+          <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 14px;">Jetsetters Travel Experts</p>
+        </div>
+        <div style="padding: 24px; background-color: #f9f9f9;">
+          <p style="font-size: 16px; color: #333;">Hi <strong>${name}</strong>,</p>
+          <p style="font-size: 15px; color: #555; line-height: 1.6;">Thank you for reaching out! We've received your <strong>${type}</strong> callback request and our travel specialist will contact you soon.</p>
+          <div style="background: white; padding: 18px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #0066b2;">
+            <h3 style="margin: 0 0 14px; font-size: 14px; text-transform: uppercase; color: #0066b2;">Your Request Summary</h3>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Name:</strong> ${name}</p>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Phone:</strong> ${phone}</p>
+            ${email ? `<p style="margin: 6px 0; font-size: 14px;"><strong>Email:</strong> ${email}</p>` : ""}
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Preferred Call Time:</strong> ${preferredTime}</p>
+            ${message ? `<p style="margin: 6px 0; font-size: 14px;"><strong>Message:</strong> ${message}</p>` : ""}
+          </div>
+          <p style="font-size: 14px; color: #666;">Questions? Reach us at <strong>support@jetsetterss.com</strong> or <strong>(877) 538-7380</strong>.</p>
+          <p style="font-size: 15px; color: #333;">Best regards,<br>The Jetsetters Team 🌍</p>
+        </div>
+        <div style="padding: 16px; text-align: center; font-size: 12px; color: #999; background: #f1f1f1; border-radius: 0 0 12px 12px;">
+          <p style="margin: 0;">© 2026 Jetsetters. All rights reserved.</p>
+        </div>
+      </div>
+    `;
+
+    const adminHtml = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #dc2626, #b91c1c); padding: 24px; text-align: center; border-radius: 12px 12px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 20px;">🔔 New Callback Request</h1>
+          <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">${type.toUpperCase()} Inquiry</p>
+        </div>
+        <div style="padding: 16px 24px; background: #fffbeb; border-left: 4px solid #eab308;">
+          <p style="margin: 0; font-size: 14px; font-weight: 600; color: #713f12;">⚡ Action Required: Please call the customer within 24 hours</p>
+        </div>
+        <div style="padding: 24px; background: #f9f9f9;">
+          <div style="background: #e0f2fe; padding: 18px; border-radius: 10px;">
+            <h3 style="margin: 0 0 14px; font-size: 13px; color: #0369a1; text-transform: uppercase;">Customer Details</h3>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Name:</strong> ${name}</p>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Email:</strong> ${email || "Not provided"}</p>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Phone:</strong> ${phone}</p>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Preferred Call Time:</strong> ${preferredTime}</p>
+            ${message ? `<p style="margin: 6px 0; font-size: 14px;"><strong>Message:</strong> ${message}</p>` : ""}
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Submitted:</strong> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</p>
+          </div>
+        </div>
+        <div style="padding: 14px; text-align: center; font-size: 12px; color: #999; background: #f1f1f1; border-radius: 0 0 12px 12px;">
+          <p style="margin: 0;">Jetsetters Admin Notification</p>
+        </div>
+      </div>
+    `;
+
+    const results = [];
+
+    if (email) {
+      try {
+        const customerResult = await resend.emails.send({
+          from: "Jetsetters <noreply@jetsetterss.com>",
+          to: [email],
+          subject: `✅ Your ${type.charAt(0).toUpperCase() + type.slice(1)} Callback Request - Confirmed!`,
+          html: customerHtml,
+        });
+        console.log("📧 Customer email sent:", customerResult);
+        results.push({ recipient: "customer", data: customerResult });
+      } catch (err) {
+        console.warn("⚠️ Customer email failed:", err.message);
+      }
+    }
+
+    try {
+      const adminResult = await resend.emails.send({
+        from: "Jetsetters Notifications <noreply@jetsetterss.com>",
+        to: [adminEmail],
+        subject: `🆕 New ${type.toUpperCase()} Callback Request from ${name}`,
+        html: adminHtml,
+      });
+      console.log("📧 Admin email sent:", adminResult);
+      results.push({ recipient: "admin", data: adminResult });
+    } catch (err) {
+      console.warn("⚠️ Admin email failed:", err.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: results.length > 0
+        ? `Emails sent to: ${results.map(r => r.recipient).join(", ")}`
+        : "Callback saved but no emails could be sent",
+      data: results,
+    });
+  } catch (error) {
+    console.error("📧 Error in send-email endpoint:", error);
+    return res.status(200).json({
+      success: true,
+      message: "Callback saved, but email service encountered an error",
+      error: error.message,
+    });
+  }
+});
+
 // 404 handler for API routes (must be before static file serving)
 app.use("/api/*", (req, res) => {
   res.status(404).json({
@@ -224,153 +347,6 @@ const testSupabaseConnection = async (retryCount = 0, maxRetries = 5) => {
 
 // Initialize Supabase connection on startup
 testSupabaseConnection();
-
-// Direct test email endpoint
-app.post("/api/send-email", async (req, res) => {
-  try {
-    console.log("📧 Direct email endpoint hit with data:", req.body);
-
-    // Check if API key is available
-    if (!process.env.RESEND_API_KEY) {
-      console.error(
-        "📧 ERROR: Missing Resend API key in environment variables",
-      );
-      return res.status(500).json({
-        success: false,
-        error: "Missing email API key",
-      });
-    }
-
-    // Import and initialize Resend with a try-catch to handle any errors
-    let resend;
-    try {
-      const { Resend } = await import("resend");
-      resend = new Resend(process.env.RESEND_API_KEY);
-    } catch (importError) {
-      console.error("📧 ERROR: Failed to initialize Resend:", importError);
-      return res.status(500).json({
-        success: false,
-        error: "Failed to initialize email service",
-      });
-    }
-
-    const { name, email, phone, type = "callback", details = {} } = req.body;
-
-    // Simple formatted email with dynamic content based on type
-    let html = `
-      <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
-        <div style="background-color: #0066b2; padding: 20px; text-align: center; color: white;">
-          <h1>${type.toUpperCase()} Request Confirmation</h1>
-        </div>
-        <div style="padding: 20px; background-color: #f9f9f9;">
-          <p>Dear ${name},</p>
-          <p>Thank you for your ${type} request. We have received your information and will contact you shortly.</p>
-
-          <div style="background-color: white; padding: 15px; margin: 15px 0; border-radius: 5px;">
-            <h3>Your Request Details:</h3>
-            <p><strong>Name:</strong> ${name}</p>
-            <p><strong>Phone:</strong> ${phone}</p>
-            <p><strong>Email:</strong> ${email}</p>
-    `;
-
-    // Add type-specific content
-    if (type === "package" && details) {
-      html += `
-            <h3>Package Information:</h3>
-            <p><strong>Package Name:</strong> ${details.packageName || "Not specified"}</p>
-            <p><strong>Travel Date:</strong> ${details.travelDate || "Not specified"}</p>
-            <p><strong>Number of Guests:</strong> ${details.guests || "Not specified"}</p>
-            <p><strong>Budget:</strong> ${details.budget || "Not specified"}</p>
-            <p><strong>Special Requests:</strong> ${details.request || "None"}</p>
-      `;
-    } else if (type === "rental" && details) {
-      html += `
-            <h3>Hotel Booking Information:</h3>
-            <p><strong>Hotel Name:</strong> ${details.hotelName || "Not specified"}</p>
-            <p><strong>Check-in Date:</strong> ${details.checkIn || "Not specified"}</p>
-            <p><strong>Check-out Date:</strong> ${details.checkOut || "Not specified"}</p>
-            <p><strong>Number of Guests:</strong> ${details.guests || "Not specified"}</p>
-            <p><strong>Room Type:</strong> ${details.roomType || "Not specified"}</p>
-            <p><strong>Total Price:</strong> $${details.totalPrice || "Not specified"}</p>
-      `;
-    } else if (type === "cruise" && details) {
-      html += `
-            <h3>Cruise Information:</h3>
-            <p><strong>Preferred Time:</strong> ${details.preferredTime || "Not specified"}</p>
-            <p><strong>Message:</strong> ${details.message || "None"}</p>
-      `;
-    }
-
-    // Close the HTML structure
-    html += `          </div>
-
-          <p>Best regards,<br>The JetSetGo Team</p>
-        </div>
-        <div style="padding: 20px; text-align: center; font-size: 12px; color: #666; background-color: #f1f1f1;">
-          <p>This is an automated message, please do not reply to this email.</p>
-          <p>&copy; 2025 JetSetGo. All rights reserved.</p>
-        </div>
-      </div>
-    `;
-
-    const text = html
-      .replace(/<[^>]*>?/gm, "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    try {
-      // Always use a verified sender email with Resend
-      const result = await resend.emails.send({
-        from: "JetSetGo <onboarding@resend.dev>",
-        to: ["jetsetters721@gmail.com"], // Always send to the registered email
-        subject: `JetSetGo ${type.toUpperCase()} Request Confirmation`,
-        html,
-        text,
-      });
-
-      console.log("📧 Email sent successfully:", result);
-
-      return res.status(200).json({
-        success: true,
-        message: "Email sent successfully",
-        data: result,
-      });
-    } catch (sendError) {
-      console.error("📧 Error sending email via Resend:", sendError);
-
-      // Return a more specific error message based on the error type
-      if (
-        sendError.statusCode === 403 &&
-        sendError.message.includes("domain is not verified")
-      ) {
-        return res.status(200).json({
-          success: true,
-          message:
-            "Callback data saved, but email sending limited due to domain verification",
-          error: "Domain not verified",
-          note: "The callback request was saved successfully, but email sending requires domain verification. Your data is safely stored.",
-        });
-      }
-
-      return res.status(200).json({
-        success: true,
-        message: "Callback data saved, but email could not be sent",
-        error: sendError.message || "An error occurred sending email",
-        data: null,
-      });
-    }
-  } catch (error) {
-    console.error("📧 Error in send-email endpoint:", error);
-
-    // Still return a 200 response to prevent blocking the callback flow
-    return res.status(200).json({
-      success: true,
-      message: "Callback data saved, but email service encountered an error",
-      error: error.message || "An error occurred processing the email request",
-      data: null,
-    });
-  }
-});
 
 // Debug middleware for email routes
 app.use("/api/email/*", (req, res, next) => {

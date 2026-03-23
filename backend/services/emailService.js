@@ -160,43 +160,74 @@ const emailService = {
   sendCallbackConfirmation: async (data, type) => {
     try {
       // Different email templates based on callback type
-      let subject, html;
+      let subject, html, adminSubject, adminHtml;
 
       switch (type) {
         case 'cruise':
-          subject = 'Your Cruise Callback Request Confirmation';
+          subject = 'Your Cruise Callback Request - Confirmed! 🛳️';
           html = generateCruiseCallbackTemplate(data);
+          adminSubject = '🆕 New Cruise Callback Request';
+          adminHtml = generateAdminCallbackNotificationTemplate(data, 'cruise');
           break;
         case 'package':
-          subject = 'Your Package Quote Request Confirmation';
+          subject = 'Your Package Quote Request - Received! 🌴';
           html = generatePackageCallbackTemplate(data);
+          adminSubject = '🆕 New Package Quote Request';
+          adminHtml = generateAdminCallbackNotificationTemplate(data, 'package');
           break;
         case 'rental':
-          subject = 'Your Hotel Booking Request Confirmation';
+          subject = 'Your Hotel Booking Request - Confirmed! 🏨';
           html = generateRentalCallbackTemplate(data);
+          adminSubject = '🆕 New Hotel Booking Request';
+          adminHtml = generateAdminCallbackNotificationTemplate(data, 'rental');
           break;
         default:
-          subject = 'Callback Request Confirmation';
+          subject = 'Callback Request - Confirmed! ✨';
           html = generateDefaultCallbackTemplate(data);
+          adminSubject = '🆕 New Callback Request';
+          adminHtml = generateAdminCallbackNotificationTemplate(data, 'general');
       }
 
-      // For Resend free tier, we must use the registered email address
-      // Original requester's email from data is shown in the template
-      const registeredEmail = 'jetsetters721@gmail.com';
+      const adminEmail = 'jetsetters721@gmail.com';
+      const customerEmail = data.email;
 
-      // Send the email using Resend
-      const response = await resend.emails.send({
-        from: 'Jetsetters <noreply@jetsetterss.com>',
-        to: [registeredEmail], // Send to the email registered with Resend
-        subject,
-        html,
-        text: stripHtml(html)
-      });
+      const results = [];
 
-      console.log('Email sent successfully:', response);
-      return response;
+      // 1) Send confirmation email to the customer (if they provided an email)
+      if (customerEmail) {
+        try {
+          const customerResponse = await resend.emails.send({
+            from: 'Jetsetters <noreply@jetsetterss.com>',
+            to: [customerEmail],
+            subject,
+            html,
+            text: stripHtml(html)
+          });
+          console.log('✅ Customer confirmation email sent to:', customerEmail, customerResponse);
+          results.push({ recipient: 'customer', ...customerResponse });
+        } catch (customerEmailError) {
+          console.warn('⚠️ Could not send email to customer:', customerEmailError.message);
+        }
+      }
+
+      // 2) Send admin notification email
+      try {
+        const adminResponse = await resend.emails.send({
+          from: 'Jetsetters <noreply@jetsetterss.com>',
+          to: [adminEmail],
+          subject: adminSubject,
+          html: adminHtml,
+          text: stripHtml(adminHtml)
+        });
+        console.log('✅ Admin notification email sent:', adminResponse);
+        results.push({ recipient: 'admin', ...adminResponse });
+      } catch (adminEmailError) {
+        console.warn('⚠️ Could not send admin notification email:', adminEmailError.message);
+      }
+
+      return results;
     } catch (error) {
-      console.error('Error sending email:', error);
+      console.error('Error sending callback emails:', error);
       throw error;
     }
   }
@@ -625,6 +656,106 @@ function stripHtml(html) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+/**
+ * Generate admin notification email when a new callback request is received
+ * @param {Object} data - Callback request data
+ * @param {string} type - Type of request
+ * @returns {string} - HTML email content
+ */
+function generateAdminCallbackNotificationTemplate(data, type) {
+  const { name, email = 'Not provided', phone, preferredTime, message } = data;
+  const typeLabels = {
+    cruise: '🛳️ Cruise',
+    package: '🌴 Package',
+    rental: '🏨 Hotel',
+    general: '✨ General'
+  };
+  const typeLabel = typeLabels[type] || '✨ General';
+  const submittedAt = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body, html { margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, sans-serif; background-color: #f4f6f9; }
+        .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .header { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); padding: 28px 32px; text-align: center; }
+        .header h1 { color: white; margin: 0; font-size: 22px; font-weight: 700; }
+        .header p { color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 14px; }
+        .badge { display: inline-block; background: rgba(255,255,255,0.2); color: white; padding: 4px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-top: 10px; }
+        .content { padding: 28px 32px; }
+        .alert-box { background: #fef9c3; border-left: 4px solid #eab308; padding: 14px 18px; border-radius: 0 8px 8px 0; margin-bottom: 24px; }
+        .alert-box p { margin: 0; color: #713f12; font-size: 14px; font-weight: 600; }
+        .info-grid { background: #f0f9ff; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+        .info-grid h3 { margin: 0 0 16px; font-size: 13px; font-weight: 700; color: #0369a1; text-transform: uppercase; letter-spacing: 0.5px; }
+        .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e0f2fe; font-size: 14px; }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { color: #64748b; font-weight: 500; }
+        .info-value { color: #1e293b; font-weight: 600; text-align: right; max-width: 65%; word-break: break-word; }
+        .cta { text-align: center; margin: 24px 0 8px; }
+        .cta a { background: linear-gradient(135deg, #0066b2, #1e88e5); color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; display: inline-block; }
+        .footer { padding: 18px 32px; border-top: 1px solid #f1f5f9; text-align: center; font-size: 12px; color: #94a3b8; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🔔 New Callback Request</h1>
+          <p>A customer is requesting a call back</p>
+          <span class="badge">${typeLabel} Inquiry</span>
+        </div>
+        <div class="content">
+          <div class="alert-box">
+            <p>⚡ Action Required: Please call the customer within 24 hours</p>
+          </div>
+          <div class="info-grid">
+            <h3>Customer Details</h3>
+            <div class="info-row">
+              <span class="info-label">Name</span>
+              <span class="info-value">${name}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Email</span>
+              <span class="info-value">${email}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Phone</span>
+              <span class="info-value">${phone}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Preferred Call Time</span>
+              <span class="info-value">${preferredTime || 'Any time'}</span>
+            </div>
+            ${message ? `
+            <div class="info-row">
+              <span class="info-label">Message</span>
+              <span class="info-value">${message}</span>
+            </div>` : ''}
+            <div class="info-row">
+              <span class="info-label">Submitted At</span>
+              <span class="info-value">${submittedAt} IST</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Request Type</span>
+              <span class="info-value">${typeLabel}</span>
+            </div>
+          </div>
+        </div>
+        <div class="footer">
+          <p>Jetsetters Admin Notification — Do not reply to this email</p>
+          <p>© 2026 Jetsetters. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+
 
 /**
  * Generate professional inquiry received email template for customers
