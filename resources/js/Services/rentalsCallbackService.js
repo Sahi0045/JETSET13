@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@src/config/api';
 import supabase from '../lib/supabase';
 
 /**
@@ -54,12 +55,7 @@ const rentalsCallbackService = {
       try {
         console.log('Sending rental confirmation email via direct endpoint');
         
-        // Get the base URL dynamically for production support
-        const baseUrl = import.meta.env.PROD 
-          ? window.location.origin 
-          : 'http://localhost:5001';
-        
-        const emailResponse = await fetch(`${baseUrl}/api/send-email`, {
+        const emailResponse = await fetch(`${API_BASE_URL}/send-email`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

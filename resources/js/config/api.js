@@ -1,6 +1,8 @@
+import { API_BASE_URL } from '@src/config/api';
+
 // API configuration
 const config = {
-  baseURL: `http://localhost:${process.env.BACKEND_PORT || 5001}`,
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },

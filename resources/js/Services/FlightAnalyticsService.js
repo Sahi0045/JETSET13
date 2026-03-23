@@ -18,15 +18,7 @@ const cache = {
  * Get API base URL
  */
 const getApiUrl = () => {
-    try {
-        return apiConfig.baseUrl || '';
-    } catch {
-        if (typeof window !== 'undefined') {
-            const isLocal = window.location.hostname === 'localhost';
-            return isLocal ? 'http://localhost:5005/api' : 'https://www.jetsetterss.com/api';
-        }
-        return '';
-    }
+    return apiConfig.baseUrl || '';
 };
 
 /**

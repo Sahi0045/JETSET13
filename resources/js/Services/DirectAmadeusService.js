@@ -2,11 +2,12 @@
 // This service connects directly to the Amadeus API for real hotel data
 // when our production API returns empty results
 
+import { API_BASE_URL } from '@src/config/api';
 import axios from 'axios';
 import * as amadeusUtils from '../Pages/Common/rentals/amadeusUtils';
 
-// Production API URL from environment variables
-const PRODUCTION_API_URL = import.meta.env.VITE_APP_URL || 'https://www.jetsetterss.com/api';
+// Production API URL from centralized configuration
+const PRODUCTION_API_URL = API_BASE_URL;
 
 // Amadeus API credentials from environment variables only - never hardcode secrets
 const API_KEY = import.meta.env.VITE_AMADEUS_API_KEY;
