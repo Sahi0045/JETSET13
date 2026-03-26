@@ -8,10 +8,29 @@ dotenv.config();
 
 const router = express.Router();
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
-);
+const supabaseUrl =
+    process.env.SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL;
+const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_KEY ||
+    process.env.SUPABASE_ANON_KEY;
+
+const supabase =
+    supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+function requireSupabase(req, res, next) {
+    if (!supabase) {
+        return res.status(503).json({
+            success: false,
+            message: 'Subscription service unavailable: configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.',
+        });
+    }
+    next();
+}
+
+router.use(requireSupabase);
 
 const ARC_PAY_CONFIG = {
     API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/77/merchant/TESTARC05511704',
@@ -19,7 +38,43 @@ const ARC_PAY_CONFIG = {
     API_USERNAME: process.env.ARC_PAY_API_USERNAME || 'TESTARC05511704',
     API_PASSWORD: process.env.ARC_PAY_API_PASSWORD,
     BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77',
+    PORTAL_URL: process.env.ARC_PAY_PORTAL_URL || 'https://api.arcpay.travel/ma/',
 };
+
+function arcOrderPaymentSuccess(transaction) {
+    if (!transaction) return false;
+    const arr = transaction.transaction || [];
+    const latestTxn = arr[arr.length - 1];
+    const result = latestTxn?.result || transaction.result;
+    const gatewayCode = latestTxn?.response?.gatewayCode || transaction.response?.gatewayCode;
+    return result === 'SUCCESS' && (gatewayCode === 'APPROVED' || !gatewayCode);
+}
+
+function subscriptionEndDate(planType) {
+    const end = new Date();
+    if (planType && String(planType).includes('annual')) {
+        end.setFullYear(end.getFullYear() + 1);
+    } else {
+        end.setMonth(end.getMonth() + 1);
+    }
+    return end.toISOString();
+}
+
+async function activateSubscriptionRow(subRow) {
+    const planId = subRow.plan_type;
+    const endDate = subscriptionEndDate(planId);
+    await supabase
+        .from('user_subscriptions')
+        .update({ status: 'active', end_date: endDate })
+        .eq('transaction_id', subRow.transaction_id);
+    await supabase
+        .from('users')
+        .update({
+            subscription_tier: planId,
+            subscription_end_date: endDate,
+        })
+        .eq('id', subRow.user_id);
+}
 
 // POST /api/subscription/checkout
 router.post('/checkout', async (req, res) => {
@@ -87,7 +142,7 @@ router.post('/checkout', async (req, res) => {
 
             res.json({
                 success: true,
-                checkoutUrl: `${ARC_PAY_CONFIG.PORTAL_URL || 'https://api.arcpay.travel/ma/'}checkout/enterCard.html?merchantSearchId=${arcMerchantId}&session.id=${response.data.session.id}`,
+                checkoutUrl: `${ARC_PAY_CONFIG.PORTAL_URL}checkout/enterCard.html?merchantSearchId=${arcMerchantId}&session.id=${response.data.session.id}`,
                 sessionId: response.data.session.id,
                 orderId: transactionRef
             });
@@ -102,6 +157,70 @@ router.post('/checkout', async (req, res) => {
             message: 'Failed to initiate checkout',
             error: error.response?.data?.error?.explanation || error.message
         });
+    }
+});
+
+// POST /api/subscription/complete — after ARC returnUrl (?status=success&tx=ORDER_ID)
+router.post('/complete', async (req, res) => {
+    try {
+        const { transactionId, userId } = req.body;
+        if (!transactionId || typeof transactionId !== 'string') {
+            return res.status(400).json({ success: false, message: 'transactionId is required' });
+        }
+
+        const { data: sub, error: findErr } = await supabase
+            .from('user_subscriptions')
+            .select('*')
+            .eq('transaction_id', transactionId.trim())
+            .maybeSingle();
+
+        if (findErr) throw findErr;
+        if (!sub) {
+            return res.status(404).json({ success: false, message: 'Subscription not found for this payment.' });
+        }
+        if (userId && sub.user_id !== userId) {
+            return res.status(403).json({ success: false, message: 'Not allowed.' });
+        }
+
+        if (sub.status === 'active') {
+            return res.json({ success: true, alreadyActive: true });
+        }
+
+        const arcMerchantId = ARC_PAY_CONFIG.MERCHANT_ID;
+        const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
+        if (!arcMerchantId || !arcApiPassword) {
+            return res.status(503).json({ success: false, message: 'Payment verification unavailable.' });
+        }
+
+        const authHeader =
+            'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
+        let transaction;
+        try {
+            const orderResponse = await axios.get(
+                `${ARC_PAY_CONFIG.BASE_URL}/merchant/${arcMerchantId}/order/${encodeURIComponent(transactionId.trim())}`,
+                { headers: { Authorization: authHeader, Accept: 'application/json' } }
+            );
+            transaction = orderResponse.data;
+        } catch (e) {
+            console.error('Subscription complete: ARC order fetch failed', e.response?.data || e.message);
+            return res.status(502).json({
+                success: false,
+                message: 'Could not verify payment with ARC. Try again shortly or contact support.',
+            });
+        }
+
+        if (!arcOrderPaymentSuccess(transaction)) {
+            return res.json({
+                success: false,
+                message: 'Payment not completed or still processing.',
+            });
+        }
+
+        await activateSubscriptionRow(sub);
+        return res.json({ success: true, alreadyActive: false });
+    } catch (error) {
+        console.error('Subscription complete error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to complete subscription.' });
     }
 });
 
@@ -127,36 +246,33 @@ router.get('/status/:userId', async (req, res) => {
 // POST /api/subscription/webhook
 router.post('/webhook', async (req, res) => {
     try {
-        // Here we handle the ARC Pay completion
-        const { orderId, result, planId, userId } = req.body;
+        const { orderId, result } = req.body;
 
-        if (result === 'SUCCESS') {
-            const endDate = new Date();
-            if (planId.includes('annual')) {
-                endDate.setFullYear(endDate.getFullYear() + 1);
-            } else {
-                endDate.setMonth(endDate.getMonth() + 1);
-            }
-
-            // Update user_subscriptions table
-            await supabase
-                .from('user_subscriptions')
-                .update({ status: 'active', end_date: endDate.toISOString() })
-                .eq('transaction_id', orderId);
-
-            // Update users table
-            await supabase
-                .from('users')
-                .update({ 
-                    subscription_tier: planId,
-                    subscription_end_date: endDate.toISOString()
-                })
-                .eq('id', userId);
-
-            res.json({ success: true, message: 'Subscription activated' });
-        } else {
-            res.json({ success: false, message: 'Payment not successful' });
+        if (result !== 'SUCCESS' || !orderId) {
+            return res.json({ success: false, message: 'Payment not successful' });
         }
+
+        const { data: sub, error } = await supabase
+            .from('user_subscriptions')
+            .select('*')
+            .eq('transaction_id', orderId)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!sub) {
+            return res.status(404).json({ success: false, message: 'Unknown order' });
+        }
+
+        if (!sub.plan_type || !sub.user_id) {
+            return res.status(400).json({ success: false, message: 'Invalid subscription row' });
+        }
+
+        if (sub.status === 'active') {
+            return res.json({ success: true, message: 'Already active' });
+        }
+
+        await activateSubscriptionRow(sub);
+        return res.json({ success: true, message: 'Subscription activated' });
     } catch (error) {
         console.error('Webhook error:', error);
         res.status(500).json({ success: false, message: 'Webhook processing failed' });

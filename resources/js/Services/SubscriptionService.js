@@ -13,7 +13,7 @@ class SubscriptionService {
     async createCheckoutSession(checkoutData) {
         try {
             console.log('🚀 Creating subscription checkout session...', checkoutData);
-            const response = await axios.post(`${this.apiUrl}?action=checkout`, checkoutData);
+            const response = await axios.post(`${this.apiUrl}/checkout`, checkoutData);
             return response.data;
         } catch (error) {
             console.error('Subscription checkout creation failed:', error);
@@ -28,7 +28,7 @@ class SubscriptionService {
     async getStatus(userId) {
         try {
             if (!userId) return { success: false, message: 'User ID required' };
-            const response = await axios.get(`${this.apiUrl}?action=status&userId=${userId}`);
+            const response = await axios.get(`${this.apiUrl}/status/${encodeURIComponent(userId)}`);
             return response.data;
         } catch (error) {
             console.error('Failed to fetch subscription status:', error);
@@ -36,6 +36,20 @@ class SubscriptionService {
                 success: false,
                 message: error.response?.data?.message || 'Failed to fetch status'
             };
+        }
+    }
+
+    async completeAfterPayment(transactionId, userId) {
+        try {
+            if (!transactionId) return { success: false, message: 'transactionId required' };
+            const body = { transactionId: String(transactionId).trim() };
+            if (userId) body.userId = userId;
+            const response = await axios.post(`${this.apiUrl}/complete`, body);
+            return response.data;
+        } catch (error) {
+            const status = error.response?.status;
+            const msg = error.response?.data?.message || error.message;
+            return { success: false, message: msg, httpStatus: status };
         }
     }
 }

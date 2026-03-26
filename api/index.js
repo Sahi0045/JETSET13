@@ -22,6 +22,7 @@ import supabaseAuthRoutes from "../backend/routes/supabaseAuth.js";
 import geoRoutes from "../backend/routes/geo.routes.js";
 import adminRoutes from "../backend/routes/admin.routes.js";
 import couponRoutes from "../backend/routes/coupon.routes.js";
+import subscriptionRoutes from "../backend/routes/subscription.routes.js";
 import chatRoutes from "./chat/index.js";
 
 const app = express();
@@ -59,6 +60,7 @@ app.use("/api/supabase-auth", supabaseAuthRoutes);
 app.use("/api/geo", geoRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/coupons", couponRoutes);
+app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/chat", chatRoutes);
 
 // Also mount without /api prefix for rewrite compatibility
@@ -75,6 +77,7 @@ app.use("/supabase-auth", supabaseAuthRoutes);
 app.use("/geo", geoRoutes);
 app.use("/admin", adminRoutes);
 app.use("/coupons", couponRoutes);
+app.use("/subscription", subscriptionRoutes);
 app.use("/chat", chatRoutes);
 
 // Direct send-email endpoint (must match server.js implementation)

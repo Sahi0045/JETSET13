@@ -14,20 +14,51 @@ const Membership = () => {
   const user = JSON.parse(localStorage.getItem('user') || 'null');
 
   useEffect(() => {
-    // Check for success or cancel from ARC Pay redirect
     const query = new URLSearchParams(location.search);
     const status = query.get('status');
-    
-    if (status === 'success') {
-      setStatusMessage({ type: 'success', text: 'Thank you! Your payment is processing. Your subscription will be active shortly.' });
-    } else if (status === 'cancel') {
+    const tx = query.get('tx');
+
+    if (status === 'cancel') {
       setStatusMessage({ type: 'error', text: 'Checkout was cancelled.' });
     }
 
-    if (user && user.id) {
-      fetchUserStatus();
-    }
-  }, [location]);
+    const run = async () => {
+      if (status === 'success' && tx) {
+        const complete = await SubscriptionService.completeAfterPayment(tx, user?.id || null);
+        if (complete.success) {
+          setStatusMessage({
+            type: 'success',
+            text: complete.alreadyActive
+              ? 'Your Premium subscription is already active.'
+              : 'Welcome to Premium! Your subscription is now active.',
+          });
+        } else if (user?.id) {
+          setStatusMessage({
+            type: 'error',
+            text:
+              complete.message ||
+              'We could not confirm your payment yet. If you were charged, contact support with your receipt.',
+          });
+        } else {
+          setStatusMessage({
+            type: 'success',
+            text: 'Thank you for completing checkout. Log in to refresh your membership status.',
+          });
+        }
+      } else if (status === 'success') {
+        setStatusMessage({
+          type: 'success',
+          text: 'Thank you! If you just paid, your subscription will appear once confirmed.',
+        });
+      }
+
+      if (user && user.id) {
+        await fetchUserStatus();
+      }
+    };
+
+    run();
+  }, [location.search]);
 
   const fetchUserStatus = async () => {
     const res = await SubscriptionService.getStatus(user.id);

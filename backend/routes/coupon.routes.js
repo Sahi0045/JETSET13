@@ -229,7 +229,25 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const updates = req.body;
+        const b = req.body;
+        const updates = {};
+        if (b.code != null) updates.code = String(b.code).trim().toUpperCase();
+        if (b.description != null) updates.description = b.description;
+        if (b.discountType != null) updates.discount_type = b.discountType;
+        if (b.discount_type != null) updates.discount_type = b.discount_type;
+        if (b.discountValue != null) updates.discount_value = b.discountValue;
+        if (b.discount_value != null) updates.discount_value = b.discount_value;
+        if (b.minOrderValue != null) updates.min_order_value = b.minOrderValue;
+        if (b.min_order_value != null) updates.min_order_value = b.min_order_value;
+        if (b.maxUses !== undefined) updates.max_uses = b.maxUses;
+        if (b.max_uses !== undefined) updates.max_uses = b.max_uses;
+        if (b.validFrom != null) updates.valid_from = b.validFrom;
+        if (b.valid_from != null) updates.valid_from = b.valid_from;
+        if (b.validUntil != null) updates.valid_until = b.validUntil;
+        if (b.valid_until != null) updates.valid_until = b.valid_until;
+        if (b.applicableTo != null) updates.applicable_to = b.applicableTo;
+        if (b.applicable_to != null) updates.applicable_to = b.applicable_to;
+        if (typeof b.is_active === 'boolean') updates.is_active = b.is_active;
 
         const { data, error } = await supabase
             .from('coupons')

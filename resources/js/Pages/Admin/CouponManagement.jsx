@@ -34,8 +34,9 @@ const CouponManagement = () => {
   const fetchCoupons = async () => {
     setLoading(true);
     try {
-      const resp = await axios.get(`${getApiBase()}`, { params: { action: 'list' } });
-      if (resp.data.success) setCoupons(resp.data.data);
+      const resp = await axios.get(`${getApiBase()}`);
+      if (resp.data.success && Array.isArray(resp.data.data)) setCoupons(resp.data.data);
+      else setCoupons([]);
     } catch (e) {
       setError('Failed to load coupons.');
     } finally {
@@ -57,9 +58,9 @@ const CouponManagement = () => {
       };
 
       if (editingId) {
-        await axios.put(`${getApiBase()}?id=${editingId}`, payload);
+        await axios.put(`${getApiBase()}/${editingId}`, payload);
       } else {
-        await axios.post(`${getApiBase()}?action=create`, payload);
+        await axios.post(`${getApiBase()}`, payload);
       }
       setForm(EMPTY_FORM);
       setShowForm(false);
@@ -90,12 +91,12 @@ const CouponManagement = () => {
 
   const handleDeactivate = async (id) => {
     if (!window.confirm('Deactivate this coupon?')) return;
-    await axios.delete(`${getApiBase()}?id=${id}`);
+    await axios.delete(`${getApiBase()}/${id}`);
     fetchCoupons();
   };
 
   const handleToggleActive = async (coupon) => {
-    await axios.put(`${getApiBase()}?id=${coupon.id}`, { is_active: !coupon.is_active });
+    await axios.put(`${getApiBase()}/${coupon.id}`, { is_active: !coupon.is_active });
     fetchCoupons();
   };
 
