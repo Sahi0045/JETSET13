@@ -497,6 +497,15 @@ const AdminDashboard = () => {
                   <div className="action-arrow">→</div>
                 </Link>
 
+                <Link to="/admin/subscriptions" className="action-card">
+                  <div className="action-icon">🌟</div>
+                  <div className="action-content">
+                    <h4>Subscription Management</h4>
+                    <p>View and manage Premium subscriptions</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
+
                 <Link to="/admin/feature-flags" className="action-card">
                   <div className="action-icon">⚙️</div>
                   <div className="action-content">

@@ -163,4 +163,66 @@ router.post('/webhook', async (req, res) => {
     }
 });
 
+// GET /api/subscription (Admin: list all subscriptions)
+router.get('/', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('user_subscriptions')
+            .select(`
+                *,
+                users!inner(first_name, last_name, email)
+            `)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Map data to easier format
+        const formattedData = data.map(sub => ({
+            ...sub,
+            user_email: sub.users?.email,
+            user_name: `${sub.users?.first_name || ''} ${sub.users?.last_name || ''}`.trim() || 'Unknown User'
+        }));
+
+        res.json({ success: true, data: formattedData });
+    } catch (error) {
+        console.error('Admin Fetch subscriptions error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch subscriptions' });
+    }
+});
+
+// PUT /api/subscription/:id (Admin: update subscription status)
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status, plan_type, end_date } = req.body;
+
+        // Update user_subscriptions table
+        const { data: subData, error: subError } = await supabase
+            .from('user_subscriptions')
+            .update({ status, plan_type, end_date })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (subError) throw subError;
+
+        // Also update the users table if active
+        if (subData && subData.user_id) {
+            const userUpdate = {
+                subscription_tier: status === 'active' ? plan_type : null,
+                subscription_end_date: status === 'active' ? end_date : null
+            };
+            await supabase
+                .from('users')
+                .update(userUpdate)
+                .eq('id', subData.user_id);
+        }
+
+        res.json({ success: true, message: 'Subscription updated successfully', data: subData });
+    } catch (error) {
+        console.error('Update subscription error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update subscription' });
+    }
+});
+
 export default router;
