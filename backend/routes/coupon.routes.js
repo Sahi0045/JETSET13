@@ -6,10 +6,31 @@ dotenv.config();
 
 const router = express.Router();
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
-);
+const supabaseUrl =
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL;
+const supabaseKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY;
+
+const supabase =
+  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+function requireSupabase(req, res, next) {
+  if (!supabase) {
+    return res.status(503).json({
+      success: false,
+      message: 'Coupons service is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.',
+    });
+  }
+  next();
+}
+
+router.use(requireSupabase);
 
 // ─────────────────────────────────────────────
 // PUBLIC: Validate a coupon code
