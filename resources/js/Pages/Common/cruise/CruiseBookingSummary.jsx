@@ -8,6 +8,7 @@ import cruiseLineData from './data/cruiselines.json';
 import Price from '../../../Components/Price';
 import currencyService from '../../../Services/CurrencyService';
 import ArcPayService from '../../../Services/ArcPayService';
+import CouponInput from '../../../components/CouponInput';
 
 function CruiseBookingSummary() {
   const navigate = useNavigate();
@@ -23,6 +24,7 @@ function CruiseBookingSummary() {
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
 
   useEffect(() => {
     // Find the selected cruise from cruiseLineData
@@ -105,7 +107,8 @@ function CruiseBookingSummary() {
       const basePrice = parseFloat(cruiseData.price.replace(/[^0-9.]/g, ''));
       const taxesAndFees = 150;
       const portCharges = 200;
-      const totalAmount = basePrice + taxesAndFees + portCharges;
+      const rawTotal = basePrice + taxesAndFees + portCharges;
+      const totalAmount = appliedCoupon ? appliedCoupon.finalTotal : rawTotal;
 
       // Store booking data in localStorage before redirect
       const bookingData = {
@@ -316,12 +319,29 @@ function CruiseBookingSummary() {
                       <span>Total</span>
                       <span>
                         <Price
-                          amount={parseFloat(cruiseData.price.replace(/[^0-9.]/g, '')) + 150 + 200}
+                          amount={appliedCoupon ? appliedCoupon.finalTotal : (parseFloat(cruiseData.price.replace(/[^0-9.]/g, '')) + 150 + 200)}
                           showCode={true}
                         />
                       </span>
                     </div>
                   </div>
+
+                  {/* Coupon Input */}
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Have a coupon?</p>
+                    <CouponInput
+                      orderTotal={parseFloat(cruiseData.price.replace(/[^0-9.]/g, '')) + 150 + 200}
+                      bookingType="cruises"
+                      onApply={(coupon) => setAppliedCoupon(coupon)}
+                      onRemove={() => setAppliedCoupon(null)}
+                    />
+                  </div>
+                  {appliedCoupon && (
+                    <div className="flex justify-between text-green-700 font-semibold mt-2">
+                      <span>Coupon ({appliedCoupon.code})</span>
+                      <span>-<Price amount={appliedCoupon.discountAmount} /></span>
+                    </div>
+                  )}
                 </div>
 
                 <button

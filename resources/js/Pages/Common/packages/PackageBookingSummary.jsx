@@ -7,6 +7,7 @@ import withPageElements from "../PageWrapper";
 import currencyService from '../../../Services/CurrencyService';
 import Price from '../../../Components/Price';
 import ArcPayService from '../../../Services/ArcPayService';
+import CouponInput from '../../../components/CouponInput';
 
 const PackageBookingSummary = () => {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ const PackageBookingSummary = () => {
   
   // State for booking data
   const [bookingDetails, setBookingDetails] = useState(null);
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
 
   const [paymentDetails, setPaymentDetails] = useState({
     cardNumber: '',
@@ -202,7 +204,7 @@ const PackageBookingSummary = () => {
         throw new Error('Payment gateway is currently unavailable. Please try again later.');
       }
 
-      const totalAmount = bookingDetails.pricing.total;
+      const totalAmount = appliedCoupon ? appliedCoupon.finalTotal : bookingDetails.pricing.total;
 
       // Store booking data in localStorage before redirect
       const bookingData = {
@@ -606,10 +608,27 @@ const PackageBookingSummary = () => {
                     <div className="border-t pt-2 mt-2">
                       <div className="flex justify-between font-semibold">
                         <span>Total</span>
-                        <span className="text-[#0066b2]"><Price amount={bookingDetails.pricing.total} /></span>
+                        <span className="text-[#0066b2]"><Price amount={appliedCoupon ? appliedCoupon.finalTotal : bookingDetails.pricing.total} /></span>
                       </div>
                     </div>
                   </div>
+
+                  {/* Coupon Input */}
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Have a coupon?</p>
+                    <CouponInput
+                      orderTotal={bookingDetails.pricing.total}
+                      bookingType="packages"
+                      onApply={(coupon) => setAppliedCoupon(coupon)}
+                      onRemove={() => setAppliedCoupon(null)}
+                    />
+                  </div>
+                  {appliedCoupon && (
+                    <div className="flex justify-between text-green-700 font-semibold mt-2">
+                      <span>Coupon ({appliedCoupon.code})</span>
+                      <span>-<Price amount={appliedCoupon.discountAmount} /></span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
