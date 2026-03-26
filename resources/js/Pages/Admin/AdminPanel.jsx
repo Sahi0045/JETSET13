@@ -13,6 +13,7 @@ import BookingsList from './BookingsList';
 import PaymentLinkCreate from './PaymentLinkCreate';
 import PaymentLinksList from './PaymentLinksList';
 import AgentManagement from './AgentManagement';
+import CouponManagement from './CouponManagement';
 import './AdminPanel.css';
 
 const AdminPanel = () => {
@@ -32,6 +33,7 @@ const AdminPanel = () => {
           <Route path="/payment-links" element={<PaymentLinksList />} />
           <Route path="/payment-links/create" element={<PaymentLinkCreate />} />
           <Route path="/agents" element={<AgentManagement />} />
+          <Route path="/coupons" element={<CouponManagement />} />
         </Routes>
       </div>
       <Footer />
