@@ -13,6 +13,7 @@ import featureFlagRoutes from './routes/featureFlag.routes.js';
 import geoRoutes from './routes/geo.routes.js';
 import airportRoutes from './routes/airport.routes.js';
 import visaRoutes from './routes/visa.routes.js';
+import subscriptionRoutes from './routes/subscription.routes.js';
 import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
 // import 
 // const flightRoutes =re('./routes/flights');
@@ -103,6 +104,7 @@ app.use('/api/feature-flags', featureFlagRoutes);
 app.use('/api/geo', geoRoutes);
 app.use('/api/airports', airportRoutes);
 app.use('/api/visa', visaRoutes);
+app.use('/api/subscription', subscriptionRoutes);
 
 // Direct send-email endpoint (must match api/index.js implementation)
 app.post('/api/send-email', async (req, res) => {

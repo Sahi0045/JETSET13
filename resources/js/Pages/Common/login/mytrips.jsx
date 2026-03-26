@@ -1546,6 +1546,18 @@ export default function TravelDashboard() {
                         </span>
                       )}
                     </button>
+
+                    <div className="border-t border-gray-200 my-3"></div>
+
+                    <button
+                      onClick={() => navigate('/membership')}
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors text-yellow-700 hover:bg-yellow-50 border border-yellow-200 bg-yellow-50"
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="text-lg">⭐</span>
+                        <span className="font-medium text-sm">Premium Membership</span>
+                      </span>
+                    </button>
                   </nav>
                 </div>
               </div>

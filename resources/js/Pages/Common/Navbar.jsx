@@ -212,8 +212,11 @@ const Navbar = ({ forceScrolled }) => {
                     <circle cx="12" cy="7" r="4"></circle>
                   </svg>
                 </div>
-                <span className="profile-name">
+                <span className="profile-name flex items-center gap-1.5">
                   {user?.firstName || user?.email?.split('@')[0] || 'User'}
+                  {user?.subscriptionTier && user.subscriptionTier !== 'free' && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-bold bg-yellow-400 text-yellow-900 rounded-full leading-none">PRO</span>
+                  )}
                 </span>
               </button>
               {isDropdownOpen && (
@@ -237,6 +240,12 @@ const Navbar = ({ forceScrolled }) => {
                       <circle cx="12" cy="7" r="4"></circle>
                     </svg>
                     Profile
+                  </button>
+                  <button onClick={() => { window.location.href = '/membership'; setIsDropdownOpen(false); }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                    Membership
                   </button>
                   <button onClick={handleLogout}>
                     <svg
@@ -334,6 +343,9 @@ const Navbar = ({ forceScrolled }) => {
           </Link>
           <Link to="/request" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
             Request
+          </Link>
+          <Link to="/membership" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>
+            ⭐ Premium
           </Link>
 
           {/* Add Currency Selector to mobile menu */}

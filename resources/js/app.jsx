@@ -584,6 +584,11 @@ const PaymentLinkPage = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Payment..." /> }))
 );
 
+const Membership = React.lazy(() =>
+  import('./Pages/Common/Membership')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Membership..." /> }))
+);
+
 // Add Admin Panel import
 const AdminPanel = React.lazy(() =>
   import('./Pages/Admin/AdminPanel')
@@ -733,6 +738,8 @@ const App = () => {
           <Route path="/payment/success" element={<PaymentSuccess />} />
           <Route path="/payment/failed" element={<PaymentFailed />} />
           <Route path="/pay/:token" element={<PaymentLinkPage />} />
+          <Route path="/membership" element={<Membership />} />
+          <Route path="/pricing" element={<Membership />} />
 
           {/* Admin Routes */}
           <Route path="/admin/login" element={<AdminLogin />} />
