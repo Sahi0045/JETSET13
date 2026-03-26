@@ -12,6 +12,7 @@ import ArcPayService from "../../../Services/ArcPayService";
 import { useLocationContext } from '../../../Context/LocationContext';
 import { allAirports } from './airports';
 import PricingService from '../../../Services/PricingService';
+import CouponInput from '../../../components/CouponInput';
 import "./booking-confirmation.css";
 
 
@@ -29,6 +30,7 @@ function FlightBookingConfirmation() {
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [vipService, setVipService] = useState(false);
   const [priceConfig, setPriceConfig] = useState(null);
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
   const [calculatedFare, setCalculatedFare] = useState({
     baseFare: 0,
     countryTax: 0,
@@ -643,7 +645,9 @@ function FlightBookingConfirmation() {
 
       // Prepare flight data for ARC Pay - use routerLocation.state for raw flight data
       const rawFlightData = routerLocation.state?.flightData;
-      const amount = calculatedFare.totalAmount;
+      const amount = appliedCoupon
+        ? appliedCoupon.finalTotal
+        : calculatedFare.totalAmount;
 
       // Get flight details
       const flightNumber = `${rawFlightData?.airline?.code || 'XX'} ${rawFlightData?.id || '000'}`;
@@ -1495,9 +1499,27 @@ function FlightBookingConfirmation() {
                   </div>
                 )}
 
+                {/* Coupon Input */}
+                <div className="mt-4 mb-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Have a coupon?</p>
+                  <CouponInput
+                    orderTotal={calculatedFare.totalAmount}
+                    bookingType="flights"
+                    onApply={(coupon) => setAppliedCoupon(coupon)}
+                    onRemove={() => setAppliedCoupon(null)}
+                  />
+                </div>
+
+                {appliedCoupon && (
+                  <div className="fare-row" style={{ color: '#16a34a' }}>
+                    <span className="label">Coupon ({appliedCoupon.code})</span>
+                    <span className="value">-<Price amount={appliedCoupon.discountAmount} /></span>
+                  </div>
+                )}
+
                 <div className="fare-row total">
                   <span className="label">Total to Pay</span>
-                  <span className="value"><Price amount={calculatedFare.totalAmount} showCode={true} /></span>
+                  <span className="value"><Price amount={appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount} showCode={true} /></span>
                 </div>
 
                 <button

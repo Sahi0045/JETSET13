@@ -9,6 +9,7 @@ import hotelService from '../../../Services/HotelService';
 import currencyService from '../../../Services/CurrencyService';
 import Price from '../../../Components/Price';
 import ArcPayService from '../../../Services/ArcPayService';
+import CouponInput from '../../../components/CouponInput';
 
 const HotelBookingSummary = () => {
     const navigate = useNavigate();
@@ -50,6 +51,7 @@ const HotelBookingSummary = () => {
     });
 
     const [errors, setErrors] = useState({});
+    const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
 
     // Fetch hotel details
     useEffect(() => {
@@ -178,7 +180,7 @@ const HotelBookingSummary = () => {
             console.log('🚀 Creating ArcPay hosted checkout session...');
 
             const checkoutResponse = await ArcPayService.createHostedCheckout({
-                amount: total,
+                amount: appliedCoupon ? appliedCoupon.finalTotal : total,
                 currency: 'USD',
                 orderId: orderId,
                 bookingType: 'hotel',
@@ -691,8 +693,25 @@ const HotelBookingSummary = () => {
                                 </div>
                                 <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2">
                                     <span>Total</span>
-                                    <span className="text-[#055B75]"><Price amount={total} /></span>
+                                    <span className="text-[#055B75]"><Price amount={appliedCoupon ? appliedCoupon.finalTotal : total} /></span>
                                 </div>
+
+                                {/* Coupon Input */}
+                                <div className="mt-4">
+                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Have a coupon?</p>
+                                    <CouponInput
+                                        orderTotal={total}
+                                        bookingType="hotels"
+                                        onApply={(coupon) => setAppliedCoupon(coupon)}
+                                        onRemove={() => setAppliedCoupon(null)}
+                                    />
+                                </div>
+                                {appliedCoupon && (
+                                    <div className="flex justify-between text-green-700 font-semibold mt-2">
+                                        <span>Coupon ({appliedCoupon.code})</span>
+                                        <span>-<Price amount={appliedCoupon.discountAmount} /></span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
