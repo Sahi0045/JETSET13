@@ -488,6 +488,15 @@ const AdminDashboard = () => {
                   <div className="action-arrow">→</div>
                 </Link>
 
+                <Link to="/admin/coupons" className="action-card">
+                  <div className="action-icon">🏷️</div>
+                  <div className="action-content">
+                    <h4>Coupon Management</h4>
+                    <p>Create and manage discount coupons</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
+
                 <Link to="/admin/feature-flags" className="action-card">
                   <div className="action-icon">⚙️</div>
                   <div className="action-content">
