@@ -877,9 +877,9 @@ function FlightBookingConfirmation() {
                       return (
                         <React.Fragment key={idx}>
                           {/* Segment Card */}
-                          <div className="flex gap-4 py-4 px-2">
+                          <div className="itinerary-segment flex gap-4 py-4 px-2 border-b border-gray-100 last:border-b-0">
                             {/* Left - Airline Info */}
-                            <div className="flex flex-col items-center min-w-[90px] text-center">
+                            <div className="segment-airline flex flex-col items-center min-w-[90px] text-center">
                               <img
                                 src={seg.carrierLogo || `https://pics.avs.io/200/200/${(seg.carrier || 'XX').toUpperCase()}.png`}
                                 alt={seg.carrierName || seg.carrier}
@@ -892,9 +892,9 @@ function FlightBookingConfirmation() {
                             </div>
 
                             {/* Center - Route */}
-                            <div className="flex-1 flex items-stretch gap-3">
+                            <div className="segment-route flex-1 flex items-stretch gap-3">
                               {/* Departure */}
-                              <div className="flex flex-col items-start min-w-[120px]">
+                              <div className="route-endpoint departure flex flex-col items-start min-w-[100px] md:min-w-[120px]">
                                 <div className="text-xs text-gray-500">{seg.departure.cityName || getCityName(seg.departure.airport)}</div>
                                 <div className="text-2xl font-bold text-[#055B75]">{depTime}</div>
                                 <div className="text-xs text-gray-500">{depDate}</div>
@@ -904,7 +904,7 @@ function FlightBookingConfirmation() {
                               </div>
 
                               {/* Duration Arrow */}
-                              <div className="flex flex-col items-center justify-center flex-1 min-w-[80px]">
+                              <div className="route-connector flex flex-col items-center justify-center flex-1 min-w-[60px] md:min-w-[80px]">
                                 <div className="text-xs text-gray-500 font-medium">{formatDuration(seg.duration)}</div>
                                 <div className="relative w-full flex items-center my-1">
                                   <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
@@ -917,7 +917,7 @@ function FlightBookingConfirmation() {
                               </div>
 
                               {/* Arrival */}
-                              <div className="flex flex-col items-end min-w-[120px] text-right">
+                              <div className="route-endpoint arrival flex flex-col items-end min-w-[100px] md:min-w-[120px] text-right">
                                 <div className="text-xs text-gray-500">{seg.arrival.cityName || getCityName(seg.arrival.airport)}</div>
                                 <div className="text-2xl font-bold text-[#055B75]">{arrTime}</div>
                                 <div className="text-xs text-gray-500">{arrDate}</div>

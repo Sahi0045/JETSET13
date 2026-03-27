@@ -5,8 +5,8 @@
       align-items: center;
       padding: 0 32px;
       position: relative;
-      z-index: 1000;
-      background-color: #f8fafc;
+      z-index: 999;
+      background-color: #ffffff; /* Solid white background */
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
       border-bottom: 1px solid rgba(0, 0, 0, 0.04);
       transition: all 0.3s ease-in-out;
@@ -130,13 +130,34 @@
       /* let hero merge under transparent navbar */
     }
 
+    /* Desktop nav links - hidden on mobile, flex on desktop */
+    .desktop-nav-links {
+      display: none;
+    }
+
+    @media (min-width: 1024px) {
+      .desktop-nav-links {
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        margin-right: 24px;
+      }
+    }
+
+    @media (min-width: 1024px) and (max-width: 1280px) {
+      .desktop-nav-links {
+        gap: 16px;
+        margin-right: 16px;
+      }
+    }
+
+    /* Keep and improve old navbar-center for backward compatibility or if used elsewhere */
     .navbar-center {
       display: flex;
       gap: 24px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       align-items: center;
       max-width: 60vw;
-      overflow: hidden;
     }
 
     .nav-link {
@@ -148,6 +169,8 @@
       padding: 8px 0;
       font-weight: 500;
       letter-spacing: 0.01em;
+      white-space: nowrap;
+      flex-shrink: 0; /* Prevent links from narrowing and overlapping text */
     }
 
     .nav-link:hover {

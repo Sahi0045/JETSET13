@@ -301,6 +301,19 @@ body {
 }
 
 /* ===== PASSENGER FORM STYLE ===== */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+@media (max-width: 640px) {
+    .form-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+    }
+}
+
 .passenger-form-card .booking-card-header {
     background: white;
     border-bottom: 1px solid var(--color-border);
@@ -483,46 +496,254 @@ body {
 }
 
 /* ===== RESPONSIVE ===== */
+@media (max-width: 1200px) {
+    .booking-layout {
+        gap: 1.5rem;
+    }
+}
+
 @media (max-width: 1024px) {
+    .booking-header-banner {
+        margin-bottom: 2.5rem;
+    }
+
+    .booking-header-banner h1 {
+        font-size: 2.25rem;
+    }
+
     .booking-layout {
         grid-template-columns: 1fr;
     }
 
     .fare-summary-card {
         position: static;
-        /* Stack at bottom */
-        margin-top: 2rem;
+        margin-top: 1rem;
     }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
     .booking-confirmation-container {
-        padding: 1.5rem 1rem;
+        padding: 1.5rem 1rem 3rem;
     }
 
-    .flight-route {
+    .booking-header-banner h1 {
+        font-size: 1.85rem;
+    }
+
+    .flight-endpoint .city-code {
+        font-size: 3rem;
+    }
+
+    .flight-card .booking-card-header {
+        padding: 1.25rem 1.5rem;
         flex-direction: column;
-        gap: 1.5rem;
+        align-items: flex-start;
+        gap: 1rem;
     }
 
-    .flight-path {
-        width: 100%;
-        margin: 1.5rem 0;
-        transform: rotate(90deg);
-        /* Vertical on mobile? Maybe just cleaner stack */
-        /* Let's keep it horizontal but simplify */
-        transform: none;
-        border-left: 2px dashed var(--color-flight-path);
-        height: 40px;
-        margin: 0;
-        width: 2px;
+    .cabin-class-badge {
+        align-self: flex-start;
     }
 
-    .path-line {
-        display: none;
+    .booking-card-body {
+        padding: 1.5rem;
     }
 
     .flight-info-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        padding: 1rem;
+    }
+}
+
+/* ===== UNIFIED MOBILE RESPONSIVENESS FIX ===== */
+@media (max-width: 768px) {
+    .booking-confirmation-container {
+        padding: 1rem !important;
+        width: 100% !important;
+        overflow-x: hidden !important;
+    }
+
+    .booking-layout {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 1.5rem !important;
+    }
+
+    .booking-header-banner {
+        margin-bottom: 2rem !important;
+    }
+
+    .booking-header-banner h1 {
+        font-size: 1.6rem !important;
+    }
+
+    .booking-header-banner p {
+        font-size: 0.95rem !important;
+    }
+
+    /* Fixed Itinerary Layout */
+    .itinerary-segment {
+        flex-direction: column !important;
+        gap: 1rem !important;
+        padding: 1.25rem 0.75rem !important;
+    }
+
+    .segment-airline {
+        flex-direction: row !important;
+        width: 100% !important;
+        justify-content: flex-start !important;
+        border-bottom: 1px dashed var(--color-border) !important;
+        padding-bottom: 0.75rem !important;
+        min-width: 0 !important;
+    }
+
+    .segment-route {
+        flex-direction: row !important;
+        gap: 0.5rem !important;
+        width: 100% !important;
+        align-items: center !important;
+    }
+
+    .route-endpoint {
+        min-width: 0 !important;
+        flex: 1 !important;
+    }
+
+    .route-endpoint .text-2xl {
+        font-size: 1.5rem !important;
+    }
+
+    .route-endpoint .text-xs {
+        font-size: 0.7rem !important;
+        white-space: normal !important;
+    }
+
+    .route-connector {
+        min-width: 40px !important;
+    }
+
+    /* Direct Flight Route Style */
+    .flight-route {
+        flex-direction: column !important;
+        gap: 1rem !important;
+    }
+
+    .flight-endpoint {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        width: 100% !important;
+        text-align: left !important;
+    }
+
+    .flight-endpoint .city-code {
+        font-size: 2rem !important;
+    }
+
+    .flight-endpoint .time {
+        font-size: 1.1rem !important;
+    }
+
+    .flight-path {
+        margin: 0 !important;
+        height: 40px !important;
+        border-left: 2px dashed var(--color-flight-path) !important;
+        margin-left: 35px !important;
+    }
+
+    .path-line { display: none !important; }
+
+    /* Form & Grid Fixes */
+    .form-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+    }
+
+    .flight-info-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 1rem !important;
+        padding: 1.25rem !important;
+    }
+
+    .fare-summary-card {
+        position: relative !important;
+        top: 0 !important;
+        margin-top: 1rem !important;
+    }
+
+    .fare-summary-card .booking-card-header {
+        padding: 0.85rem 1rem !important;
+    }
+
+    .fare-summary-card .booking-card-header h2 {
+        font-size: 1rem !important;
+    }
+
+    .fare-summary-card .booking-card-body {
+        padding: 1rem !important;
+    }
+
+    .fare-row {
+        margin-bottom: 0.5rem !important;
+        font-size: 0.85rem !important;
+    }
+
+    .fare-row.total {
+        margin-top: 0.75rem !important;
+        padding-top: 0.75rem !important;
+    }
+
+    .fare-row.total .label {
+        font-size: 0.95rem !important;
+    }
+
+    .fare-row.total .value {
+        font-size: 1.4rem !important; /* Smaller, elegant total price */
+    }
+
+    .btn-primary {
+        padding: 0.65rem 1rem !important; /* More compact button */
+        font-size: 0.9rem !important;
+        height: auto !important;
+    }
+
+    /* Coupon Input Compact Fix */
+    .fare-summary-card input {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.8rem !important;
+        height: auto !important;
+    }
+
+    .fare-summary-card .flex.gap-2 button {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.8rem !important;
+        height: auto !important;
+        min-width: 60px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .flight-info-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .flight-endpoint {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.25rem !important;
+    }
+
+    .flight-endpoint .city-code {
+        font-size: 1.75rem !important;
+    }
+
+    .itinerary-segment .text-2xl {
+        font-size: 1.25rem !important;
+    }
+
+    .route-connector {
+        min-width: 30px !important;
+        flex: 0 0 auto !important;
     }
 }

@@ -64,6 +64,7 @@
   background: linear-gradient(135deg, #B9D0DC 0%, #f0f7fa 100%);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
   position: relative;
+  padding-top: 40px; /* Offset for the 40px fixed status bar */
 }
 
 /* System Status Bar */
@@ -111,8 +112,8 @@
 /* Main Login Wrapper */
 .admin-login-wrapper {
   display: flex;
-  min-height: 100vh;
-  margin-top: 40px;
+  min-height: calc(100vh - 116px); /* 100vh - status_bar(40) - navbar(76) */
+  margin-top: 0px; 
 }
 
 /* Left Panel - Branding */
@@ -452,12 +453,13 @@
   }
 
   .login-branding {
-    padding: 40px;
-    min-height: 280px;
+    padding: 32px 24px;
+    min-height: auto; /* Allow content to dictate height */
   }
 
   .login-form-panel {
-    padding: 40px;
+    padding: 32px 24px;
+    min-height: auto;
   }
 
   .branding-content h1 {
@@ -477,7 +479,8 @@
   }
 
   .admin-login-wrapper {
-    margin-top: 36px;
+    margin-top: 0px;
+    min-height: calc(100vh - 96px); /* 100vh - status_bar(32) - navbar(64) */
   }
 
   .login-branding {
@@ -518,13 +521,15 @@
 
 @media (max-width: 480px) {
   .system-status-bar {
-    padding: 0 12px;
-    height: 32px;
     font-size: 11px;
   }
 
+  .admin-login-container {
+    padding-top: 32px; /* Match the 32px status bar on tiny screens */
+  }
+
   .admin-login-wrapper {
-    margin-top: 32px;
+    margin-top: 0px;
   }
 
   .login-branding {

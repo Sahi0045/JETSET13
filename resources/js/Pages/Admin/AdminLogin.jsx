@@ -105,7 +105,6 @@ const AdminLogin = () => {
 
   return (
     <>
-      <Navbar />
       <div className="admin-login-container">
         {/* System Status Bar */}
         <div className="system-status-bar">
@@ -122,6 +121,8 @@ const AdminLogin = () => {
             })}
           </div>
         </div>
+
+        <Navbar />
 
         <div className="admin-login-wrapper">
           {/* Left Panel - Branding */}
