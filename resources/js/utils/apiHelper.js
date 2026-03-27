@@ -69,7 +69,7 @@ export const apiPost = (endpoint, data, options = {}) => {
   return apiRequest(endpoint, {
     ...options,
     method: 'POST',
-    body: JSON.stringify(data)
+    body: (data instanceof FormData) ? data : JSON.stringify(data)
   });
 };
 

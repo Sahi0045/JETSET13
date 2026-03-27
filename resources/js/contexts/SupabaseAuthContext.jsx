@@ -290,7 +290,7 @@ export const SupabaseAuthProvider = ({ children }) => {
 
       const baseUrl = isDevelopment
         ? window.location.origin
-        : 'https://www.jetsetterss.com';
+        : (window.location.hostname.includes('jetsetterss.com') ? window.location.origin : 'https://www.jetsetterss.com');
 
       const redirectUrl = options.redirectTo || `${baseUrl}/auth/callback`;
 

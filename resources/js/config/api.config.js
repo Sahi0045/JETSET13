@@ -5,27 +5,41 @@
 
 const getApiUrl = () => {
   // Check if we're in development or production
+  const hostname = window.location.hostname;
   const isDevelopment = 
-    window.location.hostname === 'localhost' || 
-    window.location.hostname === '127.0.0.1' ||
-    window.location.hostname.includes('local');
+    hostname === 'localhost' || 
+    hostname === '127.0.0.1' ||
+    hostname.includes('local');
 
   if (isDevelopment) {
     // Development: Use Vite proxy
     return '/api';
   } else {
-    // Production: Use production domain API
+    // Production: Use relative path if on the target domain, 
+    // or hardcoded domain if accessed elsewhere
+    if (hostname.includes('jetsetterss.com')) {
+      return '/api';
+    }
     return 'https://www.jetsetterss.com/api';
   }
 };
 
 const getBaseUrl = () => {
+  const hostname = window.location.hostname;
   const isDevelopment = 
-    window.location.hostname === 'localhost' || 
-    window.location.hostname === '127.0.0.1' ||
-    window.location.hostname.includes('local');
+    hostname === 'localhost' || 
+    hostname === '127.0.0.1' ||
+    hostname.includes('local');
 
-  return isDevelopment ? 'http://localhost:5173' : 'https://www.jetsetterss.com';
+  if (isDevelopment) {
+    return 'http://localhost:5173';
+  } else {
+    // If we're on jetsetterss.com or www.jetsetterss.com, use current origin
+    if (hostname.includes('jetsetterss.com')) {
+      return window.location.origin;
+    }
+    return 'https://www.jetsetterss.com';
+  }
 };
 
 export const API_CONFIG = {
