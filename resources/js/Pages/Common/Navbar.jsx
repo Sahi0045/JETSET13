@@ -158,7 +158,7 @@ const Navbar = ({ forceScrolled }) => {
             Hotels
           </Link>
           <Link to="/visa" className={`nav-link ${isActive('/visa') ? 'active' : ''}`}>
-            Visa
+            Visa / Document services
           </Link>
           <Link to="/my-trips" className={`nav-link ${isActive('/my-trips') ? 'active' : ''}`}>
             My Trips
