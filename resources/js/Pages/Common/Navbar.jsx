@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './Navbar.css';
 import CurrencySelector from '../../Components/CurrencySelector';
-import LanguageSwitcher from '../../components/LanguageSwitcher';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
 const Navbar = ({ forceScrolled }) => {
@@ -172,11 +171,6 @@ const Navbar = ({ forceScrolled }) => {
         {/* Currency Selector */}
         <div className="currency-selector-container mr-4">
           <CurrencySelector />
-        </div>
-
-        {/* Language Selector */}
-        <div className="language-selector-container mr-4">
-          <LanguageSwitcher />
         </div>
 
         {loading ? (
@@ -389,13 +383,6 @@ const Navbar = ({ forceScrolled }) => {
             <div className="px-4 py-2 text-sm text-gray-500">Select Currency</div>
             <div className="px-4">
               <CurrencySelector />
-            </div>
-          </div>
-
-          <div className="mobile-language-selector py-2 border-t border-gray-200 mt-2">
-            <div className="px-4 py-2 text-sm text-gray-500">Select Language</div>
-            <div className="px-4">
-               <LanguageSwitcher />
             </div>
           </div>
 

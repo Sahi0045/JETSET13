@@ -282,5 +282,5 @@ export function onLanguageChange(fn) {
   return () => listeners.delete(fn);
 }
 
-// Init dir attribute on load
-setLanguage(currentLang);
+// Init dir attribute on load (disabled for now)
+// setLanguage(currentLang);
