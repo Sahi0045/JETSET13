@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { apiGet, apiPost } from '../../../../utils/apiHelper';
+import { useVisaRealtime } from '../../../../hooks/useVisaRealtime';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
-// Screen 14: Admin Multi-Chat Messaging Hub
+// Screen 14: Admin Multi-Chat Messaging Hub - REAL-TIME via Supabase (resilient hook)
 
 const AdminMessagingHub = () => {
     const location = useLocation();
@@ -12,7 +13,7 @@ const AdminMessagingHub = () => {
     const [messages, setMessages] = useState([]);
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(true);
-    const [view, setView] = useState('list'); // 'list' or 'chat'
+    const [view, setView] = useState('list');
     const [showInfo, setShowInfo] = useState(false);
 
     const fetchThreads = useCallback(async () => {
@@ -27,8 +28,6 @@ const AdminMessagingHub = () => {
             }
         } catch (err) {
             console.error('fetchThreads error:', err);
-        } finally {
-            setLoading(false);
         }
     }, [activeChatId]);
 
@@ -45,17 +44,28 @@ const AdminMessagingHub = () => {
         }
     }, []);
 
-    useEffect(() => {
+    const handleNewMessage = useCallback((newRecord) => {
+        if (newRecord.application_id === activeChatId) {
+            setMessages(prev => {
+                if (prev.some(m => m.id === newRecord.id)) return prev;
+                return [...prev, newRecord];
+            });
+        }
         fetchThreads();
-        const interval = setInterval(fetchThreads, 10000); // Poll threads every 10s
-        return () => clearInterval(interval);
-    }, [fetchThreads]);
+    }, [activeChatId, fetchThreads]);
+
+    const { connectionStatus, lastUpdate } = useVisaRealtime({
+        tables: ['visa_messages'],
+        applicationId: activeChatId,
+        onMessageInsert: handleNewMessage,
+        getDataFn: fetchThreads,
+        fetchOnMount: true,
+        fallbackPollingMs: 15000
+    });
 
     useEffect(() => {
         if (activeChatId) {
             fetchMessages(activeChatId);
-            const interval = setInterval(() => fetchMessages(activeChatId), 5000); // Poll messages every 5s
-            return () => clearInterval(interval);
         }
     }, [activeChatId, fetchMessages]);
 
@@ -71,7 +81,7 @@ const AdminMessagingHub = () => {
             if (data.success) {
                 setMessage('');
                 fetchMessages(activeChatId);
-                fetchThreads(); // Update last message in thread list
+                fetchThreads();
             }
         } catch (err) {
             console.error('handleSendMessage error:', err);
@@ -79,13 +89,13 @@ const AdminMessagingHub = () => {
     };
 
     const activeThread = threads.find(t => t.application_id === activeChatId);
+    const isConnected = connectionStatus === 'connected';
 
     return (
         <div className="bg-[#f6f6f8] font-sans text-slate-900 flex flex-col h-[calc(100vh-80px)] lg:h-[calc(100vh-130px)] overflow-hidden">
             <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
 
             <div className="flex h-full overflow-hidden relative">
-                {/* Left Chat List - Hidden on mobile when chat is active */}
                 <aside className={`w-full lg:w-80 border-r border-slate-200 bg-white flex flex-col shrink-0 z-20 transition-all duration-300 lg:translate-x-0 ${view === 'chat' ? '-translate-x-full absolute lg:relative lg:translate-x-0' : 'translate-x-0 relative'}`}>
                     <div className="p-6 border-b border-slate-50 bg-white">
                         <div className="flex items-center justify-between mb-6">
@@ -124,9 +134,7 @@ const AdminMessagingHub = () => {
                     </div>
                 </aside>
 
-                {/* Center Conversation */}
                 <section className={`flex-1 flex flex-col bg-white lg:bg-[#f8f9fc] relative transition-transform duration-300 z-10 ${view === 'list' ? 'translate-x-full absolute lg:relative lg:translate-x-0' : 'translate-x-0 relative'}`}>
-                    {/* Chat Header */}
                     <div className="px-4 lg:px-10 py-5 bg-white border-b border-slate-100 flex items-center justify-between z-20 shadow-sm relative">
                         <div className="flex items-center gap-4">
                             <button onClick={() => setView('list')} className="lg:hidden p-2 -ml-2 text-slate-400 hover:text-slate-900">
@@ -141,9 +149,14 @@ const AdminMessagingHub = () => {
                             <div className="flex flex-col">
                                 <h4 className="text-[13px] font-black text-slate-900 leading-none mb-1 md:mb-1.5">{activeThread?.customer_name}</h4>
                                 <div className="flex items-center gap-2">
-                                    <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                        Live Pulse <span className="mx-1 text-slate-200">|</span> Ref: #{activeThread?.application_id?.split('-')[0]}
+                                    <span className={`size-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
+                                    <p className="text-[9px] font-black uppercase tracking-widest">
+                                        {isConnected ? (
+                                            <><span className="text-emerald-600">Real-Time</span> <span className="mx-1 text-slate-200">|</span> Supabase</>
+                                        ) : (
+                                            <><span className="text-amber-600">Polling</span> <span className="mx-1 text-slate-200">|</span> Syncing...</span>
+                                        )}
+                                        <span className="mx-1 text-slate-200">|</span> Ref: #{activeThread?.application_id?.split('-')[0]}
                                     </p>
                                 </div>
                             </div>
@@ -157,11 +170,9 @@ const AdminMessagingHub = () => {
                         </div>
                     </div>
 
-                    {/* Messages Area */}
                     <div className="flex-1 overflow-y-auto p-4 lg:p-12 flex flex-col gap-10 lg:gap-14 custom-scrollbar relative z-0">
                         <div className="absolute inset-0 bg-[radial-gradient(#1152d4_1px,transparent_1px)] [background-size:24px_24px] opacity-10 pointer-events-none"></div>
 
-                        {/* Floating Date */}
                         <div className="flex justify-center sticky top-0 z-20 pointer-events-none mb-4">
                             <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] px-8 py-2 bg-white/60 backdrop-blur-xl rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.05)] border border-white/50">Intelligence Horizon • Oct 24</span>
                         </div>
@@ -194,7 +205,6 @@ const AdminMessagingHub = () => {
                         ))}
                     </div>
 
-                    {/* Input Box */}
                     <div className="p-4 lg:p-10 bg-white border-t border-slate-100 lg:bg-transparent z-20">
                         <form onSubmit={handleSendMessage} className="bg-white rounded-[2.5rem] p-3 lg:p-4 border border-slate-200/60 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] transition-all focus-within:ring-8 focus-within:ring-[#1152d4]/5 focus-within:border-[#1152d4]/40 max-w-4xl mx-auto w-full">
                             <textarea
@@ -217,7 +227,6 @@ const AdminMessagingHub = () => {
                     </div>
                 </section>
 
-                {/* Right Info Pane - Optimized Mobile Drawer */}
                 <aside className={`fixed lg:relative inset-y-0 right-0 w-80 lg:w-72 border-l border-slate-100 bg-white flex flex-col overflow-y-auto custom-scrollbar p-8 z-40 transform transition-transform duration-300 ${showInfo ? 'translate-x-0 shadow-2xl' : 'translate-x-full lg:translate-x-0'} ${showInfo ? '' : 'lg:flex hidden'}`}>
                     <button onClick={() => setShowInfo(false)} className="lg:hidden absolute left-4 top-8 p-2 text-slate-300">
                         <span className="material-symbols-outlined">close</span>

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import Navbar from "../Navbar";
 import Footer from "../Footer";
 import { getApiUrl } from "../../../utils/apiHelper";
+import supabase from "../../../lib/supabase";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 
@@ -145,18 +146,30 @@ const VisaApplicationTracker = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Real-time Polling (30s) ─────────────────────────────────────────────
+  // ── Supabase Real-Time for Application Status Updates ─────────────────────────────────────
   useEffect(() => {
-    let pollInterval;
-    if (hasSearched && applications.length > 0 && !loading) {
-      pollInterval = setInterval(() => {
-        handleSearch();
-      }, 30000);
-    }
+    if (!selectedApp || !selectedApp.id) return;
+
+    const channel = supabase
+      .channel(`tracker-${selectedApp.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'visa_applications',
+          filter: `id=eq.${selectedApp.id}`
+        },
+        () => {
+          handleSearch();
+        }
+      )
+      .subscribe();
+
     return () => {
-      if (pollInterval) clearInterval(pollInterval);
+      supabase.removeChannel(channel);
     };
-  }, [hasSearched, applications.length, loading, handleSearch]);
+  }, [selectedApp?.id]);
 
   return (
     <div className="min-h-screen bg-[#f6f6f8] font-sans text-slate-900">

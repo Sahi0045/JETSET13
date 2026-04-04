@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { getApiUrl, apiGet } from "../../../../utils/apiHelper";
+import { useVisaRealtime } from "../../../../hooks/useVisaRealtime";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Admin - All Visa Applications List — connected to live API
@@ -104,23 +105,47 @@ const VisaApplicationsList = () => {
   useEffect(() => {
     fetchStatusCounts();
 
-    // ── Real-time Polling (20s) ─────────────────────────────────────────────
-    const pollInterval = setInterval(() => {
-      fetchStatusCounts();
-    }, 20000);
+    const channel = supabase
+      .channel('visa-applications-status')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'visa_applications'
+        },
+        () => {
+          fetchStatusCounts();
+        }
+      )
+      .subscribe();
 
-    return () => clearInterval(pollInterval);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchStatusCounts]);
 
   useEffect(() => {
     fetchApplications();
 
-    // ── Real-time Polling (20s) ─────────────────────────────────────────────
-    const pollInterval = setInterval(() => {
-      fetchApplications();
-    }, 20000);
+    const channel = supabase
+      .channel('visa-applications-list')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'visa_applications'
+        },
+        () => {
+          fetchApplications();
+        }
+      )
+      .subscribe();
 
-    return () => clearInterval(pollInterval);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchApplications]);
 
   // ── Debounced search ──────────────────────────────────────────────────────

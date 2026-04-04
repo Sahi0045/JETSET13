@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { getApiUrl, apiGet } from "../../../../utils/apiHelper";
+import supabase from "../../../../lib/supabase";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 11: Admin Visa Stats & Revenue Dashboard — connected to live API
@@ -108,13 +109,25 @@ const VisaAdminDashboard = () => {
     fetchStats();
     fetchRecentApplications();
 
-    // ── Real-time Polling (20s) ─────────────────────────────────────────────
-    const pollInterval = setInterval(() => {
-      fetchStats();
-      fetchRecentApplications();
-    }, 20000);
+    const channel = supabase
+      .channel('visa-admin-dashboard')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'visa_applications'
+        },
+        () => {
+          fetchStats();
+          fetchRecentApplications();
+        }
+      )
+      .subscribe();
 
-    return () => clearInterval(pollInterval);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchStats, fetchRecentApplications]);
 
   // ── Derived stats ─────────────────────────────────────────────────────────
@@ -216,8 +229,13 @@ const VisaAdminDashboard = () => {
               </Link>
             </div>
           </div>
-          <p className="text-[10px] lg:text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">
-            Real-time visa analytics &amp; revenue flow
+          <p className="text-[10px] lg:text-[11px] font-bold text-emerald-600 uppercase tracking-[0.2em]">
+            <span className="inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+              Supabase Real-Time
+            </span>
+            <span className="mx-2 text-slate-300">|</span>
+            visa analytics &amp; revenue flow
           </p>
         </div>
 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet, apiPut } from '../../../../utils/apiHelper';
+import supabase from '../../../../lib/supabase';
+import supabase from '../../../../lib/supabase';
 
 const ConsultantDashboard = () => {
     const [appointments, setAppointments] = useState([]);
@@ -95,14 +97,42 @@ const ConsultantDashboard = () => {
         fetchStats();
         fetchRecentCompliance();
 
-        const interval = setInterval(() => {
-            fetchConsultations();
-            fetchStats();
-            fetchRecentCompliance();
-        }, 30000); // 30s polling for dashboard
-        
-        return () => clearInterval(interval);
-    }, [fetchConsultations]);
+        const consultationsChannel = supabase
+            .channel('consultant-dashboard-consultations')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'visa_consultations'
+                },
+                () => {
+                    fetchConsultations();
+                    fetchStats();
+                }
+            )
+            .subscribe();
+
+        const applicationsChannel = supabase
+            .channel('consultant-dashboard-applications')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'visa_applications'
+                },
+                () => {
+                    fetchRecentCompliance();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(consultationsChannel);
+            supabase.removeChannel(applicationsChannel);
+        };
+    }, [fetchConsultations, fetchStats, fetchRecentCompliance]);
 
     // Calculate current week range (Mon to Sun)
     const today = new Date();

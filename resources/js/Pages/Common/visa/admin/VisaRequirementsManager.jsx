@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../../../utils/apiHelper';
+import supabase from '../../../../lib/supabase';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Visa Requirements Manager - CRUD for country-pair visa requirements
@@ -62,12 +63,24 @@ const VisaRequirementsManager = () => {
     useEffect(() => {
         fetchRequirements();
 
-        // ── Real-time Polling (60s) ─────────────────────────────────────────────
-        const pollInterval = setInterval(() => {
-            fetchRequirements();
-        }, 60000);
+        const channel = supabase
+            .channel('visa-requirements')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'visa_requirements_extended'
+                },
+                () => {
+                    fetchRequirements();
+                }
+            )
+            .subscribe();
 
-        return () => clearInterval(pollInterval);
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [fetchRequirements]);
 
     const filtered = requirements.filter(r =>

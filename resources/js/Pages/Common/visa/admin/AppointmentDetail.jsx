@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiGet } from '../../../../utils/apiHelper';
+import supabase from '../../../../lib/supabase';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 19: Appointment Details & Preparation View
@@ -33,9 +34,27 @@ const AppointmentDetail = () => {
 
     useEffect(() => {
         fetchConsultation();
-        const interval = setInterval(fetchConsultation, 20000);
-        return () => clearInterval(interval);
-    }, [fetchConsultation]);
+
+        const channel = supabase
+            .channel(`appointment-detail-${id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'visa_consultations',
+                    filter: `id=eq.${id}`
+                },
+                () => {
+                    fetchConsultation();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [fetchConsultation, id]);
 
     if (loading && !consultation) {
         return (

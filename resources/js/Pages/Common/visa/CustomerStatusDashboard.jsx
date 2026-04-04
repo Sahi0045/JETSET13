@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import { apiGet, apiPost } from '../../../utils/apiHelper';
+import supabase from '../../../lib/supabase';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 4: Customer Status Dashboard
@@ -72,13 +73,30 @@ const CustomerStatusDashboard = () => {
     useEffect(() => {
         fetchApplication();
         
-        // Polling for status updates every 5 seconds for "real-time" sync
-        const interval = setInterval(() => {
-            fetchApplication();
-        }, 5000);
+        let channel = null;
         
-        return () => clearInterval(interval);
-    }, [fetchApplication]);
+        if (application?.id) {
+            channel = supabase
+                .channel(`customer-status-${application.id}`)
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'visa_applications',
+                        filter: `id=eq.${application.id}`
+                    },
+                    () => {
+                        fetchApplication();
+                    }
+                )
+                .subscribe();
+        }
+        
+        return () => {
+            if (channel) supabase.removeChannel(channel);
+        };
+    }, [fetchApplication, application?.id]);
 
     const handleResendEmail = async () => {
         if (!application?.id) return;

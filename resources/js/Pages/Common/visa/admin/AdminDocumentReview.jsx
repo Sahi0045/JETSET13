@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiGet, apiPost } from '../../../../utils/apiHelper';
+import supabase from '../../../../lib/supabase';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 8: Admin Document Review System
@@ -33,13 +34,26 @@ const AdminDocumentReview = () => {
     useEffect(() => {
         fetchApplication();
 
-        // ── Real-time Polling (10s) ─────────────────────────────────────────────
-        const pollInterval = setInterval(() => {
-            fetchApplication();
-        }, 10000);
+        const channel = supabase
+            .channel(`doc-review-${id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'visa_applications',
+                    filter: `id=eq.${id}`
+                },
+                () => {
+                    fetchApplication();
+                }
+            )
+            .subscribe();
 
-        return () => clearInterval(pollInterval);
-    }, [fetchApplication]);
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [fetchApplication, id]);
 
     const documents = application?.documents || [];
     const history = application?.timeline || [];

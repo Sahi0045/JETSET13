@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { getApiUrl, apiGet, apiPost, apiPut, apiDelete } from "../../../../utils/apiHelper";
+import supabase from "../../../../lib/supabase";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Admin - Single Application Detail / Review Page — connected to live API
@@ -87,13 +88,26 @@ const VisaApplicationDetail = () => {
   useEffect(() => {
     fetchApp();
 
-    // ── Real-time Polling (10s) ─────────────────────────────────────────────
-    const pollInterval = setInterval(() => {
-      fetchApp();
-    }, 10000);
+    const channel = supabase
+      .channel(`app-detail-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'visa_applications',
+          filter: `id=eq.${id}`
+        },
+        () => {
+          fetchApp();
+        }
+      )
+      .subscribe();
 
-    return () => clearInterval(pollInterval);
-  }, [fetchApp]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchApp, id]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const formatDate = (dateStr) => {
