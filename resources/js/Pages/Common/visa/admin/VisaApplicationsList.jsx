@@ -104,49 +104,37 @@ const VisaApplicationsList = () => {
 
   useEffect(() => {
     fetchStatusCounts();
+  }, [fetchStatusCounts]);
 
-    const channel = supabase
-      .channel('visa-applications-status')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'visa_applications'
-        },
-        () => {
-          fetchStatusCounts();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+useEffect(() => {
+    fetchStatusCounts();
   }, [fetchStatusCounts]);
 
   useEffect(() => {
     fetchApplications();
-
-    const channel = supabase
-      .channel('visa-applications-list')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'visa_applications'
-        },
-        () => {
-          fetchApplications();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [fetchApplications]);
+
+  useVisaRealtime({
+    tables: ['visa_applications'],
+    onApplicationUpdate: () => {
+      fetchApplications();
+      fetchStatusCounts();
+    },
+    getDataFn: fetchApplications,
+    fetchOnMount: false,
+    fallbackPollingMs: 20000
+  });
+
+  useVisaRealtime({
+    tables: ['visa_applications'],
+    onApplicationUpdate: () => {
+      fetchApplications();
+      fetchStatusCounts();
+    },
+    getDataFn: fetchApplications,
+    fetchOnMount: false,
+    fallbackPollingMs: 20000
+  });
 
   // ── Debounced search ──────────────────────────────────────────────────────
   const handleSearchInput = (e) => {

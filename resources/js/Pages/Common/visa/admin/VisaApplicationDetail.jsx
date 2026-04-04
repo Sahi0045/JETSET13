@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { getApiUrl, apiGet, apiPost, apiPut, apiDelete } from "../../../../utils/apiHelper";
-import supabase from "../../../../lib/supabase";
+import { useVisaRealtime } from "../../../../hooks/useVisaRealtime";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Admin - Single Application Detail / Review Page — connected to live API
@@ -85,29 +85,31 @@ const VisaApplicationDetail = () => {
     }
   }, [id]);
 
-  useEffect(() => {
+useEffect(() => {
     fetchApp();
-
-    const channel = supabase
-      .channel(`app-detail-${id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'visa_applications',
-          filter: `id=eq.${id}`
-        },
-        () => {
-          fetchApp();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [fetchApp, id]);
+
+  useVisaRealtime({
+    tables: ['visa_applications'],
+    applicationId: id,
+    onApplicationUpdate: () => {
+      fetchApp();
+    },
+    getDataFn: fetchApp,
+    fetchOnMount: false,
+    fallbackPollingMs: 10000
+  });
+
+  useVisaRealtime({
+    tables: ['visa_applications'],
+    applicationId: id,
+    onApplicationUpdate: () => {
+      fetchApp();
+    },
+    getDataFn: fetchApp,
+    fetchOnMount: false,
+    fallbackPollingMs: 10000
+  });
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const formatDate = (dateStr) => {

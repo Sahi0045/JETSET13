@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import Navbar from "../Navbar";
 import Footer from "../Footer";
 import { getApiUrl } from "../../../utils/apiHelper";
-import supabase from "../../../lib/supabase";
+import { useVisaRealtime } from "../../../hooks/useVisaRealtime";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 
@@ -147,29 +147,16 @@ const VisaApplicationTracker = () => {
   }, []);
 
   // ── Supabase Real-Time for Application Status Updates ─────────────────────────────────────
-  useEffect(() => {
-    if (!selectedApp || !selectedApp.id) return;
-
-    const channel = supabase
-      .channel(`tracker-${selectedApp.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'visa_applications',
-          filter: `id=eq.${selectedApp.id}`
-        },
-        () => {
-          handleSearch();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [selectedApp?.id]);
+  useVisaRealtime({
+    tables: ['visa_applications'],
+    applicationId: selectedApp?.id,
+    onStatusChange: () => {
+      handleSearch();
+    },
+    getDataFn: handleSearch,
+    fetchOnMount: false,
+    fallbackPollingMs: 30000
+  });
 
   return (
     <div className="min-h-screen bg-[#f6f6f8] font-sans text-slate-900">

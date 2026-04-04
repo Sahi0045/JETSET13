@@ -5,6 +5,7 @@ const CONNECTION_TIMEOUT_MS = 10000;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const BASE_RETRY_DELAY_MS = 2000;
 const DEFAULT_FALLBACK_POLLING_MS = 30000;
+let globalChannelId = 0;
 
 export const useVisaRealtime = ({
   tables = [],
@@ -24,7 +25,7 @@ export const useVisaRealtime = ({
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef(null);
   const connectionTimeoutRef = useRef(null);
-  const channelPrefix = `visa-realtime-${Date.now()}`;
+  const channelIdRef = useRef(++globalChannelId);
 
   const isConnected = connectionStatus === 'connected';
   const isPolling = connectionStatus === 'polling_fallback';
@@ -77,7 +78,7 @@ export const useVisaRealtime = ({
     }, CONNECTION_TIMEOUT_MS);
 
     for (const table of tables) {
-      const channelName = `${channelPrefix}-${table}`;
+      const channelName = `visa-realtime-${channelIdRef.current}-${table}`;
       
       let filter = null;
       if (table === 'visa_applications' && userId) {
@@ -89,52 +90,55 @@ export const useVisaRealtime = ({
       }
 
       try {
-        const channel = supabase
-          .channel(channelName)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table,
-              ...(filter && { filter })
-            },
-            (payload) => {
-              const { eventType, new: newRecord, old: oldRecord } = payload;
-              setLastUpdate(new Date());
+        const channel = supabase.channel(channelName);
+        
+        const handleChange = (payload) => {
+          const { eventType, new: newRecord, old: oldRecord } = payload;
+          setLastUpdate(new Date());
 
-              if (eventType === 'INSERT') {
-                if (table === 'visa_messages' && onMessageInsert) {
-                  onMessageInsert(newRecord);
-                } else if (onApplicationUpdate) {
-                  onApplicationUpdate(newRecord);
-                }
-              } else if (eventType === 'UPDATE') {
-                if (onStatusChange && (newRecord.status !== oldRecord.status)) {
-                  onStatusChange(newRecord, oldRecord);
-                }
-                if (onApplicationUpdate) {
-                  onApplicationUpdate(newRecord, oldRecord);
-                }
-              }
+          if (eventType === 'INSERT') {
+            if (table === 'visa_messages' && onMessageInsert) {
+              onMessageInsert(newRecord);
+            } else if (onApplicationUpdate) {
+              onApplicationUpdate(newRecord);
             }
-          )
-          .subscribe((status, error) => {
-            if (status === 'SUBSCRIBED') {
-              setConnectionStatus('connected');
-              reconnectAttemptsRef.current = 0;
-              stopPolling();
-              if (connectionTimeoutRef.current) {
-                clearTimeout(connectionTimeoutRef.current);
-              }
-            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              setConnectionStatus('error');
-              attemptReconnect();
-            } else if (status === 'CLOSED') {
-              setConnectionStatus('disconnected');
-              attemptReconnect();
+          } else if (eventType === 'UPDATE') {
+            if (onStatusChange && (newRecord.status !== oldRecord.status)) {
+              onStatusChange(newRecord, oldRecord);
             }
-          });
+            if (onApplicationUpdate) {
+              onApplicationUpdate(newRecord, oldRecord);
+            }
+          }
+        };
+
+        channel.on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table,
+            ...(filter && { filter })
+          },
+          handleChange
+        );
+
+        channel.subscribe((status, error) => {
+          if (status === 'SUBSCRIBED') {
+            setConnectionStatus('connected');
+            reconnectAttemptsRef.current = 0;
+            stopPolling();
+            if (connectionTimeoutRef.current) {
+              clearTimeout(connectionTimeoutRef.current);
+            }
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            setConnectionStatus('error');
+            attemptReconnect();
+          } else if (status === 'CLOSED') {
+            setConnectionStatus('disconnected');
+            attemptReconnect();
+          }
+        });
 
         newChannels.push(channel);
       } catch (err) {
@@ -146,7 +150,7 @@ export const useVisaRealtime = ({
 
     subscriptionsRef.current = newChannels;
     return newChannels;
-  }, [tables, userId, applicationId, channelPrefix, onApplicationUpdate, onMessageInsert, onStatusChange, connectionStatus, attemptReconnect, stopPolling]);
+  }, [tables, userId, applicationId, channelIdRef, onApplicationUpdate, onMessageInsert, onStatusChange, connectionStatus, attemptReconnect, stopPolling]);
 
   const unsubscribe = useCallback(() => {
     subscriptionsRef.current.forEach(channel => {

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiGet, apiPost } from '../../../../utils/apiHelper';
-import supabase from '../../../../lib/supabase';
+import { useVisaRealtime } from '../../../../hooks/useVisaRealtime';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 8: Admin Document Review System
@@ -31,29 +31,16 @@ const AdminDocumentReview = () => {
         }
     }, [id]);
 
-    useEffect(() => {
-        fetchApplication();
-
-        const channel = supabase
-            .channel(`doc-review-${id}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'visa_applications',
-                    filter: `id=eq.${id}`
-                },
-                () => {
-                    fetchApplication();
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [fetchApplication, id]);
+    const { isConnected, isPolling, lastUpdate } = useVisaRealtime({
+        tables: ['visa_applications'],
+        applicationId: id,
+        fetchOnMount: true,
+        getDataFn: fetchApplication,
+        fallbackPollingMs: 15000,
+        onApplicationUpdate: (newRecord) => {
+            setApplication(prev => prev ? { ...prev, ...newRecord } : newRecord);
+        }
+    });
 
     const documents = application?.documents || [];
     const history = application?.timeline || [];

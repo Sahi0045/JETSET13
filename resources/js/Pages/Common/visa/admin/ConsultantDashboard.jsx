@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet, apiPut } from '../../../../utils/apiHelper';
 import supabase from '../../../../lib/supabase';
-import supabase from '../../../../lib/supabase';
 
 const ConsultantDashboard = () => {
     const [appointments, setAppointments] = useState([]);

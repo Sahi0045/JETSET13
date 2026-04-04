@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { getApiUrl, apiGet } from "../../../../utils/apiHelper";
-import supabase from "../../../../lib/supabase";
+import { useVisaRealtime } from "../../../../hooks/useVisaRealtime";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 11: Admin Visa Stats & Revenue Dashboard — connected to live API
@@ -105,30 +105,32 @@ const VisaAdminDashboard = () => {
     }
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     fetchStats();
     fetchRecentApplications();
-
-    const channel = supabase
-      .channel('visa-admin-dashboard')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'visa_applications'
-        },
-        () => {
-          fetchStats();
-          fetchRecentApplications();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [fetchStats, fetchRecentApplications]);
+
+  useVisaRealtime({
+    tables: ['visa_applications'],
+    onApplicationUpdate: () => {
+      fetchStats();
+      fetchRecentApplications();
+    },
+    getDataFn: fetchStats,
+    fetchOnMount: false,
+    fallbackPollingMs: 20000
+  });
+
+  useVisaRealtime({
+    tables: ['visa_applications'],
+    onApplicationUpdate: () => {
+      fetchStats();
+      fetchRecentApplications();
+    },
+    getDataFn: fetchStats,
+    fetchOnMount: false,
+    fallbackPollingMs: 20000
+  });
 
   // ── Derived stats ─────────────────────────────────────────────────────────
   const appStats = stats?.applications || {};

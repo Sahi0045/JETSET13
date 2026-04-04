@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import { apiGet, apiPost } from '../../../utils/apiHelper';
-import supabase from '../../../lib/supabase';
+import { useVisaRealtime } from '../../../hooks/useVisaRealtime';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 4: Customer Status Dashboard
@@ -72,31 +72,21 @@ const CustomerStatusDashboard = () => {
 
     useEffect(() => {
         fetchApplication();
-        
-        let channel = null;
-        
-        if (application?.id) {
-            channel = supabase
-                .channel(`customer-status-${application.id}`)
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'visa_applications',
-                        filter: `id=eq.${application.id}`
-                    },
-                    () => {
-                        fetchApplication();
-                    }
-                )
-                .subscribe();
-        }
-        
-        return () => {
-            if (channel) supabase.removeChannel(channel);
-        };
-    }, [fetchApplication, application?.id]);
+    }, [fetchApplication]);
+
+    useVisaRealtime({
+        tables: ['visa_applications', 'visa_messages'],
+        applicationId: application?.id,
+        onApplicationUpdate: () => {
+            fetchApplication();
+        },
+        onMessageInsert: () => {
+            if (application?.id) fetchMessages(application.id);
+        },
+        getDataFn: fetchApplication,
+        fetchOnMount: false,
+        fallbackPollingMs: 15000
+    });
 
     const handleResendEmail = async () => {
         if (!application?.id) return;

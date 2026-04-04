@@ -154,7 +154,7 @@ const AdminMessagingHub = () => {
                                         {isConnected ? (
                                             <><span className="text-emerald-600">Real-Time</span> <span className="mx-1 text-slate-200">|</span> Supabase</>
                                         ) : (
-                                            <><span className="text-amber-600">Polling</span> <span className="mx-1 text-slate-200">|</span> Syncing...</span>
+                                            <><span className="text-amber-600">Polling</span> <span className="mx-1 text-slate-200">|</span> Syncing...</>
                                         )}
                                         <span className="mx-1 text-slate-200">|</span> Ref: #{activeThread?.application_id?.split('-')[0]}
                                     </p>

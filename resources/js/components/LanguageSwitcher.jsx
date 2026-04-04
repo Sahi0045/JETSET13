@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LANGUAGES, setLanguage, getLanguage, onLanguageChange } from '../../utils/i18n';
+import { LANGUAGES, setLanguage, getLanguage, onLanguageChange } from '../utils/i18n';
 
 /**
  * LanguageSwitcher — drop into any navbar.
