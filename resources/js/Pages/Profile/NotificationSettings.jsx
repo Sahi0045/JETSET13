@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Mail, Phone, MessageSquare, Smartphone, CheckCircle, AlertCircle, Save, Loader } from 'lucide-react';
-import { supabase } from '../../config/supabase';
+import supabase from '../../lib/supabase';
 
 export default function NotificationSettings() {
   const [loading, setLoading] = useState(true);
@@ -87,7 +87,6 @@ export default function NotificationSettings() {
 
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
-      const token = await import('../../../firebase').then(m => m.getToken?.());
       console.log('Push permission granted');
     } else {
       setError('Push notification permission denied');

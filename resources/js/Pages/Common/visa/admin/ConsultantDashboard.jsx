@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet, apiPut } from '../../../../utils/apiHelper';
-import supabase from '../../../../lib/supabase';
+import { useVisaRealtime } from '../../../../hooks/useVisaRealtime';
 
 const ConsultantDashboard = () => {
     const [appointments, setAppointments] = useState([]);
@@ -91,47 +91,35 @@ const ConsultantDashboard = () => {
     }, []);
 
 
-    useEffect(() => {
+useEffect(() => {
         fetchConsultations();
         fetchStats();
         fetchRecentCompliance();
-
-        const consultationsChannel = supabase
-            .channel('consultant-dashboard-consultations')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'visa_consultations'
-                },
-                () => {
-                    fetchConsultations();
-                    fetchStats();
-                }
-            )
-            .subscribe();
-
-        const applicationsChannel = supabase
-            .channel('consultant-dashboard-applications')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'visa_applications'
-                },
-                () => {
-                    fetchRecentCompliance();
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(consultationsChannel);
-            supabase.removeChannel(applicationsChannel);
-        };
     }, [fetchConsultations, fetchStats, fetchRecentCompliance]);
+
+    useVisaRealtime({
+        tables: ['visa_consultations', 'visa_applications'],
+        onApplicationUpdate: () => {
+            fetchConsultations();
+            fetchStats();
+            fetchRecentCompliance();
+        },
+        getDataFn: fetchConsultations,
+        fetchOnMount: false,
+        fallbackPollingMs: 30000
+    });
+
+    useVisaRealtime({
+        tables: ['visa_consultations', 'visa_applications'],
+        onApplicationUpdate: () => {
+            fetchConsultations();
+            fetchStats();
+            fetchRecentCompliance();
+        },
+        getDataFn: fetchConsultations,
+        fetchOnMount: false,
+        fallbackPollingMs: 30000
+    });
 
     // Calculate current week range (Mon to Sun)
     const today = new Date();

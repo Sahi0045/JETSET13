@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiGet } from '../../../../utils/apiHelper';
-import supabase from '../../../../lib/supabase';
+import { useVisaRealtime } from '../../../../hooks/useVisaRealtime';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Screen 19: Appointment Details & Preparation View
@@ -11,6 +11,8 @@ const AppointmentDetail = () => {
     const [consultation, setConsultation] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [notes, setNotes] = useState('');
+    const [autoFollowUp, setAutoFollowUp] = useState(false);
 
     const fetchConsultation = useCallback(async () => {
         try {
@@ -30,31 +32,18 @@ const AppointmentDetail = () => {
         } finally {
             setLoading(false);
         }
-    }, [id]);
+    }, [id, notes]);
 
-    useEffect(() => {
-        fetchConsultation();
-
-        const channel = supabase
-            .channel(`appointment-detail-${id}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'visa_consultations',
-                    filter: `id=eq.${id}`
-                },
-                () => {
-                    fetchConsultation();
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [fetchConsultation, id]);
+    const { isConnected, isPolling, lastUpdate } = useVisaRealtime({
+        tables: ['visa_consultations'],
+        applicationId: id,
+        fetchOnMount: true,
+        getDataFn: fetchConsultation,
+        fallbackPollingMs: 15000,
+        onApplicationUpdate: (newRecord) => {
+            setConsultation(prev => prev ? { ...prev, ...newRecord } : newRecord);
+        }
+    });
 
     if (loading && !consultation) {
         return (
@@ -125,6 +114,10 @@ const AppointmentDetail = () => {
                         <div className="flex flex-wrap items-center gap-3">
                             <span className="px-4 py-1 bg-[#1152d4] text-white text-[9px] font-black rounded-full uppercase tracking-widest shadow-lg shadow-[#1152d4]/20">Active Session</span>
                             <span className="text-slate-400 text-[10px] font-black tracking-[0.2em] uppercase">Ref ID: {applicant.ref}</span>
+                            <div className="flex items-center gap-1.5 ml-2 px-2 py-1 bg-white rounded-full border border-slate-100">
+                                <div className={`size-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : isPolling ? 'bg-amber-500 animate-pulse' : 'bg-slate-300'}`} />
+                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{isPolling ? 'Sync' : 'Live'}</span>
+                            </div>
                         </div>
                         <h1 className="text-3xl lg:text-5xl font-black text-slate-900 tracking-tight lg:tracking-tighter mt-2">Preparation Phase</h1>
                         <div className="flex flex-col sm:flex-row sm:items-center gap-4 lg:gap-8 text-slate-500 mt-4">

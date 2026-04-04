@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../../../utils/apiHelper';
-import supabase from '../../../../lib/supabase';
+import { useVisaRealtime } from '../../../../hooks/useVisaRealtime';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Visa Requirements Manager - CRUD for country-pair visa requirements
@@ -60,28 +60,29 @@ const VisaRequirementsManager = () => {
         }
     }, []);
 
-    useEffect(() => {
+useEffect(() => {
         fetchRequirements();
-
-        const channel = supabase
-            .channel('visa-requirements')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'visa_requirements_extended'
-                },
-                () => {
-                    fetchRequirements();
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
     }, [fetchRequirements]);
+
+    useVisaRealtime({
+        tables: ['visa_requirements_extended'],
+        onApplicationUpdate: () => {
+            fetchRequirements();
+        },
+        getDataFn: fetchRequirements,
+        fetchOnMount: false,
+        fallbackPollingMs: 60000
+    });
+
+    useVisaRealtime({
+        tables: ['visa_requirements_extended'],
+        onApplicationUpdate: () => {
+            fetchRequirements();
+        },
+        getDataFn: fetchRequirements,
+        fetchOnMount: false,
+        fallbackPollingMs: 60000
+    });
 
     const filtered = requirements.filter(r =>
         !searchQuery ||

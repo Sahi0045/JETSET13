@@ -100,17 +100,6 @@ useEffect(() => {
     fallbackPollingMs: 10000
   });
 
-  useVisaRealtime({
-    tables: ['visa_applications'],
-    applicationId: id,
-    onApplicationUpdate: () => {
-      fetchApp();
-    },
-    getDataFn: fetchApp,
-    fetchOnMount: false,
-    fallbackPollingMs: 10000
-  });
-
   // ── Helpers ────────────────────────────────────────────────────────────────
   const formatDate = (dateStr) => {
     if (!dateStr) return "—";

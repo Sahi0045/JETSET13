@@ -171,6 +171,10 @@ const AdminDocumentReview = () => {
 
                     <div className="px-4 lg:px-8 py-4 lg:py-6 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/50 backdrop-blur-xl border-b border-slate-200/50 z-10 relative">
                         <div className="flex items-center gap-4 w-full sm:w-auto">
+                            <div className="flex items-center gap-2 mr-2">
+                                <div className={`size-2 rounded-full ${isConnected ? 'bg-emerald-500' : isPolling ? 'bg-amber-500 animate-pulse' : 'bg-slate-300'}`} />
+                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{isPolling ? 'Sync' : 'Live'}</span>
+                            </div>
                             <div className="flex-1 sm:flex-none">
                                 <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest truncate max-w-[200px] lg:max-w-none">
                                     {selectedDoc?.file_url?.split('/').pop() || 'No file uploaded'}
@@ -187,7 +191,7 @@ const AdminDocumentReview = () => {
                                 <button onClick={() => setZoom(z => Math.min(200, z + 10))} className="size-8 flex items-center justify-center hover:bg-slate-50 rounded-xl text-slate-400 transition-colors"><span className="material-symbols-outlined text-xl">add</span></button>
                             </div>
                             <div className="w-px h-4 bg-slate-100"></div>
-                             <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1">
                                 <button className="size-8 flex items-center justify-center hover:bg-slate-50 rounded-xl text-slate-400"><span className="material-symbols-outlined text-xl">rotate_right</span></button>
                                 <a href={selectedDoc?.file_url} target="_blank" rel="noreferrer" className="size-8 flex items-center justify-center text-[#1152d4] bg-[#1152d4]/5 rounded-xl hover:bg-[#1152d4] hover:text-white transition-all"><span className="material-symbols-outlined text-xl">download</span></a>
                             </div>

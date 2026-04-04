@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { getApiUrl, apiGet, apiPut, apiRequest } from "../../../../utils/apiHelper";
-import supabase from "../../../../lib/supabase";
+import { useVisaRealtime } from "../../../../hooks/useVisaRealtime";
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
 // Admin - Document Services List — connected to live API (stored as consultations)
@@ -127,27 +127,17 @@ const DocumentServicesList = () => {
 
   useEffect(() => {
     fetchServices();
-
-    const channel = supabase
-      .channel('document-services')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'visa_consultations',
-          filter: "service_type=eq.document_services"
-        },
-        () => {
-          fetchServices();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [fetchServices]);
+
+  useVisaRealtime({
+    tables: ['visa_consultations'],
+    onApplicationUpdate: () => {
+      fetchServices();
+    },
+    getDataFn: fetchServices,
+    fetchOnMount: false,
+    fallbackPollingMs: 30000
+  });
 
   // ── Debounced search ───────────────────────────────────────────────────────
   const handleSearchInput = (e) => {
