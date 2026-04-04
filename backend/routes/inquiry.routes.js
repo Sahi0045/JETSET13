@@ -10,6 +10,8 @@ import {
   assignInquiry
 } from '../controllers/inquiry.controller.js';
 import { protect, admin, optionalProtect } from '../middleware/auth.middleware.js';
+import { auditLog, bulkAuditLog } from '../middleware/auditLog.middleware.js';
+import supabase from '../config/supabase.js';
 
 const router = express.Router();
 
@@ -41,8 +43,35 @@ router.get('/', protect, (req, res, next) => {
 // Admin only routes
 router.get('/stats', protect, admin, getInquiryStats);
 router.get('/:id', protect, getInquiryById);
-router.put('/:id', protect, admin, updateInquiry);
-router.put('/:id/assign', protect, admin, assignInquiry);
-router.delete('/:id', protect, admin, deleteInquiry);
+router.put('/:id', protect, admin, auditLog('inquiry_updated', 'inquiry'), updateInquiry);
+router.put('/:id/assign', protect, admin, auditLog('inquiry_assigned', 'inquiry'), assignInquiry);
+router.delete('/:id', protect, admin, auditLog('inquiry_deleted', 'inquiry'), deleteInquiry);
+
+// Bulk update (admin only)
+router.put('/bulk-update', protect, admin, bulkAuditLog('bulk_status_update', 'inquiry'), async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    const VALID = ['pending', 'in_progress', 'approved', 'rejected', 'cancelled'];
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'ids array is required' });
+    }
+    if (!VALID.includes(status)) {
+      return res.status(400).json({ success: false, message: `Invalid status. Must be one of: ${VALID.join(', ')}` });
+    }
+
+    const { error } = await supabase
+      .from('inquiries')
+      .update({ status, updated_at: new Date().toISOString() })
+      .in('id', ids);
+
+    if (error) throw new Error(error.message);
+
+    res.json({ success: true, message: `${ids.length} inquiries updated to "${status}"`, updated: ids.length });
+  } catch (error) {
+    console.error('Bulk update error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 export default router;

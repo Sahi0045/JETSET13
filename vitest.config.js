@@ -4,17 +4,53 @@ import path from 'path';
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./tests/setup.js'],
-    include: ['tests/**/*.test.{js,jsx}'],
+    // Root-level coverage (spans all projects)
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'text-summary'],
+      reporter: ['text', 'text-summary', 'html'],
+      include: ['backend/**/*.js', 'resources/js/**/*.{js,jsx}'],
+      exclude: ['node_modules', 'tests', 'dist', '**/*.config.*'],
     },
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, 'resources/js'),
-    },
+    // Multi-environment setup via projects
+    projects: [
+      {
+        // ── Frontend (React components, hooks, utils) ─────────
+        test: {
+          name: 'frontend',
+          environment: 'jsdom',
+          setupFiles: ['./tests/setup.js'],
+          include: [
+            'tests/components/**/*.test.{js,jsx}',
+            'tests/utils/**/*.test.{js,jsx}',
+          ],
+        },
+        resolve: {
+          alias: { '@': path.resolve('./resources/js') },
+        },
+      },
+      {
+        // ── Backend (controllers, models, services) ───────────
+        test: {
+          name: 'backend',
+          environment: 'node',
+          setupFiles: ['./tests/backend/setup.js'],
+          include: [
+            'tests/backend/**/*.test.js',
+            'tests/services/**/*.test.js',
+          ],
+        },
+      },
+      {
+        // ── Integration (full API routes via supertest) ───────
+        test: {
+          name: 'integration',
+          environment: 'node',
+          setupFiles: ['./tests/backend/setup.js'],
+          include: ['tests/integration/**/*.test.js'],
+          // Integration tests hit the DB so run serially
+          sequence: { concurrent: false },
+        },
+      },
+    ],
   },
 });

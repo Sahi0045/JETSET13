@@ -15,6 +15,11 @@ import PaymentLinksList from './PaymentLinksList';
 import AgentManagement from './AgentManagement';
 import CouponManagement from './CouponManagement';
 import SubscriptionManagement from './SubscriptionManagement';
+import SLADashboard from './SLADashboard';
+import BulkActions from './BulkActions';
+import AnalyticsDashboard from './AnalyticsDashboard';
+import BulkUpload from './BulkUpload';
+import TemplateManager from './TemplateManager';
 import './AdminPanel.css';
 
 const AdminPanel = () => {
@@ -36,6 +41,11 @@ const AdminPanel = () => {
           <Route path="/agents" element={<AgentManagement />} />
           <Route path="/coupons" element={<CouponManagement />} />
           <Route path="/subscriptions" element={<SubscriptionManagement />} />
+          <Route path="/sla" element={<SLADashboard />} />
+          <Route path="/bulk" element={<BulkActions />} />
+          <Route path="/bulk-upload" element={<BulkUpload />} />
+          <Route path="/templates" element={<TemplateManager />} />
+          <Route path="/reports" element={<AnalyticsDashboard />} />
         </Routes>
       </div>
       <Footer />

@@ -56,8 +56,49 @@ export default defineConfig(({ mode }) => {
                     chunkFileNames: 'assets/[name]-[hash].js',
                     assetFileNames: 'assets/[name]-[hash].[ext]',
                     manualChunks(id) {
+                        // ── Core React runtime ─────────────────────────────
+                        if (id.includes('node_modules/react/') ||
+                            id.includes('node_modules/react-dom/') ||
+                            id.includes('node_modules/react-router-dom/') ||
+                            id.includes('node_modules/scheduler/')) {
+                            return 'react-vendor';
+                        }
+                        // ── Icon / UI libraries ────────────────────────────
+                        if (id.includes('node_modules/lucide-react') ||
+                            id.includes('node_modules/react-icons') ||
+                            id.includes('node_modules/@fortawesome')) {
+                            return 'ui-icons';
+                        }
+                        // ── Date utilities ─────────────────────────────────
+                        if (id.includes('node_modules/date-fns') ||
+                            id.includes('node_modules/dayjs') ||
+                            id.includes('node_modules/react-datepicker')) {
+                            return 'date-utils';
+                        }
+                        // ── PDF / canvas (heavy, rarely used) ─────────────
+                        if (id.includes('node_modules/jspdf') ||
+                            id.includes('node_modules/html2canvas')) {
+                            return 'pdf-utils';
+                        }
+                        // ── Bootstrap (only used in a few pages) ──────────
+                        if (id.includes('node_modules/bootstrap') ||
+                            id.includes('node_modules/react-bootstrap')) {
+                            return 'bootstrap';
+                        }
+                        // ── Admin section ──────────────────────────────────
+                        if (id.includes('/Pages/Admin/')) {
+                            return 'admin';
+                        }
+                        // ── Booking flows ──────────────────────────────────
+                        if (id.includes('/Pages/Common/flights/') ||
+                            id.includes('/Pages/Common/cruise/') ||
+                            id.includes('/Pages/Common/hotels/') ||
+                            id.includes('/Pages/Common/packages/')) {
+                            return 'booking';
+                        }
+                        // ── Everything else from node_modules ──────────────
                         if (id.includes('node_modules')) {
-                            return 'vendor';
+                            return 'vendor-misc';
                         }
                     }
                 }

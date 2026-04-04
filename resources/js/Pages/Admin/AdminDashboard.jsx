@@ -533,11 +533,47 @@ const AdminDashboard = () => {
                   <div className="action-arrow">→</div>
                 </Link>
 
+                <Link to="/admin/sla" className="action-card">
+                  <div className="action-icon">🚨</div>
+                  <div className="action-content">
+                    <h4>SLA Tracking</h4>
+                    <p>Monitor service level agreements and breaches</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
+
+                <Link to="/admin/bulk" className="action-card">
+                  <div className="action-icon">📦</div>
+                  <div className="action-content">
+                    <h4>Bulk Updates</h4>
+                    <p>Perform batch actions on multiple inquiries</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
+
                 <Link to="/admin/reports" className="action-card">
                   <div className="action-icon">📊</div>
                   <div className="action-content">
                     <h4>Analytics</h4>
                     <p>View detailed reports and insights</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
+
+                <Link to="/admin/bulk-upload" className="action-card">
+                  <div className="action-icon">📤</div>
+                  <div className="action-content">
+                    <h4>Bulk Upload</h4>
+                    <p>Upload multiple visa applications via CSV/Excel</p>
+                  </div>
+                  <div className="action-arrow">→</div>
+                </Link>
+
+                <Link to="/admin/templates" className="action-card">
+                  <div className="action-icon">📝</div>
+                  <div className="action-content">
+                    <h4>Email Templates</h4>
+                    <p>Manage automated response templates</p>
                   </div>
                   <div className="action-arrow">→</div>
                 </Link>

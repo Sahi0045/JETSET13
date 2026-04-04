@@ -15,7 +15,11 @@ import airportRoutes from './routes/airport.routes.js';
 import visaRoutes from './routes/visa.routes.js';
 import subscriptionRoutes from './routes/subscription.routes.js';
 import couponRoutes from './routes/coupon.routes.js';
+import analyticsRoutes from './routes/analytics.routes.js';
 import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
+import { startWorkflowEngine } from './jobs/workflowEngine.js';
+import { startDataRetentionJob } from './jobs/dataRetention.job.js';
+import { initializeDefaultTemplates } from './services/templateResponse.service.js';
 // import 
 // const flightRoutes =re('./routes/flights');
 // Load environment variables
@@ -107,6 +111,34 @@ app.use('/api/airports', airportRoutes);
 app.use('/api/visa', visaRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/coupons', couponRoutes);
+app.use('/api/analytics', analyticsRoutes);
+
+// Bulk upload routes
+import bulkUploadRoutes from './routes/bulkUpload.routes.js';
+app.use('/api/bulk', bulkUploadRoutes);
+
+// Template response routes
+import templateRoutes from './routes/template.routes.js';
+app.use('/api/templates', templateRoutes);
+
+// Document templates routes
+import documentRoutes from './routes/document.routes.js';
+app.use('/api/documents', documentRoutes);
+
+// Video tutorials routes
+import videoRoutes from './routes/video.routes.js';
+app.use('/api/videos', videoRoutes);
+
+// Visa requirements routes
+import visaRequirementsRoutes from './routes/visaRequirements.routes.js';
+app.use('/api/visa-requirements', visaRequirementsRoutes);
+
+// Simple GDPR routes (dynamic import to keep server.js clean)
+app.get('/api/gdpr/my-data-summary',   async (req, res) => { const { getDataSummary }         = await import('./controllers/gdpr.controller.js'); return getDataSummary(req, res); });
+app.get('/api/gdpr/export-data',       async (req, res) => { const { exportUserData }          = await import('./controllers/gdpr.controller.js'); return exportUserData(req, res); });
+app.delete('/api/gdpr/delete-account', async (req, res) => { const { requestAccountDeletion }  = await import('./controllers/gdpr.controller.js'); return requestAccountDeletion(req, res); });
+app.post('/api/gdpr/consent',          async (req, res) => { const { recordConsent }           = await import('./controllers/gdpr.controller.js'); return recordConsent(req, res); });
+
 
 // Direct send-email endpoint (must match api/index.js implementation)
 app.post('/api/send-email', async (req, res) => {
@@ -274,4 +306,13 @@ app.listen(PORT, () => {
   console.log('Environment:', process.env.NODE_ENV);
   console.log('Allowed Origins:', corsOptions.origin.toString());
   console.log('API Base URL:', '/api');
+
+  // Start automated workflow engine (auto-assign, SLA, escalation, retention)
+  if (process.env.NODE_ENV !== 'test') {
+    startWorkflowEngine().catch(e => console.error('[Workflow] Engine failed to start:', e.message));
+    startDataRetentionJob(24).catch(e => console.error('[Retention] Job failed to start:', e.message));
+    
+    // Initialize default email templates
+    initializeDefaultTemplates().catch(e => console.error('[Templates] Init failed:', e.message));
+  }
 }); 

@@ -605,6 +605,21 @@ const HotelBookingSuccess = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Hotel Booked..." /> }))
 );
 
+const PrivacyControls = React.lazy(() =>
+  import('./Pages/Profile/PrivacyControls')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Privacy..." /> }))
+);
+
+const NotificationSettings = React.lazy(() =>
+  import('./Pages/Profile/NotificationSettings')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Settings..." /> }))
+);
+
+const HelpCenter = React.lazy(() =>
+  import('./Pages/Common/HelpCenter')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Help..." /> }))
+);
+
 // Supabase Auth Components
 const SupabaseLogin = React.lazy(() =>
   import('./Pages/Common/login/SupabaseLogin')
@@ -653,6 +668,9 @@ const App = () => {
           <Route path="/signup" element={<Signup />} />
           <Route path="/profiledashboard" element={<ProfileDashboard />} />
           <Route path="/complete-profile" element={<CompleteProfile />} />
+          <Route path="/profile/privacy" element={<PrivacyControls />} />
+          <Route path="/profile/notifications" element={<NotificationSettings />} />
+          <Route path="/help" element={<HelpCenter />} />
 
           {/* Supabase Auth Routes */}
           <Route path="/supabase-login" element={<SupabaseLogin />} />
