@@ -911,7 +911,7 @@ const HomePage = () => {
             <div className="container mx-auto px-4 py-1 flex justify-center items-center">
               <Sparkles className="h-4 w-4 text-yellow-300 mr-2 flex-shrink-0" />
               <p className={`text-white ${isMobileView ? 'text-[10px]' : 'text-sm'} font-medium tracking-wide text-center leading-tight`}>
-                <span className="font-bold">Self-Service Portal Coming Soon!</span> For bookings, call <span className="text-yellow-300 font-bold">(877) 538-7380</span> or email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>
+                <span className="font-bold">Self-Service Portal Coming Soon!</span> For bookings, call <span className="text-yellow-300 font-bold">(877) 538-7380</span> or email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>. <span className="text-yellow-300 font-bold ml-2">Plus, get a $50 Discount voucher for every trip!</span>
               </p>
             </div>
           </div>
@@ -965,7 +965,7 @@ const HomePage = () => {
                     <FaEnvelope className="text-white text-lg" />
                   </div>
                   <h3 className="text-lg md:text-xl font-bold text-white mb-1">Stay Updated</h3>
-                  <p className="text-white text-opacity-90 mb-3 text-xs md:text-sm">Subscribe to receive the latest cruise deals and travel tips.</p>
+                  <p className="text-white text-opacity-90 mb-3 text-xs md:text-sm italic font-medium">Subscribe to receive the latest cruise deals and travel tips, plus get a <span className="text-yellow-300 font-bold">$50 Discount voucher</span> for every trip!</p>
 
                   <div className="flex items-center gap-2 mb-3 hidden md:flex">
                     <div className="flex -space-x-2">
