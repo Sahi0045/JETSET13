@@ -626,7 +626,7 @@ const CruiseBookingPopup = ({
 
               <p className="text-[10px] sm:text-sm text-gray-500 mb-4 sm:mb-8 leading-relaxed max-w-[220px] sm:max-w-xs mx-auto">
                 Hi! We are excited to announce that bookings are open. <br />
-                <span className="font-semibold text-gray-700">Contact us directly to avail the best prices</span>
+                <span className="font-semibold text-gray-700">Contact us directly to avail the best prices and get a <span className="text-blue-600 font-bold">$50 instant discount voucher</span>!</span>
               </p>
 
               {/* Contact Options */}
