@@ -3,7 +3,7 @@
       {
         "id": 1,
         "name": "Caribbean",
-        "price": 699,
+        "price": 69,
         "rating": 4.7,
         "image": "/images/Rectangle 1434 (1).png",
         "country": "Multiple",
@@ -16,7 +16,7 @@
       {
         "id": 2,
         "name": "Mediterranean",
-        "price": 899,
+        "price": 70,
         "rating": 4.8,
         "image": "/images/Rectangle 1434 (2).png",
         "country": "Multiple",
@@ -29,7 +29,7 @@
       {
         "id": 3,
         "name": "Alaska",
-        "price": 799,
+        "price": 71,
         "rating": 4.9,
         "image": "/images/Rectangle 1434 (3).png",
         "country": "USA/Canada",
@@ -42,7 +42,7 @@
       {
         "id": 4,
         "name": "Bahamas",
-        "price": 599,
+        "price": 72,
         "rating": 4.7,
         "image": "/images/Rectangle 1434 (4).png",
         "country": "Bahamas",
@@ -55,7 +55,7 @@
       {
         "id": 5,
         "name": "Europe",
-        "price": 999,
+        "price": 73,
         "rating": 4.8,
         "image": "/images/Rectangle 1434 (5).png",
         "country": "Multiple",
@@ -68,7 +68,7 @@
       {
         "id": 6,
         "name": "Asia",
-        "price": 1099,
+        "price": 74,
         "rating": 4.7,
         "image": "/images/Rectangle 1434.png",
         "country": "Multiple",
@@ -81,7 +81,7 @@
       {
         "id": 7,
         "name": "Australia/New Zealand",
-        "price": 1199,
+        "price": 75,
         "rating": 4.8,
         "image": "/images/Rectangle 1434 (1).png",
         "country": "Australia/New Zealand",
@@ -94,7 +94,7 @@
       {
         "id": 8,
         "name": "Hawaii",
-        "price": 899,
+        "price": 76,
         "rating": 4.9,
         "image": "/images/Rectangle 1434 (2).png",
         "country": "USA",
@@ -107,7 +107,7 @@
       {
         "id": 9,
         "name": "South America",
-        "price": 999,
+        "price": 77,
         "rating": 4.7,
         "image": "/images/Rectangle 1434 (3).png",
         "country": "Multiple",
