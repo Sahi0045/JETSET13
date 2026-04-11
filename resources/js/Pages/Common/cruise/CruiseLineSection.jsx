@@ -14,7 +14,8 @@ const CruiseLineSection = () => {
       </div>
 
       <p className="section-subtitle">
-        Discover top-rated cruise lines and premium experiences
+        Discover top-rated cruise lines and premium experiences. <br />
+        <span className="authorized-badge">Authorized Worldwide Sellers for all Major Cruiseliners</span>
       </p>
 
       <div className="cruise-lines-grid">

@@ -620,9 +620,14 @@ const CruiseBookingPopup = ({
         <div className="p-5 sm:p-8">
           {popupView === 'announcement' && (
             <div className="text-center">
-              <h2 className="text-xl sm:text-3xl font-extrabold text-[#0D1B2A] mb-1.5 sm:mb-3 tracking-tight leading-tight">
+              <h2 className="text-xl sm:text-3xl font-extrabold text-[#0D1B2A] mb-1 sm:mb-2 tracking-tight leading-tight">
                 Cruise Bookings Are <br /><span className="text-[#0066b2]">Now Open!</span>
               </h2>
+
+              <div className="flex items-center justify-center gap-1.5 mb-3 sm:mb-4">
+                <FaCheckCircle className="text-green-500 w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="text-[10px] sm:text-xs font-bold text-[#0D1B2A] uppercase tracking-wider">Authorized Worldwide Sellers for all Major Cruiselines</span>
+              </div>
 
               <p className="text-[11px] sm:text-[14px] text-gray-500 mb-4 sm:mb-8 leading-relaxed max-w-[280px] sm:max-w-sm mx-auto">
                 Hi! We are excited to announce that bookings are open. <br />
