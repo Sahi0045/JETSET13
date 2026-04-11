@@ -6,7 +6,7 @@ import { FaShip, FaAnchor, FaStar, FaLifeRing, FaUsers, FaCheckCircle, FaTimes, 
 import { Link } from 'react-router-dom';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
-import { Mail, Phone, ExternalLink, Calendar, MessageSquare, Clock, ArrowLeft, User, CheckCircle2 } from 'lucide-react';
+import { Mail, Phone, ExternalLink, Calendar, MessageSquare, Clock, ArrowLeft, User, CheckCircle2, Ticket } from 'lucide-react';
 import withPageElements from '../PageWrapper';
 import WhyChooseUsSection from './WhyChooseUsSection';
 import ContactSection from './ContactSection';
@@ -536,11 +536,11 @@ Inquiry from JetSetters Cruise Portal`;
 
 const mailtoLink = `mailto:bookings@jetsetterss.com?subject=${encodeURIComponent('Cruise Booking Inquiry')}&body=${encodeURIComponent(emailBody)}`;
 
-const CruiseBookingPopup = ({ 
-  showCruisePopup, 
-  setShowCruisePopup, 
-  popupView, 
-  setPopupView 
+const CruiseBookingPopup = ({
+  showCruisePopup,
+  setShowCruisePopup,
+  popupView,
+  setPopupView
 }) => {
   const [formLoading, setFormLoading] = useState(false);
   const [callbackForm, setCallbackForm] = useState({
@@ -624,9 +624,21 @@ const CruiseBookingPopup = ({
                 Cruise Bookings Are <br /><span className="text-[#0066b2]">Now Open!</span>
               </h2>
 
-              <p className="text-[10px] sm:text-sm text-gray-500 mb-4 sm:mb-8 leading-relaxed max-w-[220px] sm:max-w-xs mx-auto">
+              <p className="text-[11px] sm:text-[14px] text-gray-500 mb-4 sm:mb-8 leading-relaxed max-w-[280px] sm:max-w-sm mx-auto">
                 Hi! We are excited to announce that bookings are open. <br />
-                <span className="font-semibold text-gray-700">Contact us directly to avail the best prices and get a <span className="text-blue-600 font-bold">$50 instant discount voucher</span>!</span>
+                Contact us directly to avail the best prices and get a <br />
+                <span className="inline-block mt-3 mb-1 group cursor-default">
+                  <span className="relative bg-[#0066FF] px-4 py-2 sm:px-6 sm:py-2.5 rounded-md flex items-center gap-3 shadow-[0_8px_20px_rgba(0,102,255,0.2)] overflow-hidden transition-all group-hover:scale-105 group-hover:shadow-[0_10px_25px_rgba(0,102,255,0.3)] border-x border-dashed border-white/20">
+                    {/* Corner cutouts matching white popup background */}
+                    <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
+                    <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
+                    <div className="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
+                    <div className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
+                    
+                    <Ticket className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                    <span className="text-base sm:text-2xl font-black text-white tracking-tighter uppercase">$50 OFF VOUCHER</span>
+                  </span>
+                </span>
               </p>
 
               {/* Contact Options */}
@@ -896,7 +908,7 @@ const HomePage = () => {
   return (
     <>
       <Navbar />
-      <CruiseBookingPopup 
+      <CruiseBookingPopup
         showCruisePopup={showCruisePopup}
         setShowCruisePopup={setShowCruisePopup}
         popupView={popupView}
@@ -911,7 +923,19 @@ const HomePage = () => {
             <div className="container mx-auto px-4 py-1 flex justify-center items-center">
               <Sparkles className="h-4 w-4 text-yellow-300 mr-2 flex-shrink-0" />
               <p className={`text-white ${isMobileView ? 'text-[10px]' : 'text-sm'} font-medium tracking-wide text-center leading-tight`}>
-                <span className="font-bold">Self-Service Portal Coming Soon!</span> For bookings, call <span className="text-yellow-300 font-bold">(877) 538-7380</span> or email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>. <span className="text-yellow-300 font-bold ml-2">Plus, get a $50 Discount voucher for every trip!</span>
+                <span className="font-bold">Self-Service Portal Coming Soon!</span> For bookings, call <span className="text-yellow-300 font-bold">(877) 538-7380</span> or email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>.
+                <span className="inline-flex items-center ml-2.5 align-middle group cursor-default">
+                  <span className="relative bg-[#0066FF] px-2 py-0.5 rounded-sm flex items-center gap-1 shadow-[0_2px_10px_rgba(0,0,0,0.3)] overflow-hidden">
+                    {/* Corner cutouts matching banner background colors */}
+                    <div className="absolute -top-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></div>
+                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></div>
+                    <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></div>
+                    <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></div>
+
+                    <Ticket className="w-2.5 h-2.5 text-white" />
+                    <span className="text-[9px] md:text-[10px] font-black text-white px-0.5">$50 OFF</span>
+                  </span>
+                </span>
               </p>
             </div>
           </div>
