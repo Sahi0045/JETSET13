@@ -238,51 +238,65 @@ export default function PopularDestinations({ onSelectDestination }) {
 
   console.log('🎬 Rendering grid with', displayDestinations?.length || 0, 'destinations');
   
-  if (!displayDestinations || displayDestinations.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">Loading destinations...</p>
-      </div>
-    );
-  }
+  // Force use staticDestinations if displayDestinations is empty
+  const renderDestinations = (!displayDestinations || displayDestinations.length === 0) 
+    ? staticDestinations 
+    : displayDestinations;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-      {displayDestinations.map((destination, index) => (
+      {renderDestinations.map((destination, index) => (
         <div
           key={destination.id}
           className={`rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 relative h-[320px] cursor-pointer group ${selectedDestination?.id === destination.id ? 'ring-2 ring-[#055B75]' : ''
             }`}
           onClick={() => handleDestinationClick(destination)}
         >
-          {/* Placeholder background - always visible behind skeleton */}
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-200 via-gray-300 to-gray-200"></div>
+          {/* Color background - always visible by default */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#055B75] via-[#0099CC] to-[#65B3CF]"></div>
           
-          {/* Skeleton loader overlay */}
-          {!loadedImages[destination.id] && (
-            <div className="absolute inset-0 animate-pulse z-10">
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/20 to-transparent"></div>
-              <div className="absolute bottom-5 left-5 right-5">
-                <div className="h-7 bg-gray-400/50 rounded w-32 mb-2"></div>
-                <div className="h-4 bg-gray-400/30 rounded w-24"></div>
-              </div>
-            </div>
-          )}
+          {/* Image with local color fallback - always shows content */}
+          <div className="absolute inset-0 w-full h-full">
+            {destination.image && (
+              <img
+                src={destination.image}
+                alt={destination.name}
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                loading="eager"
+                fetchpriority={index < 4 ? "high" : "auto"}
+                onLoad={() => handleImageLoad(destination.id)}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  handleImageLoad(destination.id);
+                }}
+              />
+            )}
+            {/* Gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/30"></div>
+          </div>
 
-          {/* Full bleed image */}
+          {/* Image with local fallback */}
           <div className={`absolute inset-0 w-full h-full transition-opacity duration-300 ${loadedImages[destination.id] ? 'opacity-100' : 'opacity-0'}`}>
-            <img
-              src={destination.image || getCityImage(destination.name)}
-              alt={destination.name}
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-              loading="eager"
-              fetchpriority={index < 4 ? "high" : "auto"}
-              onLoad={() => handleImageLoad(destination.id)}
-              onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=2070&auto=format&fit=crop";
-                handleImageLoad(destination.id);
-              }}
+            {destination.image ? (
+              <img
+                src={destination.image}
+                alt={destination.name}
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                loading="eager"
+                fetchpriority={index < 4 ? "high" : "auto"}
+                onLoad={() => handleImageLoad(destination.id)}
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.style.display = 'none';
+                  e.target.nextSibling && (e.target.nextSibling.style.display = 'block');
+                  handleImageLoad(destination.id);
+                }}
+              />
+            ) : null}
+            {/* Local color fallback - always works */}
+            <div 
+              className="absolute inset-0 bg-gradient-to-br from-[#055B75] via-[#0099CC] to-[#65B3CF]"
+              style={{ display: loadedImages[destination.id] && destination.image ? 'none' : 'block' }}
             />
             {/* Gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/30"></div>
