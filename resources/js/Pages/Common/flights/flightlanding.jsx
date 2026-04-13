@@ -189,20 +189,24 @@ function FlightLanding() {
         <div className="w-full text-center bg-gradient-to-r from-[#055B75] to-[#034457] py-2 backdrop-blur-sm z-20 border-y border-white/10 px-3 md:px-0">
           <div className="container mx-auto px-4 py-1 flex justify-center items-center">
             <Sparkles className="h-4 w-4 text-yellow-300 mr-2 flex-shrink-0" />
-            <p className="text-white text-[10px] md:text-sm font-medium tracking-wide text-center leading-tight">
-              <span className="font-bold">Self-Service Portal Coming Soon!</span> For bookings, call <span className="text-yellow-300 font-bold">(877) 538-7380</span> or email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>. 
-              <span className="inline-flex items-center ml-2.5 align-middle group cursor-default">
-                <span className="relative bg-[#0066FF] px-2 py-0.5 rounded-sm flex items-center gap-1 shadow-[0_2px_10px_rgba(0,0,0,0.3)] overflow-hidden">
-                  <div className="absolute -top-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></div>
-                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></div>
-                  <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></div>
-                  <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></div>
+            <div className="text-white text-[10px] md:text-sm font-medium tracking-wide text-center leading-tight flex flex-wrap items-center justify-center gap-x-1">
+              <span className="font-bold">Self-Service Portal Coming Soon!</span>
+              <span>For bookings, call</span>
+              <span className="text-yellow-300 font-bold">(877) 538-7380</span>
+              <span>or email</span>
+              <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>
+              <span className="inline-flex items-center ml-1 align-middle group cursor-default">
+                <span className="relative bg-[#0066FF] px-2 py-0.5 rounded-sm inline-flex items-center gap-1 shadow-[0_2px_10px_rgba(0,0,0,0.3)] overflow-hidden">
+                  <span className="absolute -top-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></span>
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></span>
+                  <span className="absolute -bottom-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></span>
+                  <span className="absolute -bottom-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></span>
                   <Ticket className="w-2.5 h-2.5 text-white" />
                   <span className="text-[9px] md:text-[10px] font-black text-white px-0.5">$50 OFF</span>
                 </span>
               </span>
-              <span className="ml-1">Discount voucher for every trip!</span>
-            </p>
+              <span>Discount voucher for every trip!</span>
+            </div>
           </div>
         </div>
       </div>
