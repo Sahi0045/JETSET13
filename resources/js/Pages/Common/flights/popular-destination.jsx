@@ -74,9 +74,12 @@ const preloadImage = (src) => {
 
 export default function PopularDestinations({ onSelectDestination }) {
   const { cityCode, loading: locationLoading } = useLocationContext();
-  const [displayDestinations, setDisplayDestinations] = useState(destinations);
+  // Always start with static destinations so cards are visible immediately
+  const [displayDestinations, setDisplayDestinations] = useState(
+    destinations.map(d => ({ ...d, image: getCityImage(d.name) }))
+  );
   const [trendingBadges, setTrendingBadges] = useState({});
-  const [isApiLoading, setIsApiLoading] = useState(true);
+  const [isApiLoading, setIsApiLoading] = useState(false);
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [loadedImages, setLoadedImages] = useState({});
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -86,12 +89,17 @@ export default function PopularDestinations({ onSelectDestination }) {
     let isMounted = true;
 
     const fetchTrendingDestinations = async () => {
-      // Wait for location context to be loaded
+      // Wait for location context to be loaded, but give it a 5s timeout
       if (locationLoading) return;
 
       try {
         // Get user location from shared LocationContext
         const originCode = cityCode || '';
+        if (!originCode) {
+          // No origin code yet — static fallback already shown, nothing to do
+          setIsApiLoading(false);
+          return;
+        }
 
         console.log(`📊 Fetching most booked destinations from ${originCode}`);
 

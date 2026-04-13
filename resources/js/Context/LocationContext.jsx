@@ -22,6 +22,7 @@ export const LocationProvider = ({ children }) => {
         country: '',
         countryCode: '',
         city: '',
+        cityCode: '',
         currency: '',
         callingCode: '',
         region: '',
@@ -52,7 +53,14 @@ export const LocationProvider = ({ children }) => {
     }, []);
 
     const updateLocation = (newLocation) => {
-        setLocation(prev => ({ ...prev, ...newLocation, loaded: true, loading: false }));
+        setLocation(prev => ({
+            ...prev,
+            ...newLocation,
+            // Expose cityCode directly (GeoService already resolves it)
+            cityCode: newLocation.cityCode || prev.cityCode || '',
+            loaded: true,
+            loading: false
+        }));
 
         // Only auto-set currency from geo if user hasn't manually chosen one
         if (newLocation.currency && !currencyService.isManuallySet()) {
