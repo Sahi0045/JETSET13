@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 100" width="320" height="100">
+  <!-- Ship anchor icon -->
+  <g transform="translate(28,50)">
+    <!-- Anchor ring -->
+    <circle cx="0" cy="-18" r="7" stroke="#003087" stroke-width="3.5" fill="none"/>
+    <!-- Anchor vertical stem -->
+    <line x1="0" y1="-11" x2="0" y2="20" stroke="#003087" stroke-width="3.5" stroke-linecap="round"/>
+    <!-- Anchor cross bar -->
+    <line x1="-14" y1="-5" x2="14" y2="-5" stroke="#003087" stroke-width="3.5" stroke-linecap="round"/>
+    <!-- Anchor flukes -->
+    <path d="M0,20 Q-16,26 -14,14" stroke="#003087" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <path d="M0,20 Q16,26 14,14" stroke="#003087" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- "Disney" text -->
+  <text x="56" y="42" font-family="Georgia, 'Times New Roman', serif" font-size="30" font-weight="700"
+        letter-spacing="1" fill="#003087">Disney</text>
+
+  <!-- "CRUISE LINE" text -->
+  <text x="56" y="68" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700"
+        letter-spacing="3.5" fill="#C41230">CRUISE LINE</text>
+
+  <!-- Decorative wave -->
+  <path d="M56,78 Q100,70 144,78 Q188,86 232,78" stroke="#C41230" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>
