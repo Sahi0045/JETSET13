@@ -49,39 +49,46 @@ const TrustIndicators = () => {
 
         <div className="flex flex-wrap justify-center gap-8 md:gap-16">
           <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-[#0066b2] mb-1">500+</div>
+            <div className="text-3xl md:text-5xl font-bold text-[#0066b2] mb-1">500+</div>
             <div className="text-gray-500 text-sm">Happy Customers</div>
           </div>
 
           <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-[#0066b2] mb-1">50+</div>
+            <div className="text-3xl md:text-5xl font-bold text-[#0066b2] mb-1">50+</div>
             <div className="text-gray-500 text-sm">Destinations</div>
           </div>
 
           <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-[#0066b2] mb-1">98%</div>
+            <div className="text-3xl md:text-5xl font-bold text-[#0066b2] mb-1">98%</div>
             <div className="text-gray-500 text-sm">Satisfaction Rate</div>
           </div>
 
           <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-[#0066b2] mb-1">24/7</div>
+            <div className="text-3xl md:text-5xl font-bold text-[#0066b2] mb-1">24/7</div>
             <div className="text-gray-500 text-sm">Customer Support</div>
           </div>
         </div>
 
-        <div className="mt-6 md:mt-8 flex justify-center">
-          <div className="grid grid-cols-3 gap-2 sm:gap-4 md:flex md:gap-8 justify-center items-center">
-            <img src="/images/logos/forbes.svg" alt="Forbes" className="h-8 md:h-10 opacity-90" />
-            <img src="/images/logos/travelandleisure.svg" alt="Travel+Leisure" className="h-8 md:h-10 opacity-90" />
-            <img src="/images/logos/cruisecritic.svg" alt="Cruise Critic" className="h-8 md:h-10 opacity-90" />
-            <div className="flex items-center gap-2 opacity-90 hidden md:flex">
-              <FaTripadvisor className="text-[#6B7280] text-3xl" />
-              <div className="flex flex-col items-start leading-none">
-                <span className="text-[#6B7280] font-bold text-[10px] tracking-wide">TRIPADVISOR</span>
-                <span className="text-[#6B7280] text-[8px] tracking-wider">REVIEWS</span>
+        <div className="mt-12 md:mt-16 text-center">
+          <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-[0.3em] mb-6 md:mb-8">
+            Trusted Payment & Cruise Line Partners
+          </p>
+          <div className="flex flex-wrap gap-8 md:gap-14 justify-center items-center">
+            {[
+              { src: '/images/logos/amadeus.svg', alt: 'Amadeus' },
+              { src: '/images/logos/arc-pay-gateway.png', alt: 'ARC Pay Gateway' },
+              { src: '/images/logos/royal_caribbean.png', alt: 'Royal Caribbean' },
+              { src: '/images/logos/carnival.png', alt: 'Carnival' },
+              { src: '/images/logos/norwegian.png', alt: 'Norwegian Cruise Line' }
+            ].map((logo, index) => (
+              <div key={index} className="h-16 md:h-24 w-48 md:w-64 flex items-center justify-center transition-all duration-300 hover:scale-105 opacity-85 hover:opacity-100">
+                <img
+                  src={logo.src}
+                  alt={logo.alt}
+                  className="max-h-full max-w-full object-contain mix-blend-multiply filter brightness-[1.05] contrast-[1.1]"
+                />
               </div>
-            </div>
-            <img src="/images/logos/cntraveler.svg" alt="CN Traveler" className="h-8 md:h-10 hidden md:block opacity-90" />
+            ))}
           </div>
         </div>
       </div>
@@ -639,7 +646,7 @@ const CruiseBookingPopup = ({
                     <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
                     <div className="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
                     <div className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
-                    
+
                     <Ticket className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     <span className="text-base sm:text-2xl font-black text-white tracking-tighter uppercase">$50 OFF VOUCHER</span>
                   </span>
