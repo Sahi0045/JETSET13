@@ -1,2 +1,77 @@
+# robots.txt for JetSetters - www.jetsetterss.com
+
+# Allow all search engines
 User-agent: *
-Disallow:
+Allow: /
+
+# Disallow admin and private areas
+Disallow: /admin/
+Disallow: /api/
+Disallow: /backend/
+Disallow: /supabase-auth-debug
+Disallow: /supabase-auth-status
+Disallow: /profile/
+Disallow: /profiledashboard
+Disallow: /complete-profile
+Disallow: /my-trips
+Disallow: /manage-booking/
+
+# Disallow authentication pages
+Disallow: /login
+Disallow: /signup
+Disallow: /supabase-login
+Disallow: /supabase-signup
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /auth/callback
+
+# Disallow payment and booking process pages (allow only after completion)
+Disallow: /flight-payment
+Disallow: /flight-create-orders
+Disallow: /hotel-payment
+Disallow: /cruise-booking-summary
+
+# Allow booking confirmation pages (good for SEO)
+Allow: /booking-confirmation
+Allow: /flight-booking-success
+Allow: /hotel-booking-success
+Allow: /cruise-booking-success
+
+# Allow search result pages
+Allow: /flights/search
+Allow: /hotels/search
+Allow: /cruises/search
+
+# Crawl-delay for polite crawling
+Crawl-delay: 1
+
+# Sitemap location
+Sitemap: https://www.jetsetterss.com/sitemap.xml
+Sitemap: https://www.jetsetterss.com/sitemap-flights.xml
+Sitemap: https://www.jetsetterss.com/sitemap-hotels.xml
+Sitemap: https://www.jetsetterss.com/sitemap-cruises.xml
+
+# Specific rules for Google
+User-agent: Googlebot
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+
+# Specific rules for Bing
+User-agent: Bingbot
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+
+# Block bad bots
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
