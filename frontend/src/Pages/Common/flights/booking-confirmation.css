@@ -41,7 +41,7 @@
     --radius-xl: 24px;
 }
 
-body {
+.booking-confirmation-page {
     background-color: var(--color-bg-page);
     font-family: 'Outfit', sans-serif;
     color: var(--color-text-main);
@@ -328,26 +328,23 @@ body {
     background: white;
 }
 
-.form-group {
+.booking-confirmation-page .form-group {
     margin-bottom: 1.5rem;
 }
 
-.form-label {
-    display: block;
+.booking-confirmation-page .form-label {
     font-size: 0.9rem;
     font-weight: 600;
     color: var(--color-text-main);
     margin-bottom: 0.5rem;
 }
 
-.form-label .required {
+.booking-confirmation-page .form-label .required {
     color: var(--color-error);
     margin-left: 2px;
 }
 
-.form-input {
-    width: 100%;
-    padding: 0.875rem 1rem;
+.booking-confirmation-page .form-input {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     font-size: 1rem;
@@ -356,7 +353,7 @@ body {
     background-color: #FAFAFA;
 }
 
-.form-input:focus {
+.booking-confirmation-page .form-input:focus {
     outline: none;
     border-color: var(--color-secondary);
     box-shadow: 0 0 0 4px rgba(101, 179, 207, 0.1);
@@ -454,7 +451,7 @@ body {
 }
 
 /* ===== BUTTONS ===== */
-.btn-primary {
+.booking-confirmation-page .btn-primary {
     width: 100%;
     background: white;
     /* White button on dark card */
@@ -474,13 +471,13 @@ body {
     margin-top: 1.5rem;
 }
 
-.btn-primary:hover {
+.booking-confirmation-page .btn-primary:hover {
     background: #f8fafc;
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
-.btn-primary:active {
+.booking-confirmation-page .btn-primary:active {
     transform: translateY(0);
 }
 

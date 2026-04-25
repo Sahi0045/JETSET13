@@ -115,19 +115,19 @@
   margin-bottom: 20px;
 }
 
-.form-group {
+.contact-popup-overlay .form-group {
   margin-bottom: 20px;
 }
 
-.form-group label {
+.contact-popup-overlay .form-group label {
   display: block;
   margin-bottom: 5px;
   font-weight: 600;
   color: #444;
 }
 
-.form-group input,
-.form-group textarea {
+.contact-popup-overlay .form-group input,
+.contact-popup-overlay .form-group textarea {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid #ddd;
@@ -136,8 +136,8 @@
   transition: border-color 0.3s;
 }
 
-.form-group input:focus,
-.form-group textarea:focus {
+.contact-popup-overlay .form-group input:focus,
+.contact-popup-overlay .form-group textarea:focus {
   border-color: #0d99ff;
   outline: none;
 }

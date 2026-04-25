@@ -6,13 +6,13 @@
   margin-top: 0;
 }
 
-.container {
+.partner-section .container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 15px;
 }
 
-.section-title {
+.partner-section .section-title {
   font-size: 2rem;
   font-weight: 600;
   color: #333;
@@ -58,7 +58,7 @@
 }
 
 @media (max-width: 480px) {
-  .section-title {
+  .partner-section .section-title {
     font-size: 1.5rem;
   }
   

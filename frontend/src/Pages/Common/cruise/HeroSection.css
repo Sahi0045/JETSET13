@@ -589,7 +589,7 @@ select.search-input {
   }
 }
 
-.title {
+.hero-section .title {
   font-size: 4rem;
   font-weight: 800;
   color: white;
@@ -600,7 +600,7 @@ select.search-input {
   letter-spacing: -0.02em;
 }
 
-.subtitle {
+.hero-section .subtitle {
   font-size: 1.5rem;
   font-weight: 600;
   color: #ffffff;
@@ -1093,12 +1093,12 @@ select.search-input {
     justify-content: center;
   }
 
-  .title {
+  .hero-section .title {
     font-size: 3.2rem;
     text-shadow: 0 4px 20px rgba(0, 0, 0, 0.7), 0 2px 10px rgba(0, 0, 0, 0.5);
   }
 
-  .subtitle {
+  .hero-section .subtitle {
     font-size: 1.3rem;
   }
 
@@ -1165,7 +1165,7 @@ select.search-input {
     padding: 0 30px;
   }
 
-  .title {
+  .hero-section .title {
     font-size: 3.8rem;
     text-shadow: 0 4px 20px rgba(0, 0, 0, 0.7), 0 2px 10px rgba(0, 0, 0, 0.5);
   }
@@ -1173,7 +1173,7 @@ select.search-input {
 
 /* Extra large screens */
 @media (min-width: 1200px) {
-  .title {
+  .hero-section .title {
     font-size: 4rem;
     text-shadow: 0 4px 20px rgba(0, 0, 0, 0.7), 0 2px 10px rgba(0, 0, 0, 0.5);
   }

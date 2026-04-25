@@ -2,7 +2,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 /* Reset and Base Styles */
-* {
+.login-container *,
+.login-container *::before,
+.login-container *::after {
   box-sizing: border-box;
 }
 
@@ -152,11 +154,11 @@
 }
 
 /* Form Groups */
-.form-group {
+.login-container .form-group {
   margin-bottom: 24px;
 }
 
-.form-group label {
+.login-container .form-group label {
   display: block;
   font-size: 0.875rem;
   font-weight: 600;
@@ -212,9 +214,22 @@
 }
 
 /* Password Toggle */
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrapper .form-input {
+  width: 100%;
+  padding-right: 48px;
+}
+
 .password-toggle {
   position: absolute;
   right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
   background: none;
   border: none;
   color: #64748b;

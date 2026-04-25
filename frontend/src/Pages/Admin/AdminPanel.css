@@ -71,8 +71,9 @@
   --admin-space-xl: 32px;
 }
 
-/* Global Styles */
-* {
+.admin-panel *,
+.admin-panel *::before,
+.admin-panel *::after {
   box-sizing: border-box;
 }
 
@@ -2851,7 +2852,7 @@ input:disabled+.toggle-slider {
   color: #666;
 }
 
-.alert {
+.admin-panel .alert {
   padding: 1rem;
   border-radius: 4px;
   margin-bottom: 1rem;

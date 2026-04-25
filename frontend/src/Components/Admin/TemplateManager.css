@@ -219,21 +219,21 @@
   gap: 20px;
 }
 
-.form-group {
+.template-manager .form-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.form-group label {
+.template-manager .form-group label {
   font-size: 14px;
   font-weight: 500;
   color: #374151;
 }
 
-.form-group input[type="text"],
-.form-group select,
-.form-group textarea {
+.template-manager .form-group input[type="text"],
+.template-manager .form-group select,
+.template-manager .form-group textarea {
   padding: 10px 12px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
@@ -243,23 +243,23 @@
   transition: border-color 0.2s;
 }
 
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
+.template-manager .form-group input:focus,
+.template-manager .form-group select:focus,
+.template-manager .form-group textarea:focus {
   outline: none;
   border-color: #4f46e5;
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
-.form-group input:disabled,
-.form-group select:disabled,
-.form-group textarea:disabled {
+.template-manager .form-group input:disabled,
+.template-manager .form-group select:disabled,
+.template-manager .form-group textarea:disabled {
   background: #f9fafb;
   color: #6b7280;
   cursor: not-allowed;
 }
 
-.form-group textarea {
+.template-manager .form-group textarea {
   resize: vertical;
   min-height: 200px;
   font-family: inherit;
