@@ -81,7 +81,7 @@ class NativeTextSplitter {
 }
 import geminiService from "./gemini.service.js";
 import chatModel from "../models/chat.model.js";
-import chatbotConfig from "../../config/chatbot.js";
+import chatbotConfig from "../config/chatbot.js";
 
 // ---------------------------------------------------------------------------
 // ContentIndexer

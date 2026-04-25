@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { protect, adminOnly } from '../middleware/auth.middleware.js';
+import { protect, admin } from '../middleware/auth.middleware.js';
 import {
   getConversionRates,
   getProcessingTimes,
@@ -18,7 +18,7 @@ import { getAuditLogs } from '../middleware/auditLog.middleware.js';
 const router = express.Router();
 
 // All analytics routes require admin access
-router.use(protect, adminOnly);
+router.use(protect, admin);
 
 router.get('/dashboard',          getDashboardOverview);
 router.get('/conversion',         getConversionRates);

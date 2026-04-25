@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import chatbotConfig from "../../config/chatbot.js";
+import chatbotConfig from "../config/chatbot.js";
 import chatSecurityService from "./chat-security.service.js";
 
 class GeminiService {

@@ -4,7 +4,7 @@ import queryClassifier from '../services/query-classifier.js';
 import responseGenerator from '../services/response-generator.js';
 import bookingDataService from '../services/booking-data.service.js';
 import chatSecurityService from '../services/chat-security.service.js';
-import chatbotConfig from '../../config/chatbot.js';
+import chatbotConfig from '../config/chatbot.js';
 
 class ChatController {
   /**

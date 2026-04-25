@@ -60,3 +60,7 @@ dist/
 .DS_Store
 Thumbs.db
 .cursor/mcp.json
+
+# Backup & scratch files
+*.backup
+*.tst

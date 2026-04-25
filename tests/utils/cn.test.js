@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import cn from '../../resources/js/utils/cn.js';
+import cn from '../../frontend/src/utils/cn.js';
 
 describe('cn (classnames utility)', () => {
   it('joins multiple class strings', () => {

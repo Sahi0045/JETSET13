@@ -8,7 +8,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary', 'html'],
-      include: ['backend/**/*.js', 'resources/js/**/*.{js,jsx}'],
+      include: ['backend/**/*.js', 'frontend/src/**/*.{js,jsx}'],
       exclude: ['node_modules', 'tests', 'dist', '**/*.config.*'],
     },
     // Multi-environment setup via projects
@@ -25,7 +25,7 @@ export default defineConfig({
           ],
         },
         resolve: {
-          alias: { '@': path.resolve('./resources/js') },
+          alias: { '@': path.resolve('./frontend/src') },
         },
       },
       {

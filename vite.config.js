@@ -36,10 +36,10 @@ export default defineConfig(({ mode }) => {
         base: '/',
         resolve: {
             alias: {
-                '@': path.resolve(__dirname, './resources/js'),
-                '@pages': path.resolve(__dirname, './resources/js/Pages'),
-                '@components': path.resolve(__dirname, './resources/js/Components'),
-                '@src': path.resolve(__dirname, './src')
+                '@': path.resolve(__dirname, './frontend/src'),
+                '@pages': path.resolve(__dirname, './frontend/src/Pages'),
+                '@components': path.resolve(__dirname, './frontend/src/Components'),
+                '@src': path.resolve(__dirname, './frontend')
             }
         },
         build: {

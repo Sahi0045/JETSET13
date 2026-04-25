@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getTodayDate, getNextDay, formatDateDisplay, getSafeDate, formatDateToISO } from '../../resources/js/utils/dateUtils.js';
+import { getTodayDate, getNextDay, formatDateDisplay, getSafeDate, formatDateToISO } from '../../frontend/src/utils/dateUtils.js';
 
 describe('dateUtils', () => {
   describe('getTodayDate', () => {

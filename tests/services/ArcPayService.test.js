@@ -19,7 +19,7 @@ describe('ArcPayService', () => {
     vi.clearAllMocks();
     // Re-import to get the singleton with the mocked axios
     vi.resetModules();
-    const mod = await import('../../resources/js/Services/ArcPayService.js');
+    const mod = await import('../../frontend/src/Services/ArcPayService.js');
     service = mod.default;
     // Override api with our mock
     service.api = mockAxiosInstance;

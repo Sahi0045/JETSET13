@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // We need to mock the api.config module before importing
-vi.mock('../../resources/js/config/api.config', () => ({
+vi.mock('../../frontend/src/config/api.config', () => ({
   default: { API_URL: 'http://localhost:3001/api' }
 }));
 
@@ -10,7 +10,7 @@ describe('apiHelper', () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    const mod = await import('../../resources/js/utils/apiHelper.js');
+    const mod = await import('../../frontend/src/utils/apiHelper.js');
     getApiUrl = mod.getApiUrl;
     apiRequest = mod.apiRequest;
   });

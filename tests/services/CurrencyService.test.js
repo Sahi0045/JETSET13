@@ -18,7 +18,7 @@ describe('CurrencyService', () => {
       writable: true,
       configurable: true,
     });
-    const mod = await import('../../resources/js/Services/CurrencyService.js');
+    const mod = await import('../../frontend/src/Services/CurrencyService.js');
     currencyService = mod.default;
   });
 

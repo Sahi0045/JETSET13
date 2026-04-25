@@ -310,7 +310,7 @@ app.listen(PORT, () => {
   // Start automated workflow engine (auto-assign, SLA, escalation, retention)
   if (process.env.NODE_ENV !== 'test') {
     startWorkflowEngine().catch(e => console.error('[Workflow] Engine failed to start:', e.message));
-    startDataRetentionJob(24).catch(e => console.error('[Retention] Job failed to start:', e.message));
+    try { startDataRetentionJob(24); } catch(e) { console.error('[Retention] Job failed to start:', e.message); }
     
     // Initialize default email templates
     initializeDefaultTemplates().catch(e => console.error('[Templates] Init failed:', e.message));
