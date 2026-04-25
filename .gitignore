@@ -59,8 +59,11 @@ dist/
 *.sw?
 .DS_Store
 Thumbs.db
-.cursor/mcp.json
+.cursor/
 
 # Backup & scratch files
 *.backup
 *.tst
+.env
+.env.*
+!.env.example
