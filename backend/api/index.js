@@ -9,21 +9,21 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // Import route handlers
-import authRoutes from "../backend/routes/auth.routes.js";
-import userRoutes from "../backend/routes/user.routes.js";
-import emailRoutes from "../backend/routes/email.routes.js";
-import flightRoutes from "../backend/routes/flight.routes.js";
-import hotelRoutes from "../backend/routes/hotel.routes.js";
-import paymentRoutes from "../backend/routes/payment.routes.js";
-import inquiryRoutes from "../backend/routes/inquiry.routes.js";
-import quoteRoutes from "../backend/routes/quote.routes.js";
-import cruiseRoutes from "../backend/routes/cruise.routes.js";
-import supabaseAuthRoutes from "../backend/routes/supabaseAuth.js";
-import geoRoutes from "../backend/routes/geo.routes.js";
-import adminRoutes from "../backend/routes/admin.routes.js";
-import couponRoutes from "../backend/routes/coupon.routes.js";
-import subscriptionRoutes from "../backend/routes/subscription.routes.js";
-import visaRoutes from "../backend/routes/visa.routes.js";
+import authRoutes from "../routes/auth.routes.js";
+import userRoutes from "../routes/user.routes.js";
+import emailRoutes from "../routes/email.routes.js";
+import flightRoutes from "../routes/flight.routes.js";
+import hotelRoutes from "../routes/hotel.routes.js";
+import paymentRoutes from "../routes/payment.routes.js";
+import inquiryRoutes from "../routes/inquiry.routes.js";
+import quoteRoutes from "../routes/quote.routes.js";
+import cruiseRoutes from "../routes/cruise.routes.js";
+import supabaseAuthRoutes from "../routes/supabaseAuth.js";
+import geoRoutes from "../routes/geo.routes.js";
+import adminRoutes from "../routes/admin.routes.js";
+import couponRoutes from "../routes/coupon.routes.js";
+import subscriptionRoutes from "../routes/subscription.routes.js";
+import visaRoutes from "../routes/visa.routes.js";
 import chatRoutes from "./chat/index.js";
 
 const app = express();
