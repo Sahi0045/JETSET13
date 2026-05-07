@@ -619,15 +619,15 @@ const CruiseBookingPopup = ({
                 Hi! We are excited to announce that bookings are open. <br />
                 Contact us directly to avail the best prices and get a <br />
                 <span className="inline-block mt-3 mb-1 group cursor-default">
-                  <span className="relative bg-[#0066FF] px-4 py-2 sm:px-6 sm:py-2.5 rounded-md flex items-center gap-3 shadow-[0_8px_20px_rgba(0,102,255,0.2)] overflow-hidden transition-all group-hover:scale-105 group-hover:shadow-[0_10px_25px_rgba(0,102,255,0.3)] border-x border-dashed border-white/20">
+                  <span className="relative bg-[#0066FF] px-4 py-2 sm:px-7 sm:py-3 rounded-lg inline-flex items-center gap-3 ring-2 ring-yellow-300/80 shadow-[0_0_24px_rgba(255,221,51,0.8)] overflow-hidden transition-all group-hover:scale-105 group-hover:shadow-[0_0_30px_rgba(255,221,51,0.95)] border-x border-dashed border-white/20 animate-pulse">
                     {/* Corner cutouts matching white popup background */}
                     <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
                     <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
                     <div className="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
                     <div className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
 
-                    <Ticket className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                    <span className="text-base sm:text-2xl font-black text-white tracking-tighter uppercase">$50 OFF VOUCHER</span>
+                    <Ticket className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+                    <span className="text-lg sm:text-3xl font-black text-white tracking-wide uppercase">$50 OFF VOUCHER</span>
                   </span>
                 </span>
               </p>
@@ -916,15 +916,15 @@ const HomePage = () => {
               <p className={`text-white ${isMobileView ? 'text-[10px]' : 'text-sm'} font-medium tracking-wide text-center leading-tight`}>
                 <span className="font-bold">Self-Service Portal Coming Soon!</span> For bookings, call <span className="text-yellow-300 font-bold">(877) 538-7380</span> or email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>.
                 <span className="inline-flex items-center ml-2.5 align-middle group cursor-default">
-                  <span className="relative bg-[#0066FF] px-2 py-0.5 rounded-sm flex items-center gap-1 shadow-[0_2px_10px_rgba(0,0,0,0.3)] overflow-hidden">
+                  <span className="relative bg-[#0066FF] px-3.5 py-1.5 md:px-4 md:py-1.5 rounded-md inline-flex items-center gap-1.5 ring-2 ring-yellow-300/80 shadow-[0_0_18px_rgba(255,221,51,0.75)] overflow-hidden animate-pulse">
                     {/* Corner cutouts matching banner background colors */}
                     <div className="absolute -top-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></div>
                     <div className="absolute -top-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></div>
                     <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></div>
                     <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></div>
 
-                    <Ticket className="w-2.5 h-2.5 text-white" />
-                    <span className="text-[9px] md:text-[10px] font-black text-white px-0.5">$50 OFF</span>
+                    <Ticket className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
+                    <span className="text-sm md:text-lg font-black text-white px-1 tracking-wide">$50 OFF</span>
                   </span>
                 </span>
               </p>
