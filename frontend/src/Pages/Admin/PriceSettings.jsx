@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getApiUrl } from '../../utils/apiHelper';
+import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
 const PriceSettings = () => {
@@ -24,6 +25,8 @@ const PriceSettings = () => {
   useEffect(() => {
     fetchPriceSettings();
   }, []);
+
+  useRegisterRefresh(useCallback(() => fetchPriceSettings(), []), []);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
@@ -182,17 +185,10 @@ const PriceSettings = () => {
   }
 
   return (
-    <div className="price-settings-container" style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '32px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
-          <div style={{ fontSize: '32px' }}>💰</div>
-          <h1 style={{ margin: 0, fontSize: '28px', color: '#1f2937' }}>Price Control Settings</h1>
-        </div>
-        <p style={{ color: '#6b7280', fontSize: '16px', margin: 0 }}>
-          Configure taxes, fees, and markup percentages for flights, cruises, hotels, and packages
-        </p>
-      </div>
+    <div className="price-settings-container" style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <p style={{ color: '#6b7280', fontSize: 14, margin: '0 0 20px' }}>
+        Configure taxes, fees, and markup percentages for flights, cruises, hotels, and packages.
+      </p>
 
       {/* Message */}
       {message && (

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
 const InquiryList = () => {
@@ -28,6 +29,8 @@ const InquiryList = () => {
   useEffect(() => {
     fetchInquiries();
   }, [filters, sortConfig]);
+
+  useRegisterRefresh(useCallback(() => fetchInquiries(), [filters, sortConfig]), [filters, sortConfig]);
 
   const fetchInquiries = async () => {
     try {

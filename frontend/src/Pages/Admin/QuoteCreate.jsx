@@ -435,27 +435,18 @@ const QuoteCreate = () => {
 
   return (
     <div className="quote-create">
-      {/* Page Header */}
-      <div className="page-header">
-        <div className="header-content">
-          <div className="inquiry-info">
-            <h1>Create Professional Quote</h1>
-            <div className="inquiry-details">
-              <div className="inquiry-meta">
-                <span className="inquiry-type-badge">
-                  <span className="type-icon">{getInquiryTypeIcon(inquiry.inquiry_type)}</span>
-                  <span>{inquiry.inquiry_type}</span>
-                </span>
-                <span className="inquiry-customer">{inquiry.customer_name}</span>
-                <span className="inquiry-id">#{inquiry.id}</span>
-              </div>
-            </div>
-          </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.875rem', color: '#374151', flexWrap: 'wrap' }}>
+          <span style={{ background: '#F0FAFC', color: '#055B75', padding: '4px 10px', borderRadius: 999, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {getInquiryTypeIcon(inquiry.inquiry_type)} {inquiry.inquiry_type}
+          </span>
+          <span style={{ fontWeight: 600 }}>{inquiry.customer_name}</span>
+          <span style={{ color: '#6b7280' }}>#{inquiry.id}</span>
         </div>
-        <div className="header-actions">
+        <div>
           <button
             onClick={() => setShowPreview(!showPreview)}
-            className="action-button secondary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', border: '1px solid #d1d5db', background: '#fff', color: '#374151', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}
           >
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
               <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
@@ -463,7 +454,7 @@ const QuoteCreate = () => {
             </svg>
             {showPreview ? 'Hide Preview' : 'Show Preview'}
           </button>
-          <Link to={`/admin/inquiries/${inquiryId}`} className="action-button secondary">
+          <Link to={`/admin/inquiries/${inquiryId}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 8, padding: '8px 16px', border: '1px solid #d1d5db', background: '#fff', color: '#374151', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: '0.875rem' }}>
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
             </svg>

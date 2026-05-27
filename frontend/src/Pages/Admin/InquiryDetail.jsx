@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
 const InquiryDetail = () => {
@@ -45,14 +46,9 @@ const InquiryDetail = () => {
 
   useEffect(() => {
     fetchInquiryDetails();
-    
-    // Auto-refresh every 30 seconds to get latest payment status
-    const refreshInterval = setInterval(() => {
-      fetchInquiryDetails();
-    }, 30000); // Refresh every 30 seconds
-    
-    return () => clearInterval(refreshInterval);
   }, [id]);
+
+  useRegisterRefresh(useCallback(() => fetchInquiryDetails(), [id]), [id]);
 
   const fetchInquiryDetails = async () => {
     try {

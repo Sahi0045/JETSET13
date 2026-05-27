@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
 const QuoteDetail = () => {
@@ -15,6 +16,8 @@ const QuoteDetail = () => {
   useEffect(() => {
     fetchQuoteDetails();
   }, [id]);
+
+  useRegisterRefresh(useCallback(() => fetchQuoteDetails(), [id]), [id]);
 
   const fetchQuoteDetails = async () => {
     try {
@@ -156,29 +159,23 @@ const QuoteDetail = () => {
     }
   };
 
+  const backBtn = {
+    padding: '8px 16px', border: '1px solid #d1d5db', background: '#fff',
+    color: '#374151', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem',
+    textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6
+  };
+
   if (loading) {
     return (
-      <div className="admin-container">
-        <div className="admin-header">
-          <h1>Loading Quote Details...</h1>
-        </div>
-        <div className="loading-spinner" style={{ textAlign: 'center', padding: '50px' }}>
-          <div className="spinner"></div>
-        </div>
-      </div>
+      <div style={{ textAlign: 'center', padding: 50, color: '#6b7280' }}>Loading quote details…</div>
     );
   }
 
   if (error) {
     return (
-      <div className="admin-container">
-        <div className="admin-header">
-          <button onClick={() => navigate(-1)} className="btn-secondary" style={{ marginBottom: '20px' }}>
-            ← Back
-          </button>
-          <h1>Error</h1>
-        </div>
-        <div className="error-message" style={{ padding: '20px', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '8px', color: '#991b1b' }}>
+      <div>
+        <button onClick={() => navigate(-1)} style={{ ...backBtn, marginBottom: 16 }}>← Back</button>
+        <div style={{ padding: 20, backgroundColor: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, color: '#991b1b' }}>
           {error}
         </div>
       </div>
@@ -187,34 +184,28 @@ const QuoteDetail = () => {
 
   if (!quote) {
     return (
-      <div className="admin-container">
-        <div className="admin-header">
-          <button onClick={() => navigate(-1)} className="btn-secondary" style={{ marginBottom: '20px' }}>
-            ← Back
-          </button>
-          <h1>Quote Not Found</h1>
+      <div>
+        <button onClick={() => navigate(-1)} style={{ ...backBtn, marginBottom: 16 }}>← Back</button>
+        <div style={{ padding: 20, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#6b7280' }}>
+          Quote not found.
         </div>
       </div>
     );
   }
 
   return (
-    <div className="admin-container">
-      <div className="admin-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-          <button onClick={() => navigate(-1)} className="btn-secondary">
-            ← Back
-          </button>
-          {inquiry && (
-            <Link to={`/admin/inquiries/${inquiry.id}`} className="btn-secondary">
-              View Inquiry
-            </Link>
-          )}
-        </div>
-        <h1>Quote Details: {quote.quote_number || quote.id}</h1>
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <button onClick={() => navigate(-1)} style={backBtn}>← Back</button>
+        {inquiry && (
+          <Link to={`/admin/inquiries/${inquiry.id}`} style={backBtn}>View Inquiry</Link>
+        )}
+        <span style={{ marginLeft: 'auto', color: '#6b7280', fontSize: '0.875rem' }}>
+          Quote: <strong style={{ color: '#055B75' }}>{quote.quote_number || quote.id}</strong>
+        </span>
       </div>
 
-      <div className="admin-content">
+      <div>
         {/* Quote Information */}
         <div className="quote-card" style={{ marginBottom: '20px' }}>
           <div className="quote-header">

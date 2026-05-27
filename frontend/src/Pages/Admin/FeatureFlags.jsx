@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
 const FeatureFlags = () => {
@@ -60,6 +61,8 @@ const FeatureFlags = () => {
   useEffect(() => {
     fetchFeatureFlags();
   }, []);
+
+  useRegisterRefresh(useCallback(() => fetchFeatureFlags(), []), []);
 
   const fetchFeatureFlags = async () => {
     try {
@@ -218,19 +221,11 @@ const FeatureFlags = () => {
 
   return (
     <div className="feature-flags">
-      {/* Page Header */}
-      <div className="page-header">
-        <div className="header-content">
-          <h1>System Configuration</h1>
-          <p>Control which features are available to your users and manage system settings</p>
-        </div>
-        <div className="header-actions">
-          <div className="stats-summary">
-            <span className="stats-item">
-              <strong>{flags.filter(f => f.enabled).length}</strong> of <strong>{flags.length}</strong> enabled
-            </span>
-          </div>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
+        <p style={{ color: '#6b7280', margin: 0, fontSize: '0.95rem' }}>Control which features are available to your users.</p>
+        <span style={{ color: '#374151', fontSize: '0.875rem' }}>
+          <strong style={{ color: '#055B75' }}>{flags.filter(f => f.enabled).length}</strong> of <strong>{flags.length}</strong> enabled
+        </span>
       </div>
 
       {/* Success/Error Messages */}

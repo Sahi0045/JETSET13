@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getApiUrl } from '../../utils/apiHelper';
+import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
 const SubscriptionManagement = () => {
@@ -12,6 +13,8 @@ const SubscriptionManagement = () => {
     useEffect(() => {
         fetchSubscriptions();
     }, []);
+
+    useRegisterRefresh(useCallback(() => fetchSubscriptions(), []), []);
 
     const fetchSubscriptions = async () => {
         try {
@@ -69,13 +72,8 @@ const SubscriptionManagement = () => {
     };
 
     return (
-        <div className="admin-content p-6 max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Subscription Management</h1>
-                    <p className="text-gray-600">View and manage user subscriptions</p>
-                </div>
-            </div>
+        <div className="max-w-7xl mx-auto">
+            <p className="text-gray-500 text-sm mb-5 m-0">View and manage user subscriptions.</p>
 
             {statusMessage && (
                 <div className={`p-4 rounded-md mb-6 ${statusMessage.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>

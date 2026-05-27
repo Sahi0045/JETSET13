@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getApiUrl } from '../../utils/apiHelper';
+import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
 const BookingsList = () => {
@@ -97,6 +98,8 @@ const BookingsList = () => {
     useEffect(() => {
         fetchBookings();
     }, [fetchBookings]);
+
+    useRegisterRefresh(fetchBookings, [fetchBookings]);
 
     const handleSearch = (e) => {
         e.preventDefault();

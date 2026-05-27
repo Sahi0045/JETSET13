@@ -1,7 +1,6 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import Navbar from '../Common/Navbar';
-import Footer from '../Common/Footer';
+import AdminShell from './shell/AdminShell';
 import AdminDashboard from './AdminDashboard';
 import InquiryList from './InquiryList';
 import InquiryDetail from './InquiryDetail';
@@ -20,36 +19,31 @@ import BulkActions from './BulkActions';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import BulkUpload from './BulkUpload';
 import TemplateManager from './TemplateManager';
-import './AdminPanel.css';
 
 const AdminPanel = () => {
   return (
-    <>
-      <Navbar />
-      <div className="admin-panel">
-        <Routes>
-          <Route path="/" element={<AdminDashboard />} />
-          <Route path="/inquiries" element={<InquiryList />} />
-          <Route path="/inquiries/:id" element={<InquiryDetail />} />
-          <Route path="/inquiries/:inquiryId/quote" element={<QuoteCreate />} />
-          <Route path="/quotes/:id" element={<QuoteDetail />} />
-          <Route path="/feature-flags" element={<FeatureFlags />} />
-          <Route path="/price-settings" element={<PriceSettings />} />
-          <Route path="/bookings" element={<BookingsList />} />
-          <Route path="/payment-links" element={<PaymentLinksList />} />
-          <Route path="/payment-links/create" element={<PaymentLinkCreate />} />
-          <Route path="/agents" element={<AgentManagement />} />
-          <Route path="/coupons" element={<CouponManagement />} />
-          <Route path="/subscriptions" element={<SubscriptionManagement />} />
-          <Route path="/sla" element={<SLADashboard />} />
-          <Route path="/bulk" element={<BulkActions />} />
-          <Route path="/bulk-upload" element={<BulkUpload />} />
-          <Route path="/templates" element={<TemplateManager />} />
-          <Route path="/reports" element={<AnalyticsDashboard />} />
-        </Routes>
-      </div>
-      <Footer />
-    </>
+    <Routes>
+      <Route element={<AdminShell />}>
+        <Route path="/" element={<AdminDashboard />} />
+        <Route path="inquiries" element={<InquiryList />} />
+        <Route path="inquiries/:id" element={<InquiryDetail />} />
+        <Route path="inquiries/:inquiryId/quote" element={<QuoteCreate />} />
+        <Route path="quotes/:id" element={<QuoteDetail />} />
+        <Route path="feature-flags" element={<FeatureFlags />} />
+        <Route path="price-settings" element={<PriceSettings />} />
+        <Route path="bookings" element={<BookingsList />} />
+        <Route path="payment-links" element={<PaymentLinksList />} />
+        <Route path="payment-links/create" element={<PaymentLinkCreate />} />
+        <Route path="agents" element={<AgentManagement />} />
+        <Route path="coupons" element={<CouponManagement />} />
+        <Route path="subscriptions" element={<SubscriptionManagement />} />
+        <Route path="sla" element={<SLADashboard />} />
+        <Route path="bulk" element={<BulkActions />} />
+        <Route path="bulk-upload" element={<BulkUpload />} />
+        <Route path="templates" element={<TemplateManager />} />
+        <Route path="reports" element={<AnalyticsDashboard />} />
+      </Route>
+    </Routes>
   );
 };
 

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 import { getApiUrl } from '../../utils/apiHelper';
 
@@ -27,22 +28,15 @@ const AdminDashboard = () => {
   const [recentInquiries, setRecentInquiries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('7d');
-  const [currentTime, setCurrentTime] = useState(new Date());
-
   // Determine user role (admin vs agent)
   const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
   const userRole = adminUser.role || 'admin';
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000); // Update every minute
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
     fetchDashboardData();
   }, [timeRange]);
+
+  useRegisterRefresh(useCallback(() => fetchDashboardData(), [timeRange]), [timeRange]);
 
   const fetchDashboardData = async () => {
     try {
@@ -234,34 +228,11 @@ const AdminDashboard = () => {
 
   return (
     <div className="admin-dashboard">
-      {/* Dashboard Header */}
-      <div className="dashboard-header">
-        <div className="header-content">
-          <div className="header-info">
-            <h1>{userRole === 'agent' ? 'Agent Dashboard' : 'Dashboard Overview'}</h1>
-            <p>{userRole === 'agent' ? `Welcome back, ${adminUser.firstName || 'Agent'}! Here are your stats.` : "Welcome back! Here's what's happening with your travel business today."}</p>
-          </div>
-          <div className="header-actions">
-            <div className="time-display">
-              <span className="current-time">
-                {currentTime.toLocaleTimeString('en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true
-                })}
-              </span>
-              <span className="current-date">
-                {currentTime.toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <p style={{ color: 'var(--aps-text-muted, #6b7280)', margin: '0 0 16px', fontSize: '0.95rem' }}>
+        {userRole === 'agent'
+          ? `Welcome back, ${adminUser.firstName || 'Agent'}! Here are your stats.`
+          : "Welcome back! Here's what's happening with your travel business today."}
+      </p>
 
       {/* Time Range Selector */}
       <div className="dashboard-controls">

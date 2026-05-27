@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
 const PaymentLinksList = () => {
@@ -13,6 +14,8 @@ const PaymentLinksList = () => {
   useEffect(() => {
     fetchLinks();
   }, []);
+
+  useRegisterRefresh(useCallback(() => fetchLinks(), []), []);
 
   const fetchLinks = async () => {
     try {
@@ -114,28 +117,15 @@ const PaymentLinksList = () => {
 
   return (
     <div className="payment-links-list">
-      <div className="page-header">
-        <div className="header-content">
-          <div className="header-info">
-            <h1>🔗 Payment Links</h1>
-            <p>Manage all generated payment links</p>
-          </div>
-        </div>
-        <div className="header-actions">
-          <Link to="/admin/payment-links/create" className="action-button primary" style={{
-            background: '#055B75',
-            color: 'white',
-            textDecoration: 'none',
-            padding: '10px 20px',
-            borderRadius: '8px',
-            fontWeight: 600,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}>
-            + Create Payment Link
-          </Link>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
+        <p style={{ color: '#6b7280', margin: 0, fontSize: '0.95rem' }}>Manage all generated payment links.</p>
+        <Link to="/admin/payment-links/create" style={{
+          background: '#055B75', color: '#fff', textDecoration: 'none',
+          padding: '10px 20px', borderRadius: 8, fontWeight: 600,
+          display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.875rem'
+        }}>
+          + Create Payment Link
+        </Link>
       </div>
 
       {/* Stats Bar */}

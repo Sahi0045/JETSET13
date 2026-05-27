@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import supabase from '../../lib/supabase';
+import { useRegisterRefresh } from './shell/RefreshContext';
 
 const API_BASE = '/api';
 
@@ -45,11 +46,7 @@ export default function SLADashboard() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-refresh every 5 minutes
-  useEffect(() => {
-    const t = setInterval(load, 5 * 60 * 1000);
-    return () => clearInterval(t);
-  }, [load]);
+  useRegisterRefresh(load, [load]);
 
   const inquiries = data?.inquiries || [];
   const summary   = data?.summary   || {};

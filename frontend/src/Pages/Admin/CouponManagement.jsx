@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { useRegisterRefresh } from './shell/RefreshContext';
 
 const getApiBase = () => {
   if (typeof import.meta !== 'undefined' && import.meta.env?.PROD && import.meta.env?.VITE_API_BASE_URL) {
@@ -30,6 +31,8 @@ const CouponManagement = () => {
   const [editingId, setEditingId] = useState(null);
 
   useEffect(() => { fetchCoupons(); }, []);
+
+  useRegisterRefresh(useCallback(() => fetchCoupons(), []), []);
 
   const fetchCoupons = async () => {
     setLoading(true);
@@ -101,12 +104,9 @@ const CouponManagement = () => {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Coupon Management</h2>
-          <p className="text-sm text-gray-500 mt-1">{coupons.length} coupons total</p>
-        </div>
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <p className="text-sm text-gray-500 m-0">{coupons.length} coupons total</p>
         <button
           onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(EMPTY_FORM); }}
           className="flex items-center gap-2 px-5 py-2.5 bg-[#055B75] text-white text-sm font-semibold rounded-xl hover:bg-[#034457] transition-colors"

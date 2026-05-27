@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
 const AgentManagement = () => {
@@ -14,6 +15,8 @@ const AgentManagement = () => {
   const [success, setSuccess] = useState('');
 
   useEffect(() => { fetchAgents(); }, []);
+
+  useRegisterRefresh(useCallback(() => fetchAgents(), []), []);
 
   const getToken = () => localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
 
@@ -132,22 +135,15 @@ const AgentManagement = () => {
 
   return (
     <div className="agent-management">
-      <div className="page-header">
-        <div className="header-content">
-          <div className="header-info">
-            <h1>👥 Agent Management</h1>
-            <p>Create and manage travel agents</p>
-          </div>
-        </div>
-        <div className="header-actions">
-          <button onClick={openCreateModal} className="action-button primary" style={{
-            background: '#055B75', color: 'white', border: 'none',
-            padding: '10px 20px', borderRadius: '8px', fontWeight: 600,
-            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
-          }}>
-            + Add Agent
-          </button>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <p style={{ color: '#6b7280', margin: 0, fontSize: '0.95rem' }}>Create and manage travel agents</p>
+        <button onClick={openCreateModal} style={{
+          background: '#055B75', color: 'white', border: 'none',
+          padding: '10px 20px', borderRadius: '8px', fontWeight: 600,
+          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
+        }}>
+          + Add Agent
+        </button>
       </div>
 
       {success && (

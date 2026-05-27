@@ -135,11 +135,9 @@ const PaymentLinkCreate = () => {
   if (generatedLink) {
     return (
       <div className="payment-link-create">
-        <div className="page-header">
-          <div className="header-content">
-            <h1>✅ Payment Link Generated!</h1>
-            <p>Share this link with your client to collect payment</p>
-          </div>
+        <div style={{ marginBottom: 20 }}>
+          <h2 style={{ margin: 0, color: '#055B75', fontSize: '1.4rem' }}>✅ Payment Link Generated!</h2>
+          <p style={{ color: '#6b7280', margin: '4px 0 0' }}>Share this link with your client to collect payment</p>
         </div>
 
         <div className="success-container" style={{ maxWidth: '700px', margin: '30px auto' }}>
@@ -230,18 +228,14 @@ const PaymentLinkCreate = () => {
 
   return (
     <div className="payment-link-create">
-      <div className="page-header">
-        <div className="header-content">
-          <div className="header-info">
-            <h1>🔗 Create Payment Link</h1>
-            <p>Enter travel details and generate a payment link for your client</p>
-          </div>
-        </div>
-        <div className="header-actions">
-          <Link to="/admin/payment-links" className="action-button secondary">
-            View All Links
-          </Link>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
+        <p style={{ color: '#6b7280', margin: 0, fontSize: '0.95rem' }}>Enter travel details and generate a payment link for your client.</p>
+        <Link to="/admin/payment-links" style={{
+          padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: 8,
+          color: '#374151', textDecoration: 'none', fontWeight: 600, fontSize: '0.875rem'
+        }}>
+          View All Links
+        </Link>
       </div>
 
       {error && (
