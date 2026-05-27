@@ -88,6 +88,40 @@ export default defineConfig(({ mode }) => {
                             id.includes('node_modules/react-bootstrap')) {
                             return 'bootstrap';
                         }
+                        // ── Shared app shell (Navbar/Footer/auth/supabase/prefetch) ─
+                        //    These modules are imported by every booking flow AND by
+                        //    admin pages. Without an explicit chunk, Rollup folds them
+                        //    into whichever flow-chunk first imports them — usually
+                        //    `admin` — which then forces every other flow chunk to
+                        //    statically import the admin chunk. That cross-flow
+                        //    dependency caused a TDZ error in prod (cruise chunk used
+                        //    `supabase`/`Navbar` before the admin chunk finished
+                        //    evaluating). Pin them to their own chunk so every flow
+                        //    depends on `common-shell`, not on each other.
+                        if (id.endsWith('/Pages/Common/Navbar.jsx') ||
+                            id.endsWith('/Pages/Common/Footer.jsx') ||
+                            id.endsWith('/Pages/Common/PageWrapper.jsx') ||
+                            id.endsWith('/Pages/Common/ContactPopup.jsx') ||
+                            id.includes('/frontend/src/lib/supabase') ||
+                            id.includes('/frontend/src/Components/PrefetchLink') ||
+                            id.includes('/frontend/src/Components/CurrencySelector') ||
+                            id.includes('/frontend/src/Components/LoadingSpinner') ||
+                            id.includes('/frontend/src/Components/Price') ||
+                            id.includes('/frontend/src/components/CouponInput') ||
+                            id.includes('/frontend/src/utils/routePrefetch') ||
+                            id.includes('/frontend/src/utils/apiHelper') ||
+                            id.includes('/frontend/src/utils/axiosShim') ||
+                            id.includes('/frontend/src/utils/dateUtils') ||
+                            id.includes('/frontend/src/config/api') ||
+                            id.endsWith('/frontend/src/api.js') ||
+                            id.includes('/frontend/src/Services/GeoService') ||
+                            id.includes('/frontend/src/Services/CurrencyService') ||
+                            id.includes('/frontend/src/Services/ArcPayService') ||
+                            id.includes('/frontend/src/Services/callbackService') ||
+                            id.includes('/frontend/src/Context/LocationContext') ||
+                            id.includes('/frontend/src/contexts/SupabaseAuthContext')) {
+                            return 'common-shell';
+                        }
                         // ── Admin section ──────────────────────────────────
                         if (id.includes('/Pages/Admin/')) {
                             return 'admin';
