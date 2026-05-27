@@ -896,8 +896,7 @@ export default function HotelSearchResults() {
                 <img
                   src={hotel.image}
                   alt={hotel.name}
-                  className="w-full h-full object-cover"
-                />
+                  className="w-full h-full object-cover" loading="lazy" decoding="async" />
                 <button
                   onClick={() => toggleFavorite(hotel.id)}
                   className="absolute top-4 right-4 p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"

@@ -163,7 +163,7 @@ const PaymentLinkPage = () => {
     <div style={styles.pageContainer}>
       {/* Header */}
       <div style={styles.header}>
-        <img src="/logo.png" alt="Jetsetters" style={{ height: '36px' }} onError={(e) => { e.target.style.display = 'none'; }} />
+        <img src="/logo.png" alt="Jetsetters" style={{ height: '36px' }} loading="lazy" decoding="async" onError={(e) => { e.target.style.display = 'none'; }} />
         <span style={{ fontSize: '20px', fontWeight: 700, color: '#055B75' }}>Jetsetters</span>
       </div>
 

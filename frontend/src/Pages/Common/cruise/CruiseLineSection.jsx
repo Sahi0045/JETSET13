@@ -1,11 +1,21 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './CruiseLineSection.css';
-import cruiseLineData from './data/cruiselines.json';
+import { loadCruiseLines } from './data/cruiselinesLoader';
 import { FaStar, FaShip } from 'react-icons/fa';
 import Price from '../../../Components/Price';
 
 const CruiseLineSection = () => {
+  const [cruiseLines, setCruiseLines] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadCruiseLines().then(data => {
+      if (!cancelled) setCruiseLines(data.cruiseLines || []);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <section className="cruise-line-section">
       <div className="cruise-line-header flex flex-col items-center gap-2">
@@ -19,14 +29,14 @@ const CruiseLineSection = () => {
       </p>
 
       <div className="cruise-lines-grid">
-        {cruiseLineData.cruiseLines.map((cruiseLine) => (
+        {cruiseLines.map((cruiseLine) => (
           <div key={cruiseLine.id} className="cruise-line-card">
             <div className="rating">
               <FaStar className="star-icon" />
               <span>5.0</span>
             </div>
             <div className="cruise-line-image">
-              <img src={cruiseLine.image} alt={cruiseLine.name} />
+              <img loading="lazy" decoding="async" src={cruiseLine.image} alt={cruiseLine.name} />
             </div>
             <div className="cruise-line-info">
               <h4>{cruiseLine.name}</h4>

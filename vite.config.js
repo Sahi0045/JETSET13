@@ -39,7 +39,10 @@ export default defineConfig(({ mode }) => {
                 '@': path.resolve(__dirname, './frontend/src'),
                 '@pages': path.resolve(__dirname, './frontend/src/Pages'),
                 '@components': path.resolve(__dirname, './frontend/src/Components'),
-                '@src': path.resolve(__dirname, './frontend')
+                '@src': path.resolve(__dirname, './frontend'),
+                // Route axios imports to an in-tree fetch-based shim so the npm
+                // package can be removed from the bundle (vendor-misc shrink).
+                axios: path.resolve(__dirname, './frontend/src/utils/axiosShim.js')
             }
         },
         build: {
@@ -89,13 +92,17 @@ export default defineConfig(({ mode }) => {
                         if (id.includes('/Pages/Admin/')) {
                             return 'admin';
                         }
-                        // ── Booking flows ──────────────────────────────────
-                        if (id.includes('/Pages/Common/flights/') ||
-                            id.includes('/Pages/Common/cruise/') ||
-                            id.includes('/Pages/Common/hotels/') ||
-                            id.includes('/Pages/Common/packages/')) {
-                            return 'booking';
+                        // ── Lazily-loaded data files: let Rollup put them in their
+                        //    own dynamic chunks instead of folding into the flow bundles.
+                        if (id.endsWith('/flights/data-mock-booking.js') ||
+                            id.endsWith('/cruise/data/cruiselines.json')) {
+                            return; // undefined → Rollup chooses dynamic chunk
                         }
+                        // ── Booking flows (per-flow so users only download what they visit) ──
+                        if (id.includes('/Pages/Common/flights/')) return 'booking-flights';
+                        if (id.includes('/Pages/Common/cruise/'))  return 'booking-cruise';
+                        if (id.includes('/Pages/Common/hotels/'))  return 'booking-hotels';
+                        if (id.includes('/Pages/Common/packages/')) return 'booking-packages';
                         // ── Everything else from node_modules ──────────────
                         if (id.includes('node_modules')) {
                             return 'vendor-misc';

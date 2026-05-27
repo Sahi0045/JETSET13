@@ -5,8 +5,6 @@ import {
   AlertCircle, AlertTriangle, CheckCircle, Info, Phone, Mail, Edit3,
   Download, X, Wifi, Utensils, Luggage, Flame, Zap, Ban, Skull, Battery, Scissors, Droplet, Briefcase
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
@@ -143,6 +141,11 @@ function ManageBooking() {
     const input = ticketRef.current;
 
     try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
       // Wait a bit for any images to fully load
       await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -827,7 +830,7 @@ function ManageBooking() {
 
           {/* 1. Header with Logo and Booking ID */}
           <div className="flex justify-between items-center p-6 border-b border-gray-200">
-            <img src="/images/jetset.jpeg" alt="JetSetters" className="h-12 object-contain" crossOrigin="anonymous" />
+            <img loading="lazy" decoding="async" src="/images/jetset.jpeg" alt="JetSetters" className="h-12 object-contain" crossOrigin="anonymous" />
             <div className="text-right">
               <div className="text-sm font-bold text-gray-700">Booking ID: {bookingData?.orderId || bookingData?.bookingDetails?.bookingId || 'PENDING'}</div>
               <div className="text-xs text-gray-500">Booked on {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
@@ -906,7 +909,7 @@ function ManageBooking() {
                 <div className="border-t border-gray-100 py-4 flex flex-wrap md:flex-nowrap items-center">
                   <div className="flex items-center w-1/4">
                     <div className="mr-3">
-                      <img src="/images/jetset.jpeg" alt="Airline" className="w-10 h-10 object-contain" crossOrigin="anonymous" />
+                      <img loading="lazy" decoding="async" src="/images/jetset.jpeg" alt="Airline" className="w-10 h-10 object-contain" crossOrigin="anonymous" />
                     </div>
                     <div>
                       <div className="font-bold text-sm text-gray-700">{bookingData?.airlineName || bookingData?.bookingDetails?.flight?.airline || 'JetSetters Air'}</div>
@@ -1112,7 +1115,7 @@ function ManageBooking() {
                 <p>Email: help@jetsetters.com</p>
               </div>
               <div className="text-right">
-                <img src="/images/jetset.jpeg" alt="JetSetters" className="h-8 object-contain opacity-50 ml-auto" crossOrigin="anonymous" />
+                <img loading="lazy" decoding="async" src="/images/jetset.jpeg" alt="JetSetters" className="h-8 object-contain opacity-50 ml-auto" crossOrigin="anonymous" />
                 <p className="text-[10px] text-gray-400 mt-1">© 2026 JetSetters Inc.</p>
               </div>
             </div>

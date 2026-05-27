@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 const ContactBanner = () => {
   const bannerUrl = import.meta.env.VITE_CONTACT_BANNER_URL || '/images/jetsetters-banner.jpg';
+  const bannerWebp = bannerUrl.replace(/\.(jpe?g|png)$/i, '.webp');
   const email = 'bookings@jetsetterss.com';
   const phone = '+1-408-899-9705';
   const [isMinimized, setIsMinimized] = useState(false);
@@ -77,14 +78,19 @@ const ContactBanner = () => {
       </button>
 
       <a href={`mailto:${email}`} title={`Email ${email}`} style={{ display: 'block' }}>
-        <img
-          src={bannerUrl}
-          alt="Jetsetters — Plan your stress-free global travel. Contact bookings@jetsetterss.com or call +1-408-899-9705"
-          style={{ width: '100%', height: 'auto', maxHeight: 260, objectFit: 'contain', display: 'block', background: '#0b689c' }}
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-          }}
-        />
+        <picture>
+          <source srcSet={bannerWebp} type="image/webp" />
+          <img
+            src={bannerUrl}
+            alt="Jetsetters — Plan your stress-free global travel. Contact bookings@jetsetterss.com or call +1-408-899-9705"
+            loading="lazy"
+            decoding="async"
+            style={{ width: '100%', height: 'auto', maxHeight: 260, objectFit: 'contain', display: 'block', background: '#0b689c' }}
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        </picture>
       </a>
     </div>
   );

@@ -171,8 +171,7 @@ const TravelBlog = () => {
                     <img
                       src={featuredPost.image}
                       alt={featuredPost.title}
-                      className="w-full h-72 lg:h-full object-cover"
-                    />
+                      className="w-full h-72 lg:h-full object-cover" loading="lazy" decoding="async" />
                   </div>
                   <div className="lg:w-1/2 p-8 lg:p-10">
                     <div className="flex items-center gap-3 mb-4">
@@ -223,8 +222,7 @@ const TravelBlog = () => {
                     <img
                       src={post.image}
                       alt={post.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" decoding="async" />
                   </div>
 
                   {/* Post Content */}

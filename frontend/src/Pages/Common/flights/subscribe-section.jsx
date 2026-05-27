@@ -219,7 +219,7 @@ export default function SubscribeSection() {
                         <path d={subscriptionAirplane} />
                       </svg>
                     ) : (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={subscriptionAirplane || "https://images.unsplash.com/photo-1556388158-158ea5ccacbd?q=80&w=320&auto=format&fit=crop"}
                         alt="Airplane"
                         className="w-10 h-10 object-contain mr-3"
@@ -289,7 +289,7 @@ export default function SubscribeSection() {
                     <div className="flex -space-x-2 mr-3">
                       {stats.avatars.map((avatar, index) => (
                         <div key={avatar.id || index} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden">
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={avatar.image_url}
                             alt={`Subscriber ${index + 1}`}
                             className="w-full h-full object-cover"

@@ -25,7 +25,10 @@ export default defineConfig({
           ],
         },
         resolve: {
-          alias: { '@': path.resolve('./frontend/src') },
+          alias: {
+            '@': path.resolve('./frontend/src'),
+            axios: path.resolve('./frontend/src/utils/axiosShim.js')
+          },
         },
       },
       {

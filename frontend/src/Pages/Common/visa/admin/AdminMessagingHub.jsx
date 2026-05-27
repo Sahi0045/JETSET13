@@ -117,7 +117,7 @@ const AdminMessagingHub = () => {
                                     }`}
                             >
                                 <div className="relative shrink-0">
-                                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${thread.customer_name}`} className="size-14 rounded-[1.25rem] border-2 border-white shadow-xl" alt="C" />
+                                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${thread.customer_name}`} className="size-14 rounded-[1.25rem] border-2 border-white shadow-xl" alt="C" loading="lazy" decoding="async" />
                                     <div className="absolute -bottom-1 -right-1 size-4 bg-emerald-500 border-2 border-white rounded-full shadow-lg"></div>
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -142,7 +142,7 @@ const AdminMessagingHub = () => {
                             </button>
                             <div className="relative group cursor-pointer" onClick={() => setShowInfo(!showInfo)}>
                                 <div className="relative">
-                                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activeThread?.customer_name}`} className="size-11 rounded-[1.25rem] border-2 border-[#1152d4]/10 shadow-lg shadow-[#1152d4]/5 transition-transform group-hover:scale-105" alt="A" />
+                                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activeThread?.customer_name}`} className="size-11 rounded-[1.25rem] border-2 border-[#1152d4]/10 shadow-lg shadow-[#1152d4]/5 transition-transform group-hover:scale-105" alt="A" loading="lazy" decoding="async" />
                                     <div className="absolute -bottom-1 -right-1 size-3.5 bg-emerald-500 border-2 border-white rounded-full shadow-md"></div>
                                 </div>
                             </div>
@@ -185,7 +185,7 @@ const AdminMessagingHub = () => {
                                             <span className="material-symbols-outlined text-sm">robot_2</span>
                                         </div>
                                     ) : (
-                                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activeThread?.customer_name}`} className="size-9 rounded-xl shadow-lg border-2 border-white" alt="C" />
+                                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activeThread?.customer_name}`} className="size-9 rounded-xl shadow-lg border-2 border-white" alt="C" loading="lazy" decoding="async" />
                                     )}
                                 </div>
                                 <div className={`flex flex-col gap-2 ${msg.sender_type === 'admin' ? 'items-end' : ''}`}>

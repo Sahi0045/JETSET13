@@ -311,7 +311,7 @@ export default function CheapestFlights({ onBookFlight }) {
               {!loadedImages[flight.id] && (
                 <div className="absolute inset-0 bg-gradient-to-br from-gray-200 via-gray-300 to-gray-200 animate-pulse z-5"></div>
               )}
-              <img
+              <img loading="lazy" decoding="async"
                 src={flight.image}
                 alt={flight.destination}
                 className={`w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 ${loadedImages[flight.id] ? 'opacity-100' : 'opacity-0'}`}

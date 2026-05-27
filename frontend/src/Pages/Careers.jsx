@@ -179,8 +179,7 @@ const Careers = () => {
                       <img
                         src={benefit.image}
                         alt={benefit.title}
-                        className="w-full h-[500px] object-cover"
-                      />
+                        className="w-full h-[500px] object-cover" loading="lazy" decoding="async" />
                     </div>
                   </div>
                   <div className="flex-1 space-y-6">

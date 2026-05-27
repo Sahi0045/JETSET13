@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Link, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, Filter, ArrowUpDown, MapPin, Luggage, Sun, Sunrise, Sunset, Moon, ShieldCheck, RefreshCw, Briefcase } from "lucide-react";
 import Navbar from '../Navbar';
@@ -20,6 +20,8 @@ import { getTodayDate, getSafeDate } from "../../../utils/dateUtils";
 import apiConfig from '@/config/api';
 import LoadingSpinner from '../../../Components/LoadingSpinner';
 import FlightSearchForm from './flight-search-form';
+import FlightCard from './FlightCard';
+import FlightFilterSidebar from './FlightFilterSidebar';
 
 function FlightSearchPage() {
   const location = useLocation();
@@ -68,6 +70,9 @@ function FlightSearchPage() {
 
   // Generate date range based on current date
   useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
     const generateDateRange = (centerDate) => {
       const dates = [];
       // Ensure we work with local noon to avoid timezone shifts
@@ -169,7 +174,8 @@ function FlightSearchPage() {
               'Accept': 'application/json'
             },
             body: JSON.stringify(searchData),
-            credentials: 'omit'
+            credentials: 'omit',
+            signal: controller.signal
           });
 
           if (!response.ok) {
@@ -178,6 +184,7 @@ function FlightSearchPage() {
           }
 
           const data = await response.json();
+          if (cancelled) return;
           console.log('API response received:', data);
 
           if (!data.success && !data.data) {
@@ -221,11 +228,12 @@ function FlightSearchPage() {
             }
           }
         } catch (error) {
+          if (cancelled || error.name === 'AbortError') return;
           console.error('Error fetching initial flights:', error);
           setFlights([]);
           setError(error.message);
         } finally {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
         }
       } else {
         setLoading(false);
@@ -233,6 +241,11 @@ function FlightSearchPage() {
     };
 
     fetchInitialFlights();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [location.state]);
 
   // Update search params when location state changes
@@ -248,20 +261,12 @@ function FlightSearchPage() {
   const [dynamicAirlineMap, setDynamicAirlineMap] = useState({});
 
   // City code to name mapping - Generated from comprehensive airports database
-  const cityMap = allAirports.reduce((acc, airport) => {
-    acc[airport.code] = `${airport.name}${airport.country ? ` (${airport.name === airport.city ? airport.country : airport.name + ', ' + airport.country})` : ''}`;
-    // Actually, simpler mapping is better for most UI parts
+  const cityMap = useMemo(() => allAirports.reduce((acc, airport) => {
     acc[airport.code] = airport.name;
     return acc;
-  }, {});
+  }, {}), []);
 
-  // Full name mapping for search/display
-  const fullCityMap = allAirports.reduce((acc, airport) => {
-    acc[airport.code] = `${airport.name} (${airport.code})`;
-    return acc;
-  }, {});
   // No static mappings needed - all airports are handled dynamically from airports.js
-  // No static mappings needed
 
 
   // Dynamic aircraft names - populated from Amadeus API responses (no hardcoding)
@@ -571,86 +576,9 @@ function FlightSearchPage() {
   };
 
   // Render stop details with tooltip
-  const renderStopDetails = (flight) => {
-    if (flight.stops === 0) {
-      return <span className="text-green-600 font-medium">Non-stop</span>;
-    }
-
-    // Use detailed stop info from backend
-    const layovers = flight.stopDetails || [];
-    const isOpen = openTooltipId === flight.id;
-
-    return (
-      <div className="relative inline-block z-20">
-        <button
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent triggering row click if any
-            setOpenTooltipId(isOpen ? null : flight.id);
-          }}
-          className="text-orange-600 font-medium border-b border-dashed border-orange-300 hover:border-orange-600 transition-colors focus:outline-none"
-        >
-          {flight.stops} {flight.stops === 1 ? 'stop' : 'stops'}
-          {layovers.length > 0 && <span className="text-xs ml-1 text-gray-500">via {layovers[0].airport}</span>}
-        </button>
-
-        {/* Enhanced Tooltip - Click activated */}
-        {isOpen && layovers.length > 0 && (
-          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-max max-w-[280px] sm:max-w-xs bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl z-50 animate-in fade-in zoom-in-95 duration-200">
-            {/* Close button for mobile convenience */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenTooltipId(null);
-              }}
-              className="absolute top-1 right-1 text-gray-400 hover:text-white p-1"
-            >
-              ×
-            </button>
-
-            <div className="font-bold text-[#65B3CF] mb-1.5 border-b border-gray-700 pb-1 pr-4">Layover Information</div>
-            {layovers.map((l, idx) => (
-              <div key={idx} className="mb-2 last:mb-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-                  <span className="text-gray-300">Stop {idx + 1}:</span>
-                  <span className="font-semibold text-white">{cityMap[l.airport] || l.airport} ({l.airport})</span>
-                </div>
-                <div className="pl-3.5 text-gray-400">
-                  <span className="text-yellow-400 font-mono">{l.duration}</span> layover
-                </div>
-              </div>
-            ))}
-            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Get flights from API
-  const getFlights = async (searchData) => {
-    try {
-      // Check if we have the required data
-      if (!searchData || !searchData.data || !searchData.data.flights) {
-        throw new Error('Missing flight data');
-      }
-
-      // Update date range prices
-      if (searchData.data.dateWisePrices) {
-        setDateRange(Object.entries(searchData.data.dateWisePrices).map(([date, price]) => ({
-          date,
-          price: price || null
-        })));
-      }
-
-      // Return the transformed flight data
-      return transformFlightData(searchData.data.flights);
-    } catch (error) {
-      console.error('Error processing flights:', error);
-      setError(error.message);
-      return [];
-    }
-  };
+  const handleToggleTooltip = useCallback((flightId) => {
+    setOpenTooltipId(prev => (prev === flightId ? null : flightId));
+  }, []);
 
   // Handle search form submission
   const handleSearch = async (formData) => {
@@ -742,12 +670,23 @@ function FlightSearchPage() {
   };
 
   // Handle filter changes
-  const handleFilterChange = (filterType, value) => {
+  const handleFilterChange = useCallback((filterType, value) => {
     setFilters(prev => ({
       ...prev,
       [filterType]: value
     }));
-  };
+  }, []);
+
+  const handleResetAllFilters = useCallback(() => {
+    setFilters({
+      price: [0, 50000],
+      stops: "any",
+      airlines: [],
+      departureTime: "any",
+      baggage: "any",
+      refundable: "any"
+    });
+  }, []);
 
   // Helper to get a reliable numeric price for filtering
   // Returns the price converted to the user's display currency so filters match what the user sees
@@ -796,8 +735,8 @@ function FlightSearchPage() {
     }
   }, [flights]);
 
-  // Apply filters to flights
-  const getFilteredFlights = () => {
+  // Apply filters to flights (memoized — only recomputes when flights/filters/sort actually change)
+  const filteredFlights = useMemo(() => {
     if (!flights || !Array.isArray(flights)) return [];
 
     return flights.filter(flight => {
@@ -903,7 +842,7 @@ function FlightSearchPage() {
 
       return 0;
     });
-  };
+  }, [flights, filters, sortOrder]);
 
   // Handle date navigation in the date bar
   const handleDateNavigate = async (direction) => {
@@ -1036,139 +975,55 @@ function FlightSearchPage() {
   };
 
   // Toggle an airline in the filter
-  const toggleAirlineFilter = (airline) => {
-    const updatedAirlines = filters.airlines.includes(airline)
-      ? filters.airlines.filter(a => a !== airline)
-      : [...filters.airlines, airline];
+  const toggleAirlineFilter = useCallback((airline) => {
+    setFilters(prev => {
+      const updatedAirlines = prev.airlines.includes(airline)
+        ? prev.airlines.filter(a => a !== airline)
+        : [...prev.airlines, airline];
+      return { ...prev, airlines: updatedAirlines };
+    });
+  }, []);
 
-    handleFilterChange('airlines', updatedAirlines);
-  };
-
-  // Get all airlines for filtering - dynamically from current search results
-  const getAllAirlines = () => {
-    if (!flights || flights.length === 0) return [];
-    const airlineNames = new Set();
+  // Aggregate airline stats once per flight-list change (count + minPrice per airline)
+  const airlineStats = useMemo(() => {
+    const stats = new Map();
+    if (!flights || flights.length === 0) return stats;
     flights.forEach(f => {
       const name = f.airline?.name || f.airline;
-      if (name) airlineNames.add(name);
+      if (!name) return;
+      const price = f.price?.amount ?? 0;
+      const existing = stats.get(name);
+      if (existing) {
+        existing.count += 1;
+        if (price < existing.minPrice) existing.minPrice = price;
+      } else {
+        stats.set(name, { count: 1, minPrice: price });
+      }
     });
-    return [...airlineNames].sort();
-  };
+    return stats;
+  }, [flights]);
+
+  const allAirlines = useMemo(
+    () => Array.from(airlineStats.keys()).sort(),
+    [airlineStats]
+  );
 
   // Handle booking a flight
-  const handleBookFlight = (flight) => {
-    // Navigate to passenger details and booking confirmation page with flight data
+  const handleBookFlight = useCallback((flight) => {
     navigate('/flights/booking-confirmation', {
       state: {
         flightData: flight,
         searchData: searchParams
       }
     });
-  };
+  }, [navigate, searchParams]);
 
-  // Get city suggestions based on search input
-  const getCitySuggestions = (input, field) => {
-    if (!input) return [];
-
-    const searchTerm = input.toLowerCase();
-    const currentFrom = field === 'to' ? searchParams.from : null;
-    const currentTo = field === 'from' ? searchParams.to : null;
-
-    return Object.entries(cityMap)
-      .filter(([code, name]) => {
-        // Skip the current selected city in the other field
-        if ((field === 'to' && code === currentFrom) ||
-          (field === 'from' && code === currentTo)) {
-          return false;
-        }
-
-        return name.toLowerCase().includes(searchTerm) ||
-          code.toLowerCase().includes(searchTerm);
-      })
-      .map(([code, name]) => ({
-        code,
-        name,
-        country: getCountryByCode(code)
-      }));
-  };
-
-  // Get country by airport code
-  const getCountryByCode = (code) => {
-    const airport = allAirports.find(a => a.code === code);
-    return airport ? airport.country : 'Unknown';
-  };
-
-  // Handle city selection
-  const handleCitySelect = (field, value) => {
-    setSearchParams(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  // Validate city selection
-  const validateCitySelection = (from, to) => {
-    if (!from || !to) return true; // Allow empty values during selection
-    return from !== to;
-  };
-
-  // Update the search form component
-  const renderCityInput = (field) => {
-    const value = searchParams[field];
-    const suggestions = getCitySuggestions(value, field);
-    const isValid = validateCitySelection(
-      field === 'from' ? value : searchParams.from,
-      field === 'to' ? value : searchParams.to
-    );
-
-    return (
-      <div className="relative">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => handleCitySelect(field, e.target.value)}
-          placeholder={field === 'from' ? 'From' : 'To'}
-          className={`w-full p-2 border rounded-md ${!isValid ? 'border-red-500' : 'border-gray-300'
-            }`}
-        />
-        {!isValid && (
-          <p className="text-red-500 text-sm mt-1">
-            Please select different cities for departure and arrival
-          </p>
-        )}
-        {suggestions.length > 0 && (
-          <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg">
-            {suggestions.map((suggestion) => (
-              <div
-                key={suggestion.code}
-                onClick={() => handleCitySelect(field, suggestion.code)}
-                className="p-2 hover:bg-gray-100 cursor-pointer"
-              >
-                <div className="font-medium">{suggestion.name}</div>
-                <div className="text-sm text-gray-500">
-                  {suggestion.code} - {suggestion.country}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const filteredFlights = getFilteredFlights();
-
-  const getPaginatedData = () => {
-    const filteredData = getFilteredFlights();
-    const totalItems = filteredData.length;
+  const paginatedData = useMemo(() => {
+    const totalItems = filteredFlights.length;
     const totalPages = Math.ceil(totalItems / flightsPerPage);
-
-    // Calculate the start and end index for the current page
     const startIndex = (currentPage - 1) * flightsPerPage;
     const endIndex = Math.min(startIndex + flightsPerPage, totalItems);
-
-    // Get the current page's items
-    const currentItems = filteredData.slice(startIndex, endIndex);
+    const currentItems = filteredFlights.slice(startIndex, endIndex);
 
     return {
       currentItems,
@@ -1178,300 +1033,15 @@ function FlightSearchPage() {
       startIndex,
       endIndex
     };
-  };
+  }, [filteredFlights, currentPage, flightsPerPage]);
+
+  const getPaginatedData = () => paginatedData;
 
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
     // Scroll to top when changing pages
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
-  const MobileQuickFilters = ({ filters, onFilterChange, sortOrder, onSortChange, activeFiltersCount, setIsFilterOpen }) => {
-    const [showSortOptions, setShowSortOptions] = useState(false);
-
-    const sortOptions = [
-      { value: 'price', label: 'Cheapest', icon: '💰' },
-      { value: 'duration', label: 'Fastest', icon: '⚡' },
-      { value: 'departure', label: 'Earliest', icon: '🌅' },
-      { value: '-price', label: 'Luxury', icon: '✨' }
-    ];
-
-    const quickFilters = [
-      { type: 'stops', value: '0', label: 'Non-stop' },
-      { type: 'stops', value: '1', label: '1 Stop max' },
-      { type: 'price', value: [0, 5000], label: `Under ${currencyService.getCurrencySymbol()}5000` },
-      { type: 'price', value: [0, 10000], label: `Under ${currencyService.getCurrencySymbol()}10000` }
-    ];
-
-    return (
-      <div className="mb-4">
-        {/* Sort Dropdown */}
-        <div className="relative mb-3">
-          <button
-            onClick={() => setShowSortOptions(!showSortOptions)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-xl shadow-sm border border-gray-200"
-          >
-            <div className="flex items-center">
-              <ArrowUpDown className="h-4 w-4 text-[#055B75] mr-2" />
-              <span className="text-gray-700">Sort by: </span>
-              <span className="font-medium text-[#055B75] ml-1">
-                {sortOptions.find(opt => opt.value === sortOrder)?.label || 'Best Match'}
-              </span>
-            </div>
-            <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${showSortOptions ? 'transform rotate-180' : ''}`} />
-          </button>
-
-          {showSortOptions && (
-            <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-              {sortOptions.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => {
-                    onSortChange(option.value);
-                    setShowSortOptions(false);
-                  }}
-                  className={`w-full flex items-center px-4 py-3 hover:bg-[#F0FAFC] ${sortOrder === option.value
-                    ? 'bg-[#F0FAFC] text-[#055B75]'
-                    : 'text-gray-700'
-                    }`}
-                >
-                  <span className="text-xl mr-3">{option.icon}</span>
-                  <span className="font-medium">{option.label}</span>
-                  {sortOrder === option.value && (
-                    <span className="ml-auto text-[#055B75]">✓</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Quick Filter Chips */}
-        <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-1">
-          <button
-            onClick={() => setIsFilterOpen(true)}
-            className={`flex items-center px-3 py-2 rounded-full border shadow-sm whitespace-nowrap ${activeFiltersCount > 0
-              ? 'bg-[#055B75] text-white border-[#034457]'
-              : 'bg-white text-gray-700 border-gray-200'
-              }`}
-          >
-            <Filter className="h-4 w-4 mr-1" />
-            {activeFiltersCount > 0 ? `${activeFiltersCount} Active` : 'All Filters'}
-          </button>
-
-          {quickFilters.map((filter, index) => (
-            <button
-              key={index}
-              onClick={() => onFilterChange(filter.type, filter.value)}
-              className={`px-3 py-2 rounded-full border shadow-sm whitespace-nowrap ${(filter.type === 'stops' && filters.stops === filter.value) ||
-                (filter.type === 'price' && filters.price[1] === filter.value[1])
-                ? 'bg-[#055B75] text-white border-[#034457]'
-                : 'bg-white text-gray-700 border-gray-200'
-                }`}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const MobileFilterDrawer = ({ isOpen, onClose, filters, onFilterChange, airlines, sortOrder, onSortChange }) => {
-    if (!isOpen) return null;
-
-    const [activeTab, setActiveTab] = useState('sort');
-    const tabs = [
-      { id: 'sort', label: 'Sort', icon: ArrowUpDown },
-      { id: 'price', label: 'Price', icon: () => <span className="text-lg">💰</span> },
-      { id: 'stops', label: 'Stops', icon: () => <span className="text-lg">✈️</span> },
-      { id: 'airlines', label: 'Airlines', icon: () => <span className="text-lg">🏢</span> }
-    ];
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
-        <div className="absolute inset-x-0 bottom-0 h-[90vh] bg-white rounded-t-2xl shadow-xl transform transition-transform duration-300 ease-in-out">
-          <div className="flex flex-col h-full">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-[#055B75] to-[#034457] text-white rounded-t-2xl">
-              <h2 className="text-xl font-bold">Filters & Sort</h2>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-white/10 rounded-full text-white"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex border-b overflow-x-auto hide-scrollbar">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 min-w-[100px] flex flex-col items-center py-3 px-4 ${activeTab === tab.id
-                    ? 'text-[#055B75] border-b-2 border-[#055B75]'
-                    : 'text-gray-500'
-                    }`}
-                >
-                  <tab.icon className="h-5 w-5 mb-1" />
-                  <span className="text-sm font-medium">{tab.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-4">
-                {activeTab === 'sort' && (
-                  <div className="space-y-2">
-                    {[
-                      { value: 'price', label: 'Lowest price first', icon: '💰' },
-                      { value: '-price', label: 'Highest price first', icon: '✨' },
-                      { value: 'duration', label: 'Shortest duration', icon: '⚡' },
-                      { value: 'departure', label: 'Earliest departure', icon: '🌅' },
-                      { value: 'arrival', label: 'Earliest arrival', icon: '🌆' }
-                    ].map(option => (
-                      <button
-                        key={option.value}
-                        onClick={() => onSortChange(option.value)}
-                        className={`w-full flex items-center p-4 rounded-xl ${sortOrder === option.value
-                          ? 'bg-[#F0FAFC] border-[#65B3CF]'
-                          : 'bg-white border-gray-200'
-                          } border`}
-                      >
-                        <span className="text-xl mr-3">{option.icon}</span>
-                        <span className="font-medium text-gray-700">{option.label}</span>
-                        {sortOrder === option.value && (
-                          <span className="ml-auto text-[#055B75]">✓</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {activeTab === 'price' && (
-                  <div className="space-y-6">
-                    <div>
-                      <div className="flex justify-between mb-2">
-                        <span className="font-medium text-gray-700">Price range</span>
-                        <span className="text-[#055B75] font-medium">
-                          {currencyService.getCurrencySymbol()}{filters.price[0].toLocaleString()} - {currencyService.getCurrencySymbol()}{filters.price[1].toLocaleString()}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={priceRangeBounds.min}
-                        max={priceRangeBounds.max}
-                        step="1000"
-                        value={filters.price[1]}
-                        onChange={(e) => onFilterChange('price', [filters.price[0], parseInt(e.target.value)])}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#055B75]"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      {[5000, 10000, 15000, 20000].map(price => (
-                        <button
-                          key={price}
-                          onClick={() => onFilterChange('price', [0, price])}
-                          className={`p-3 rounded-xl border ${filters.price[1] === price
-                            ? 'bg-[#F0FAFC] border-[#65B3CF] text-[#055B75]'
-                            : 'bg-white border-gray-200 text-gray-700'
-                            }`}
-                        >
-                          Under {currencyService.getCurrencySymbol()}{price.toLocaleString()}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === 'stops' && (
-                  <div className="space-y-3">
-                    {[
-                      { value: 'any', label: 'Any number of stops', icon: '🔄' },
-                      { value: '0', label: 'Non-stop only', icon: '✈️' },
-                      { value: '1', label: '1 stop maximum', icon: '🛑' },
-                      { value: '2', label: '2+ stops', icon: '🛑' }
-                    ].map(option => (
-                      <button
-                        key={option.value}
-                        onClick={() => onFilterChange('stops', option.value)}
-                        className={`w-full flex items-center p-4 rounded-xl ${filters.stops === option.value
-                          ? 'bg-[#F0FAFC] border-[#65B3CF]'
-                          : 'bg-white border-gray-200'
-                          } border`}
-                      >
-                        <span className="text-xl mr-3">{option.icon}</span>
-                        <span className="font-medium text-gray-700">{option.label}</span>
-                        {filters.stops === option.value && (
-                          <span className="ml-auto text-[#055B75]">✓</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {activeTab === 'airlines' && (
-                  <div className="space-y-2">
-                    {airlines.map(airline => (
-                      <button
-                        key={airline}
-                        onClick={() => {
-                          const updatedAirlines = filters.airlines.includes(airline)
-                            ? filters.airlines.filter(a => a !== airline)
-                            : [...filters.airlines, airline];
-                          onFilterChange('airlines', updatedAirlines);
-                        }}
-                        className={`w-full flex items-center p-4 rounded-xl ${filters.airlines.includes(airline)
-                          ? 'bg-[#F0FAFC] border-[#65B3CF]'
-                          : 'bg-white border-gray-200'
-                          } border`}
-                      >
-                        <span className="font-medium text-gray-700">{airline}</span>
-                        {filters.airlines.includes(airline) && (
-                          <span className="ml-auto text-[#055B75]">✓</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 border-t bg-gray-50">
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    onFilterChange('price', [0, 50000]);
-                    onFilterChange('stops', 'any');
-                    onFilterChange('airlines', []);
-                    onFilterChange('departureTime', 'any');
-                    onFilterChange('baggage', 'any');
-                    onFilterChange('refundable', 'any');
-                    onSortChange('price');
-                  }}
-                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
-                >
-                  Reset All
-                </button>
-                <button
-                  onClick={onClose}
-                  className="flex-1 py-3 bg-[#055B75] text-white rounded-xl font-medium hover:bg-[#034457] transition-colors"
-                >
-                  Apply Filters
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // MobileSearchBar removed - using FlightSearchForm instead
 
   const { currentItems, totalPages, totalItems, startIndex, endIndex } = getPaginatedData();
 
@@ -1484,7 +1054,7 @@ function FlightSearchPage() {
       {/* Enhanced Header Section with Background Image */}
       <div className="relative px-4 py-12 bg-gradient-to-r from-[#055B75] to-[#034457] text-white z-30">
         <div className="absolute inset-0 overflow-hidden">
-          <img
+          <img loading="lazy" decoding="async"
             src="https://images.unsplash.com/photo-1569154941061-e231b4725ef1?q=80&w=2070&auto=format&fit=crop"
             alt="Clouds from airplane window"
             className="w-full h-full object-cover opacity-20"
@@ -1579,308 +1149,15 @@ function FlightSearchPage() {
             </div>
           ) : (
             <div className="flex flex-col md:flex-row gap-6">
-              {/* Professional OTA-Style Filter Sidebar */}
-              <div className="hidden md:block w-full md:w-[280px] lg:w-[300px] flex-shrink-0">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-
-                  {/* Filter Header */}
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                    <div className="flex items-center gap-2">
-                      <Filter className="h-4 w-4 text-[#055B75]" />
-                      <span className="text-sm font-bold text-gray-800 uppercase tracking-wide">Filters</span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setFilters({
-                          price: [0, 50000],
-                          stops: "any",
-                          airlines: [],
-                          departureTime: "any",
-                          baggage: "any",
-                          refundable: "any"
-                        });
-                      }}
-                      className="text-xs font-semibold text-[#055B75] hover:text-[#034457] hover:underline transition-colors"
-                    >
-                      RESET ALL
-                    </button>
-                  </div>
-
-                  {/* Popular Filters (Quick Filters) */}
-                  <div className="px-5 py-4 border-b border-gray-100">
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Popular Filters</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { label: 'Non-Stop', action: () => handleFilterChange('stops', filters.stops === '0' ? 'any' : '0'), active: filters.stops === '0' },
-                        { label: 'Refundable', action: () => handleFilterChange('refundable', filters.refundable === 'yes' ? 'any' : 'yes'), active: filters.refundable === 'yes' },
-                        { label: 'With Baggage', action: () => handleFilterChange('baggage', filters.baggage === 'included' ? 'any' : 'included'), active: filters.baggage === 'included' },
-                        { label: 'Morning Dep.', action: () => handleFilterChange('departureTime', filters.departureTime === 'morning' ? 'any' : 'morning'), active: filters.departureTime === 'morning' },
-                      ].map((chip, idx) => (
-                        <button
-                          key={idx}
-                          onClick={chip.action}
-                          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-200 ${chip.active
-                            ? 'bg-[#055B75] text-white border-[#055B75] shadow-sm'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-[#055B75] hover:text-[#055B75]'
-                            }`}
-                        >
-                          {chip.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Price Range - Professional dual slider */}
-                  <div className="px-5 py-4 border-b border-gray-100">
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Price Range</h4>
-                    <div className="mb-3">
-                      <div className="flex items-center gap-2 mb-4">
-                        <div className="flex-1">
-                          <label className="text-[10px] text-gray-400 font-medium mb-1 block">MIN</label>
-                          <div className="relative">
-                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">{currencyService.getCurrencySymbol()}</span>
-                            <input
-                              type="number"
-                              min={0}
-                              max={priceRangeBounds.max}
-                              step="500"
-                              value={filters.price[0]}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value);
-                                if (!isNaN(val)) handleFilterChange('price', [val, filters.price[1]]);
-                              }}
-                              className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-200 rounded-md text-gray-700 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75] outline-none"
-                            />
-                          </div>
-                        </div>
-                        <span className="text-gray-300 mt-4">-</span>
-                        <div className="flex-1">
-                          <label className="text-[10px] text-gray-400 font-medium mb-1 block">MAX</label>
-                          <div className="relative">
-                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">{currencyService.getCurrencySymbol()}</span>
-                            <input
-                              type="number"
-                              min={0}
-                              max={priceRangeBounds.max}
-                              step="500"
-                              value={filters.price[1]}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value);
-                                if (!isNaN(val)) handleFilterChange('price', [filters.price[0], val]);
-                              }}
-                              className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-200 rounded-md text-gray-700 focus:border-[#055B75] focus:ring-1 focus:ring-[#055B75] outline-none"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      {/* Dual Range Slider */}
-                      <div className="relative h-6 mx-1">
-                        {/* Background track */}
-                        <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1.5 bg-gray-200 rounded-full" />
-                        {/* Active track */}
-                        <div
-                          className="absolute top-1/2 -translate-y-1/2 h-1.5 bg-[#055B75] rounded-full"
-                          style={{
-                            left: `${((filters.price[0] - priceRangeBounds.min) / (priceRangeBounds.max - priceRangeBounds.min || 1)) * 100}%`,
-                            right: `${100 - ((filters.price[1] - priceRangeBounds.min) / (priceRangeBounds.max - priceRangeBounds.min || 1)) * 100}%`
-                          }}
-                        />
-                        {/* Min thumb */}
-                        <input
-                          type="range"
-                          min={priceRangeBounds.min}
-                          max={priceRangeBounds.max}
-                          step="500"
-                          value={filters.price[0]}
-                          onChange={(e) => handleFilterChange('price', [Math.min(parseInt(e.target.value) || priceRangeBounds.min, filters.price[1] - 500), filters.price[1]])}
-                          className="absolute top-0 left-0 w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#055B75] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-30 [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#055B75] [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:cursor-pointer"
-                          style={{ zIndex: filters.price[0] > 25000 ? 20 : 10 }}
-                        />
-                        {/* Max thumb */}
-                        <input
-                          type="range"
-                          min={priceRangeBounds.min}
-                          max={priceRangeBounds.max}
-                          step="500"
-                          value={filters.price[1]}
-                          onChange={(e) => handleFilterChange('price', [filters.price[0], Math.max(parseInt(e.target.value) || priceRangeBounds.max, filters.price[0] + 500)])}
-                          className="absolute top-0 left-0 w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#055B75] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-30 [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#055B75] [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:cursor-pointer"
-                          style={{ zIndex: filters.price[1] < 25000 ? 20 : 10 }}
-                        />
-                      </div>
-                      <div className="flex justify-between mt-1.5">
-                        <span className="text-[10px] text-gray-400">{currencyService.getCurrencySymbol()}{priceRangeBounds.min.toLocaleString()}</span>
-                        <span className="text-[10px] text-gray-400">{currencyService.getCurrencySymbol()}{priceRangeBounds.max.toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Stops Filter */}
-                  <div className="px-5 py-4 border-b border-gray-100">
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Stops</h4>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {[
-                        { value: 'any', label: 'Any' },
-                        { value: '0', label: 'Non-stop' },
-                        { value: '1', label: '1 Stop' },
-                      ].map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => handleFilterChange('stops', opt.value)}
-                          className={`px-2 py-2 rounded-lg text-xs font-medium border text-center transition-all duration-200 ${filters.stops === opt.value
-                            ? 'bg-[#055B75] text-white border-[#055B75] shadow-sm'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-[#65B3CF]'
-                            }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => handleFilterChange('stops', filters.stops === '2' ? 'any' : '2')}
-                      className={`mt-1.5 w-full px-2 py-2 rounded-lg text-xs font-medium border text-center transition-all duration-200 ${filters.stops === '2'
-                        ? 'bg-[#055B75] text-white border-[#055B75] shadow-sm'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-[#65B3CF]'
-                        }`}
-                    >
-                      2+ Stops
-                    </button>
-                  </div>
-
-                  {/* Departure Time Filter */}
-                  <div className="px-5 py-4 border-b border-gray-100">
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Departure Time</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { value: 'early_morning', label: 'Before 6 AM', sublabel: 'Early Morning', icon: <Moon className="h-3.5 w-3.5" /> },
-                        { value: 'morning', label: '6 AM - 12 PM', sublabel: 'Morning', icon: <Sunrise className="h-3.5 w-3.5" /> },
-                        { value: 'afternoon', label: '12 PM - 6 PM', sublabel: 'Afternoon', icon: <Sun className="h-3.5 w-3.5" /> },
-                        { value: 'evening', label: '6 PM - 9 PM', sublabel: 'Evening', icon: <Sunset className="h-3.5 w-3.5" /> },
-                      ].map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => handleFilterChange('departureTime', filters.departureTime === opt.value ? 'any' : opt.value)}
-                          className={`flex flex-col items-center p-2.5 rounded-lg border text-center transition-all duration-200 ${filters.departureTime === opt.value
-                            ? 'bg-[#F0FAFC] border-[#055B75] text-[#055B75]'
-                            : 'bg-white border-gray-200 text-gray-500 hover:border-[#65B3CF]'
-                            }`}
-                        >
-                          <span className={`mb-1 ${filters.departureTime === opt.value ? 'text-[#055B75]' : 'text-gray-400'}`}>{opt.icon}</span>
-                          <span className="text-[10px] font-semibold leading-tight">{opt.sublabel}</span>
-                          <span className="text-[9px] text-gray-400 mt-0.5">{opt.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Baggage Filter */}
-                  <div className="px-5 py-4 border-b border-gray-100">
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                      <Briefcase className="h-3.5 w-3.5 text-gray-400" />
-                      Baggage
-                    </h4>
-                    <div className="space-y-1.5">
-                      {[
-                        { value: 'any', label: 'Any', desc: 'Show all flights' },
-                        { value: 'included', label: 'Check-in Baggage Included', desc: 'Flights with checked baggage' },
-                        { value: 'cabin_only', label: 'Cabin Baggage Only', desc: 'No checked baggage' },
-                      ].map((opt) => (
-                        <label
-                          key={opt.value}
-                          className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-all duration-200 ${filters.baggage === opt.value
-                            ? 'bg-[#F0FAFC] border border-[#055B75]/20'
-                            : 'hover:bg-gray-50 border border-transparent'
-                            }`}
-                        >
-                          <input
-                            type="radio"
-                            name="baggage"
-                            className="mt-0.5 w-3.5 h-3.5 text-[#055B75] border-gray-300 focus:ring-[#055B75]"
-                            checked={filters.baggage === opt.value}
-                            onChange={() => handleFilterChange('baggage', opt.value)}
-                          />
-                          <div>
-                            <div className="text-xs font-medium text-gray-700">{opt.label}</div>
-                            <div className="text-[10px] text-gray-400">{opt.desc}</div>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Refundable Filter */}
-                  <div className="px-5 py-4 border-b border-gray-100">
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                      <ShieldCheck className="h-3.5 w-3.5 text-gray-400" />
-                      Fare Type
-                    </h4>
-                    <div className="space-y-1.5">
-                      {[
-                        { value: 'any', label: 'All Fares' },
-                        { value: 'yes', label: 'Refundable Only' },
-                        { value: 'no', label: 'Non-Refundable Only' },
-                      ].map((opt) => (
-                        <label
-                          key={opt.value}
-                          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 ${filters.refundable === opt.value
-                            ? 'bg-[#F0FAFC] border border-[#055B75]/20'
-                            : 'hover:bg-gray-50 border border-transparent'
-                            }`}
-                        >
-                          <input
-                            type="radio"
-                            name="refundable"
-                            className="w-3.5 h-3.5 text-[#055B75] border-gray-300 focus:ring-[#055B75]"
-                            checked={filters.refundable === opt.value}
-                            onChange={() => handleFilterChange('refundable', opt.value)}
-                          />
-                          <span className="text-xs font-medium text-gray-700">{opt.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Airlines Filter */}
-                  <div className="px-5 py-4">
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Airlines</h4>
-                    {getAllAirlines().length > 0 ? (
-                      <div className="space-y-0.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                        {getAllAirlines().map(airline => {
-                          const airlineFlights = flights.filter(f => f.airline?.name === airline);
-                          const minPrice = airlineFlights.length > 0 ? Math.min(...airlineFlights.map(f => f.price?.amount || 0)) : null;
-                          return (
-                            <label
-                              key={airline}
-                              className={`flex items-center justify-between px-2.5 py-2 rounded-lg cursor-pointer transition-all duration-200 ${filters.airlines.includes(airline)
-                                ? 'bg-[#F0FAFC]'
-                                : 'hover:bg-gray-50'
-                                }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  className="w-3.5 h-3.5 text-[#055B75] border-gray-300 rounded focus:ring-[#055B75]"
-                                  checked={filters.airlines.includes(airline)}
-                                  onChange={() => toggleAirlineFilter(airline)}
-                                />
-                                <span className="text-xs text-gray-700 font-medium">{airline}</span>
-                              </div>
-                              {minPrice !== null && (
-                                <span className="text-[10px] text-gray-400 font-medium">
-                                  {currencyService.getCurrencySymbol()}{Math.round(minPrice).toLocaleString()}
-                                </span>
-                              )}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-gray-400 italic">No airlines to filter</p>
-                    )}
-                  </div>
-
-                </div>
-              </div>
+              <FlightFilterSidebar
+                filters={filters}
+                priceRangeBounds={priceRangeBounds}
+                airlines={allAirlines}
+                airlineStats={airlineStats}
+                onFilterChange={handleFilterChange}
+                onToggleAirline={toggleAirlineFilter}
+                onResetAll={handleResetAllFilters}
+              />
 
               {/* Results */}
               <div className="flex-1 min-w-0">
@@ -1945,120 +1222,14 @@ function FlightSearchPage() {
                 ) : (
                   <div className="space-y-6">
                     {currentItems.map((flight, index) => (
-                      <div
-                        key={index}
-                        className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-200 hover:border-[#65B3CF] transition-all duration-300 group" style={{ overflow: 'visible' }}
-                      >
-                        {/* Top section with airline and price */}
-                        <div className="p-5">
-                          <div className="flex flex-col md:flex-row items-center justify-between">
-                            {/* Airline and Flight Info */}
-                            <div className="flex items-center mb-4 md:mb-0">
-                              <div className="w-16 h-16 flex items-center justify-center bg-[#F0FAFC] rounded-xl mr-4 overflow-hidden border border-gray-100 group-hover:border-[#B9D0DC] transition-colors">
-                                <img
-                                  src={flight.airline?.logo}
-                                  alt={flight.airline?.name || 'Airline'}
-                                  className="w-12 h-12 object-contain"
-                                  onError={(e) => {
-                                    e.target.onerror = null;
-                                    // Use a data URL for the airplane emoji as fallback
-                                    e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iOCIgZmlsbD0iIzM3NzNmNCIvPgo8dGV4dCB4PSIyMCIgeT0iMjgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuKciO+4jzwvdGV4dD4KPHN2Zz4K';
-                                  }}
-                                />
-                              </div>
-                              <div>
-                                <h3 className="font-bold text-gray-900 text-lg">{flight.airline?.name || 'Unknown Airline'}</h3>
-                                <div className="text-sm text-gray-500 flex items-center flex-wrap gap-x-2">
-                                  <span className="font-medium text-[#055B75]">{flight.segments?.[0]?.flightNumber || 'N/A'}</span>
-                                  <span className="mx-1">•</span>
-                                  <span>{flight.segments?.[0]?.aircraft || flight.aircraft || 'Unknown Aircraft'}</span>
-                                  {flight.operatingCarrier && flight.operatingCarrier !== flight.airline?.code && (
-                                    <>
-                                      <span className="mx-1">•</span>
-                                      <span className="text-xs text-orange-600">Operated by {flight.operatingAirlineName || flight.operatingCarrier}</span>
-                                    </>
-                                  )}
-                                </div>
-                                {flight.brandedFare && (
-                                  <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded font-medium">
-                                    {flight.brandedFareLabel || flight.brandedFare}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Price and Book Button */}
-                            <div className="flex flex-col items-end">
-                              <div className="text-right mb-3">
-                                <div className="text-xl sm:text-2xl md:text-3xl font-bold text-[#055B75] flex items-center">
-                                  <Price amount={flight.price} showCode={true} />
-                                </div>
-                                <div className="text-xs text-gray-500">per passenger</div>
-                              </div>
-                              <button
-                                onClick={() => handleBookFlight(flight)}
-                                className="w-full md:w-auto px-8 py-3 bg-[#055B75] hover:bg-[#034457] text-white rounded-lg font-semibold shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5"
-                              >
-                                Book Now
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Flight Details */}
-                          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
-                            <div>
-                              <div className="font-medium text-gray-500 mb-1">Departure</div>
-                              <div className="font-bold text-gray-800 text-lg">{flight.departure?.time || 'N/A'}</div>
-                              <div className="text-gray-500 mb-1">{flight.departure?.date || 'N/A'}</div>
-                              <div className="text-xs">
-                                <span className="font-medium">{flight.departure?.cityName || flight.departure?.airport || 'N/A'}</span>
-                                {flight.departure?.terminal && (
-                                  <span className="ml-1 text-[#055B75] bg-[#F0FAFC] px-1 rounded">T{flight.departure?.terminal}</span>
-                                )}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-500 mb-1">Arrival</div>
-                              <div className="font-bold text-gray-800 text-lg">{flight.arrival?.time || 'N/A'}</div>
-                              <div className="text-gray-500 mb-1">{flight.arrival?.date || 'N/A'}</div>
-                              <div className="text-xs">
-                                <span className="font-medium">{flight.arrival?.cityName || flight.arrival?.airport || 'N/A'}</span>
-                                {flight.arrival?.terminal && (
-                                  <span className="ml-1 text-[#055B75] bg-[#F0FAFC] px-1 rounded">T{flight.arrival?.terminal}</span>
-                                )}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-500 mb-1">Duration</div>
-                              <div className="font-bold text-gray-800">
-                                {flight.duration?.replace('PT', '').replace('H', 'h ').replace('M', 'm') || 'N/A'}
-                              </div>
-                              <div className="text-xs mt-1">
-                                {renderStopDetails(flight)}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-500 mb-1">Class</div>
-                              <div className="font-bold text-gray-800">
-                                {flight.cabin ? flight.cabin.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : 'Economy'}
-                              </div>
-                              <div className="text-xs mt-1">
-                                {flight.baggage?.checked?.weight ? `${flight.baggage.checked.weight}${flight.baggage.checked.weightUnit}` : 'No checked baggage'}
-                              </div>
-                              {flight.numberOfBookableSeats && flight.numberOfBookableSeats <= 9 && (
-                                <div className="text-xs mt-1 text-red-600 font-medium">
-                                  Only {flight.numberOfBookableSeats} seat{flight.numberOfBookableSeats > 1 ? 's' : ''} left
-                                </div>
-                              )}
-                              {flight.lastTicketingDate && (
-                                <div className="text-xs mt-0.5 text-gray-400">
-                                  Book by {new Date(flight.lastTicketingDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      <FlightCard
+                        key={flight.id ?? index}
+                        flight={flight}
+                        onBook={handleBookFlight}
+                        isStopOpen={openTooltipId === flight.id}
+                        onToggleStop={handleToggleTooltip}
+                        cityMap={cityMap}
+                      />
                     ))}
                   </div>
                 )}

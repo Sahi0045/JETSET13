@@ -24,7 +24,7 @@ const DestinationSection = () => {
               <span>{destination.rating}</span>
             </div>
             <div className="destination-image">
-              <img src={destination.image} alt={destination.name} />
+              <img loading="lazy" decoding="async" src={destination.image} alt={destination.name} />
             </div>
             <div className="destination-info">
               <h4>{destination.name}</h4>

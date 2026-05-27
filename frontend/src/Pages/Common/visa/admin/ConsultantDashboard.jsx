@@ -276,7 +276,7 @@ useEffect(() => {
                                                                 <p className="text-[11px] lg:text-[12px] font-black text-slate-900 leading-snug mb-3 group-hover:text-[#1152d4] transition-colors line-clamp-2">{app.title}</p>
                                                                 <div className="flex items-center gap-3 mt-auto">
                                                                     <div className="relative">
-                                                                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${app.client}`} className="size-6 lg:size-7 rounded-lg border-2 border-white shadow-md" alt="" />
+                                                                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${app.client}`} className="size-6 lg:size-7 rounded-lg border-2 border-white shadow-md" alt="" loading="lazy" decoding="async" />
                                                                         <div className="absolute -bottom-0.5 -right-0.5 size-2 bg-emerald-500 border border-white rounded-full" />
                                                                     </div>
                                                                     <span className={`text-[10px] font-black ${c.text} truncate uppercase tracking-widest`}>{app.client.split(' ')[0]}</span>
@@ -317,7 +317,7 @@ useEffect(() => {
                                                             <p className="text-[13px] font-black text-slate-900 leading-none">{app.client}</p>
                                                             <p className="text-[10px] font-black text-[#1152d4] uppercase mt-2 tracking-widest bg-[#1152d4]/5 px-2 py-0.5 rounded-md text-center">{app.status}</p>
                                                         </div>
-                                                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${app.client}`} className="size-12 lg:size-14 rounded-2xl border-4 border-white shadow-2xl" alt="" />
+                                                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${app.client}`} className="size-12 lg:size-14 rounded-2xl border-4 border-white shadow-2xl" alt="" loading="lazy" decoding="async" />
                                                     </div>
                                                     <Link to={`/visa/admin/appointments/${app.id}`} className="px-8 py-4 bg-slate-950 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] no-underline hover:bg-[#1152d4] transition-all shadow-2xl shadow-slate-950/20 active:scale-95 group">
                                                         Access Vault <span className="material-symbols-outlined text-base ml-2 group-hover:translate-x-1 transition-transform">arrow_forward</span>

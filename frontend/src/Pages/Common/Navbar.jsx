@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import Link from '../../Components/PrefetchLink';
 import './Navbar.css';
 import CurrencySelector from '../../Components/CurrencySelector';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
@@ -129,11 +130,15 @@ const Navbar = ({ forceScrolled }) => {
         <Link to="/" className="logo-link">
           <div className="logo-container">
             <div className="logo">
-              <img
-                src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png"
-                alt="Jetsetterss"
-                className="h-16 w-auto object-contain"
-              />
+              <picture>
+                <source srcSet="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.webp" type="image/webp" />
+                <img
+                  src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png"
+                  alt="Jetsetterss"
+                  className="h-16 w-auto object-contain"
+                  decoding="async"
+                />
+              </picture>
             </div>
             <div className="navbar-tagline">Jet set g0</div>
           </div>

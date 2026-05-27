@@ -6,7 +6,6 @@ import Footer from "../Footer";
 import withPageElements from "../PageWrapper";
 import Price from "../../../Components/Price";
 import currencyService from "../../../Services/CurrencyService";
-import { flightBookingData } from "./data";
 import supabase from "../../../lib/supabase";
 import ArcPayService from "../../../Services/ArcPayService";
 import { useLocationContext } from '../../../Context/LocationContext';
@@ -147,8 +146,10 @@ function FlightBookingConfirmation() {
     checkAuth();
   }, []);
 
-  // Fetch booking details from mock data (fallback when no search-page data is passed)
-  const fetchBookingFromMockData = (id) => {
+  // Fetch booking details from mock data (fallback when no search-page data is passed).
+  // The mock dataset is large, so we load it lazily only when this fallback is triggered.
+  const fetchBookingFromMockData = async (id) => {
+    const { flightBookingData } = await import("./data-mock-booking");
     const mockBooking = flightBookingData.bookings.find(b => b.bookingId === id) ||
       flightBookingData.internationalBookings.find(b => b.bookingId === id) ||
       flightBookingData.bookings[0];
@@ -335,41 +336,44 @@ function FlightBookingConfirmation() {
     };
   };
 
-  // Fetch booking details
+  // Fetch booking details.
+  // The cancelled flag prevents a stale fetch from clobbering state after the
+  // user navigates away or the booking id changes. Pricing config and the mock
+  // booking fallback are independent — we kick them off in parallel.
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
 
     const getBookingDetails = async () => {
       try {
+        const hasSearchState = !!routerLocation.state?.flightData;
+        const targetId = bookingId || "TEST_BOOKING_123";
+
+        const configPromise = priceConfig
+          ? Promise.resolve(priceConfig)
+          : PricingService.getPriceConfig('all').catch((err) => {
+              console.warn('Could not fetch price config, using defaults', err);
+              return PricingService.getDefaultSettings('all');
+            });
+        const mockPromise = hasSearchState
+          ? Promise.resolve(null)
+          : fetchBookingFromMockData(targetId);
+
+        const [config, mockData] = await Promise.all([configPromise, mockPromise]);
+        if (cancelled) return;
+
+        if (!priceConfig) setPriceConfig(config);
+
         let bookingData;
-
-        // Check if flight data was passed from search page
-        // Fetch admin price settings first
-        let config = priceConfig;
-        if (!config) {
-          try {
-            config = await PricingService.getPriceConfig('all');
-            setPriceConfig(config);
-          } catch (err) {
-            console.warn('Could not fetch price config, using defaults');
-            config = PricingService.getDefaultSettings('all');
-          }
-        }
-
-        if (routerLocation.state?.flightData) {
+        if (hasSearchState) {
           console.log("Using flight data from search page", routerLocation.state.flightData);
           bookingData = transformFlightData(routerLocation.state.flightData, config);
-        } else {
-          // Fallback: Use mock data when no search-page state is available
-          const targetId = bookingId || "TEST_BOOKING_123";
+        } else if (mockData) {
           console.log("No state data, using mock data for ID:", targetId);
-          const mockData = fetchBookingFromMockData(targetId);
-          if (mockData) {
-            bookingData = transformBookingData(mockData, config);
-          } else {
-            setError("No flight data available. Please return to the search page and try again.");
-            return;
-          }
+          bookingData = transformBookingData(mockData, config);
+        } else {
+          setError("No flight data available. Please return to the search page and try again.");
+          return;
         }
 
         if (!bookingData) {
@@ -377,18 +381,19 @@ function FlightBookingConfirmation() {
         }
 
         setBookingDetails(bookingData);
-        // Initialize with 1 passenger if none exist
         const initialPassengerCount = Math.max(1, passengerData.length);
         updateFareSummary(initialPassengerCount, bookingData);
       } catch (error) {
+        if (cancelled) return;
         console.error("Error getting booking details:", error);
         setError(error.message);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     getBookingDetails();
+    return () => { cancelled = true; };
   }, [routerLocation.state, bookingId]);
 
   // Add an effect to update fare when passengers, addons, or VIP service changes
@@ -880,7 +885,7 @@ function FlightBookingConfirmation() {
                           <div className="itinerary-segment flex gap-4 py-4 px-2 border-b border-gray-100 last:border-b-0">
                             {/* Left - Airline Info */}
                             <div className="segment-airline flex flex-col items-center min-w-[90px] text-center">
-                              <img
+                              <img loading="lazy" decoding="async"
                                 src={seg.carrierLogo || `https://pics.avs.io/200/200/${(seg.carrier || 'XX').toUpperCase()}.png`}
                                 alt={seg.carrierName || seg.carrier}
                                 className="w-10 h-10 rounded-full object-contain border border-gray-200 mb-1"

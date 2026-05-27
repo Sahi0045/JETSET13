@@ -1,5 +1,4 @@
 /* Professional Login Styles - Goibibo Inspired */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 /* Reset and Base Styles */
 .login-container *,
@@ -36,7 +35,7 @@
 .login-image-section {
   flex: 1;
   background: linear-gradient(135deg, #0284c7 0%, #0369a1 50%, #0c4a6e 100%);
-  background-image: url('/images/login/cruise-background.png');
+  background-image: image-set(url('/images/login/cruise-background.webp') type('image/webp'), url('/images/login/cruise-background.png') type('image/png'));
   background-size: cover;
   background-position: center;
   position: relative;

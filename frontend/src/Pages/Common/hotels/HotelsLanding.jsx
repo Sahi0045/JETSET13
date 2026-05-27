@@ -467,7 +467,7 @@ const HotelsLanding = () => {
                             {featuredHotelsList.map((hotel) => (
                                 <div key={hotel.id} className="bg-white rounded-[2rem] overflow-hidden shadow-lg border border-gray-100 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group cursor-pointer flex flex-col h-full">
                                     <div className="relative h-72 overflow-hidden">
-                                        <img
+                                        <img loading="lazy" decoding="async"
                                             src={hotel.image}
                                             alt={hotel.name}
                                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"

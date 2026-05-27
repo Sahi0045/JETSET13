@@ -92,7 +92,7 @@ const WhyChooseUsSection = () => {
                 "JetSet Cruises made booking our family vacation incredibly easy. Their customer service team went above and beyond to help us find the perfect cruise, and their exclusive deals saved us hundreds!"
               </div>
               <div className="flex items-center">
-                <img
+                <img loading="lazy" decoding="async"
                   src="/images/testimonial-avatar.jpg"
                   alt="Customer Testimonial"
                   className="w-12 h-12 rounded-full object-cover mr-4"

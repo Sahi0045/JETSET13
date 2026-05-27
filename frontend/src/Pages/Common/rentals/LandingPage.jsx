@@ -668,8 +668,7 @@ export default function LandingPage() {
         <img
           src="https://images.unsplash.com/photo-1742943892619-501567da0c62?q=80&w=2938&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
           alt="Luxury Accommodation"
-          className="absolute inset-0 w-full h-full object-cover scale-105 animate-slow-zoom"
-        />
+          className="absolute inset-0 w-full h-full object-cover scale-105 animate-slow-zoom" loading="lazy" decoding="async" />
 
         {/* Animated Shapes - Hide on mobile/tablet */}
         {!isMobileView && !isTabletView && (
@@ -1315,8 +1314,7 @@ export default function LandingPage() {
                         <img
                           src={destination.image || "/placeholder.svg"}
                           alt={destination.name}
-                          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 hover:scale-110"
-                        />
+                          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 hover:scale-110" loading="lazy" decoding="async" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
 
                         {/* Rating Badge */}
@@ -1466,8 +1464,7 @@ export default function LandingPage() {
                   <img
                     src={destination.image || "/placeholder.svg"}
                     alt={destination.name}
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                  />
+                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" loading="lazy" decoding="async" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
 
                   <div className="absolute bottom-0 left-0 p-6 text-white w-full">
@@ -1533,8 +1530,7 @@ export default function LandingPage() {
                   <img
                     src="https://images.unsplash.com/photo-1566837497312-7be7830ae9b1?q=80&w=2070&auto=format&fit=crop"
                     alt="Jammu & Kashmir"
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
+                    className="absolute inset-0 w-full h-full object-cover" loading="lazy" decoding="async" />
                   <div className="absolute inset-0 bg-gradient-to-l from-transparent to-blue-900/20"></div>
 
                   {/* Price Badge */}

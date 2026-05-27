@@ -6,7 +6,6 @@ import { HelmetProvider } from 'react-helmet-async';
 // Import CSS files
 import './styles/app.css';
 import './styles/fonts.css';
-import 'bootstrap/dist/css/bootstrap.min.css';
 
 // Import App component
 import App from './src/app.jsx';

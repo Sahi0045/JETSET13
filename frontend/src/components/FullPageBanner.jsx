@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 const FullPageBanner = () => {
   const imageUrl = import.meta.env.VITE_CONTACT_BANNER_URL || '/images/jetsetters-banner.jpg';
+  const imageWebp = imageUrl.replace(/\.(jpe?g|png)$/i, '.webp');
   const email = 'bookings@jetsetterss.com';
   const phone = '+1-408-899-9705';
   const durationMs = Number(import.meta.env.VITE_FULL_BANNER_MS || 4000); // faster default 4s
@@ -40,24 +41,27 @@ const FullPageBanner = () => {
       }}
       aria-label="Jetsetters full page banner"
     >
-      <img
-        src={imageUrl}
-        alt="Jetsetters — Plan your stress‑free Global Travel. Email bookings@jetsetterss.com or call +1-408-899-9705"
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'contain',
-          objectPosition: 'center'
-        }}
-        loading="lazy"
-        decoding="async"
-        onError={(e) => {
-          // If image fails, keep the solid background and show text fallback
-          e.currentTarget.style.display = 'none';
-        }}
-      />
+      <picture>
+        <source srcSet={imageWebp} type="image/webp" />
+        <img
+          src={imageUrl}
+          alt="Jetsetters — Plan your stress‑free Global Travel. Email bookings@jetsetterss.com or call +1-408-899-9705"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            objectPosition: 'center'
+          }}
+          loading="lazy"
+          decoding="async"
+          onError={(e) => {
+            // If image fails, keep the solid background and show text fallback
+            e.currentTarget.style.display = 'none';
+          }}
+        />
+      </picture>
 
       <div
         style={{

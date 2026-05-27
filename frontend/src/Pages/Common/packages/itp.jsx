@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronDown, MapPin, Calendar, Star, Clock, Users, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { FaHotel, FaPlane, FaUtensils, FaShieldAlt, FaCheck, FaMapMarkerAlt, FaRegClock, FaUsers, FaStar, FaCalendarAlt, FaPhoneAlt, FaEnvelope, FaCheckCircle } from "react-icons/fa";
-import itineraryData from '../../../data/itinerarypackages.json'
 import packagesData from '../../../data/packages.json'
 import Navbar from '../Navbar'
 import Footer from '../Footer'
@@ -23,6 +22,15 @@ const ItineraryPackage = () => {
   const [expandedDay, setExpandedDay] = useState(null)
   const [showQuoteModal, setShowQuoteModal] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [itineraryData, setItineraryData] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('../../../data/itinerarypackages.json').then(mod => {
+      if (!cancelled) setItineraryData(mod.default);
+    });
+    return () => { cancelled = true; };
+  }, []);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -105,8 +113,8 @@ const ItineraryPackage = () => {
     return defaultImages[selectedPackage] || defaultImages.dubai;
   };
 
-  // Get the correct package data from itinerary data
-  const packageData = itineraryData[selectedPackage]?.packages[0];
+  // Get the correct package data from itinerary data (loaded asynchronously)
+  const packageData = itineraryData?.[selectedPackage]?.packages[0];
   
   // Get the correct image set for the current package
   const currentPackageImages = getPackageImages();
@@ -233,7 +241,7 @@ const ItineraryPackage = () => {
         <div className="relative w-full h-[300px] md:h-[400px] mb-4 md:mb-8 rounded-xl md:rounded-2xl overflow-hidden group">
           {/* Main Image */}
           <div className="absolute inset-0 transition-transform duration-700 ease-in-out transform">
-            <img 
+            <img loading="lazy" decoding="async" 
               src={currentPackageImages[currentImageIndex].url}
               alt={currentPackageImages[currentImageIndex].caption}
               className="w-full h-full object-cover"
@@ -284,7 +292,7 @@ const ItineraryPackage = () => {
                 index === currentImageIndex ? 'ring-2 ring-blue-500' : ''
               }`}
             >
-              <img 
+              <img loading="lazy" decoding="async" 
                 src={image.url}
                 alt={image.caption}
                 className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
@@ -620,7 +628,7 @@ const ItineraryPackage = () => {
             ].map((destination) => (
               <div key={destination.name} className="text-center group">
                 <div className="rounded-lg overflow-hidden mb-1 md:mb-2 aspect-w-4 aspect-h-3">
-                  <img 
+                  <img loading="lazy" decoding="async" 
                     src={destination.image} 
                     alt={destination.name}
                     className="w-full h-32 md:h-48 object-cover transition-transform duration-300 group-hover:scale-110"

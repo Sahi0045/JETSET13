@@ -152,7 +152,7 @@ const AppointmentDetail = () => {
                             </div>
                             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-8 lg:gap-10 mb-10 pb-10 border-b border-slate-50 relative z-10">
                                 <div className="relative shrink-0">
-                                    <img src={applicant.img} className="size-28 lg:size-32 rounded-[2.5rem] border-4 border-white shadow-2xl relative z-10" alt="P" />
+                                    <img src={applicant.img} className="size-28 lg:size-32 rounded-[2.5rem] border-4 border-white shadow-2xl relative z-10" alt="P" loading="lazy" decoding="async" />
                                     <div className="absolute -inset-2 bg-[#1152d4]/5 rounded-[3rem] -z-0" />
                                 </div>
                                 <div className="flex flex-col justify-center text-center sm:text-left">

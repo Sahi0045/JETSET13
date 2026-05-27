@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import supabase from '../lib/supabase';
 
 // Create Auth Context
@@ -172,7 +172,7 @@ export const SupabaseAuthProvider = ({ children }) => {
   }, []);
 
   // Sign up with email and password
-  const signUp = async (email, password, metadata = {}) => {
+  const signUp = useCallback(async (email, password, metadata = {}) => {
     try {
       setLoading(true);
       setError(null);
@@ -195,10 +195,10 @@ export const SupabaseAuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Sign in with email and password
-  const signIn = async (email, password) => {
+  const signIn = useCallback(async (email, password) => {
     try {
       setLoading(true);
       setError(null);
@@ -276,10 +276,10 @@ export const SupabaseAuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Sign in with OAuth provider (Google, GitHub, etc.)
-  const signInWithOAuth = async (provider, options = {}) => {
+  const signInWithOAuth = useCallback(async (provider, options = {}) => {
     try {
       setLoading(true);
       setError(null);
@@ -313,10 +313,10 @@ export const SupabaseAuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Sign out
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -376,10 +376,10 @@ export const SupabaseAuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   // Update user profile
-  const updateProfile = async (updates) => {
+  const updateProfile = useCallback(async (updates) => {
     try {
       setLoading(true);
       setError(null);
@@ -398,10 +398,10 @@ export const SupabaseAuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Reset password
-  const resetPassword = async (email) => {
+  const resetPassword = useCallback(async (email) => {
     try {
       setLoading(true);
       setError(null);
@@ -420,10 +420,10 @@ export const SupabaseAuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Update password
-  const updatePassword = async (newPassword) => {
+  const updatePassword = useCallback(async (newPassword) => {
     try {
       setLoading(true);
       setError(null);
@@ -442,9 +442,9 @@ export const SupabaseAuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     session,
     loading,
@@ -458,7 +458,7 @@ export const SupabaseAuthProvider = ({ children }) => {
     resetPassword,
     updatePassword,
     supabase // Expose supabase client for advanced usage
-  };
+  }), [user, session, loading, error, signUp, signIn, signInWithOAuth, signOut, updateProfile, resetPassword, updatePassword]);
 
   return (
     <SupabaseAuthContext.Provider value={value}>

@@ -154,7 +154,7 @@ const VideoConsultation = () => {
                             <p className="text-[9px] text-slate-300 font-black uppercase tracking-widest">Consultant</p>
                             <p className="text-[11px] font-black text-slate-900 uppercase">{consultation.consultant_name}</p>
                         </div>
-                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${consultation.consultant_name}`} className="size-10 rounded-2xl border-2 border-[#1152d4]/10 shadow-sm" alt="S" />
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${consultation.consultant_name}`} className="size-10 rounded-2xl border-2 border-[#1152d4]/10 shadow-sm" alt="S" loading="lazy" decoding="async" />
                     </div>
                 </header>
 
@@ -284,14 +284,14 @@ const VideoConsultation = () => {
                         {/* Video Feeds */}
                         <div className="flex flex-col gap-3">
                             <div className="h-44 rounded-[2rem] overflow-hidden bg-slate-900 relative border-2 border-white shadow-xl group">
-                                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah" className="absolute inset-0 w-full h-full object-cover scale-150" alt="V" />
+                                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah" className="absolute inset-0 w-full h-full object-cover scale-150" alt="V" loading="lazy" decoding="async" />
                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-5 flex items-center justify-between">
                                     <span className="text-[10px] text-white font-black uppercase tracking-widest leading-none">{consultation.consultant_name}</span>
                                     <div className="size-5 rounded-lg bg-white/10 flex items-center justify-center backdrop-blur-md"><span className="material-symbols-outlined text-xs text-white">mic</span></div>
                                 </div>
                             </div>
                             <div className="h-44 rounded-[2rem] overflow-hidden bg-slate-900 relative border border-slate-100 shadow-md">
-                                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=John" className="absolute inset-0 w-full h-full object-cover scale-150" alt="V" />
+                                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=John" className="absolute inset-0 w-full h-full object-cover scale-150" alt="V" loading="lazy" decoding="async" />
                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-5">
                                     <span className="text-[10px] text-white font-black uppercase tracking-widest leading-none">You (Live)</span>
                                 </div>

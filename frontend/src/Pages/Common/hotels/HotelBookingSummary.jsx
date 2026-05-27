@@ -53,8 +53,10 @@ const HotelBookingSummary = () => {
     const [errors, setErrors] = useState({});
     const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
 
-    // Fetch hotel details
+    // Fetch hotel details. Guard prevents a stale fetch from flashing the
+    // wrong hotel into the summary if the user changes hotelId mid-flight.
     useEffect(() => {
+        let cancelled = false;
         const fetchHotel = async () => {
             if (!hotelId) {
                 setLoading(false);
@@ -63,15 +65,18 @@ const HotelBookingSummary = () => {
 
             try {
                 const hotelData = await hotelService.getHotelById(hotelId);
+                if (cancelled) return;
                 setHotel(hotelData);
             } catch (err) {
+                if (cancelled) return;
                 console.error('Error fetching hotel:', err);
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
 
         fetchHotel();
+        return () => { cancelled = true; };
     }, [hotelId]);
 
     // Calculate prices
@@ -620,7 +625,7 @@ const HotelBookingSummary = () => {
                         <div className="sticky top-24 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                             {/* Hotel Image */}
                             <div className="relative h-40 rounded-lg overflow-hidden mb-4">
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src={hotel.image}
                                     alt={hotel.name}
                                     className="w-full h-full object-cover"

@@ -135,7 +135,7 @@ export default function Login() {
                     <div
                         className="login-image-section"
                         style={{
-                            backgroundImage: `url('/images/Rectangle 1434 (1).png')`,
+                            backgroundImage: `image-set(url('/images/Rectangle 1434 (1).webp') type('image/webp'), url('/images/Rectangle 1434 (1).png') type('image/png'))`,
                         }}
                     >
                         <div className="image-overlay">

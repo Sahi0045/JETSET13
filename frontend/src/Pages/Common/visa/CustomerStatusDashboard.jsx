@@ -422,7 +422,7 @@ const CustomerStatusDashboard = () => {
                 <aside className="w-[380px] border-l border-slate-200 bg-white flex flex-col shrink-0">
                     <div className="p-4 border-b border-slate-100 flex items-center gap-3">
                         <div className="relative">
-                            <img className="size-10 rounded-full border-2 border-slate-50 shadow-sm" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah" alt="Agent" />
+                            <img className="size-10 rounded-full border-2 border-slate-50 shadow-sm" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah" alt="Agent" loading="lazy" decoding="async" />
                             <div className="absolute bottom-0 right-0 size-3 bg-green-500 border-2 border-white rounded-full"></div>
                         </div>
                         <div>

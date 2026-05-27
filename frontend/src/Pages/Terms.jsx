@@ -1,5 +1,4 @@
 import React from 'react';
-import { Container, Row, Col, Card } from 'react-bootstrap';
 import { Helmet } from 'react-helmet-async';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
@@ -15,13 +14,11 @@ const Terms = () => {
 
       <Navbar forceScrolled={true} />
 
-      <Container className="py-5">
-        <Row className="justify-content-center mb-4">
-          <Col md={10}>
-            <Card className="shadow-sm">
-              <Card.Body className="p-5">
-                <h1 className="text-center mb-4">Terms of Service</h1>
-                <div className="terms-content">
+      <div className="container mx-auto px-4 py-12 max-w-5xl">
+        <div className="bg-white rounded-lg shadow-sm">
+          <div className="p-6 md:p-12">
+            <h1 className="text-3xl md:text-4xl font-bold text-center mb-8">Terms of Service</h1>
+            <div className="terms-content prose prose-slate max-w-none">
                   <section className="mb-4">
                     <h2>Introduction</h2>
                     <p>Last Updated: {new Date().toLocaleDateString()}</p>
@@ -158,12 +155,10 @@ const Terms = () => {
                       <strong>Address:</strong> 513 W Bonaventure Ave Tracy, CA 95391
                     </p>
                   </section>
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
-      </Container>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <Footer />
     </>

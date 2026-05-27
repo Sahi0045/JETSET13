@@ -222,8 +222,7 @@ Booking Date: ${new Date(bookingDetails.bookingDate).toLocaleDateString()}
               <img
                 src={bookingDetails.hotelDetails.image}
                 alt={bookingDetails.hotelDetails.name}
-                className="w-full h-48 object-cover"
-              />
+                className="w-full h-48 object-cover" loading="lazy" decoding="async" />
               <div className="p-6">
                 <h3 className="text-xl font-bold text-gray-900 mb-2">
                   {bookingDetails.hotelDetails.name}

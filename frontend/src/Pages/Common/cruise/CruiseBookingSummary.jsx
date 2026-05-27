@@ -4,7 +4,7 @@ import { FaShip, FaUser, FaLock } from 'react-icons/fa';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
-import cruiseLineData from './data/cruiselines.json';
+import { loadCruiseLines } from './data/cruiselinesLoader';
 import Price from '../../../Components/Price';
 import currencyService from '../../../Services/CurrencyService';
 import ArcPayService from '../../../Services/ArcPayService';
@@ -27,9 +27,12 @@ function CruiseBookingSummary() {
   const [appliedCoupon, setAppliedCoupon] = useState(null);
 
   useEffect(() => {
-    // Find the selected cruise from cruiseLineData
-    const findCruise = () => {
-      const allCruises = cruiseLineData.cruiseLines;
+    let cancelled = false;
+    // Find the selected cruise from the lazily-loaded cruise lines dataset
+    const findCruise = async () => {
+      const data = await loadCruiseLines();
+      if (cancelled) return;
+      const allCruises = data.cruiseLines;
       let selectedCruise;
 
       if (cruiseId) {
@@ -57,6 +60,7 @@ function CruiseBookingSummary() {
     };
 
     findCruise();
+    return () => { cancelled = true; };
   }, [cruiseId, cruiseLine]);
 
   const handlePassengerChange = (type, index, field, value) => {
@@ -206,8 +210,8 @@ function CruiseBookingSummary() {
 
           {/* Cruise Image */}
           <div className="mb-8 rounded-lg overflow-hidden shadow-lg">
-            <img
-              src={cruiseData.image || "/images/Rectangle 1434 (1).png"}
+            <img loading="lazy" decoding="async"
+              src={cruiseData.image || "/images/Rectangle 1434 (1).webp"}
               alt={cruiseData.name}
               className="w-full h-[400px] object-cover"
             />

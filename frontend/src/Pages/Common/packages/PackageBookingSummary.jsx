@@ -53,15 +53,19 @@ const PackageBookingSummary = () => {
 
   // Fetch package details if not provided in location state
   useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+    let redirectTimer = null;
+
     const fetchPackageDetails = async () => {
       if (packageDetails) {
         // If we have package details from location state, use them
         setBookingDetails(packageDetails);
-        
+
         // Initialize traveler form based on number of travelers
         const adultCount = packageDetails.travelers?.adults || 1;
         const childCount = packageDetails.travelers?.children || 0;
-        
+
         // Create additional traveler forms based on count (subtract 1 for primary traveler)
         const additionalTravelersCount = adultCount + childCount - 1;
         const additionalTravelers = Array(additionalTravelersCount).fill().map(() => ({
@@ -72,37 +76,38 @@ const PackageBookingSummary = () => {
           passportExpiry: '',
           nationality: ''
         }));
-        
+
         setTravelerDetails(prev => ({
           ...prev,
           additionalTravelers
         }));
-        
+
         setIsLoading(false);
       } else {
         // If no package details in location state, try to fetch from API or redirect
         try {
           // Get package ID from URL if available
           const packageId = new URLSearchParams(location.search).get('id');
-          
+
           if (!packageId) {
             throw new Error('No package ID provided');
           }
-          
+
           // Example API call - replace with your actual API endpoint
-          const response = await fetch(`/api/packages/${packageId}`);
-          
+          const response = await fetch(`/api/packages/${packageId}`, { signal: controller.signal });
+
           if (!response.ok) {
             throw new Error('Failed to load package details');
           }
-          
+
           const data = await response.json();
+          if (cancelled) return;
           setBookingDetails(data);
-          
+
           // Initialize traveler form based on number of travelers
           const adultCount = data.travelers?.adults || 1;
           const childCount = data.travelers?.children || 0;
-          
+
           // Create additional traveler forms based on count (subtract 1 for primary traveler)
           const additionalTravelersCount = adultCount + childCount - 1;
           const additionalTravelers = Array(additionalTravelersCount).fill().map(() => ({
@@ -113,26 +118,33 @@ const PackageBookingSummary = () => {
             passportExpiry: '',
             nationality: ''
           }));
-          
+
           setTravelerDetails(prev => ({
             ...prev,
             additionalTravelers
           }));
-          
+
           setIsLoading(false);
         } catch (err) {
+          if (cancelled || err.name === 'AbortError') return;
           setLoadError(err.message || 'Failed to load package details');
           setIsLoading(false);
-          
+
           // Redirect back to packages page after 3 seconds
-          setTimeout(() => {
+          redirectTimer = setTimeout(() => {
             navigate('/packages');
           }, 3000);
         }
       }
     };
-    
+
     fetchPackageDetails();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      if (redirectTimer) clearTimeout(redirectTimer);
+    };
   }, [location, packageDetails, navigate]);
 
   const handlePaymentChange = (field, value) => {

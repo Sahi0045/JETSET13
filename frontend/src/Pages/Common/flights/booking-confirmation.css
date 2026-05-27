@@ -1,9 +1,7 @@
-/* Flight Booking Confirmation - Premium Modern Design ✈️ 
+/* Flight Booking Confirmation - Premium Modern Design ✈️
    A clean, sophisticated aesthetic focusing on clarity and elegance.
+   Fonts loaded via <link> in index.html.
 */
-
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
 :root {
     /* Primary Brand Colors */

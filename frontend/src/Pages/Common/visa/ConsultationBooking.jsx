@@ -417,8 +417,7 @@ const ConsultationBooking = () => {
                       <img
                         src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.name)}`}
                         alt={c.name}
-                        className="w-full h-full object-cover"
-                      />
+                        className="w-full h-full object-cover" loading="lazy" decoding="async" />
                     </div>
                     <p className="text-sm font-black text-center leading-tight">
                       {c.role}
@@ -733,8 +732,7 @@ const ConsultationBooking = () => {
                   <img
                     src={activeConsultant?.img}
                     alt={activeConsultant?.name}
-                    className="size-12 rounded-full border-2 border-white shadow-sm"
-                  />
+                    className="size-12 rounded-full border-2 border-white shadow-sm" loading="lazy" decoding="async" />
                   <div>
                     <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest leading-none mb-1">
                       Expert

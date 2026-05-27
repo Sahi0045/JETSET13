@@ -1,5 +1,4 @@
 import React from 'react';
-import { Container, Row, Col, Card, Table } from 'react-bootstrap';
 import { Helmet } from 'react-helmet-async';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
@@ -15,13 +14,11 @@ const Cookies = () => {
 
       <Navbar forceScrolled={true} />
 
-      <Container className="py-5">
-        <Row className="justify-content-center mb-4">
-          <Col md={10}>
-            <Card className="shadow-sm">
-              <Card.Body className="p-5">
-                <h1 className="text-center mb-4">Cookie Policy</h1>
-                <div className="cookies-content">
+      <div className="container mx-auto px-4 py-12 max-w-5xl">
+        <div className="bg-white rounded-lg shadow-sm">
+          <div className="p-6 md:p-12">
+            <h1 className="text-3xl md:text-4xl font-bold text-center mb-8">Cookie Policy</h1>
+            <div className="cookies-content prose prose-slate max-w-none">
                   <section className="mb-4">
                     <h2>Introduction</h2>
                     <p>Last Updated: {new Date().toLocaleDateString()}</p>
@@ -67,59 +64,61 @@ const Cookies = () => {
                     <h2>Types of cookies we use</h2>
                     <p>The specific types of first- and third-party cookies served through our Website and the purposes they perform are described below:</p>
 
-                    <Table responsive bordered className="my-4">
-                      <thead className="table-light">
-                        <tr>
-                          <th>Type of Cookie</th>
-                          <th>Purpose</th>
-                          <th>Duration</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td><strong>Essential Cookies</strong></td>
-                          <td>
-                            These cookies are strictly necessary to provide you with services available through our Website and to use
-                            some of its features, such as access to secure areas. Without these cookies, services you have asked for,
-                            like shopping carts or e-billing, cannot be provided.
-                          </td>
-                          <td>Session / Persistent</td>
-                        </tr>
-                        <tr>
-                          <td><strong>Performance & Functionality Cookies</strong></td>
-                          <td>
-                            These cookies are used to enhance the performance and functionality of our Website but are non-essential to
-                            their use. However, without these cookies, certain functionality may become unavailable.
-                          </td>
-                          <td>Session / Persistent</td>
-                        </tr>
-                        <tr>
-                          <td><strong>Analytics & Customization Cookies</strong></td>
-                          <td>
-                            These cookies collect information that is used either in aggregate form to help us understand how our Website
-                            is being used or how effective our marketing campaigns are, or to help us customize our Website for you.
-                          </td>
-                          <td>Session / Persistent</td>
-                        </tr>
-                        <tr>
-                          <td><strong>Advertising & Targeting Cookies</strong></td>
-                          <td>
-                            These cookies are used to make advertising messages more relevant to you. They perform functions like preventing
-                            the same ad from continuously reappearing, ensuring that ads are properly displayed for advertisers, and in some
-                            cases selecting advertisements that are based on your interests.
-                          </td>
-                          <td>Session / Persistent</td>
-                        </tr>
-                        <tr>
-                          <td><strong>Social Media Cookies</strong></td>
-                          <td>
-                            These cookies are used to enable you to share pages and content that you find interesting on our Website through
-                            third-party social networking and other websites. These cookies may also be used for advertising purposes.
-                          </td>
-                          <td>Session / Persistent</td>
-                        </tr>
-                      </tbody>
-                    </Table>
+                    <div className="overflow-x-auto my-4">
+                      <table className="w-full border-collapse border border-gray-300">
+                        <thead className="bg-gray-100">
+                          <tr>
+                            <th className="border border-gray-300 px-4 py-2 text-left">Type of Cookie</th>
+                            <th className="border border-gray-300 px-4 py-2 text-left">Purpose</th>
+                            <th className="border border-gray-300 px-4 py-2 text-left">Duration</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td className="border border-gray-300 px-4 py-2 align-top"><strong>Essential Cookies</strong></td>
+                            <td className="border border-gray-300 px-4 py-2">
+                              These cookies are strictly necessary to provide you with services available through our Website and to use
+                              some of its features, such as access to secure areas. Without these cookies, services you have asked for,
+                              like shopping carts or e-billing, cannot be provided.
+                            </td>
+                            <td className="border border-gray-300 px-4 py-2 align-top">Session / Persistent</td>
+                          </tr>
+                          <tr>
+                            <td className="border border-gray-300 px-4 py-2 align-top"><strong>Performance & Functionality Cookies</strong></td>
+                            <td className="border border-gray-300 px-4 py-2">
+                              These cookies are used to enhance the performance and functionality of our Website but are non-essential to
+                              their use. However, without these cookies, certain functionality may become unavailable.
+                            </td>
+                            <td className="border border-gray-300 px-4 py-2 align-top">Session / Persistent</td>
+                          </tr>
+                          <tr>
+                            <td className="border border-gray-300 px-4 py-2 align-top"><strong>Analytics & Customization Cookies</strong></td>
+                            <td className="border border-gray-300 px-4 py-2">
+                              These cookies collect information that is used either in aggregate form to help us understand how our Website
+                              is being used or how effective our marketing campaigns are, or to help us customize our Website for you.
+                            </td>
+                            <td className="border border-gray-300 px-4 py-2 align-top">Session / Persistent</td>
+                          </tr>
+                          <tr>
+                            <td className="border border-gray-300 px-4 py-2 align-top"><strong>Advertising & Targeting Cookies</strong></td>
+                            <td className="border border-gray-300 px-4 py-2">
+                              These cookies are used to make advertising messages more relevant to you. They perform functions like preventing
+                              the same ad from continuously reappearing, ensuring that ads are properly displayed for advertisers, and in some
+                              cases selecting advertisements that are based on your interests.
+                            </td>
+                            <td className="border border-gray-300 px-4 py-2 align-top">Session / Persistent</td>
+                          </tr>
+                          <tr>
+                            <td className="border border-gray-300 px-4 py-2 align-top"><strong>Social Media Cookies</strong></td>
+                            <td className="border border-gray-300 px-4 py-2">
+                              These cookies are used to enable you to share pages and content that you find interesting on our Website through
+                              third-party social networking and other websites. These cookies may also be used for advertising purposes.
+                            </td>
+                            <td className="border border-gray-300 px-4 py-2 align-top">Session / Persistent</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
                   </section>
 
                   <section className="mb-4">
@@ -174,12 +173,10 @@ const Cookies = () => {
                       <strong>Address:</strong> 513 W Bonaventure Ave Tracy, CA 95391
                     </p>
                   </section>
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
-      </Container>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <Footer />
     </>

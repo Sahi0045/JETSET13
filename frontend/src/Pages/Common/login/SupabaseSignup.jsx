@@ -186,7 +186,7 @@ export default function SupabaseSignup() {
                 <div
                     className="login-image"
                     style={{
-                        backgroundImage: `url('/images/Rectangle 1434 (1).png')`,
+                        backgroundImage: `image-set(url('/images/Rectangle 1434 (1).webp') type('image/webp'), url('/images/Rectangle 1434 (1).png') type('image/png'))`,
                     }}
                 ></div>
 

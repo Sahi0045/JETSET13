@@ -804,8 +804,8 @@ function FlightPayment() {
                               />
                               <div className="absolute inset-y-0 right-3 flex items-center">
                                 <div className="flex space-x-1">
-                                  <img src="https://cdn-icons-png.flaticon.com/512/349/349221.png" alt="Visa" className="h-6" />
-                                  <img src="https://cdn-icons-png.flaticon.com/512/349/349228.png" alt="MasterCard" className="h-6" />
+                                  <img loading="lazy" decoding="async" src="https://cdn-icons-png.flaticon.com/512/349/349221.png" alt="Visa" className="h-6" />
+                                  <img loading="lazy" decoding="async" src="https://cdn-icons-png.flaticon.com/512/349/349228.png" alt="MasterCard" className="h-6" />
                                 </div>
                               </div>
                             </div>
@@ -952,7 +952,7 @@ function FlightPayment() {
                                   type="button"
                                   className="flex flex-col sm:flex-row items-center justify-center sm:justify-start p-2 border rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
                                 >
-                                  <img src={app.icon} alt={app.name} className="w-6 h-6 mb-1 sm:mb-0 sm:mr-2" />
+                                  <img loading="lazy" decoding="async" src={app.icon} alt={app.name} className="w-6 h-6 mb-1 sm:mb-0 sm:mr-2" />
                                   <span className="text-xs font-medium">{app.name}</span>
                                 </button>
                               ))}
@@ -1006,7 +1006,7 @@ function FlightPayment() {
                     >
                       <div className="flex items-center">
                         <div className="h-10 w-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center mr-4">
-                          <img
+                          <img loading="lazy" decoding="async"
                             src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/UPI-Logo-vector.svg/1280px-UPI-Logo-vector.svg.png"
                             alt="UPI"
                             className="h-6"
@@ -1059,7 +1059,7 @@ function FlightPayment() {
                                   type="button"
                                   className="flex items-center space-x-2 p-2 border rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
                                 >
-                                  <img src={app.icon} alt={app.name} className="w-6 h-6" />
+                                  <img loading="lazy" decoding="async" src={app.icon} alt={app.name} className="w-6 h-6" />
                                   <span className="text-xs font-medium">{app.name}</span>
                                 </button>
                               ))}

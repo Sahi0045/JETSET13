@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { FaMapMarkerAlt, FaCalendar, FaArrowLeft, FaShip, FaSearch, FaSpinner, FaExclamationTriangle } from 'react-icons/fa';
 // import './cruise-cards.css';
-import cruiseLineData from './data/cruiselines.json';
+import { loadCruiseLines } from './data/cruiselinesLoader';
 import destinationsData from './data/destinations.json';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
@@ -59,52 +59,62 @@ const CruiseCards = () => {
     return filtered;
   };
 
-  const fetchCruiseData = async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Fetch cruise data from our API endpoint
-      const response = await fetch('/api/cruises');
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch cruise data');
-      }
-
-      const apiResponse = await response.json();
-
-      // Transform API data to match our local data structure
-      const transformedCruises = apiResponse.data.map(cruise => ({
-        id: cruise.id || Math.random().toString(36).substr(2, 9),
-        name: cruise.cruise_line,
-        image: cruise.image || '/images/default-cruise.jpg',
-        duration: `${cruise.duration} Days`,
-        description: cruise.name,
-        destinations: cruise.destinations,
-        departurePorts: [cruise.departure_port],
-        price: cruise.price_per_person,
-        priceValue: cruise.price_per_person,
-        departureDate: cruise.departure_date
-      }));
-
-      const filtered = applyFiltersAndTitle(transformedCruises);
-      setFilteredCruises(filtered);
-      setUsingFallback(false);
-    } catch (apiError) {
-      console.error('Error fetching cruise data:', apiError);
-      setError('Unable to fetch live cruise data. Using fallback data.');
-      setUsingFallback(true);
-
-      // Fallback to local JSON data
-      const filtered = applyFiltersAndTitle(cruiseLineData.cruiseLines);
-      setFilteredCruises(filtered);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    // Kick off the fallback load in parallel so the catch branch doesn't have
+    // to wait for the JSON parse after the API has already failed.
+    const fallbackPromise = loadCruiseLines();
+
+    const fetchCruiseData = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch('/api/cruises', { signal: controller.signal });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch cruise data');
+        }
+
+        const apiResponse = await response.json();
+        if (cancelled) return;
+
+        const transformedCruises = apiResponse.data.map((cruise, idx) => ({
+          id: cruise.id || `${cruise.cruise_line || 'cruise'}-${cruise.departure_date || ''}-${cruise.departure_port || ''}-${idx}`,
+          name: cruise.cruise_line,
+          image: cruise.image || '/images/default-cruise.jpg',
+          duration: `${cruise.duration} Days`,
+          description: cruise.name,
+          destinations: cruise.destinations,
+          departurePorts: [cruise.departure_port],
+          price: cruise.price_per_person,
+          priceValue: cruise.price_per_person,
+          departureDate: cruise.departure_date
+        }));
+
+        setFilteredCruises(applyFiltersAndTitle(transformedCruises));
+        setUsingFallback(false);
+      } catch (apiError) {
+        if (cancelled || apiError.name === 'AbortError') return;
+        console.error('Error fetching cruise data:', apiError);
+        setError('Unable to fetch live cruise data. Using fallback data.');
+        setUsingFallback(true);
+
+        const fallback = await fallbackPromise;
+        if (cancelled) return;
+        setFilteredCruises(applyFiltersAndTitle(fallback.cruiseLines));
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
     fetchCruiseData();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [cruiseLineParam, destinationParam, countryParam]);
 
   if (isLoading) {
@@ -167,7 +177,7 @@ const CruiseCards = () => {
                 >
                   {/* Image Section with Overlay */}
                   <div className="w-full md:w-[42%] h-[280px] md:h-auto relative overflow-hidden">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={cruise.image}
                       alt={cruise.name}
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"

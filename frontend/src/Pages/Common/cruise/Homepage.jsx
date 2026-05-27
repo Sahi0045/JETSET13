@@ -40,32 +40,42 @@ const styles = {
 };
 
 const TrustIndicators = () => {
+  const logos = [
+    { src: '/images/logos/amadeus.svg', alt: 'Amadeus' },
+    { src: '/images/logos/arc-pay-gateway.png', alt: 'ARC Pay Gateway' },
+    { src: '/images/logos/royal_caribbean.png', webp: '/images/logos/royal_caribbean.webp', alt: 'Royal Caribbean' },
+    { src: '/images/logos/carnival.png', webp: '/images/logos/carnival.webp', alt: 'Carnival' },
+    { src: '/images/logos/norwegian.png', webp: '/images/logos/norwegian.webp', alt: 'Norwegian Cruise Line' },
+    { src: '/images/logos/disney_cruise.png', webp: '/images/logos/disney_cruise.webp', alt: 'Disney Cruise Line' }
+  ];
+
   return (
     <div className="py-8 md:py-10 bg-transparent">
       <div className="max-w-7xl mx-auto px-4">
         <div className="mt-0 text-center">
           <div className="flex items-center justify-center gap-3 md:gap-5 mb-6 md:mb-8">
             <span className="flex-1 max-w-[80px] md:max-w-[140px] h-px bg-gradient-to-r from-transparent to-[#0066b2]/40"></span>
-            <p className="text-sm md:text-base font-extrabold text-[#0066b2] uppercase tracking-[0.2em] whitespace-nowrap">
+            <p className="text-xs sm:text-sm md:text-base font-extrabold text-[#0066b2] uppercase tracking-[0.15em] md:tracking-[0.2em] text-center">
               Trusted Payment authorized partners &amp; Cruise Line Partners
             </p>
             <span className="flex-1 max-w-[80px] md:max-w-[140px] h-px bg-gradient-to-l from-transparent to-[#0066b2]/40"></span>
           </div>
-          <div className="flex flex-wrap gap-8 md:gap-14 justify-center items-center">
-            {[
-              { src: '/images/logos/amadeus.svg', alt: 'Amadeus' },
-              { src: '/images/logos/arc-pay-gateway.png', alt: 'ARC Pay Gateway' },
-              { src: '/images/logos/royal_caribbean.png', alt: 'Royal Caribbean' },
-              { src: '/images/logos/carnival.png', alt: 'Carnival' },
-              { src: '/images/logos/norwegian.png', alt: 'Norwegian Cruise Line' },
-              { src: '/images/logos/disney_cruise.png', alt: 'Disney Cruise Line', large: true }
-            ].map((logo, index) => (
-              <div key={index} className={`flex items-center justify-center transition-all duration-300 hover:scale-105 opacity-85 hover:opacity-100 ${logo.large ? 'h-24 md:h-36 w-60 md:w-80' : 'h-16 md:h-24 w-48 md:w-64'}`}>
-                <img
-                  src={logo.src}
-                  alt={logo.alt}
-                  className="max-h-full max-w-full object-contain mix-blend-multiply filter brightness-[1.05] contrast-[1.1]"
-                />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-6 md:gap-8 items-center justify-items-center">
+            {logos.map((logo, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-center h-16 md:h-20 w-full max-w-[160px] transition-all duration-300 hover:scale-105 opacity-85 hover:opacity-100"
+              >
+                <picture>
+                  {logo.webp && <source srcSet={logo.webp} type="image/webp" />}
+                  <img
+                    loading="lazy"
+                    decoding="async"
+                    src={logo.src}
+                    alt={logo.alt}
+                    className="max-h-full max-w-full object-contain mix-blend-multiply filter brightness-[1.05] contrast-[1.1]"
+                  />
+                </picture>
               </div>
             ))}
           </div>
@@ -381,7 +391,7 @@ const TestimonialBanner = () => {
                   <FaQuoteRight className="w-8 h-8 sm:w-10 sm:h-10" />
                 </div>
                 <div className="flex flex-col sm:flex-row items-start">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={testimonialItems[currentTestimonial].image}
                     alt={testimonialItems[currentTestimonial].name}
                     className="w-14 h-14 sm:w-16 sm:h-16 rounded-full mb-3 sm:mb-0 sm:mr-4 object-cover border-4 border-white shadow-md"
@@ -426,7 +436,7 @@ const TestimonialBanner = () => {
                     }}
                   >
                     <div className="flex items-center">
-                      <img src={item.image} alt={item.name} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full mr-2 sm:mr-3 object-cover" />
+                      <img loading="lazy" decoding="async" src={item.image} alt={item.name} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full mr-2 sm:mr-3 object-cover" />
                       <div>
                         <h4 className="text-sm sm:text-base font-bold text-gray-800">{item.name}</h4>
                         <div className="flex">
@@ -477,11 +487,16 @@ const PromoSection = () => {
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <div className="flex flex-col md:flex-row">
             <div className="md:w-1/2 relative">
-              <img
-                src="/images/Rectangle 1434 (2).png"
-                alt="Limited Time Offer"
-                className="w-full h-full object-cover"
-              />
+              <picture>
+                <source srcSet="/images/Rectangle 1434 (2).webp" type="image/webp" />
+                <img
+                  src="/images/Rectangle 1434 (2).png"
+                  alt="Limited Time Offer"
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-full object-cover"
+                />
+              </picture>
               <div className="absolute top-4 left-4 bg-red-500 text-white px-4 py-2 rounded-full text-sm font-bold">
                 Limited Time
               </div>
@@ -984,9 +999,9 @@ const HomePage = () => {
 
                   <div className="flex items-center gap-2 mb-3 hidden md:flex">
                     <div className="flex -space-x-2">
-                      <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1491528323818-fdd1faba62cc?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                      <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1550525811-e5869dd03032?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                      <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2.25&w=256&h=256&q=80" alt="" />
+                      <img loading="lazy" decoding="async" className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1491528323818-fdd1faba62cc?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
+                      <img loading="lazy" decoding="async" className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1550525811-e5869dd03032?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
+                      <img loading="lazy" decoding="async" className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2.25&w=256&h=256&q=80" alt="" />
                     </div>
                     <span className="text-xs text-white">Join 25,000+ subscribers</span>
                   </div>

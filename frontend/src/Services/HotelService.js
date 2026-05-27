@@ -1,7 +1,8 @@
 // Hotel Service - Amadeus API with JSON fallback
-// Tries Amadeus API first, falls back to hotels.json when API fails
+// Tries Amadeus API first, falls back to hotels.json when API fails.
+// The fallback dataset is large (~33KB), so it is lazy-loaded the first
+// time a fallback path is hit and cached for subsequent calls.
 
-import hotelsData from '../data/hotels.json';
 import axios from 'axios';
 
 // Detect production based on domain (more reliable than import.meta.env.PROD)
@@ -12,7 +13,14 @@ const API_BASE_URL = isProduction ? 'https://www.jetsetterss.com/api' : '/api';
 
 class HotelService {
     constructor() {
-        this.fallbackData = hotelsData;
+        this._fallbackPromise = null;
+    }
+
+    _loadFallback() {
+        if (!this._fallbackPromise) {
+            this._fallbackPromise = import('../data/hotels.json').then(mod => mod.default);
+        }
+        return this._fallbackPromise;
     }
 
     /**
@@ -115,7 +123,7 @@ class HotelService {
 
         // Check if it's a JSON hotel ID (format: destination-number, but not our Amadeus prefix)
         if (hotelId.includes('-') && !hotelId.startsWith('amadeus-')) {
-            const hotel = this.getHotelFromJsonById(hotelId);
+            const hotel = await this.getHotelFromJsonById(hotelId);
             if (hotel) {
                 return hotel;
             }
@@ -370,11 +378,12 @@ class HotelService {
 
     /**
      * Get all hotels from JSON fallback data
-     * @returns {Array} - All hotels from JSON
+     * @returns {Promise<Array>} - All hotels from JSON
      */
-    getAllHotels() {
+    async getAllHotels() {
+        const fallbackData = await this._loadFallback();
         const allHotels = [];
-        const destinations = this.fallbackData.destinations || {};
+        const destinations = fallbackData.destinations || {};
 
         Object.keys(destinations).forEach(destKey => {
             const destination = destinations[destKey];
@@ -452,8 +461,9 @@ class HotelService {
      * Get available destinations
      * @returns {Array} - Array of destination objects
      */
-    getDestinations() {
-        const destinations = this.fallbackData.destinations || {};
+    async getDestinations() {
+        const fallbackData = await this._loadFallback();
+        const destinations = fallbackData.destinations || {};
         return Object.keys(destinations).map(key => ({
             id: key,
             ...destinations[key],
@@ -561,13 +571,14 @@ class HotelService {
     /**
      * Search hotels from JSON data
      */
-    searchFromJson(searchTerm) {
+    async searchFromJson(searchTerm) {
         if (!searchTerm) {
             return this.getAllHotels();
         }
 
+        const fallbackData = await this._loadFallback();
         const normalized = searchTerm.toLowerCase().trim();
-        const destinations = this.fallbackData.destinations || {};
+        const destinations = fallbackData.destinations || {};
 
         // First, check if searchTerm matches a destination key
         if (destinations[normalized]) {
@@ -619,8 +630,9 @@ class HotelService {
     /**
      * Get hotel from JSON by ID
      */
-    getHotelFromJsonById(hotelId) {
-        const destinations = this.fallbackData.destinations || {};
+    async getHotelFromJsonById(hotelId) {
+        const fallbackData = await this._loadFallback();
+        const destinations = fallbackData.destinations || {};
 
         for (const destKey of Object.keys(destinations)) {
             const dest = destinations[destKey];

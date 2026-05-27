@@ -255,8 +255,7 @@ const Destinations = () => {
                   <img
                     src={dest.image}
                     alt={dest.name}
-                    className="h-56 w-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
+                    className="h-56 w-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" decoding="async" />
                 </div>
                 <div className="p-5">
                   <div className="flex justify-between items-start mb-2">

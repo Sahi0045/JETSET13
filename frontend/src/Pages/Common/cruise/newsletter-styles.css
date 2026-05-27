@@ -2,6 +2,10 @@
   position: relative;
   padding: 0;
   background-image: url('/cruise/cruise-newsletter-bg.jpg');
+  background-image: image-set(
+    url('/cruise/cruise-newsletter-bg.webp') type('image/webp'),
+    url('/cruise/cruise-newsletter-bg.jpg') type('image/jpeg')
+  );
   background-size: cover;
   background-position: center center;
   color: #fff;

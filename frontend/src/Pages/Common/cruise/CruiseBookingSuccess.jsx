@@ -5,8 +5,6 @@ import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import Price from '../../../Components/Price';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 
 function CruiseBookingSuccess() {
     const location = useLocation();
@@ -56,6 +54,10 @@ function CruiseBookingSuccess() {
 
         try {
             setIsDownloading(true);
+            const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+                import('html2canvas'),
+                import('jspdf'),
+            ]);
             const canvas = await html2canvas(ticketRef.current, {
                 scale: 2, // Higher quality
                 useCORS: true, // Allow cross-origin images

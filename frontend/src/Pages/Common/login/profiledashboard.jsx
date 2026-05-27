@@ -546,7 +546,7 @@ export default function ProfilePage() {
           <div className="sidebar-profile-card">
             <div className="profile-avatar-container">
               {data.profile_photo ? (
-                <img src={URL.createObjectURL(data.profile_photo)} alt="Profile" className="profile-avatar" />
+                <img src={URL.createObjectURL(data.profile_photo)} alt="Profile" className="profile-avatar" loading="lazy" decoding="async" />
               ) : (
                 <div className="profile-avatar-placeholder">
                   {data.first_name ? data.first_name[0].toUpperCase() : user?.email?.[0]?.toUpperCase() || 'U'}
@@ -947,7 +947,7 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="qr-container">
-                    <img src={twoFactorQR} alt="2FA QR Code" className="qr-code" />
+                    <img src={twoFactorQR} alt="2FA QR Code" className="qr-code" loading="lazy" decoding="async" />
                     <p className="secret-code">Secret: <code>{twoFactorSecret}</code></p>
                   </div>
 

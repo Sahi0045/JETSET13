@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Check, Download, Printer, Share2, Copy, ArrowLeft } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import Price from '../../../Components/Price';
@@ -40,6 +38,11 @@ export default function FlightBookingSuccess() {
 
     setIsGenerating(true);
     try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
       const element = ticketRef.current;
 
       // Wait for images to fully load

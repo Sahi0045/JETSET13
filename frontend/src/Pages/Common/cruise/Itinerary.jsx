@@ -5,7 +5,7 @@ import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import callbackService from '../../../Services/callbackService';
-import cruiseLineData from './data/cruiselines.json';
+import { loadCruiseLines } from './data/cruiselinesLoader';
 import Price from '../../../Components/Price';
 import currencyService from '../../../Services/CurrencyService';
 
@@ -691,9 +691,12 @@ const Itinerary = () => {
   const [cruiseData, setCruiseData] = useState(null);
 
   useEffect(() => {
-    // Find the selected cruise from cruiseLineData
-    const findCruise = () => {
-      const allCruises = cruiseLineData.cruiseLines;
+    let cancelled = false;
+    // Find the selected cruise from the lazily-loaded cruise lines dataset
+    const findCruise = async () => {
+      const data = await loadCruiseLines();
+      if (cancelled) return;
+      const allCruises = data.cruiseLines;
       let selectedCruise;
 
       if (cruiseId) {
@@ -741,6 +744,7 @@ const Itinerary = () => {
     };
 
     findCruise();
+    return () => { cancelled = true; };
   }, [cruiseId, cruiseLine]);
 
   const handleInputChange = (e) => {
@@ -817,7 +821,7 @@ const Itinerary = () => {
 
       {/* Hero Header Image */}
       <div className="relative w-full">
-        <img
+        <img loading="lazy" decoding="async"
           src="https://images.unsplash.com/photo-1548574505-5e239809ee19?w=1920&q=80"
           alt="Cruise Itinerary"
           className="w-full h-[400px] object-cover object-center"
@@ -975,7 +979,7 @@ const Itinerary = () => {
           <div className="highlights-grid">
             {cruiseData?.highlights?.map((highlight, index) => (
               <div key={index} className="highlight-card">
-                <img src={highlight.img} alt={highlight.title} />
+                <img loading="lazy" decoding="async" src={highlight.img} alt={highlight.title} />
               </div>
             ))}
           </div>
@@ -1001,7 +1005,7 @@ const Itinerary = () => {
                 key={reviewer.id}
                 className={`reviewer-image ${reviewer.isActive ? 'active' : ''}`}
               >
-                <img src={reviewer.image} alt={`Reviewer ${reviewer.id}`} />
+                <img loading="lazy" decoding="async" src={reviewer.image} alt={`Reviewer ${reviewer.id}`} />
               </div>
             ))}
           </div>

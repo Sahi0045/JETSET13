@@ -1,5 +1,5 @@
 import { Search, ChevronDown, MapPin, Users, Star, ArrowRight, DollarSign, Tag, Heart, Plane, Sunrise, Coffee, X, Clock, Sparkles, CheckCircle } from "lucide-react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import packagesData from '../../../data/packages.json'
 import { Link } from "react-router-dom"
 import Navbar from '../Navbar'
@@ -145,8 +145,8 @@ const TravelPackages = () => {
     return result
   }
 
-  // Create processed data with correct images
-  const processedPackages = {
+  // Create processed data with correct images (memoized — packagesData is static)
+  const processedPackages = useMemo(() => ({
     dubai: {
       ...packagesData.dubai,
       packages: (packagesData.dubai?.packages || []).map(pkg => ({
@@ -175,31 +175,35 @@ const TravelPackages = () => {
         image: getEnhancedImage('northEast', pkg.id, pkg.image)
       }))
     }
-  }
+  }), []);
 
   // Combine all packages into one array for search using the processed data
-  const allPackages = [
+  const allPackages = useMemo(() => [
     ...processedPackages.dubai.packages,
     ...processedPackages.europe.packages,
     ...processedPackages.kashmir.packages,
     ...processedPackages.northEast.packages
-  ]
+  ], [processedPackages]);
 
-  // Extract available destinations and locations for auto-suggestion
-  const availableDestinations = [
+  // Extract available destinations and locations for auto-suggestion (static)
+  const availableDestinations = useMemo(() => [
     { type: 'destination', value: 'dubai', label: 'Dubai' },
     { type: 'destination', value: 'europe', label: 'Europe' },
     { type: 'destination', value: 'kashmir', label: 'Kashmir' },
     { type: 'destination', value: 'northEast', label: 'North East' }
-  ];
+  ], []);
 
   // Extract unique locations from all packages
-  const availableLocations = [...new Set(allPackages.map(pkg => pkg.location))]
-    .filter(location => location) // Filter out undefined/null
-    .map(location => ({ type: 'location', value: location, label: location }));
+  const availableLocations = useMemo(() => [...new Set(allPackages.map(pkg => pkg.location))]
+    .filter(location => location)
+    .map(location => ({ type: 'location', value: location, label: location })),
+    [allPackages]);
 
   // Combine destinations and locations for search suggestions
-  const allSuggestions = [...availableDestinations, ...availableLocations];
+  const allSuggestions = useMemo(
+    () => [...availableDestinations, ...availableLocations],
+    [availableDestinations, availableLocations]
+  );
 
   const packageTypes = ["All Inclusive", "Flight + Hotel", "Activities Only", "Cruise Package"]
 
@@ -233,29 +237,35 @@ const TravelPackages = () => {
   };
 
   // Filter suggestions based on input
-  const filteredSuggestions = allSuggestions.filter(suggestion =>
-    suggestion.label.toLowerCase().includes(searchQuery.toLowerCase())
-  ).slice(0, 5); // Limit to 5 suggestions
+  const filteredSuggestions = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return allSuggestions
+      .filter(suggestion => suggestion.label.toLowerCase().includes(q))
+      .slice(0, 5);
+  }, [allSuggestions, searchQuery]);
 
   // Filter packages based on search query and package type
-  const filteredPackages = allPackages.filter(pkg => {
-    const matchesSearch = !searchQuery ||
-      pkg.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (pkg.location && pkg.location.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      pkg.destination.toLowerCase() === searchQuery.toLowerCase() ||
-      pkg.features.some(feature => feature.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredPackages = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return allPackages.filter(pkg => {
+      const matchesSearch = !searchQuery ||
+        pkg.title.toLowerCase().includes(q) ||
+        (pkg.location && pkg.location.toLowerCase().includes(q)) ||
+        pkg.destination.toLowerCase() === q ||
+        pkg.features.some(feature => feature.toLowerCase().includes(q))
 
-    const matchesType = selectedPackageType === "All Inclusive" ||
-      pkg.packageType === selectedPackageType
+      const matchesType = selectedPackageType === "All Inclusive" ||
+        pkg.packageType === selectedPackageType
 
-    return matchesSearch && matchesType
-  })
+      return matchesSearch && matchesType
+    });
+  }, [allPackages, searchQuery, selectedPackageType]);
 
   const renderPackageCard = (pkg) => (
     <div key={pkg.id} className="rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 h-full flex flex-col bg-white">
       {/* Package Image */}
       <div className="relative h-48">
-        <img
+        <img loading="lazy" decoding="async"
           src={pkg.image}
           alt={pkg.title}
           className="w-full h-full object-cover"
@@ -802,7 +812,7 @@ const TravelPackages = () => {
                 >
                   {/* Package Image */}
                   <div className="relative h-48">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={item.image}
                       alt={item.title}
                       className="w-full h-full object-cover"
@@ -924,7 +934,7 @@ const TravelPackages = () => {
                 >
                   {/* Package Image */}
                   <div className="relative h-48 shrink-0">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={item.image}
                       alt={item.title}
                       className="w-full h-full object-cover"
@@ -983,7 +993,7 @@ const TravelPackages = () => {
                 >
                   {/* Package Image */}
                   <div className="relative h-48 shrink-0">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={item.image}
                       alt={item.title}
                       className="w-full h-full object-cover"
@@ -1055,7 +1065,7 @@ const TravelPackages = () => {
                 >
                   {/* Package Image */}
                   <div className="relative h-48 shrink-0">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={item.image}
                       alt={item.title}
                       className="w-full h-full object-cover"
@@ -1115,7 +1125,7 @@ const TravelPackages = () => {
                 >
                   {/* Package Image */}
                   <div className="relative h-48 shrink-0">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={item.image}
                       alt={item.title}
                       className="w-full h-full object-cover"
@@ -1186,7 +1196,7 @@ const TravelPackages = () => {
               >
                 {/* Package Image */}
                 <div className="relative h-48 shrink-0">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={item.image}
                     alt={item.title}
                     className="w-full h-full object-cover"

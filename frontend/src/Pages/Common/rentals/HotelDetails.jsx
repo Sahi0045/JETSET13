@@ -895,8 +895,7 @@ export default function HotelDetails() {
                 <img
                   src={selectedHotel.images.main}
                   alt={selectedHotel.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" decoding="async" />
                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <div className="bg-white/80 backdrop-blur-sm rounded-full p-2">
                     <Camera className="h-6 w-6 text-gray-800" />
@@ -919,8 +918,7 @@ export default function HotelDetails() {
                     <img
                       src={image}
                       alt={`${selectedHotel.name} ${index + 1}`}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" decoding="async" />
                     <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                   </div>
                 ))}
@@ -1033,8 +1031,7 @@ export default function HotelDetails() {
                   <img
                     src="https://maps.googleapis.com/maps/api/staticmap?center=Jammu+Kashmir&zoom=12&size=800x300&maptype=roadmap&markers=color:red%7C33.7782,76.5762&key=YOUR_API_KEY"
                     alt="Map location"
-                    className="w-full h-full object-cover opacity-60"
-                  />
+                    className="w-full h-full object-cover opacity-60" loading="lazy" decoding="async" />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="bg-white/90 backdrop-blur-sm px-6 py-4 rounded-lg shadow-lg transform transition-transform group-hover:scale-105">
                       <p className="text-gray-800 font-medium">Interactive map will be displayed here</p>
@@ -1076,8 +1073,7 @@ export default function HotelDetails() {
                           <img
                             src={review.avatar}
                             alt={review.user}
-                            className="w-10 h-10 rounded-full mr-3"
-                          />
+                            className="w-10 h-10 rounded-full mr-3" loading="lazy" decoding="async" />
                           <div>
                             <p className="font-medium">{review.user}</p>
                             <div className="flex items-center">
@@ -1403,8 +1399,7 @@ export default function HotelDetails() {
                   <img
                     src="https://randomuser.me/api/portraits/men/85.jpg"
                     alt="Host"
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
+                    className="w-10 h-10 rounded-full object-cover" loading="lazy" decoding="async" />
                   <div>
                     <p className="font-medium">Rajesh Kumar</p>
                     <p className="text-sm text-gray-600">Response rate: 98%</p>
@@ -1447,8 +1442,7 @@ export default function HotelDetails() {
             <img
               src={activeImage === 0 ? selectedHotel.images.main : selectedHotel.images.gallery[activeImage - 1]}
               alt={`${selectedHotel.name} image ${activeImage + 1}`}
-              className="max-h-[80vh] mx-auto"
-            />
+              className="max-h-[80vh] mx-auto" loading="lazy" decoding="async" />
             <p className="text-white text-center mt-4">
               {activeImage + 1} / {1 + selectedHotel.images.gallery.length}
             </p>
@@ -1589,9 +1583,9 @@ export default function HotelDetails() {
                 </form>
 
                 <div className="flex items-center justify-center mt-4 space-x-4">
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg" alt="Visa" className="h-6 opacity-60" />
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Mastercard-logo.svg" alt="Mastercard" className="h-6 opacity-60" />
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/f/fa/American_Express_logo_%282018%29.svg" alt="American Express" className="h-6 opacity-60" />
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg" alt="Visa" className="h-6 opacity-60" loading="lazy" decoding="async" />
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Mastercard-logo.svg" alt="Mastercard" className="h-6 opacity-60" loading="lazy" decoding="async" />
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/f/fa/American_Express_logo_%282018%29.svg" alt="American Express" className="h-6 opacity-60" loading="lazy" decoding="async" />
                 </div>
 
                 <p className="text-xs text-gray-500 mt-4 text-center relative z-10">

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './HeroSection.css';
 import { FaMapMarkerAlt, FaCalendarAlt, FaShip, FaAnchor, FaDollarSign, FaSearch, FaStar, FaArrowRight, FaChevronRight, FaAngleDown } from 'react-icons/fa';
-import cruiseData from './data/cruiselines.json';
+import { loadCruiseLines } from './data/cruiselinesLoader';
 import destinationsData from './data/destinations.json';
 import { Search, MapPin, DollarSign, ChevronDown, Anchor, Ship, Navigation } from 'lucide-react';
 import DatePicker from "react-datepicker";
@@ -43,13 +43,14 @@ const HeroSection = () => {
   const [priceRange, setPriceRange] = useState('Any Price');
 
   useEffect(() => {
-    // Extract cruise lines and unique destinations from the JSON data
-    if (cruiseData && cruiseData.cruiseLines) {
+    let cancelled = false;
+    // Lazy-load cruise lines dataset; extract names and unique destinations
+    loadCruiseLines().then(cruiseData => {
+      if (cancelled || !cruiseData?.cruiseLines) return;
       const lines = cruiseData.cruiseLines.map(line => line.name);
       setCruiseLines(lines);
       setCruiseLinesDetails(cruiseData.cruiseLines);
 
-      // Extract all unique destinations
       const allDestinations = new Set();
       cruiseData.cruiseLines.forEach(line => {
         line.destinations.forEach(destination => {
@@ -57,7 +58,11 @@ const HeroSection = () => {
         });
       });
       setDestinations(Array.from(allDestinations).sort());
-    }
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
 
     // Load destination data from JSON if available
     if (destinationsData && destinationsData.destinations) {
@@ -184,7 +189,7 @@ const HeroSection = () => {
     if (endDate) queryParams.append('endDate', formatDateToISO(endDate));
 
     // Filter cruise results based on search criteria
-    const filteredResults = cruiseData.cruiseLines.filter(cruise => {
+    const filteredResults = cruiseLinesDetails.filter(cruise => {
       let matches = true;
 
       // Filter by cruise line

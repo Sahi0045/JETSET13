@@ -60,8 +60,11 @@ const HotelDetailsPage = () => {
         return outDate.toISOString().split('T')[0];
     };
 
-    // Fetch hotel details
+    // Fetch hotel details. Guard against navigating between hotels mid-fetch:
+    // the previous request's setHotel/setSelectedRoom must not overwrite the
+    // newer hotel's data.
     useEffect(() => {
+        let cancelled = false;
         const fetchHotel = async () => {
             if (!hotelId) {
                 setError('No hotel ID provided');
@@ -71,7 +74,6 @@ const HotelDetailsPage = () => {
 
             setLoading(true);
             try {
-                // For Amadeus hotels, pass dates and adults so backend can fetch real offers
                 const effectiveCheckIn = checkInDate || getDefaultCheckIn();
                 const effectiveCheckOut = checkOutDate || getDefaultCheckOut();
 
@@ -81,9 +83,9 @@ const HotelDetailsPage = () => {
                     effectiveCheckOut,
                     adultsParam
                 );
+                if (cancelled) return;
                 if (hotelData) {
                     setHotel(hotelData);
-                    // If there are rooms, select the first one by default
                     if (hotelData.rooms && hotelData.rooms.length > 0) {
                         setSelectedRoom(hotelData.rooms[0]);
                     }
@@ -91,14 +93,16 @@ const HotelDetailsPage = () => {
                     setError('Hotel not found');
                 }
             } catch (err) {
+                if (cancelled) return;
                 console.error('Error fetching hotel:', err);
                 setError('Failed to load hotel details');
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
 
         fetchHotel();
+        return () => { cancelled = true; };
     }, [hotelId]);
 
     // Image navigation
@@ -293,7 +297,7 @@ const HotelDetailsPage = () => {
 
             {/* Hero Image Gallery */}
             <div className="relative h-[300px] md:h-[450px] overflow-hidden group">
-                <img
+                <img loading="lazy" decoding="async"
                     src={images[currentImageIndex]}
                     alt={hotel.name}
                     className="w-full h-full object-cover transition-transform duration-700"
@@ -371,7 +375,7 @@ const HotelDetailsPage = () => {
                                 className={`flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden ${idx === currentImageIndex ? 'ring-2 ring-[#055B75]' : ''
                                     }`}
                             >
-                                <img src={img} alt="" className="w-full h-full object-cover" />
+                                <img loading="lazy" decoding="async" src={img} alt="" className="w-full h-full object-cover" />
                             </button>
                         ))}
                     </div>

@@ -285,7 +285,7 @@ const SearchPackages = () => {
             >
               {/* Package Image */}
               <div className="relative h-40 md:h-48 overflow-hidden">
-                <img
+                <img loading="lazy" decoding="async"
                   src={pkg.image}
                   alt={pkg.title}
                   className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"

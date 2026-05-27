@@ -228,7 +228,7 @@ function FlightLanding() {
         {/* Content Container */}
         <div className="relative z-10 w-full flex flex-col justify-center px-4 sm:px-6 md:px-16 pt-32 pb-20">
           <div className="container mx-auto">
-            <div className="max-w-[900px] xl:max-w-[1100px] animate-fade-in-up mx-auto lg:mx-0">
+            <div className="max-w-[900px] xl:max-w-[1100px] animate-fade-in-up mx-auto">
               {/* Hero/Header Section */}
               <div className="mb-8 md:mb-12">
                 {/* Mobile hero - shown below lg */}
@@ -237,7 +237,7 @@ function FlightLanding() {
                 </div>
                 {/* Desktop hero - shown at lg and above */}
                 <div className="hidden lg:block">
-                  <div className="flex items-center mb-4 text-left">
+                  <div className="flex items-center justify-center mb-4">
                     <div className="h-0.5 w-16 bg-[#055B75] mr-4"></div>
                     <h2 className="text-[#055B75] text-xl font-light tracking-wider uppercase">
                       <span className="font-script">Explore the World</span>
@@ -304,7 +304,7 @@ function FlightLanding() {
               <div className="relative">
                 <div className="absolute -top-6 -left-6 w-24 h-24 bg-yellow-400 rounded-full opacity-20"></div>
                 <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-blue-500 rounded-full opacity-20"></div>
-                <img
+                <img loading="lazy" decoding="async"
                   src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=1474&auto=format&fit=crop"
                   alt="Airplane flying in sky"
                   className="w-full h-auto object-cover relative z-10 rounded-2xl shadow-2xl transform hover:scale-105 transition-transform duration-500"

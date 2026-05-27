@@ -241,8 +241,7 @@ const AboutUs = () => {
                     <img
                       src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?q=80&w=1484&auto=format&fit=crop"
                       alt="Jetsetterss Team"
-                      className="w-full h-[500px] object-cover"
-                    />
+                      className="w-full h-[500px] object-cover" loading="lazy" decoding="async" />
                   </div>
                   <div className="absolute -bottom-6 -right-6 bg-[#055B75] text-white p-8 rounded-2xl shadow-xl max-w-xs">
                     <div className="text-4xl font-bold mb-2">15+</div>
@@ -269,7 +268,7 @@ const AboutUs = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
               {partners.map((partner, index) => (
                 <div key={index} className="flex items-center justify-center p-6 bg-gray-50 rounded-xl border border-gray-200 hover:border-[#055B75] transition-all duration-300">
-                  <img src={partner.logo} alt={partner.name} className="max-w-full h-auto opacity-60 hover:opacity-100 transition-opacity" />
+                  <img src={partner.logo} alt={partner.name} className="max-w-full h-auto opacity-60 hover:opacity-100 transition-opacity" loading="lazy" decoding="async" />
                 </div>
               ))}
             </div>

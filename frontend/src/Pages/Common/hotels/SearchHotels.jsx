@@ -95,8 +95,11 @@ const SearchHotels = () => {
         };
     }, []);
 
-    // Fetch hotels on mount and when search params change
+    // Fetch hotels on mount and when search params change.
+    // The cancelled flag prevents an in-flight response from overwriting
+    // newer state when filters change rapidly.
     useEffect(() => {
+        let cancelled = false;
         const fetchHotels = async () => {
             setLoading(true);
             setError(null);
@@ -108,19 +111,22 @@ const SearchHotels = () => {
                     checkOutDate,
                     guests.adults
                 );
+                if (cancelled) return;
                 setHotels(results);
             } catch (err) {
+                if (cancelled) return;
                 console.error('Error fetching hotels:', err);
                 setError('Failed to load hotels. Please try again.');
-                // Still try to get fallback data
-                const fallback = hotelService.getAllHotels();
+                const fallback = await hotelService.getAllHotels();
+                if (cancelled) return;
                 setHotels(fallback);
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
 
         fetchHotels();
+        return () => { cancelled = true; };
     }, [searchQuery, checkInDate, checkOutDate, guests.adults]);
 
     // Update URL when search params change
@@ -133,7 +139,7 @@ const SearchHotels = () => {
         params.set('adults', guests.adults);
         params.set('children', guests.children);
         navigate({ search: params.toString() }, { replace: true });
-    }, [searchQuery, checkInDate, checkOutDate, guests]);
+    }, [searchQuery, checkInDate, checkOutDate, guests.rooms, guests.adults, guests.children, navigate]);
 
     // Toggle like
     const toggleLike = (hotelId) => {
@@ -432,7 +438,7 @@ const SearchHotels = () => {
                             >
                                 {/* Hotel Image */}
                                 <div className="relative h-48 overflow-hidden">
-                                    <img
+                                    <img loading="lazy" decoding="async"
                                         src={hotel.image}
                                         alt={hotel.name}
                                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"

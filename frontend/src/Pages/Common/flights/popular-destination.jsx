@@ -241,6 +241,7 @@ export default function PopularDestinations({ onSelectDestination }) {
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
               loading="eager"
               fetchpriority={index < 4 ? "high" : "auto"}
+              decoding="async"
               onLoad={() => handleImageLoad(destination.id)}
               onError={(e) => {
                 e.target.onerror = null;
