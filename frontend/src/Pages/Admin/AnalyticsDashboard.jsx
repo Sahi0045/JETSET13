@@ -54,10 +54,13 @@ export default function AnalyticsDashboard() {
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Loading analytics…</div>;
   if (error) return <div style={{ padding: 40, textAlign: 'center', color: '#ef4444' }}>Error: {error}</div>;
+  if (!data) return <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>No analytics data available</div>;
 
-  const { totals } = data.summary;
-  const { funnel, rates } = data.conversion;
-  const { summary: revSum, series } = data.revenue;
+  const totals = data.summary?.totals || {};
+  const funnel = data.conversion?.funnel || {};
+  const rates = data.conversion?.rates || {};
+  const revSum = data.revenue?.summary || {};
+  const series = data.revenue?.series || [];
 
   const statCards = [
     { label: 'Total Revenue', value: `$${revSum.grand_total}`, color: '#10b981', icon: '💰' },

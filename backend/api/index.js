@@ -24,6 +24,11 @@ import adminRoutes from "../routes/admin.routes.js";
 import couponRoutes from "../routes/coupon.routes.js";
 import subscriptionRoutes from "../routes/subscription.routes.js";
 import visaRoutes from "../routes/visa.routes.js";
+import analyticsRoutes from "../routes/analytics.routes.js";
+import templateRoutes from "../routes/template.routes.js";
+import bulkUploadRoutes from "../routes/bulkUpload.routes.js";
+import featureFlagRoutes from "../routes/featureFlag.routes.js";
+import airportRoutes from "../routes/airport.routes.js";
 import chatRoutes from "./chat/index.js";
 
 const app = express();
@@ -63,6 +68,11 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/visa", visaRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/templates", templateRoutes);
+app.use("/api/bulk", bulkUploadRoutes);
+app.use("/api/feature-flags", featureFlagRoutes);
+app.use("/api/airports", airportRoutes);
 app.use("/api/chat", chatRoutes);
 
 // Also mount without /api prefix for rewrite compatibility
@@ -81,6 +91,11 @@ app.use("/admin", adminRoutes);
 app.use("/coupons", couponRoutes);
 app.use("/subscription", subscriptionRoutes);
 app.use("/visa", visaRoutes);
+app.use("/analytics", analyticsRoutes);
+app.use("/templates", templateRoutes);
+app.use("/bulk", bulkUploadRoutes);
+app.use("/feature-flags", featureFlagRoutes);
+app.use("/airports", airportRoutes);
 app.use("/chat", chatRoutes);
 
 // Direct send-email endpoint (must match server.js implementation)
