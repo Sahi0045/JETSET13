@@ -136,7 +136,7 @@ const VideoConsultation = () => {
                 <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-8 shrink-0 z-40">
                     <div className="flex items-center gap-4">
                         <Link to="/visa" className="flex items-center gap-2 text-[#1152d4] font-black text-xl no-underline uppercase tracking-tighter">
-                            <span className="material-symbols-outlined text-2xl">flight_takeoff</span>JetSetters
+                            <span className="material-symbols-outlined text-2xl">flight_takeoff</span>Jetsetters
                         </Link>
                         <div className="h-6 w-px bg-slate-100 hidden sm:block"></div>
                         <Link to="/visa" className="text-[10px] font-black uppercase tracking-widest text-slate-400 no-underline hover:text-[#1152d4] transition-colors hidden sm:flex items-center gap-1">

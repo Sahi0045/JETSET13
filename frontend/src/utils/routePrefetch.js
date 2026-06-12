@@ -48,7 +48,6 @@ const importers = {
   '/my-trips': () => import('../Pages/Common/login/mytrips'),
 
   // Static / content
-  '/about': () => import('../Pages/AboutUs'),
   '/contact': () => import('../Pages/ContactUs'),
   '/membership': () => import('../Pages/Common/Membership'),
   '/help': () => import('../Pages/Common/HelpCenter'),

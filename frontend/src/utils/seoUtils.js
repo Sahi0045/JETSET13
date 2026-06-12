@@ -35,7 +35,7 @@ export const truncateDescription = (text, maxLength = 160) => {
  * @returns {string} - Complete page title
  */
 export const generatePageTitle = (pageTitle, includeSiteName = true) => {
-  const siteName = 'JetSetters';
+  const siteName = 'Jetsetters';
   return includeSiteName ? `${pageTitle} | ${siteName}` : pageTitle;
 };
 

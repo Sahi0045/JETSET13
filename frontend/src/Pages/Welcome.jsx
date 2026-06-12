@@ -5,7 +5,7 @@ import withPageElements from './Common/PageWrapper';
 
 const Welcome = () => {
     React.useEffect(() => {
-        document.title = 'Welcome - JetSetters';
+        document.title = 'Jetsetters | Luxury Travel. Effortlessly Planned.';
     }, []);
 
     const handleImageError = () => {

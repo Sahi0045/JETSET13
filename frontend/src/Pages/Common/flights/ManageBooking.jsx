@@ -166,7 +166,7 @@ function ManageBooking() {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`JetSetters_Ticket_${bookingData?.orderId || bookingData?.bookingReference || 'Booking'}.pdf`);
+      pdf.save(`Jetsetters_Ticket_${bookingData?.orderId || bookingData?.bookingReference || 'Booking'}.pdf`);
     } catch (err) {
       console.error("Error generating ticket:", err);
       alert("Failed to generate ticket. Please try again.");
@@ -830,7 +830,7 @@ function ManageBooking() {
 
           {/* 1. Header with Logo and Booking ID */}
           <div className="flex justify-between items-center p-6 border-b border-gray-200">
-            <img loading="lazy" decoding="async" src="/images/jetset.jpeg" alt="JetSetters" className="h-12 object-contain" crossOrigin="anonymous" />
+            <img loading="lazy" decoding="async" src="/images/jetset.jpeg" alt="Jetsetters" className="h-12 object-contain" crossOrigin="anonymous" />
             <div className="text-right">
               <div className="text-sm font-bold text-gray-700">Booking ID: {bookingData?.orderId || bookingData?.bookingDetails?.bookingId || 'PENDING'}</div>
               <div className="text-xs text-gray-500">Booked on {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
@@ -842,7 +842,7 @@ function ManageBooking() {
             {/* 2. Top Barcode Information */}
             <div className="bg-blue-50 rounded-t-lg border border-blue-100 p-4 mb-0">
               <p className="text-sm text-blue-800">
-                Barcode(s) for your journey <span className="font-bold">{bookingData?.originCity || bookingData?.bookingDetails?.flight?.departureCity || 'Origin'}-{bookingData?.destinationCity || bookingData?.bookingDetails?.flight?.arrivalCity || 'Dest'}</span> on <span className="font-bold">{bookingData?.airlineName || bookingData?.bookingDetails?.flight?.airline || 'JetSetters Air'}</span>
+                Barcode(s) for your journey <span className="font-bold">{bookingData?.originCity || bookingData?.bookingDetails?.flight?.departureCity || 'Origin'}-{bookingData?.destinationCity || bookingData?.bookingDetails?.flight?.arrivalCity || 'Dest'}</span> on <span className="font-bold">{bookingData?.airlineName || bookingData?.bookingDetails?.flight?.airline || 'Jetsetters Air'}</span>
               </p>
             </div>
 
@@ -912,7 +912,7 @@ function ManageBooking() {
                       <img loading="lazy" decoding="async" src="/images/jetset.jpeg" alt="Airline" className="w-10 h-10 object-contain" crossOrigin="anonymous" />
                     </div>
                     <div>
-                      <div className="font-bold text-sm text-gray-700">{bookingData?.airlineName || bookingData?.bookingDetails?.flight?.airline || 'JetSetters Air'}</div>
+                      <div className="font-bold text-sm text-gray-700">{bookingData?.airlineName || bookingData?.bookingDetails?.flight?.airline || 'Jetsetters Air'}</div>
                       <div className="text-xs text-gray-500">{bookingData?.flightNumber || bookingData?.bookingDetails?.flight?.flightNumber || 'JS-001'}</div>
                     </div>
                   </div>
@@ -1110,13 +1110,13 @@ function ManageBooking() {
             {/* Footer */}
             <div className="flex justify-between items-end border-t border-gray-200 pt-6">
               <div className="text-xs text-gray-500">
-                <p className="font-bold text-gray-700 mb-1">JetSetters Support</p>
+                <p className="font-bold text-gray-700 mb-1">Jetsetters Support</p>
                 <p>Tel: +1 (555) 123-4567</p>
                 <p>Email: help@jetsetters.com</p>
               </div>
               <div className="text-right">
-                <img loading="lazy" decoding="async" src="/images/jetset.jpeg" alt="JetSetters" className="h-8 object-contain opacity-50 ml-auto" crossOrigin="anonymous" />
-                <p className="text-[10px] text-gray-400 mt-1">© 2026 JetSetters Inc.</p>
+                <img loading="lazy" decoding="async" src="/images/jetset.jpeg" alt="Jetsetters" className="h-8 object-contain opacity-50 ml-auto" crossOrigin="anonymous" />
+                <p className="text-[10px] text-gray-400 mt-1">© 2026 Jetsetters Inc.</p>
               </div>
             </div>
 

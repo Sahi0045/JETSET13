@@ -458,7 +458,7 @@ function CruiseBookingSuccess() {
                         {/* ── Footer Confirmation ── */}
                         <div className="px-4 sm:px-8 pb-6 sm:pb-8 text-center">
                             <p className="text-sm text-gray-400 mb-1">🎉 A confirmation email has been sent with all the details of your booking.</p>
-                            <p className="text-xs text-gray-300">JetSetters Travel • Booking #{bookingData.orderId}</p>
+                            <p className="text-xs text-gray-300">Jetsetters Travel • Booking #{bookingData.orderId}</p>
                         </div>
                     </div>
 

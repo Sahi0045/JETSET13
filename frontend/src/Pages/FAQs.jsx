@@ -52,8 +52,8 @@ const FAQs = () => {
     {
       id: 1,
       category: 'general',
-      question: "What is Jetsetterss and how does it work?",
-      answer: "Jetsetterss is a comprehensive travel platform that helps you plan, book, and manage your travel experiences. We offer flights, hotels, cruises, and vacation packages. Simply search for your desired destination, compare options, and book directly through our secure platform. Our team of travel experts is also available to provide personalized assistance and recommendations."
+      question: "What is Jetsetters and how does it work?",
+      answer: "Jetsetters is a comprehensive travel platform that helps you plan, book, and manage your travel experiences. We offer flights, hotels, cruises, and vacation packages. Simply search for your desired destination, compare options, and book directly through our secure platform. Our team of travel experts is also available to provide personalized assistance and recommendations."
     },
     {
       id: 2,

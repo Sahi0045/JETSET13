@@ -18,10 +18,10 @@ const Footer = () => {
                 <div className="footer-logo">
                   <picture>
                     <source srcSet="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.webp" type="image/webp" />
-                    <img src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png" alt="Jetsetterss" className="logo-icon" loading="lazy" decoding="async" />
+                    <img src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png" alt="Jetsetters" className="logo-icon" loading="lazy" decoding="async" />
                   </picture>
                 </div>
-                <div className="footer-tagline">Jet set g0</div>
+                <div className="footer-tagline">Jet Set Go</div>
               </div>
             </Link>
             <p className="column-description">
@@ -97,11 +97,6 @@ const Footer = () => {
             <nav aria-label="Company Navigation">
               <ul className="nav-list">
                 <li>
-                  <Link to="/about" className="footer-nav-link">
-                    About Us
-                  </Link>
-                </li>
-                <li>
                   <Link to="/careers" className="footer-nav-link">
                     Careers
                   </Link>
@@ -126,7 +121,7 @@ const Footer = () => {
           </div>
         </div>
         <div className="footer-bottom">
-          <p className="copyright">© {currentYear} Jetsetterss. All rights reserved.</p>
+          <p className="copyright">© {currentYear} Jetsetters. All rights reserved.</p>
           <div className="social-links">
             <a
               href="https://www.facebook.com/people/Jetsetters/61557536332731/?ref=pl_edit_xav_ig_profile_page_web"

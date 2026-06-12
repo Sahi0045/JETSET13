@@ -838,7 +838,7 @@ function FlightBookingConfirmation() {
                   <div className="airline-logo-placeholder">
                     {bookingDetails?.flight?.airlineCode || bookingDetails?.flight?.airline?.substring(0, 2).toUpperCase() || "JS"}
                   </div>
-                  {bookingDetails?.flight?.airline || 'JetSetters Airlines'}
+                  {bookingDetails?.flight?.airline || 'Jetsetters Airlines'}
                   <span className="opacity-70 font-normal ml-2 text-sm">
                     #{bookingDetails?.flight?.flightNumber}
                   </span>

@@ -8,8 +8,8 @@ const Terms = () => {
   return (
     <>
       <Helmet>
-        <title>Terms of Service - Jetsetterss</title>
-        <meta name="description" content="Jetsetterss terms and conditions of service for cruise bookings and travel services." />
+        <title>Terms of Service - Jetsetters</title>
+        <meta name="description" content="Jetsetters terms and conditions of service for cruise bookings and travel services." />
       </Helmet>
 
       <Navbar forceScrolled={true} />
@@ -23,7 +23,7 @@ const Terms = () => {
                     <h2>Introduction</h2>
                     <p>Last Updated: {new Date().toLocaleDateString()}</p>
                     <p>
-                      Welcome to Jetsetterss. These Terms of Service ("Terms") govern your use of our website,
+                      Welcome to Jetsetters. These Terms of Service ("Terms") govern your use of our website,
                       mobile applications, and services (collectively, the "Services"). By accessing or using our
                       Services, you agree to be bound by these Terms.
                     </p>
@@ -102,7 +102,7 @@ const Terms = () => {
                       without any warranties of any kind, either express or implied.
                     </p>
                     <p>
-                      <strong>Limitation of Liability:</strong> To the maximum extent permitted by law, Jetsetterss
+                      <strong>Limitation of Liability:</strong> To the maximum extent permitted by law, Jetsetters
                       and its affiliates shall not be liable for any indirect, incidental, special, consequential,
                       or punitive damages arising from or related to your use of our Services.
                     </p>
@@ -117,7 +117,7 @@ const Terms = () => {
                     <h2>Intellectual Property</h2>
                     <p>
                       All content, features, and functionality of our Services, including text, graphics, logos,
-                      images, and software, are owned by Jetsetterss, its licensors, or other providers and are
+                      images, and software, are owned by Jetsetters, its licensors, or other providers and are
                       protected by copyright, trademark, and other intellectual property laws.
                     </p>
                   </section>

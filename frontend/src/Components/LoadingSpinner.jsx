@@ -95,7 +95,7 @@ const LoadingSpinner = ({ text = "Loading...", fullScreen = false, className = "
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text'
             }}>
-            JetSetters
+            Jetsetters
           </h3>
           <div className="h-0.5 w-20 mx-auto mt-2 bg-gradient-to-r from-transparent via-[#055B75] to-transparent rounded-full" />
         </div>

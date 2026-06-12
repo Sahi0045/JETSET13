@@ -91,7 +91,7 @@ const AboutUs = () => {
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto text-center">
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-6 leading-tight">
-                Behind the scenes <span className="text-[#055B75]">@Jetsetterss</span>
+                Behind the scenes <span className="text-[#055B75]">@Jetsetters</span>
               </h1>
               <p className="text-xl md:text-2xl text-gray-600 leading-relaxed max-w-3xl mx-auto">
                 Our exponential growth and incredible success has been nothing short of a dream.
@@ -208,11 +208,11 @@ const AboutUs = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                 <div>
                   <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-                    Our Journey Since 2010
+                    Our Journey Since 2009
                   </h2>
                   <div className="space-y-4 text-gray-600 text-lg leading-relaxed">
                     <p>
-                      Jetsetterss began with a simple vision: to make travel accessible, affordable,
+                      Jetsetters began with a simple vision: to make travel accessible, affordable,
                       and extraordinary for everyone. What started as a small team of passionate travelers
                       has grown into a global platform serving millions.
                     </p>
@@ -240,7 +240,7 @@ const AboutUs = () => {
                   <div className="rounded-2xl overflow-hidden shadow-2xl">
                     <img
                       src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?q=80&w=1484&auto=format&fit=crop"
-                      alt="Jetsetterss Team"
+                      alt="Jetsetters Team"
                       className="w-full h-[500px] object-cover" loading="lazy" decoding="async" />
                   </div>
                   <div className="absolute -bottom-6 -right-6 bg-[#055B75] text-white p-8 rounded-2xl shadow-xl max-w-xs">
@@ -307,7 +307,7 @@ const AboutUs = () => {
                 Ready to Start Your Journey?
               </h2>
               <p className="text-xl mb-10 opacity-90">
-                Join millions of travelers who trust Jetsetterss for their adventures
+                Join millions of travelers who trust Jetsetters for their adventures
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">

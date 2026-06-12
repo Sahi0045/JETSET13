@@ -533,7 +533,7 @@ Preferred Call Time:
 Additional Information: 
 
 --
-Inquiry from JetSetters Cruise Portal`;
+Inquiry from Jetsetters Cruise Portal`;
 
 const mailtoLink = `mailto:bookings@jetsetterss.com?subject=${encodeURIComponent('Cruise Booking Inquiry')}&body=${encodeURIComponent(emailBody)}`;
 

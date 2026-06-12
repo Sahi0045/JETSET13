@@ -14,7 +14,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
 
     // Get flight data - handle both nested and direct structures
     const flight = bookingDetails?.flight || bookingData.flight || {
-        airline: bookingData.airlineName || bookingData.airline || 'JetSetters Air',
+        airline: bookingData.airlineName || bookingData.airline || 'Jetsetters Air',
         flightNumber: bookingData.flightNumber || 'JS-001',
         stops: bookingData.stops || 0,
         cabin: bookingData.cabinClass || bookingData.cabin || 'Economy',
@@ -60,7 +60,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                 {/* Header with Branding */}
                 <div className="bg-[#055B75] text-white p-8 flex justify-between items-center print-header">
                     <div>
-                        <h1 className="text-3xl font-bold tracking-wider italic">JetSetters</h1>
+                        <h1 className="text-3xl font-bold tracking-wider italic">Jetsetters</h1>
                         <p className="text-sm text-blue-200 tracking-widest mt-1">JET SET GO</p>
                     </div>
                     <div className="text-right">
@@ -200,7 +200,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                     </div>
 
                     <div className="mt-12 text-center border-t border-gray-100 pt-6">
-                        <p className="text-xs text-gray-400">Restricted Carriage. Thank you for choosing JetSetters.</p>
+                        <p className="text-xs text-gray-400">Restricted Carriage. Thank you for choosing Jetsetters.</p>
                         <p className="text-xs text-blue-500 mt-1">www.jetsetterss.com/support</p>
                     </div>
 

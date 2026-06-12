@@ -49,8 +49,8 @@ const AIChatbot = () => {
       const isLoggedIn = checkAuth();
 
       const welcomeMessage = isLoggedIn && userName
-        ? `Hi ${userName}! I'm the Jetsetterss AI assistant. I can help you with your bookings, travel plans, and more. What would you like to know?`
-        : 'Hi there! I\'m the Jetsetterss AI assistant. How can I help you today?';
+        ? `Hi ${userName}! I'm the Jetsetters AI assistant. I can help you with your bookings, travel plans, and more. What would you like to know?`
+        : 'Hi there! I\'m the Jetsetters AI assistant. How can I help you today?';
 
       setMessages([{ type: 'bot', content: welcomeMessage }]);
     }
@@ -236,7 +236,7 @@ const AIChatbot = () => {
                 <path d="M2 12h20"></path>
                 <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
               </svg>
-              <span>Jetsetterss Assistant</span>
+              <span>Jetsetters Assistant</span>
             </div>
           </div>
 

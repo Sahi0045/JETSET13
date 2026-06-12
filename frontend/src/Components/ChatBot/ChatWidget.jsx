@@ -59,7 +59,7 @@ const ChatWidget = () => {
                 <MessageCircle className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-semibold">JetSetters Assistant</h3>
+                <h3 className="font-semibold">Jetsetters Assistant</h3>
                 <p className="text-xs text-blue-100">
                   {isLoading ? 'Typing...' : 'Online'}
                 </p>

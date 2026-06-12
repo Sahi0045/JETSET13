@@ -5,7 +5,7 @@ import Navbar from '../Navbar';
 import Footer from '../Footer';
 
 // Stitch MCP Project: Customer Visa Application Portal (ID: 14307733649035881866)
-// Screen: JetSetters Visa Landing & Eligibility Checker (8cb26df459824893b12fbae8bc74bc88)
+// Screen: Jetsetters Visa Landing & Eligibility Checker (8cb26df459824893b12fbae8bc74bc88)
 
 const VisaLanding = () => {
     const navigate = useNavigate();
@@ -109,7 +109,7 @@ const VisaLanding = () => {
 
                             <div className="relative z-10 flex flex-col gap-4 text-center max-w-2xl mx-auto">
                                 <h1 className="text-white text-4xl md:text-5xl font-black leading-tight tracking-tight drop-shadow-md">
-                                    Fast &amp; Secure Visa Processing for JetSetters
+                                    Fast &amp; Secure Visa Processing for Jetsetters
                                 </h1>
                                 <p className="text-white/90 text-lg font-medium leading-relaxed drop-shadow-sm">
                                     Check your eligibility and apply for visas to top destinations worldwide with ease.

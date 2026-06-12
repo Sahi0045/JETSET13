@@ -395,7 +395,7 @@ const HotelsLanding = () => {
             <section className="py-12 bg-[#F0FAFC]">
                 <div className="container mx-auto px-4">
                     <div className="text-center mb-16">
-                        <span className="text-[#65B3CF] font-semibold tracking-wider text-sm uppercase mb-2 block">Why Choose JetSet</span>
+                        <span className="text-[#65B3CF] font-semibold tracking-wider text-sm uppercase mb-2 block">Why Choose Jetsetters</span>
                         <h2 className="text-3xl md:text-4xl font-bold text-[#055B75] mb-4">Experience the Difference</h2>
                         <div className="w-24 h-1.5 bg-[#055B75]/20 mx-auto rounded-full"></div>
                     </div>

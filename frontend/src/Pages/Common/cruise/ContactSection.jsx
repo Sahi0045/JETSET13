@@ -250,7 +250,7 @@ const ContactSection = () => {
             style={{ border: 0 }}
             allowFullScreen=""
             loading="lazy"
-            title="JetSet Cruises Location"
+            title="Jetsetters Cruises Location"
           ></iframe>
         </div>
       </div>

@@ -134,13 +134,13 @@ const Navbar = ({ forceScrolled }) => {
                 <source srcSet="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.webp" type="image/webp" />
                 <img
                   src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png"
-                  alt="Jetsetterss"
+                  alt="Jetsetters"
                   className="h-16 w-auto object-contain"
                   decoding="async"
                 />
               </picture>
             </div>
-            <div className="navbar-tagline">Jet set g0</div>
+            <div className="navbar-tagline">Jet Set Go</div>
           </div>
         </Link>
       </div>

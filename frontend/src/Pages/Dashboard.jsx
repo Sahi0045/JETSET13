@@ -8,7 +8,7 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        document.title = 'Dashboard - JetSetters';
+        document.title = 'Dashboard | Jetsetters';
 
         // Check authentication from localStorage
         const authStatus = localStorage.getItem('isAuthenticated') === 'true';

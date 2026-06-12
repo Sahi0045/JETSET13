@@ -822,7 +822,7 @@ const ItineraryPackage = () => {
                         className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
                       />
                       <label htmlFor="terms" className="text-xs text-gray-500 flex-1">
-                        I agree to receive promotional emails about special offers from JetSetters
+                        I agree to receive promotional emails about special offers from Jetsetters
                       </label>
                     </div>
 

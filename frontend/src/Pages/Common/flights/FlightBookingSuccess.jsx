@@ -67,7 +67,7 @@ export default function FlightBookingSuccess() {
       const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-      pdf.save(`JetSetters_Ticket_${bookingData.bookingDetails?.bookingId || 'Booking'}.pdf`);
+      pdf.save(`Jetsetters_Ticket_${bookingData.bookingDetails?.bookingId || 'Booking'}.pdf`);
     } catch (error) {
       console.error('Error generating ticket:', error);
       alert('Failed to generate ticket. Please try again.');

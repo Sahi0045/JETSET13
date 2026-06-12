@@ -360,7 +360,7 @@ function FlightLanding() {
         <div className="container mx-auto px-4">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h2 className="text-4xl font-bold text-gray-800 mb-6">
-              Why Choose JetSetters
+              Why Choose Jetsetters
             </h2>
             <p className="text-gray-600 text-lg">
               We make your travel experience seamless and enjoyable from booking to arrival

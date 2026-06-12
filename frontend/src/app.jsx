@@ -11,7 +11,7 @@ const LoadingComponent = () => <LoadingSpinner fullScreen={true} text="Preparing
 
 const DashboardFallback = () => <LoadingSpinner fullScreen={true} text="Loading Dashboard..." />;
 
-const WelcomeFallback = () => <LoadingSpinner fullScreen={true} text="Welcome to JetSet..." />;
+const WelcomeFallback = () => <LoadingSpinner fullScreen={true} text="Welcome to Jetsetters..." />;
 
 const ErrorFallback = () => <LoadingSpinner fullScreen={true} text="Loading Error Page..." />;
 
@@ -479,11 +479,6 @@ const Company = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Company Info..." /> }))
 );
 
-const AboutUs = React.lazy(() =>
-  import('./Pages/AboutUs')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading About Us..." /> }))
-);
-
 const ContactUs = React.lazy(() =>
   import('./Pages/ContactUs')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Contact info..." /> }))
@@ -743,7 +738,6 @@ const App = () => {
           <Route path="/support" element={<Support />} />
           <Route path="/faqs" element={<FAQs />} />
           <Route path="/company" element={<Company />} />
-          <Route path="/about-us" element={<AboutUs />} />
           <Route path="/contact" element={<ContactUs />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-conditions" element={<TermsConditions />} />
@@ -768,7 +762,6 @@ const App = () => {
           } />
 
           {/* Legacy redirects for backward compatibility */}
-          <Route path="/about" element={<Navigate to="/about-us" />} />
           <Route path="/blog" element={<Navigate to="/travel-blog" />} />
           <Route path="/faq" element={<Navigate to="/faqs" />} />
           <Route path="/cruise-booking" element={<Navigate to="/cruises" />} />

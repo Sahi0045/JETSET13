@@ -129,7 +129,7 @@ export default function PaymentSuccess() {
               <div style={styles.receiptHeaderLeft}>
                 <div style={styles.companyLogo}>✈️</div>
                 <div>
-                  <h2 style={styles.companyName}>JetSet Go Travel</h2>
+                  <h2 style={styles.companyName}>Jetsetters Travel</h2>
                   <p style={styles.companyTagline}>Your Premium Travel Partner</p>
                 </div>
               </div>
@@ -304,7 +304,7 @@ export default function PaymentSuccess() {
 
             {/* Company Footer */}
             <div style={styles.companyFooter}>
-              <p style={styles.companyFooterText}>JetSet Go Travel — www.jetsetters.com</p>
+              <p style={styles.companyFooterText}>Jetsetters Travel — www.jetsetters.com</p>
               <p style={styles.companyFooterText}>Thank you for choosing us for your travel needs!</p>
             </div>
           </div>

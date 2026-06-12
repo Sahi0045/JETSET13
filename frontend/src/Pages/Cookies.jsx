@@ -8,8 +8,8 @@ const Cookies = () => {
   return (
     <>
       <Helmet>
-        <title>Cookie Policy - Jetsetterss</title>
-        <meta name="description" content="Learn about how Jetsetterss uses cookies and similar technologies on our website." />
+        <title>Cookie Policy - Jetsetters</title>
+        <meta name="description" content="Learn about how Jetsetters uses cookies and similar technologies on our website." />
       </Helmet>
 
       <Navbar forceScrolled={true} />
@@ -23,7 +23,7 @@ const Cookies = () => {
                     <h2>Introduction</h2>
                     <p>Last Updated: {new Date().toLocaleDateString()}</p>
                     <p>
-                      This Cookie Policy explains how Jetsetterss ("we", "us", or "our") uses cookies and similar
+                      This Cookie Policy explains how Jetsetters ("we", "us", or "our") uses cookies and similar
                       technologies to recognize you when you visit our website at <a href="/">www.jet-setters.us</a> ("Website").
                       It explains what these technologies are and why we use them, as well as your rights to control our use of them.
                     </p>
@@ -41,7 +41,7 @@ const Cookies = () => {
                       as well as to provide reporting information.
                     </p>
                     <p>
-                      Cookies set by the website owner (in this case, Jetsetterss) are called "first-party cookies." Cookies set
+                      Cookies set by the website owner (in this case, Jetsetters) are called "first-party cookies." Cookies set
                       by parties other than the website owner are called "third-party cookies." Third-party cookies enable third-party
                       features or functionality to be provided on or through the website (e.g., advertising, interactive content, and analytics).
                       The parties that set these third-party cookies can recognize your computer both when it visits the website in question

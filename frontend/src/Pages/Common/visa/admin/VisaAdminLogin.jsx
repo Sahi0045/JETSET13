@@ -109,7 +109,7 @@ const VisaAdminLogin = () => {
             </div>
             <div className="text-left">
               <p className="text-lg font-black tracking-tight leading-none">
-                JetSetters
+                Jetsetters
               </p>
               <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 leading-none mt-1">
                 Visa Admin Portal

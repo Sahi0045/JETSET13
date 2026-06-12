@@ -18,7 +18,7 @@ const ChatHistory = ({ messages, onFeedback, isLoading }) => {
         <div className="text-center">
           <div className="text-4xl mb-4">✈️</div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Welcome to JetSetters!
+            Welcome to Jetsetters!
           </h3>
           <p className="text-gray-600 text-sm">
             I'm your travel assistant. Ask me about flights, hotels, bookings, or travel advice.

@@ -6,8 +6,8 @@ const Privacy = () => {
   return (
     <>
       <Helmet>
-        <title>Privacy Policy - Jetsetterss</title>
-        <meta name="description" content="Jetsetterss privacy policy, data protection practices, and your rights." />
+        <title>Privacy Policy - Jetsetters</title>
+        <meta name="description" content="Jetsetters privacy policy, data protection practices, and your rights." />
       </Helmet>
 
       <div className="container mx-auto px-4 py-12 max-w-5xl">
@@ -19,7 +19,7 @@ const Privacy = () => {
                     <h2>Introduction</h2>
                     <p>Last Updated: {new Date().toLocaleDateString()}</p>
                     <p>
-                      At Jetsetterss, we value your privacy and are committed to protecting your personal data.
+                      At Jetsetters, we value your privacy and are committed to protecting your personal data.
                       This Privacy Policy will inform you about how we look after your personal data when you
                       visit our website and tell you about your privacy rights and how the law protects you.
                     </p>

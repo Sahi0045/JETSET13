@@ -39,7 +39,7 @@ const WhyChooseUsSection = () => {
     <div className="why-choose-us-section py-16 bg-white">
       <div className="container mx-auto px-4">
         <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Why Choose JetSet Cruises</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Why Choose Jetsetters Cruises</h2>
           <p className="text-gray-600 max-w-xl mx-auto">
             Discover why thousands of travelers trust us for their cruise vacations
           </p>
@@ -63,10 +63,10 @@ const WhyChooseUsSection = () => {
 
         <div className="mt-16 text-center">
           <a
-            href="/about"
+            href="/request"
             className="inline-flex items-center px-8 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md hover:shadow-lg"
           >
-            Learn More About Us
+            Plan My Cruise
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-5 w-5 ml-2"
@@ -89,7 +89,7 @@ const WhyChooseUsSection = () => {
           <div className="flex flex-col md:flex-row items-center justify-between max-w-5xl mx-auto">
             <div className="md:w-1/2 mb-8 md:mb-0 md:pr-10">
               <div className="text-lg italic text-gray-700 mb-6">
-                "JetSet Cruises made booking our family vacation incredibly easy. Their customer service team went above and beyond to help us find the perfect cruise, and their exclusive deals saved us hundreds!"
+                "Jetsetters Cruises made booking our family vacation incredibly easy. Their customer service team went above and beyond to help us find the perfect cruise, and their exclusive deals saved us hundreds!"
               </div>
               <div className="flex items-center">
                 <img loading="lazy" decoding="async"
@@ -111,7 +111,7 @@ const WhyChooseUsSection = () => {
             <div className="md:w-1/2 bg-white p-6 rounded-xl shadow-md border border-gray-200">
               <h3 className="text-xl font-bold text-gray-800 mb-3">Our Commitment</h3>
               <p className="text-gray-600 mb-4">
-                At JetSet Cruises, we're dedicated to providing exceptional service and the best cruise experiences. Our satisfaction guarantee ensures your journey will be everything you dreamed of and more.
+                At Jetsetters Cruises, we're dedicated to providing exceptional service and the best cruise experiences. Our satisfaction guarantee ensures your journey will be everything you dreamed of and more.
               </p>
               <div className="flex items-center text-blue-600 font-medium">
                 <FaShieldAlt className="mr-2" />

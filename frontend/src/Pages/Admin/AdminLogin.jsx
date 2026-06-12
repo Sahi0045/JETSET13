@@ -141,7 +141,7 @@ const AdminLogin = () => {
                   </defs>
                 </svg>
               </div>
-              <h1>Jetsetterss</h1>
+              <h1>Jetsetters</h1>
               <p>Premium Travel Management System</p>
               <div className="brand-features">
                 <div className="feature-item">

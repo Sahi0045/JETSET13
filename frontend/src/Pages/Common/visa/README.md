@@ -1,6 +1,6 @@
-# JetSetters Visa Section
+# Jetsetters Visa Section
 
-This folder contains the complete Visa Application and Management system for JetSetters, covering both the customer-facing portal and the admin/consultant dashboard.
+This folder contains the complete Visa Application and Management system for Jetsetters, covering both the customer-facing portal and the admin/consultant dashboard.
 
 ## Folder Structure
 

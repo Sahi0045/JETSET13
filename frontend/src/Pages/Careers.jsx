@@ -149,13 +149,13 @@ const Careers = () => {
           <div className="relative z-10 container mx-auto px-4 py-20 text-white">
             <div className="max-w-4xl">
               <h1 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-8 leading-tight">
-                Discover your place at Jetsetterss
+                Discover your place at Jetsetters
               </h1>
               <p className="text-2xl md:text-3xl mb-12 leading-relaxed opacity-90 max-w-3xl">
                 Work at one of the most creative places on Earth
               </p>
               <p className="text-xl mb-12 opacity-80 max-w-2xl">
-                From our first three customers in 2009, Jetsetterss has welcomed over 2 million travelers,
+                From our first three customers in 2009, Jetsetters has welcomed over 2 million travelers,
                 all thanks to our passionate team of 500+ travel experts.
               </p>
               <Link
@@ -340,12 +340,6 @@ const Careers = () => {
                   className="inline-flex items-center justify-center gap-2 bg-white text-[#055B75] px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-all duration-300"
                 >
                   Get in Touch <FaArrowRight />
-                </Link>
-                <Link
-                  to="/about-us"
-                  className="inline-flex items-center justify-center gap-2 border-2 border-white text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-white hover:text-[#055B75] transition-all duration-300"
-                >
-                  Learn About Us
                 </Link>
               </div>
             </div>

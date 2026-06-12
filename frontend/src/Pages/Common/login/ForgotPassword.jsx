@@ -62,7 +62,7 @@ const ForgotPassword = () => {
               <span className="material-symbols-outlined text-2xl text-white">flight_takeoff</span>
             </div>
             <div className="text-left">
-              <p className="text-lg font-black tracking-tight leading-none">JetSetters</p>
+              <p className="text-lg font-black tracking-tight leading-none">Jetsetters</p>
               <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 leading-none mt-1">Security Portal</p>
             </div>
           </Link>

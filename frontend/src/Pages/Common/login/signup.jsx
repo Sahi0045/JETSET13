@@ -208,7 +208,7 @@ export default function Signup() {
                         }}
                     >
                         <div className="image-overlay">
-                            <h2 className="image-title">Join JetSet</h2>
+                            <h2 className="image-title">Join Jetsetters</h2>
                             <p className="image-subtitle">Create an account to start booking your trips</p>
                         </div>
                     </div>

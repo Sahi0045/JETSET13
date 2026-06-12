@@ -21,7 +21,7 @@ const Error = () => {
   }[status] || 'An error occurred.';
 
   React.useEffect(() => {
-    document.title = `${title} - JetSetters`;
+    document.title = `${title} | Jetsetters`;
   }, [title]);
 
   return (

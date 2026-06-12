@@ -94,7 +94,7 @@ const ContactUs = () => {
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto text-center">
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-6 leading-tight">
-                Talk to the <span className="text-[#055B75]">Jetsetterss</span> team
+                Talk to the <span className="text-[#055B75]">Jetsetters</span> team
               </h1>
               <p className="text-xl md:text-2xl text-gray-600 leading-relaxed">
                 Have a question about our services? Looking for a specific travel solution?
@@ -116,7 +116,7 @@ const ContactUs = () => {
                       Ready to transform your travel experience?
                     </h2>
                     <p className="text-lg text-gray-600 leading-relaxed mb-8">
-                      Talk to our team now to understand how Jetsetterss can help you explore
+                      Talk to our team now to understand how Jetsetters can help you explore
                       the world with confidence and ease.
                     </p>
                   </div>
@@ -377,7 +377,7 @@ const ContactUs = () => {
                 Ready to Start Your Journey?
               </h2>
               <p className="text-xl mb-10 opacity-90">
-                Join millions of travelers who trust Jetsetterss for their adventures
+                Join millions of travelers who trust Jetsetters for their adventures
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
@@ -388,10 +388,10 @@ const ContactUs = () => {
                   <FaPlane /> Book Your Flight
                 </Link>
                 <Link
-                  to="/about-us"
+                  to="/request"
                   className="inline-flex items-center justify-center gap-2 border-2 border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-[#055B75] transition-all duration-300"
                 >
-                  About Us <FaArrowRight />
+                  Request a Quote <FaArrowRight />
                 </Link>
               </div>
 

@@ -65,7 +65,7 @@ const Company = () => {
     {
       year: "2009",
       title: "Company Founded",
-      description: "Jetsetterss was born from a simple idea: making world-class travel accessible to everyone."
+      description: "Jetsetters was born from a simple idea: making world-class travel accessible to everyone."
     },
     {
       year: "2012",
@@ -99,7 +99,7 @@ const Company = () => {
       name: "Sarah Mitchell",
       position: "Chief Executive Officer",
       image: "https://images.unsplash.com/photo-1494790108755-2616b612b786?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
-      bio: "Sarah has over 20 years of experience in the travel industry and has been instrumental in Jetsetterss's growth from startup to industry leader.",
+      bio: "Sarah has over 20 years of experience in the travel industry and has been instrumental in Jetsetters's growth from startup to industry leader.",
       linkedin: "#"
     },
     {
@@ -132,7 +132,7 @@ const Company = () => {
         {/* Hero Section */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
           <div className="container mx-auto px-4 text-center">
-            <h1 className="text-5xl font-bold mb-6">About Jetsetterss</h1>
+            <h1 className="text-5xl font-bold mb-6">About Jetsetters</h1>
             <p className="text-xl max-w-3xl mx-auto">
               We're more than just a travel company. We're your partners in creating unforgettable experiences 
               and making the world more accessible, one journey at a time.
@@ -162,7 +162,7 @@ const Company = () => {
               <h2 className="text-4xl font-bold text-gray-900 mb-8">Our Story</h2>
               <div className="prose prose-lg mx-auto text-gray-600">
                 <p className="mb-6">
-                  Founded in 2009, Jetsetterss began as a small team of passionate travelers with a big dream: 
+                  Founded in 2009, Jetsetters began as a small team of passionate travelers with a big dream: 
                   to democratize luxury travel and make extraordinary experiences accessible to everyone.
                 </p>
                 <p className="mb-6">
