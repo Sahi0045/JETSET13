@@ -1,4 +1,5 @@
-import admin from 'firebase-admin';
+import { initializeApp, getApps, cert, applicationDefault } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 import supabase from '../config/supabase.js';
 
 /**
@@ -45,21 +46,21 @@ function initMessaging() {
   if (messaging) return messaging;
 
   try {
-    if (!admin.apps.length) {
+    if (!getApps().length) {
       const serviceAccount = loadServiceAccount();
 
       if (serviceAccount) {
-        admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+        initializeApp({ credential: cert(serviceAccount) });
       } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
         // Application Default Credentials (file path env var)
-        admin.initializeApp({ credential: admin.credential.applicationDefault() });
+        initializeApp({ credential: applicationDefault() });
       } else {
         console.warn('[Push] Firebase Admin not configured — set FIREBASE_SERVICE_ACCOUNT');
         return null;
       }
     }
 
-    messaging = admin.messaging();
+    messaging = getMessaging();
     return messaging;
   } catch (error) {
     console.error('[Push] Failed to initialize Firebase Admin:', error.message);
