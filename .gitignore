@@ -67,3 +67,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+.vercel
+.env*
+
+# Kiro local MCP config (may contain machine-specific / sensitive settings)
+.kiro/settings/mcp.json

@@ -41,6 +41,7 @@ export const SupabaseAuthProvider = ({ children }) => {
               email: session.user.email,
               firstName: session.user.user_metadata?.first_name || session.user.user_metadata?.full_name?.split(' ')[0] || '',
               lastName: session.user.user_metadata?.last_name || session.user.user_metadata?.full_name?.split(' ')[1] || '',
+              phone: session.user.user_metadata?.phone || session.user.phone || '',
               photoURL: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
               role
             };
@@ -99,6 +100,7 @@ export const SupabaseAuthProvider = ({ children }) => {
           email: session.user.email,
           firstName: session.user.user_metadata?.first_name || session.user.user_metadata?.full_name?.split(' ')[0] || '',
           lastName: session.user.user_metadata?.last_name || session.user.user_metadata?.full_name?.split(' ')[1] || '',
+          phone: session.user.user_metadata?.phone || session.user.phone || '',
           photoURL: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
           role
         };
@@ -116,8 +118,13 @@ export const SupabaseAuthProvider = ({ children }) => {
           // Don't remove adminToken for non-admin Supabase users — it may have been set by custom admin login
         }
 
-        // 📧 Send login notification for OAuth (Google) sign-ins
-        if (event === 'SIGNED_IN') {
+        // 📧 Send login notification only on a genuine new sign-in.
+        // supabase-js fires SIGNED_IN on page reloads, tab refocus, and session
+        // restoration too, so dedupe per user via a localStorage marker to avoid
+        // spamming the same notification repeatedly.
+        const alreadyNotified = localStorage.getItem('loginNotifiedUserId') === session.user.id;
+        if (event === 'SIGNED_IN' && !alreadyNotified) {
+          localStorage.setItem('loginNotifiedUserId', session.user.id);
           try {
             const loginTime = new Date().toLocaleString('en-US', {
               dateStyle: 'medium',
@@ -163,6 +170,8 @@ export const SupabaseAuthProvider = ({ children }) => {
           localStorage.removeItem('adminToken');
         }
         localStorage.removeItem('supabase_token');
+        // Allow a fresh login notification after the user signs out / session ends.
+        localStorage.removeItem('loginNotifiedUserId');
       }
     });
 
@@ -389,6 +398,27 @@ export const SupabaseAuthProvider = ({ children }) => {
       });
 
       if (error) throw error;
+
+      // Persist profile fields to the `users` table (system of record) so the
+      // phone number and names are durable and queryable, not just in auth metadata.
+      const authUser = data?.user;
+      if (authUser?.id) {
+        const dbUpdates = { id: authUser.id, updated_at: new Date().toISOString() };
+        if (updates.first_name !== undefined) dbUpdates.first_name = updates.first_name;
+        if (updates.last_name !== undefined) dbUpdates.last_name = updates.last_name;
+        if (updates.full_name !== undefined) dbUpdates.name = updates.full_name;
+        if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+
+        const { error: dbError } = await supabase
+          .from('users')
+          .upsert(dbUpdates, { onConflict: 'id' });
+
+        // Auth metadata is the primary store; don't fail the whole update if the
+        // DB write fails, but surface it for debugging.
+        if (dbError) {
+          console.warn('Profile saved to auth, but users table update failed:', dbError.message);
+        }
+      }
 
       return { data, error: null };
     } catch (error) {
