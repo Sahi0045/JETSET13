@@ -52,31 +52,53 @@ export default function PhoneInputWithCountry({
     const [searchQuery, setSearchQuery] = useState('');
     const [isDetecting, setIsDetecting] = useState(true);
     const dropdownRef = useRef(null);
+    // True once we've derived the country from an explicit dial code in `value`,
+    // so async auto-detection doesn't override the user's actual country.
+    const hasExplicitCountry = useRef(false);
 
-    // Parse initial value if provided
+    // Parse initial/incoming value by matching the longest known dial code.
+    // A naive `\+\d{1,4}` grab is wrong because it can swallow leading digits of
+    // the actual number (e.g. "+918824013820" -> "+9188" + "24013820").
     useEffect(() => {
-        if (value) {
-            // Try to extract country code and number from value
-            const match = value.match(/^(\+\d{1,4})(.*)$/);
-            if (match) {
-                const dialCode = match[1];
-                const number = match[2].trim();
-                const country = COUNTRIES.find(c => c.dialCode === dialCode);
-                if (country) {
-                    setSelectedCountry(country);
-                    setPhoneNumber(number);
-                    return;
-                }
-            }
-            // If no match, just set the raw number
-            setPhoneNumber(value.replace(/^\+\d{1,4}\s*/, ''));
+        // Reset on every run so stale explicit-country state doesn't linger when
+        // the value is cleared or no longer contains a recognizable dial code.
+        hasExplicitCountry.current = false;
+
+        if (!value) {
+            setPhoneNumber('');
+            return;
         }
-    }, []);
+
+        const trimmed = String(value).trim();
+
+        if (trimmed.startsWith('+')) {
+            // Longest dial code first so e.g. +971 wins over +9... matches.
+            const matched = [...COUNTRIES]
+                .sort((a, b) => b.dialCode.length - a.dialCode.length)
+                .find((c) => trimmed.startsWith(c.dialCode));
+
+            if (matched) {
+                setSelectedCountry(matched);
+                hasExplicitCountry.current = true;
+                setPhoneNumber(trimmed.slice(matched.dialCode.length).replace(/[^\d]/g, ''));
+                return;
+            }
+        }
+
+        // No recognizable country code — treat the whole thing as the local number.
+        setPhoneNumber(trimmed.replace(/[^\d]/g, ''));
+    }, [value]);
 
     // Auto-detect country on mount
     useEffect(() => {
         const detectCountry = async () => {
             try {
+                // An explicit country code parsed from `value` always wins.
+                if (hasExplicitCountry.current) {
+                    setIsDetecting(false);
+                    return;
+                }
+
                 // Check localStorage for saved preference
                 const savedCountry = localStorage.getItem('userPhoneCountry');
                 if (savedCountry) {
@@ -95,7 +117,7 @@ export default function PhoneInputWithCountry({
 
                 if (response.ok) {
                     const data = await response.json();
-                    if (data && data.country_code) {
+                    if (data && data.country_code && !hasExplicitCountry.current) {
                         const country = COUNTRIES.find(c => c.code === data.country_code);
                         if (country) {
                             setSelectedCountry(country);
