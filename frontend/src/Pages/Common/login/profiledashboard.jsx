@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom"
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext"
 import supabase from "../../../lib/supabase"
 import PhoneInputWithCountry from "../components/PhoneInputWithCountry"
+import { registerForPushNotifications } from "../../../lib/pushNotifications"
 import './profile.css'
 
 export default function ProfilePage() {
@@ -216,6 +217,24 @@ export default function ProfilePage() {
 
   const handlePhoneChange = (phoneNumber) => {
     setData({ ...data, mobile_number: phoneNumber })
+  }
+
+  const [pushLoading, setPushLoading] = useState(false)
+  const [pushStatus, setPushStatus] = useState(
+    typeof Notification !== 'undefined' && Notification.permission === 'granted' ? 'enabled' : ''
+  )
+
+  const handleEnablePush = async () => {
+    setPushLoading(true)
+    setPushStatus('')
+    try {
+      const result = await registerForPushNotifications()
+      setPushStatus(result.success ? 'enabled' : `error:${result.reason || 'Failed to enable'}`)
+    } catch (err) {
+      setPushStatus(`error:${err.message}`)
+    } finally {
+      setPushLoading(false)
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -841,6 +860,27 @@ export default function ProfilePage() {
                     <input type="checkbox" defaultChecked />
                     <span className="toggle-slider"></span>
                   </label>
+                </div>
+                <div className="preference-card">
+                  <h4>Push Notifications</h4>
+                  <p>Get booking and visa updates on this device</p>
+                  {pushStatus === 'enabled' ? (
+                    <span className="alert success" style={{ margin: 0 }}>✓ Enabled on this device</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={handleEnablePush}
+                      disabled={pushLoading}
+                    >
+                      {pushLoading ? 'Enabling…' : 'Enable Push Notifications'}
+                    </button>
+                  )}
+                  {pushStatus.startsWith('error:') && (
+                    <small className="alert error" style={{ marginTop: '0.5rem', display: 'block' }}>
+                      {pushStatus.slice(6)}
+                    </small>
+                  )}
                 </div>
               </div>
             </div>

@@ -29,6 +29,7 @@ import templateRoutes from "../routes/template.routes.js";
 import bulkUploadRoutes from "../routes/bulkUpload.routes.js";
 import featureFlagRoutes from "../routes/featureFlag.routes.js";
 import airportRoutes from "../routes/airport.routes.js";
+import pushRoutes from "../routes/push.routes.js";
 import chatRoutes from "./chat/index.js";
 
 const app = express();
@@ -74,6 +75,7 @@ app.use("/api/bulk", bulkUploadRoutes);
 app.use("/api/feature-flags", featureFlagRoutes);
 app.use("/api/airports", airportRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/push", pushRoutes);
 
 // Also mount without /api prefix for rewrite compatibility
 app.use("/auth", authRoutes);
@@ -93,6 +95,7 @@ app.use("/subscription", subscriptionRoutes);
 app.use("/visa", visaRoutes);
 app.use("/analytics", analyticsRoutes);
 app.use("/templates", templateRoutes);
+app.use("/push", pushRoutes);
 app.use("/bulk", bulkUploadRoutes);
 app.use("/feature-flags", featureFlagRoutes);
 app.use("/airports", airportRoutes);
