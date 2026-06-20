@@ -149,12 +149,10 @@ export default function SubscribeSection() {
           <div className="flex flex-col md:flex-row items-center gap-8">
             {/* Left side - promotional content */}
             <div className="md:w-1/2 text-white">
-              <div className="inline-block mb-4 bg-[#65B3CF] text-white px-3 py-0.5 rounded-full font-bold text-xs shadow-lg transform -rotate-2">
-                EXCLUSIVE OFFERS
-              </div>
+              <p className="kicker text-brand-sky mb-5">Exclusive Offers</p>
 
-              <h2 className="text-3xl md:text-4xl font-extrabold mb-4 leading-tight drop-shadow-md">
-                GET <span className="text-[#B9D0DC]">EXCLUSIVE OFFERS</span> ON YOUR NEXT FLIGHT!
+              <h2 className="font-serif text-4xl md:text-5xl font-semibold mb-5 leading-[1.08] tracking-tight drop-shadow-sm">
+                Exclusive offers on your <span className="italic text-[#B9D0DC]">next flight</span>
               </h2>
 
               <div className="flex gap-4 mb-6 flex-wrap text-sm">
@@ -225,7 +223,7 @@ export default function SubscribeSection() {
                         className="w-10 h-10 object-contain mr-3"
                       />
                     )}
-                    <h3 className="text-xl font-bold text-gray-800">Subscribe & Save</h3>
+                    <h3 className="font-serif text-2xl font-semibold text-ink">Subscribe &amp; Save</h3>
                   </div>
 
                   <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -269,13 +267,13 @@ export default function SubscribeSection() {
 
                     <button
                       type="submit"
-                      className={`w-full py-4 rounded-xl font-bold text-lg relative overflow-hidden transition-all ${email && consent
+                      className={`w-full py-4 rounded-xl font-semibold text-base tracking-wide relative overflow-hidden transition-all ${email && consent
                         ? "bg-gradient-to-r from-[#055B75] to-[#034457] text-white shadow-lg hover:shadow-[#055B75]/30 hover:scale-[1.02]"
                         : "bg-gray-200 text-gray-400 cursor-not-allowed"
                         }`}
                       disabled={!email || !consent}
                     >
-                      <span className="relative z-10">GET OFFERS ON MY NEXT FLIGHT</span>
+                      <span className="relative z-10">Get offers on my next flight</span>
                       {email && consent && (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <div className="w-full h-full bg-gradient-to-r from-[#055B75] to-[#044A5F] absolute"></div>

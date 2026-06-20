@@ -210,7 +210,7 @@ const TestimonialBanner = () => {
       {/* Contact Support Modal */}
       {showContactForm && (
         <div
-          className="fixed inset-0 bg-transparent backdrop-blur-[2px] flex items-center justify-center z-50 p-2 sm:p-4 animate-fadeIn overflow-y-auto"
+          className="fixed inset-0 bg-transparent backdrop-blur-[2px] flex items-center justify-center z-[1100] p-2 sm:p-4 animate-fadeIn overflow-y-auto"
           onClick={() => setShowContactForm(false)}
           style={{
             animation: 'fadeIn 0.3s ease-out',
@@ -350,7 +350,7 @@ const TestimonialBanner = () => {
       {/* Testimonials Modal */}
       {showTestimonials && (
         <div
-          className="fixed inset-0 bg-transparent backdrop-blur-[2px] flex items-center justify-center z-50 p-2 sm:p-4 animate-fadeIn overflow-y-auto"
+          className="fixed inset-0 bg-transparent backdrop-blur-[2px] flex items-center justify-center z-[1100] p-2 sm:p-4 animate-fadeIn overflow-y-auto"
           onClick={() => setShowTestimonials(false)}
         >
           <div
@@ -590,7 +590,7 @@ const CruiseBookingPopup = ({
   if (!showCruisePopup) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
       <div
         className="relative w-[340px] sm:w-full sm:max-w-xl bg-white rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 overflow-y-auto max-h-[90vh] hide-scrollbar"
         onClick={(e) => e.stopPropagation()}

@@ -15,10 +15,20 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Inter', 'Figtree', ...defaultTheme.fontFamily.sans],
-                display: ['Inter', 'Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['Lato', 'Inter', 'Figtree', ...defaultTheme.fontFamily.sans],
+                display: ['Lato', 'Inter', 'Figtree', ...defaultTheme.fontFamily.sans],
+                // Homepage redesign headings use the `font-serif` class — mapped to Lato (sans) per request
+                serif: ['Lato', 'Inter', 'Helvetica Neue', 'Arial', 'sans-serif'],
             },
             colors: {
+                // Warm editorial canvas + ink (luxury homepage)
+                ivory: '#FBF9F4',
+                sand: '#F3EEE4',
+                ink: '#0C2A33', // deep teal-ink for headings
+                brand: {
+                    teal: '#055B75',
+                    sky: '#65B3CF',
+                },
                 // Primary brand colors (Coastal Theme)
                 primary: {
                     50: '#f0f9ff',

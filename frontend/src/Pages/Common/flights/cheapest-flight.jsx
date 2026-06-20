@@ -247,9 +247,9 @@ export default function CheapestFlights({ onBookFlight }) {
   // Loading skeleton
   if (loading) {
     return (
-      <div className="bg-[#B9D0DC] rounded-xl p-8 shadow-lg border border-white/20">
+      <div className="bg-white/55 backdrop-blur-sm rounded-[1.5rem] p-6 md:p-9 shadow-soft border border-ink/10">
         <div className="flex items-center mb-8 gap-3">
-          <h3 className="text-[#055B75] text-2xl font-bold">Cheapest Fares From</h3>
+          <h3 className="font-serif text-ink text-3xl font-semibold tracking-tight">Cheapest fares from</h3>
           <div className="bg-white/60 animate-pulse rounded-full px-4 py-1.5 w-32 h-8"></div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -274,9 +274,9 @@ export default function CheapestFlights({ onBookFlight }) {
   // Error state
   if (error && flights.length === 0) {
     return (
-      <div className="bg-[#B9D0DC] rounded-xl p-8 shadow-lg border border-white/20">
+      <div className="bg-white/55 backdrop-blur-sm rounded-[1.5rem] p-6 md:p-9 shadow-soft border border-ink/10">
         <div className="flex items-center mb-8 gap-3">
-          <h3 className="text-[#055B75] text-2xl font-bold">Cheapest Fares</h3>
+          <h3 className="font-serif text-ink text-3xl font-semibold tracking-tight">Cheapest fares</h3>
         </div>
         <div className="bg-white/80 backdrop-blur-sm rounded-lg p-8 text-center">
           <AlertCircle className="h-12 w-12 text-[#055B75] mx-auto mb-4 opacity-60" />
@@ -288,15 +288,15 @@ export default function CheapestFlights({ onBookFlight }) {
   }
 
   return (
-    <div className="bg-[#B9D0DC] rounded-xl p-8 shadow-lg border border-white/20">
-      <div className="flex flex-col md:flex-row md:items-center mb-8 gap-4">
-        <h3 className="text-[#055B75] text-2xl font-bold">Cheapest Fares From</h3>
+    <div className="bg-white/55 backdrop-blur-sm rounded-[1.5rem] p-6 md:p-9 shadow-soft border border-ink/10">
+      <div className="flex flex-col md:flex-row md:items-center mb-8 gap-x-4 gap-y-3">
+        <h3 className="font-serif text-ink text-3xl font-semibold tracking-tight">Cheapest fares from</h3>
           {originCity && originCode && (
-            <div className="bg-white text-[#055B75] px-4 py-1.5 rounded-full border border-[#055B75]/30 text-base font-semibold">
+            <div className="inline-flex items-center self-start md:self-auto bg-white text-brand-teal px-4 py-1.5 rounded-full border border-brand-teal/25 text-base font-semibold">
               {originCity} ({originCode})
             </div>
           )}
-        <div className="ml-auto flex items-center text-sm text-[#055B75]/70">
+        <div className="md:ml-auto flex items-center text-sm text-ink/60">
           <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
           Live prices from Amadeus
         </div>
@@ -344,8 +344,8 @@ export default function CheapestFlights({ onBookFlight }) {
               {/* Destination and region */}
               <div className="mb-2">
                 <div className="flex items-center">
-                  <h4 className="font-bold text-gray-800">{flight.destination}</h4>
-                  <span className="text-[#65B3CF] text-xs font-medium ml-2">({flight.destinationCode})</span>
+                  <h4 className="font-serif text-lg font-semibold text-ink">{flight.destination}</h4>
+                  <span className="text-brand-sky text-xs font-medium ml-2">({flight.destinationCode})</span>
                   <span className="text-gray-400 mx-1">,</span>
                   <p className="text-gray-600 text-sm">{flight.region}</p>
                 </div>

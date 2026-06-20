@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback } from "react"
-import { Calendar, Users, MapPin, Search, ChevronDown } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { Calendar, Users, MapPin, Search, ChevronDown, Plane, Ship, Package, Hotel, ArrowLeftRight } from "lucide-react"
 import { defaultSearchData, specialFares, sourceCities, allDestinations } from "./data.js"
 import { allAirports } from "./airports.js";
 import AirportService from "../../../Services/AirportService";
@@ -15,6 +16,7 @@ const USE_AMADEUS_API = true;
 
 export default function FlightSearchForm({ initialData, onSearch }) {
   const { city, loaded, country: userCountry } = useLocationContext();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState(initialData || defaultSearchData)
   const [formErrors, setFormErrors] = useState({})
   const [showFromSuggestions, setShowFromSuggestions] = useState(false);
@@ -25,9 +27,14 @@ export default function FlightSearchForm({ initialData, onSearch }) {
   const [isSearching, setIsSearching] = useState(false);
   const [showDepartCalendar, setShowDepartCalendar] = useState(false);
   const [showReturnCalendar, setShowReturnCalendar] = useState(false);
+  const [showTravellers, setShowTravellers] = useState(false);
+  const [adults, setAdults] = useState(Number(initialData?.adults) || Number(initialData?.travelers) || 1);
+  const [children, setChildren] = useState(Number(initialData?.children) || 0);
+  const [infants, setInfants] = useState(Number(initialData?.infants) || 0);
 
   const departCalendarRef = useRef(null);
   const returnCalendarRef = useRef(null);
+  const travellersRef = useRef(null);
 
   // Debounce timer ref
   const searchTimeoutRef = useRef(null);
@@ -100,11 +107,25 @@ export default function FlightSearchForm({ initialData, onSearch }) {
       if (returnCalendarRef.current && !returnCalendarRef.current.contains(event.target)) {
         setShowReturnCalendar(false);
       }
+      if (travellersRef.current && !travellersRef.current.contains(event.target)) {
+        setShowTravellers(false);
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Keep the legacy `travelers` total + breakdown in sync for the search payload
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      adults,
+      children,
+      infants,
+      travelers: String(adults + children + infants),
+    }));
+  }, [adults, children, infants]);
 
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return "";
@@ -285,262 +306,341 @@ export default function FlightSearchForm({ initialData, onSearch }) {
     }
   };
 
-  return (
-    <div className="flex flex-col gap-4">
-      {/* Trip Type Selector */}
-      <div className="w-72 rounded-full overflow-hidden bg-white mx-auto lg:mx-0">
-        <div className="flex">
-          <button
-            onClick={() => handleTripTypeChange("oneWay")}
-            className={`w-1/2 py-3 text-center font-medium transition-colors ${formData.tripType === "oneWay"
-              ? "bg-[#055B75] text-white"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-          >
-            One Way
-          </button>
-          <button
-            onClick={() => handleTripTypeChange("roundTrip")}
-            className={`w-1/2 py-3 text-center font-medium transition-colors ${formData.tripType === "roundTrip"
-              ? "bg-[#055B75] text-white"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-          >
-            Round Trip
-          </button>
-        </div>
+  // Swap From and To
+  const handleSwap = () => {
+    setFormData((prev) => ({
+      ...prev,
+      from: prev.to, to: prev.from,
+      fromCode: prev.toCode, toCode: prev.fromCode,
+      fromCountry: prev.toCountry, toCountry: prev.fromCountry,
+      fromType: prev.toType, toType: prev.fromType,
+    }));
+  };
+
+  // Break a yyyy-mm-dd string into MakeMyTrip-style display parts
+  const getDateParts = (dateStr) => {
+    if (!dateStr) return null;
+    try {
+      const d = parseISO(dateStr);
+      if (!isValid(d)) return null;
+      return { day: format(d, 'dd'), month: format(d, 'MMM'), yy: format(d, 'yy'), weekday: format(d, 'EEEE') };
+    } catch {
+      return null;
+    }
+  };
+
+  const departParts = getDateParts(formData.departDate);
+  const returnParts = getDateParts(formData.returnDate);
+  const fromSubtitle = formData.fromCode ? `${formData.fromCode}${formData.fromCountry ? ', ' + formData.fromCountry : ''}` : '';
+  const toSubtitle = formData.toCode ? `${formData.toCode}${formData.toCountry ? ', ' + formData.toCountry : ''}` : '';
+  const activeFare = selectedFare || 'regular';
+  const anyCalendarOpen = showDepartCalendar || showReturnCalendar || showTravellers;
+  // Make custom (non-native) controls operable via keyboard (Enter / Space)
+  const onKeyActivate = (fn) => (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      fn();
+    }
+  };
+
+  const totalTravellers = adults + children + infants;
+  const adultOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ label: String(n), val: n })).concat([{ label: '>9', val: 10, over: true }]);
+  const childOptions = [0, 1, 2, 3, 4, 5, 6].map((n) => ({ label: String(n), val: n })).concat([{ label: '>6', val: 7, over: true }]);
+  const classOptions = [
+    { value: 'ECONOMY', label: 'Economy/Premium Economy' },
+    { value: 'PREMIUM_ECONOMY', label: 'Premium Economy' },
+    { value: 'BUSINESS', label: 'Business' },
+    { value: 'FIRST', label: 'First Class' },
+  ];
+  const classLabels = {
+    ECONOMY: 'Economy/Premium Economy',
+    PREMIUM_ECONOMY: 'Premium Economy',
+    BUSINESS: 'Business',
+    FIRST: 'First Class',
+  };
+
+  // Counter grid (Adults / Children / Infants)
+  const renderCounter = (label, sub, value, setValue, options) => (
+    <div>
+      <div className="text-[13px] font-bold text-gray-800">{label}</div>
+      <div className="text-xs text-gray-400 mb-2">{sub}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => {
+          const active = opt.over ? value >= opt.val : value === opt.val;
+          return (
+            <button
+              key={opt.label}
+              type="button"
+              onClick={() => setValue(opt.val)}
+              className={`h-8 min-w-[32px] px-2 rounded-md border text-sm font-semibold transition-colors ${active ? 'bg-[#055B75] text-white border-[#055B75]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#055B75]'}`}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
+    </div>
+  );
 
-      {/* Main Search Form */}
-      <div className="w-full mx-auto bg-white rounded-xl shadow-md p-6 max-w-7xl">
-        <div className="flex flex-col lg:flex-row lg:flex-wrap items-end gap-3">
-          {/* From */}
-          <div className="flex-[1.5] min-w-[160px] w-full lg:w-auto">
-            <label className="text-gray-600 text-sm font-medium mb-2 block">From</label>
-            <div className="relative">
+  const categoryTabs = [
+    { key: 'cruise', label: 'Cruise', Icon: Ship, to: '/cruise' },
+    { key: 'flight', label: 'Flight', Icon: Plane, to: '/flights', active: true },
+    { key: 'packages', label: 'Packages', Icon: Package, to: '/packages' },
+    { key: 'hotels', label: 'Hotels', Icon: Hotel, to: '/hotels' },
+  ];
+
+  const fareOptions = [
+    { key: 'regular', title: 'Regular', sub: 'Regular fares' },
+    { key: 'student', title: 'Student', sub: 'Extra discounts / baggage' },
+    { key: 'armed', title: 'Armed Forces', sub: 'Up to ₹600 off' },
+    { key: 'gst', title: 'Have a GST number?', sub: 'Up to 10% extra savings' },
+    { key: 'senior', title: 'Senior Citizen', sub: 'Up to ₹600 off' },
+    { key: 'doctor', title: 'Doctor & Nurses', sub: 'Up to ₹600 off' },
+  ];
+
+  return (
+    <div className="w-full max-w-5xl mx-auto text-left font-sans">
+      {/* ===== Unified booking widget (MakeMyTrip-style) ===== */}
+      <div className="relative bg-white rounded-3xl shadow-[0_28px_70px_-16px_rgba(8,40,52,0.45)] ring-1 ring-black/[0.06] pb-14">
+
+        {/* Booking category tabs */}
+        <div className="flex items-center justify-center gap-1 px-2 sm:px-4 pt-3 border-b border-gray-100 overflow-x-auto hide-scrollbar">
+          {categoryTabs.map(({ key, label, Icon, to, active }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => navigate(to)}
+              aria-current={active ? 'page' : undefined}
+              className={`relative flex flex-col items-center gap-1 px-5 sm:px-8 pb-3 pt-1 transition-colors ${active ? 'text-[#055B75]' : 'text-gray-500 hover:text-[#055B75]'}`}
+            >
+              <Icon className="h-6 w-6" strokeWidth={1.75} />
+              <span className="text-[13px] font-semibold whitespace-nowrap">{label}</span>
+              {active && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[3px] w-10 rounded-full bg-[#055B75]" />}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className={`px-4 sm:px-6 pt-5 ${anyCalendarOpen ? 'relative z-[60]' : ''}`}>
+          {/* Trip type + tagline */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-5">
+            {[
+              { key: 'oneWay', label: 'One Way' },
+              { key: 'roundTrip', label: 'Round Trip' },
+            ].map(({ key, label }) => {
+              const checked = formData.tripType === key;
+              return (
+                <button key={key} type="button" onClick={() => handleTripTypeChange(key)} className="flex items-center gap-2">
+                  <span className={`flex items-center justify-center h-4 w-4 rounded-full border ${checked ? 'border-[#055B75]' : 'border-gray-300'}`}>
+                    {checked && <span className="h-2 w-2 rounded-full bg-[#055B75]" />}
+                  </span>
+                  <span className={`text-sm ${checked ? 'text-gray-900 font-semibold' : 'text-gray-600'}`}>{label}</span>
+                </button>
+              );
+            })}
+            <span className="flex items-center gap-2 opacity-50 cursor-not-allowed" title="Coming soon">
+              <span className="h-4 w-4 rounded-full border border-gray-300" />
+              <span className="text-sm text-gray-500">Multi City</span>
+            </span>
+            <p className="ml-auto hidden md:block text-sm text-gray-500">Book International &amp; Domestic Flights</p>
+          </div>
+
+          {/* Fields */}
+          <div className={`flex flex-col lg:flex-row rounded-xl border border-gray-200 ${anyCalendarOpen ? 'relative z-20' : ''}`}>
+            {/* From */}
+            <label className="relative flex-[1.4] px-5 py-4 cursor-text hover:bg-[#055B75]/[0.03] focus-within:bg-[#055B75]/[0.04] focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#055B75]/30 transition-colors block">
+              <span className="block text-sm text-gray-500 mb-1">From</span>
               <input
-                type="text"
-                name="from"
-                value={formData.from || ""}
-                onChange={handleInputChange}
-                onBlur={() => handleInputBlur("from")}
-                className="w-full p-3 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Departure city"
+                type="text" name="from" value={formData.from || ""}
+                onChange={handleInputChange} onBlur={() => handleInputBlur("from")}
+                placeholder="City or airport"
+                className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 text-2xl md:text-[27px] leading-tight font-black text-gray-900 placeholder:text-gray-300 placeholder:font-medium placeholder:text-base"
               />
-              <MapPin className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-            </div>
-            {showFromSuggestions && fromSuggestions.length > 0 && (
-              <div className="absolute z-20 w-full min-w-[280px] max-w-[90vw] sm:max-w-sm mt-1 bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto left-0">
-                {fromSuggestions.map((city, index) => (
-                  <div
-                    key={index}
-                    className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100 transition-colors"
-                    onClick={() => handleSuggestionClick(city.name, "from")}
-                  >
-                    <div className="font-semibold text-gray-800">{city.name}</div>
-                    <div className="text-xs text-gray-500 flex justify-between">
-                      <span>{city.code}</span>
-                      <span>{city.country}</span>
+              <span className="block text-xs text-gray-500 mt-1 truncate">{fromSubtitle || ' '}</span>
+              {showFromSuggestions && fromSuggestions.length > 0 && (
+                <div className="absolute z-30 left-3 top-full w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
+                  {fromSuggestions.map((c, i) => (
+                    <div key={i} className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100"
+                      onClick={() => handleSuggestionClick(c.name, "from")}>
+                      <div className="font-semibold text-gray-800 text-sm">{c.name}</div>
+                      <div className="text-xs text-gray-500 flex justify-between"><span>{c.code}</span><span>{c.country}</span></div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {formErrors.from && (
-              <p className="text-red-500 text-xs mt-1">{formErrors.from}</p>
-            )}
-          </div>
-
-          {/* To */}
-          <div className="flex-[1.5] min-w-[160px] w-full lg:w-auto">
-            <label className="text-gray-600 text-sm font-medium mb-2 block">To</label>
-            <div className="relative">
-              <input
-                type="text"
-                name="to"
-                value={formData.to || ""}
-                onChange={handleInputChange}
-                onBlur={() => handleInputBlur("to")}
-                className="w-full p-3 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Destination city"
-              />
-              <MapPin className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-            </div>
-            {showToSuggestions && toSuggestions.length > 0 && (
-              <div className="absolute z-20 w-full min-w-[280px] max-w-[90vw] sm:max-w-sm mt-1 bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto right-0 sm:left-0 sm:right-auto">
-                {toSuggestions.map((city, index) => (
-                  <div
-                    key={index}
-                    className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100 transition-colors"
-                    onClick={() => handleSuggestionClick(city.name, "to")}
-                  >
-                    <div className="font-semibold text-gray-800">{city.name}</div>
-                    <div className="text-xs text-gray-500 flex justify-between">
-                      <span>{city.code}</span>
-                      <span>{city.country}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {formErrors.to && (
-              <p className="text-red-500 text-xs mt-1">{formErrors.to}</p>
-            )}
-          </div>
-
-          {/* Depart Date */}
-          <div className={`flex-1 min-w-[140px] w-full lg:w-auto relative ${showDepartCalendar ? 'z-50' : 'z-10'}`} ref={departCalendarRef}>
-            <label className="text-gray-600 text-sm font-medium mb-2 block">Depart Date</label>
-            <div className="relative">
-              <div
-                onClick={() => {
-                  setShowDepartCalendar(!showDepartCalendar);
-                  setShowReturnCalendar(false);
-                }}
-                className="w-full p-3 pr-10 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer min-h-[50px] flex items-center"
-              >
-                {formData.departDate ? formatDateDisplay(formData.departDate) : <span className="text-gray-400">dd/mm/yyyy</span>}
-              </div>
-              <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
-
-              {showDepartCalendar && (
-                <CustomFlightCalendar
-                  selectedDate={formData.departDate}
-                  minDate={new Date()}
-                  originCode={formData.fromCode || (formData.from?.match(/\(([A-Z]{3})\)/)?.[1])}
-                  destinationCode={formData.toCode || (formData.to?.match(/\(([A-Z]{3})\)/)?.[1])}
-                  onSelect={(date) => {
-                    handleInputChange({ target: { name: 'departDate', value: date } });
-                    setShowDepartCalendar(false);
-                  }}
-                  onClose={() => setShowDepartCalendar(false)}
-                />
-              )}
-            </div>
-            {formErrors.departDate && (
-              <p className="text-red-500 text-xs mt-1">{formErrors.departDate}</p>
-            )}
-          </div>
-
-          {/* Return Date - Only visible for Round Trip */}
-          {formData.tripType === "roundTrip" && (
-            <div className={`flex-1 min-w-[140px] w-full lg:w-auto relative ${showReturnCalendar ? 'z-50' : 'z-10'}`} ref={returnCalendarRef}>
-              <label className="text-gray-600 text-sm font-medium mb-2 block">Return Date</label>
-              <div className="relative">
-                <div
-                  onClick={() => {
-                    setShowReturnCalendar(!showReturnCalendar);
-                    setShowDepartCalendar(false);
-                  }}
-                  className="w-full p-3 pr-10 border border-gray-200 rounded-md text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer min-h-[50px] flex items-center"
-                >
-                  {formData.returnDate ? formatDateDisplay(formData.returnDate) : <span className="text-gray-400">dd/mm/yyyy</span>}
+                  ))}
                 </div>
-                <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
+              )}
+              {formErrors.from && <span className="block text-red-500 text-xs mt-1">{formErrors.from}</span>}
+            </label>
 
-                {showReturnCalendar && (
+            {/* To — extra left gutter on desktop keeps the input clear of the swap control */}
+            <label className="relative flex-[1.4] px-5 lg:pl-10 py-4 cursor-text hover:bg-[#055B75]/[0.03] focus-within:bg-[#055B75]/[0.04] focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#055B75]/30 transition-colors block border-t lg:border-t-0 lg:border-l border-gray-200">
+              <span className="block text-sm text-gray-500 mb-1">To</span>
+              <input
+                type="text" name="to" value={formData.to || ""}
+                onChange={handleInputChange} onBlur={() => handleInputBlur("to")}
+                placeholder="City or airport"
+                className="w-full border-0 p-0 bg-transparent outline-none focus:ring-0 text-2xl md:text-[27px] leading-tight font-black text-gray-900 placeholder:text-gray-300 placeholder:font-medium placeholder:text-base"
+              />
+              <span className="block text-xs text-gray-500 mt-1 truncate">{toSubtitle || ' '}</span>
+              {showToSuggestions && toSuggestions.length > 0 && (
+                <div className="absolute z-30 left-3 top-full w-[280px] max-w-[88vw] bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-auto">
+                  {toSuggestions.map((c, i) => (
+                    <div key={i} className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer border-b last:border-0 border-gray-100"
+                      onClick={() => handleSuggestionClick(c.name, "to")}>
+                      <div className="font-semibold text-gray-800 text-sm">{c.name}</div>
+                      <div className="text-xs text-gray-500 flex justify-between"><span>{c.code}</span><span>{c.country}</span></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {formErrors.to && <span className="block text-red-500 text-xs mt-1">{formErrors.to}</span>}
+
+              {/* Swap origin / destination — rendered LAST so the To input stays the
+                  label's primary control (a label binds to its first labelable child) */}
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSwap(); }}
+                aria-label="Swap origin and destination"
+                className="absolute z-20 left-1/2 -translate-x-1/2 -top-4 lg:left-0 lg:top-1/2 lg:-translate-y-1/2 h-8 w-8 rounded-full bg-white border border-gray-300 shadow-md flex items-center justify-center text-[#055B75] hover:bg-[#055B75] hover:text-white transition-colors"
+              >
+                <ArrowLeftRight className="h-4 w-4" />
+              </button>
+            </label>
+
+            {/* Departure */}
+            <div ref={departCalendarRef}
+              role="button" tabIndex={0} aria-haspopup="dialog" aria-expanded={showDepartCalendar} aria-label="Select departure date"
+              className={`relative flex-1 px-5 py-4 cursor-pointer hover:bg-[#055B75]/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#055B75]/40 transition-colors border-t lg:border-t-0 lg:border-l border-gray-200 ${showDepartCalendar ? 'z-50' : ''}`}
+              onClick={() => { setShowDepartCalendar((v) => !v); setShowReturnCalendar(false); }}
+              onKeyDown={onKeyActivate(() => { setShowDepartCalendar((v) => !v); setShowReturnCalendar(false); })}>
+              <span className="block text-sm text-gray-500 mb-1">Departure</span>
+              {departParts ? (
+                <>
+                  <p className="leading-none"><span className="text-[27px] font-black text-gray-900">{departParts.day}</span> <span className="text-base text-gray-700 align-top">{departParts.month}'{departParts.yy}</span></p>
+                  <span className="block text-xs text-gray-500 mt-1">{departParts.weekday}</span>
+                </>
+              ) : <p className="text-sm text-gray-400 mt-2">Select date</p>}
+              {showDepartCalendar && (
+                <div onClick={(e) => e.stopPropagation()}>
                   <CustomFlightCalendar
-                    selectedDate={formData.returnDate}
-                    minDate={formData.departDate ? parseISO(formData.departDate) : new Date()}
+                    selectedDate={formData.departDate} minDate={new Date()}
                     originCode={formData.fromCode || (formData.from?.match(/\(([A-Z]{3})\)/)?.[1])}
                     destinationCode={formData.toCode || (formData.to?.match(/\(([A-Z]{3})\)/)?.[1])}
-                    onSelect={(date) => {
-                      handleInputChange({ target: { name: 'returnDate', value: date } });
-                      setShowReturnCalendar(false);
-                    }}
-                    onClose={() => setShowReturnCalendar(false)}
-                  />
-                )}
-              </div>
-              {formErrors.returnDate && (
-                <p className="text-red-500 text-xs mt-1">{formErrors.returnDate}</p>
+                    onSelect={(date) => { handleInputChange({ target: { name: 'departDate', value: date } }); setShowDepartCalendar(false); }}
+                    onClose={() => setShowDepartCalendar(false)} />
+                </div>
+              )}
+              {formErrors.departDate && <span className="block text-red-500 text-xs mt-1">{formErrors.departDate}</span>}
+            </div>
+
+            {/* Return */}
+            <div ref={returnCalendarRef}
+              role="button" tabIndex={0} aria-haspopup="dialog" aria-expanded={showReturnCalendar} aria-label="Select return date"
+              className={`relative flex-1 px-5 py-4 cursor-pointer hover:bg-[#055B75]/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#055B75]/40 transition-colors border-t lg:border-t-0 lg:border-l border-gray-200 ${showReturnCalendar ? 'z-50' : ''}`}
+              onClick={() => {
+                if (formData.tripType !== 'roundTrip') handleTripTypeChange('roundTrip');
+                setShowReturnCalendar((v) => !v); setShowDepartCalendar(false);
+              }}
+              onKeyDown={onKeyActivate(() => {
+                if (formData.tripType !== 'roundTrip') handleTripTypeChange('roundTrip');
+                setShowReturnCalendar((v) => !v); setShowDepartCalendar(false);
+              })}>
+              <span className="block text-sm text-gray-500 mb-1">Return</span>
+              {formData.tripType === 'roundTrip' && returnParts ? (
+                <>
+                  <p className="leading-none"><span className="text-[27px] font-black text-gray-900">{returnParts.day}</span> <span className="text-base text-gray-700 align-top">{returnParts.month}'{returnParts.yy}</span></p>
+                  <span className="block text-xs text-gray-500 mt-1">{returnParts.weekday}</span>
+                </>
+              ) : <p className="text-xs text-gray-400 mt-1 leading-snug max-w-[150px]">Tap to add a return date for bigger discounts</p>}
+              {showReturnCalendar && (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <CustomFlightCalendar
+                    selectedDate={formData.returnDate} minDate={formData.departDate ? parseISO(formData.departDate) : new Date()}
+                    originCode={formData.fromCode || (formData.from?.match(/\(([A-Z]{3})\)/)?.[1])}
+                    destinationCode={formData.toCode || (formData.to?.match(/\(([A-Z]{3})\)/)?.[1])}
+                    onSelect={(date) => { handleInputChange({ target: { name: 'returnDate', value: date } }); setShowReturnCalendar(false); }}
+                    onClose={() => setShowReturnCalendar(false)} />
+                </div>
+              )}
+              {formErrors.returnDate && <span className="block text-red-500 text-xs mt-1">{formErrors.returnDate}</span>}
+            </div>
+
+            {/* Travellers & Class */}
+            <div ref={travellersRef}
+              role="button" tabIndex={0} aria-haspopup="dialog" aria-expanded={showTravellers} aria-label="Select travellers and class"
+              className={`relative flex-[1.2] px-5 py-4 cursor-pointer hover:bg-[#055B75]/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#055B75]/40 transition-colors border-t lg:border-t-0 lg:border-l border-gray-200 ${showTravellers ? 'z-50' : ''}`}
+              onClick={() => { setShowTravellers((v) => !v); setShowDepartCalendar(false); setShowReturnCalendar(false); }}
+              onKeyDown={onKeyActivate(() => { setShowTravellers((v) => !v); setShowDepartCalendar(false); setShowReturnCalendar(false); })}>
+              <span className="block text-sm text-gray-500 mb-1">Travellers &amp; Class</span>
+              <p className="leading-none">
+                <span className="text-[27px] font-black text-gray-900">{totalTravellers}</span>{' '}
+                <span className="text-base text-gray-700">{totalTravellers > 1 ? 'Travellers' : 'Traveller'}</span>
+              </p>
+              <span className="block text-xs text-gray-500 mt-1 truncate">{classLabels[formData.travelClass || 'ECONOMY']}</span>
+
+              {showTravellers && (
+                <div onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 top-full mt-2 w-[560px] max-w-[88vw] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 z-[100] text-left cursor-default">
+                  {renderCounter('ADULTS (12y +)', 'on the day of travel', adults, setAdults, adultOptions)}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 mt-4">
+                    {renderCounter('CHILDREN (2y - 12y)', 'on the day of travel', children, setChildren, childOptions)}
+                    {renderCounter('INFANTS (below 2y)', 'on the day of travel', infants, setInfants, childOptions)}
+                  </div>
+                  <div className="mt-4">
+                    <div className="text-[13px] font-bold text-gray-800 mb-2 uppercase tracking-wide">Choose Travel Class</div>
+                    <div className="flex flex-wrap gap-2">
+                      {classOptions.map(({ value, label }) => {
+                        const on = (formData.travelClass || 'ECONOMY') === value;
+                        return (
+                          <button key={value} type="button"
+                            onClick={() => setFormData((p) => ({ ...p, travelClass: value }))}
+                            className={`px-3 py-2 rounded-md border text-sm font-medium transition-colors ${on ? 'bg-[#055B75] text-white border-[#055B75]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#055B75]'}`}>
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex justify-end mt-4">
+                    <button type="button" onClick={() => setShowTravellers(false)}
+                      className="px-8 py-2 rounded-full bg-gradient-to-r from-[#055B75] to-[#0890BC] text-white text-sm font-bold tracking-wide shadow-md hover:shadow-lg">
+                      APPLY
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
-          )}
+          </div>
 
-          {/* Travelers */}
-          <div className="flex-1 min-w-[130px] w-full lg:w-auto">
-            <label className="text-gray-600 text-sm font-medium mb-2 block">Travelers</label>
-            <div className="relative">
-              <select
-                name="travelers"
-                value={formData.travelers || "1"}
-                onChange={handleInputChange}
-                className="w-full p-3 pr-10 appearance-none border border-gray-200 rounded-md text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
-              >
-                <option value="1">1 Traveler</option>
-                <option value="2">2 Travelers</option>
-                <option value="3">3 Travelers</option>
-                <option value="4">4+ Travelers</option>
-              </select>
-              <Users className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
+          {/* Special fares */}
+          <div className="mt-5 flex flex-col sm:flex-row sm:items-stretch gap-x-4 gap-y-3">
+            <div className="flex items-center shrink-0">
+              <span className="text-xs font-extrabold tracking-wide text-gray-800 uppercase leading-tight">Special Fares</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {fareOptions.map(({ key, title, sub }) => {
+                const on = activeFare === key;
+                return (
+                  <button key={key} type="button" onClick={() => setSelectedFare(key)}
+                    className={`text-left rounded-md border px-3 py-1.5 min-w-[118px] transition-colors ${on ? 'border-[#055B75] bg-[#055B75]/[0.06]' : 'border-gray-200 hover:border-gray-300 bg-white'}`}>
+                    <div className={`text-[13px] font-bold ${on ? 'text-[#055B75]' : 'text-gray-700'}`}>{title}</div>
+                    <div className="text-[11px] text-gray-400">{sub}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
-
-          {/* Class */}
-          <div className="flex-1 min-w-[120px] w-full lg:w-auto">
-            <label className="text-gray-600 text-sm font-medium mb-2 block">Class</label>
-            <div className="relative">
-              <select
-                name="travelClass"
-                value={formData.travelClass || "ECONOMY"}
-                onChange={handleInputChange}
-                className="w-full p-3 pr-10 appearance-none border border-gray-200 rounded-md text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
-              >
-                <option value="ECONOMY">Economy</option>
-                <option value="PREMIUM_ECONOMY">Premium Economy</option>
-                <option value="BUSINESS">Business</option>
-                <option value="FIRST">First Class</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* Search Button */}
-          <div className={`w-full lg:w-auto lg:flex-shrink-0 ${formData.tripType === "roundTrip" ? "lg:basis-full lg:flex lg:justify-center lg:mt-4" : ""}`}>
-            <button
-              onClick={handleSearch}
-              className="h-12 w-full lg:w-auto bg-[#055B75] hover:bg-[#044A5F] text-white px-8 rounded-md flex items-center justify-center transition-colors shadow-md hover:shadow-lg"
-            >
-              <Search className="h-5 w-5 mr-2" />
-              <span className="font-medium">Search</span>
-            </button>
-          </div>
         </div>
-      </div>
 
-      {/* Special Fares */}
-      <div className="flex flex-wrap items-center gap-3 mt-2 justify-center lg:justify-start">
-        <span className="text-[#055B75] font-medium drop-shadow-sm">Special Fares:</span>
-        <div className="flex flex-wrap gap-2 lg:gap-3">
-          <button
-            onClick={() => setSelectedFare(selectedFare === 'student' ? null : 'student')}
-            className={`px-4 lg:px-6 py-2 rounded-full border border-[#055B75] font-medium shadow-sm transition-all text-sm lg:text-base ${selectedFare === 'student'
-              ? 'bg-[#055B75] text-white'
-              : 'bg-white text-[#055B75] hover:bg-[#055B75] hover:text-white'
-              }`}
-          >
-            Student
-          </button>
-          <button
-            onClick={() => setSelectedFare(selectedFare === 'senior' ? null : 'senior')}
-            className={`px-4 lg:px-6 py-2 rounded-full border border-[#055B75] font-medium shadow-sm transition-all text-sm lg:text-base ${selectedFare === 'senior'
-              ? 'bg-[#055B75] text-white'
-              : 'bg-white text-[#055B75] hover:bg-[#055B75] hover:text-white'
-              }`}
-          >
-            Senior Citizen
-          </button>
-          <button
-            onClick={() => setSelectedFare(selectedFare === 'armed' ? null : 'armed')}
-            className={`px-4 lg:px-6 py-2 rounded-full border border-[#055B75] font-medium shadow-sm transition-all text-sm lg:text-base ${selectedFare === 'armed'
-              ? 'bg-[#055B75] text-white'
-              : 'bg-white text-[#055B75] hover:bg-[#055B75] hover:text-white'
-              }`}
-          >
-            Armed Forces
-          </button>
-        </div>
+        {/* Search button */}
+        <button
+          type="button"
+          onClick={handleSearch}
+          aria-label="Search flights"
+          className="absolute left-1/2 -translate-x-1/2 -bottom-6 h-12 px-16 rounded-full bg-gradient-to-r from-[#055B75] to-[#0890BC] text-white text-lg font-bold tracking-[0.15em] shadow-lg hover:shadow-xl hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#055B75]/30 transition-all duration-300 flex items-center justify-center"
+        >
+          SEARCH
+        </button>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import Link from '../../Components/PrefetchLink';
 import './Navbar.css';
 import CurrencySelector from '../../Components/CurrencySelector';
+import Breadcrumbs from '../../Components/Breadcrumbs';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
 const Navbar = ({ forceScrolled }) => {
@@ -125,6 +126,7 @@ const Navbar = ({ forceScrolled }) => {
   };
 
   return (
+    <>
     <nav className={`navbar ${isScrolled || forceScrolled ? 'scrolled' : ''}`}>
       <div className="navbar-left">
         <Link to="/" className="logo-link">
@@ -150,18 +152,7 @@ const Navbar = ({ forceScrolled }) => {
 
       <div className="navbar-right">
         <div className="desktop-nav-links flex items-center gap-8 mr-8 hidden lg:flex">
-          <Link to="/cruise" className={`nav-link ${isActive('/cruise') ? 'active' : ''}`}>
-            Cruise
-          </Link>
-          <Link to="/flights" className={`nav-link ${isActive('/flights') ? 'active' : ''}`}>
-            Flight
-          </Link>
-          <Link to="/packages" className={`nav-link ${isActive('/packages') ? 'active' : ''}`}>
-            Packages
-          </Link>
-          <Link to="/hotels" className={`nav-link ${isActive('/hotels') ? 'active' : ''}`}>
-            Hotels
-          </Link>
+          {/* Cruise / Flight / Packages / Hotels now live in the booking-widget tabs on the home hero */}
           <Link to="/visa" className={`nav-link ${isActive('/visa') ? 'active' : ''}`}>
             Visa / Document services
           </Link>
@@ -410,7 +401,9 @@ const Navbar = ({ forceScrolled }) => {
         </div>
       </div>
     </nav>
+    <Breadcrumbs />
+    </>
   );
 };
 
-export default Navbar; 
+export default Navbar;

@@ -3,14 +3,14 @@ import { useNavigate } from "react-router-dom"
 import FlightSearchForm from "./flight-search-form"
 import PopularDestinations from "./popular-destination"
 import CheapestFlights from "./cheapest-flight"
-import SubscribeSection from "./subscribe-section"
 import Navbar from "../Navbar"
 import Footer from "../Footer"
 import LoadingSpinner from "../../../Components/LoadingSpinner"
+import ScrollFlightProgress from "../../../Components/ScrollFlightProgress"
 import withPageElements from "../PageWrapper"
 import axios from 'axios';
 import { useState, useEffect } from "react";
-import { Mail, Phone, ExternalLink, Calendar, MessageSquare, Clock, ArrowLeft, User, CheckCircle2, Ticket, Sparkles } from 'lucide-react';
+import { Mail, Phone, ExternalLink, Calendar, MessageSquare, Clock, ArrowLeft, User, CheckCircle2, Ticket, Sparkles, ArrowRight, ArrowUpRight, ShieldCheck, Headphones, BadgePercent, Check, Plane, Compass, Star, Lock } from 'lucide-react';
 // Import centralized API configuration
 import apiConfig from '@/config/api';
 // Importing data from the data file
@@ -174,7 +174,7 @@ function FlightLanding() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-ivory">
       {/* Loading Overlay */}
       {isSearching && (
         <div className="fixed inset-0 z-[999] bg-white/80 backdrop-blur-sm">
@@ -183,132 +183,123 @@ function FlightLanding() {
       )}
 
       <Navbar />
+      <ScrollFlightProgress />
 
-      {/* Special Offer Banner */}
-      <div className="relative">
-        <div className="w-full text-center bg-gradient-to-r from-[#055B75] to-[#034457] py-2 backdrop-blur-sm z-20 border-y border-white/10 px-3 md:px-0">
-          <div className="container mx-auto px-4 py-1 flex justify-center items-center">
-            <Sparkles className="h-4 w-4 text-yellow-300 mr-2 flex-shrink-0" />
-            <div className="text-white text-[10px] md:text-sm font-medium tracking-wide text-center leading-tight flex flex-wrap items-center justify-center gap-x-1">
-              <span className="font-bold">Self-Service Portal Coming Soon!</span>
-              <span>For bookings, call</span>
-              <span className="text-yellow-300 font-bold">(877) 538-7380</span>
-              <span>or email</span>
-              <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>
-              <span className="inline-flex items-center ml-1 align-middle group cursor-default">
-                <span className="relative bg-[#0066FF] px-3.5 py-1.5 md:px-4 md:py-1.5 rounded-md inline-flex items-center gap-1.5 ring-2 ring-yellow-300/80 shadow-[0_0_18px_rgba(255,221,51,0.75)] overflow-hidden animate-pulse">
-                  <span className="absolute -top-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></span>
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></span>
-                  <span className="absolute -bottom-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></span>
-                  <span className="absolute -bottom-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></span>
-                  <Ticket className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
-                  <span className="text-sm md:text-lg font-black text-white px-1 tracking-wide">$50 OFF</span>
-                </span>
-              </span>
-              <span>Grab your exclusive travel voucher — today only!</span>
-            </div>
-          </div>
+      {/* Special Offer Banner — refined, slim */}
+      <div className="w-full bg-ink text-white/90 border-b border-white/10">
+        <div className="container mx-auto px-4 py-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-[11px] md:text-xs tracking-wide leading-tight">
+          <span className="inline-flex items-center gap-1.5 text-brand-sky">
+            <Sparkles className="h-3.5 w-3.5" /> Self-Service Portal Coming Soon
+          </span>
+          <span className="hidden sm:inline text-white/25">·</span>
+          <span className="hidden sm:inline">Call <span className="font-semibold text-white">(877) 538-7380</span></span>
+          <span className="hidden md:inline text-white/25">·</span>
+          <a href="mailto:support@jetsetterss.com" className="hidden md:inline text-white underline decoration-white/30 underline-offset-2 hover:decoration-white">support@jetsetterss.com</a>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-300/40 bg-yellow-300/10 px-2.5 py-0.5 text-yellow-200">
+            <Ticket className="h-3.5 w-3.5" /> <span className="font-semibold tracking-wider">$50 OFF</span> · today only
+          </span>
         </div>
       </div>
 
-      {/* Enhanced Hero Section */}
-      {/* Enhanced Hero Section */}
-      <section className="relative w-full min-h-screen md:min-h-[85vh] flex flex-col justify-center">
-        {/* Background Image */}
+      {/* ───────────────────────── Hero ───────────────────────── */}
+      <section aria-labelledby="hero-heading" className="relative w-full flex flex-col justify-center overflow-x-clip bg-ivory">
+        {/* Background image + editorial ivory wash */}
         <div
           className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
           style={{
-            backgroundImage: "url('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2074&auto=format&fit=crop')", // Bright airplane/sky image
+            backgroundImage: "url('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2074&auto=format&fit=crop')",
           }}
         >
-          {/* Bright Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/60 to-transparent"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-ivory/95 via-ivory/55 to-transparent"></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-ivory/70 via-transparent to-transparent"></div>
         </div>
+        <div className="bg-grain absolute inset-0 z-[1]"></div>
 
-        {/* Content Container */}
-        <div className="relative z-10 w-full flex flex-col justify-center px-4 sm:px-6 md:px-16 pt-32 pb-20">
+        {/* Content */}
+        <div className="relative z-10 w-full px-4 sm:px-6 md:px-12 pt-6 md:pt-8 pb-12 md:pb-16">
           <div className="container mx-auto">
-            <div className="max-w-[900px] xl:max-w-[1100px] animate-fade-in-up mx-auto">
-              {/* Hero/Header Section */}
-              <div className="mb-8 md:mb-12">
-                {/* Mobile hero - shown below lg */}
-                <div className="block lg:hidden mb-6 text-center">
-                  <p className="text-[#055B75] text-lg md:text-xl font-semibold italic drop-shadow-sm">Travel is the only thing you buy that makes you richer.</p>
-                </div>
-                {/* Desktop hero - shown at lg and above */}
-                <div className="hidden lg:block">
-                  <div className="flex items-center justify-center mb-4">
-                    <div className="h-0.5 w-16 bg-[#055B75] mr-4"></div>
-                    <h2 className="text-[#055B75] text-xl font-light tracking-wider uppercase">
-                      <span className="font-script">Explore the World</span>
-                    </h2>
-                  </div>
-                  <h1 className="text-gray-900 text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-4 md:mb-6 leading-tight text-center">
-                    Find Your <span className="text-[#055B75]">Perfect Flight</span> Today
-                  </h1>
-                  <p className="text-gray-600 text-base sm:text-lg md:text-xl mb-6 md:mb-10 max-w-3xl font-medium mx-auto text-center">
-                    Discover amazing deals on flights to destinations worldwide. Book with confidence and travel with peace of mind.
-                  </p>
-                </div>
+            <div className="max-w-6xl mx-auto text-center">
+              {/* Kicker */}
+              <div className="reveal-up flex items-center justify-center gap-4 mb-5">
+                <span className="hairline w-10 md:w-14 rotate-180" aria-hidden="true"></span>
+                <span className="kicker text-brand-teal">Luxury Travel, Effortlessly Planned</span>
+                <span className="hairline w-10 md:w-14" aria-hidden="true"></span>
               </div>
 
-              {/* <div className="bg-white/10 backdrop-blur-md p-8 rounded-xl shadow-2xl border border-white/20 transform hover:scale-[1.01] transition-transform duration-300"> */}
+              <h1
+                id="hero-heading"
+                className="reveal-up font-serif text-ink font-semibold leading-[1.15] tracking-normal text-[2.4rem] sm:text-5xl md:text-6xl lg:text-7xl xl:text-[5rem]"
+                style={{ animationDelay: '0.1s' }}
+              >
+                Find Your <span className="text-brand-teal">Perfect Flight</span>
+                <br className="hidden sm:block" /> Today
+              </h1>
 
+              <p
+                className="reveal-up mx-auto mt-8 max-w-xl text-neutral-600 text-base sm:text-lg leading-relaxed"
+                style={{ animationDelay: '0.15s' }}
+              >
+                Handpicked fares, real human concierges, and a best-price promise —
+                book with confidence and travel with peace of mind.
+              </p>
+            </div>
+
+            {/* Booking card — relative z-30 keeps its open dropdowns above the
+                content below (the reveal-up transform creates a stacking context) */}
+            <div className="reveal-up relative z-30 mt-11 md:mt-14 max-w-5xl mx-auto" style={{ animationDelay: '0.28s' }}>
               <FlightSearchForm onSearch={handleSearch} />
+            </div>
 
+            {/* Security reassurance */}
+            <div
+              className="reveal-up mt-8 flex items-center justify-center gap-2 text-sm text-ink/60"
+              style={{ animationDelay: '0.36s' }}
+            >
+              <Lock className="h-4 w-4 text-brand-teal" aria-hidden="true" /> Secure checkout · SSL encrypted
             </div>
           </div>
         </div>
       </section>
 
-      {/* Popular Destinations Section with Enhanced UI */}
-      <section className="pt-20 pb-8 bg-gradient-to-b from-white to-[#F0FAFC]">
+      {/* ──────────────── Popular Destinations ──────────────── */}
+      <section className="relative bg-grain bg-ivory pt-12 md:pt-14 pb-16">
         <div className="container mx-auto px-4">
-          <div className="text-center max-w-3xl mx-auto mb-12">
-            <div className="inline-block bg-[#E0F7FA] text-[#055B75] px-4 py-1 rounded-full text-sm font-medium mb-4 animate-bounce-subtle">
-              Top Trending Destinations
-            </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              Explore Popular Destinations
+          <div className="text-center max-w-3xl mx-auto mb-14">
+            <p className="kicker text-brand-teal mb-5">Top Trending Destinations</p>
+            <h2 className="font-serif font-semibold text-ink text-4xl md:text-6xl tracking-tight leading-[1.05]">
+              Explore popular destinations
             </h2>
-            <p className="text-gray-600 text-lg">
-              Discover our carefully selected destinations loved by travelers worldwide.
-              Perfect places for your next adventure.
+            <p className="mt-5 text-neutral-600 text-lg leading-relaxed">
+              A carefully selected collection loved by travellers worldwide —
+              perfect places for your next adventure.
             </p>
           </div>
 
           <PopularDestinations onSelectDestination={handleBookFlight} />
 
-          <div className="flex justify-center mt-8">
+          <div className="flex justify-center mt-12">
             <button
               onClick={handleExploreDestinations}
-              className="group relative px-8 py-3.5 bg-gradient-to-r from-[#055B75] to-[#0099CC] text-white rounded-lg font-medium shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl"
+              className="group inline-flex items-center gap-3 rounded-full border border-brand-teal/40 bg-white/60 px-7 py-3.5 text-brand-teal font-medium tracking-wide transition-all duration-300 hover:bg-brand-teal hover:text-white hover:border-brand-teal"
             >
-              <div className="absolute top-0 left-0 w-full h-full bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-              <span className="relative flex items-center">
-                Explore More Destinations
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </span>
+              Explore more destinations
+              <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
             </button>
           </div>
         </div>
       </section>
 
-      {/* Enhanced Cheapest Flights Section */}
-      <section className="pt-8 pb-12 bg-[#F0FAFC]">
+      {/* ──────────────── Lowest Fares ──────────────── */}
+      <section className="bg-sand pt-20 md:pt-24 pb-20">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between mb-16">
-            <div className="md:w-1/2 mb-10 md:mb-0">
+          <div className="flex flex-col md:flex-row items-center gap-12 md:gap-16 mb-16">
+            {/* Framed image */}
+            <div className="md:w-1/2 w-full">
               <div className="relative">
-                <div className="absolute -top-6 -left-6 w-24 h-24 bg-yellow-400 rounded-full opacity-20"></div>
-                <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-blue-500 rounded-full opacity-20"></div>
                 <img loading="lazy" decoding="async"
                   src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=1474&auto=format&fit=crop"
                   alt="Airplane flying in sky"
-                  className="w-full h-auto object-cover relative z-10 rounded-2xl shadow-2xl transform hover:scale-105 transition-transform duration-500"
-                  style={{ filter: "drop-shadow(0px 4px 20px rgba(0, 0, 0, 0.15))" }}
+                  className="w-full h-[300px] md:h-[420px] object-cover relative z-10 rounded-[1.5rem] shadow-large"
                   onError={(e) => {
                     e.target.onerror = null;
                     e.target.src = 'https://images.unsplash.com/photo-1569154941061-e231b4725ef1?q=80&w=1470&auto=format&fit=crop';
@@ -316,101 +307,35 @@ function FlightLanding() {
                 />
               </div>
             </div>
-            <div className="md:w-1/2 md:pl-16">
-              <div className="inline-block bg-[#E0F7FA] text-[#055B75] px-4 py-1 rounded-full text-sm font-medium mb-4">
-                Incredible Savings
-              </div>
-              <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6 leading-tight">
-                Find Our <span className="text-[#055B75]">Lowest Fares</span> to Popular Destinations
+
+            <div className="md:w-1/2">
+              <p className="kicker text-brand-teal mb-5">Incredible Savings</p>
+              <h2 className="font-serif font-semibold text-ink text-4xl md:text-5xl leading-[1.08] tracking-tight mb-6">
+                Our lowest fares to the world's<span className="italic text-brand-teal"> most-loved</span> places
               </h2>
-              <p className="text-gray-600 text-lg mb-8">
-                Take advantage of our special deals and promotions to get the best value for your travel budget.
-                We're committed to finding you the most affordable flights without compromising on quality.
+              <p className="text-neutral-600 text-lg leading-relaxed mb-8">
+                Take advantage of our special deals and promotions to get the best value
+                for your travel budget — the most affordable flights, without compromising on quality.
               </p>
-              <div className="flex items-center text-gray-500 mb-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#055B75]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Price match guarantee</span>
-              </div>
-              <div className="flex items-center text-gray-500 mb-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#055B75]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>No hidden fees or charges</span>
-              </div>
-              <div className="flex items-center text-gray-500">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#055B75]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>24/7 customer support</span>
-              </div>
+              <ul className="space-y-3.5">
+                {['Price match guarantee', 'No hidden fees or charges', '24/7 customer support'].map((item) => (
+                  <li key={item} className="flex items-center text-ink/80">
+                    <span className="flex-shrink-0 mr-3 flex h-6 w-6 items-center justify-center rounded-full bg-brand-teal/10 text-brand-teal">
+                      <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                    </span>
+                    <span className="text-base">{item}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
 
           {/* Cheapest Flights Component */}
-          <div className="transform hover:scale-[1.01] transition-transform duration-300">
-            <CheapestFlights onBookFlight={handleBookFlight} />
-          </div>
+          <CheapestFlights onBookFlight={handleBookFlight} />
         </div>
       </section>
 
-      {/* Features Section - NEW */}
-      <section className="pt-12 pb-20 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-4xl font-bold text-gray-800 mb-6">
-              Why Choose Jetsetters
-            </h2>
-            <p className="text-gray-600 text-lg">
-              We make your travel experience seamless and enjoyable from booking to arrival
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
-              <div className="w-16 h-16 flex items-center justify-center bg-[#E0F7FA] rounded-2xl text-[#055B75] mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-3">Best Price Guarantee</h3>
-              <p className="text-gray-600">Find a lower price? We'll match it and give you an additional discount on your booking.</p>
-            </div>
-
-            <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
-              <div className="w-16 h-16 flex items-center justify-center bg-[#E0F7FA] rounded-2xl text-[#055B75] mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-3">Secure Booking</h3>
-              <p className="text-gray-600">Your personal and payment information is always protected with the latest security protocols.</p>
-            </div>
-
-            <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
-              <div className="w-16 h-16 flex items-center justify-center bg-[#E0F7FA] rounded-2xl text-[#055B75] mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-3">24/7 Support</h3>
-              <p className="text-gray-600">Our customer service team is available around the clock to assist with any questions or issues.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Enhanced Subscribe Section */}
-      <section className="bg-gradient-to-b from-[#034457] to-[#055B75] py-12 relative overflow-hidden">
-        {/* Decorative elements */}
-        <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-white rounded-full opacity-5"></div>
-        <div className="absolute bottom-1/3 left-1/6 w-48 h-48 bg-white rounded-full opacity-5"></div>
-
-        <SubscribeSection />
-      </section>
-
+      {/* Newsletter signup now lives in the footer */}
       <Footer />
     </div>
   )
