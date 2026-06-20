@@ -91,6 +91,24 @@ export async function registerForPushNotifications() {
       return { success: false, reason: err.message || 'Backend rejected token registration' };
     }
 
+    // Show notifications even when the tab is focused (foreground). Without this,
+    // FCM delivers foreground messages silently and nothing appears on screen.
+    onMessage(messaging, (payload) => {
+      const n = payload.notification || {};
+      const title = n.title || 'Jetsetters';
+      const options = {
+        body: n.body || '',
+        icon: n.icon || '/icon-192.png',
+        badge: '/badge-icon.png',
+        data: payload.data || {},
+      };
+      if (swRegistration) {
+        swRegistration.showNotification(title, options);
+      } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification(title, options);
+      }
+    });
+
     return { success: true, token };
   } catch (error) {
     console.error('[Push] Registration failed:', error);
