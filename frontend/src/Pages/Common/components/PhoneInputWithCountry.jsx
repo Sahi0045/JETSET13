@@ -60,6 +60,10 @@ export default function PhoneInputWithCountry({
     // A naive `\+\d{1,4}` grab is wrong because it can swallow leading digits of
     // the actual number (e.g. "+918824013820" -> "+9188" + "24013820").
     useEffect(() => {
+        // Reset on every run so stale explicit-country state doesn't linger when
+        // the value is cleared or no longer contains a recognizable dial code.
+        hasExplicitCountry.current = false;
+
         if (!value) {
             setPhoneNumber('');
             return;
