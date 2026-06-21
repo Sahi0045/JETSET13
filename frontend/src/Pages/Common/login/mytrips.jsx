@@ -7,6 +7,7 @@ import Navbar from '../Navbar'
 import Footer from '../Footer'
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext'
 import ArcPayService from '../../../Services/ArcPayService'
+import Price from '../../../Components/Price'
 
 // Empty State Component
 const EmptyState = ({ icon, title, description, actionLabel, onAction }) => (
@@ -573,64 +574,42 @@ export default function TravelDashboard() {
   };
 
   // Filter bookings based on active tab and sidebar selection
-  const getFilteredBookings = () => {
-    let filtered = bookings
-    console.log('🔍 Filtering bookings...', {
-      totalBookings: bookings.length,
-      activeTab,
-      activeSidebarItem
-    })
-
-    // Filter by booking type (sidebar)
-    if (activeSidebarItem !== "All Bookings" && activeSidebarItem !== "Requests") {
-      const typeMap = {
-        "Flights": "flight",
-        "Cruise": "cruise",
-        "Hotels": "hotel",
-        "Packages": "package"
-      }
-      const targetType = typeMap[activeSidebarItem]
-      if (targetType) {
-        filtered = filtered.filter(booking => booking.type === targetType)
-        console.log(`Filtered by type "${targetType}":`, filtered.length)
-      }
-    }
-
-    // Filter by status (tab) - Now properly using travel dates
-    // Normalize status to uppercase for consistent comparison
+  // Filter a booking list by the active tab (Upcoming / Past / Cancelled / Failed)
+  const filterByTab = (list) => {
     const normalizeStatus = (s) => (s || '').toUpperCase();
-
     if (activeTab === "Upcoming") {
-      // Show confirmed bookings with travel date in the future (or no date set)
-      filtered = filtered.filter(booking => {
-        const status = normalizeStatus(booking.status);
+      return list.filter((b) => {
+        const status = normalizeStatus(b.status);
         const isCancelled = status === 'CANCELLED' || status === 'FAILED';
-        const isPast = isTravelDatePast(booking);
-        const isUpcoming = !isCancelled && !isPast;
-        console.log(`Booking ${booking.orderId}: status=${booking.status}, travelDate=${getTravelDateFromBooking(booking)}, isPast=${isPast}, isUpcoming=${isUpcoming}`);
-        return isUpcoming;
+        return !isCancelled && !isTravelDatePast(b);
       });
-    } else if (activeTab === "Past") {
-      // Show bookings where travel date has passed
-      filtered = filtered.filter(booking => {
-        const status = normalizeStatus(booking.status);
-        const isCancelled = status === 'CANCELLED' || status === 'FAILED';
-        const isPast = isTravelDatePast(booking);
-        console.log(`Booking ${booking.orderId}: isPast=${isPast}`);
-        return !isCancelled && isPast;
-      });
-    } else if (activeTab === "Cancelled") {
-      filtered = filtered.filter(booking => normalizeStatus(booking.status) === 'CANCELLED')
-    } else if (activeTab === "Failed") {
-      filtered = filtered.filter(booking => normalizeStatus(booking.status) === 'FAILED')
     }
+    if (activeTab === "Past") {
+      return list.filter((b) => {
+        const status = normalizeStatus(b.status);
+        const isCancelled = status === 'CANCELLED' || status === 'FAILED';
+        return !isCancelled && isTravelDatePast(b);
+      });
+    }
+    if (activeTab === "Cancelled") return list.filter((b) => normalizeStatus(b.status) === 'CANCELLED');
+    if (activeTab === "Failed") return list.filter((b) => normalizeStatus(b.status) === 'FAILED');
+    return list;
+  };
 
-    console.log(`Final filtered bookings for ${activeTab}:`, filtered.length)
-    return filtered
-  }
-
+  const getFilteredBookings = () => {
+    // First narrow to the active tab, then by sidebar type
+    let filtered = filterByTab(bookings);
+    if (activeSidebarItem !== "All Bookings" && activeSidebarItem !== "Requests") {
+      const typeMap = { "Flights": "flight", "Cruise": "cruise", "Hotels": "hotel", "Packages": "package" };
+      const targetType = typeMap[activeSidebarItem];
+      if (targetType) filtered = filtered.filter((booking) => booking.type === targetType);
+    }
+    return filtered;
+  };
 
   const filteredBookings = getFilteredBookings()
+  // Bookings within the current tab — used for sidebar counts so the badges match the list
+  const tabBookings = filterByTab(bookings)
 
   const getFilteredRequests = () => {
     let filtered = requests
@@ -1001,7 +980,10 @@ export default function TravelDashboard() {
           <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Amount</p>
             <p className="text-lg font-bold text-green-600">
-              {booking.currency || 'USD'} {(booking.totalAmount || booking.total_amount || booking.amount) ? parseFloat(booking.totalAmount || booking.total_amount || booking.amount).toFixed(2) : 'N/A'}
+              {(() => {
+                const amt = parseFloat(booking.totalAmount || booking.total_amount || booking.amount || 0);
+                return amt > 0 ? <Price amount={amt} /> : <span className="text-gray-400 font-semibold">On request</span>;
+              })()}
             </p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
@@ -1509,11 +1491,11 @@ export default function TravelDashboard() {
 
                   <nav className="space-y-1">
                     {[
-                      { key: "All Bookings", icon: "📋", count: bookings.length },
-                      { key: "Flights", icon: "✈️", count: bookings.filter(b => b.type === 'flight').length },
-                      { key: "Hotels", icon: "🏨", count: bookings.filter(b => b.type === 'hotel').length },
-                      { key: "Cruise", icon: "🚢", count: bookings.filter(b => b.type === 'cruise').length },
-                      { key: "Packages", icon: "🎒", count: bookings.filter(b => b.type === 'package').length },
+                      { key: "All Bookings", icon: "📋", count: tabBookings.length },
+                      { key: "Flights", icon: "✈️", count: tabBookings.filter(b => b.type === 'flight').length },
+                      { key: "Hotels", icon: "🏨", count: tabBookings.filter(b => b.type === 'hotel').length },
+                      { key: "Cruise", icon: "🚢", count: tabBookings.filter(b => b.type === 'cruise').length },
+                      { key: "Packages", icon: "🎒", count: tabBookings.filter(b => b.type === 'package').length },
                     ].map((item) => (
                       <button
                         key={item.key}
