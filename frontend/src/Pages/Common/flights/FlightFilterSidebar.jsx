@@ -1,6 +1,7 @@
 import React from 'react';
 import { Filter, Moon, Sunrise, Sun, Sunset, Briefcase, ShieldCheck } from 'lucide-react';
 import currencyService from '../../../Services/CurrencyService';
+import Price from '../../../Components/Price';
 
 const DEPARTURE_TIMES = [
   { value: 'early_morning', label: 'Before 6 AM', sublabel: 'Early Morning', Icon: Moon },
@@ -348,7 +349,7 @@ function FlightFilterSidebar({
                     </div>
                     {minPrice !== null && (
                       <span className="text-[10px] text-gray-400 font-medium">
-                        {currencySymbol}{Math.round(minPrice).toLocaleString()}
+                        <Price amount={minPrice} />
                       </span>
                     )}
                   </label>
