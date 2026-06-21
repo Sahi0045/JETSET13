@@ -804,7 +804,26 @@ router.post('/seatmaps', async (req, res) => {
     if (!flightOffer) {
       return res.status(400).json({ success: false, error: 'flightOffer is required' });
     }
-    const result = await AmadeusService.getSeatMaps(flightOffer);
+
+    // First attempt with the offer as received
+    let result = await AmadeusService.getSeatMaps(flightOffer);
+
+    // Amadeus offers expire fast — by the time the user reaches the booking page the
+    // stored offer is often stale and the seat map comes back empty. Re-price the offer
+    // (which returns a freshly validated copy) and retry once.
+    if (!result?.data || result.data.length === 0) {
+      try {
+        const priced = await AmadeusService.priceFlightOffer(flightOffer);
+        const refreshed = priced?.data?.flightOffers?.[0];
+        if (refreshed) {
+          const retry = await AmadeusService.getSeatMaps(refreshed);
+          if (retry?.data && retry.data.length > 0) result = retry;
+        }
+      } catch (repriceErr) {
+        console.warn('⚠️ SeatMap re-price retry failed:', repriceErr.error || repriceErr.message);
+      }
+    }
+
     res.json(result);
   } catch (error) {
     console.error('❌ SeatMap error:', error);
