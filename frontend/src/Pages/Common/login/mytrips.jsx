@@ -1129,9 +1129,23 @@ export default function TravelDashboard() {
                       try {
                         const userStr = localStorage.getItem('user')
                         const userEmail = userStr ? JSON.parse(userStr).email : null
-                        const result = await ArcPayService.cancelBooking(ref, userEmail, 'Customer request')
+                        const isFlight = (booking.type || '').toLowerCase() === 'flight'
+                        let result
+                        if (isFlight) {
+                          // Flight: cancel the real Amadeus order + ARC Pay refund + DB status
+                          const resp = await fetch(getApiUrl(`flights/order/${encodeURIComponent(ref)}`), {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' }
+                          })
+                          result = await resp.json()
+                        } else {
+                          // Non-flight: existing ARC Pay refund + DB status flow
+                          result = await ArcPayService.cancelBooking(ref, userEmail, 'Customer request')
+                        }
                         if (result.success) {
-                          alert(result.message || 'Booking cancelled successfully' + (result.cancellation?.refundAmount ? `. Refund: $${result.cancellation.refundAmount}` : ''))
+                          const refundMsg = result.cancellation?.refundAmount ? `. Refund: $${result.cancellation.refundAmount}` : ''
+                          const amaMsg = isFlight ? (result.amadeusCancelled ? ' Airline reservation cancelled.' : ' (airline cancellation pending)') : ''
+                          alert((result.message || 'Booking cancelled successfully') + refundMsg + amaMsg)
                           // Reload bookings to reflect the cancellation
                           loadBookings()
                         } else {

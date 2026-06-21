@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { Check, Printer, Download, Share2, ChevronDown, ChevronUp, CheckCircle, UserCircle, Plus, Edit, Save } from "lucide-react";
+import { Check, Printer, Download, Share2, ChevronDown, ChevronUp, CheckCircle, UserCircle, Plus, Edit, Save, Briefcase, Luggage, Info, ShieldCheck, Clock, MinusCircle, PlusCircle } from "lucide-react";
 import Navbar from "../Navbar";
 import Footer from "../Footer";
 import withPageElements from "../PageWrapper";
@@ -12,6 +12,9 @@ import { useLocationContext } from '../../../Context/LocationContext';
 import { allAirports } from './airports';
 import PricingService from '../../../Services/PricingService';
 import CouponInput from '../../../components/CouponInput';
+import FlightSeatMap from './FlightSeatMap';
+import FlightFareRules from './FlightFareRules';
+import FlightCancellationPolicy from './FlightCancellationPolicy';
 import "./booking-confirmation.css";
 
 
@@ -27,7 +30,26 @@ function FlightBookingConfirmation() {
   const [editMode, setEditMode] = useState(true); // Start in edit mode for new bookings
   const [passengerData, setPassengerData] = useState([]);
   const [selectedAddons, setSelectedAddons] = useState([]);
+  const [selectedSeats, setSelectedSeats] = useState([]);
+  const [seatExtraFee, setSeatExtraFee] = useState(0); // seat fees (offer currency)
+  const [selectedBags, setSelectedBags] = useState([]); // chosen extra-baggage options
+  const [bagExtraFee, setBagExtraFee] = useState(0); // extra-bag fees (offer currency)
   const [vipService, setVipService] = useState(false);
+
+  // Assign chosen seats to passengers (in order) so they flow into the order/payment
+  const handleSeatsChange = (seatNumbers, seatObjs = []) => {
+    setSelectedSeats(seatNumbers);
+    setSeatExtraFee(seatObjs.reduce((sum, s) => sum + (s.price || 0), 0));
+    setPassengerData((prev) =>
+      prev.map((p, i) => ({ ...p, seatNumber: seatNumbers[i] || '' }))
+    );
+  };
+
+  // Track chosen extra-baggage options + their total fee
+  const handleBagsChange = (bags = [], totalFee = 0) => {
+    setSelectedBags(bags);
+    setBagExtraFee(totalFee);
+  };
   const [priceConfig, setPriceConfig] = useState(null);
   const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
   const [calculatedFare, setCalculatedFare] = useState({
@@ -35,6 +57,7 @@ function FlightBookingConfirmation() {
     countryTax: 0,
     platformFee: 0,
     totalTax: 0,
+    serviceFee: 0,
     addonsTotal: 0,
     vipServiceFee: 0,
     totalAmount: 0,
@@ -181,9 +204,11 @@ function FlightBookingConfirmation() {
         arrivalAirport: `${apiData.flight.arrivalCity} Airport`,
         price: {
           base: basePrice,
+          airlineTaxes: 0,
+          serviceFee: totalTaxes,
           fixedFee: fixedFee,
           percentageFee: percentageFee,
-          totalTaxes: totalTaxes,
+          totalTaxes: 0,
           total: basePrice + totalTaxes,
           currency: apiData.payment?.currency || "USD"
         }
@@ -204,9 +229,11 @@ function FlightBookingConfirmation() {
   const transformFlightData = (flightData, config) => {
     if (!flightData) return null;
 
-    // Use the same price displayed on the search results page (price.amount = Amadeus grandTotal)
-    // This is the total fare shown to the user on the search page, so it must match here as base fare
-    const basePrice = parseFloat(
+    // Real Amadeus fare components:
+    //  - fareTotal  = grandTotal (what the airline charges, incl. its taxes)
+    //  - amaBase    = price.base (true base fare, before airline taxes)
+    //  - airlineTaxes = fareTotal - amaBase (true airline taxes & surcharges)
+    const fareTotal = parseFloat(
       flightData.price?.amount ||
       flightData.price?.grandTotal ||
       flightData.price?.total ||
@@ -214,11 +241,14 @@ function FlightBookingConfirmation() {
       flightData.originalOffer?.price?.total ||
       0
     );
+    const amaBase = parseFloat(flightData.price?.base || flightData.originalOffer?.price?.base || 0);
+    const baseFareReal = (amaBase > 0 && amaBase <= fareTotal) ? amaBase : fareTotal;
+    const airlineTaxes = Math.max(0, fareTotal - baseFareReal);
 
-    // Use admin-configured price settings
+    // Platform service/convenience fee (admin-configured markup on top of the airline fare)
     const fixedFee = config?.flight_taxes_fees || 0;
-    const percentageFee = basePrice * ((config?.flight_taxes_fees_percentage || 0) / 100);
-    const totalTaxes = fixedFee + percentageFee;
+    const percentageFee = fareTotal * ((config?.flight_taxes_fees_percentage || 0) / 100);
+    const serviceFee = fixedFee + percentageFee;
 
     return {
       bookingId: bookingId || `BOOK-${Date.now()}`,
@@ -246,11 +276,12 @@ function FlightBookingConfirmation() {
         lastTicketingDate: flightData.lastTicketingDate || null,
         stops: flightData.stops,
         stopDetails: flightData.stopDetails || [],
-        basePrice: basePrice,
-        tax: totalTaxes,
+        basePrice: baseFareReal,
+        tax: airlineTaxes,
+        serviceFee: serviceFee,
         fixedFee: fixedFee,
         percentageFee: percentageFee,
-        totalPrice: basePrice + totalTaxes,
+        totalPrice: baseFareReal + airlineTaxes + serviceFee,
         departureAirport: flightData.departure.terminal
           ? `${flightData.departure.airport} Terminal ${flightData.departure.terminal}`
           : flightData.departure.airport,
@@ -284,11 +315,13 @@ function FlightBookingConfirmation() {
           number: segment.flightNumber
         })),
         price: {
-          base: basePrice,
+          base: baseFareReal,           // real Amadeus base fare
+          airlineTaxes: airlineTaxes,   // real airline taxes & surcharges (total - base)
+          serviceFee: serviceFee,       // platform convenience fee (admin markup)
           fixedFee: fixedFee,
           percentageFee: percentageFee,
-          totalTaxes: totalTaxes,
-          total: basePrice + totalTaxes, // Base fare + taxes
+          totalTaxes: airlineTaxes,     // backward-compat alias = real airline taxes
+          total: baseFareReal + airlineTaxes + serviceFee,
           currency: flightData.price?.currency || flightData.originalOffer?.price?.currency || 'USD'
         }
       },
@@ -396,12 +429,12 @@ function FlightBookingConfirmation() {
     return () => { cancelled = true; };
   }, [routerLocation.state, bookingId]);
 
-  // Add an effect to update fare when passengers, addons, or VIP service changes
+  // Add an effect to update fare when passengers, addons, VIP, or extras change
   useEffect(() => {
     if (bookingDetails) {
       updateFareSummary(passengerData.length);
     }
-  }, [passengerData.length, selectedAddons, vipService]);
+  }, [passengerData.length, selectedAddons, vipService, seatExtraFee, bagExtraFee]);
 
   // Ensure there's always at least one passenger
   useEffect(() => {
@@ -433,11 +466,12 @@ function FlightBookingConfirmation() {
   const updateFareSummary = (passengerCount, bookingData = bookingDetails) => {
     if (!bookingData || !bookingData.flight || !bookingData.flight.price) return;
 
-    // Get base fare from flight data
+    // Real Amadeus base fare + airline taxes, and the platform service fee
     const baseFare = parseFloat(bookingData.flight.price.base) || 0;
-
-    // Get taxes from price data (set by admin settings)
-    const totalTaxes = bookingData.flight.price.totalTaxes || 0;
+    const airlineTaxes = bookingData.flight.price.airlineTaxes != null
+      ? bookingData.flight.price.airlineTaxes
+      : (bookingData.flight.price.totalTaxes || 0);
+    const serviceFeePer = bookingData.flight.price.serviceFee || 0;
 
     // Calculate add-ons total
     const addonsTotal = selectedAddons.reduce((sum, addonId) => {
@@ -448,17 +482,25 @@ function FlightBookingConfirmation() {
     // Calculate VIP service fee if selected
     const vipServiceFee = vipService ? (bookingData.vipServiceFee || 0) : 0;
 
+    // Seat + extra-baggage fees (already in the offer's currency)
+    const extrasTotal = (seatExtraFee || 0) + (bagExtraFee || 0);
+
     // Calculate per passenger costs (minimum 1 passenger)
     const effectivePassengerCount = Math.max(1, passengerCount);
     const totalBaseFare = baseFare * effectivePassengerCount;
-    const totalTax = totalTaxes * effectivePassengerCount;
-    const totalAmount = totalBaseFare + totalTax + addonsTotal + vipServiceFee;
+    const totalTax = airlineTaxes * effectivePassengerCount;
+    const totalServiceFee = serviceFeePer * effectivePassengerCount;
+    const totalAmount = totalBaseFare + totalTax + totalServiceFee + addonsTotal + vipServiceFee + extrasTotal;
 
     setCalculatedFare({
       baseFare: totalBaseFare,
       totalTax: totalTax,
+      serviceFee: totalServiceFee,
       addonsTotal,
       vipServiceFee,
+      seatFee: seatExtraFee || 0,
+      bagFee: bagExtraFee || 0,
+      extrasTotal,
       totalAmount,
       currency: bookingData.flight.price.currency || 'EUR'
     });
@@ -708,6 +750,8 @@ function FlightBookingConfirmation() {
         selectedFlight: rawFlightData,
         originalOffer: rawFlightData?.originalOffer || rawFlightData,
         passengerData: passengerData, // Contains full details: title, meal, seat, etc.
+        selectedSeats: selectedSeats, // chosen seat numbers (ancillary)
+        selectedBags: selectedBags, // chosen extra-baggage options (ancillary)
         bookingDetails: finalBookingDetails,
         calculatedFare: calculatedFare,
         amount: amount,
@@ -820,11 +864,18 @@ function FlightBookingConfirmation() {
       <Navbar forceScrolled={true} />
 
       <div className="booking-confirmation-container pt-24">
-        {/* Header Banner */}
-        {/* Header Banner */}
+        {/* Header + progress stepper (MakeMyTrip-style) */}
         <div className="booking-header-banner">
-          <h1>Your Journey Begins Here</h1>
-          <p>Confirm your details below and get ready for takeoff ✈️</p>
+          <h1>Review your Booking</h1>
+          <div className="booking-stepper">
+            <span className="step done"><span className="step-num">✓</span> Flight Selected</span>
+            <span className="step-divider" />
+            <span className="step active"><span className="step-num">2</span> Review &amp; Travellers</span>
+            <span className="step-divider" />
+            <span className="step"><span className="step-num">3</span> Payment</span>
+            <span className="step-divider" />
+            <span className="step"><span className="step-num">4</span> Confirmation</span>
+          </div>
         </div>
 
         <div className="booking-layout grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1021,8 +1072,35 @@ function FlightBookingConfirmation() {
                     </div>
                   )}
                 </div>
+
+                {/* Baggage & fare-rules strip (MakeMyTrip-style) */}
+                <div className="flex flex-wrap items-center justify-between gap-2 mt-4 px-4 py-3 rounded-lg bg-[#F0FAFC] border border-[#B9D0DC]/60 text-sm">
+                  <div className="flex items-center gap-3 sm:gap-4 text-gray-700 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Briefcase className="h-4 w-4 text-[#055B75]" /> Cabin: <strong className="text-gray-900">7 Kg</strong>
+                    </span>
+                    <span className="text-gray-300">|</span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Luggage className="h-4 w-4 text-[#055B75]" /> Check-in: <strong className="text-gray-900">{formatBaggage(bookingDetails?.baggage?.checkIn) || '15 Kg'}</strong> / adult
+                    </span>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#055B75]">
+                    <ShieldCheck className="h-4 w-4" />
+                    {bookingDetails?.flight?.refundable ? 'Partially Refundable' : 'Non-Refundable'} · See fare rules below
+                  </span>
+                </div>
               </div>
             </div>
+
+            {/* Cancellation & Date Change Policy (Amadeus fare rules) */}
+            {routerLocation.state?.flightData?.originalOffer && (
+              <FlightCancellationPolicy
+                flightOffer={routerLocation.state.flightData.originalOffer}
+                fromCode={bookingDetails?.flight?.departureCode}
+                toCode={bookingDetails?.flight?.arrivalCode}
+                departureAt={routerLocation.state.flightData.originalOffer?.itineraries?.[0]?.segments?.[0]?.departure?.at}
+              />
+            )}
 
             {/* Traveller Details Section */}
             <div className="booking-card passenger-form-card mb-8">
@@ -1402,6 +1480,48 @@ function FlightBookingConfirmation() {
               </div>
             </div>
 
+            {/* Seat selection */}
+            {routerLocation.state?.flightData?.originalOffer && (
+              <div className="booking-card mb-8">
+                <div className="booking-card-header">
+                  <h2>
+                    <span className="flex items-center gap-2">
+                      <UserCircle className="h-5 w-5" />
+                      Select Your Seat <span className="text-sm font-normal text-gray-400">(optional)</span>
+                    </span>
+                  </h2>
+                </div>
+                <div className="booking-card-body">
+                  <FlightSeatMap
+                    flightOffer={routerLocation.state.flightData.originalOffer}
+                    passengerCount={passengerData.length || 1}
+                    selectedSeats={selectedSeats}
+                    onSeatsChange={handleSeatsChange}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Fare rules & baggage */}
+            {routerLocation.state?.flightData?.originalOffer && (
+              <div className="booking-card mb-8">
+                <div className="booking-card-header">
+                  <h2>
+                    <span className="flex items-center gap-2">
+                      <Check className="h-5 w-5" />
+                      Baggage &amp; Fare Rules
+                    </span>
+                  </h2>
+                </div>
+                <div className="booking-card-body">
+                  <FlightFareRules
+                    flightOffer={routerLocation.state.flightData.originalOffer}
+                    onBagsChange={handleBagsChange}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* VIP Service */}
             <div className="booking-card mb-8">
               <div className="booking-card-body flex flex-col md:flex-row items-center justify-between gap-6">
@@ -1470,6 +1590,45 @@ function FlightBookingConfirmation() {
               </div>
             )}
 
+            {/* Important Information */}
+            <div className="booking-card mb-8">
+              <div className="booking-card-header" style={{ padding: '1.1rem 1.5rem', borderBottom: '1px solid #E2E8F0' }}>
+                <h2 style={{ color: '#055B75' }}>
+                  <span className="flex items-center gap-2"><Info className="h-5 w-5" /> Important Information</span>
+                </h2>
+              </div>
+              <div className="booking-card-body">
+                <ul className="space-y-3 text-sm text-gray-600">
+                  {[
+                    'Carry a valid government photo ID and a printed or digital copy of your e-ticket for check-in.',
+                    'Check-in counters usually close 45–60 minutes before domestic departure. Reach the airport at least 2 hours prior.',
+                    'Web check-in opens 48 hours before departure — complete it to save time at the airport.',
+                    'Cancellation and date-change charges apply as per the fare rules shown above.',
+                    'Traveller names must exactly match the government ID; corrections after booking may attract airline fees.',
+                  ].map((t, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <Check className="h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Trust strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+              {[
+                { Icon: ShieldCheck, label: 'Secure Payment' },
+                { Icon: CheckCircle, label: 'Instant Confirmation' },
+                { Icon: Clock, label: '24x7 Support' },
+                { Icon: Briefcase, label: 'Best Fares' },
+              ].map(({ Icon, label }, i) => (
+                <div key={i} className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-xs font-medium text-gray-600">
+                  <Icon className="h-4 w-4 text-[#055B75] flex-shrink-0" /> {label}
+                </div>
+              ))}
+            </div>
+
             <div className="lg:hidden mt-8">
               {/* Mobile Place for Fare Summary if needed, or stick to bottom */}
             </div>
@@ -1480,27 +1639,75 @@ function FlightBookingConfirmation() {
           <div className="lg:col-span-1">
             <div className="booking-card fare-summary-card">
               <div className="booking-card-header">
-                <h2>Receipt Summary</h2>
+                <h2>Fare Summary</h2>
               </div>
               <div className="booking-card-body">
-                <div className="fare-row">
-                  <span className="label">Base Fare ({passengerData.length}x)</span>
-                  <span className="value"><Price amount={calculatedFare.baseFare} /></span>
+                {/* Base Fare */}
+                <div className="flex items-start gap-3 py-3 border-b border-gray-100">
+                  <MinusCircle className="h-5 w-5 text-gray-300 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-gray-800">Base Fare</div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      Adult(s) ({passengerData.length || 1} &times; <Price amount={(calculatedFare.baseFare || 0) / (passengerData.length || 1)} />)
+                    </div>
+                  </div>
+                  <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><Price amount={calculatedFare.baseFare} /></div>
                 </div>
-                <div className="fare-row">
-                  <span className="label">Taxes & Fees</span>
-                  <span className="value"><Price amount={calculatedFare.totalTax} /></span>
-                </div>
-                {calculatedFare.addonsTotal > 0 && (
-                  <div className="fare-row">
-                    <span className="label">Add-ons</span>
-                    <span className="value"><Price amount={calculatedFare.addonsTotal} /></span>
+
+                {/* Taxes and Surcharges (real Amadeus airline taxes = grandTotal − base) */}
+                {calculatedFare.totalTax > 0 && (
+                  <div className="flex items-start gap-3 py-3 border-b border-gray-100">
+                    <MinusCircle className="h-5 w-5 text-gray-300 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-gray-800">Taxes and Surcharges</div>
+                      <div className="text-xs text-gray-400 mt-0.5">Airline taxes &amp; surcharges</div>
+                    </div>
+                    <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><Price amount={calculatedFare.totalTax} /></div>
                   </div>
                 )}
-                {vipService && (
-                  <div className="fare-row">
-                    <span className="label">VIP Services</span>
-                    <span className="value"><Price amount={calculatedFare.vipServiceFee} /></span>
+
+                {/* Service Fee (Jetsetters convenience fee) */}
+                {calculatedFare.serviceFee > 0 && (
+                  <div className="flex items-start gap-3 py-3 border-b border-gray-100">
+                    <MinusCircle className="h-5 w-5 text-gray-300 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-gray-800">Service Fee</div>
+                      <div className="text-xs text-gray-400 mt-0.5">Jetsetters convenience fee</div>
+                    </div>
+                    <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><Price amount={calculatedFare.serviceFee} /></div>
+                  </div>
+                )}
+
+                {/* Other Services (seats, baggage, add-ons, VIP) */}
+                {(() => {
+                  const other = (calculatedFare.addonsTotal || 0) + (calculatedFare.seatFee || 0) + (calculatedFare.bagFee || 0) + (calculatedFare.vipServiceFee || 0);
+                  if (other <= 0) return null;
+                  const parts = [];
+                  if (calculatedFare.seatFee > 0) parts.push(`Seat${selectedSeats.length > 1 ? 's' : ''}${selectedSeats.length ? ` (${selectedSeats.join(', ')})` : ''}`);
+                  if (calculatedFare.bagFee > 0) parts.push('Extra baggage');
+                  if (calculatedFare.addonsTotal > 0) parts.push('Add-ons');
+                  if (vipService) parts.push('VIP services');
+                  return (
+                    <div className="flex items-start gap-3 py-3 border-b border-gray-100">
+                      <MinusCircle className="h-5 w-5 text-gray-300 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-gray-800">Other Services</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{parts.join(' · ')}</div>
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><Price amount={other} /></div>
+                    </div>
+                  );
+                })()}
+
+                {/* Discounts */}
+                {appliedCoupon && (
+                  <div className="flex items-start gap-3 py-3 border-b border-gray-100">
+                    <PlusCircle className="h-5 w-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-gray-800">Discounts</div>
+                      <div className="text-xs text-gray-400 mt-0.5">Coupon {appliedCoupon.code}</div>
+                    </div>
+                    <div className="text-sm font-semibold text-emerald-600 whitespace-nowrap">- <Price amount={appliedCoupon.discountAmount} /></div>
                   </div>
                 )}
 
@@ -1515,16 +1722,9 @@ function FlightBookingConfirmation() {
                   />
                 </div>
 
-                {appliedCoupon && (
-                  <div className="fare-row" style={{ color: '#16a34a' }}>
-                    <span className="label">Coupon ({appliedCoupon.code})</span>
-                    <span className="value">-<Price amount={appliedCoupon.discountAmount} /></span>
-                  </div>
-                )}
-
                 <div className="fare-row total">
-                  <span className="label">Total to Pay</span>
-                  <span className="value"><Price amount={appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount} showCode={true} /></span>
+                  <span className="label">Total Amount</span>
+                  <span className="value"><Price amount={appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount} /></span>
                 </div>
 
                 <button

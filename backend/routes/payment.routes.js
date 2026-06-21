@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import AmadeusService from '../services/amadeusService.js';
 
 dotenv.config();
 
@@ -1651,41 +1652,20 @@ async function handleCancelBookingAction(req, res) {
             cancellationFee: 0
         };
 
-        // 2. Cancel flight via Amadeus API
-        const orderId = booking.booking_reference ||
+        // 2. Cancel the flight reservation via Amadeus (only for flight bookings).
+        // Use the REAL Amadeus order id first; the service is mock-aware so test PNRs
+        // are handled gracefully and the recorded flag stays accurate.
+        const orderId = booking.booking_details?.amadeus_order_id ||
             booking.booking_details?.order_id ||
-            booking.booking_details?.amadeus_order_id;
+            booking.booking_reference;
 
-        if (orderId) {
+        if (orderId && (booking.travel_type === 'flight' || booking.travel_type == null)) {
             try {
-                const amadeus_client_id = process.env.AMADEUS_API_KEY || process.env.AMADEUS_CLIENT_ID;
-                const amadeus_client_secret = process.env.AMADEUS_API_SECRET || process.env.AMADEUS_CLIENT_SECRET;
-                const amadeus_base_url = process.env.AMADEUS_BASE_URL || 'https://test.api.amadeus.com';
-
-                if (amadeus_client_id && amadeus_client_secret) {
-                    const tokenResponse = await axios.post(`${amadeus_base_url}/v1/security/oauth2/token`, `grant_type=client_credentials&client_id=${amadeus_client_id}&client_secret=${amadeus_client_secret}`, {
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-                    });
-
-                    if (tokenResponse.status === 200 || tokenResponse.status === 201) {
-                        const tokenData = tokenResponse.data;
-                        const cancelResponse = await axios.delete(`${amadeus_base_url}/v1/booking/flight-orders/${orderId}`, {
-                            headers: {
-                                'Authorization': `Bearer ${tokenData.access_token}`,
-                                'Accept': 'application/vnd.amadeus+json'
-                            },
-                            validateStatus: () => true // Prevent throw on 4xx/5xx
-                        });
-                        if (cancelResponse.status >= 200 && cancelResponse.status < 300) {
-                            console.log('✅ Amadeus flight order cancelled');
-                            cancellationResult.amadeusCancelled = true;
-                        } else {
-                            console.warn('⚠️ Amadeus cancellation failed:', cancelResponse.status);
-                        }
-                    }
-                }
+                const amaResult = await AmadeusService.cancelFlightOrder(orderId);
+                cancellationResult.amadeusCancelled = !!amaResult?.success;
+                console.log(`🛫 Amadeus cancellation: ${cancellationResult.amadeusCancelled ? 'success' : 'no-op'} (${amaResult?.mode || 'LIVE'})`);
             } catch (amadeusError) {
-                console.warn('⚠️ Amadeus cancellation error:', amadeusError.message);
+                console.warn('⚠️ Amadeus cancellation error:', amadeusError.error || amadeusError.message);
             }
         }
 

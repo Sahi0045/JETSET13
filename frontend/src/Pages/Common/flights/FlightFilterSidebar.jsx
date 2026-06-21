@@ -32,11 +32,15 @@ function FlightFilterSidebar({
   priceRangeBounds,
   airlines,
   airlineStats,
+  airportStats,
   onFilterChange,
   onToggleAirline,
-  onResetAll
+  onToggleAirport,
+  onResetAll,
+  variant = 'desktop'
 }) {
   const currencySymbol = currencyService.getCurrencySymbol();
+  const isMobile = variant === 'mobile';
 
   const popularFilters = [
     { label: 'Non-Stop', action: () => onFilterChange('stops', filters.stops === '0' ? 'any' : '0'), active: filters.stops === '0' },
@@ -46,8 +50,10 @@ function FlightFilterSidebar({
   ];
 
   return (
-    <div className="hidden md:block w-full md:w-[280px] lg:w-[300px] flex-shrink-0">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+    <div className={isMobile ? 'w-full' : 'hidden md:block w-full md:w-[280px] lg:w-[300px] flex-shrink-0'}>
+      <div className={isMobile
+        ? 'bg-white'
+        : 'bg-white rounded-xl shadow-sm border border-gray-100 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent'}>
 
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
@@ -267,6 +273,54 @@ function FlightFilterSidebar({
             ))}
           </div>
         </div>
+
+        {airportStats && (airportStats.origins?.length > 1 || airportStats.dests?.length > 1) && (
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Airports</h4>
+            {airportStats.origins?.length > 1 && (
+              <div className="mb-3">
+                <div className="text-[10px] font-semibold text-gray-400 mb-1.5">DEPARTURE</div>
+                <div className="space-y-0.5">
+                  {airportStats.origins.map((a) => (
+                    <label key={a.code} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-all duration-200 ${filters.originAirports?.includes(a.code) ? 'bg-[#F0FAFC]' : 'hover:bg-gray-50'}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <input
+                          type="checkbox"
+                          className="w-3.5 h-3.5 text-[#055B75] border-gray-300 rounded focus:ring-[#055B75]"
+                          checked={filters.originAirports?.includes(a.code) || false}
+                          onChange={() => onToggleAirport('origin', a.code)}
+                        />
+                        <span className="text-xs text-gray-700 font-medium truncate">{a.code} <span className="text-gray-400 font-normal">{a.city}</span></span>
+                      </div>
+                      <span className="text-[10px] text-gray-400">{a.count}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            {airportStats.dests?.length > 1 && (
+              <div>
+                <div className="text-[10px] font-semibold text-gray-400 mb-1.5">ARRIVAL</div>
+                <div className="space-y-0.5">
+                  {airportStats.dests.map((a) => (
+                    <label key={a.code} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-all duration-200 ${filters.destAirports?.includes(a.code) ? 'bg-[#F0FAFC]' : 'hover:bg-gray-50'}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <input
+                          type="checkbox"
+                          className="w-3.5 h-3.5 text-[#055B75] border-gray-300 rounded focus:ring-[#055B75]"
+                          checked={filters.destAirports?.includes(a.code) || false}
+                          onChange={() => onToggleAirport('dest', a.code)}
+                        />
+                        <span className="text-xs text-gray-700 font-medium truncate">{a.code} <span className="text-gray-400 font-normal">{a.city}</span></span>
+                      </div>
+                      <span className="text-[10px] text-gray-400">{a.count}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="px-5 py-4">
           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Airlines</h4>

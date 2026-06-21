@@ -55,6 +55,41 @@ class CurrencyService {
   constructor() {
     this.currentCurrency = DEFAULT_CURRENCY;
     this.detectUserCurrency();
+    this.loadLiveRates();
+  }
+
+  /**
+   * Load live USD-based exchange rates from the backend (cached hourly server-side).
+   * Applies a recent localStorage cache immediately, then refreshes in the background.
+   * Falls back to the static EXCHANGE_RATES if the network/API is unavailable.
+   */
+  async loadLiveRates() {
+    if (typeof window === 'undefined') return;
+
+    // 1) Apply a recent cached snapshot right away (avoids a flash of stale rates)
+    try {
+      const cached = JSON.parse(localStorage.getItem('fxRates') || 'null');
+      if (cached && cached.rates && (Date.now() - cached.at) < 6 * 60 * 60 * 1000) {
+        Object.assign(EXCHANGE_RATES, cached.rates);
+      }
+    } catch (e) { /* ignore bad cache */ }
+
+    // 2) Refresh from the server
+    try {
+      const res = await fetch('/api/currency/rates');
+      const data = await res.json();
+      if (data && data.rates && typeof data.rates.USD === 'number') {
+        Object.keys(data.rates).forEach((c) => {
+          const v = data.rates[c];
+          if (typeof v === 'number' && v > 0) EXCHANGE_RATES[c] = v;
+        });
+        localStorage.setItem('fxRates', JSON.stringify({ rates: { ...EXCHANGE_RATES }, at: Date.now() }));
+        // Tell Price components to re-render with the fresh rates
+        window.dispatchEvent(new CustomEvent('currencyChanged', { detail: { currency: this.getCurrency() } }));
+      }
+    } catch (error) {
+      console.warn('Live FX rates unavailable, using cached/static rates:', error?.message);
+    }
   }
 
   /**

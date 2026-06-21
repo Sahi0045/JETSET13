@@ -350,51 +350,57 @@ class AmadeusService {
    * @returns {Promise<Object>} - Cancellation result
    */
   async cancelFlightOrder(orderId) {
-    try {
-      const token = await this.getAccessToken();
+    const token = await this.getAccessToken();
+    console.log(`🗑️ Cancelling flight order: ${orderId}`);
 
-      console.log(`🗑️ Cancelling flight order: ${orderId}`);
-
-      await axios.delete(
-        `${this.baseUrls.v1}/booking/flight-orders/${orderId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/vnd.amadeus+json'
+    const maxAttempts = 4;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await axios.delete(
+          `${this.baseUrls.v1}/booking/flight-orders/${orderId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/vnd.amadeus+json'
+            }
           }
-        }
-      );
+        );
 
-      console.log(`✅ Flight order ${orderId} cancelled successfully`);
-
-      return {
-        success: true,
-        message: `Flight order ${orderId} has been cancelled`
-      };
-
-    } catch (error) {
-      console.error('❌ Error cancelling flight order:', error.response?.data || error.message);
-
-      // Check if it's a mock order and remove from storage
-      const mockOrder = this.getMockOrder(orderId);
-      if (mockOrder) {
-        // Remove from mock storage (in-memory)
-        if (this.mockOrders) {
-          this.mockOrders.delete(orderId);
-        }
-        console.log(`✅ Mock order ${orderId} removed from storage`);
+        console.log(`✅ Flight order ${orderId} cancelled successfully`);
         return {
           success: true,
-          message: `Mock order ${orderId} has been cancelled`,
-          mode: 'MOCK_CANCELLATION'
+          message: `Flight order ${orderId} has been cancelled`
+        };
+
+      } catch (error) {
+        const amadeusCode = error.response?.data?.errors?.[0]?.code;
+
+        // 23788: order is still settling right after creation — wait briefly and retry
+        if (amadeusCode === 23788 && attempt < maxAttempts) {
+          console.warn(`⏳ Amadeus busy (23788 simultaneous changes) — retrying cancel in 4s (attempt ${attempt}/${maxAttempts})`);
+          await new Promise((r) => setTimeout(r, 4000));
+          continue;
+        }
+
+        // Check if it's a mock order and remove from in-memory storage
+        const mockOrder = this.getMockOrder(orderId);
+        if (mockOrder) {
+          if (this.mockOrders) this.mockOrders.delete(orderId);
+          console.log(`✅ Mock order ${orderId} removed from storage`);
+          return {
+            success: true,
+            message: `Mock order ${orderId} has been cancelled`,
+            mode: 'MOCK_CANCELLATION'
+          };
+        }
+
+        console.error('❌ Error cancelling flight order:', error.response?.data || error.message);
+        throw {
+          success: false,
+          error: error.response?.data?.errors?.[0]?.detail || error.message,
+          code: error.response?.status || 500
         };
       }
-
-      throw {
-        success: false,
-        error: error.response?.data?.errors?.[0]?.detail || error.message,
-        code: error.response?.status || 500
-      };
     }
   }
 
@@ -445,6 +451,7 @@ class AmadeusService {
       return {
         success: true,
         data: response.data.data,
+        included: response.data.included, // detailed-fare-rules + bags live here
         dictionaries: response.data.dictionaries
       };
 
@@ -455,6 +462,89 @@ class AmadeusService {
         error: error.response?.data?.errors?.[0]?.detail || error.message,
         code: error.response?.status || 500
       };
+    }
+  }
+
+  /**
+   * Get branded-fare upsell options for a flight offer.
+   * Returns alternative fare families (e.g. Eco Value / Comfort / Flex) with
+   * their own price, baggage and amenities.
+   * @see https://developers.amadeus.com/self-service/category/flights/api-doc/branded-fares-upsell
+   * @param {Object} flightOffer - A flight offer from a recent search
+   * @returns {Promise<Object>} - { success, data: [offers], dictionaries }
+   */
+  async getBrandedFareUpsell(flightOffer) {
+    try {
+      const token = await this.getAccessToken();
+
+      console.log('🏷️  Fetching branded-fare upsell options...');
+
+      const response = await axios.post(
+        `${this.baseUrls.v1}/shopping/flight-offers/upselling`,
+        {
+          data: {
+            type: 'flight-offers-upselling',
+            flightOffers: [flightOffer]
+          }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/vnd.amadeus+json',
+            'Accept': 'application/vnd.amadeus+json'
+          }
+        }
+      );
+
+      const offers = response.data.data || [];
+      console.log(`✅ Branded-fare upsell returned ${offers.length} fare option(s)`);
+
+      return {
+        success: true,
+        data: offers,
+        dictionaries: response.data.dictionaries
+      };
+
+    } catch (error) {
+      console.error('❌ Branded-fare upsell error:', error.response?.data || error.message);
+      throw {
+        success: false,
+        error: error.response?.data?.errors?.[0]?.detail || error.message,
+        code: error.response?.status || 500
+      };
+    }
+  }
+
+  /**
+   * SeatMap Display — seat map for one or more flight offers.
+   * @see https://developers.amadeus.com/self-service/category/flights/api-doc/seatmap-display
+   * @param {Object} flightOffer - A flight offer from a recent search/pricing
+   * @returns {Promise<Object>} - { success, data: [seatmaps], dictionaries }
+   */
+  async getSeatMaps(flightOffer) {
+    try {
+      const token = await this.getAccessToken();
+
+      const response = await axios.post(
+        `${this.baseUrls.v1}/shopping/seatmaps`,
+        {
+          data: [flightOffer]
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/vnd.amadeus+json',
+            'Accept': 'application/vnd.amadeus+json'
+          }
+        }
+      );
+
+      const maps = response.data.data || [];
+      console.log(`✅ SeatMap returned ${maps.length} map(s)`);
+      return { success: true, data: maps, dictionaries: response.data.dictionaries };
+    } catch (error) {
+      console.error('❌ SeatMap error:', error.response?.data || error.message);
+      return { success: false, data: [] };
     }
   }
 

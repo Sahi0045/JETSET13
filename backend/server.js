@@ -17,6 +17,8 @@ import subscriptionRoutes from './routes/subscription.routes.js';
 import couponRoutes from './routes/coupon.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import pushRoutes from './routes/push.routes.js';
+import adminRoutes from './routes/admin.routes.js';
+import currencyRoutes from './routes/currency.routes.js';
 import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
 import { startWorkflowEngine } from './jobs/workflowEngine.js';
 import { startDataRetentionJob } from './jobs/dataRetention.job.js';
@@ -114,6 +116,8 @@ app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/currency', currencyRoutes);
 
 // Bulk upload routes
 import bulkUploadRoutes from './routes/bulkUpload.routes.js';

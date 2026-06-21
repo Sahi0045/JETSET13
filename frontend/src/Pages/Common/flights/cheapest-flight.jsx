@@ -81,162 +81,107 @@ export default function CheapestFlights({ onBookFlight }) {
   const [originCode, setOriginCode] = useState("");
   const [loadedImages, setLoadedImages] = useState({});
 
-  // Step 1: Discover destinations from API, then fetch cheapest dates for them
+  // Render destination cards instantly; enrich with live prices in the background.
   useEffect(() => {
     let isMounted = true;
 
-      const fetchCheapestFlights = async () => {
-        // Wait for location context to be loaded
-        if (locationLoading) return;
+    // Wait for location context, then need an origin
+    if (locationLoading) return;
+    if (!cityCode) { setLoading(false); return; }
 
-        // Don't fetch if no origin city detected
-        if (!cityCode) {
-          setLoading(false);
-          return;
-        }
+    const origin = cityCode;
+    const originCityName = city || '';
+    const country = countryCode || 'IN';
+    setOriginCode(origin);
+    setOriginCity(originCityName);
 
-        try {
-          setLoading(true);
-          setError(null);
+    // Country-specific popular routes (used immediately — no network wait)
+    const countryFallbacks = {
+      'IN': ['BOM', 'BLR', 'GOI', 'JAI', 'CCU', 'HYD', 'MAA', 'DXB', 'BKK', 'SIN'],
+      'US': ['LAX', 'JFK', 'ORD', 'SFO', 'MIA', 'LHR', 'CDG', 'NRT', 'CUN', 'HNL'],
+      'GB': ['CDG', 'BCN', 'AMS', 'DXB', 'JFK', 'FCO', 'IST', 'ATH', 'LIS', 'BKK'],
+      'AE': ['BOM', 'DEL', 'LHR', 'BKK', 'IST', 'CDG', 'SIN', 'JFK', 'CAI', 'KUL'],
+    };
+    const codes = (countryFallbacks[country] || countryFallbacks['IN'])
+      .filter((c) => c !== origin)
+      .slice(0, 6);
 
-          // Get user's origin city from context
-          const userOriginCode = cityCode;
-          const userOriginCity = city || '';
-          const userCountryCode = countryCode || 'IN';
-
-        if (isMounted) {
-          setOriginCode(userOriginCode);
-          setOriginCity(userOriginCity);
-        }
-
-        console.log(`💰 Discovering destinations from ${userOriginCity} (${userOriginCode})`);
-
-        // Step 1: Dynamically discover top destinations via Amadeus analytics
-        const bookedData = await FlightAnalyticsService.getMostBookedDestinations(userOriginCode);
-
-        // If API returns no data, use country-based curated destinations
-        let destinationCodes;
-        if (bookedData && bookedData.length > 0) {
-          destinationCodes = bookedData.map(d => ({ destination: d.destination }));
-          console.log(`📊 Discovered ${bookedData.length} popular destinations, fetching cheapest dates...`);
-        } else {
-          console.log('📊 API returned no destinations, using curated fallback for country:', userCountryCode);
-          // Country-specific popular flight routes
-          const countryFallbacks = {
-            'IN': ['BOM', 'BLR', 'GOI', 'JAI', 'CCU', 'HYD', 'MAA', 'DXB', 'BKK', 'SIN'],
-            'US': ['LAX', 'JFK', 'ORD', 'SFO', 'MIA', 'LHR', 'CDG', 'NRT', 'CUN', 'HNL'],
-            'GB': ['CDG', 'BCN', 'AMS', 'DXB', 'JFK', 'FCO', 'IST', 'ATH', 'LIS', 'BKK'],
-            'AE': ['BOM', 'DEL', 'LHR', 'BKK', 'IST', 'CDG', 'SIN', 'JFK', 'CAI', 'KUL'],
-          };
-          const fallbackCodes = countryFallbacks[userCountryCode] || countryFallbacks['IN'];
-          // Remove origin from fallback list
-          destinationCodes = fallbackCodes
-            .filter(c => c !== userOriginCode)
-            .map(c => ({ destination: c }));
-        }
-
-          // Step 2: Fetch cheapest flight dates sequentially in batches to avoid rate limits
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          const depDate = tomorrow.toISOString().split('T')[0];
-
-          const destinations = destinationCodes.slice(0, 6);
-          const validFlights = [];
-
-          // Process 2 at a time with delay between batches
-          for (let i = 0; i < destinations.length; i += 2) {
-            const batch = destinations.slice(i, i + 2);
-            const batchResults = await Promise.allSettled(
-              batch.map(async (item) => {
-                const destCode = item.destination;
-                const airport = airportByCode[destCode];
-                const cityName = airport?.name || destCode;
-                const country = airport?.country || "International";
-
-                try {
-                  const data = await FlightAnalyticsService.getCheapestFlightDates(
-                    userOriginCode,
-                    destCode,
-                    { oneWay: true, departureDate: depDate }
-                  );
-
-                  if (data && data.length > 0) {
-                    const cheapest = data.reduce((min, curr) =>
-                      parseFloat(curr.price?.total || Infinity) < parseFloat(min.price?.total || Infinity) ? curr : min
-                      , data[0]);
-
-                    return {
-                      id: destCode,
-                      destination: cityName,
-                      destinationCode: destCode,
-                      region: country,
-                      price: parseFloat(cheapest.price?.total || 0),
-                      currency: cheapest.price?.currency || 'USD',
-                      date: formatDate(cheapest.departureDate),
-                      image: getCityImage(cityName),
-                      isApiData: true,
-                    };
-                  }
-                  return null;
-                } catch (err) {
-                  console.warn(`Failed to get cheapest for ${cityName}:`, err.message);
-                  return null;
-                }
-              })
-            );
-
-            for (const r of batchResults) {
-              if (r.status === 'fulfilled' && r.value) {
-                validFlights.push(r.value);
-              }
-            }
-
-            // Small delay between batches to respect rate limits
-            if (i + 2 < destinations.length) {
-              await new Promise(resolve => setTimeout(resolve, 300));
-            }
-          }
-
-        if (isMounted) {
-          if (validFlights.length > 0) {
-            // Sort by price ascending
-            validFlights.sort((a, b) => a.price - b.price);
-            setFlights(validFlights);
-          } else {
-            // Fallback: show destination cards without prices
-            const fallbackCards = destinationCodes.slice(0, 6).map(item => {
-              const code = item.destination;
-              const airport = airportByCode[code];
-              return {
-                id: code,
-                destination: airport?.name || code,
-                destinationCode: code,
-                region: airport?.country || 'International',
-                price: null,
-                currency: 'USD',
-                date: 'Flexible dates',
-                image: getCityImage(airport?.name || code),
-                isApiData: false,
-              };
-            }).filter(Boolean);
-            if (fallbackCards.length > 0) {
-              setFlights(fallbackCards);
-            } else {
-              setError("No cheapest fares available right now. Please try again later.");
-            }
-          }
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error('❌ Cheapest flights fetch error:', err);
-        if (isMounted) {
-          setError("Unable to load cheapest fares. Please try again later.");
-          setLoading(false);
-        }
-      }
+    const buildCard = (code, priced) => {
+      const airport = airportByCode[code];
+      const cityName = airport?.name || code;
+      return {
+        id: code,
+        destination: cityName,
+        destinationCode: code,
+        region: airport?.country || 'International',
+        price: priced ? priced.price : null,
+        currency: priced ? priced.currency : 'USD',
+        date: priced ? priced.date : 'Flexible dates',
+        image: getCityImage(cityName),
+        isApiData: !!priced,
+      };
     };
 
-    fetchCheapestFlights();
+    const baseCards = codes.map((c) => buildCard(c, null));
+
+    // 1) Paint immediately — use a fresh localStorage cache if we have one, else priceless cards
+    const cacheKey = `cheapestFares_${origin}`;
+    let initial = baseCards;
+    try {
+      const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+      if (cached && cached.at && (Date.now() - cached.at) < 6 * 60 * 60 * 1000 && Array.isArray(cached.flights) && cached.flights.length) {
+        initial = cached.flights;
+      }
+    } catch (e) { /* ignore bad cache */ }
+    if (isMounted) {
+      setFlights(initial);
+      setError(null);
+      setLoading(false); // render now — do not block on Amadeus
+    }
+
+    // 2) Enrich with live cheapest prices in the background (never blocks the UI)
+    (async () => {
+      try {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const depDate = tomorrow.toISOString().split('T')[0];
+
+        const results = await Promise.allSettled(
+          codes.map(async (code) => {
+            try {
+              const data = await FlightAnalyticsService.getCheapestFlightDates(
+                origin, code, { oneWay: true, departureDate: depDate }
+              );
+              if (data && data.length > 0) {
+                const cheapest = data.reduce((min, curr) =>
+                  parseFloat(curr.price?.total || Infinity) < parseFloat(min.price?.total || Infinity) ? curr : min, data[0]);
+                return buildCard(code, {
+                  price: parseFloat(cheapest.price?.total || 0),
+                  currency: cheapest.price?.currency || 'USD',
+                  date: formatDate(cheapest.departureDate),
+                });
+              }
+            } catch (e) { /* destination price unavailable */ }
+            return null;
+          })
+        );
+
+        const byCode = {};
+        results.forEach((r) => { if (r.status === 'fulfilled' && r.value) byCode[r.value.destinationCode] = r.value; });
+
+        if (Object.keys(byCode).length > 0 && isMounted) {
+          const merged = baseCards
+            .map((b) => byCode[b.destinationCode] || b)
+            .sort((a, b) => (a.price == null ? Infinity : a.price) - (b.price == null ? Infinity : b.price));
+          setFlights(merged);
+          try { localStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), flights: merged })); } catch (e) { /* quota */ }
+        }
+      } catch (e) {
+        // Background enrichment failed — the instant cards stay; no error surfaced
+        console.warn('Cheapest-fares price enrichment skipped:', e?.message);
+      }
+    })();
+
     return () => { isMounted = false; };
   }, [cityCode, city, countryCode, locationLoading]);
 

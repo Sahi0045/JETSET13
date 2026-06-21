@@ -39,6 +39,8 @@ function buildBookingRow(bookingData, userId) {
     booking_details: {
       pnr: bookingData.pnr,
       order_id: bookingData.orderId,
+      // Real Amadeus order id — required to cancel the reservation via the GDS
+      amadeus_order_id: bookingData.amadeusOrderId || null,
       transaction_id: bookingData.transactionId,
       amount: parseFloat(bookingData.totalAmount) || 0,
       currency: bookingData.currency || 'USD',
@@ -442,6 +444,11 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
         refundable: travelerPricing?.price?.refundableTaxes ? true : false,
         seats: flight.numberOfBookableSeats || 'Available',
         isUpsellOffer: flight.isUpsellOffer || false,
+        // Richer Amadeus fare data surfaced to the UI
+        amenities: fareDetails?.amenities || [],
+        fareBasis: fareDetails?.fareBasis || null,
+        bookingClass: fareDetails?.class || null,
+        validatingAirlineCodes: flight.validatingAirlineCodes || [],
         originalOffer: flight // Keep original for booking
       };
     } catch (error) {
@@ -599,6 +606,212 @@ router.post('/price', async (req, res) => {
   }
 });
 
+// Branded-fare upsell endpoint — returns alternative fare families for an offer
+router.post('/upsell', async (req, res) => {
+  try {
+    const { flightOffer } = req.body;
+
+    if (!flightOffer) {
+      return res.status(400).json({
+        success: false,
+        error: 'Flight offer is required for upsell'
+      });
+    }
+
+    const upsellResponse = await AmadeusService.getBrandedFareUpsell(flightOffer);
+
+    // Reuse the standard transform so fare options share the card data shape
+    const options = transformAmadeusFlightData(
+      upsellResponse.data || [],
+      upsellResponse.dictionaries
+    );
+
+    res.json({
+      success: true,
+      data: options,
+      meta: { count: options.length }
+    });
+
+  } catch (error) {
+    console.error('❌ Branded-fare upsell error:', error);
+    // Soft-fail: no upsell options just means the caller falls back to the base fare
+    res.status(200).json({
+      success: false,
+      data: [],
+      error: error.error || error.message || 'No fare options available'
+    });
+  }
+});
+
+// Date-wise lowest fares for the date strip (cheapest fare per day)
+router.post('/date-prices', async (req, res) => {
+  try {
+    const { from, to, dates, adults, children, infants, travelClass } = req.body;
+
+    if (!from || !to || !Array.isArray(dates) || dates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'from, to and a non-empty dates array are required'
+      });
+    }
+
+    const resolvedFrom = await resolveToIATACode(from);
+    const resolvedTo = await resolveToIATACode(to);
+
+    // Cap dates (a month view sends ~31) and skip past dates
+    const today = new Date().toISOString().split('T')[0];
+    const limited = dates.slice(0, 35).filter((d) => d && d >= today);
+
+    const probe = async (date) => {
+      const r = await AmadeusService.searchFlights({
+        from: resolvedFrom,
+        to: resolvedTo,
+        departDate: date,
+        adults: parseInt(adults) || 1,
+        children: parseInt(children) || 0,
+        infants: parseInt(infants) || 0,
+        travelClass: travelClass || undefined,
+        max: 1, // Amadeus returns cheapest first
+        currency: 'USD'
+      });
+      const offers = r.data || [];
+      if (!offers.length) return { date, price: null };
+      const min = Math.min(...offers.map(o => parseFloat(o.price?.total || o.price?.grandTotal || Infinity)));
+      return { date, price: Number.isFinite(min) ? min : null };
+    };
+
+    // Throttle: process in batches to stay within Amadeus rate limits
+    const dateWisePrices = {};
+    const BATCH = 6;
+    for (let i = 0; i < limited.length; i += BATCH) {
+      const batch = limited.slice(i, i + BATCH);
+      const settled = await Promise.allSettled(batch.map(probe));
+      settled.forEach((r) => {
+        if (r.status === 'fulfilled' && r.value && r.value.price != null) {
+          dateWisePrices[r.value.date] = r.value.price;
+        }
+      });
+    }
+
+    const priceVals = Object.values(dateWisePrices);
+    const lowestPrice = priceVals.length ? Math.min(...priceVals) : null;
+
+    res.json({ success: true, dateWisePrices, lowestPrice, currency: 'USD' });
+
+  } catch (error) {
+    console.error('❌ Date-prices error:', error);
+    res.status(200).json({ success: false, dateWisePrices: {}, lowestPrice: null });
+  }
+});
+
+// Fare rules + extra-bag prices for a chosen flight offer
+router.post('/fare-rules', async (req, res) => {
+  try {
+    const { flightOffer } = req.body;
+    if (!flightOffer) {
+      return res.status(400).json({ success: false, error: 'flightOffer is required' });
+    }
+
+    const priced = await AmadeusService.priceFlightOffer(flightOffer, {
+      include: ['detailed-fare-rules', 'bags']
+    });
+
+    const included = priced.included || {};
+
+    // Structured extra-baggage options
+    const bags = Object.values(included.bags || {}).map((b) => ({
+      quantity: b.quantity,
+      name: b.name,
+      price: b.price ? { amount: parseFloat(b.price.amount), currency: b.price.currencyCode } : null,
+      segmentIds: b.segmentIds || [],
+    }));
+
+    // Fare-rule notes (free text) — surface penalty/general categories
+    const rulesObj = included['detailed-fare-rules'] || {};
+    const fareRules = [];
+    Object.values(rulesObj).forEach((r) => {
+      const descs = r.fareNotes?.descriptions || [];
+      descs.forEach((d) => {
+        if (d.text) fareRules.push({ title: d.descriptionType || 'INFORMATION', text: d.text });
+      });
+    });
+
+    // ===== Derive a structured cancellation/change policy from the PENALTIES text =====
+    const penaltyText = fareRules
+      .filter((r) => /PENALT|CANCEL|REISSUE|CHANGE|REFUND/i.test((r.title || '') + ' ' + (r.text || '')))
+      .map((r) => r.text)
+      .join(' \n ')
+      .toUpperCase();
+
+    let cancellation = null;
+    if (penaltyText) {
+      // All "CHARGE <CUR> <amount>" occurrences with their position in the text
+      const charges = [];
+      const re = /CHARGE\s+([A-Z]{3})\s+([\d,]+(?:\.\d+)?)/g;
+      let m;
+      while ((m = re.exec(penaltyText)) !== null) {
+        charges.push({ currency: m[1], amount: Math.round(parseFloat(m[2].replace(/,/g, ''))), index: m.index });
+      }
+
+      const changeIdx = penaltyText.search(/CHANGE|REISSUE|REVALIDATION/);
+      const cancelIdx = penaltyText.search(/CANCELLATION|CANCEL\b|REFUND/);
+
+      const nearest = (anchor) => {
+        if (anchor < 0 || charges.length === 0) return null;
+        // first charge at/after the anchor, else the closest overall
+        const after = charges.filter((c) => c.index >= anchor).sort((a, b) => a.index - b.index)[0];
+        return after || charges[0];
+      };
+
+      const changeCharge = nearest(changeIdx);
+      const cancelCharge = nearest(cancelIdx) || changeCharge;
+
+      // Cutoff window, e.g. "TILL 02 HRS" / "WITHIN 4 HOURS" / "4 HOURS BEFORE"
+      const cutoffMatch = penaltyText.match(/TILL\s+0?(\d{1,2})\s*HRS?/) ||
+        penaltyText.match(/WITHIN\s+0?(\d{1,2})\s*H(?:OUR|RS?)/) ||
+        penaltyText.match(/0?(\d{1,2})\s*HOURS?\s+(?:BEFORE|PRIOR)/);
+      const cutoffHours = cutoffMatch ? parseInt(cutoffMatch[1], 10) : 4;
+
+      const isNonRefundable = /NON[\s-]?REFUND/i.test(penaltyText);
+
+      // Offer-level refundable flag + total
+      const tp = flightOffer.travelerPricings?.[0];
+      const refundableFlag = tp?.price?.refundableTaxes ? true : (isNonRefundable ? false : null);
+
+      cancellation = {
+        hasData: charges.length > 0 || cutoffMatch != null,
+        currency: (cancelCharge || changeCharge)?.currency || 'INR',
+        cutoffHours,
+        changeFee: changeCharge?.amount ?? null,
+        cancelFee: cancelCharge?.amount ?? null,
+        refundable: refundableFlag,
+        fareTotal: flightOffer.price ? parseFloat(flightOffer.price.grandTotal || flightOffer.price.total) : null,
+        fareCurrency: flightOffer.price?.currency || null,
+      };
+    }
+
+    res.json({ success: true, bags, fareRules: fareRules.slice(0, 8), cancellation });
+  } catch (error) {
+    console.error('❌ Fare-rules error:', error);
+    res.status(200).json({ success: false, bags: [], fareRules: [] });
+  }
+});
+
+// SeatMap Display — seat map for a chosen flight offer
+router.post('/seatmaps', async (req, res) => {
+  try {
+    const { flightOffer } = req.body;
+    if (!flightOffer) {
+      return res.status(400).json({ success: false, error: 'flightOffer is required' });
+    }
+    const result = await AmadeusService.getSeatMaps(flightOffer);
+    res.json(result);
+  } catch (error) {
+    console.error('❌ SeatMap error:', error);
+    res.status(200).json({ success: false, data: [] });
+  }
+});
+
 // Flight order creation endpoint
 router.post('/order', async (req, res) => {
   try {
@@ -688,6 +901,7 @@ router.post('/order', async (req, res) => {
           bookingReference: bookingReference,
           pnr: mockPNR,
           orderId: orderId,
+          amadeusOrderId: orderId,
           transactionId: transactionId || `TXN-${Date.now()}`,
           totalAmount: finalAmount,
           currency: firstOffer?.price?.currency || 'USD',
@@ -928,6 +1142,7 @@ router.post('/order', async (req, res) => {
         bookingReference: bookingReference,
         pnr: mockPNR,
         orderId: orderId,
+        amadeusOrderId: orderId,
         transactionId: req.body.transactionId || `TXN-${Date.now()}`,
         totalAmount: totalAmount || amount || '0',
         origin: firstOffer?.itineraries?.[0]?.segments?.[0]?.departure?.iataCode || '',
@@ -1051,6 +1266,7 @@ router.post('/order', async (req, res) => {
       bookingReference: req.body.bookingReference || orderIdValue,
       pnr: pnrValue,
       orderId: req.body.orderId || orderIdValue,
+      amadeusOrderId: orderIdValue, // the real Amadeus order id (for cancellation)
       transactionId: req.body.transactionId || `TXN-${Date.now()}`,
       totalAmount: firstOffer?.price?.total || '0',
       currency: firstOffer?.price?.currency || 'USD',
@@ -1193,10 +1409,10 @@ router.delete('/order/:orderId', async (req, res) => {
     const { orderId } = req.params;
     console.log(`🗑️ Cancel flight order request: ${orderId}`);
 
-    // Use the same orchestrated cancel flow as ArcPayService.cancelBooking()
-    // This ensures ARC Pay refund/void is properly called
+    // Delegate to the orchestrated cancel: it cancels the real Amadeus order (via the
+    // stored amadeus_order_id), refunds/voids via ARC Pay, updates booking status, and
+    // persists the full cancellation record. Single source of truth.
     const paymentApiUrl = `${req.protocol}://${req.get('host')}/api/payments?action=cancel-booking`;
-
     try {
       const cancelResponse = await fetch(paymentApiUrl, {
         method: 'POST',
@@ -1215,35 +1431,47 @@ router.delete('/order/:orderId', async (req, res) => {
           message: cancelResult.message || `Order ${orderId} cancelled`,
           cancellation: cancelResult.cancellation,
           booking: cancelResult.booking,
+          amadeusCancelled: cancelResult.cancellation?.amadeusCancelled ?? false,
           mode: 'ORCHESTRATED_CANCELLATION'
         });
       }
 
-      // If the orchestrated cancel returned an error (e.g. booking not found),
-      // pass it through
       console.warn('⚠️ Orchestrated cancel returned error:', cancelResult.error);
     } catch (fetchError) {
       console.warn('⚠️ Could not reach orchestrated cancel endpoint:', fetchError.message);
     }
 
-    // Fallback: direct Amadeus cancel + DB update (no ARC Pay refund)
-    console.log('🔄 Falling back to direct cancellation (no ARC Pay refund)...');
-    try {
-      await AmadeusService.cancelFlightOrder(orderId);
-    } catch (e) {
-      console.warn('⚠️ Amadeus cancel failed:', e.message);
-    }
-
+    // Fallback: mock-aware Amadeus cancel + DB status (no refund) if the orchestrator is unreachable
+    let amadeusCancelled = false;
     if (supabase) {
+      try {
+        const { data: bk } = await supabase
+          .from('bookings')
+          .select('booking_details')
+          .or(`booking_reference.eq.${orderId},booking_details->>order_id.eq.${orderId},booking_details->>amadeus_order_id.eq.${orderId}`)
+          .limit(1)
+          .maybeSingle();
+        const amaId = bk?.booking_details?.amadeus_order_id || bk?.booking_details?.order_id || orderId;
+        try {
+          const r = await AmadeusService.cancelFlightOrder(amaId);
+          amadeusCancelled = !!r?.success;
+        } catch (e) {
+          console.warn('⚠️ Fallback Amadeus cancel failed:', e.error || e.message);
+        }
+      } catch (lookupErr) {
+        console.warn('⚠️ Booking lookup for cancellation failed:', lookupErr.message);
+      }
+
       const { error } = await supabase
         .from('bookings')
-        .update({ status: 'cancelled', payment_status: 'paid' })
+        .update({ status: 'cancelled' })
         .or(`booking_reference.eq.${orderId},booking_details->>` + `order_id.eq.${orderId}`);
 
       if (!error) {
         return res.json({
           success: true,
-          message: `Order ${orderId} has been cancelled (refund pending manual processing)`,
+          message: `Order ${orderId} has been cancelled${amadeusCancelled ? '' : ' (refund pending manual processing)'}`,
+          amadeusCancelled,
           mode: 'FALLBACK_CANCELLATION'
         });
       }
@@ -1492,6 +1720,7 @@ router.get('/bookings', async (req, res) => {
         // Core booking_details
         pnr: booking.booking_details?.pnr,
         orderId: booking.booking_details?.order_id,
+        amadeusOrderId: booking.booking_details?.amadeus_order_id || booking.booking_details?.order_id || null,
         transactionId: booking.booking_details?.transaction_id,
         origin: booking.booking_details?.origin,
         destination: booking.booking_details?.destination,

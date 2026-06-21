@@ -3050,10 +3050,10 @@ async function handleCancelBooking(req, res) {
       paymentAction: null
     };
 
-    // 2. Cancel flight via Amadeus API (if we have an order ID)
-    const orderId = booking.booking_reference ||
+    // 2. Cancel flight via Amadeus API — use the REAL Amadeus order id first
+    const orderId = booking.booking_details?.amadeus_order_id ||
       booking.booking_details?.order_id ||
-      booking.booking_details?.amadeus_order_id;
+      booking.booking_reference;
 
     if (orderId) {
       try {

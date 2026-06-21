@@ -17,8 +17,8 @@
     /* Slate 800 - High contrast text */
     --color-text-muted: #64748B;
     /* Slate 500 - Secondary text */
-    --color-bg-page: #F8FAFC;
-    /* Slate 50 - Very subtle gray bg */
+    --color-bg-page: #f2f2f2;
+    /* MakeMyTrip-style light gray page */
     --color-bg-card: #FFFFFF;
     --color-border: #E2E8F0;
 
@@ -76,17 +76,17 @@
 
 /* ===== HEADER SECTION ===== */
 .booking-header-banner {
-    text-align: center;
-    margin-bottom: 3.5rem;
-    padding-top: 1rem;
+    text-align: left;
+    margin-bottom: 1.5rem;
+    padding-top: 0;
 }
 
 .booking-header-banner h1 {
-    font-size: 2.75rem;
+    font-size: 1.6rem;
     font-weight: 800;
-    color: var(--color-primary);
-    margin-bottom: 0.75rem;
-    letter-spacing: -0.02em;
+    color: var(--color-text-main);
+    margin-bottom: 1rem;
+    letter-spacing: -0.01em;
     line-height: 1.2;
 }
 
@@ -96,21 +96,75 @@
     font-weight: 400;
 }
 
-/* ===== LAYOUT GRID ===== */
+/* ===== STEPPER (MakeMyTrip-style) ===== */
+.booking-stepper {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+}
+
+.booking-stepper .step {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.booking-stepper .step .step-num {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: #e2e8f0;
+    color: var(--color-text-muted);
+}
+
+.booking-stepper .step.active {
+    color: var(--color-primary);
+}
+
+.booking-stepper .step.active .step-num {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.booking-stepper .step.done .step-num {
+    background: var(--color-success);
+    color: #fff;
+}
+
+.booking-stepper .step-divider {
+    flex: 1 1 24px;
+    min-width: 16px;
+    max-width: 60px;
+    height: 2px;
+    background: #e2e8f0;
+    margin: 0 0.75rem;
+}
+
+/* ===== LAYOUT GRID =====
+   Columns are driven by the Tailwind classes in the markup
+   (grid-cols-1 / lg:grid-cols-3 with col-span-2 + col-span-1).
+   Do NOT set grid-template-columns here or it overrides the span and
+   collapses the two columns on top of each other. */
 .booking-layout {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 2.5rem;
     align-items: start;
 }
 
 /* ===== CARDS COMMON STYLES ===== */
 .booking-card {
     background: var(--color-bg-card);
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
     border: 1px solid var(--color-border);
-    margin-bottom: 2rem;
+    margin-bottom: 1.25rem;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     overflow: hidden;
 }
@@ -131,7 +185,7 @@
 .flight-card .booking-card-header {
     background: var(--color-primary);
     background: linear-gradient(135deg, var(--color-primary) 0%, #087091 100%);
-    padding: 1.5rem 2rem;
+    padding: 1rem 1.5rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -190,7 +244,7 @@
 }
 
 .flight-endpoint .city-code {
-    font-size: 4rem;
+    font-size: 2.5rem;
     line-height: 1;
     font-weight: 800;
     color: var(--color-primary);
@@ -391,88 +445,85 @@
     position: sticky;
     top: 100px;
     z-index: 10;
-    box-shadow: var(--shadow-lg);
-    border: none;
-    background: linear-gradient(135deg, var(--color-primary) 0%, #064e66 100%);
-    /* Dark Gradient */
-    color: white;
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-card);
+    color: var(--color-text-main);
 }
 
 .fare-summary-card .booking-card-header {
-    padding: 1.5rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1.1rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
     background: transparent;
 }
 
 .fare-summary-card .booking-card-header h2 {
-    color: white;
-    font-size: 1.2rem;
+    color: var(--color-text-main);
+    font-size: 1.1rem;
     font-weight: 700;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
 }
 
 .fare-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 0.85rem;
     font-size: 0.95rem;
-    color: rgba(255, 255, 255, 0.7);
-    /* Muted white */
+    color: var(--color-text-muted);
 }
 
 .fare-row .value {
-    color: white;
+    color: var(--color-text-main);
     font-weight: 600;
 }
 
 .fare-row.total {
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-    align-items: flex-end;
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px dashed var(--color-border);
+    align-items: center;
 }
 
 .fare-row.total .label {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     font-weight: 700;
-    color: white;
+    color: var(--color-text-main);
 }
 
 .fare-row.total .value {
-    font-size: 2.25rem;
+    font-size: 1.6rem;
     line-height: 1;
     font-weight: 800;
-    color: white;
-    letter-spacing: -0.05em;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    color: var(--color-primary);
+    letter-spacing: -0.02em;
 }
 
 /* ===== BUTTONS ===== */
 .booking-confirmation-page .btn-primary {
     width: 100%;
-    background: white;
-    /* White button on dark card */
-    color: var(--color-primary);
+    background: linear-gradient(135deg, var(--color-primary) 0%, #0890BC 100%);
+    color: #fff;
     font-weight: 800;
-    padding: 1.1rem;
+    padding: 1rem;
     border-radius: var(--radius-md);
     border: none;
     cursor: pointer;
-    font-size: 1.1rem;
+    font-size: 1.05rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
     transition: all 0.2s;
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 0.5rem;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    margin-top: 1.5rem;
+    box-shadow: 0 4px 14px rgba(5, 91, 117, 0.3);
+    margin-top: 1.25rem;
 }
 
 .booking-confirmation-page .btn-primary:hover {
-    background: #f8fafc;
+    box-shadow: 0 8px 20px rgba(5, 91, 117, 0.4);
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
 .booking-confirmation-page .btn-primary:active {

@@ -112,7 +112,11 @@ export const endpoints = {
     analytics: createEndpoint('/flights/analytics'),
     cheapestDates: createEndpoint('/flights/cheapest-dates'),
     status: createEndpoint('/flights/status'),
-    availabilities: createEndpoint('/flights/availabilities')
+    availabilities: createEndpoint('/flights/availabilities'),
+    upsell: createEndpoint('/flights/upsell'),
+    datePrices: createEndpoint('/flights/date-prices'),
+    seatmaps: createEndpoint('/flights/seatmaps'),
+    fareRules: createEndpoint('/flights/fare-rules')
   },
 
   // Hotel endpoints
