@@ -16,6 +16,10 @@ class AmadeusService {
     console.log(`Amadeus API host: ${apiHost} (NODE_ENV=${process.env.NODE_ENV})`);
     this.token = null;
     this.tokenExpiration = null;
+    // Shared in-flight token request so concurrent callers (autocomplete + search
+    // bursts on a cold serverless instance) reuse one OAuth call instead of each
+    // firing their own and tripping Amadeus' rate limit (429).
+    this._tokenPromise = null;
 
     // Circuit breaker for endpoints that consistently fail in test env
     this._circuitBreakers = {};
@@ -52,12 +56,70 @@ class AmadeusService {
     delete this._circuitBreakers[key];
   }
 
+  _sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Whether a failed Amadeus request is worth retrying. Retry transient
+   * conditions only — rate limits (429), gateway/server errors (5xx) and
+   * network errors with no response. Never retry deterministic 4xx (e.g. 400
+   * bad params, 401 bad credentials) — retrying just wastes the rate budget.
+   */
+  _isRetryable(error) {
+    const status = error?.response?.status;
+    if (status === 429) return true;
+    if (status >= 500 && status <= 599) return true;
+    if (!error?.response) return true; // network / timeout
+    return false;
+  }
+
+  /**
+   * Run an axios request with exponential backoff on transient failures.
+   * Honors the server's Retry-After header when present (Amadeus sets it on 429).
+   */
+  async _requestWithRetry(requestFn, { label = 'amadeus', retries = 3, baseDelay = 800 } = {}) {
+    let lastError;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await requestFn();
+      } catch (error) {
+        lastError = error;
+        if (attempt === retries || !this._isRetryable(error)) {
+          throw error;
+        }
+        const status = error?.response?.status;
+        const retryAfter = parseInt(error?.response?.headers?.['retry-after'], 10);
+        // Exponential backoff with jitter, capped at 8s; prefer Retry-After if given.
+        const backoff = Math.min(baseDelay * Math.pow(2, attempt), 8000);
+        const jitter = Math.floor(Math.random() * 250);
+        const delay = (Number.isFinite(retryAfter) ? retryAfter * 1000 : backoff) + jitter;
+        console.warn(`⚠️ ${label} request failed (status ${status || 'network'}), retry ${attempt + 1}/${retries} in ${delay}ms`);
+        await this._sleep(delay);
+      }
+    }
+    throw lastError;
+  }
+
   async getAccessToken() {
     // Check if we have a valid token
     if (this.token && this.tokenExpiration && new Date() < this.tokenExpiration) {
       return this.token;
     }
 
+    // A token request is already in flight — reuse it so concurrent callers
+    // don't each hit the OAuth endpoint and trip Amadeus' rate limit.
+    if (this._tokenPromise) {
+      return this._tokenPromise;
+    }
+
+    this._tokenPromise = this._fetchAccessToken()
+      .finally(() => { this._tokenPromise = null; });
+
+    return this._tokenPromise;
+  }
+
+  async _fetchAccessToken() {
     try {
       // Use updated API keys for Amadeus
       // Try three different sources to find valid credentials
@@ -88,14 +150,17 @@ class AmadeusService {
 
       console.log('Attempting Amadeus authentication with credentials...');
 
-      const response = await axios.post(
-        `${this.baseUrls.v1}/security/oauth2/token`,
-        params.toString(),
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
+      const response = await this._requestWithRetry(
+        () => axios.post(
+          `${this.baseUrls.v1}/security/oauth2/token`,
+          params.toString(),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            }
           }
-        }
+        ),
+        { label: 'oauth-token' }
       );
 
       this.token = response.data.access_token;
@@ -171,13 +236,16 @@ class AmadeusService {
 
       console.log('Amadeus flight search parameters:', searchParams);
 
-      const response = await axios.get(`${this.baseUrls.v2}/shopping/flight-offers`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/vnd.amadeus+json'
-        },
-        params: searchParams
-      });
+      const response = await this._requestWithRetry(
+        () => axios.get(`${this.baseUrls.v2}/shopping/flight-offers`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.amadeus+json'
+          },
+          params: searchParams
+        }),
+        { label: 'flight-search' }
+      );
 
       console.log(`✅ Found ${response.data.data?.length || 0} flight offers`);
 
@@ -580,12 +648,15 @@ class AmadeusService {
         params.countryCode = options.countryCode;
       }
 
-      const response = await axios.get(`${this.baseUrls.v1}/reference-data/locations`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        params: params
-      });
+      const response = await this._requestWithRetry(
+        () => axios.get(`${this.baseUrls.v1}/reference-data/locations`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          params: params
+        }),
+        { label: 'location-search', retries: 2 }
+      );
 
       const locations = response.data.data || [];
       console.log(`✅ Found ${locations.length} locations for "${keyword}"`);
