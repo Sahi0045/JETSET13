@@ -38,6 +38,28 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
     let cancelled = false;
     const controller = new AbortController();
 
+    // Numeric price from either shape: display price ({amount}) or raw Amadeus ({total})
+    const priceNum = (p) => parseFloat(p?.amount ?? p?.total ?? p ?? 0) || 0;
+
+    // The fare the user actually clicked. Amadeus' branded-fares upsell often returns
+    // ONLY the higher branded families and omits this (usually cheapest) fare, which
+    // makes the modal's "cheapest" disagree with the card. So always include it.
+    const baseOption = {
+      id: 'original',
+      price: flight.price,
+      cabin: flight.cabin,
+      bookingClass: flight.bookingClass,
+      brandedFare: flight.brandedFare,
+      brandedFareLabel: flight.brandedFareLabel,
+      amenities: flight.amenities,
+      refundable: flight.refundable,
+      baggageDetails: flight.baggage
+        ? { checked: flight.baggage.checked, cabin: flight.baggage.cabin }
+        : null,
+      originalOffer: flight.originalOffer,
+      isOriginal: true,
+    };
+
     const load = async () => {
       setLoading(true);
       setError(null);
@@ -50,14 +72,15 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
         });
         const data = await res.json();
         if (cancelled) return;
-        const opts = (data.data || []).slice().sort(
-          (a, b) => (parseFloat(a.price?.total) || 0) - (parseFloat(b.price?.total) || 0)
-        );
+        const basePrice = Math.round(priceNum(flight.price));
+        // Keep the clicked fare first, then upsell options — minus any duplicate of it
+        const upsell = (data.data || []).filter((o) => Math.round(priceNum(o.price)) !== basePrice);
+        const opts = [baseOption, ...upsell].sort((a, b) => priceNum(a.price) - priceNum(b.price));
         setOptions(opts);
-        if (!opts.length) setError('No alternate fares — continue with the selected fare.');
       } catch (e) {
         if (cancelled || e.name === 'AbortError') return;
-        setError('Could not load fare options — continue with the selected fare.');
+        // Upsell failed — still let the user book the fare they clicked
+        setOptions([baseOption]);
       } finally {
         if (!cancelled) setLoading(false);
       }
