@@ -1,7 +1,7 @@
  
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Link, useSearchParams, useNavigate, useLocation } from "react-router-dom";
-import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, Filter, ArrowUpDown, MapPin, Luggage, Sun, Sunrise, Sunset, Moon, ShieldCheck, RefreshCw, Briefcase } from "lucide-react";
+import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, ArrowUpDown, MapPin, Luggage, Sun, Sunrise, Sunset, Moon, ShieldCheck, RefreshCw, Briefcase } from "lucide-react";
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
@@ -24,6 +24,7 @@ import FlightCard from './FlightCard';
 import FlightFilterSidebar from './FlightFilterSidebar';
 import FlightModifyBar from './FlightModifyBar';
 import FlightSortTabs from './FlightSortTabs';
+import FlightMobileSortFilter from './FlightMobileSortFilter';
 import FlightFareOptions from './FlightFareOptions';
 import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
@@ -1355,16 +1356,19 @@ function FlightSearchPage() {
             )}
           </div>
 
-          {/* Promotional banners */}
-          <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-1 mb-5">
+          {/* Promotional banners — compact scrollable offer strip */}
+          <div className="flex gap-2 overflow-x-auto hide-scrollbar snap-x -mx-4 px-4 pb-1 mb-5">
             {promoBanners.map(({ title, desc, accent, Icon }, i) => (
-              <div key={i} className="flex items-center gap-3 min-w-[240px] flex-shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
-                <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${accent} flex items-center justify-center text-white flex-shrink-0`}>
-                  <Icon className="h-5 w-5" />
+              <div
+                key={i}
+                className="snap-start flex items-center gap-2.5 flex-shrink-0 bg-white rounded-full border border-gray-200 shadow-sm pl-1.5 pr-4 py-1.5"
+              >
+                <div className={`h-8 w-8 rounded-full bg-gradient-to-br ${accent} flex items-center justify-center text-white flex-shrink-0`}>
+                  <Icon className="h-4 w-4" />
                 </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-gray-800 truncate">{title}</div>
-                  <div className="text-xs text-gray-500 truncate">{desc}</div>
+                <div className="leading-tight">
+                  <div className="text-[12px] font-semibold text-gray-800 whitespace-nowrap">{title}</div>
+                  <div className="text-[10px] text-gray-500 whitespace-nowrap">{desc}</div>
                 </div>
               </div>
             ))}
@@ -1391,31 +1395,35 @@ function FlightSearchPage() {
 
               {/* Results */}
               <div className="flex-1 min-w-0">
-                {/* Mobile filters trigger */}
-                <button
-                  onClick={() => setShowMobileFilters(true)}
-                  className="md:hidden w-full mb-3 flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-[#055B75] shadow-sm"
-                >
-                  <Filter className="h-4 w-4" />
-                  Filters &amp; Sort
-                </button>
-
-                {/* Applied filter chips */}
-                <FlightAppliedFilters
+                {/* Mobile: single-line filter + sort bar */}
+                <FlightMobileSortFilter
                   filters={filters}
                   priceRangeBounds={priceRangeBounds}
-                  onFilterChange={handleFilterChange}
-                  onToggleAirline={toggleAirlineFilter}
-                  onToggleAirport={toggleAirportFilter}
-                  onResetAll={handleResetAllFilters}
-                />
-
-                {/* Sort tabs (Cheapest / Non Stop First / You May Prefer / Other) */}
-                <FlightSortTabs
-                  flights={filteredFlights}
                   sortOrder={sortOrder}
                   onSortChange={setSortOrder}
+                  onOpenFilters={() => setShowMobileFilters(true)}
                 />
+
+                {/* Applied filter chips (desktop) */}
+                <div className="hidden md:block">
+                  <FlightAppliedFilters
+                    filters={filters}
+                    priceRangeBounds={priceRangeBounds}
+                    onFilterChange={handleFilterChange}
+                    onToggleAirline={toggleAirlineFilter}
+                    onToggleAirport={toggleAirportFilter}
+                    onResetAll={handleResetAllFilters}
+                  />
+                </div>
+
+                {/* Sort tabs (desktop): Cheapest / Non Stop First / You May Prefer / Other */}
+                <div className="hidden md:block">
+                  <FlightSortTabs
+                    flights={filteredFlights}
+                    sortOrder={sortOrder}
+                    onSortChange={setSortOrder}
+                  />
+                </div>
 
                 {/* Result count subtitle */}
                 <div className="flex items-center justify-between mb-3 px-1">

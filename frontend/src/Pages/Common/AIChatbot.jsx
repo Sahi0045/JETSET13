@@ -13,7 +13,7 @@ const AIChatbot = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userName, setUserName] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const initializedRef = useRef(false);
 
   // Check authentication status on mount and when chat opens
@@ -69,7 +69,13 @@ const AIChatbot = () => {
   }, [messages]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Scroll only the messages container, not the whole document. The chatbot is
+    // position:fixed, so scrollIntoView() here would scroll the page itself and
+    // jump the user down into the footer.
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   };
 
   const toggleChat = () => {
@@ -240,7 +246,7 @@ const AIChatbot = () => {
             </div>
           </div>
 
-          <div className="chatbot-messages">
+          <div className="chatbot-messages" ref={messagesContainerRef}>
             {messages.map((message, index) => (
               <div
                 key={index}
@@ -275,8 +281,6 @@ const AIChatbot = () => {
                 </div>
               </div>
             )}
-
-            <div ref={messagesEndRef} />
           </div>
 
           <form className="chatbot-input" onSubmit={handleSubmit}>

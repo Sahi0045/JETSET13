@@ -1,7 +1,7 @@
 // CSS imports moved to main.jsx entry point
 
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import LoadingSpinner from './Components/LoadingSpinner';
 import { LocationProvider } from './Context/LocationContext';
 
@@ -652,10 +652,24 @@ const ProtectedRoute = React.lazy(() =>
     .catch(() => ({ default: ({ children }) => children }))
 );
 
+// Reset scroll position to the top on every route change. React Router does not
+// do this by default, so navigating from a search form (scrolled down) to a
+// results page would otherwise keep the old scroll offset and land the user in
+// the footer while results load. Keyed on pathname only, so in-page query-param
+// navigation (e.g. the flight results date strip changing ?date=) is preserved.
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+};
+
 const App = () => {
   return (
     <React.Suspense fallback={<LoadingComponent />}>
       <LocationProvider>
+        <ScrollToTop />
         <Routes>
           <Route path="/" element={<Welcome />} />
           <Route path="/dashboard" element={<Dashboard />} />

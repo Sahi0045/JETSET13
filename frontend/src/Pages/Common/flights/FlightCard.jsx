@@ -271,7 +271,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
 
           {/* Price + CTA */}
           <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between lg:justify-center gap-3 lg:gap-2 lg:w-[180px] lg:flex-shrink-0 lg:border-l lg:border-gray-100 lg:pl-5">
-            <div className="text-right relative">
+            <div className="text-left lg:text-right relative">
               <div className="text-xl sm:text-2xl font-bold text-[#055B75] leading-none">
                 <Price amount={flight.price} />
               </div>
