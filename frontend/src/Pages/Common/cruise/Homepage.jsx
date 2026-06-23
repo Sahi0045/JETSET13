@@ -50,35 +50,33 @@ const TrustIndicators = () => {
   ];
 
   return (
-    <div className="py-8 md:py-10 bg-transparent">
+    <div className="py-8 md:py-12 bg-gradient-to-b from-[#eef7fb] to-white">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="mt-0 text-center">
-          <div className="flex items-center justify-center gap-3 md:gap-5 mb-6 md:mb-8">
-            <span className="flex-1 max-w-[80px] md:max-w-[140px] h-px bg-gradient-to-r from-transparent to-[#0066b2]/40"></span>
-            <p className="text-xs sm:text-sm md:text-base font-extrabold text-[#0066b2] uppercase tracking-[0.15em] md:tracking-[0.2em] text-center">
-              Trusted Payment authorized partners &amp; Cruise Line Partners
-            </p>
-            <span className="flex-1 max-w-[80px] md:max-w-[140px] h-px bg-gradient-to-l from-transparent to-[#0066b2]/40"></span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-6 md:gap-8 items-center justify-items-center">
-            {logos.map((logo, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-center h-16 md:h-20 w-full max-w-[160px] transition-all duration-300 hover:scale-105 opacity-85 hover:opacity-100"
-              >
-                <picture>
-                  {logo.webp && <source srcSet={logo.webp} type="image/webp" />}
-                  <img
-                    loading="lazy"
-                    decoding="async"
-                    src={logo.src}
-                    alt={logo.alt}
-                    className="max-h-full max-w-full object-contain mix-blend-multiply filter brightness-[1.05] contrast-[1.1]"
-                  />
-                </picture>
-              </div>
-            ))}
-          </div>
+        <div className="flex items-center justify-center gap-3 md:gap-5 mb-7 md:mb-9">
+          <span className="flex-1 max-w-[48px] sm:max-w-[80px] md:max-w-[140px] h-px bg-gradient-to-r from-transparent to-[#055B75]/40"></span>
+          <p className="text-[11px] sm:text-sm md:text-base font-extrabold text-[#055B75] uppercase tracking-[0.12em] md:tracking-[0.2em] text-center leading-snug">
+            Trusted Payment &amp; Cruise Line Partners
+          </p>
+          <span className="flex-1 max-w-[48px] sm:max-w-[80px] md:max-w-[140px] h-px bg-gradient-to-l from-transparent to-[#055B75]/40"></span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+          {logos.map((logo, index) => (
+            <div
+              key={index}
+              className="flex items-center justify-center h-20 md:h-24 rounded-xl bg-white border border-slate-100 shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 p-2.5"
+            >
+              <picture>
+                {logo.webp && <source srcSet={logo.webp} type="image/webp" />}
+                <img
+                  loading="lazy"
+                  decoding="async"
+                  src={logo.src}
+                  alt={logo.alt}
+                  className="h-auto w-auto max-h-14 md:max-h-16 max-w-[88%] object-contain"
+                />
+              </picture>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -332,7 +330,7 @@ const TestimonialBanner = () => {
 
                   <button
                     type="submit"
-                    className="w-full bg-gradient-to-r from-[#0066b2] to-[#1e88e5] text-white font-bold py-3 sm:py-4 px-4 rounded-xl hover:shadow-lg transition-all duration-300 flex items-center justify-center mt-4 sm:mt-6 text-sm sm:text-base"
+                    className="w-full bg-gradient-to-r from-[#055B75] to-[#0890BC] text-white font-bold py-3 sm:py-4 px-4 rounded-xl hover:shadow-lg transition-all duration-300 flex items-center justify-center mt-4 sm:mt-6 text-sm sm:text-base"
                   >
                     Submit Request
                   </button>
@@ -361,7 +359,7 @@ const TestimonialBanner = () => {
               boxShadow: '0 20px 50px rgba(0, 0, 0, 0.15)',
             }}
           >
-            <div className="bg-gradient-to-r from-[#0066b2] to-[#1e88e5] pt-6 sm:pt-8 pb-10 sm:pb-12 px-4 sm:px-6 text-white relative">
+            <div className="bg-gradient-to-r from-[#055B75] to-[#0890BC] pt-6 sm:pt-8 pb-10 sm:pb-12 px-4 sm:px-6 text-white relative">
               <button
                 className="absolute top-3 sm:top-4 right-3 sm:right-4 text-white hover:text-gray-200 transition-colors z-10"
                 onClick={() => setShowTestimonials(false)}
@@ -844,9 +842,6 @@ const CruiseBookingPopup = ({
 };
 
 const HomePage = () => {
-  const [subscriptionEmail, setSubscriptionEmail] = useState('');
-  const [subscriptionSubmitted, setSubscriptionSubmitted] = useState(false);
-  const [subscriptionError, setSubscriptionError] = useState('');
   const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
   const [showCruisePopup, setShowCruisePopup] = useState(false);
   const [popupView, setPopupView] = useState('announcement'); // 'announcement', 'form', 'success'
@@ -878,38 +873,6 @@ const HomePage = () => {
       window.removeEventListener('resize', handleResize);
     };
   }, []);
-
-  const handleSubscriptionSubmit = async (e) => {
-    e.preventDefault();
-    setSubscriptionError('');
-
-    try {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .insert([
-          { email: subscriptionEmail }
-        ]);
-
-      if (error) {
-        if (error.code === '23505') { // Unique violation
-          setSubscriptionError('This email is already subscribed.');
-        } else {
-          setSubscriptionError('An error occurred. Please try again.');
-        }
-        return;
-      }
-
-      setSubscriptionSubmitted(true);
-      setSubscriptionEmail('');
-
-      // Reset the success message after 3 seconds
-      setTimeout(() => {
-        setSubscriptionSubmitted(false);
-      }, 3000);
-    } catch (error) {
-      setSubscriptionError('An unexpected error occurred. Please try again.');
-    }
-  };
 
   return (
     <>
@@ -978,77 +941,8 @@ const HomePage = () => {
           </section>
 
 
-          {/* Simple Email Subscription Section */}
-          <section className="subscription-section py-4 relative" style={{
-            backgroundImage: "url('https://images.unsplash.com/photo-1599640842225-85d111c60e6b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1974&q=80')",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat"
-          }}>
-            {/* Overlay with matched gradient */}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#055B75] to-[#034457] opacity-95"></div>
-
-            <div className="container mx-auto px-4 md:px-6 relative z-10 py-2">
-              <div className="max-w-md mx-auto bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-3 md:p-4 border border-white border-opacity-20 shadow-lg">
-                <div className="flex flex-col items-center text-center">
-                  <div className="mb-1">
-                    <FaEnvelope className="text-white text-lg" />
-                  </div>
-                  <h3 className="text-lg md:text-xl font-bold text-white mb-1">Stay Updated</h3>
-                  <p className="text-white text-opacity-90 mb-3 text-xs md:text-sm italic font-medium">Subscribe to receive the latest cruise deals and travel tips, plus get a <span className="text-yellow-300 font-bold">$50 Discount voucher</span> for every trip!</p>
-
-                  <div className="flex items-center gap-2 mb-3 hidden md:flex">
-                    <div className="flex -space-x-2">
-                      <img loading="lazy" decoding="async" className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1491528323818-fdd1faba62cc?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                      <img loading="lazy" decoding="async" className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1550525811-e5869dd03032?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="" />
-                      <img loading="lazy" decoding="async" className="inline-block h-6 w-6 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2.25&w=256&h=256&q=80" alt="" />
-                    </div>
-                    <span className="text-xs text-white">Join 25,000+ subscribers</span>
-                  </div>
-
-                  {subscriptionSubmitted ? (
-                    <div className="w-full bg-green-500 bg-opacity-20 backdrop-blur-sm rounded-lg p-3 text-white animate-fadeIn">
-                      <div className="flex items-center justify-center text-sm">
-                        <FaCheckCircle className="text-green-400 mr-2" />
-                        <span>Successfully subscribed! Thank you.</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <form onSubmit={handleSubscriptionSubmit} className="w-full">
-                      <div className="flex flex-col md:flex-row md:items-center gap-2">
-                        <input
-                          type="email"
-                          value={subscriptionEmail}
-                          onChange={(e) => setSubscriptionEmail(e.target.value)}
-                          placeholder="Enter your email"
-                          className="w-full md:flex-1 px-3 py-2 text-sm rounded-lg md:rounded-l-lg md:rounded-r-none bg-white border-0 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                          required
-                        />
-                        <button
-                          type="submit"
-                          className="w-full md:w-auto mt-1 md:mt-0 px-3 py-2 text-sm bg-[#65B3CF] hover:bg-[#5aa3be] text-white font-semibold rounded-lg md:rounded-l-none md:rounded-r-lg flex items-center justify-center md:justify-start transition-colors"
-                        >
-                          Subscribe
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 ml-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                          </svg>
-                        </button>
-                      </div>
-                      {subscriptionError && (
-                        <div className="mt-2 text-red-400 text-sm text-center">
-                          {subscriptionError}
-                        </div>
-                      )}
-                    </form>
-                  )}
-
-                  <div className="mt-2">
-                    <p className="text-white text-opacity-80 text-xs">By subscribing, you agree to our <a href="#" className="underline hover:text-white">Privacy Policy</a></p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
+          {/* Newsletter signup is provided once, in the global Footer (Subscribe & Save),
+              to avoid a duplicate email form stacking on top of it on mobile. */}
         </main>
 
         {/* <PopularPorts /> */}

@@ -613,7 +613,13 @@
     .booking-layout {
         display: flex !important;
         flex-direction: column !important;
+        align-items: stretch !important;
         gap: 1.5rem !important;
+    }
+
+    .booking-layout > * {
+        width: 100% !important;
+        max-width: 100% !important;
     }
 
     .booking-header-banner {
@@ -621,11 +627,26 @@
     }
 
     .booking-header-banner h1 {
-        font-size: 1.6rem !important;
+        font-size: 1.5rem !important;
     }
 
     .booking-header-banner p {
         font-size: 0.95rem !important;
+    }
+
+    /* Clean 2x2 stepper on mobile — the connector lines look broken when wrapped */
+    .booking-stepper {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.65rem 0.75rem !important;
+    }
+
+    .booking-stepper .step-divider {
+        display: none !important;
+    }
+
+    .booking-stepper .step {
+        font-size: 0.8rem !important;
     }
 
     /* Fixed Itinerary Layout */
@@ -676,19 +697,44 @@
     }
 
     .flight-endpoint {
-        display: flex !important;
-        justify-content: space-between !important;
-        align-items: center !important;
+        display: grid !important;
+        grid-template-columns: auto 1fr !important;
+        column-gap: 0.75rem !important;
+        row-gap: 0.15rem !important;
+        align-items: baseline !important;
         width: 100% !important;
         text-align: left !important;
     }
 
     .flight-endpoint .city-code {
-        font-size: 2rem !important;
+        grid-column: 1 !important;
+        grid-row: 1 !important;
+        font-size: 1.9rem !important;
+        margin-bottom: 0 !important;
     }
 
     .flight-endpoint .time {
-        font-size: 1.1rem !important;
+        grid-column: 2 !important;
+        grid-row: 1 !important;
+        justify-self: end !important;
+        font-size: 1.35rem !important;
+        margin-top: 0 !important;
+    }
+
+    .flight-endpoint .city-name {
+        grid-column: 1 / -1 !important;
+        grid-row: 2 !important;
+    }
+
+    .flight-endpoint .text-xs {
+        grid-column: 1 / -1 !important;
+        grid-row: 3 !important;
+    }
+
+    .flight-endpoint .airport {
+        grid-column: 1 / -1 !important;
+        grid-row: 4 !important;
+        max-width: none !important;
     }
 
     .flight-path {
@@ -710,6 +756,20 @@
         grid-template-columns: 1fr 1fr !important;
         gap: 1rem !important;
         padding: 1.25rem !important;
+    }
+
+    .flight-info-grid .info-box {
+        text-align: left !important;
+    }
+
+    .flight-info-grid .info-box .label {
+        font-size: 0.65rem !important;
+        margin-bottom: 0.15rem !important;
+    }
+
+    .flight-info-grid .info-box .value {
+        font-size: 0.95rem !important;
+        line-height: 1.25 !important;
     }
 
     .fare-summary-card {
@@ -771,17 +831,15 @@
 
 @media (max-width: 480px) {
     .flight-info-grid {
-        grid-template-columns: 1fr !important;
-    }
-
-    .flight-endpoint {
-        flex-direction: column !important;
-        align-items: flex-start !important;
-        gap: 0.25rem !important;
+        grid-template-columns: 1fr 1fr !important;
     }
 
     .flight-endpoint .city-code {
         font-size: 1.75rem !important;
+    }
+
+    .flight-endpoint .time {
+        font-size: 1.2rem !important;
     }
 
     .itinerary-segment .text-2xl {
@@ -791,5 +849,87 @@
     .route-connector {
         min-width: 30px !important;
         flex: 0 0 auto !important;
+    }
+}
+
+/* ===== TRAVELLER DETAILS — modern info banner + passenger cards ===== */
+.alert-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    background: linear-gradient(135deg, #E0F2F8 0%, #F0F9FF 100%);
+    border: 1px solid #BAE6FD;
+    color: #075985;
+    border-radius: var(--radius-md);
+    padding: 0.85rem 1rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+    line-height: 1.45;
+}
+
+.alert-info .icon {
+    flex-shrink: 0;
+    color: var(--color-primary);
+    margin-top: 1px;
+}
+
+.alert-info .icon svg {
+    width: 1.15rem;
+    height: 1.15rem;
+}
+
+.alert-info .message {
+    flex: 1;
+    font-weight: 500;
+}
+
+/* Each passenger in its own clean card */
+.passenger-item {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    background: #fff;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.passenger-item:hover {
+    border-color: #CBD5E1;
+    box-shadow: var(--shadow-sm);
+}
+
+.passenger-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px dashed var(--color-border);
+}
+
+/* "Adult 1" pill */
+.passenger-badge {
+    display: inline-flex;
+    align-items: center;
+    background: linear-gradient(135deg, var(--color-primary) 0%, #0890BC 100%);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.4rem 0.95rem;
+    border-radius: 9999px;
+    letter-spacing: 0.02em;
+    box-shadow: 0 2px 6px rgba(5, 91, 117, 0.25);
+}
+
+@media (max-width: 768px) {
+    .passenger-item {
+        padding: 1rem;
+    }
+
+    .passenger-header {
+        margin-bottom: 1rem;
+        padding-bottom: 0.85rem;
     }
 }

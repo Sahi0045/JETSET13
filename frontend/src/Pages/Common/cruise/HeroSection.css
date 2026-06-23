@@ -24,14 +24,14 @@
 
 /* Search Container */
 .search-container {
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(16px);
-  border-radius: 1rem;
-  padding: 2rem;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(20px);
+  border-radius: 1.25rem;
+  padding: 1.75rem;
+  box-shadow: 0 30px 60px -15px rgba(3, 68, 87, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.6);
   transition: all 0.3s ease;
   animation: slideUp 0.6s ease-out;
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.85);
   width: 100%;
   margin: 0 auto;
 }
@@ -73,7 +73,7 @@
 .search-icon {
   width: 1rem;
   height: 1rem;
-  color: #2563EB;
+  color: #0890BC;
   flex-shrink: 0;
 }
 
@@ -92,8 +92,8 @@
 
 .search-input:focus {
   outline: none;
-  border-color: #3B82F6;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+  border-color: #0890BC;
+  box-shadow: 0 0 0 4px rgba(8, 144, 188, 0.15);
   border-width: 2px;
 }
 
@@ -108,17 +108,17 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 1rem 2rem;
-  background: linear-gradient(to right, #2563EB, #3B82F6);
+  padding: 1rem 2.5rem;
+  background: linear-gradient(to right, #055B75, #0890BC);
   color: white;
   font-weight: 700;
   font-size: 1rem;
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   transition: all 0.3s ease;
   border: none;
   cursor: pointer;
   margin: 0 auto;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 4px 14px rgba(8, 144, 188, 0.45);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -130,9 +130,9 @@
 }
 
 .search-submit:hover {
-  background: linear-gradient(to right, #1D4ED8, #2563EB);
+  background: linear-gradient(to right, #034457, #067a9e);
   transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 10px 22px rgba(8, 144, 188, 0.55);
 }
 
 .search-submit:active {
@@ -237,7 +237,7 @@ select.search-input {
 
 /* States */
 .search-field:hover .search-input {
-  border-color: #93C5FD;
+  border-color: #7FD0E6;
 }
 
 .search-input.error {
@@ -1542,4 +1542,34 @@ select.search-input {
 
 .fade-in-delay-3 {
   animation-delay: 0.6s;
+}
+
+/* Trust badges under the search card (redesigned hero) */
+.hero-trust-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.hero-trust-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+}
+
+.hero-trust-badge svg {
+  color: #9FD6E8;
+  flex-shrink: 0;
 }
