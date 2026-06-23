@@ -27,7 +27,6 @@ const COLUMNS = [
   {
     title: 'Company',
     links: [
-      { label: 'Careers', to: '/careers' },
       { label: 'Contact Us', to: '/contact' },
       { label: 'Privacy Policy', to: '/privacy-policy' },
       { label: 'Terms & Conditions', to: '/terms-conditions' },
@@ -83,10 +82,10 @@ const Footer = () => {
     <footer className="relative z-30 bg-ink text-white/70">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Newsletter */}
-        <div className="flex flex-col gap-5 border-b border-white/10 py-8 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 border-b border-white/10 py-5 md:flex-row md:items-center md:justify-between md:gap-8">
           <div className="md:max-w-sm">
-            <h3 className="font-serif text-2xl font-semibold text-white">Subscribe &amp; Save</h3>
-            <p className="mt-1 text-sm text-white/55">
+            <h3 className="font-serif text-xl font-semibold text-white sm:text-2xl">Subscribe &amp; Save</h3>
+            <p className="mt-1 text-xs text-white/55 sm:text-sm">
               Flash sales, seasonal offers, and member-only deals — straight to your inbox.
             </p>
           </div>
@@ -134,16 +133,16 @@ const Footer = () => {
         </div>
 
         {/* Links */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-8 pt-8 pb-6">
+        <div className="flex flex-col gap-5 py-6 md:flex-row md:gap-8">
           {/* Brand */}
-          <div className="col-span-2 md:col-span-1">
+          <div className="md:w-1/4">
             <Link to="/" className="inline-block" aria-label="Jetsetters home">
               <picture>
                 <source srcSet="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.webp" type="image/webp" />
                 <img
                   src="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png"
                   alt="Jetsetters"
-                  className="h-12 w-auto object-contain"
+                  className="h-10 w-auto object-contain"
                   loading="lazy"
                   decoding="async"
                 />
@@ -152,43 +151,45 @@ const Footer = () => {
             <p className="mt-1 text-sm italic text-brand-sky/90" style={{ fontFamily: '"Brush Script MT", cursive' }}>
               Jet Set Go
             </p>
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/55">
-              Extraordinary travel experiences for travellers that demand excellence,
-              customization, and unforgettable memories.
+            <p className="mt-2 max-w-xs text-xs leading-relaxed text-white/55">
+              Extraordinary travel experiences for travellers that demand excellence and unforgettable memories.
             </p>
           </div>
 
-          {COLUMNS.map((col) => (
-            <nav key={col.title} aria-label={`${col.title} navigation`}>
-              <h3 className="mb-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white">
-                {col.title}
-              </h3>
-              <ul className="space-y-2">
-                {col.links.map((l) => (
-                  <li key={l.label}>
-                    <Link
-                      to={l.to}
-                      className="text-sm text-white/60 transition-colors hover:text-brand-sky"
-                    >
-                      {l.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          ))}
+          {/* Link columns — kept side-by-side (3-col) even on mobile to stay compact */}
+          <div className="grid flex-1 grid-cols-3 gap-x-4 gap-y-2 sm:gap-x-8">
+            {COLUMNS.map((col) => (
+              <nav key={col.title} aria-label={`${col.title} navigation`}>
+                <h3 className="mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-white sm:mb-3 sm:text-[11px]">
+                  {col.title}
+                </h3>
+                <ul className="space-y-1.5">
+                  {col.links.map((l) => (
+                    <li key={l.label}>
+                      <Link
+                        to={l.to}
+                        className="text-xs text-white/60 transition-colors hover:text-brand-sky sm:text-sm"
+                      >
+                        {l.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            ))}
+          </div>
         </div>
 
         {/* Bottom bar */}
-        <div className="flex flex-col-reverse items-center justify-between gap-4 border-t border-white/10 py-4 sm:flex-row">
-          <p className="text-xs text-white/45">© {currentYear} Jetsetters. All rights reserved.</p>
-          <div className="flex items-center gap-3">
+        <div className="flex flex-row items-center justify-between gap-3 border-t border-white/10 py-3">
+          <p className="text-[11px] text-white/45 sm:text-xs">© {currentYear} Jetsetters. All rights reserved.</p>
+          <div className="flex items-center gap-2">
             <a
               href="https://www.facebook.com/people/Jetsetters/61557536332731/?ref=pl_edit_xav_ig_profile_page_web"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Facebook"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-white/70 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-white/70 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white"
             >
               <Facebook className="h-4 w-4" />
             </a>
@@ -197,7 +198,7 @@ const Footer = () => {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Instagram"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-white/70 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-white/70 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white"
             >
               <Instagram className="h-4 w-4" />
             </a>

@@ -4,7 +4,7 @@ import './HeroSection.css';
 import { FaMapMarkerAlt, FaCalendarAlt, FaShip, FaAnchor, FaDollarSign, FaSearch, FaStar, FaArrowRight, FaChevronRight, FaAngleDown } from 'react-icons/fa';
 import { loadCruiseLines } from './data/cruiselinesLoader';
 import destinationsData from './data/destinations.json';
-import { Search, MapPin, DollarSign, ChevronDown, Anchor, Ship, Navigation } from 'lucide-react';
+import { Search, MapPin, DollarSign, ChevronDown, Anchor, Ship, Navigation, Star, Users, ShieldCheck } from 'lucide-react';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { formatDateToISO } from "../../../utils/dateUtils";
@@ -273,7 +273,8 @@ const HeroSection = () => {
           backgroundImage: "url('https://images.unsplash.com/photo-1717541262982-731503ac4dc2?q=80&w=1920&auto=format&fit=crop')",
         }}
       >
-        <div className="absolute inset-0 bg-black/40"></div>
+        {/* Branded gradient overlay for legibility + premium feel */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#034457]/70 via-[#055B75]/45 to-[#034457]/80"></div>
       </div>
 
       {/* Content Container */}
@@ -283,7 +284,7 @@ const HeroSection = () => {
 
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white tracking-tight drop-shadow-2xl">
             Discover Your Perfect
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300 drop-shadow-lg">
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#9FD6E8] to-[#65B3CF] drop-shadow-lg">
               Cruise Adventure
             </span>
           </h1>
@@ -426,6 +427,19 @@ const HeroSection = () => {
               <span>Search Cruises</span>
             </button>
           </form>
+
+          {/* Trust badges */}
+          <div className="hero-trust-badges">
+            <span className="hero-trust-badge">
+              <Star className="w-4 h-4 fill-current" /> 4.9/5 Guest Rating
+            </span>
+            <span className="hero-trust-badge">
+              <Users className="w-4 h-4" /> 25,000+ Happy Travelers
+            </span>
+            <span className="hero-trust-badge">
+              <ShieldCheck className="w-4 h-4" /> Best Price Guarantee
+            </span>
+          </div>
         </div>
       </div>
     </section>
