@@ -86,6 +86,13 @@
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 
+/* Icon only surfaces on small screens, where the button collapses to a circle */
+.contact-us-icon {
+  display: none;
+  width: 22px;
+  height: 22px;
+}
+
 .close-button {
   position: absolute;
   top: 15px;
@@ -208,5 +215,42 @@
   .contact-popup {
     padding: 20px;
     width: 95%;
+  }
+}
+
+/* Phones: collapse the floating cluster into compact circular icons tucked in
+   the corner, so the wide "Contact Us" pill no longer sprawls over page content. */
+@media (max-width: 640px) {
+  .contact-us-container {
+    bottom: 64px;
+    right: 10px;
+    gap: 10px;
+  }
+
+  .whatsapp-button {
+    width: 42px;
+    height: 42px;
+  }
+
+  .whatsapp-button svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .contact-us-button {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .contact-us-button .contact-us-label {
+    display: none;
+  }
+
+  .contact-us-icon {
+    display: block;
+    width: 20px;
+    height: 20px;
   }
 }
