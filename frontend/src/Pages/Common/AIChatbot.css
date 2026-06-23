@@ -236,4 +236,23 @@
     width: calc(100vw - 40px);
     height: 450px;
   }
-} 
+}
+
+/* Phones: shrink the launcher and tuck it into the corner so it lines up with
+   the compact WhatsApp / Contact buttons instead of crowding page content. */
+@media (max-width: 640px) {
+  .ai-chatbot-container {
+    bottom: 12px;
+    right: 10px;
+  }
+
+  .chat-toggle-button {
+    width: 46px;
+    height: 46px;
+  }
+
+  .chat-toggle-button svg {
+    width: 22px;
+    height: 22px;
+  }
+}

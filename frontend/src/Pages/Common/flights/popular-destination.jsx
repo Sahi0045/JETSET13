@@ -314,14 +314,30 @@ export default function PopularDestinations({ onSelectDestination }) {
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Featured destination */}
-      {displayDestinations[0] && renderCard(displayDestinations[0], 0, true)}
-
-      {/* Supporting 2×2 grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        {displayDestinations.slice(1, 5).map((destination, i) => renderCard(destination, i + 1, false))}
+    <>
+      {/* Mobile / tablet: horizontal swipe carousel — keeps the section to one
+          card-height row instead of a long vertical stack. Peek of the next
+          card hints there's more to scroll. */}
+      <div className="lg:hidden">
+        <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-3 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          {displayDestinations.slice(0, 8).map((destination, i) => (
+            <div key={destination.id} className="snap-start shrink-0 w-[80%] sm:w-[46%]">
+              {renderCard(destination, i, false)}
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+
+      {/* Desktop: featured tile + 2×2 grid (fits the viewport, no excess scroll) */}
+      <div className="hidden lg:grid lg:grid-cols-2 gap-6">
+        {/* Featured destination */}
+        {displayDestinations[0] && renderCard(displayDestinations[0], 0, true)}
+
+        {/* Supporting 2×2 grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {displayDestinations.slice(1, 5).map((destination, i) => renderCard(destination, i + 1, false))}
+        </div>
+      </div>
+    </>
   )
 }

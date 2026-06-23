@@ -19,7 +19,7 @@ const cityImages = {
   "London": "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?q=80&w=1200&auto=format&fit=crop",
   "Paris": "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?q=80&w=1200&auto=format&fit=crop",
   "Dubai": "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?q=80&w=1200&auto=format&fit=crop",
-  "Singapore": "https://images.unsplash.com/photo-1525625293386-38f0e1d2b5e5?q=80&w=1200&auto=format&fit=crop",
+  "Singapore": "https://images.unsplash.com/photo-1565967511849-76a60a516170?q=80&w=1200&auto=format&fit=crop",
   "Bangkok": "https://images.unsplash.com/photo-1563492065599-3520f775eeed?q=80&w=1200&auto=format&fit=crop",
   "New York": "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?q=80&w=1200&auto=format&fit=crop",
   "Sydney": "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?q=80&w=1200&auto=format&fit=crop",
@@ -46,17 +46,90 @@ const cityImages = {
   "Frankfurt": "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?q=80&w=1200&auto=format&fit=crop",
   "Milan": "https://images.unsplash.com/photo-1520440229-6469a149ac59?q=80&w=1200&auto=format&fit=crop",
   "Goa": "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?q=80&w=1200&auto=format&fit=crop",
-  "Jaipur": "https://images.unsplash.com/photo-1524230507669-5ff97982bb6e?q=80&w=1200&auto=format&fit=crop",
+  "Jaipur": "https://images.unsplash.com/photo-1477587458883-47145ed94245?q=80&w=1200&auto=format&fit=crop",
   "Chennai": "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?q=80&w=1200&auto=format&fit=crop",
   "Kolkata": "https://images.unsplash.com/photo-1558431382-27e303142255?q=80&w=1200&auto=format&fit=crop",
-  "Hyderabad": "https://images.unsplash.com/photo-1572552667988-6abe1be60ce5?q=80&w=1200&auto=format&fit=crop",
+  "Hyderabad": "https://images.unsplash.com/photo-1551161242-b5af797b7233?q=80&w=1200&auto=format&fit=crop",
   "Copenhagen": "https://images.unsplash.com/photo-1513622470522-26c3c8a854bc?q=80&w=1200&auto=format&fit=crop",
   "Stockholm": "https://images.unsplash.com/photo-1509356843151-3e7d96241e11?q=80&w=1200&auto=format&fit=crop",
 };
 
-// Get image for a city, with generic travel fallback
-const getCityImage = (cityName) => {
-  return cityImages[cityName] || `https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=1200&auto=format&fit=crop`;
+// Reliable image lookup keyed by IATA code. Airport names returned by the data
+// set are long ("Goa Dabolim", "Singapore Changi", "London Heathrow"), so name
+// matching against cityImages misses constantly — code keys never do. Covers
+// every destination in the country fallback pools below.
+const cityImageByCode = {
+  // India
+  BOM: "https://images.unsplash.com/photo-1566552881560-0be862a7c445?q=80&w=1200&auto=format&fit=crop", // Mumbai
+  BLR: "https://images.unsplash.com/photo-1596176530529-78163a4f7af2?q=80&w=1200&auto=format&fit=crop", // Bangalore
+  GOI: "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?q=80&w=1200&auto=format&fit=crop", // Goa
+  JAI: "https://images.unsplash.com/photo-1477587458883-47145ed94245?q=80&w=1200&auto=format&fit=crop", // Jaipur
+  CCU: "https://images.unsplash.com/photo-1558431382-27e303142255?q=80&w=1200&auto=format&fit=crop", // Kolkata
+  HYD: "https://images.unsplash.com/photo-1551161242-b5af797b7233?q=80&w=1200&auto=format&fit=crop", // Hyderabad
+  MAA: "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?q=80&w=1200&auto=format&fit=crop", // Chennai
+  DEL: "https://images.unsplash.com/photo-1587474260584-136574528ed5?q=80&w=1200&auto=format&fit=crop", // New Delhi
+  // Asia / Middle East
+  DXB: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?q=80&w=1200&auto=format&fit=crop", // Dubai
+  BKK: "https://images.unsplash.com/photo-1563492065599-3520f775eeed?q=80&w=1200&auto=format&fit=crop", // Bangkok
+  SIN: "https://images.unsplash.com/photo-1565967511849-76a60a516170?q=80&w=1200&auto=format&fit=crop", // Singapore
+  KUL: "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?q=80&w=1200&auto=format&fit=crop", // Kuala Lumpur
+  NRT: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=1200&auto=format&fit=crop", // Tokyo
+  // North America
+  LAX: "https://images.unsplash.com/photo-1534190760961-74e8c1c5c3da?q=80&w=1200&auto=format&fit=crop", // Los Angeles
+  JFK: "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?q=80&w=1200&auto=format&fit=crop", // New York
+  ORD: "https://images.unsplash.com/photo-1494522855154-9297ac14b55f?q=80&w=1200&auto=format&fit=crop", // Chicago
+  SFO: "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?q=80&w=1200&auto=format&fit=crop", // San Francisco
+  MIA: "https://images.unsplash.com/photo-1506966953602-c20cc11f75e3?q=80&w=1200&auto=format&fit=crop", // Miami
+  HNL: "https://images.unsplash.com/photo-1545459720-aac8509eb02c?q=80&w=1200&auto=format&fit=crop", // Honolulu
+  CUN: "https://images.unsplash.com/photo-1510097467424-192d713fd8b2?q=80&w=1200&auto=format&fit=crop", // Cancun
+  // Europe
+  LHR: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?q=80&w=1200&auto=format&fit=crop", // London
+  CDG: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?q=80&w=1200&auto=format&fit=crop", // Paris
+  BCN: "https://images.unsplash.com/photo-1583422409516-2895a77efded?q=80&w=1200&auto=format&fit=crop", // Barcelona
+  FCO: "https://images.unsplash.com/photo-1552832230-c0197dd311b5?q=80&w=1200&auto=format&fit=crop", // Rome
+  AMS: "https://images.unsplash.com/photo-1534351590666-13e3e96b5017?q=80&w=1200&auto=format&fit=crop", // Amsterdam
+  IST: "https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?q=80&w=1200&auto=format&fit=crop", // Istanbul
+  ATH: "https://images.unsplash.com/photo-1555993539-1732b0258235?q=80&w=1200&auto=format&fit=crop", // Athens
+  LIS: "https://images.unsplash.com/photo-1585208798174-6cedd86e019a?q=80&w=1200&auto=format&fit=crop", // Lisbon
+  // Africa
+  CAI: "https://images.unsplash.com/photo-1572252009286-268acec5ca0a?q=80&w=1200&auto=format&fit=crop", // Cairo
+};
+
+// Distinct generic travel photos. Any unmapped destination picks one
+// deterministically from its key so different cities never share the same
+// fallback image (the old single fallback made every miss look identical).
+const FALLBACK_IMAGES = [
+  "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=1200&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1488646953014-85cb44e25828?q=80&w=1200&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1503220317375-aaad61436b1b?q=80&w=1200&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1200&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1500835556837-99ac94a94552?q=80&w=1200&auto=format&fit=crop",
+];
+
+// Stable pick from FALLBACK_IMAGES based on a key (code or city name)
+const fallbackImageFor = (key = "") => {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return FALLBACK_IMAGES[hash % FALLBACK_IMAGES.length];
+};
+
+// Resolve a destination image: by code (reliable) → by city name → distinct fallback
+const getDestImage = (code, cityName) =>
+  cityImageByCode[code] || cityImages[cityName] || fallbackImageFor(code || cityName);
+
+// Desktop shows two rows of three (6 cards). Mobile/tablet stay compact, showing
+// only the first MOBILE_CARD_COUNT — the rest are hidden below the lg breakpoint.
+const CARD_COUNT = 6;
+const MOBILE_CARD_COUNT = 3;
+
+// Fisher-Yates shuffle (returns a new array, does not mutate the input)
+const shuffle = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 };
 
 // Format date nicely
@@ -102,9 +175,8 @@ export default function CheapestFlights({ onBookFlight }) {
       'GB': ['CDG', 'BCN', 'AMS', 'DXB', 'JFK', 'FCO', 'IST', 'ATH', 'LIS', 'BKK'],
       'AE': ['BOM', 'DEL', 'LHR', 'BKK', 'IST', 'CDG', 'SIN', 'JFK', 'CAI', 'KUL'],
     };
-    const codes = (countryFallbacks[country] || countryFallbacks['IN'])
-      .filter((c) => c !== origin)
-      .slice(0, 6);
+    const pool = (countryFallbacks[country] || countryFallbacks['IN'])
+      .filter((c) => c !== origin);
 
     const buildCard = (code, priced) => {
       const airport = airportByCode[code];
@@ -117,26 +189,43 @@ export default function CheapestFlights({ onBookFlight }) {
         price: priced ? priced.price : null,
         currency: priced ? priced.currency : 'USD',
         date: priced ? priced.date : 'Flexible dates',
-        image: getCityImage(cityName),
+        image: getDestImage(code, cityName),
         isApiData: !!priced,
       };
     };
 
-    const baseCards = codes.map((c) => buildCard(c, null));
-
-    // 1) Paint immediately — use a fresh localStorage cache if we have one, else priceless cards
+    // Decide which destinations to show. Reuse a fresh cache so the instant
+    // paint matches the prices we re-fetch (no content swap); otherwise pick a
+    // fresh shuffled subset so the line-up varies between visits.
     const cacheKey = `cheapestFares_${origin}`;
-    let initial = baseCards;
+    let cached = null;
     try {
-      const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
-      if (cached && cached.at && (Date.now() - cached.at) < 6 * 60 * 60 * 1000 && Array.isArray(cached.flights) && cached.flights.length) {
-        initial = cached.flights;
+      const parsed = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+      if (parsed && parsed.at && (Date.now() - parsed.at) < 6 * 60 * 60 * 1000 && Array.isArray(parsed.flights) && parsed.flights.length) {
+        cached = parsed;
       }
     } catch (e) { /* ignore bad cache */ }
+
+    let codes;
+    let initial;
+    if (cached) {
+      codes = cached.flights.map((f) => f.destinationCode).slice(0, CARD_COUNT);
+      // Re-resolve images on read so older cached entries pick up corrected URLs
+      initial = cached.flights
+        .slice(0, CARD_COUNT)
+        .map((f) => ({ ...f, image: getDestImage(f.destinationCode, f.destination) }));
+    } else {
+      codes = shuffle(pool).slice(0, CARD_COUNT);
+      initial = codes.map((c) => buildCard(c, null));
+    }
+
+    const baseCards = codes.map((c) => buildCard(c, null));
+
+    // 1) Paint immediately — never block on Amadeus
     if (isMounted) {
       setFlights(initial);
       setError(null);
-      setLoading(false); // render now — do not block on Amadeus
+      setLoading(false);
     }
 
     // 2) Enrich with live cheapest prices in the background (never blocks the UI)
@@ -198,8 +287,8 @@ export default function CheapestFlights({ onBookFlight }) {
           <div className="bg-white/60 animate-pulse rounded-full px-4 py-1.5 w-32 h-8"></div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="bg-white rounded-xl overflow-hidden shadow-md animate-pulse">
+          {Array.from({ length: CARD_COUNT }).map((_, i) => (
+            <div key={i} className={`bg-white rounded-xl overflow-hidden shadow-md animate-pulse ${i >= MOBILE_CARD_COUNT ? 'hidden lg:block' : ''}`}>
               <div className="h-32 bg-gray-200"></div>
               <div className="p-4">
                 <div className="h-5 bg-gray-200 rounded w-24 mb-2"></div>
@@ -248,8 +337,8 @@ export default function CheapestFlights({ onBookFlight }) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {flights.map((flight) => (
-          <div key={flight.id} className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 group">
+        {flights.map((flight, idx) => (
+          <div key={flight.id} className={`bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 group ${idx >= MOBILE_CARD_COUNT ? 'hidden lg:block' : ''}`}>
             {/* Image container */}
             <div className="relative h-32 overflow-hidden">
               {/* Skeleton while image loads */}
@@ -263,7 +352,7 @@ export default function CheapestFlights({ onBookFlight }) {
                 onLoad={() => handleImageLoad(flight.id)}
                 onError={(e) => {
                   e.target.onerror = null;
-                  e.target.src = "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=1200&auto=format&fit=crop";
+                  e.target.src = fallbackImageFor(flight.destinationCode || flight.destination);
                   handleImageLoad(flight.id);
                 }}
               />

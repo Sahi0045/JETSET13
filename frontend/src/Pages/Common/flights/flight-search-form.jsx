@@ -411,11 +411,15 @@ export default function FlightSearchForm({ initialData, onSearch }) {
               type="button"
               onClick={() => navigate(to)}
               aria-current={active ? 'page' : undefined}
-              className={`relative flex flex-col items-center gap-1 px-5 sm:px-8 pb-3 pt-1 transition-colors ${active ? 'text-[#055B75]' : 'text-gray-500 hover:text-[#055B75]'}`}
+              className={`relative flex flex-col items-center gap-1 px-5 sm:px-8 pb-3 pt-1 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/40 rounded-lg ${active ? 'text-[#055B75]' : 'text-gray-500 hover:text-[#055B75]'}`}
             >
               <Icon className="h-6 w-6" strokeWidth={1.75} />
-              <span className="text-[13px] font-semibold whitespace-nowrap">{label}</span>
-              {active && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[3px] w-10 rounded-full bg-[#055B75]" />}
+              {/* Label wraps the underline so the indicator is exactly as wide as
+                  the text and stays centered under it on every tab. */}
+              <span className="relative text-[13px] font-semibold whitespace-nowrap">
+                {label}
+                {active && <span className="absolute -bottom-3 inset-x-0 h-[3px] rounded-full bg-[#055B75]" />}
+              </span>
             </button>
           ))}
         </div>
