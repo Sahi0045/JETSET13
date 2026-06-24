@@ -136,7 +136,7 @@ const Footer = () => {
         <div className="flex flex-col gap-5 py-6 md:flex-row md:gap-8">
           {/* Brand */}
           <div className="md:w-1/4">
-            <Link to="/" className="inline-block" aria-label="Jetsetters home">
+            <Link to="/" className="inline-flex flex-col" aria-label="Jetsetters home">
               <picture>
                 <source srcSet="/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.webp" type="image/webp" />
                 <img
@@ -147,10 +147,10 @@ const Footer = () => {
                   decoding="async"
                 />
               </picture>
+              <span className="-mt-0.5 text-[13px] font-semibold italic text-brand-sky/90 tracking-wide">
+                Jet Set Go
+              </span>
             </Link>
-            <p className="mt-1 text-sm italic text-brand-sky/90" style={{ fontFamily: '"Brush Script MT", cursive' }}>
-              Jet Set Go
-            </p>
             <p className="mt-2 max-w-xs text-xs leading-relaxed text-white/55">
               Extraordinary travel experiences for travellers that demand excellence and unforgettable memories.
             </p>

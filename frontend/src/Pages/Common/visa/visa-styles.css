@@ -31,7 +31,7 @@
 .visa-page {
     min-height: 100vh;
     background-color: var(--visa-bg-light);
-    font-family: 'Public Sans', sans-serif;
+    font-family: 'Lato', 'Inter', sans-serif;
 }
 
 /* Hero section */

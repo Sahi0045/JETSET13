@@ -41,7 +41,7 @@
 
 .booking-confirmation-page {
     background-color: var(--color-bg-page);
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Lato', 'Inter', sans-serif;
     color: var(--color-text-main);
     -webkit-font-smoothing: antialiased;
 }

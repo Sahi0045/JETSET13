@@ -15,6 +15,7 @@ import CouponInput from '../../../components/CouponInput';
 import FlightSeatMap from './FlightSeatMap';
 import FlightFareRules from './FlightFareRules';
 import FlightCancellationPolicy from './FlightCancellationPolicy';
+import useMembership from '../../../hooks/useMembership';
 import "./booking-confirmation.css";
 
 
@@ -22,6 +23,7 @@ function FlightBookingConfirmation() {
   const routerLocation = useLocation();
   const { country, callingCode, currency: userCurrency } = useLocationContext();
   const navigate = useNavigate();
+  const membership = useMembership();
   const { bookingId } = useParams();
   const [bookingDetails, setBookingDetails] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -434,7 +436,7 @@ function FlightBookingConfirmation() {
     if (bookingDetails) {
       updateFareSummary(passengerData.length);
     }
-  }, [passengerData.length, selectedAddons, vipService, seatExtraFee, bagExtraFee]);
+  }, [passengerData.length, selectedAddons, vipService, seatExtraFee, bagExtraFee, membership.isActive]);
 
   // Ensure there's always at least one passenger
   useEffect(() => {
@@ -482,8 +484,11 @@ function FlightBookingConfirmation() {
     // Calculate VIP service fee if selected
     const vipServiceFee = vipService ? (bookingData.vipServiceFee || 0) : 0;
 
-    // Seat + extra-baggage fees (already in the offer's currency)
-    const extrasTotal = (seatExtraFee || 0) + (bagExtraFee || 0);
+    // Seat + extra-baggage fees (already in the offer's currency).
+    // Premium members get free seat selection — waive the seat fee.
+    const seatFeeWaived = membership.isActive && (seatExtraFee || 0) > 0;
+    const effectiveSeatFee = seatFeeWaived ? 0 : (seatExtraFee || 0);
+    const extrasTotal = effectiveSeatFee + (bagExtraFee || 0);
 
     // Calculate per passenger costs (minimum 1 passenger)
     const effectivePassengerCount = Math.max(1, passengerCount);
@@ -498,7 +503,9 @@ function FlightBookingConfirmation() {
       serviceFee: totalServiceFee,
       addonsTotal,
       vipServiceFee,
-      seatFee: seatExtraFee || 0,
+      seatFee: effectiveSeatFee,
+      seatFeeWaived,
+      seatFeeOriginal: seatExtraFee || 0,
       bagFee: bagExtraFee || 0,
       extrasTotal,
       totalAmount,
@@ -1497,6 +1504,7 @@ function FlightBookingConfirmation() {
                     passengerCount={passengerData.length || 1}
                     selectedSeats={selectedSeats}
                     onSeatsChange={handleSeatsChange}
+                    feeWaived={membership.isActive}
                   />
                 </div>
               </div>
@@ -1694,6 +1702,23 @@ function FlightBookingConfirmation() {
                     </div>
                   );
                 })()}
+
+                {/* Premium perk: free seat selection */}
+                {calculatedFare.seatFeeWaived && (
+                  <div className="flex items-start gap-3 py-3 border-b border-gray-100">
+                    <CheckCircle className="h-5 w-5 text-[#055B75] mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-[#055B75]">Seat selection — Free with Premium</div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {selectedSeats.length ? `Seat${selectedSeats.length > 1 ? 's' : ''} ${selectedSeats.join(', ')}` : 'Member benefit'}
+                      </div>
+                    </div>
+                    <div className="text-sm font-semibold whitespace-nowrap">
+                      <span className="text-gray-400 line-through mr-1"><Price amount={calculatedFare.seatFeeOriginal} /></span>
+                      <span className="text-[#055B75]">Free</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Discounts */}
                 {appliedCoupon && (

@@ -13,10 +13,12 @@ import ArcPayService from "../../../Services/ArcPayService";
 import LoadingSpinner from "../../../Components/LoadingSpinner";
 import Price from "../../../Components/Price";
 import currencyService from "../../../Services/CurrencyService";
+import useMembership from "../../../hooks/useMembership";
 
 function FlightPayment() {
   const location = useLocation();
   const navigate = useNavigate();
+  const membership = useMembership();
   const [paymentData, setPaymentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -92,13 +94,17 @@ function FlightPayment() {
         console.log('📋 Payment data received:', paymentData);
 
         // Calculate amount from calculatedFare or selectedFlight
-        const amount = paymentData?.calculatedFare?.totalAmount ||
+        const baseAmount = paymentData?.calculatedFare?.totalAmount ||
           paymentData?.calculatedFare?.totalPrice ||
           paymentData?.calculatedFare?.total ||
           paymentData?.bookingDetails?.flight?.price?.total ||
           paymentData?.selectedFlight?.price?.total ||
           paymentData?.selectedFlight?.price?.amount ||
           paymentData?.amount || 100;
+
+        // Apply Jetsetter Premium member discount (if active) before charging
+        const memberCut = membership.isActive ? membership.discountFor(baseAmount) : 0;
+        const amount = Math.max(0, baseAmount - memberCut);
 
         // Extract flight details from bookingDetails or selectedFlight
         const flightDetails = paymentData?.bookingDetails?.flight || {};
@@ -264,6 +270,12 @@ function FlightPayment() {
 
   const finalAmount = paymentData ? getBaseAmount() - discountAmount : 100;
 
+  // Jetsetter Premium member discount — applied after promo, on the base fare.
+  const membershipDiscount = paymentData && membership.isActive
+    ? membership.discountFor(getBaseAmount())
+    : 0;
+  const payableAmount = Math.max(0, finalAmount - membershipDiscount);
+
   const toggleFareDetails = () => {
     setShowFareDetails(!showFareDetails);
   };
@@ -360,7 +372,7 @@ function FlightPayment() {
         passengerData: paymentData?.passengerData,
         bookingDetails: paymentData?.bookingDetails,
         calculatedFare: paymentData?.calculatedFare,
-        amount: finalAmount
+        amount: payableAmount
       };
       localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingData));
 
@@ -370,7 +382,7 @@ function FlightPayment() {
       console.log('🚀 Creating ARC Pay hosted checkout session...');
 
       const checkoutResponse = await ArcPayService.createHostedCheckout({
-        amount: finalAmount,
+        amount: payableAmount,
         currency: paymentData?.calculatedFare?.currency || currencyService.getCurrency(),
         orderId: orderId,
         bookingType: 'flight',
@@ -403,7 +415,7 @@ function FlightPayment() {
         sessionId: checkoutResponse.sessionId,
         orderId: orderId,
         bookingType: 'flight',
-        amount: finalAmount
+        amount: payableAmount
       }));
 
       // Redirect to ARC Pay hosted payment page
@@ -653,13 +665,22 @@ function FlightPayment() {
                           <span className="font-medium text-green-600">- <Price amount={discountAmount} /></span>
                         </div>
                       )}
+                      {membershipDiscount > 0 && (
+                        <div className="flex justify-between text-[#055B75]">
+                          <span className="flex items-center gap-1">
+                            <Star className="w-4 h-4 fill-current" />
+                            {membership.fullLabel} ({Math.round(membership.discountRate * 100)}% off)
+                          </span>
+                          <span className="font-semibold">- <Price amount={membershipDiscount} /></span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Total Amount */}
                     <div className="border-t border-gray-200 pt-4 mt-4">
                       <div className="flex justify-between items-center">
                         <span className="text-lg font-semibold text-gray-900">Total Payable</span>
-                        <span className="text-xl font-bold text-blue-600"><Price amount={finalAmount} /></span>
+                        <span className="text-xl font-bold text-blue-600"><Price amount={payableAmount} /></span>
                       </div>
                       <p className="text-xs text-gray-500 mt-1 text-right">(Inclusive of all taxes)</p>
                     </div>
@@ -669,7 +690,7 @@ function FlightPayment() {
                       <div className="bg-green-50 p-3 rounded-lg mt-4 flex items-center border border-green-100">
                         <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
                         <span className="text-green-700 text-sm font-medium">
-                          You saved ${(paymentData.calculatedFare.baseFare + paymentData.calculatedFare.totalTax - finalAmount).toFixed(2)} on this booking!
+                          You saved ${(paymentData.calculatedFare.baseFare + paymentData.calculatedFare.totalTax - payableAmount).toFixed(2)} on this booking!
                         </span>
                       </div>
                     )}
@@ -981,7 +1002,7 @@ function FlightPayment() {
                             ) : (
                               <div className="flex items-center">
                                 <Lock className="w-5 h-5 mr-2" />
-                                Pay <Price amount={finalAmount} />
+                                Pay <Price amount={payableAmount} />
                               </div>
                             )}
                           </button>
@@ -1085,7 +1106,7 @@ function FlightPayment() {
                             ) : (
                               <>
                                 <Lock className="w-5 h-5 mr-2" />
-                                Pay Securely <Price amount={finalAmount} />
+                                Pay Securely <Price amount={payableAmount} />
                               </>
                             )}
                           </button>
@@ -1146,7 +1167,7 @@ function FlightPayment() {
                     <CheckCircle className="w-12 h-12 text-green-600" />
                   </div>
                   <h4 className="text-lg font-semibold text-gray-800 mb-2">
-                    Payment of <Price amount={finalAmount} /> Successful!
+                    Payment of <Price amount={payableAmount} /> Successful!
                   </h4>
                   <p className="text-gray-600 mb-4 text-sm">
                     Your booking is confirmed. Redirecting you shortly...

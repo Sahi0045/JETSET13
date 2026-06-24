@@ -9,7 +9,7 @@ const parseSeat = (num) => {
   return m ? { row: parseInt(m[1], 10), col: m[2] } : null;
 };
 
-function FlightSeatMap({ flightOffer, passengerCount = 1, selectedSeats = [], onSeatsChange }) {
+function FlightSeatMap({ flightOffer, passengerCount = 1, selectedSeats = [], onSeatsChange, feeWaived = false }) {
   const [loading, setLoading] = useState(true);
   const [seats, setSeats] = useState([]);
   const [error, setError] = useState(null);
@@ -172,9 +172,18 @@ function FlightSeatMap({ flightOffer, passengerCount = 1, selectedSeats = [], on
             : <span className="text-gray-400">No seats selected (optional)</span>}
         </span>
         {seatFeeTotal > 0 && (
-          <span className="font-semibold text-gray-800">
-            Seat fee: <Price amount={{ amount: seatFeeTotal, currency: feeCurrency }} />
-          </span>
+          feeWaived ? (
+            <span className="font-semibold text-[#055B75] flex items-center gap-1">
+              <span className="text-gray-400 line-through font-normal">
+                <Price amount={{ amount: seatFeeTotal, currency: feeCurrency }} />
+              </span>
+              Free with Premium
+            </span>
+          ) : (
+            <span className="font-semibold text-gray-800">
+              Seat fee: <Price amount={{ amount: seatFeeTotal, currency: feeCurrency }} />
+            </span>
+          )
         )}
       </div>
     </div>

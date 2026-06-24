@@ -18,6 +18,7 @@ export default defineConfig({
         test: {
           name: 'frontend',
           environment: 'jsdom',
+          globals: true,
           setupFiles: ['./tests/setup.js'],
           include: [
             'tests/components/**/*.test.{js,jsx}',

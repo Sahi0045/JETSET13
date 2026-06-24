@@ -95,19 +95,15 @@
 
     .navbar-tagline {
       font-size: 14px;
-      /* Increased size */
       font-weight: 700;
       color: #055B75;
       letter-spacing: 1px;
       margin-top: -4px;
       font-family: 'Brush Script MT', 'Comic Sans MS', cursive;
-      /* Stylish handwritten font */
       font-style: italic;
       white-space: nowrap;
       text-shadow: 1px 1px 0px rgba(255, 255, 255, 0.5);
-      /* Added subtle shadow */
       transform: rotate(-3deg);
-      /* Slight tilt for style */
       margin-right: 4px;
     }
 

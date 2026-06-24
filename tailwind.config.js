@@ -15,10 +15,12 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Lato', 'Inter', 'Figtree', ...defaultTheme.fontFamily.sans],
-                display: ['Lato', 'Inter', 'Figtree', ...defaultTheme.fontFamily.sans],
-                // Homepage redesign headings use the `font-serif` class — mapped to Lato (sans) per request
-                serif: ['Lato', 'Inter', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                // Single brand typeface (Lato) with Inter as the only secondary fallback.
+                sans: ['Lato', 'Inter', ...defaultTheme.fontFamily.sans],
+                display: ['Lato', 'Inter', ...defaultTheme.fontFamily.sans],
+                // `font-serif` is intentionally mapped to the brand sans (Lato) so headings
+                // that use it stay consistent with the rest of the site — it is NOT an actual serif.
+                serif: ['Lato', 'Inter', ...defaultTheme.fontFamily.sans],
             },
             colors: {
                 // Warm editorial canvas + ink (luxury homepage)

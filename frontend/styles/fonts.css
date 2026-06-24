@@ -1,6 +1,6 @@
 /* Font variables. Actual font files are loaded via <link> in index.html. */
 
 :root {
-  --font-primary: 'Poppins', sans-serif;
-  --font-secondary: 'Montserrat', sans-serif;
+  --font-primary: 'Lato', 'Inter', sans-serif;
+  --font-secondary: 'Lato', 'Inter', sans-serif;
 }

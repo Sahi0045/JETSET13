@@ -1,595 +1,230 @@
-# 🚀 Jetsetterss - Premium Travel & Cruise Booking Platform
+# 🚀 Jetsetters (JETSET13) — Travel Booking Platform
 
-A comprehensive, modern travel booking platform built with React, featuring luxury cruise experiences, flight bookings, hotel accommodations, and vacation packages.
+A full-stack travel booking platform covering **flights, hotels, cruises, vacation packages, visas, and rentals**, plus an admin / quote / inquiry workflow. Built with a **React (Vite)** frontend and a **Node.js / Express** backend, backed by **Supabase** (auth + Postgres) and a range of travel/payment integrations.
 
-![Jetsetterss Platform](https://img.shields.io/badge/Jetsetterss-Travel%20Platform-blue?style=for-the-badge&logo=react)
-![React](https://img.shields.io/badge/React-18.0+-61DAFB?style=for-the-badge&logo=react)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css)
-![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
+![Vite](https://img.shields.io/badge/Vite-7-646CFF?style=for-the-badge&logo=vite)
+![Node.js](https://img.shields.io/badge/Node.js-Express-339933?style=for-the-badge&logo=node.js)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres-3ECF8E?style=for-the-badge&logo=supabase)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-38B2AC?style=for-the-badge&logo=tailwind-css)
 
-##  **Project Overview**
+---
 
-Jetsetterss is a premium travel booking platform that offers an exceptional user experience for planning and booking luxury travel experiences. Built with modern web technologies, it provides a seamless interface for discovering destinations, comparing prices, and managing travel bookings.
+## Overview
 
-## ✨ **Key Features**
+Jetsetters lets users search and book travel across multiple surfaces and gives staff an admin panel to manage quotes, inquiries, and bookings. The codebase is **ES modules throughout** (`"type": "module"`) and ships as a single Express app that can run as a monolith server, a dev backend, or a Vercel serverless function.
 
-### 🚢 **Cruise Experiences**
-- **Luxury Cruise Packages**: Premium cruise experiences with major cruise lines
-- **Destination Discovery**: Explore worldwide cruise destinations
-- **Package Customization**: Tailored cruise packages with excursions
-- **Real-time Availability**: Live booking availability and pricing
-- **Cruise Line Partnerships**: Access to major cruise operators globally
+A companion **React Native (Expo)** mobile app lives in a sibling repository and consumes the same backend API.
 
-### ✈️ **Flight Booking System**
-- **Multi-Airline Search**: Search across 500+ airlines worldwide
-- **Smart Price Comparison**: Best price guarantee with price alerts
-- **Flexible Booking Options**: One-way, round-trip, and multi-city flights
-- **Real-time Updates**: Live flight status and schedule changes
-- **Seat Selection**: Advanced seat booking and preferences
+## ✨ Features
 
-### 🏨 **Hotel Accommodations**
-- **2M+ Properties**: Extensive selection from budget to luxury
-- **Verified Reviews**: Authentic guest reviews and ratings
-- **Best Rate Guarantee**: Competitive pricing with price matching
-- **Free Cancellation**: Flexible booking policies
-- **Location-based Search**: Find hotels near attractions and landmarks
+- **✈️ Flights** — multi-city/round-trip/one-way search, fare options & upsells, seat and passenger handling (Amadeus inventory).
+- **🏨 Hotels** — property search, rates, and booking.
+- **🚢 Cruises** — cruise discovery, packages, and booking flows.
+- **📦 Vacation Packages** — bundled itineraries and deals.
+- **🛂 Visas** — visa requirements lookup and visa requests.
+- **🚗 Rentals** — vehicle rental flows.
+- **🧾 Quotes & Inquiries** — request-a-quote workflow with admin review and expiry handling.
+- **🛠️ Admin Panel** — manage bookings, quotes, inquiries, coupons, templates, and bulk uploads.
+- **🤖 AI Chatbot** — Google Gemini / LangChain assistant.
+- **🔐 Auth** — Supabase (primary) with Firebase (legacy flows), Google OAuth.
+- **💳 Payments** — ARC Pay gateway integration.
+- **📧 / 📱 Messaging** — transactional email (Resend) and SMS (Twilio).
 
-### 📦 **Vacation Packages**
-- **All-Inclusive Deals**: Flights, hotels, and activities bundled
-- **Custom Itineraries**: Personalized travel planning
-- **Group Discounts**: Special rates for group bookings
-- **Travel Insurance**: Comprehensive protection options
-- **Expert Planning**: Professional travel consultation services
+## 🧱 Tech Stack
 
-###  **Authentication & Security**
-- **Firebase Authentication**: Secure user login and registration
-- **Phone Authentication**: SMS-based verification
-- **Google OAuth**: Social login integration
-- **Profile Management**: User dashboard and preferences
-- **Secure Payments**: Encrypted payment processing
+| Layer | Technology |
+| --- | --- |
+| Frontend | React 18, React Router 7, Vite 7, Tailwind CSS 3, Headless UI, Lucide / FontAwesome / React Icons |
+| Backend | Node.js, Express 4 |
+| Auth & DB | Supabase (Postgres + Auth); Firebase (legacy); local SQLite for some scripts |
+| Inventory | Amadeus (flights / hotels) |
+| Payments | ARC Pay |
+| AI | Google Gemini (`@google/genai`), LangChain |
+| Messaging | Resend (email), Twilio (SMS) |
+| Caching | Redis via `ioredis` |
+| PDF / Files | jsPDF, html2canvas, Puppeteer, Multer, XLSX, PapaParse |
+| Testing | Vitest (frontend / backend / integration), Testing Library, Supertest |
+| Deploy | Vercel (primary), Render, Docker |
 
-### 💳 **Payment & Booking**
-- **Multiple Payment Methods**: Credit cards, digital wallets, bank transfers
-- **Secure Processing**: PCI-compliant payment handling
-- **Booking Management**: Modify and cancel existing bookings
-- **Invoice Generation**: Detailed booking receipts
-- **Refund Processing**: Streamlined refund handling
-
-## 🛠️ **Technology Stack**
-
-### **Frontend Framework**
-- **React 18+**: Modern React with hooks and functional components
-- **React Router DOM**: Client-side routing and navigation
-- **React Icons**: Comprehensive icon library for UI elements
-
-### **Styling & UI**
-- **Tailwind CSS**: Utility-first CSS framework for responsive design
-- **Custom CSS**: Brand-specific styling and animations
-- **Responsive Design**: Mobile-first approach with breakpoint optimization
-
-### **Backend & Services**
-- **Firebase**: Authentication, database, and hosting
-- **Supabase**: Alternative database and backend services
-- **Node.js**: Server-side JavaScript runtime
-- **Express.js**: Web application framework
-
-### **Development Tools**
-- **Vite**: Fast build tool and development server
-- **ESLint**: Code quality and consistency
-- **Prettier**: Code formatting and style enforcement
-- **Git**: Version control and collaboration
-
-## 📁 **Project Structure**
+## 📁 Project Structure
 
 ```
-sahi/
-├── prod/                          # Production build directory
-│   ├── resources/js/             # Main JavaScript source
-│   │   ├── Pages/                # Page components
-│   │   │   ├── Common/           # Shared page components
-│   │   │   │   ├── cruise/       # Cruise-related pages
-│   │   │   │   ├── flights/      # Flight booking pages
-│   │   │   │   ├── hotels/       # Hotel booking pages
-│   │   │   │   ├── packages/     # Vacation package pages
-│   │   │   │   ├── login/        # Authentication pages
-│   │   │   │   ├── Navbar.jsx    # Navigation component
-│   │   │   │   └── Footer.jsx    # Footer component
-│   │   │   ├── Resources.jsx     # Travel resources page
-│   │   │   ├── Destinations.jsx  # Destination showcase
-│   │   │   ├── TravelBlog.jsx    # Travel blog
-│   │   │   ├── Support.jsx       # Customer support
-│   │   │   ├── FAQs.jsx          # Frequently asked questions
-│   │   │   ├── Company.jsx       # Company information
-│   │   │   ├── AboutUs.jsx       # About us page
-│   │   │   ├── Careers.jsx       # Career opportunities
-│   │   │   ├── ContactUs.jsx     # Contact information
-│   │   │   ├── PrivacyPolicy.jsx # Privacy policy
-│   │   │   └── TermsConditions.jsx # Terms and conditions
-│   │   ├── components/           # Reusable UI components
-│   │   ├── contexts/             # React contexts
-│   │   ├── hooks/                # Custom React hooks
-│   │   ├── services/             # API and service functions
-│   │   ├── utils/                # Utility functions
-│   │   ├── app.jsx               # Main application component
-│   │   └── main.jsx              # Application entry point
-│   ├── public/                   # Static assets
-│   └── backend/                  # Backend server files
-├── src/                          # Source code directory
-├── package.json                  # Dependencies and scripts
-├── vite.config.js               # Vite configuration
-└── tailwind.config.js           # Tailwind CSS configuration
+JETSET13/
+├── server.js                 # Production monolith server (npm start) — serves dist/ + /api/*
+├── frontend/
+│   ├── main.jsx              # App entry
+│   └── src/
+│       ├── app.jsx           # Root app (BrowserRouter, Supabase/Location providers)
+│       ├── Pages/
+│       │   ├── Common/       # Booking flows: cruise, flights, hotels, packages, visa, rentals, login
+│       │   ├── Admin/        # Admin panel
+│       │   ├── Profile/      # User profile
+│       │   └── Request/      # Quote / inquiry requests
+│       ├── components/       # Reusable UI
+│       ├── contexts/         # React contexts
+│       ├── hooks/            # Custom hooks
+│       ├── Services/         # Frontend API/service clients
+│       └── utils/            # Helpers
+├── backend/
+│   ├── server.js             # Dev backend (nodemon, extra middleware + jobs)
+│   ├── api/index.js          # Vercel serverless handler (re-exported by api/index.js)
+│   ├── routes/               # Express routers (flights, hotels, cruise, quote, inquiry, …)
+│   ├── controllers/          # Request handlers
+│   ├── services/             # Integrations (amadeus, gemini, email, cache, sms, cdn, …)
+│   ├── models/               # Supabase-backed data models
+│   ├── middleware/           # auth (Supabase JWT), audit logging
+│   ├── jobs/                 # Background jobs (workflow engine, data retention, quote expiry)
+│   └── config/               # supabase.js, chatbot.js
+├── api/index.js              # Vercel entry → re-exports backend/api/index.js
+├── scripts/                  # Dev/build/start helpers, db SQL, maintenance
+├── supabase/migrations/      # SQL migrations
+├── tests/                    # Vitest suites
+├── vite.config.js            # Vite config + manualChunks + @ aliases
+├── vitest.config.js          # Three test projects (frontend/backend/integration)
+├── vercel.json               # Vercel routing (/api/* → single function)
+├── render.yaml               # Render deploy config
+└── dockerfile / docker-compose.yml
 ```
 
-## 🚀 **Getting Started**
+### Three entry points for the same Express app
 
-### **Prerequisites**
-- Node.js 16+ 
-- npm or yarn package manager
-- Git for version control
-- Firebase account (for authentication)
+This is the most important thing to know before editing routes:
 
-### **Installation**
+1. **`server.js` (root)** — production monolith (`npm start`). Mounts `/api/*`, serves the built SPA from `dist/`, and has its own direct `/api/send-email` endpoint.
+2. **`backend/server.js`** — the dev backend (launched by `scripts/start-dev.js` via nodemon). Adds audit logging, redaction, and background jobs.
+3. **`backend/api/index.js`** — the Vercel serverless handler. Mounts every route twice (`/api/*` and `/*`) because Vercel rewrites `/api/(.*)` to this one function (12-function limit).
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Jet-set-go-test/final-project-frontend.git
-   cd final-project-frontend
-   ```
+> When adding a route, register it in **all three** places. The route file itself lives in `backend/routes/`.
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
+## 🚀 Getting Started
 
-3. **Environment setup**
-   ```bash
-   cp .env.example .env
-   # Configure your Firebase and other environment variables
-   ```
+### Prerequisites
 
-4. **Start development server**
-   ```bash
-   npm run dev
-   # or
-   yarn dev
-   ```
+- **Node.js 18+** and **npm**
+- **Git**
+- A **Supabase** project (auth + Postgres)
+- API credentials for the integrations you intend to use (Amadeus, ARC Pay, Resend, Twilio, Gemini)
 
-5. **Build for production**
-   ```bash
-   npm run build
-   # or
-   yarn build
-   ```
+### Installation
 
-## 🔧 **Configuration**
-
-### **Firebase Setup**
-1. Create a Firebase project at [Firebase Console](https://console.firebase.google.com/)
-2. Enable Authentication (Email/Password, Phone, Google)
-3. Configure Firestore database
-4. Add your Firebase config to environment variables
-
-### **Environment Variables**
-```env
-VITE_FIREBASE_API_KEY=your_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-```
-
-## ⚠️ **Firebase Configuration Issue**
-
-If you're seeing "Missing Firebase configuration: apiKey, authDomain, projectId" errors, please follow these steps:
-
-1. Check the [FIREBASE_SETUP_INSTRUCTIONS.md](file:///Users/yashwanthreddy/Desktop/JETSET13/FIREBASE_SETUP_INSTRUCTIONS.md) file for detailed setup instructions
-2. Ensure you have properly configured your Firebase project and added the configuration to your [.env](file:///Users/yashwanthreddy/Desktop/JETSET13/.env) file
-3. The application will now gracefully handle missing configuration and show warnings instead of crashing
-
-## 📱 **Features in Detail**
-
-### **User Experience**
-- **Responsive Design**: Optimized for all devices and screen sizes
-- **Intuitive Navigation**: Easy-to-use interface with clear navigation
-- **Search Functionality**: Advanced search with filters and suggestions
-- **Real-time Updates**: Live availability and pricing information
-- **Mobile Optimization**: Touch-friendly mobile interface
-
-### **Booking Management**
-- **Multi-step Booking**: Guided booking process with validation
-- **Booking History**: Complete travel history and receipts
-- **Modification Tools**: Easy booking changes and updates
-- **Cancellation Policies**: Clear cancellation terms and procedures
-- **Travel Documents**: Digital document management
-
-### **Customer Support**
-- **24/7 Support**: Round-the-clock customer assistance
-- **Live Chat**: Real-time customer service
-- **Knowledge Base**: Comprehensive FAQ and help articles
-- **Contact Options**: Multiple ways to reach support team
-- **Office Locations**: Physical office locations worldwide
-
-## 🌍 **Deployment**
-
-### **Production Build**
 ```bash
-npm run build
+# 1. Clone
+git clone https://github.com/Sahi0045/JETSET13.git
+cd JETSET13
+
+# 2. Install dependencies
+npm install
+
+# 3. Configure environment
+cp .env.example .env
+# then fill in the values (see Environment Variables below)
+
+# 4. Start the dev environment
+npm run dev
 ```
 
-### **Deployment Options**
-- **Vercel**: Recommended for React applications
-- **Netlify**: Alternative deployment platform
-- **Firebase Hosting**: Integrated with Firebase services
-- **AWS S3**: Scalable cloud hosting
+`npm run dev` spawns the **backend on `:5004`** and the **Vite dev server on `:5173`**; Vite proxies `/api` requests to the backend.
 
-### **Environment Configuration**
-- Configure production environment variables
-- Set up CDN for static assets
-- Enable HTTPS and security headers
-- Configure domain and DNS settings
+### Build & run production
 
-## �� **Contributing**
-
-We welcome contributions! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-### **Development Guidelines**
-- Follow React best practices
-- Use TypeScript for new components
-- Maintain responsive design principles
-- Write comprehensive tests
-- Update documentation as needed
-
-## 📊 **Performance & Optimization**
-
-### **Frontend Optimization**
-- **Code Splitting**: Lazy loading for better performance
-- **Image Optimization**: Compressed and responsive images
-- **Bundle Optimization**: Minimized JavaScript bundles
-- **Caching Strategy**: Efficient caching for static assets
-- **Lighthouse Score**: Optimized for Core Web Vitals
-
-### **Backend Performance**
-- **Database Indexing**: Optimized database queries
-- **API Caching**: Redis-based caching layer
-- **Load Balancing**: Distributed server load
-- **CDN Integration**: Global content delivery
-- **Monitoring**: Real-time performance tracking
-
-## 🔒 **Security Features**
-
-### **Data Protection**
-- **Encryption**: End-to-end data encryption
-- **Authentication**: Multi-factor authentication
-- **Authorization**: Role-based access control
-- **Audit Logs**: Comprehensive activity tracking
-- **GDPR Compliance**: Data privacy compliance
-
-### **Payment Security**
-- **PCI Compliance**: Secure payment processing
-- **Tokenization**: Secure payment token handling
-- **Fraud Detection**: Advanced fraud prevention
-- **Secure APIs**: Protected API endpoints
-- **Regular Audits**: Security assessments
-
-## 📈 **Analytics & Monitoring**
-
-### **User Analytics**
-- **Google Analytics**: Comprehensive user tracking
-- **Heatmaps**: User interaction analysis
-- **Conversion Tracking**: Booking funnel analysis
-- **A/B Testing**: Performance optimization
-- **User Feedback**: Customer satisfaction metrics
-
-### **Performance Monitoring**
-- **Error Tracking**: Real-time error monitoring
-- **Performance Metrics**: Core Web Vitals tracking
-- **Uptime Monitoring**: Service availability
-- **Alert System**: Proactive issue detection
-- **Performance Reports**: Regular performance analysis
-
-## 🌟 **Future Roadmap**
-
-### **Phase 1 (Q1 2024)**
-- [x] Core booking functionality
-- [x] User authentication system
-- [x] Responsive design implementation
-- [x] Basic payment integration
-
-### **Phase 2 (Q2 2024)**
-- [ ] Advanced search algorithms
-- [ ] AI-powered recommendations
-- [ ] Multi-language support
-- [ ] Enhanced mobile app
-
-### **Phase 3 (Q3 2024)**
-- [ ] Virtual reality tours
-- [ ] Blockchain integration
-- [ ] Advanced analytics dashboard
-- [ ] Partner API integrations
-
-### **Phase 4 (Q4 2024)**
-- [ ] Machine learning optimization
-- [ ] Global expansion
-- [ ] Advanced loyalty program
-- [ ] Enterprise solutions
-
-## 📞 **Support & Contact**
-
-### **Customer Support**
-- **24/7 Hotline**: +1-800-537-8381
-- **Email**: support@jetsetterss.com
-- **Live Chat**: Available on website
-- **WhatsApp**: +1-800-537-8381
-
-### **Office Locations**
-- **New York**: 123 Travel Plaza, NY 10001
-- **London**: 456 Travel Street, W1A 1AA
-- **Singapore**: 789 Travel Avenue, 018956
-
-### **Business Inquiries**
-- **Partnerships**: partnerships@jetsetterss.com
-- **Media**: press@jetsetterss.com
-- **Careers**: careers@jetsetterss.com
-
-## 📄 **License**
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 **Acknowledgments**
-
-- **React Team**: For the amazing framework
-- **Tailwind CSS**: For the utility-first CSS framework
-- **Firebase**: For backend services and authentication
-- **Open Source Community**: For various libraries and tools
-- **Our Users**: For valuable feedback and support
-
----
-
-**Built with ❤️ by the Jetsetterss Team**
-
-*Making extraordinary travel experiences accessible to everyone*
-
----
-*Last updated: 2025-01-17 - Vercel deployment trigger*
-
-
-
-
-## 🚀 **Getting Started**
-
-### **Prerequisites**
-- Node.js 16+ 
-- npm or yarn package manager
-- Git for version control
-- Firebase account (for authentication)
-
-### **Installation**
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Jet-set-go-test/final-project-frontend.git
-   cd final-project-frontend
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
-
-3. **Environment setup**
-   ```bash
-   cp .env.example .env
-   # Configure your Firebase and other environment variables
-   ```
-
-4. **Start development server**
-   ```bash
-   npm run dev
-   # or
-   yarn dev
-   ```
-
-5. **Build for production**
-   ```bash
-   npm run build
-   # or
-   yarn build
-   ```
-
-## 🔧 **Configuration**
-
-### **Firebase Setup**
-1. Create a Firebase project at [Firebase Console](https://console.firebase.google.com/)
-2. Enable Authentication (Email/Password, Phone, Google)
-3. Configure Firestore database
-4. Add your Firebase config to environment variables
-
-### **Environment Variables**
-```env
-VITE_FIREBASE_API_KEY=your_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-```
-
-## 📱 **Features in Detail**
-
-### **User Experience**
-- **Responsive Design**: Optimized for all devices and screen sizes
-- **Intuitive Navigation**: Easy-to-use interface with clear navigation
-- **Search Functionality**: Advanced search with filters and suggestions
-- **Real-time Updates**: Live availability and pricing information
-- **Mobile Optimization**: Touch-friendly mobile interface
-
-### **Booking Management**
-- **Multi-step Booking**: Guided booking process with validation
-- **Booking History**: Complete travel history and receipts
-- **Modification Tools**: Easy booking changes and updates
-- **Cancellation Policies**: Clear cancellation terms and procedures
-- **Travel Documents**: Digital document management
-
-### **Customer Support**
-- **24/7 Support**: Round-the-clock customer assistance
-- **Live Chat**: Real-time customer service
-- **Knowledge Base**: Comprehensive FAQ and help articles
-- **Contact Options**: Multiple ways to reach support team
-- **Office Locations**: Physical office locations worldwide
-
-## 🌍 **Deployment**
-
-### **Production Build**
 ```bash
-npm run build
+npm run build      # vite build → dist/, then copy-public-assets
+npm start          # NODE_ENV=production node server.js
 ```
 
-### **Deployment Options**
-- **Vercel**: Recommended for React applications
-- **Netlify**: Alternative deployment platform
-- **Firebase Hosting**: Integrated with Firebase services
-- **AWS S3**: Scalable cloud hosting
+## 🧰 Common Commands
 
-### **Environment Configuration**
-- Configure production environment variables
-- Set up CDN for static assets
-- Enable HTTPS and security headers
-- Configure domain and DNS settings
+```bash
+# Dev
+npm run dev                # backend (:5004) + Vite (:5173) with /api proxy
+npm run server             # backend only (nodemon)
+npm run client             # Vite dev server only
 
-## �� **Contributing**
+# Build / prod
+npm run build              # production build into dist/
+npm start                  # run the production monolith
 
-We welcome contributions! Please follow these steps:
+# Tests (Vitest — three projects)
+npm test                   # all projects
+npm run test:frontend      # jsdom (React)
+npm run test:backend       # node (controllers/services)
+npm run test:integration   # serial, supertest-driven API tests
+npm run test:watch         # watch mode
+npm run test:coverage      # coverage report
+npx vitest run tests/path/to/file.test.js   # single file
+npx vitest run -t "behavior name"           # filter by test name
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+# Standalone integration scripts (hit real APIs, not Vitest)
+npm run test:hotel-api / test:direct-amadeus / test:supabase / test:chatbot ...
+```
 
-### **Development Guidelines**
-- Follow React best practices
-- Use TypeScript for new components
-- Maintain responsive design principles
-- Write comprehensive tests
-- Update documentation as needed
+> There is no lint or typecheck script — this is a JS project with `jsconfig.json` only.
 
-## 📊 **Performance & Optimization**
+## 🔧 Environment Variables
 
-### **Frontend Optimization**
-- **Code Splitting**: Lazy loading for better performance
-- **Image Optimization**: Compressed and responsive images
-- **Bundle Optimization**: Minimized JavaScript bundles
-- **Caching Strategy**: Efficient caching for static assets
-- **Lighthouse Score**: Optimized for Core Web Vitals
+Copy `.env.example` to `.env` and fill in your credentials. Key groups:
 
-### **Backend Performance**
-- **Database Indexing**: Optimized database queries
-- **API Caching**: Redis-based caching layer
-- **Load Balancing**: Distributed server load
-- **CDN Integration**: Global content delivery
-- **Monitoring**: Real-time performance tracking
+```env
+# Supabase (primary auth + database)
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
-## 🔒 **Security Features**
+# Amadeus (flight/hotel inventory)
+VITE_AMADEUS_CLIENT_ID=your_amadeus_client_id
+VITE_AMADEUS_CLIENT_SECRET=your_amadeus_client_secret
 
-### **Data Protection**
-- **Encryption**: End-to-end data encryption
-- **Authentication**: Multi-factor authentication
-- **Authorization**: Role-based access control
-- **Audit Logs**: Comprehensive activity tracking
-- **GDPR Compliance**: Data privacy compliance
+# ARC Pay (payments)
+ARC_PAY_MERCHANT_ID=your_merchant_id
+ARC_PAY_API_PASSWORD=your_api_password
+ARC_PAY_API_VERSION=100
+ARC_PAY_BASE_URL=https://api.arcpay.travel/api/rest/version/100
 
-### **Payment Security**
-- **PCI Compliance**: Secure payment processing
-- **Tokenization**: Secure payment token handling
-- **Fraud Detection**: Advanced fraud prevention
-- **Secure APIs**: Protected API endpoints
-- **Regular Audits**: Security assessments
+# Email (Resend)
+RESEND_API_KEY=your_resend_api_key
+ADMIN_EMAIL=admin@yourcompany.com
 
-## 📈 **Analytics & Monitoring**
+# App
+VITE_API_URL=http://localhost:5004/api
+FRONTEND_URL=http://localhost:5173
 
-### **User Analytics**
-- **Google Analytics**: Comprehensive user tracking
-- **Heatmaps**: User interaction analysis
-- **Conversion Tracking**: Booking funnel analysis
-- **A/B Testing**: Performance optimization
-- **User Feedback**: Customer satisfaction metrics
+# Firebase (legacy auth flows — optional)
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+```
 
-### **Performance Monitoring**
-- **Error Tracking**: Real-time error monitoring
-- **Performance Metrics**: Core Web Vitals tracking
-- **Uptime Monitoring**: Service availability
-- **Alert System**: Proactive issue detection
-- **Performance Reports**: Regular performance analysis
+> Twilio (SMS) and Gemini (chatbot) keys are also required if you use those features. Many services fail silently if misconfigured — `server.js` logs the presence of Amadeus keys on startup.
 
-## 🌟 **Future Roadmap**
+## 🗄️ Database
 
-### **Phase 1 (Q1 2024)**
-- [x] Core booking functionality
-- [x] User authentication system
-- [x] Responsive design implementation
-- [x] Basic payment integration
+**Supabase Postgres** is the system of record. SQL schemas live in `scripts/db/*.sql` and `supabase/migrations/`; a local `database/database.sqlite` is used by some scripts.
 
-### **Phase 2 (Q2 2024)**
-- [ ] Advanced search algorithms
-- [ ] AI-powered recommendations
-- [ ] Multi-language support
-- [ ] Enhanced mobile app
+> Migrations are **not** auto-applied — apply them manually via Supabase or by running scripts in `scripts/maintenance/`. **Never reset or drop the database**; use migrations for schema changes.
 
-### **Phase 3 (Q3 2024)**
-- [ ] Virtual reality tours
-- [ ] Blockchain integration
-- [ ] Advanced analytics dashboard
-- [ ] Partner API integrations
+## 🌍 Deployment
 
-### **Phase 4 (Q4 2024)**
-- [ ] Machine learning optimization
-- [ ] Global expansion
-- [ ] Advanced loyalty program
-- [ ] Enterprise solutions
+- **Vercel** (primary) — see `vercel.json`. Builds with `npm run build`, serves `dist/`, and routes `/api/*` to the single serverless function `api/index.js`. Long-running jobs / background workers belong in the `backend/server.js` path, not the serverless handler.
+- **Render** — see `render.yaml` and `render-setup.js` (`npm run render-build`).
+- **Docker** — `dockerfile`, `docker-compose.yml`, and `Makefile` run the full `server.js` monolith.
 
-## 📞 **Support & Contact**
+## 📱 Companion Mobile App
 
-### **Customer Support**
-- **24/7 Hotline**: +1-800-537-8381
-- **Email**: support@jetsetterss.com
-- **Live Chat**: Available on website
-- **WhatsApp**: +1-800-537-8381
+A separate **React Native (Expo SDK 54, RN 0.81, React 19)** client lives in a sibling directory (its own git repo) and consumes the **same backend API**. Backend changes that affect auth response shape, payment flows, or cruise/flight/hotel/request payloads should be sanity-checked against that repo's `src/services/*` layer.
 
-### **Office Locations**
-- **New York**: 123 Travel Plaza, NY 10001
-- **London**: 456 Travel Street, W1A 1AA
-- **Singapore**: 789 Travel Avenue, 018956
+## 🤝 Contributing
 
-### **Business Inquiries**
-- **Partnerships**: partnerships@jetsetterss.com
-- **Media**: press@jetsetterss.com
-- **Careers**: careers@jetsetterss.com
+1. Create a feature branch (`git checkout -b feature/your-feature`)
+2. Make your changes following the project conventions (camelCase JS, PascalCase types, boolean prefixes `is/has/should/can`, no hardcoded secrets, parameterized DB queries)
+3. Add/update tests and run `npm test`
+4. Commit and open a Pull Request
 
-## 📄 **License**
+See `CLAUDE.md` and `.cursor/rules/software-engineering-standards.mdc` for the full architecture notes and engineering standards.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 📄 License
 
-## 🙏 **Acknowledgments**
-
-- **React Team**: For the amazing framework
-- **Tailwind CSS**: For the utility-first CSS framework
-- **Firebase**: For backend services and authentication
-- **Open Source Community**: For various libraries and tools
-- **Our Users**: For valuable feedback and support
+ISC. See `package.json` for details.
 
 ---
 
-**Built with ❤️ by the Jetsetterss Team**
-
-*Making extraordinary travel 
+**Built by the Jetsetters team.**
