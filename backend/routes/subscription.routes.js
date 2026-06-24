@@ -112,9 +112,6 @@ router.post('/checkout', async (req, res) => {
                 },
                 returnUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/membership?status=success&tx=${transactionRef}`,
                 cancelUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/membership?status=cancel`
-            },
-            customer: {
-                email: email
             }
         };
 
@@ -232,11 +229,15 @@ router.get('/status/:userId', async (req, res) => {
             .from('users')
             .select('subscription_tier, subscription_end_date')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (userError) throw userError;
 
-        res.json({ success: true, data: user });
+        // No row yet → treat as a free (non-member) user instead of erroring.
+        res.json({
+            success: true,
+            data: user || { subscription_tier: null, subscription_end_date: null },
+        });
     } catch (error) {
         console.error('Status fetch error:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch status' });
