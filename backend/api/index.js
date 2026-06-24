@@ -33,26 +33,41 @@ import airportRoutes from "../routes/airport.routes.js";
 import pushRoutes from "../routes/push.routes.js";
 import chatRoutes from "./chat/index.js";
 
+// Shared stability modules (same behavior across all 3 entry points)
+import "../bootstrap/httpDefaults.js"; // global axios timeout safety net
+import { validateEnv } from "../config/validateEnv.js";
+import { initMonitoring } from "../services/monitoring.js";
+import {
+  apiLimiter,
+  authLimiter,
+  securityHeaders,
+  responseCompression,
+  buildCorsOptions,
+} from "../middleware/security.js";
+import { notFoundHandler, errorHandler } from "../middleware/errorHandler.js";
+import { readinessHandler } from "../middleware/health.js";
+
+// Validate config (don't process.exit in serverless — just surface the gap) + init monitoring
+validateEnv({ exitOnError: false });
+initMonitoring();
+
 const app = express();
+
+// Behind Vercel's proxy — trust the first hop so client IPs / rate limiting are correct
+app.set("trust proxy", 1);
+
+// Security headers + response compression (before routes)
+app.use(securityHeaders);
+app.use(responseCompression);
 
 // Middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN || "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowedHeaders: [
-      "Origin",
-      "X-Requested-With",
-      "Content-Type",
-      "Accept",
-      "Authorization",
-      "x-csrf-token",
-    ],
-    credentials: true,
-  }),
-);
+app.use(cors(buildCorsOptions()));
+
+// Global rate limiting (general API + stricter on auth)
+app.use(apiLimiter);
+app.use(["/api/auth", "/auth", "/api/supabase-auth", "/supabase-auth"], authLimiter);
 
 // Mount API routes - use both /api/* and /* patterns for flexibility
 app.use("/api/auth", authRoutes);
@@ -235,21 +250,15 @@ app.get("/api/health", (req, res) => {
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+// Deep readiness check (pings Supabase + Redis)
+app.get("/api/health/ready", readinessHandler);
+app.get("/health/ready", readinessHandler);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error("API Error:", err);
-  res.status(err.status || 500).json({
-    error: err.message || "Internal server error",
-    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
-  });
-});
+// 404 for unmatched routes (must come before the error handler)
+app.use(notFoundHandler);
 
-// Handle 404
-app.use((req, res) => {
-  console.log("404 Not Found:", req.method, req.url);
-  res.status(404).json({ error: "API endpoint not found", path: req.url });
-});
+// Central error handler (must be last) — logs, reports 5xx to monitoring
+app.use(errorHandler);
 
 // Export for Vercel serverless
 export default app;

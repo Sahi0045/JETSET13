@@ -10,6 +10,10 @@ import './styles/fonts.css';
 // Import App component
 import App from './src/app.jsx';
 import { SupabaseAuthProvider } from './src/contexts/SupabaseAuthContext.jsx';
+import { initMonitoring } from './src/lib/monitoring.js';
+
+// Initialize error monitoring (no-op unless VITE_SENTRY_DSN is set)
+initMonitoring();
 
 // Initialize the app when DOM is loaded
 const container = document.getElementById('app');

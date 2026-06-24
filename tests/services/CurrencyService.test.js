@@ -1,3 +1,9 @@
+/**
+ * CurrencyService is a frontend/browser service (uses localStorage + navigator),
+ * so this file must run under jsdom even though it lives in tests/services
+ * (which the backend project otherwise runs under node).
+ * @vitest-environment jsdom
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Reset modules before each test so we get a fresh singleton

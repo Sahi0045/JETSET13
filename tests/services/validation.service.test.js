@@ -27,7 +27,7 @@ vi.mock('../../backend/config/supabase.js', () => ({
           })
         })
       })
-    })
+    }))
   }
 }));
 

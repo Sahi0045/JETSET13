@@ -183,11 +183,15 @@ export async function deleteTemplate(templateId) {
 
 export function renderTemplate(template, variables) {
   let rendered = template;
-  
+
   for (const [key, value] of Object.entries(variables)) {
     const regex = new RegExp(`{{${key}}}`, 'g');
     rendered = rendered.replace(regex, value || '');
   }
+
+  // Strip any placeholders for variables that weren't provided, so
+  // customer-facing output never leaks raw {{tokens}}.
+  rendered = rendered.replace(/{{\s*[\w.]+\s*}}/g, '');
 
   return rendered;
 }

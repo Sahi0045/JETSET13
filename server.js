@@ -28,44 +28,47 @@ import couponRoutes from "./backend/routes/coupon.routes.js";
 import subscriptionRoutes from "./backend/routes/subscription.routes.js";
 import pushRoutes from "./backend/routes/push.routes.js";
 import supabase from "./backend/config/supabase.js";
+// Shared stability modules (same behavior across all 3 entry points)
+import "./backend/bootstrap/httpDefaults.js"; // global axios timeout safety net
+import { validateEnv } from "./backend/config/validateEnv.js";
+import { initMonitoring } from "./backend/services/monitoring.js";
+import { installProcessGuards } from "./backend/bootstrap/processGuards.js";
+import {
+  apiLimiter,
+  authLimiter,
+  securityHeaders,
+  responseCompression,
+  buildCorsOptions,
+} from "./backend/middleware/security.js";
+import { errorHandler } from "./backend/middleware/errorHandler.js";
+import { readinessHandler } from "./backend/middleware/health.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Log key environment information for debugging
-console.log("Environment:", {
-  NODE_ENV: process.env.NODE_ENV,
-  PORT: process.env.PORT,
-  AMADEUS_KEYS_SET: !!(
-    process.env.AMADEUS_API_KEY && process.env.AMADEUS_API_SECRET
-  ),
-  REACT_APP_KEYS_SET: !!(
-    process.env.REACT_APP_AMADEUS_API_KEY &&
-    process.env.REACT_APP_AMADEUS_API_SECRET
-  ),
-});
+// Behind a proxy (Vercel/Render) — trust first hop for correct client IPs / rate limiting
+app.set("trust proxy", 1);
+
+// Fail fast on missing required config; warn on degraded features. Then init monitoring.
+validateEnv();
+initMonitoring();
 
 const PORT = process.env.PORT || 5004;
+
+// Security headers + response compression (before routes)
+app.use(securityHeaders);
+app.use(responseCompression);
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN || "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Origin",
-      "X-Requested-With",
-      "Content-Type",
-      "Accept",
-      "Authorization",
-      "x-csrf-token",
-    ],
-  }),
-);
+app.use(cors(buildCorsOptions()));
+
+// Global rate limiting (general API + stricter on auth)
+app.use(apiLimiter);
+app.use(["/api/auth", "/api/supabase"], authLimiter);
 
 // API Routes
 app.use("/api/auth", authRoutes);
@@ -106,6 +109,9 @@ app.get("/api/health", (req, res) => {
     },
   });
 });
+
+// Deep readiness check (pings Supabase + Redis) for load balancers / uptime monitors
+app.get("/api/health/ready", readinessHandler);
 
 // Direct send-email endpoint (must be before the /api/* 404 catch-all)
 app.post("/api/send-email", async (req, res) => {
@@ -280,10 +286,15 @@ app.get("*", (req, res) => {
   });
 });
 
+// Central error handler (must be last) — logs, reports 5xx to monitoring
+app.use(errorHandler);
+
 if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
+  // Crash guards + graceful shutdown (drain in-flight requests on SIGTERM/SIGINT)
+  installProcessGuards({ server });
 }
 
 // Test Supabase connection

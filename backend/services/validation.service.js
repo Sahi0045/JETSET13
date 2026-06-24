@@ -99,9 +99,11 @@ export function validateNationality(nationality, allowedCountries) {
 
   if (allowedCountries && allowedCountries.length > 0) {
     const normalized = nationality.toLowerCase();
-    const isAllowed = allowedCountries.some(
-      c => c.toLowerCase() === normalized || c.code?.toLowerCase() === normalized
-    );
+    const isAllowed = allowedCountries.some((c) => {
+      // Entries may be plain strings or { code, name } objects.
+      if (typeof c === 'string') return c.toLowerCase() === normalized;
+      return c?.name?.toLowerCase() === normalized || c?.code?.toLowerCase() === normalized;
+    });
 
     if (!isAllowed) {
       return { valid: false, error: `Nationality not in allowed list` };

@@ -1,6 +1,7 @@
 import amadeusService from '../services/amadeusService.js';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { get as cacheGet, set as cacheSet, CacheKeys, TTL } from '../services/cache.service.js';
 
 // Ensure environment variables are loaded
 dotenv.config();
@@ -177,7 +178,24 @@ export const searchHotels = async (req, res) => {
     // Use the AmadeusService directly for more consistent behavior
     try {
       console.log('Searching hotels using AmadeusService with params:', searchParams);
-      const searchResults = await amadeusService.searchHotels(searchParams);
+      // Served from Redis cache when available; passthrough when REDIS_URL unset
+      const hotelCacheKey = CacheKeys.hotelSearch(
+        searchParams.cityCode,
+        searchParams.checkInDate,
+        searchParams.checkOutDate,
+        searchParams.adults
+      );
+      let searchResults = await cacheGet(hotelCacheKey);
+      if (searchResults) {
+        console.log('✅ Hotel search served from cache');
+      } else {
+        searchResults = await amadeusService.searchHotels(searchParams);
+        // Only cache non-empty results (handles both array and object shapes)
+        const hasResults = searchResults && (Array.isArray(searchResults) ? searchResults.length : Object.keys(searchResults).length);
+        if (hasResults) {
+          await cacheSet(hotelCacheKey, searchResults, TTL.HOTEL_SEARCH);
+        }
+      }
       
       // Format hotel data for frontend
       const formattedHotels = [];

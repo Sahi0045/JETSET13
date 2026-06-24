@@ -23,12 +23,27 @@ import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
 import { startWorkflowEngine } from './jobs/workflowEngine.js';
 import { startDataRetentionJob } from './jobs/dataRetention.job.js';
 import { initializeDefaultTemplates } from './services/templateResponse.service.js';
-// import 
+// Shared stability modules (same behavior across all 3 entry points)
+import './bootstrap/httpDefaults.js'; // global axios timeout safety net
+import { validateEnv } from './config/validateEnv.js';
+import { initMonitoring } from './services/monitoring.js';
+import { installProcessGuards } from './bootstrap/processGuards.js';
+import { apiLimiter, authLimiter, securityHeaders, responseCompression } from './middleware/security.js';
+import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
+import { readinessHandler } from './middleware/health.js';
+// import
 // const flightRoutes =re('./routes/flights');
 // Load environment variables
 dotenv.config();
 
+// Fail fast on missing required config; warn on degraded features. Then init monitoring.
+validateEnv();
+initMonitoring();
+
 const app = express();
+
+// Behind a proxy (Render/Vercel) — trust first hop for correct client IPs / rate limiting
+app.set('trust proxy', 1);
 
 // Debugging middleware
 app.use((req, res, next) => {
@@ -77,11 +92,19 @@ const corsOptions = {
   optionsSuccessStatus: 200
 };
 
+// Security headers + response compression (before routes)
+app.use(securityHeaders);
+app.use(responseCompression);
+
 app.use(cors(corsOptions));
 
 // Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Global rate limiting (general API + stricter on auth)
+app.use(apiLimiter);
+app.use('/api/auth', authLimiter);
 
 // Test route
 app.get('/api/test', (req, res) => {
@@ -95,6 +118,12 @@ app.get('/api/test', (req, res) => {
     }
   });
 });
+
+// Health + deep readiness checks
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'healthy', uptime: process.uptime(), timestamp: new Date().toISOString() });
+});
+app.get('/api/health/ready', readinessHandler);
 
 // Quote expiration check endpoint (manual trigger)
 app.post('/api/jobs/check-quote-expiration', checkQuoteExpirationHandler);
@@ -270,44 +299,15 @@ app.post('/api/send-email', async (req, res) => {
   }
 });
 
-// 404 handler for undefined routes (must be after all routes)
-app.use((req, res, next) => {
-  console.log('404 - Route not found:', req.method, req.path);
-  res.status(404).json({
-    success: false,
-    message: `Route ${req.method} ${req.path} not found`,
-    path: req.path,
-    method: req.method
-  });
-});
+// 404 for unmatched routes (must be after all routes)
+app.use(notFoundHandler);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', {
-    message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    path: req.path,
-    method: req.method
-  });
-
-  if (err.message.includes('Not allowed by CORS')) {
-    return res.status(403).json({
-      success: false,
-      message: 'CORS error: Origin not allowed',
-      allowedOrigins: corsOptions.origin
-    });
-  }
-
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Internal server error',
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-  });
-});
+// Central error handler (must be last) — logs, reports 5xx to monitoring
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5004;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log('Environment:', process.env.NODE_ENV);
   console.log('Allowed Origins:', corsOptions.origin.toString());
@@ -317,8 +317,11 @@ app.listen(PORT, () => {
   if (process.env.NODE_ENV !== 'test') {
     startWorkflowEngine().catch(e => console.error('[Workflow] Engine failed to start:', e.message));
     try { startDataRetentionJob(24); } catch(e) { console.error('[Retention] Job failed to start:', e.message); }
-    
+
     // Initialize default email templates
     initializeDefaultTemplates().catch(e => console.error('[Templates] Init failed:', e.message));
   }
-}); 
+});
+
+// Crash guards + graceful shutdown (drain in-flight requests on SIGTERM/SIGINT)
+installProcessGuards({ server });

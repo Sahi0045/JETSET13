@@ -1,4 +1,5 @@
 import React from 'react';
+import { reportError } from '../lib/monitoring.js';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -12,8 +13,9 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    // You can log the error to an error reporting service here
     console.error('Error caught by boundary:', error, errorInfo);
+    // Report to monitoring (no-op unless Sentry is configured)
+    reportError(error, { componentStack: errorInfo?.componentStack });
     this.setState({
       error: error,
       errorInfo: errorInfo

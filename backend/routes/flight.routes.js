@@ -2,6 +2,18 @@ import express from 'express';
 import AmadeusService from '../services/amadeusService.js';
 import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
+import { get as cacheGet, set as cacheSet, CacheKeys, TTL } from '../services/cache.service.js';
+import { validate } from '../middleware/validate.js';
+import { z } from 'zod';
+
+// Only the fields the handler genuinely requires; passthrough keeps the rest.
+const flightSearchSchema = z
+  .object({
+    from: z.string().min(1, 'from is required'),
+    to: z.string().min(1, 'to is required'),
+    departDate: z.string().min(1, 'departDate is required'),
+  })
+  .passthrough();
 
 const router = express.Router();
 
@@ -459,19 +471,11 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
 };
 
 // Flight search endpoint
-router.post('/search', async (req, res) => {
+router.post('/search', validate({ body: flightSearchSchema }), async (req, res) => {
   try {
     console.log('🔍 Flight search request received:', req.body);
 
     const { from, to, departDate, returnDate, tripType, travelers } = req.body;
-
-    // Validate required fields
-    if (!from || !to || !departDate) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields: from, to, and departDate are required'
-      });
-    }
 
     // Check if Amadeus credentials are available
     const { apiKey, apiSecret } = getAmadeusCredentials();
@@ -515,8 +519,23 @@ router.post('/search', async (req, res) => {
     console.log('Searching flights with params:', searchParams);
 
     try {
-      // Call real Amadeus API
-      const amadeusResponse = await AmadeusService.searchFlights(searchParams);
+      // Call real Amadeus API (served from Redis cache when available; passthrough when not)
+      const flightCacheKey = CacheKeys.flightSearch(
+        searchParams.from,
+        searchParams.to,
+        `${searchParams.departDate}|${searchParams.returnDate || 'ow'}`,
+        `${searchParams.adults}-${searchParams.children}-${searchParams.infants}-${searchParams.travelClass || 'any'}-${searchParams.nonStop ? 'ns' : 'any'}`
+      );
+      let amadeusResponse = await cacheGet(flightCacheKey);
+      if (amadeusResponse) {
+        console.log('✅ Flight search served from cache');
+      } else {
+        amadeusResponse = await AmadeusService.searchFlights(searchParams);
+        // Only cache successful, non-empty results — never cache failures/empties
+        if (amadeusResponse?.success && amadeusResponse.data?.length) {
+          await cacheSet(flightCacheKey, amadeusResponse, TTL.FLIGHT_SEARCH);
+        }
+      }
 
       if (!amadeusResponse.success) {
         throw new Error(amadeusResponse.error);
