@@ -95,24 +95,28 @@ router.post('/checkout', async (req, res) => {
 
         const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
         const transactionRef = `SUB-${Date.now()}-${uuidv4().substring(0, 8)}`;
+        const frontend = process.env.FRONTEND_URL || 'http://localhost:5173';
 
+        // Mirror the proven hosted-checkout payload (apiOperation INITIATE_CHECKOUT).
+        // The previous "DEFAULT" operation rejected customer.email / order.description.
         const orderData = {
-            apiOperation: "DEFAULT",
+            apiOperation: 'INITIATE_CHECKOUT',
+            interaction: {
+                operation: 'PURCHASE',
+                returnUrl: `${frontend}/membership?status=success&tx=${transactionRef}`,
+                cancelUrl: `${frontend}/membership?status=cancel`,
+                merchant: { name: 'Jetsetter Travel' },
+                displayControl: { billingAddress: 'MANDATORY', customerEmail: 'MANDATORY' },
+                timeout: 900
+            },
             order: {
                 id: transactionRef,
-                amount: price,
-                currency: "USD",
-                description: `Subscription: ${planName}`
+                reference: transactionRef,
+                amount: parseFloat(price).toFixed(2),
+                currency: 'USD',
+                description: `Subscription ${planName}`
             },
-            interaction: {
-                operation: "PURCHASE",
-                merchant: {
-                    name: "Jetsetter Travel",
-                    logo: "https://www.jetsetterss.com/logo.png"
-                },
-                returnUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/membership?status=success&tx=${transactionRef}`,
-                cancelUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/membership?status=cancel`
-            }
+            customer: { email }
         };
 
         const response = await axios.post(
@@ -127,7 +131,9 @@ router.post('/checkout', async (req, res) => {
             }
         );
 
-        if (response.data && response.data.session && response.data.session.id) {
+        const sessionId = response.data?.session?.id || response.data?.sessionId || response.data?.id;
+
+        if (sessionId) {
             // Save pending subscription intent
             await supabase.from('user_subscriptions').insert([{
                 user_id: userId,
@@ -139,8 +145,8 @@ router.post('/checkout', async (req, res) => {
 
             res.json({
                 success: true,
-                checkoutUrl: `${ARC_PAY_CONFIG.PORTAL_URL}checkout/enterCard.html?merchantSearchId=${arcMerchantId}&session.id=${response.data.session.id}`,
-                sessionId: response.data.session.id,
+                checkoutUrl: `https://api.arcpay.travel/checkout/pay/${sessionId}`,
+                sessionId,
                 orderId: transactionRef
             });
         } else {
