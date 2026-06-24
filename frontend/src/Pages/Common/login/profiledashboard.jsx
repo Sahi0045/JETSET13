@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom"
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext"
 import supabase from "../../../lib/supabase"
 import PhoneInputWithCountry from "../components/PhoneInputWithCountry"
+import useMembership from "../../../hooks/useMembership"
 import { registerForPushNotifications } from "../../../lib/pushNotifications"
 import './profile.css'
 
@@ -12,6 +13,7 @@ export default function ProfilePage() {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
   const { user, loading: authLoading, isAuthenticated, updateProfile, updatePassword } = useSupabaseAuth()
+  const membership = useMembership()
 
   const [processing, setProcessing] = useState(false)
   const [recentlySuccessful, setRecentlySuccessful] = useState(false)
@@ -44,8 +46,29 @@ export default function ProfilePage() {
     mobile_number: "",
     date_of_birth: "",
     gender: "Male",
+    nationality: "",
+    marital_status: "",
+    anniversary: "",
+    city: "",
+    state: "",
+    passport_number: "",
+    passport_expiry: "",
+    issuing_country: "",
+    pan_number: "",
     profile_photo: null,
   })
+
+  // Snapshot of the last-saved values, used to detect unsaved changes
+  const [initialData, setInitialData] = useState(null)
+
+  const EDITABLE_FIELDS = ['first_name', 'last_name', 'email', 'mobile_number', 'date_of_birth', 'gender',
+    'nationality', 'marital_status', 'anniversary', 'city', 'state',
+    'passport_number', 'passport_expiry', 'issuing_country', 'pan_number']
+
+  // Only show Save/Cancel when something actually changed
+  const isDirty = initialData
+    ? EDITABLE_FIELDS.some((k) => (data[k] || '') !== (initialData[k] || '')) || !!data.profile_photo
+    : false
 
   // Check and refresh session if needed
   useEffect(() => {
@@ -127,14 +150,14 @@ export default function ProfilePage() {
         try {
           let { data: dbUser, error: dbError } = await supabase
             .from('users')
-            .select('id, email, first_name, last_name, name')
+            .select('*')
             .eq('id', user.id)
             .single()
 
           if (dbError && dbError.code === 'PGRST116') {
             const { data: dbUserByEmail, error: emailError } = await supabase
               .from('users')
-              .select('id, email, first_name, last_name, name')
+              .select('*')
               .eq('email', user.email)
               .single()
 
@@ -168,6 +191,18 @@ export default function ProfilePage() {
               first_name: dbUser.first_name || dbUser.name?.split(' ')[0] || '',
               last_name: dbUser.last_name || dbUser.name?.split(' ')[1] || '',
               email: dbUser.email || user.email || '',
+              mobile_number: dbUser.phone || '',
+              date_of_birth: dbUser.date_of_birth || '',
+              gender: dbUser.gender || '',
+              nationality: dbUser.nationality || '',
+              marital_status: dbUser.marital_status || '',
+              anniversary: dbUser.anniversary || '',
+              city: dbUser.city || '',
+              state: dbUser.state || '',
+              passport_number: dbUser.passport_number || '',
+              passport_expiry: dbUser.passport_expiry || '',
+              issuing_country: dbUser.issuing_country || '',
+              pan_number: dbUser.pan_number || '',
             }
           }
         } catch (dbErr) {
@@ -186,13 +221,23 @@ export default function ProfilePage() {
           first_name: dbUserData.first_name || userMetadata.first_name || parsedLocalUser.firstName || parsedSavedData.first_name || userMetadata.full_name?.split(' ')[0] || '',
           last_name: dbUserData.last_name || userMetadata.last_name || parsedLocalUser.lastName || parsedSavedData.last_name || userMetadata.full_name?.split(' ')[1] || '',
           email: dbUserData.email || user.email || parsedLocalUser.email || '',
-          mobile_number: userMetadata.phone || user.phone || parsedSavedData.mobile_number || '',
-          date_of_birth: userMetadata.date_of_birth || parsedSavedData.date_of_birth || '',
-          gender: userMetadata.gender || parsedSavedData.gender || 'Male',
+          mobile_number: dbUserData.mobile_number || userMetadata.phone || user.phone || parsedSavedData.mobile_number || '',
+          date_of_birth: dbUserData.date_of_birth || userMetadata.date_of_birth || parsedSavedData.date_of_birth || '',
+          gender: dbUserData.gender || userMetadata.gender || parsedSavedData.gender || 'Male',
+          nationality: dbUserData.nationality || userMetadata.nationality || parsedSavedData.nationality || '',
+          marital_status: dbUserData.marital_status || userMetadata.marital_status || parsedSavedData.marital_status || '',
+          anniversary: dbUserData.anniversary || userMetadata.anniversary || parsedSavedData.anniversary || '',
+          city: dbUserData.city || userMetadata.city || parsedSavedData.city || '',
+          state: dbUserData.state || userMetadata.state || parsedSavedData.state || '',
+          passport_number: dbUserData.passport_number || userMetadata.passport_number || parsedSavedData.passport_number || '',
+          passport_expiry: dbUserData.passport_expiry || userMetadata.passport_expiry || parsedSavedData.passport_expiry || '',
+          issuing_country: dbUserData.issuing_country || userMetadata.issuing_country || parsedSavedData.issuing_country || '',
+          pan_number: dbUserData.pan_number || userMetadata.pan_number || parsedSavedData.pan_number || '',
           profile_photo: parsedSavedData.profile_photo || null,
         }
 
         setData(mergedData)
+        setInitialData(mergedData)
       } catch (error) {
         console.error('Error fetching user data:', error)
         setErrors({ fetch: 'Failed to load profile data. Please refresh the page.' })
@@ -260,6 +305,15 @@ export default function ProfilePage() {
         phone: data.mobile_number,
         date_of_birth: data.date_of_birth,
         gender: data.gender,
+        nationality: data.nationality,
+        marital_status: data.marital_status,
+        anniversary: data.anniversary,
+        city: data.city,
+        state: data.state,
+        passport_number: data.passport_number,
+        passport_expiry: data.passport_expiry,
+        issuing_country: data.issuing_country,
+        pan_number: data.pan_number,
       }
 
       const { error: updateError } = await updateProfile(metadataUpdates)
@@ -272,6 +326,18 @@ export default function ProfilePage() {
           first_name: data.first_name,
           last_name: data.last_name,
           name: `${data.first_name} ${data.last_name}`,
+          phone: data.mobile_number || null,
+          date_of_birth: data.date_of_birth || null,
+          gender: data.gender || null,
+          nationality: data.nationality || null,
+          marital_status: data.marital_status || null,
+          anniversary: data.anniversary || null,
+          city: data.city || null,
+          state: data.state || null,
+          passport_number: data.passport_number || null,
+          passport_expiry: data.passport_expiry || null,
+          issuing_country: data.issuing_country || null,
+          pan_number: data.pan_number || null,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'id' })
       }
@@ -282,6 +348,7 @@ export default function ProfilePage() {
 
       setProcessing(false)
       setRecentlySuccessful(true)
+      setInitialData({ ...data, profile_photo: null })
       setTimeout(() => setRecentlySuccessful(false), 3000)
     } catch (error) {
       setErrors({ submit: error.message || 'Failed to update profile.' })
@@ -543,55 +610,65 @@ export default function ProfilePage() {
 
   return (
     <div className="profile-dashboard">
-      {/* Header */}
-      <header className="profile-header">
-        <div className="header-content">
-          <button onClick={() => navigate('/')} className="back-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            <span>Back to Home</span>
-          </button>
-          <div className="header-title">
-            <h1>Account Settings</h1>
-            <p>Manage your profile and security preferences</p>
+      {/* Cover banner with overlapping avatar (Stitch design) */}
+      <div className="profile-cover">
+        <button onClick={() => navigate('/')} className="cover-back-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          <span>Back to Home</span>
+        </button>
+        <div className="cover-banner" />
+        <div className="cover-content">
+          <div className="profile-avatar-container">
+            {data.profile_photo ? (
+              <img src={URL.createObjectURL(data.profile_photo)} alt="Profile" className="profile-avatar" loading="lazy" decoding="async" />
+            ) : (
+              <div className="profile-avatar-placeholder">
+                {data.first_name ? data.first_name[0].toUpperCase() : user?.email?.[0]?.toUpperCase() || 'U'}
+              </div>
+            )}
+            <button className="avatar-edit-btn" onClick={() => fileInputRef.current?.click()}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </button>
+            <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
           </div>
-        </div>
-      </header>
-
-      <div className="profile-main">
-        {/* Sidebar */}
-        <aside className="profile-sidebar">
-          <div className="sidebar-profile-card">
-            <div className="profile-avatar-container">
-              {data.profile_photo ? (
-                <img src={URL.createObjectURL(data.profile_photo)} alt="Profile" className="profile-avatar" loading="lazy" decoding="async" />
-              ) : (
-                <div className="profile-avatar-placeholder">
-                  {data.first_name ? data.first_name[0].toUpperCase() : user?.email?.[0]?.toUpperCase() || 'U'}
-                </div>
-              )}
-              <button className="avatar-edit-btn" onClick={() => fileInputRef.current?.click()}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-              </button>
-              <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
-            </div>
-            <h3 className="profile-name">{data.first_name} {data.last_name || ''}</h3>
-            <p className="profile-email">{data.email}</p>
-            <div className="profile-status">
+          <div className="cover-meta">
+            <div className="cover-name-row">
+              <h1 className="profile-name">{data.first_name} {data.last_name || ''}</h1>
               <span className="status-badge verified">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                Verified Account
+                Verified
               </span>
+              {membership.isActive && (
+                <span className="status-badge premium">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                    <path d="M12 2l2.9 6.9L22 9.6l-5 4.6 1.4 7.1L12 17.8 5.6 21.3 7 14.2 2 9.6l7.1-.7z" />
+                  </svg>
+                  {membership.fullLabel || 'Premium'}
+                </span>
+              )}
             </div>
+            <p className="profile-email">{data.email}</p>
+            {membership.isActive && membership.endDate && (
+              <p className="profile-membership-note">
+                Premium active · renews {new Date(membership.endDate).toLocaleDateString()}
+              </p>
+            )}
           </div>
+        </div>
+      </div>
 
+      <div className="profile-main">
+        {/* Sidebar */}
+        <aside className="profile-sidebar">
           <nav className="sidebar-nav">
+            <div className="sidebar-account-label">My Account</div>
             {sidebarItems.map(item => (
               <button
                 key={item.id}
@@ -611,84 +688,176 @@ export default function ProfilePage() {
         <main className="profile-content">
           {/* Personal Information Section */}
           {activeSection === 'profile' && (
-            <form onSubmit={handleSubmit} className="content-section">
-              <div className="section-header">
-                <div className="section-title-group">
-                  <h2>Personal Information</h2>
-                  <p>Update your personal details and contact information</p>
+            <form onSubmit={handleSubmit} className="profile-sections">
+              {/* Membership status card */}
+              <section className={`membership-card ${membership.isActive ? 'is-premium' : ''}`}>
+                <div className="membership-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                    <path d="M12 2l2.9 6.9L22 9.6l-5 4.6 1.4 7.1L12 17.8 5.6 21.3 7 14.2 2 9.6l7.1-.7z" />
+                  </svg>
+                </div>
+                <div className="membership-info">
+                  {membership.loading ? (
+                    <p className="membership-title">Checking membership…</p>
+                  ) : membership.isActive ? (
+                    <>
+                      <p className="membership-title">{membership.fullLabel} Member</p>
+                      <p className="membership-sub">
+                        {Math.round(membership.discountRate * 100)}% off all bookings · free seat selection
+                        {membership.endDate ? ` · renews ${new Date(membership.endDate).toLocaleDateString()}` : ''}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="membership-title">You're on the Free plan</p>
+                      <p className="membership-sub">Go Premium for discounts and free seat selection.</p>
+                    </>
+                  )}
+                </div>
+                <button type="button" className="membership-cta" onClick={() => navigate('/membership')}>
+                  {membership.isActive ? 'Manage' : 'Upgrade'}
+                </button>
+              </section>
+
+              <div className="personalize-banner">
+                <div className="personalize-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="personalize-title">Let us personalize your travel</p>
+                  <p className="personalize-desc">Adding these details helps us find better deals and tailor trips for you.</p>
                 </div>
               </div>
 
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>First Name <span className="required">*</span></label>
-                  <input
-                    type="text"
-                    value={data.first_name}
-                    onChange={(e) => setData({ ...data, first_name: e.target.value })}
-                    placeholder="Enter first name"
-                    className={errors.first_name ? 'error' : ''}
-                  />
-                  {errors.first_name && <span className="error-text">{errors.first_name}</span>}
-                </div>
-
-                <div className="form-group">
-                  <label>Last Name</label>
-                  <input
-                    type="text"
-                    value={data.last_name}
-                    onChange={(e) => setData({ ...data, last_name: e.target.value })}
-                    placeholder="Enter last name"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Email Address <span className="required">*</span></label>
-                  <input
-                    type="email"
-                    value={data.email}
-                    onChange={(e) => setData({ ...data, email: e.target.value })}
-                    placeholder="Enter email"
-                    className={errors.email ? 'error' : ''}
-                  />
-                  {errors.email && <span className="error-text">{errors.email}</span>}
-                </div>
-
-                <div className="form-group">
-                  <label>Phone Number</label>
-                  <PhoneInputWithCountry
-                    value={data.mobile_number}
-                    onChange={handlePhoneChange}
-                    placeholder="Enter phone number"
-                    error={errors.mobile_number}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Date of Birth</label>
-                  <input
-                    type="date"
-                    value={data.date_of_birth}
-                    onChange={(e) => setData({ ...data, date_of_birth: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Gender</label>
-                  <div className="gender-selector">
-                    {['Male', 'Female', 'Other'].map(gender => (
-                      <button
-                        key={gender}
-                        type="button"
-                        className={`gender-btn ${data.gender === gender ? 'active' : ''}`}
-                        onClick={() => setData({ ...data, gender })}
-                      >
-                        {gender}
-                      </button>
-                    ))}
+              {/* General Information */}
+              <section className="section-card">
+                <h2 className="section-card-title">General Information</h2>
+                <div className="form-grid form-grid-3">
+                  <div className="form-group">
+                    <label>First Name <span className="required">*</span></label>
+                    <input type="text" value={data.first_name}
+                      onChange={(e) => setData({ ...data, first_name: e.target.value })}
+                      placeholder="Enter first name" className={errors.first_name ? 'error' : ''} />
+                    {errors.first_name && <span className="error-text">{errors.first_name}</span>}
+                  </div>
+                  <div className="form-group">
+                    <label>Last Name</label>
+                    <input type="text" value={data.last_name}
+                      onChange={(e) => setData({ ...data, last_name: e.target.value })}
+                      placeholder="Enter last name" />
+                  </div>
+                  <div className="form-group">
+                    <label>Gender</label>
+                    <div className="gender-selector">
+                      {['Male', 'Female', 'Other'].map(gender => (
+                        <button key={gender} type="button"
+                          className={`gender-btn ${data.gender === gender ? 'active' : ''}`}
+                          onClick={() => setData({ ...data, gender })}>
+                          {gender}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Date of Birth</label>
+                    <input type="date" value={data.date_of_birth}
+                      onChange={(e) => setData({ ...data, date_of_birth: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label>Nationality</label>
+                    <input type="text" value={data.nationality}
+                      onChange={(e) => setData({ ...data, nationality: e.target.value })}
+                      placeholder="e.g. India" />
+                  </div>
+                  <div className="form-group">
+                    <label>Marital Status</label>
+                    <select value={data.marital_status}
+                      onChange={(e) => setData({ ...data, marital_status: e.target.value })}>
+                      <option value="">Select</option>
+                      <option value="Single">Single</option>
+                      <option value="Married">Married</option>
+                      <option value="Prefer not to say">Prefer not to say</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Anniversary</label>
+                    <input type="date" value={data.anniversary}
+                      onChange={(e) => setData({ ...data, anniversary: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label>City of Residence</label>
+                    <input type="text" value={data.city}
+                      onChange={(e) => setData({ ...data, city: e.target.value })}
+                      placeholder="e.g. Mumbai" />
+                  </div>
+                  <div className="form-group">
+                    <label>State</label>
+                    <input type="text" value={data.state}
+                      onChange={(e) => setData({ ...data, state: e.target.value })}
+                      placeholder="e.g. Maharashtra" />
                   </div>
                 </div>
-              </div>
+              </section>
+
+              {/* Contact Details */}
+              <section className="section-card">
+                <h2 className="section-card-title">Contact Details</h2>
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Mobile Number</label>
+                    <PhoneInputWithCountry value={data.mobile_number} onChange={handlePhoneChange}
+                      placeholder="Enter phone number" error={errors.mobile_number} />
+                  </div>
+                  <div className="form-group">
+                    <label>Email Address <span className="required">*</span></label>
+                    <div className="input-with-icon">
+                      <input type="email" value={data.email}
+                        onChange={(e) => setData({ ...data, email: e.target.value })}
+                        placeholder="Enter email" className={errors.email ? 'error' : ''} />
+                      <svg className="input-verified" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                      </svg>
+                    </div>
+                    {errors.email && <span className="error-text">{errors.email}</span>}
+                  </div>
+                </div>
+              </section>
+
+              {/* Document Details */}
+              <section className="section-card">
+                <div className="section-card-head">
+                  <h2 className="section-card-title">Document Details</h2>
+                  <span className="section-card-note">PAN is used for international bookings</span>
+                </div>
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Passport Number</label>
+                    <input type="text" value={data.passport_number}
+                      onChange={(e) => setData({ ...data, passport_number: e.target.value })}
+                      placeholder="Enter passport number" />
+                  </div>
+                  <div className="form-group">
+                    <label>Passport Expiry Date</label>
+                    <input type="date" value={data.passport_expiry}
+                      onChange={(e) => setData({ ...data, passport_expiry: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label>Issuing Country</label>
+                    <input type="text" value={data.issuing_country}
+                      onChange={(e) => setData({ ...data, issuing_country: e.target.value })}
+                      placeholder="e.g. India" />
+                  </div>
+                  <div className="form-group">
+                    <label>PAN Card Number</label>
+                    <input type="text" value={data.pan_number}
+                      onChange={(e) => setData({ ...data, pan_number: e.target.value.toUpperCase() })}
+                      placeholder="ABCDE1234F" />
+                  </div>
+                </div>
+              </section>
 
               {recentlySuccessful && (
                 <div className="alert success">
@@ -711,21 +880,26 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              <div className="form-actions">
-                <button type="submit" className="btn-primary" disabled={processing}>
-                  {processing ? (
-                    <>
-                      <span className="btn-spinner"></span>
-                      Saving...
-                    </>
-                  ) : 'Save Changes'}
-                </button>
-                <button type="button" className="btn-secondary" onClick={() => window.location.reload()}>
-                  Cancel
-                </button>
-              </div>
+              {isDirty && (
+                <div className="form-actions sticky-actions">
+                  <button type="button" className="btn-secondary" onClick={() => setData(initialData)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={processing}>
+                    {processing ? (
+                      <>
+                        <span className="btn-spinner"></span>
+                        Saving...
+                      </>
+                    ) : 'Save Changes'}
+                  </button>
+                </div>
+              )}
             </form>
           )}
+
+
+
 
           {/* Security Section */}
           {activeSection === 'security' && (
