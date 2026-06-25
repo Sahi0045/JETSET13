@@ -728,15 +728,15 @@ export default function TravelDashboard() {
     const statusUp = normalizeStatus(booking.status);
 
     const DetailCell = ({ label, children }) => (
-      <div className="bg-white rounded-lg p-3 border border-[#D1E9F0]">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#0890BC] mb-1">{label}</p>
-        <p className="text-sm font-bold text-gray-900">{children}</p>
+      <div className="bg-white rounded-lg p-2.5 border border-[#D1E9F0] min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#0890BC] mb-0.5">{label}</p>
+        <p className="text-[13px] sm:text-sm font-bold text-gray-900 break-words">{children}</p>
       </div>
     )
 
     return (
       <div key={booking.orderId || booking.bookingReference || booking.quoteId}
-        className="group bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] hover:shadow-[0_20px_40px_-8px_rgba(5,91,117,0.2)] hover:-translate-y-0.5 transition-all duration-200 relative overflow-hidden">
+        className="group bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] hover:shadow-[0_20px_40px_-8px_rgba(5,91,117,0.2)] hover:-translate-y-0.5 transition-all duration-200 relative overflow-hidden">
         {/* Teal accent rail */}
         <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-[#055B75] to-[#0890BC]" />
 
@@ -792,7 +792,7 @@ export default function TravelDashboard() {
 
         {/* Travel details panel */}
         {(booking.origin || booking.destination || booking.departureDate || booking.hotelDestination || booking.cruiseDestination || booking.returnDate || booking.checkinDate || booking.checkoutDate || booking.cruiseDepartureDate) && (
-          <div className="mb-4 p-4 bg-[#F1FBFD] rounded-xl border border-[#D1E9F0]">
+          <div className="mb-4 p-3 sm:p-4 bg-[#F1FBFD] rounded-xl border border-[#D1E9F0]">
             <div className="flex items-center gap-2 mb-3">
               <FaMapMarkerAlt className="w-3.5 h-3.5 text-[#055B75]" />
               <span className="text-[11px] font-bold uppercase tracking-widest text-[#055B75]">Travel Details</span>
@@ -800,7 +800,7 @@ export default function TravelDashboard() {
 
             {isFlightBooking && (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   {(booking.origin || booking.destination) && (
                     <DetailCell label="Route">{booking.origin || 'N/A'} → {booking.destination || 'N/A'}</DetailCell>
                   )}
@@ -817,7 +817,7 @@ export default function TravelDashboard() {
 
                 {/* Enriched Flight Details */}
                 {(booking.airlineName || booking.flightNumber || booking.departureTime || booking.duration || booking.pnr) && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                     {(booking.airlineName || booking.flightNumber) && (
                       <DetailCell label="Airline / Flight">
                         {booking.airlineName || booking.airline || ''}{booking.flightNumber ? ` • ${booking.flightNumber}` : ''}
@@ -850,7 +850,7 @@ export default function TravelDashboard() {
 
                 {/* PNR, Cabin Class, Baggage, Fare Type */}
                 {(booking.pnr || booking.cabinClass || booking.baggage || booking.brandedFareLabel) && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                     {booking.pnr && <DetailCell label="PNR"><span className="tracking-wider">{booking.pnr}</span></DetailCell>}
                     {booking.cabinClass && <DetailCell label="Cabin Class"><span className="capitalize">{booking.cabinClass.replace('_', ' ')}</span></DetailCell>}
                     {booking.baggage && <DetailCell label="Baggage">{typeof booking.baggage === 'object' ? JSON.stringify(booking.baggage) : booking.baggage}</DetailCell>}
@@ -861,7 +861,7 @@ export default function TravelDashboard() {
             )}
 
             {isHotelBooking && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {booking.hotelDestination && <DetailCell label="Destination">{booking.hotelDestination}</DetailCell>}
                 {booking.checkinDate && <DetailCell label="Check-in">{fmtDate(booking.checkinDate)}</DetailCell>}
                 {booking.checkoutDate && <DetailCell label="Check-out">{fmtDate(booking.checkoutDate)}</DetailCell>}
@@ -876,7 +876,7 @@ export default function TravelDashboard() {
             )}
 
             {isCruiseBooking && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {booking.cruiseDestination && <DetailCell label="Destination">{booking.cruiseDestination}</DetailCell>}
                 {booking.cruiseDepartureDate && <DetailCell label="Departure">{fmtDate(booking.cruiseDepartureDate)}</DetailCell>}
                 {booking.cruiseDuration && <DetailCell label="Duration">{booking.cruiseDuration} {booking.cruiseDuration === 1 ? 'Day' : 'Days'}</DetailCell>}
@@ -891,7 +891,7 @@ export default function TravelDashboard() {
             )}
 
             {isPackageBooking && (booking.packageDestination || booking.packageStartDate || booking.packageEndDate || booking.packageTravelers) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {booking.packageDestination && <DetailCell label="Destination">{booking.packageDestination}</DetailCell>}
                 {booking.packageStartDate && <DetailCell label="Start Date">{fmtDate(booking.packageStartDate)}</DetailCell>}
                 {booking.packageEndDate && <DetailCell label="End Date">{fmtDate(booking.packageEndDate)}</DetailCell>}
@@ -1109,7 +1109,7 @@ export default function TravelDashboard() {
 
     return (
       <div key={request.id}
-        className="group bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] hover:shadow-[0_20px_40px_-8px_rgba(5,91,117,0.2)] hover:-translate-y-0.5 transition-all duration-200 relative overflow-hidden">
+        className="group bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] hover:shadow-[0_20px_40px_-8px_rgba(5,91,117,0.2)] hover:-translate-y-0.5 transition-all duration-200 relative overflow-hidden">
         <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-[#055B75] to-[#0890BC]" />
 
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
