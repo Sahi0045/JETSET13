@@ -2,6 +2,13 @@
 
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import {
+  FaPlane, FaShip, FaHotel, FaSuitcaseRolling, FaClipboardList,
+  FaCommentDots, FaStar, FaEye, FaCog, FaTimesCircle, FaCheckCircle,
+  FaCalendarAlt, FaMapMarkerAlt, FaLock,
+  FaSyncAlt, FaInfoCircle, FaFileInvoiceDollar, FaExclamationTriangle,
+  FaClock, FaShieldAlt,
+} from 'react-icons/fa'
 import { getApiUrl } from '../../../utils/apiHelper'
 import Navbar from '../Navbar'
 import Footer from '../Footer'
@@ -9,11 +16,51 @@ import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext'
 import ArcPayService from '../../../Services/ArcPayService'
 import Price from '../../../Components/Price'
 
+// ----- Icon helpers (react-icons replace emoji) -----
+const TYPE_ICON = {
+  flight: FaPlane,
+  cruise: FaShip,
+  hotel: FaHotel,
+  package: FaSuitcaseRolling,
+  general: FaCommentDots,
+  default: FaClipboardList,
+}
+
+const TypeIcon = ({ type, className = '' }) => {
+  const Icon = TYPE_ICON[(type || '').toLowerCase()] || TYPE_ICON.default
+  return <Icon className={className} />
+}
+
+const TYPE_NAME = {
+  flight: 'Flight',
+  cruise: 'Cruise',
+  hotel: 'Hotel',
+  package: 'Package',
+  general: 'General',
+  default: 'Travel',
+}
+
+const getTypeName = (type) => TYPE_NAME[(type || '').toLowerCase()] || TYPE_NAME.default
+
+const fmtDate = (d, opts) => {
+  if (!d) return ''
+  try {
+    return new Date(d).toLocaleDateString('en-US', opts || { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+  } catch {
+    return ''
+  }
+}
+
+// Reusable eyebrow label
+const Eyebrow = ({ children, className = '' }) => (
+  <span className={`text-[11px] font-semibold uppercase tracking-widest text-gray-400 ${className}`}>{children}</span>
+)
+
 // Empty State Component
 const EmptyState = ({ icon, title, description, actionLabel, onAction }) => (
-  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+  <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] p-12">
     <div className="flex flex-col items-center justify-center text-center">
-      <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center text-4xl mb-6 shadow-inner">
+      <div className="w-20 h-20 bg-gradient-to-br from-[#F0FAFC] to-[#E3F1F6] rounded-2xl flex items-center justify-center text-3xl mb-6 text-[#055B75]">
         {icon}
       </div>
       <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
@@ -21,11 +68,20 @@ const EmptyState = ({ icon, title, description, actionLabel, onAction }) => (
       {actionLabel && onAction && (
         <button
           onClick={onAction}
-          className="px-6 py-3 bg-[#055B75] text-white font-semibold rounded-lg hover:bg-[#034457] transition-colors"
+          className="px-6 py-3 bg-gradient-to-br from-[#055B75] to-[#034457] text-white font-semibold rounded-lg hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-md shadow-[#055B75]/30"
         >
           {actionLabel}
         </button>
       )}
+    </div>
+  </div>
+)
+
+const Spinner = ({ label }) => (
+  <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] p-12">
+    <div className="flex flex-col items-center justify-center">
+      <div className="w-10 h-10 border-[3px] border-[#055B75] border-t-transparent rounded-full animate-spin"></div>
+      <p className="mt-4 text-gray-600">{label}</p>
     </div>
   </div>
 )
@@ -641,28 +697,16 @@ export default function TravelDashboard() {
 
   const filteredRequests = getFilteredRequests()
 
+  // ---- Booking card ----
   const renderBookingCard = (booking) => {
     const isFlightBooking = booking.type === 'flight'
     const isCruiseBooking = booking.type === 'cruise'
     const isHotelBooking = booking.type === 'hotel'
     const isPackageBooking = booking.type === 'package'
 
-    // Determine icon and title based on booking type
-    const getBookingIcon = () => {
-      if (isFlightBooking) return '✈️'
-      if (isCruiseBooking) return '🚢'
-      if (isHotelBooking) return '🏨'
-      if (isPackageBooking) return '🎒'
-      return '📦'
-    }
-
     const getBookingTitle = () => {
       if (booking.title) return booking.title
-      if (isFlightBooking) return 'Flight Booking'
-      if (isCruiseBooking) return 'Cruise Booking'
-      if (isHotelBooking) return 'Hotel Booking'
-      if (isPackageBooking) return 'Package Booking'
-      return 'Travel Booking'
+      return `${getTypeName(booking.type)} Booking`
     }
 
     // Check if this is a database booking (has quoteId or inquiryId)
@@ -680,327 +724,213 @@ export default function TravelDashboard() {
       return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     };
     const daysUntilTrip = getDaysUntil();
+    const normalizeStatus = (s) => (s || '').toUpperCase();
+    const statusUp = normalizeStatus(booking.status);
+
+    const DetailCell = ({ label, children }) => (
+      <div className="bg-white rounded-lg p-3 border border-[#D1E9F0]">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#0890BC] mb-1">{label}</p>
+        <p className="text-sm font-bold text-gray-900">{children}</p>
+      </div>
+    )
 
     return (
       <div key={booking.orderId || booking.bookingReference || booking.quoteId}
-        className="group bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-all duration-200 border-l-4 border-l-[#055B75]">
+        className="group bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] hover:shadow-[0_20px_40px_-8px_rgba(5,91,117,0.2)] hover:-translate-y-0.5 transition-all duration-200 relative overflow-hidden">
+        {/* Teal accent rail */}
+        <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-[#055B75] to-[#0890BC]" />
 
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-[#B9D0DC] text-[#055B75] text-lg">
-                {getBookingIcon()}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-[#055B75]/10 text-[#055B75] text-lg flex-shrink-0">
+                <TypeIcon type={booking.type} />
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold text-gray-900 group-hover:text-[#055B75] transition-colors truncate">
                   {getBookingTitle()}
                 </h3>
                 <p className="text-sm text-gray-500 font-medium">
                   #{booking.orderId || booking.bookingReference || booking.quoteId || 'N/A'}
                 </p>
                 {booking.quoteId && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    Quote: {booking.orderId || booking.bookingReference}
-                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">Quote: {booking.orderId || booking.bookingReference}</p>
                 )}
               </div>
             </div>
             {/* Travel Date Countdown Badge */}
             {daysUntilTrip !== null && daysUntilTrip >= 0 && (
-              <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-2 ${daysUntilTrip === 0 ? 'bg-green-100 text-green-800' :
-                daysUntilTrip <= 3 ? 'bg-orange-100 text-orange-800' :
-                  daysUntilTrip <= 7 ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-blue-100 text-blue-800'
+              <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-3 ${daysUntilTrip === 0 ? 'bg-green-50 text-green-700 border border-green-200' :
+                daysUntilTrip <= 3 ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                  daysUntilTrip <= 7 ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                    'bg-[#F0FAFC] text-[#055B75] border border-[#D1E9F0]'
                 }`}>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
+                <FaCalendarAlt className="w-3 h-3" />
                 {daysUntilTrip === 0 ? '🎉 Today!' :
                   daysUntilTrip === 1 ? 'Tomorrow' :
                     `${daysUntilTrip} days to go`}
               </div>
             )}
             {daysUntilTrip !== null && daysUntilTrip < 0 && (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-2 bg-gray-100 text-gray-600">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Trip Completed
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-3 bg-gray-50 text-gray-500 border border-gray-200">
+                <FaCheckCircle className="w-3 h-3" /> Trip Completed
               </div>
             )}
           </div>
 
           <div className="flex flex-col items-start sm:items-end gap-2">
-            <span className={`inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg ${booking.status?.toUpperCase() === 'CONFIRMED' || booking.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-              booking.status?.toUpperCase() === 'CANCELLED' ? 'bg-red-50 text-red-700 border border-red-200' :
-                'bg-[#B9D0DC] text-[#055B75] border border-[#65B3CF]'
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border ${statusUp === 'CONFIRMED' || booking.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+              statusUp === 'CANCELLED' ? 'bg-red-50 text-red-700 border-red-200' :
+                'bg-[#F0FAFC] text-[#055B75] border-[#B9D0DC]'
               }`}>
-              {booking.status === 'paid' ? '✓ Paid' : booking.status?.toUpperCase() === 'CONFIRMED' ? '✓ Confirmed' : booking.status?.toUpperCase() === 'CANCELLED' ? '✗ Cancelled' : (booking.status || 'Confirmed')}
+              {statusUp === 'CONFIRMED' || booking.status === 'paid' ? <FaCheckCircle className="w-3 h-3" /> :
+                statusUp === 'CANCELLED' ? <FaTimesCircle className="w-3 h-3" /> : null}
+              {booking.status === 'paid' ? 'Paid' : statusUp === 'CONFIRMED' ? 'Confirmed' : statusUp === 'CANCELLED' ? 'Cancelled' : (booking.status || 'Confirmed')}
             </span>
-
-            {/* Mobile-friendly status indicator */}
-            <div className="sm:hidden text-xs text-gray-500 flex items-center gap-1">
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0 1 1 0 002 0zM8 9a1 1 0 000 2h2a1 1 0 100 0H8z" clipRule="evenodd" />
-              </svg>
-              Tap for details
-            </div>
           </div>
         </div>
 
-        {/* Show travel details for database bookings - ENHANCED DISPLAY */}
+        {/* Travel details panel */}
         {(booking.origin || booking.destination || booking.departureDate || booking.hotelDestination || booking.cruiseDestination || booking.returnDate || booking.checkinDate || booking.checkoutDate || booking.cruiseDepartureDate) && (
-          <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+          <div className="mb-4 p-4 bg-[#F1FBFD] rounded-xl border border-[#D1E9F0]">
             <div className="flex items-center gap-2 mb-3">
-              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Travel Details</span>
+              <FaMapMarkerAlt className="w-3.5 h-3.5 text-[#055B75]" />
+              <span className="text-[11px] font-bold uppercase tracking-widest text-[#055B75]">Travel Details</span>
             </div>
 
             {isFlightBooking && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {(booking.origin || booking.destination) && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Route</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.origin || 'N/A'} → {booking.destination || 'N/A'}</p>
-                  </div>
-                )}
-                {booking.departureDate && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Departure</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(booking.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                  </div>
-                )}
-                {booking.returnDate && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Return</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(booking.returnDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                  </div>
-                )}
-                {(booking.passengers || booking.travelClass) && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">{booking.travelClass ? 'Class & Passengers' : 'Passengers'}</p>
-                    <p className="text-sm font-bold text-gray-900 capitalize">
-                      {booking.travelClass && booking.travelClass.replace('_', ' ')}
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {(booking.origin || booking.destination) && (
+                    <DetailCell label="Route">{booking.origin || 'N/A'} → {booking.destination || 'N/A'}</DetailCell>
+                  )}
+                  {booking.departureDate && <DetailCell label="Departure">{fmtDate(booking.departureDate)}</DetailCell>}
+                  {booking.returnDate && <DetailCell label="Return">{fmtDate(booking.returnDate)}</DetailCell>}
+                  {(booking.passengers || booking.travelClass) && (
+                    <DetailCell label={booking.travelClass ? 'Class & Passengers' : 'Passengers'}>
+                      <span className="capitalize">{booking.travelClass && booking.travelClass.replace('_', ' ')}</span>
                       {booking.travelClass && booking.passengers && ' • '}
                       {booking.passengers && `${booking.passengers} ${booking.passengers === 1 ? 'Traveler' : 'Travelers'}`}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+                    </DetailCell>
+                  )}
+                </div>
 
-            {/* Enriched Flight Details - Airline, Terminal, Duration, etc. */}
-            {isFlightBooking && (booking.airlineName || booking.flightNumber || booking.departureTime || booking.duration || booking.pnr) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-                {(booking.airlineName || booking.flightNumber) && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Airline / Flight</p>
-                    <p className="text-sm font-bold text-gray-900">
-                      {booking.airlineName || booking.airline || ''}{booking.flightNumber ? ` • ${booking.flightNumber}` : ''}
-                    </p>
-                    {booking.aircraft && <p className="text-xs text-gray-500 mt-0.5">{booking.aircraft}</p>}
-                    {booking.operatingAirlineName && booking.operatingAirlineName !== booking.airlineName && (
-                      <p className="text-xs text-gray-400 mt-0.5">Operated by {booking.operatingAirlineName}</p>
+                {/* Enriched Flight Details */}
+                {(booking.airlineName || booking.flightNumber || booking.departureTime || booking.duration || booking.pnr) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+                    {(booking.airlineName || booking.flightNumber) && (
+                      <DetailCell label="Airline / Flight">
+                        {booking.airlineName || booking.airline || ''}{booking.flightNumber ? ` • ${booking.flightNumber}` : ''}
+                        {booking.aircraft && <span className="block text-xs text-gray-500 font-medium mt-0.5">{booking.aircraft}</span>}
+                        {booking.operatingAirlineName && booking.operatingAirlineName !== booking.airlineName && (
+                          <span className="block text-xs text-gray-400 mt-0.5">Operated by {booking.operatingAirlineName}</span>
+                        )}
+                      </DetailCell>
+                    )}
+                    {(booking.departureTime || booking.departureTerminal) && (
+                      <DetailCell label="Departure">
+                        {booking.departureTime || ''}{booking.departureTerminal ? ` • Terminal ${booking.departureTerminal}` : ''}
+                      </DetailCell>
+                    )}
+                    {(booking.arrivalTime || booking.arrivalTerminal) && (
+                      <DetailCell label="Arrival">
+                        {booking.arrivalTime || ''}{booking.arrivalTerminal ? ` • Terminal ${booking.arrivalTerminal}` : ''}
+                      </DetailCell>
+                    )}
+                    {(booking.duration || booking.stops !== undefined) && (
+                      <DetailCell label="Duration">
+                        {booking.duration || ''}
+                        {booking.stops !== undefined && booking.stops !== null && (
+                          <span className="text-xs text-gray-500 ml-1 font-medium">• {booking.stops === 0 ? 'Direct' : `${booking.stops} Stop${booking.stops > 1 ? 's' : ''}`}</span>
+                        )}
+                      </DetailCell>
                     )}
                   </div>
                 )}
-                {(booking.departureTime || booking.departureTerminal) && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Departure</p>
-                    <p className="text-sm font-bold text-gray-900">
-                      {booking.departureTime || ''}
-                      {booking.departureTerminal ? ` • Terminal ${booking.departureTerminal}` : ''}
-                    </p>
-                  </div>
-                )}
-                {(booking.arrivalTime || booking.arrivalTerminal) && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Arrival</p>
-                    <p className="text-sm font-bold text-gray-900">
-                      {booking.arrivalTime || ''}
-                      {booking.arrivalTerminal ? ` • Terminal ${booking.arrivalTerminal}` : ''}
-                    </p>
-                  </div>
-                )}
-                {(booking.duration || booking.stops !== undefined) && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Duration</p>
-                    <p className="text-sm font-bold text-gray-900">
-                      {booking.duration || ''}
-                      {booking.stops !== undefined && booking.stops !== null && (
-                        <span className="text-xs text-gray-500 ml-1">
-                          • {booking.stops === 0 ? 'Direct' : `${booking.stops} Stop${booking.stops > 1 ? 's' : ''}`}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
 
-            {/* PNR, Cabin Class, Baggage, Fare Type */}
-            {isFlightBooking && (booking.pnr || booking.cabinClass || booking.baggage || booking.brandedFareLabel) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-                {booking.pnr && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">PNR</p>
-                    <p className="text-sm font-bold text-gray-900 tracking-wider">{booking.pnr}</p>
+                {/* PNR, Cabin Class, Baggage, Fare Type */}
+                {(booking.pnr || booking.cabinClass || booking.baggage || booking.brandedFareLabel) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+                    {booking.pnr && <DetailCell label="PNR"><span className="tracking-wider">{booking.pnr}</span></DetailCell>}
+                    {booking.cabinClass && <DetailCell label="Cabin Class"><span className="capitalize">{booking.cabinClass.replace('_', ' ')}</span></DetailCell>}
+                    {booking.baggage && <DetailCell label="Baggage">{typeof booking.baggage === 'object' ? JSON.stringify(booking.baggage) : booking.baggage}</DetailCell>}
+                    {booking.brandedFareLabel && <DetailCell label="Fare Type">{booking.brandedFareLabel}</DetailCell>}
                   </div>
                 )}
-                {booking.cabinClass && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Cabin Class</p>
-                    <p className="text-sm font-bold text-gray-900 capitalize">{booking.cabinClass.replace('_', ' ')}</p>
-                  </div>
-                )}
-                {booking.baggage && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Baggage</p>
-                    <p className="text-sm font-bold text-gray-900">{typeof booking.baggage === 'object' ? JSON.stringify(booking.baggage) : booking.baggage}</p>
-                  </div>
-                )}
-                {booking.brandedFareLabel && (
-                  <div className="bg-white rounded-lg p-3 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">Fare Type</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.brandedFareLabel}</p>
-                  </div>
-                )}
-              </div>
+              </>
             )}
 
             {isHotelBooking && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {booking.hotelDestination && (
-                  <div className="bg-white rounded-lg p-3 border border-purple-200">
-                    <p className="text-xs text-purple-600 font-semibold mb-1">Destination</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.hotelDestination}</p>
-                  </div>
-                )}
-                {booking.checkinDate && (
-                  <div className="bg-white rounded-lg p-3 border border-purple-200">
-                    <p className="text-xs text-purple-600 font-semibold mb-1">Check-in</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(booking.checkinDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                  </div>
-                )}
-                {booking.checkoutDate && (
-                  <div className="bg-white rounded-lg p-3 border border-purple-200">
-                    <p className="text-xs text-purple-600 font-semibold mb-1">Check-out</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(booking.checkoutDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                  </div>
-                )}
+                {booking.hotelDestination && <DetailCell label="Destination">{booking.hotelDestination}</DetailCell>}
+                {booking.checkinDate && <DetailCell label="Check-in">{fmtDate(booking.checkinDate)}</DetailCell>}
+                {booking.checkoutDate && <DetailCell label="Check-out">{fmtDate(booking.checkoutDate)}</DetailCell>}
                 {(booking.hotelRooms || booking.hotelGuests) && (
-                  <div className="bg-white rounded-lg p-3 border border-purple-200">
-                    <p className="text-xs text-purple-600 font-semibold mb-1">Rooms & Guests</p>
-                    <p className="text-sm font-bold text-gray-900">
-                      {booking.hotelRooms && `${booking.hotelRooms} ${booking.hotelRooms === 1 ? 'Room' : 'Rooms'}`}
-                      {booking.hotelRooms && booking.hotelGuests && ' • '}
-                      {booking.hotelGuests && `${booking.hotelGuests} ${booking.hotelGuests === 1 ? 'Guest' : 'Guests'}`}
-                    </p>
-                  </div>
+                  <DetailCell label="Rooms & Guests">
+                    {booking.hotelRooms && `${booking.hotelRooms} ${booking.hotelRooms === 1 ? 'Room' : 'Rooms'}`}
+                    {booking.hotelRooms && booking.hotelGuests && ' • '}
+                    {booking.hotelGuests && `${booking.hotelGuests} ${booking.hotelGuests === 1 ? 'Guest' : 'Guests'}`}
+                  </DetailCell>
                 )}
               </div>
             )}
 
             {isCruiseBooking && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {booking.cruiseDestination && (
-                  <div className="bg-white rounded-lg p-3 border border-cyan-200">
-                    <p className="text-xs text-cyan-600 font-semibold mb-1">Destination</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.cruiseDestination}</p>
-                  </div>
-                )}
-                {booking.cruiseDepartureDate && (
-                  <div className="bg-white rounded-lg p-3 border border-cyan-200">
-                    <p className="text-xs text-cyan-600 font-semibold mb-1">Departure</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(booking.cruiseDepartureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                  </div>
-                )}
-                {booking.cruiseDuration && (
-                  <div className="bg-white rounded-lg p-3 border border-cyan-200">
-                    <p className="text-xs text-cyan-600 font-semibold mb-1">Duration</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.cruiseDuration} {booking.cruiseDuration === 1 ? 'Day' : 'Days'}</p>
-                  </div>
-                )}
+                {booking.cruiseDestination && <DetailCell label="Destination">{booking.cruiseDestination}</DetailCell>}
+                {booking.cruiseDepartureDate && <DetailCell label="Departure">{fmtDate(booking.cruiseDepartureDate)}</DetailCell>}
+                {booking.cruiseDuration && <DetailCell label="Duration">{booking.cruiseDuration} {booking.cruiseDuration === 1 ? 'Day' : 'Days'}</DetailCell>}
                 {(booking.cruisePassengers || booking.cruiseCabinType) && (
-                  <div className="bg-white rounded-lg p-3 border border-cyan-200">
-                    <p className="text-xs text-cyan-600 font-semibold mb-1">{booking.cruiseCabinType ? 'Cabin & Passengers' : 'Passengers'}</p>
-                    <p className="text-sm font-bold text-gray-900">
-                      {booking.cruiseCabinType && `${booking.cruiseCabinType}`}
-                      {booking.cruiseCabinType && booking.cruisePassengers && ' • '}
-                      {booking.cruisePassengers && `${booking.cruisePassengers} ${booking.cruisePassengers === 1 ? 'Person' : 'People'}`}
-                    </p>
-                  </div>
+                  <DetailCell label={booking.cruiseCabinType ? 'Cabin & Passengers' : 'Passengers'}>
+                    {booking.cruiseCabinType && `${booking.cruiseCabinType}`}
+                    {booking.cruiseCabinType && booking.cruisePassengers && ' • '}
+                    {booking.cruisePassengers && `${booking.cruisePassengers} ${booking.cruisePassengers === 1 ? 'Person' : 'People'}`}
+                  </DetailCell>
                 )}
               </div>
             )}
 
             {isPackageBooking && (booking.packageDestination || booking.packageStartDate || booking.packageEndDate || booking.packageTravelers) && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {booking.packageDestination && (
-                  <div className="bg-white rounded-lg p-3 border border-emerald-200">
-                    <p className="text-xs text-emerald-600 font-semibold mb-1">Destination</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.packageDestination}</p>
-                  </div>
-                )}
-                {booking.packageStartDate && (
-                  <div className="bg-white rounded-lg p-3 border border-emerald-200">
-                    <p className="text-xs text-emerald-600 font-semibold mb-1">Start Date</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(booking.packageStartDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                  </div>
-                )}
-                {booking.packageEndDate && (
-                  <div className="bg-white rounded-lg p-3 border border-emerald-200">
-                    <p className="text-xs text-emerald-600 font-semibold mb-1">End Date</p>
-                    <p className="text-sm font-bold text-gray-900">{new Date(booking.packageEndDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                  </div>
-                )}
-                {booking.packageTravelers && (
-                  <div className="bg-white rounded-lg p-3 border border-emerald-200">
-                    <p className="text-xs text-emerald-600 font-semibold mb-1">Travelers</p>
-                    <p className="text-sm font-bold text-gray-900">{booking.packageTravelers} {booking.packageTravelers === 1 ? 'Person' : 'People'}</p>
-                  </div>
-                )}
+                {booking.packageDestination && <DetailCell label="Destination">{booking.packageDestination}</DetailCell>}
+                {booking.packageStartDate && <DetailCell label="Start Date">{fmtDate(booking.packageStartDate)}</DetailCell>}
+                {booking.packageEndDate && <DetailCell label="End Date">{fmtDate(booking.packageEndDate)}</DetailCell>}
+                {booking.packageTravelers && <DetailCell label="Travelers">{booking.packageTravelers} {booking.packageTravelers === 1 ? 'Person' : 'People'}</DetailCell>}
               </div>
             )}
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Reference</p>
-            <p className="text-base font-bold text-gray-900">{booking.orderId || booking.bookingReference || booking.quoteId || 'N/A'}</p>
+        {/* Meta grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <div className="bg-[#F0FAFC] rounded-lg p-3.5 border border-[#E3F1F6]">
+            <Eyebrow className="block mb-1">Reference</Eyebrow>
+            <p className="text-sm font-bold text-gray-900 truncate">{booking.orderId || booking.bookingReference || booking.quoteId || 'N/A'}</p>
           </div>
-          <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{isDatabaseBooking ? 'Quote Number' : 'Transaction ID'}</p>
-            <p className="text-base font-bold text-gray-900">{isDatabaseBooking ? (booking.orderId || booking.bookingReference) : (booking.transactionId || 'N/A')}</p>
+          <div className="bg-[#F0FAFC] rounded-lg p-3.5 border border-[#E3F1F6]">
+            <Eyebrow className="block mb-1">{isDatabaseBooking ? 'Quote Number' : 'Transaction ID'}</Eyebrow>
+            <p className="text-sm font-bold text-gray-900 truncate">{isDatabaseBooking ? (booking.orderId || booking.bookingReference) : (booking.transactionId || 'N/A')}</p>
           </div>
-          <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Amount</p>
-            <p className="text-lg font-bold text-green-600">
+          <div className="bg-[#F0FAFC] rounded-lg p-3.5 border border-[#E3F1F6]">
+            <Eyebrow className="block mb-1">Amount</Eyebrow>
+            <p className="text-base font-bold text-[#055B75]">
               {(() => {
                 const amt = parseFloat(booking.totalAmount || booking.total_amount || booking.amount || 0);
-                return amt > 0 ? <Price amount={amt} /> : <span className="text-gray-400 font-semibold">On request</span>;
+                return amt > 0 ? <Price amount={amt} /> : <span className="text-gray-400 font-semibold text-sm">On request</span>;
               })()}
             </p>
           </div>
-          <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Booking Date</p>
+          <div className="bg-[#F0FAFC] rounded-lg p-3.5 border border-[#E3F1F6]">
+            <Eyebrow className="block mb-1">Booking Date</Eyebrow>
             <p className="text-sm font-semibold text-gray-900">
-              {new Date(booking.bookingDate || booking.orderCreatedAt || booking.paid_at || new Date()).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric'
-              })}
+              {fmtDate(booking.bookingDate || booking.orderCreatedAt || booking.paid_at || new Date(), { month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
           </div>
         </div>
 
         {booking.description && (
-          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Description</p>
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+            <Eyebrow className="block mb-1">Description</Eyebrow>
             <p className="text-sm text-gray-700">{booking.description}</p>
           </div>
         )}
@@ -1054,49 +984,31 @@ export default function TravelDashboard() {
                   }
                 }
               }}
-              className="flex-1 sm:flex-none px-5 py-2.5 bg-[#055B75] text-white text-sm font-semibold rounded-lg hover:bg-[#034457] transition-colors"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-br from-[#055B75] to-[#034457] text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:shadow-[#055B75]/30 hover:-translate-y-0.5 transition-all"
             >
-              <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                View Booking Details
-              </span>
+              <FaEye className="w-4 h-4" /> View Booking Details
             </button>
           ) : (
             <button
               onClick={() => navigate('/booking-confirmation', { state: { bookingData: booking } })}
-              className="flex-1 sm:flex-none px-5 py-2.5 bg-[#055B75] text-white text-sm font-semibold rounded-lg hover:bg-[#034457] transition-colors"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-br from-[#055B75] to-[#034457] text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:shadow-[#055B75]/30 hover:-translate-y-0.5 transition-all"
             >
-              <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                View Details
-              </span>
+              <FaEye className="w-4 h-4" /> View Details
             </button>
           )}
           {isFlightBooking && !isDatabaseBooking && (
             <button
               onClick={() => navigate('/manage-booking', { state: { bookingData: booking } })}
-              className="flex-1 sm:flex-none px-6 py-3 border-2 border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white text-[#055B75] text-sm font-semibold rounded-lg border-2 border-[#B9D0DC] hover:bg-[#F0FAFC] hover:border-[#055B75] transition-all"
             >
-              <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Manage Booking
-              </span>
+              <FaCog className="w-4 h-4" /> Manage Booking
             </button>
           )}
           {/* Cancel Booking Button — only for non-cancelled upcoming bookings */}
-          {(booking.status || '').toUpperCase() !== 'CANCELLED' && (booking.status || '').toUpperCase() !== 'FAILED' && (daysUntilTrip === null || daysUntilTrip >= 0) && (
+          {statusUp !== 'CANCELLED' && statusUp !== 'FAILED' && (daysUntilTrip === null || daysUntilTrip >= 0) && (
             <>
               {showCancelConfirm === booking.id ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm text-red-600 font-medium">Cancel this booking?</span>
                   <button
                     disabled={cancellingBookingId === booking.id}
@@ -1147,7 +1059,7 @@ export default function TravelDashboard() {
                   </button>
                   <button
                     onClick={() => setShowCancelConfirm(null)}
-                    className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                    className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-200 transition-colors"
                   >
                     No
                   </button>
@@ -1155,14 +1067,9 @@ export default function TravelDashboard() {
               ) : (
                 <button
                   onClick={() => setShowCancelConfirm(booking.id)}
-                  className="flex-1 sm:flex-none px-5 py-2.5 border-2 border-red-200 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 hover:border-red-400 transition-all duration-200"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-red-600 text-sm font-semibold rounded-lg border-2 border-red-200 hover:bg-red-50 hover:border-red-400 transition-all"
                 >
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    Cancel Booking
-                  </span>
+                  <FaTimesCircle className="w-4 h-4" /> Cancel Booking
                 </button>
               )}
             </>
@@ -1172,16 +1079,17 @@ export default function TravelDashboard() {
     )
   }
 
+  // ---- Request card ----
   const renderRequestCard = (request) => {
     const getStatusColor = (status) => {
       switch (status) {
-        case 'pending': return 'bg-yellow-100 text-yellow-800'
-        case 'processing': return 'bg-blue-100 text-blue-800'
-        case 'quoted': return 'bg-green-100 text-green-800'
-        case 'booked': return 'bg-purple-100 text-purple-800'
-        case 'cancelled': return 'bg-red-100 text-red-800'
-        case 'expired': return 'bg-gray-100 text-gray-800'
-        default: return 'bg-gray-100 text-gray-800'
+        case 'pending': return 'bg-amber-50 text-amber-700 border-amber-200'
+        case 'processing': return 'bg-[#F0FAFC] text-[#055B75] border-[#B9D0DC]'
+        case 'quoted': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        case 'booked': return 'bg-violet-50 text-violet-700 border-violet-200'
+        case 'cancelled': return 'bg-red-50 text-red-700 border-red-200'
+        case 'expired': return 'bg-gray-50 text-gray-600 border-gray-200'
+        default: return 'bg-gray-50 text-gray-700 border-gray-200'
       }
     }
 
@@ -1197,46 +1105,27 @@ export default function TravelDashboard() {
       }
     }
 
-    const getInquiryTypeIcon = (type) => {
-      switch (type) {
-        case 'flight': return '✈️'
-        case 'hotel': return '🏨'
-        case 'cruise': return '🚢'
-        case 'package': return '🎒'
-        case 'general': return '💬'
-        default: return '📝'
-      }
-    }
-
-    const getInquiryTypeName = (type) => {
-      switch (type) {
-        case 'flight': return 'Flight'
-        case 'hotel': return 'Hotel'
-        case 'cruise': return 'Cruise'
-        case 'package': return 'Package'
-        case 'general': return 'General'
-        default: return 'Inquiry'
-      }
-    }
+    const activeQuotes = (request.quotes || []).filter(q => q.status === 'sent' || q.status === 'accepted')
 
     return (
       <div key={request.id}
-        className="group bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-all duration-200 border-l-4 border-l-[#0066b2]">
+        className="group bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] hover:shadow-[0_20px_40px_-8px_rgba(5,91,117,0.2)] hover:-translate-y-0.5 transition-all duration-200 relative overflow-hidden">
+        <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-[#055B75] to-[#0890BC]" />
 
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-lg bg-[#B9D0DC] flex items-center justify-center text-xl text-[#055B75]">
-                {getInquiryTypeIcon(request.inquiry_type)}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-[#055B75]/10 text-[#055B75] flex items-center justify-center text-lg flex-shrink-0">
+                <TypeIcon type={request.inquiry_type} />
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-700 transition-colors flex items-center gap-2">
-                  {getInquiryTypeName(request.inquiry_type)} Inquiry
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold text-gray-900 group-hover:text-[#055B75] transition-colors flex items-center gap-2 flex-wrap">
+                  {getTypeName(request.inquiry_type)} Inquiry
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full font-medium">
                     #{request.id.slice(-8)}
                   </span>
                 </h3>
-                <p className="text-sm text-gray-500 font-medium mt-1">
+                <p className="text-sm text-gray-500 font-medium mt-0.5">
                   Submitted {new Date(request.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </p>
               </div>
@@ -1244,178 +1133,137 @@ export default function TravelDashboard() {
           </div>
 
           <div className="flex flex-col items-start sm:items-end gap-2">
-            <span className={`inline-flex items-center px-4 py-2 text-xs font-bold rounded-full shadow-sm ${getStatusColor(request.status)}
-            `}>
-              <span className="w-2 h-2 bg-current bg-opacity-30 rounded-full mr-2"></span>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full border ${getStatusColor(request.status)}`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
               {getStatusText(request.status)}
             </span>
-
-            {/* Mobile-friendly status indicator */}
-            <div className="sm:hidden text-xs text-gray-500 flex items-center gap-1">
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0 1 1 0 002 0zM8 9a1 1 0 000 2h2a1 1 0 100 0H8z" clipRule="evenodd" />
-              </svg>
-              Tap for details
-            </div>
           </div>
         </div>
 
-        {/* Enhanced Progress bar */}
-        <div className="mb-6 p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-100">
+        {/* Progress bar */}
+        <div className="mb-6 p-4 bg-[#F1FBFD] rounded-xl border border-[#D1E9F0]">
           <div className="flex justify-between text-sm font-medium text-gray-700 mb-2">
-            <span>Progress</span>
-            <span className="capitalize">{request.status === 'booked' ? 'Completed' : 'In Progress'}</span>
+            <span className="flex items-center gap-1.5"><FaClock className="w-3.5 h-3.5 text-[#0890BC]" /> Progress</span>
+            <span className="capitalize text-[#055B75] font-semibold">{request.status === 'booked' ? 'Completed' : 'In Progress'}</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-3 shadow-inner overflow-hidden">
+          <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${request.status === 'pending' ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 w-1/4' :
-                request.status === 'processing' ? 'bg-gradient-to-r from-blue-400 to-blue-500 w-1/2' :
-                  request.status === 'quoted' ? 'bg-gradient-to-r from-green-400 to-green-500 w-3/4' :
-                    request.status === 'booked' ? 'bg-gradient-to-r from-purple-400 to-purple-500 w-full' :
+              className={`h-full rounded-full transition-all duration-1000 ease-out ${request.status === 'pending' ? 'bg-gradient-to-r from-amber-400 to-amber-500 w-1/4' :
+                request.status === 'processing' ? 'bg-gradient-to-r from-[#65B3CF] to-[#0890BC] w-1/2' :
+                  request.status === 'quoted' ? 'bg-gradient-to-r from-emerald-400 to-emerald-500 w-3/4' :
+                    request.status === 'booked' ? 'bg-gradient-to-r from-violet-400 to-violet-500 w-full' :
                       'bg-gradient-to-r from-gray-400 to-gray-500 w-full'
                 }`}
             ></div>
           </div>
-          <div className="flex justify-between text-xs text-gray-500 mt-2">
+          <div className="flex justify-between text-xs text-gray-400 mt-2">
             <span>Submitted</span>
             <span>Quoted</span>
             <span>Booked</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Last Updated</p>
+        {/* Meta */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+          <div className="bg-[#F0FAFC] rounded-lg p-3.5 border border-[#E3F1F6]">
+            <Eyebrow className="block mb-1">Last Updated</Eyebrow>
             <p className="text-sm font-semibold text-gray-900">
-              {new Date(request.updated_at).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric'
-              })}
+              {new Date(request.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
           </div>
-          <div className="bg-gray-50 rounded-lg p-4 hover:bg-blue-50 transition-colors">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Priority</p>
+          <div className="bg-[#F0FAFC] rounded-lg p-3.5 border border-[#E3F1F6]">
+            <Eyebrow className="block mb-1">Priority</Eyebrow>
             <p className="text-sm font-semibold text-gray-900 capitalize">{request.priority || 'Normal'}</p>
           </div>
           {request.expires_at && (
-            <div className="bg-amber-50 rounded-lg p-4 border border-amber-200 hover:bg-amber-100 transition-colors sm:col-span-2">
-              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Expires</p>
-              <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0 1 1 0 002 0zM8 9a1 1 0 000 2h2a1 1 0 100 0H8z" clipRule="evenodd" />
-                </svg>
-                {new Date(request.expires_at).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric'
-                })}
+            <div className="bg-amber-50 rounded-lg p-3.5 border border-amber-200 sm:col-span-2">
+              <Eyebrow className="block mb-1 text-amber-700">Expires</Eyebrow>
+              <p className="text-sm font-semibold text-amber-800">
+                {new Date(request.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </p>
             </div>
           )}
         </div>
 
         {/* Inquiry details */}
-        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
-          <p className="text-sm font-semibold text-blue-800 mb-3 flex items-center gap-2">
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-            </svg>
-            Inquiry Details
+        <div className="mb-6 p-4 bg-[#F1FBFD] rounded-xl border border-[#D1E9F0]">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#055B75] mb-3 flex items-center gap-2">
+            <FaInfoCircle className="w-3.5 h-3.5" /> Inquiry Details
           </p>
           {request.inquiry_type === 'flight' && (
             <div className="text-sm text-gray-700 space-y-1">
-              <p><strong className="text-blue-700">Route:</strong> {request.flight_origin} → {request.flight_destination}</p>
-              {request.flight_departure_date && <p><strong className="text-blue-700">Departure:</strong> {new Date(request.flight_departure_date).toLocaleDateString()}</p>}
-              {request.flight_passengers && <p><strong className="text-blue-700">Passengers:</strong> {request.flight_passengers}</p>}
+              <p><strong className="text-[#055B75]">Route:</strong> {request.flight_origin} → {request.flight_destination}</p>
+              {request.flight_departure_date && <p><strong className="text-[#055B75]">Departure:</strong> {new Date(request.flight_departure_date).toLocaleDateString()}</p>}
+              {request.flight_passengers && <p><strong className="text-[#055B75]">Passengers:</strong> {request.flight_passengers}</p>}
             </div>
           )}
           {request.inquiry_type === 'hotel' && (
             <div className="text-sm text-gray-700 space-y-1">
-              <p><strong className="text-blue-700">Destination:</strong> {request.hotel_destination}</p>
-              {request.hotel_checkin_date && <p><strong className="text-blue-700">Check-in:</strong> {new Date(request.hotel_checkin_date).toLocaleDateString()}</p>}
-              {request.hotel_rooms && <p><strong className="text-blue-700">Rooms:</strong> {request.hotel_rooms}</p>}
+              <p><strong className="text-[#055B75]">Destination:</strong> {request.hotel_destination}</p>
+              {request.hotel_checkin_date && <p><strong className="text-[#055B75]">Check-in:</strong> {new Date(request.hotel_checkin_date).toLocaleDateString()}</p>}
+              {request.hotel_rooms && <p><strong className="text-[#055B75]">Rooms:</strong> {request.hotel_rooms}</p>}
             </div>
           )}
           {request.inquiry_type === 'cruise' && (
             <div className="text-sm text-gray-700 space-y-1">
-              <p><strong className="text-blue-700">Destination:</strong> {request.cruise_destination}</p>
-              {request.cruise_departure_date && <p><strong className="text-blue-700">Departure:</strong> {new Date(request.cruise_departure_date).toLocaleDateString()}</p>}
-              {request.cruise_passengers && <p><strong className="text-blue-700">Passengers:</strong> {request.cruise_passengers}</p>}
+              <p><strong className="text-[#055B75]">Destination:</strong> {request.cruise_destination}</p>
+              {request.cruise_departure_date && <p><strong className="text-[#055B75]">Departure:</strong> {new Date(request.cruise_departure_date).toLocaleDateString()}</p>}
+              {request.cruise_passengers && <p><strong className="text-[#055B75]">Passengers:</strong> {request.cruise_passengers}</p>}
             </div>
           )}
           {request.inquiry_type === 'package' && (
             <div className="text-sm text-gray-700 space-y-1">
-              <p><strong className="text-blue-700">Destination:</strong> {request.package_destination}</p>
-              {request.package_start_date && <p><strong className="text-blue-700">Start:</strong> {new Date(request.package_start_date).toLocaleDateString()}</p>}
-              {request.package_travelers && <p><strong className="text-blue-700">Travelers:</strong> {request.package_travelers}</p>}
+              <p><strong className="text-[#055B75]">Destination:</strong> {request.package_destination}</p>
+              {request.package_start_date && <p><strong className="text-[#055B75]">Start:</strong> {new Date(request.package_start_date).toLocaleDateString()}</p>}
+              {request.package_travelers && <p><strong className="text-[#055B75]">Travelers:</strong> {request.package_travelers}</p>}
             </div>
           )}
           {request.inquiry_type === 'general' && (
             <div className="text-sm text-gray-700 space-y-1">
-              {request.inquiry_subject && <p><strong className="text-blue-700">Subject:</strong> {request.inquiry_subject}</p>}
-              {request.inquiry_message && <p className="truncate"><strong className="text-blue-700">Message:</strong> {request.inquiry_message}</p>}
+              {request.inquiry_subject && <p><strong className="text-[#055B75]">Subject:</strong> {request.inquiry_subject}</p>}
+              {request.inquiry_message && <p className="truncate"><strong className="text-[#055B75]">Message:</strong> {request.inquiry_message}</p>}
             </div>
           )}
         </div>
 
-        {/* Show quote information if available */}
-        {request.quotes && request.quotes.length > 0 && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg shadow-sm">
-            <p className="text-sm font-bold text-green-800 mb-3 flex items-center gap-2">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
-              </svg>
-              {request.quotes.filter(q => q.status === 'sent' || q.status === 'accepted').length} Quote{request.quotes.filter(q => q.status === 'sent' || q.status === 'accepted').length !== 1 ? 's' : ''} Available
+        {/* Quotes */}
+        {activeQuotes.length > 0 && (
+          <div className="mb-6 p-4 bg-emerald-50/60 border border-emerald-200 rounded-xl">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700 mb-3 flex items-center gap-2">
+              <FaFileInvoiceDollar className="w-3.5 h-3.5" /> {activeQuotes.length} Quote{activeQuotes.length !== 1 ? 's' : ''} Available
             </p>
-            {request.quotes
-              .filter(q => q.status === 'sent' || q.status === 'accepted')
-              .map((quote) => (
-                <div key={quote.id} className="bg-white bg-opacity-50 rounded-md p-3 mb-2 border border-green-200">
-                  <div className="flex justify-between items-start mb-2">
-                    <p className="text-sm font-semibold text-gray-900">Quote #{quote.quote_number}</p>
-                    <p className="text-lg font-bold text-green-600">${quote.total_amount} {quote.currency}</p>
-                  </div>
-                  {quote.expires_at && (
-                    <p className="text-xs text-gray-600 flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0 1 1 0 002 0zM8 9a1 1 0 000 2h2a1 1 0 100 0H8z" clipRule="evenodd" />
-                      </svg>
-                      Expires: {new Date(quote.expires_at).toLocaleDateString()}
-                    </p>
-                  )}
+            {activeQuotes.map((quote) => (
+              <div key={quote.id} className="bg-white rounded-lg p-3 mb-2 border border-emerald-200 last:mb-0">
+                <div className="flex justify-between items-start mb-1">
+                  <p className="text-sm font-semibold text-gray-900">Quote #{quote.quote_number}</p>
+                  <p className="text-lg font-bold text-emerald-600">${quote.total_amount} {quote.currency}</p>
                 </div>
-              ))}
+                {quote.expires_at && (
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <FaClock className="w-3 h-3" /> Expires: {new Date(quote.expires_at).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            ))}
           </div>
         )}
 
         <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
           <button
             onClick={() => navigate(`/inquiry/${request.id}`)}
-            className="flex-1 sm:flex-none px-5 py-2.5 bg-[#055B75] text-white text-sm font-semibold rounded-lg hover:bg-[#034457] transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-br from-[#055B75] to-[#034457] text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:shadow-[#055B75]/30 hover:-translate-y-0.5 transition-all"
           >
-            <span className="flex items-center justify-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              View Details
-            </span>
+            <FaEye className="w-4 h-4" /> View Details
           </button>
-          {request.quotes && request.quotes.some(q => q.status === 'sent' || q.status === 'accepted') && (
+          {activeQuotes.length > 0 && (
             <button
               onClick={() => {
-                const sentQuote = request.quotes.find(q => q.status === 'sent' || q.status === 'accepted')
+                const sentQuote = activeQuotes[0]
                 navigate('/quote-detail', { state: { quoteData: sentQuote, inquiryData: request } })
               }}
-              className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-semibold rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:shadow-emerald-500/30 hover:-translate-y-0.5 transition-all"
             >
-              <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                View Quote
-              </span>
+              <FaFileInvoiceDollar className="w-4 h-4" /> View Quote
             </button>
           )}
         </div>
@@ -1423,25 +1271,65 @@ export default function TravelDashboard() {
     )
   }
 
+  // ----- Sidebar items config -----
+  const sidebarItems = [
+    { key: "All Bookings", icon: FaClipboardList, count: tabBookings.length },
+    { key: "Flights", icon: FaPlane, count: tabBookings.filter(b => b.type === 'flight').length },
+    { key: "Hotels", icon: FaHotel, count: tabBookings.filter(b => b.type === 'hotel').length },
+    { key: "Cruise", icon: FaShip, count: tabBookings.filter(b => b.type === 'cruise').length },
+    { key: "Packages", icon: FaSuitcaseRolling, count: tabBookings.filter(b => b.type === 'package').length },
+  ]
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+    <div className="min-h-screen flex flex-col font-sans" style={{ background: 'linear-gradient(180deg, #F0FAFC 0%, #E3F1F6 100%)' }}>
       <Navbar />
 
       {isGuest && (
         <div className="bg-amber-50 border-b border-amber-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
             <p className="text-sm text-amber-800 flex items-center gap-2">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
+              <FaExclamationTriangle className="w-4 h-4 flex-shrink-0" />
               Viewing as guest. Sign in to see your bookings.
             </p>
           </div>
         </div>
       )}
 
+      {/* Hero banner */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-[#034457] via-[#055B75] to-[#0890BC] px-4 py-14 md:py-20 text-center">
+        <div className="absolute inset-0 opacity-10 pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, #fff 1px, transparent 0)', backgroundSize: '26px 26px' }} />
+        <div className="relative z-10 max-w-3xl mx-auto">
+          <h1 className="text-3xl md:text-5xl font-bold text-white mb-3 leading-tight tracking-tight">My Trips</h1>
+          <p className="text-base md:text-lg text-white/85 max-w-xl mx-auto leading-relaxed">
+            All your flights, stays, cruises and requests — organized in one place.
+          </p>
+        </div>
+      </section>
+
+      {/* Stat strip floating over hero */}
+      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 -mt-9 relative z-20">
+        <div className="grid grid-cols-3 gap-3 md:gap-4">
+          {[
+            { label: 'Upcoming', value: filterByTab(bookings).length, icon: FaCalendarAlt },
+            { label: 'All Bookings', value: bookings.length, icon: FaClipboardList },
+            { label: 'Requests', value: requests.length, icon: FaCommentDots },
+          ].map((s) => (
+            <div key={s.label} className="bg-white rounded-2xl p-3 md:p-4 border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.15)] flex items-center gap-3">
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-[#055B75]/10 text-[#055B75] flex items-center justify-center flex-shrink-0">
+                <s.icon className="text-base md:text-lg" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xl md:text-2xl font-bold text-gray-900 leading-none">{s.value}</p>
+                <p className="text-[11px] md:text-xs font-semibold uppercase tracking-wider text-gray-400 mt-1 truncate">{s.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Tab Navigation - Underline Style */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
+      <div className="bg-white/70 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-30 mt-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex gap-4 sm:gap-8 overflow-x-auto hide-scrollbar">
             {["Upcoming", "Past", "Cancelled", "Failed"].map((tab) => (
@@ -1449,7 +1337,7 @@ export default function TravelDashboard() {
                 key={tab}
                 onClick={() => handleTabChange(tab)}
                 className={`py-4 text-sm font-semibold whitespace-nowrap transition-all border-b-2 -mb-px ${activeTab === tab
-                  ? "text-[#0066b2] border-[#0066b2]"
+                  ? "text-[#055B75] border-[#055B75]"
                   : "text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300"
                   }`}
               >
@@ -1461,12 +1349,11 @@ export default function TravelDashboard() {
       </div>
 
       <div className="flex-grow">
-
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex gap-6">
             {/* Mobile sidebar backdrop */}
             {isMobileMenuOpen && (
-              <div 
+              <div
                 className="fixed inset-0 bg-black/40 z-30 lg:hidden"
                 onClick={toggleMobileMenu}
               />
@@ -1479,82 +1366,81 @@ export default function TravelDashboard() {
             lg:block flex-shrink-0 shadow-xl lg:shadow-none
           `}>
               <div className="h-full lg:h-auto overflow-y-auto lg:overflow-visible p-4 lg:p-0">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:sticky lg:top-36">
-                  <div className="flex items-center justify-between mb-4 lg:hidden">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] p-2 lg:sticky lg:top-36">
+                  <div className="flex items-center justify-between mb-2 lg:hidden px-3 pt-2">
                     <h2 className="font-semibold text-gray-900">Categories</h2>
                     <button onClick={toggleMobileMenu} className="p-1 hover:bg-gray-100 rounded">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <FaTimesCircle className="w-5 h-5 text-gray-400" />
                     </button>
                   </div>
 
-                  <nav className="space-y-1">
-                    {[
-                      { key: "All Bookings", icon: "📋", count: tabBookings.length },
-                      { key: "Flights", icon: "✈️", count: tabBookings.filter(b => b.type === 'flight').length },
-                      { key: "Hotels", icon: "🏨", count: tabBookings.filter(b => b.type === 'hotel').length },
-                      { key: "Cruise", icon: "🚢", count: tabBookings.filter(b => b.type === 'cruise').length },
-                      { key: "Packages", icon: "🎒", count: tabBookings.filter(b => b.type === 'package').length },
-                    ].map((item) => (
-                      <button
-                        key={item.key}
-                        onClick={() => handleSidebarItemChange(item.key)}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeSidebarItem === item.key
-                          ? "bg-[#B9D0DC]/30 text-[#055B75] border-l-3 border-l-[#055B75]"
-                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                          }`}
-                      >
-                        <span className="flex items-center gap-3">
-                          <span className="text-lg">{item.icon}</span>
-                          <span className="font-medium text-sm">{item.key}</span>
-                        </span>
-                        {item.count > 0 && (
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${activeSidebarItem === item.key
-                            ? "bg-[#B9D0DC] text-[#055B75]"
-                            : "bg-gray-100 text-gray-600"
-                            }`}>
-                            {item.count}
+                  <p className="hidden lg:block text-[11px] font-bold uppercase tracking-widest text-gray-400 px-3 pt-3 pb-1">Bookings</p>
+                  <nav className="space-y-0.5">
+                    {sidebarItems.map((item) => {
+                      const active = activeSidebarItem === item.key
+                      return (
+                        <button
+                          key={item.key}
+                          onClick={() => handleSidebarItemChange(item.key)}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${active
+                            ? "bg-gradient-to-r from-[#055B75]/10 to-[#034457]/10 text-[#055B75] font-semibold shadow-[inset_3px_0_0_#055B75]"
+                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
+                            }`}
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className={`text-base ${active ? 'text-[#055B75]' : 'text-gray-400'}`}><item.icon /></span>
+                            <span className="text-sm">{item.key}</span>
                           </span>
-                        )}
-                      </button>
-                    ))}
+                          {item.count > 0 && (
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${active
+                              ? "bg-[#055B75] text-white"
+                              : "bg-gray-100 text-gray-600"
+                              }`}>
+                              {item.count}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
 
-                    <div className="border-t border-gray-200 my-3"></div>
+                    <div className="border-t border-gray-100 my-2"></div>
 
                     <button
                       onClick={() => handleSidebarItemChange("Requests")}
                       className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeSidebarItem === "Requests"
-                        ? "bg-[#B9D0DC] text-[#055B75]"
-                        : "text-gray-700 hover:bg-gray-50"
+                        ? "bg-gradient-to-r from-[#055B75]/10 to-[#034457]/10 text-[#055B75] font-semibold shadow-[inset_3px_0_0_#055B75]"
+                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
                         }`}
                     >
                       <span className="flex items-center gap-3">
-                        <span className="text-lg">💬</span>
-                        <span className="font-medium text-sm">My Requests</span>
+                        <span className={`text-base ${activeSidebarItem === "Requests" ? 'text-[#055B75]' : 'text-gray-400'}`}><FaCommentDots /></span>
+                        <span className="text-sm">My Requests</span>
                       </span>
                       {requests.length > 0 && (
                         <span className={`text-xs px-2 py-0.5 rounded-full ${activeSidebarItem === "Requests"
-                          ? "bg-[#B9D0DC] text-[#055B75]"
+                          ? "bg-[#055B75] text-white"
                           : "bg-gray-100 text-gray-600"
                           }`}>
                           {requests.length}
                         </span>
                       )}
                     </button>
-
-                    <div className="border-t border-gray-200 my-3"></div>
-
-                    <button
-                      onClick={() => navigate('/membership')}
-                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors text-yellow-700 hover:bg-yellow-50 border border-yellow-200 bg-yellow-50"
-                    >
-                      <span className="flex items-center gap-3">
-                        <span className="text-lg">⭐</span>
-                        <span className="font-medium text-sm">Premium Membership</span>
-                      </span>
-                    </button>
                   </nav>
+
+                  {/* Membership card */}
+                  <div className="border-t border-gray-100 my-2"></div>
+                  <button
+                    onClick={() => navigate('/membership')}
+                    className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors bg-gradient-to-br from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 border border-amber-200"
+                  >
+                    <span className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center flex-shrink-0">
+                      <FaStar className="text-sm" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-amber-800">Premium Membership</span>
+                      <span className="block text-xs text-amber-600">Unlock exclusive perks</span>
+                    </span>
+                  </button>
                 </div>
               </div>
             </aside>
@@ -1574,9 +1460,7 @@ export default function TravelDashboard() {
                 onClick={toggleMobileMenu}
                 className="lg:hidden mb-4 flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
+                <FaClipboardList className="w-4 h-4 text-[#055B75]" />
                 Categories
               </button>
 
@@ -1584,12 +1468,7 @@ export default function TravelDashboard() {
                 /* Requests Section */
                 isAuthenticated ? (
                   isLoadingRequests ? (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
-                      <div className="flex flex-col items-center justify-center">
-                        <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                        <p className="mt-4 text-gray-600">Loading requests...</p>
-                      </div>
-                    </div>
+                    <Spinner label="Loading requests..." />
                   ) : filteredRequests.length > 0 ? (
                     <div className="space-y-4">
                       {/* Header */}
@@ -1600,12 +1479,10 @@ export default function TravelDashboard() {
                         </div>
                         <button
                           onClick={loadRequests}
-                          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                          className="p-2 text-gray-400 hover:text-[#055B75] hover:bg-[#F0FAFC] rounded-lg transition-colors"
                           title="Refresh"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
+                          <FaSyncAlt className="w-4 h-4" />
                         </button>
                       </div>
 
@@ -1616,7 +1493,7 @@ export default function TravelDashboard() {
                     </div>
                   ) : (
                     <EmptyState
-                      icon="💬"
+                      icon={<FaCommentDots />}
                       title={`No ${activeTab} Requests`}
                       description="When you submit a travel inquiry, it will appear here."
                       actionLabel="Submit New Request"
@@ -1625,7 +1502,7 @@ export default function TravelDashboard() {
                   )
                 ) : (
                   <EmptyState
-                    icon="🔒"
+                    icon={<FaLock />}
                     title="Login Required"
                     description="Please sign in to view your travel requests."
                     actionLabel="Sign In"
@@ -1635,12 +1512,7 @@ export default function TravelDashboard() {
               ) : (
                 /* Bookings Section */
                 isLoadingBookings ? (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
-                    <div className="flex flex-col items-center justify-center">
-                      <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                      <p className="mt-4 text-gray-600">Loading bookings...</p>
-                    </div>
-                  </div>
+                  <Spinner label="Loading bookings..." />
                 ) : filteredBookings.length > 0 ? (
                   <div className="space-y-4">
                     {/* Header */}
@@ -1653,12 +1525,10 @@ export default function TravelDashboard() {
                       </div>
                       <button
                         onClick={loadBookings}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        className="p-2 text-gray-400 hover:text-[#055B75] hover:bg-[#F0FAFC] rounded-lg transition-colors"
                         title="Refresh"
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
+                        <FaSyncAlt className="w-4 h-4" />
                       </button>
                     </div>
 
@@ -1669,7 +1539,7 @@ export default function TravelDashboard() {
                   </div>
                 ) : (
                   <EmptyState
-                    icon={isGuest ? "🔒" : "✈️"}
+                    icon={isGuest ? <FaLock /> : <FaPlane />}
                     title={isGuest ? "Sign In to View Bookings" : `No ${activeTab} Bookings`}
                     description={isGuest
                       ? "Sign in to view your trips and bookings."
@@ -1689,13 +1559,11 @@ export default function TravelDashboard() {
 
       {/* Login Popup */}
       {showLoginPopup && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-[0_24px_48px_-12px_rgba(5,91,117,0.4)]">
             <div className="text-center">
-              <div className="w-16 h-16 bg-[#B9D0DC] rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-[#055B75]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
+              <div className="w-16 h-16 bg-[#055B75]/10 rounded-full flex items-center justify-center mx-auto mb-4 text-[#055B75]">
+                <FaShieldAlt className="w-8 h-8" />
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Sign In Required</h2>
               <p className="text-gray-600 text-sm mb-6">
@@ -1704,13 +1572,13 @@ export default function TravelDashboard() {
               <div className="space-y-3">
                 <button
                   onClick={handleLoginClick}
-                  className="w-full py-3 bg-[#055B75] text-white font-medium rounded-lg hover:bg-[#034457] transition-colors"
+                  className="w-full py-3 bg-gradient-to-br from-[#055B75] to-[#034457] text-white font-semibold rounded-lg hover:shadow-lg transition-all"
                 >
                   Sign In
                 </button>
                 <button
                   onClick={closeLoginPopup}
-                  className="w-full py-3 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors"
+                  className="w-full py-3 text-gray-600 font-semibold hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   Continue as Guest
                 </button>
