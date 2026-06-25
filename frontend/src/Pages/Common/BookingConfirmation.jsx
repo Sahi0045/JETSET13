@@ -383,7 +383,22 @@ function BookingConfirmation() {
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-sm">
                       <div className="flex justify-between text-gray-600 mb-2">
                         <span>Base Fare</span>
-                        <span>{bookingData.currency || 'USD'} {parseFloat(bookingData.fareBreakdown.baseFare || 0).toFixed(2)}</span>
+                        <span>{bookingData.currency || 'USD'} {(() => {
+                          const fb = bookingData.fareBreakdown || {};
+                          const total = parseFloat(bookingData.amount || bookingData.totalAmount || 0);
+                          const taxes = parseFloat(fb.totalTax || 0);
+                          const addons = parseFloat(fb.addonsTotal || 0);
+                          const vip = parseFloat(fb.vipServiceFee || 0);
+                          const storedBase = parseFloat(fb.baseFare || 0);
+                          // Keep the breakdown consistent with the amount actually charged:
+                          // if base + taxes (+ extras) doesn't equal the total, derive base from the total.
+                          let base = storedBase;
+                          if (total > 0 && Math.abs((storedBase + taxes + addons + vip) - total) > 0.01) {
+                            const derived = total - taxes - addons - vip;
+                            if (derived >= 0) base = derived;
+                          }
+                          return base.toFixed(2);
+                        })()}</span>
                       </div>
                       <div className="flex justify-between text-gray-600 mb-2">
                         <span>Taxes & Fees</span>

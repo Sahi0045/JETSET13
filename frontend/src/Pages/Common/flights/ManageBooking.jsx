@@ -184,7 +184,7 @@ function ManageBooking() {
         <Navbar />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0890BC] mx-auto mb-4"></div>
             <p className="text-gray-600">Loading booking details...</p>
           </div>
         </div>
@@ -203,7 +203,7 @@ function ManageBooking() {
             <p className="text-gray-600 mb-4">{error}</p>
             <button
               onClick={() => navigate('/my-trips')}
-              className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition"
+              className="bg-[#0890BC] text-white px-6 py-2 rounded-lg hover:bg-[#055B75] transition"
             >
               Back to My Trips
             </button>
@@ -219,15 +219,15 @@ function ManageBooking() {
       return (
         <div className={`p-4 rounded-lg mb-6 ${currentStatus === 'CONFIRMED' ? 'bg-emerald-50 border border-emerald-200' :
           currentStatus === 'FAILED' ? 'bg-red-50 border border-red-200' :
-            'bg-blue-50 border border-blue-200'
+            'bg-[#F0FAFC] border border-[#B9D0DC]'
           }`}>
           <div className="flex items-center">
             {currentStatus === 'CONFIRMED' ? (
               <CheckCircle className="w-5 h-5 text-emerald-600 mr-2" />
             ) : (
-              <Info className="w-5 h-5 text-blue-600 mr-2" />
+              <Info className="w-5 h-5 text-[#055B75] mr-2" />
             )}
-            <span className={`font-medium ${currentStatus === 'CONFIRMED' ? 'text-emerald-800' : 'text-blue-800'}`}>
+            <span className={`font-medium ${currentStatus === 'CONFIRMED' ? 'text-emerald-800' : 'text-[#034457]'}`}>
               Booking Status: {bookingData?.status || 'Confirmed'}
             </span>
           </div>
@@ -307,13 +307,13 @@ function ManageBooking() {
 
                     {/* Circle Icon */}
                     <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center border-2 ${step.status === 'complete' ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30' :
-                      step.status === 'current' ? 'bg-white border-blue-500 text-blue-500 shadow-lg shadow-blue-500/30' :
+                      step.status === 'current' ? 'bg-white border-[#0890BC] text-[#0890BC] shadow-lg shadow-[#0890BC]/30' :
                         step.status === 'error' ? 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-500/30' :
                           'bg-white border-slate-200 text-slate-300'
                       } transition-all duration-300 md:mb-4 relative z-20 bg-white`}>
                       {step.status === 'complete' ? <CheckCircle className="w-5 h-5" /> :
                         step.status === 'error' ? <AlertCircle className="w-5 h-5" /> :
-                          step.status === 'current' ? <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div> :
+                          step.status === 'current' ? <div className="w-3 h-3 rounded-full bg-[#0890BC] animate-pulse"></div> :
                             <div className="w-2.5 h-2.5 rounded-full bg-slate-200"></div>}
                     </div>
 
@@ -325,7 +325,7 @@ function ManageBooking() {
 
                     <div className="ml-5 md:ml-0 md:text-center mt-0.5 md:mt-0 relative z-20 bg-white/50 md:bg-transparent px-1 rounded">
                       <h4 className={`text-sm md:text-base font-bold ${step.status === 'complete' ? 'text-slate-800' :
-                        step.status === 'current' ? 'text-blue-700' :
+                        step.status === 'current' ? 'text-[#034457]' :
                           step.status === 'error' ? 'text-rose-700' :
                             'text-slate-400'
                         }`}>{step.title}</h4>
@@ -393,7 +393,7 @@ function ManageBooking() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F1FBFD]">
       <Navbar />
 
       <div className="pt-[80px]">
@@ -402,7 +402,7 @@ function ManageBooking() {
           <div className="flex items-center mb-6">
             <button
               onClick={() => navigate('/my-trips')}
-              className="flex items-center text-blue-600 hover:text-blue-700 mr-4"
+              className="flex items-center text-[#055B75] hover:text-[#034457] mr-4"
             >
               <ArrowLeft className="w-5 h-5 mr-1" />
               Back to My Trips
@@ -420,7 +420,7 @@ function ManageBooking() {
           <div className="flex flex-wrap gap-3 mb-6">
             <button
               onClick={downloadETicket}
-              className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+              className="flex items-center bg-[#055B75] text-white px-4 py-2 rounded-lg hover:bg-[#034457] transition"
             >
               <Download className="w-4 h-4 mr-2" />
               Download E-Ticket
@@ -459,7 +459,7 @@ function ManageBooking() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
+                    ? 'border-[#0890BC] text-[#055B75]'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                 >
@@ -479,7 +479,7 @@ function ManageBooking() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
                     <div className="border-r-0 sm:border-r border-gray-200 pr-0 sm:pr-4">
                       <label className="text-sm font-medium text-gray-500 block mb-1">PNR Number</label>
-                      <p className="text-lg font-semibold font-mono text-blue-600">{bookingData?.pnr || 'Not Available'}</p>
+                      <p className="text-lg font-semibold font-mono text-[#055B75]">{bookingData?.pnr || 'Not Available'}</p>
                     </div>
                     <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-4">
                       <label className="text-sm font-medium text-gray-500 block mb-1">Booking Reference</label>
@@ -496,12 +496,12 @@ function ManageBooking() {
                   </div>
 
                   {/* Flight Route Information */}
-                  <div className="mt-6 p-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
+                  <div className="mt-6 p-6 bg-gradient-to-r from-gray-50 to-[#F0FAFC] rounded-xl border border-gray-200">
                     <h4 className="font-semibold mb-4 text-gray-700">Flight Route</h4>
                     <div className="flex items-center justify-between">
                       {/* Departure */}
                       <div className="text-center flex-1">
-                        <div className="text-3xl font-bold text-blue-600 mb-1">
+                        <div className="text-3xl font-bold text-[#055B75] mb-1">
                           {bookingData?.origin || bookingData?.flight?.departureCity?.substring(0, 3)?.toUpperCase() || 'DEP'}
                         </div>
                         <div className="text-sm text-gray-600 font-medium">
@@ -519,7 +519,7 @@ function ManageBooking() {
                       <div className="flex-1 px-4 text-center">
                         <div className="relative">
                           <div className="border-t-2 border-dashed border-gray-300 w-full"></div>
-                          <Plane className="w-6 h-6 text-blue-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rotate-90" />
+                          <Plane className="w-6 h-6 text-[#0890BC] absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rotate-90" />
                         </div>
                         <div className="text-xs text-gray-500 mt-3">
                           {bookingData?.duration || bookingData?.flight?.duration || 'Duration N/A'}
@@ -533,7 +533,7 @@ function ManageBooking() {
 
                       {/* Arrival */}
                       <div className="text-center flex-1">
-                        <div className="text-3xl font-bold text-blue-600 mb-1">
+                        <div className="text-3xl font-bold text-[#055B75] mb-1">
                           {bookingData?.destination || bookingData?.flight?.arrivalCity?.substring(0, 3)?.toUpperCase() || 'ARR'}
                         </div>
                         <div className="text-sm text-gray-600 font-medium">
@@ -695,15 +695,15 @@ function ManageBooking() {
           </div>
 
           {/* Contact Support */}
-          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-semibold text-blue-800 mb-2">Need Help?</h4>
-            <p className="text-blue-700 text-sm mb-3">Our customer support team is here to assist you with any questions about your booking.</p>
+          <div className="mt-6 bg-[#F0FAFC] border border-[#B9D0DC] rounded-lg p-4">
+            <h4 className="font-semibold text-[#034457] mb-2">Need Help?</h4>
+            <p className="text-[#034457] text-sm mb-3">Our customer support team is here to assist you with any questions about your booking.</p>
             <div className="flex flex-wrap gap-4">
-              <a href="tel:(877) 538-7380" className="flex items-center text-blue-600 hover:text-blue-700">
+              <a href="tel:(877) 538-7380" className="flex items-center text-[#055B75] hover:text-[#034457]">
                 <Phone className="w-4 h-4 mr-1" />
                 (877) 538-7380
               </a>
-              <a href="mailto:support@jetsetterss.com" className="flex items-center text-blue-600 hover:text-blue-700">
+              <a href="mailto:support@jetsetterss.com" className="flex items-center text-[#055B75] hover:text-[#034457]">
                 <Mail className="w-4 h-4 mr-1" />
                 support@jetsetterss.com
               </a>
@@ -787,7 +787,7 @@ function ManageBooking() {
               <select
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0890BC] focus:border-[#0890BC]"
               >
                 <option>Change of plans</option>
                 <option>Found a better deal</option>
@@ -840,13 +840,13 @@ function ManageBooking() {
           <div className="px-6 py-4">
 
             {/* 2. Top Barcode Information */}
-            <div className="bg-blue-50 rounded-t-lg border border-blue-100 p-4 mb-0">
-              <p className="text-sm text-blue-800">
+            <div className="bg-[#F0FAFC] rounded-t-lg border border-[#D1E9F0] p-4 mb-0">
+              <p className="text-sm text-[#034457]">
                 Barcode(s) for your journey <span className="font-bold">{bookingData?.originCity || bookingData?.bookingDetails?.flight?.departureCity || 'Origin'}-{bookingData?.destinationCity || bookingData?.bookingDetails?.flight?.arrivalCity || 'Dest'}</span> on <span className="font-bold">{bookingData?.airlineName || bookingData?.bookingDetails?.flight?.airline || 'Jetsetters Air'}</span>
               </p>
             </div>
 
-            <div className="border-x border-b border-blue-100 rounded-b-lg mb-6 p-4">
+            <div className="border-x border-b border-[#D1E9F0] rounded-b-lg mb-6 p-4">
               {(bookingData?.travelers || bookingData?.passengerData)?.map((traveler, idx) => (
                 <div key={idx} className="flex justify-between items-center mb-4 last:mb-0">
                   <div className="font-medium text-gray-700">{traveler.firstName} {traveler.lastName}</div>
@@ -894,7 +894,7 @@ function ManageBooking() {
 
             {/* 5. Trip Details Card */}
             <div className="border border-gray-200 rounded-lg overflow-hidden mb-6 shadow-sm">
-              <div className="bg-blue-600 px-4 py-3">
+              <div className="bg-[#055B75] px-4 py-3">
                 <h3 className="text-white font-bold text-lg">Your trip details</h3>
               </div>
 
@@ -1051,9 +1051,9 @@ function ManageBooking() {
             </div>
 
             {/* 7. Guidelines */}
-            <div className="bg-blue-50 rounded-lg p-5 mb-6 border border-blue-100">
+            <div className="bg-[#F0FAFC] rounded-lg p-5 mb-6 border border-[#D1E9F0]">
               <h4 className="font-bold text-gray-800 mb-3 flex items-center">
-                <Info className="w-4 h-4 mr-2 text-blue-600" />
+                <Info className="w-4 h-4 mr-2 text-[#055B75]" />
                 For convenient travel, follow these guidelines
               </h4>
               <ul className="text-xs text-gray-600 space-y-2">

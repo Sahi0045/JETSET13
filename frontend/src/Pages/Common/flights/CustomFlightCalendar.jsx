@@ -268,7 +268,7 @@ export default function CustomFlightCalendar({
                 </div>
                 <div className="grid grid-cols-7 text-center border-b border-gray-200 bg-gray-50/50">
                     {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-                        <div key={d} className="text-[10px] font-semibold text-gray-500 py-2 uppercase tracking-wider">{d}</div>
+                        <div key={d} className="text-[9px] sm:text-[10px] font-semibold text-gray-500 py-2 uppercase tracking-wider">{d}</div>
                     ))}
                 </div>
                 <div className="select-none p-1">
@@ -280,7 +280,7 @@ export default function CustomFlightCalendar({
 
     return (
         <div
-            className={`absolute top-full left-0 mt-4 z-[100] bg-white shadow-2xl rounded-xl border border-gray-200 w-[640px] overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${isDragging ? 'cursor-grabbing select-none' : ''}`}
+            className={`absolute top-full left-0 mt-4 z-[100] bg-white shadow-2xl rounded-xl border border-gray-200 w-[calc(100vw-2rem)] max-w-[360px] sm:max-w-none sm:w-[640px] overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${isDragging ? 'cursor-grabbing select-none' : ''}`}
             style={{
                 transform: `translate(${position.x}px, ${position.y}px)`,
             }}
@@ -297,8 +297,8 @@ export default function CustomFlightCalendar({
                 </button>
                 <div className="flex items-center gap-3">
                     {loading && <Loader2 className="h-4 w-4 animate-spin text-[#055B75]" />}
-                    <span className="text-[10px] font-bold text-[#055B75] uppercase tracking-widest bg-white px-3 py-1 rounded-full border border-gray-200 shadow-sm">
-                        Drag to Move • Select Date
+                    <span className="text-[10px] font-bold text-[#055B75] uppercase tracking-widest bg-white px-3 py-1 rounded-full border border-gray-200 shadow-sm whitespace-nowrap">
+                        <span className="hidden sm:inline">Drag to Move • </span>Select Date
                     </span>
                 </div>
                 <button
@@ -311,7 +311,9 @@ export default function CustomFlightCalendar({
 
             <div className="flex divide-x divide-gray-200">
                 {renderMonth(currentMonth)}
-                {renderMonth(nextMonth)}
+                <div className="hidden sm:flex flex-1 min-w-0">
+                    {renderMonth(nextMonth)}
+                </div>
             </div>
 
             <div className="bg-gray-50 px-4 py-3 flex justify-between items-center border-t border-gray-200">
