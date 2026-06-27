@@ -22,10 +22,24 @@ let redis;
 
 function getRedisClient() {
   if (!redis) {
-    const redisUrl = process.env.REDIS_URL;
+    // Accept any of the common connection-string names that managed Redis providers
+    // (Upstash/Vercel Marketplace, Vercel KV, Render, etc.) may inject — so you don't
+    // have to force the value specifically into REDIS_URL. Only accept a real Redis
+    // protocol URL (redis:// or rediss://); ignore https REST endpoints like
+    // UPSTASH_REDIS_REST_URL, which ioredis can't use.
+    const candidates = [
+      process.env.REDIS_URL,
+      process.env.KV_URL,
+      process.env.REDIS_TLS_URL,
+      process.env.UPSTASH_REDIS_URL,
+      process.env.STORAGE_REDIS_URL,
+    ];
+    const redisUrl = candidates.find(
+      (u) => typeof u === 'string' && /^rediss?:\/\//i.test(u.trim())
+    );
 
     if (!redisUrl) {
-      console.warn('[Cache] REDIS_URL not set — caching disabled, all calls pass through.');
+      console.warn('[Cache] No Redis URL found (REDIS_URL/KV_URL/...) — caching disabled, all calls pass through.');
       return null;
     }
 
@@ -58,6 +72,11 @@ export const TTL = {
   ANALYTICS_DASH:     15 * 60,   // 15 minutes
   USER_PROFILE:       10 * 60,   // 10 minutes
   GEO_LOCATION:       24 * 60 * 60, // 24 hours
+  // Home-page "browse" data (cheapest-dates, inspiration, price-analysis, calendar prices).
+  // These change slowly, so a long TTL turns "N visits × M Amadeus calls" into
+  // "M calls per route per TTL window" — the bulk of the Amadeus cost saving.
+  FLIGHT_BROWSE:      12 * 60 * 60, // 12 hours
+  FLIGHT_CALENDAR:    6  * 60 * 60, //  6 hours
 };
 
 // ─── Core helpers ────────────────────────────────────────────
@@ -218,4 +237,10 @@ export const CacheKeys = {
 
   geoLocation: (ip) =>
     `geo:${ip}`,
+
+  // Generic builder for flight "browse" endpoints (cheapest-dates, inspiration, etc.).
+  // Pass a kind + an ordered list of params; undefined/empty parts collapse to '' so
+  // the key is stable for the same logical query.
+  flightBrowse: (kind, parts = []) =>
+    `flights:browse:${kind}:${parts.map((p) => (p === undefined || p === null ? '' : p)).join(':')}`,
 };

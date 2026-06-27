@@ -220,60 +220,9 @@ export default function TravelDashboard() {
       console.error('Error fetching database bookings:', error)
     }
 
-    // Load flight bookings from localStorage (as fallback/supplement)
-    // Support both array format (new) and single object format (legacy)
-    const flightBookingRaw = localStorage.getItem('completedFlightBookings') || localStorage.getItem('completedFlightBooking')
-    console.log('Flight booking from localStorage:', flightBookingRaw ? 'Found' : 'Not found')
-
-    if (flightBookingRaw) {
-      try {
-        const parsed = JSON.parse(flightBookingRaw)
-        const flightBookingsArr = Array.isArray(parsed) ? parsed : [parsed]
-        console.log(`Parsed ${flightBookingsArr.length} flight booking(s) from localStorage`)
-        for (const booking of flightBookingsArr) {
-          // Check if this booking already exists in database bookings
-          const exists = allBookings.some(b =>
-            b.bookingReference === booking.bookingReference ||
-            b.pnr === booking.pnr
-          )
-          if (!exists) {
-            allBookings.push({
-              ...booking,
-              type: 'flight',
-              bookingDate: booking.orderCreatedAt || new Date().toISOString(),
-              source: 'localStorage'
-            })
-          }
-        }
-      } catch (error) {
-        console.error('Error parsing flight booking:', error)
-      }
-    }
-
-    // Load cruise bookings from localStorage
-    const cruiseBooking = localStorage.getItem('completedBooking')
-    console.log('Cruise booking from localStorage:', cruiseBooking ? 'Found' : 'Not found')
-
-    if (cruiseBooking) {
-      try {
-        const booking = JSON.parse(cruiseBooking)
-        console.log('Parsed cruise booking:', booking)
-        // Check if this booking already exists in database bookings
-        const exists = allBookings.some(b =>
-          b.bookingReference === booking.bookingReference
-        )
-        if (!exists) {
-          allBookings.push({
-            ...booking,
-            type: 'cruise',
-            bookingDate: booking.orderCreatedAt || new Date().toISOString(),
-            source: 'localStorage'
-          })
-        }
-      } catch (error) {
-        console.error('Error parsing cruise booking:', error)
-      }
-    }
+    // NOTE: Bookings are loaded exclusively from the server (database) below.
+    // localStorage is intentionally NOT used as a booking source so that
+    // My Trips always reflects the authoritative server state.
 
     // Load paid bookings from database
     try {

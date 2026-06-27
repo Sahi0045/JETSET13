@@ -2,9 +2,10 @@ import express from 'express';
 import AmadeusService from '../services/amadeusService.js';
 import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
-import { get as cacheGet, set as cacheSet, CacheKeys, TTL } from '../services/cache.service.js';
+import { get as cacheGet, set as cacheSet, withCache, CacheKeys, TTL } from '../services/cache.service.js';
 import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
+import { handleCancelBookingAction, reverseArcPaymentForOrder } from './payment/operations.handlers.js';
 
 // Only the fields the handler genuinely requires; passthrough keeps the rest.
 const flightSearchSchema = z
@@ -17,8 +18,78 @@ const flightSearchSchema = z
 
 const router = express.Router();
 
+// Invoke the single orchestrated cancel handler (Amadeus cancel + ARC Pay refund/void +
+// DB update + email) in-process — no HTTP self-call, so it works on Vercel serverless.
+// Single source of truth for cancellation; returns that handler's response payload + status.
+async function invokeOrchestratedCancel(bookingReference, reason) {
+  let payload = null;
+  let statusCode = 200;
+  const fakeRes = {
+    status(code) { statusCode = code; return this; },
+    json(body) { payload = body; return this; }
+  };
+  await handleCancelBookingAction({ method: 'POST', body: { bookingReference, reason } }, fakeRes);
+  return { statusCode, payload };
+}
+
+// Called when flight ticket issuance FAILS after the customer was already charged.
+// Reverses the ARC payment (VOID/REFUND), marks the booking row as cancelled/refunded with
+// the failure recorded, and returns an honest error — never fabricates a confirmed booking.
+// Responds via `res`; returns the Express response.
+async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg }) {
+  console.warn('🚑 Ticket not booked after payment — reversing charge. order:', orderId, '| reason:', errorMsg);
+  const reversal = await reverseArcPaymentForOrder(orderId, {
+    amount,
+    currency,
+    reason: 'Flight booking failed after payment'
+  });
+  console.log('💸 Payment reversal result:', reversal.action, '| reversed:', reversal.reversed);
+
+  // Record the failure on the booking row created at hosted-checkout (if any).
+  try {
+    const ref = bookingReference || orderId;
+    if (supabase && ref) {
+      const { data: bk } = await supabase
+        .from('bookings')
+        .select('*')
+        .or(`booking_reference.eq.${ref},booking_details->>order_id.eq.${ref}`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (bk) {
+        await supabase.from('bookings').update({
+          status: 'cancelled',
+          payment_status: reversal.reversed ? 'refunded' : bk.payment_status,
+          booking_details: {
+            ...bk.booking_details,
+            fulfillment_failed: { at: new Date().toISOString(), error: errorMsg, reversal }
+          },
+          updated_at: new Date().toISOString()
+        }).eq('id', bk.id);
+      }
+    }
+  } catch (e) {
+    console.error('⚠️ Could not update booking after fulfillment failure:', e.message);
+  }
+
+  const userMessage = reversal.reversed
+    ? 'We could not confirm your flight booking, so your payment has been reversed. The amount will be returned to your original payment method.'
+    : 'We could not confirm your flight booking. Your payment could not be auto-reversed and our team will process your refund shortly.';
+
+  return res.status(502).json({
+    success: false,
+    bookingFailed: true,
+    refunded: reversal.reversed,
+    refundAction: reversal.action,                 // VOID | REFUND | ALREADY_REVERSED | NONE | FAILED
+    refundAmount: reversal.amount ?? amount ?? null,
+    error: userMessage,                            // FlightCreateOrders surfaces `.error` first
+    message: userMessage,
+    technicalError: errorMsg
+  });
+}
+
 // Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://qqmagqwumjipdqvxbiqu.supabase.co';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
@@ -470,12 +541,89 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
   }).filter(Boolean);
 };
 
+// Build raw Amadeus-shaped flight offers for LOCAL TESTING only (e.g. when the Amadeus key
+// is rate-limited). Returned through transformAmadeusFlightData so the shape — including
+// `originalOffer` used by the booking step — matches a real search result exactly.
+// Gated behind ENABLE_MOCK_FLIGHTS=true; never enable in production.
+function buildMockFlightOffers(searchParams) {
+  const from = String(searchParams.from || 'DEL').toUpperCase().slice(0, 3);
+  const to = String(searchParams.to || 'BOM').toUpperCase().slice(0, 3);
+  const date = String(searchParams.departDate || new Date().toISOString().split('T')[0]).split('T')[0];
+
+  const mk = (id, carrier, num, depTime, arrTime, total, base, durH, durM, aircraft) => ({
+    type: 'flight-offer',
+    id: String(id),
+    source: 'GDS',
+    instantTicketingRequired: false,
+    nonHomogeneous: false,
+    oneWay: false,
+    lastTicketingDate: date,
+    numberOfBookableSeats: 9,
+    itineraries: [{
+      duration: `PT${durH}H${durM}M`,
+      segments: [{
+        departure: { iataCode: from, terminal: '3', at: `${date}T${depTime}:00` },
+        arrival: { iataCode: to, terminal: '2', at: `${date}T${arrTime}:00` },
+        carrierCode: carrier,
+        number: num,
+        aircraft: { code: aircraft },
+        operating: { carrierCode: carrier },
+        duration: `PT${durH}H${durM}M`,
+        id: '1',
+        numberOfStops: 0,
+        blacklistedInEU: false
+      }]
+    }],
+    price: {
+      currency: 'USD',
+      total: total.toFixed(2),
+      base: base.toFixed(2),
+      fees: [{ amount: '0.00', type: 'SUPPLIER' }, { amount: '0.00', type: 'TICKETING' }],
+      grandTotal: total.toFixed(2)
+    },
+    pricingOptions: { fareType: ['PUBLISHED'], includedCheckedBagsOnly: true },
+    validatingAirlineCodes: [carrier],
+    travelerPricings: [{
+      travelerId: '1',
+      fareOption: 'STANDARD',
+      travelerType: 'ADULT',
+      price: { currency: 'USD', total: total.toFixed(2), base: base.toFixed(2) },
+      fareDetailsBySegment: [{
+        segmentId: '1',
+        cabin: 'ECONOMY',
+        fareBasis: 'ZZ1YXII',
+        brandedFare: 'ECOVALUE',
+        class: 'Z',
+        includedCheckedBags: { quantity: 1 }
+      }]
+    }]
+  });
+
+  return [
+    mk(1, 'AI', '131', '10:30', '12:45', 120, 90, 2, 15, '32N'),
+    mk(2, '6E', '209', '18:05', '20:30', 99, 75, 2, 25, '320')
+  ];
+}
+
 // Flight search endpoint
 router.post('/search', validate({ body: flightSearchSchema }), async (req, res) => {
   try {
     console.log('🔍 Flight search request received:', req.body);
 
     const { from, to, departDate, returnDate, tripType, travelers } = req.body;
+
+    // LOCAL TESTING: serve mock flights without calling Amadeus (e.g. when the API key is
+    // rate-limited). Opt-in via ENABLE_MOCK_FLIGHTS=true — never set this in production.
+    if (process.env.ENABLE_MOCK_FLIGHTS === 'true') {
+      const mockParams = { from, to, departDate, returnDate, adults: parseInt(req.body.adults || travelers) || 1 };
+      const mockFlights = transformAmadeusFlightData(buildMockFlightOffers(mockParams));
+      console.log(`🧪 ENABLE_MOCK_FLIGHTS=true → returning ${mockFlights.length} mock flights (Amadeus skipped)`);
+      return res.json({
+        success: true,
+        data: mockFlights,
+        meta: { searchParams: mockParams, resultCount: mockFlights.length, source: 'mock' }
+      });
+    }
 
     // Check if Amadeus credentials are available
     const { apiKey, apiSecret } = getAmadeusCredentials();
@@ -674,48 +822,54 @@ router.post('/date-prices', async (req, res) => {
       });
     }
 
-    const resolvedFrom = await resolveToIATACode(from);
-    const resolvedTo = await resolveToIATACode(to);
+    const cacheKey = CacheKeys.flightBrowse('date-prices', [from, to, (dates || []).join(','), adults, children, infants, travelClass]);
+    const payload = await withCache(cacheKey, TTL.FLIGHT_CALENDAR, async () => {
+      const resolvedFrom = await resolveToIATACode(from);
+      const resolvedTo = await resolveToIATACode(to);
 
-    // Cap dates (a month view sends ~31) and skip past dates
-    const today = new Date().toISOString().split('T')[0];
-    const limited = dates.slice(0, 35).filter((d) => d && d >= today);
+      // Cap dates (a month view sends ~31) and skip past dates
+      const today = new Date().toISOString().split('T')[0];
+      const limited = dates.slice(0, 35).filter((d) => d && d >= today);
 
-    const probe = async (date) => {
-      const r = await AmadeusService.searchFlights({
-        from: resolvedFrom,
-        to: resolvedTo,
-        departDate: date,
-        adults: parseInt(adults) || 1,
-        children: parseInt(children) || 0,
-        infants: parseInt(infants) || 0,
-        travelClass: travelClass || undefined,
-        max: 1, // Amadeus returns cheapest first
-        currency: 'USD'
-      });
-      const offers = r.data || [];
-      if (!offers.length) return { date, price: null };
-      const min = Math.min(...offers.map(o => parseFloat(o.price?.total || o.price?.grandTotal || Infinity)));
-      return { date, price: Number.isFinite(min) ? min : null };
-    };
+      const probe = async (date) => {
+        const r = await AmadeusService.searchFlights({
+          from: resolvedFrom,
+          to: resolvedTo,
+          departDate: date,
+          adults: parseInt(adults) || 1,
+          children: parseInt(children) || 0,
+          infants: parseInt(infants) || 0,
+          travelClass: travelClass || undefined,
+          max: 1, // Amadeus returns cheapest first
+          currency: 'USD'
+        });
+        const offers = r.data || [];
+        if (!offers.length) return { date, price: null };
+        const min = Math.min(...offers.map(o => parseFloat(o.price?.total || o.price?.grandTotal || Infinity)));
+        return { date, price: Number.isFinite(min) ? min : null };
+      };
 
-    // Throttle: process in batches to stay within Amadeus rate limits
-    const dateWisePrices = {};
-    const BATCH = 6;
-    for (let i = 0; i < limited.length; i += BATCH) {
-      const batch = limited.slice(i, i + BATCH);
-      const settled = await Promise.allSettled(batch.map(probe));
-      settled.forEach((r) => {
-        if (r.status === 'fulfilled' && r.value && r.value.price != null) {
-          dateWisePrices[r.value.date] = r.value.price;
-        }
-      });
-    }
+      // Throttle: process in batches to stay within Amadeus rate limits
+      const dateWisePrices = {};
+      const BATCH = 6;
+      for (let i = 0; i < limited.length; i += BATCH) {
+        const batch = limited.slice(i, i + BATCH);
+        const settled = await Promise.allSettled(batch.map(probe));
+        settled.forEach((r) => {
+          if (r.status === 'fulfilled' && r.value && r.value.price != null) {
+            dateWisePrices[r.value.date] = r.value.price;
+          }
+        });
+      }
 
-    const priceVals = Object.values(dateWisePrices);
-    const lowestPrice = priceVals.length ? Math.min(...priceVals) : null;
+      const priceVals = Object.values(dateWisePrices);
+      const lowestPrice = priceVals.length ? Math.min(...priceVals) : null;
+      // Only cache when we actually got prices — never cache an empty result.
+      return priceVals.length ? { dateWisePrices, lowestPrice } : null;
+    });
 
-    res.json({ success: true, dateWisePrices, lowestPrice, currency: 'USD' });
+    const out = payload || { dateWisePrices: {}, lowestPrice: null };
+    res.json({ success: true, dateWisePrices: out.dateWisePrices, lowestPrice: out.lowestPrice, currency: 'USD' });
 
   } catch (error) {
     console.error('❌ Date-prices error:', error);
@@ -1168,7 +1322,18 @@ router.post('/order', async (req, res) => {
     } catch (amadeusServiceError) {
       console.error('❌ AmadeusService.createFlightOrder threw an error:', amadeusServiceError);
 
-      // If Amadeus service completely fails, create a mock booking as ultimate fallback
+      // PRODUCTION: never fabricate a booking after a real charge — reverse the payment instead.
+      if (process.env.NODE_ENV === 'production') {
+        return await refundOnFulfillmentFailure(res, {
+          orderId: req.body.orderId,
+          bookingReference: req.body.bookingReference,
+          amount: totalAmount || amount,
+          currency: firstOffer?.price?.currency || 'USD',
+          errorMsg: amadeusServiceError?.message || 'Amadeus booking failed'
+        });
+      }
+
+      // Non-production only: create a mock booking as ultimate fallback (keeps dev/test flowing)
       const mockPNR = generateMockPNR();
       const orderId = req.body.orderId || `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const bookingReference = req.body.bookingReference || `BOOK-${Date.now().toString(36).toUpperCase()}`;
@@ -1270,10 +1435,31 @@ router.post('/order', async (req, res) => {
     if (!orderResponse || !orderResponse.success) {
       const errorMsg = orderResponse?.error || 'Amadeus service returned unsuccessful response';
       console.error('❌ Amadeus order creation failed:', errorMsg);
+      if (process.env.NODE_ENV === 'production') {
+        return await refundOnFulfillmentFailure(res, {
+          orderId: req.body.orderId,
+          bookingReference: req.body.bookingReference,
+          amount: totalAmount || amount,
+          currency: firstOffer?.price?.currency || 'USD',
+          errorMsg
+        });
+      }
       throw new Error(errorMsg);
     }
 
     console.log('✅ Flight order created successfully');
+
+    // PRODUCTION: a "successful" MOCK response means no real ticket was issued — reverse the charge.
+    if (process.env.NODE_ENV === 'production' && typeof orderResponse.mode === 'string' && orderResponse.mode.toUpperCase().includes('MOCK')) {
+      console.error('❌ Amadeus returned a MOCK booking in production (no real ticket):', orderResponse.mode);
+      return await refundOnFulfillmentFailure(res, {
+        orderId: req.body.orderId,
+        bookingReference: req.body.bookingReference,
+        amount: totalAmount || amount,
+        currency: firstOffer?.price?.currency || 'USD',
+        errorMsg: `No real ticket issued (mode: ${orderResponse.mode})`
+      });
+    }
 
     // Extract flight details for database from the first offer
     const firstItinerary = firstOffer?.itineraries?.[0];
@@ -1449,21 +1635,12 @@ router.delete('/order/:orderId', async (req, res) => {
 
     // Delegate to the orchestrated cancel: it cancels the real Amadeus order (via the
     // stored amadeus_order_id), refunds/voids via ARC Pay, updates booking status, and
-    // persists the full cancellation record. Single source of truth.
-    const paymentApiUrl = `${req.protocol}://${req.get('host')}/api/payments?action=cancel-booking`;
+    // persists the full cancellation record. Single source of truth — called in-process
+    // (no HTTP self-call) so it also works on Vercel serverless.
     try {
-      const cancelResponse = await fetch(paymentApiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookingReference: orderId,
-          reason: 'Customer cancellation via flight order API'
-        })
-      });
+      const { payload: cancelResult } = await invokeOrchestratedCancel(orderId, 'Customer cancellation via flight order API');
 
-      const cancelResult = await cancelResponse.json();
-
-      if (cancelResult.success) {
+      if (cancelResult?.success) {
         return res.json({
           success: true,
           message: cancelResult.message || `Order ${orderId} cancelled`,
@@ -1474,9 +1651,9 @@ router.delete('/order/:orderId', async (req, res) => {
         });
       }
 
-      console.warn('⚠️ Orchestrated cancel returned error:', cancelResult.error);
-    } catch (fetchError) {
-      console.warn('⚠️ Could not reach orchestrated cancel endpoint:', fetchError.message);
+      console.warn('⚠️ Orchestrated cancel returned error:', cancelResult?.error);
+    } catch (invokeError) {
+      console.warn('⚠️ Orchestrated cancel failed:', invokeError.message);
     }
 
     // Fallback: mock-aware Amadeus cancel + DB status (no refund) if the orchestrator is unreachable
@@ -1910,19 +2087,25 @@ router.get('/cheapest-dates', async (req, res) => {
     }
 
     console.log(`💰 Cheapest dates: ${origin} → ${destination}`);
-    const result = await AmadeusService.getCheapestFlightDates(origin, destination, {
-      departureDate,
-      oneWay: oneWay === 'true',
-      duration: duration ? parseInt(duration) : undefined,
-      nonStop: nonStop === 'true',
-      viewBy: viewBy || 'DATE'
+    const cacheKey = CacheKeys.flightBrowse('cheapest-dates', [origin, destination, departureDate, viewBy || 'DATE', oneWay, nonStop, duration]);
+    const result = await withCache(cacheKey, TTL.FLIGHT_BROWSE, async () => {
+      const r = await AmadeusService.getCheapestFlightDates(origin, destination, {
+        departureDate,
+        oneWay: oneWay === 'true',
+        duration: duration ? parseInt(duration) : undefined,
+        nonStop: nonStop === 'true',
+        viewBy: viewBy || 'DATE'
+      });
+      // Only cache successful, non-empty responses — never cache failures/empties.
+      return (r && r.success && Array.isArray(r.data) && r.data.length) ? r : null;
     });
 
+    const out = result || { success: true, data: [], fallback: true };
     res.json({
-      success: result.success,
-      data: result.data || [],
-      dictionaries: result.dictionaries,
-      meta: result.meta
+      success: out.success,
+      data: out.data || [],
+      dictionaries: out.dictionaries,
+      meta: out.meta
     });
   } catch (error) {
     console.error('❌ Cheapest dates error:', error);
@@ -2087,21 +2270,27 @@ router.get('/inspiration', async (req, res) => {
     }
 
     console.log(`💡 Inspiration search from ${origin}`);
-    const result = await AmadeusService.getFlightInspirations(origin, {
-      departureDate,
-      oneWay: oneWay === 'true',
-      duration: duration ? parseInt(duration) : undefined,
-      nonStop: nonStop === 'true',
-      maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
-      viewBy: viewBy || 'DATE',
-      destination
+    const cacheKey = CacheKeys.flightBrowse('inspiration', [origin, departureDate, oneWay, duration, nonStop, maxPrice, viewBy || 'DATE', destination]);
+    const result = await withCache(cacheKey, TTL.FLIGHT_BROWSE, async () => {
+      const r = await AmadeusService.getFlightInspirations(origin, {
+        departureDate,
+        oneWay: oneWay === 'true',
+        duration: duration ? parseInt(duration) : undefined,
+        nonStop: nonStop === 'true',
+        maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+        viewBy: viewBy || 'DATE',
+        destination
+      });
+      // Only cache successful, non-empty responses — never cache failures/empties.
+      return (r && r.success && Array.isArray(r.data) && r.data.length) ? r : null;
     });
 
+    const out = result || { success: false, data: [] };
     res.json({
-      success: result.success,
-      data: result.data || [],
-      dictionaries: result.dictionaries,
-      meta: result.meta
+      success: out.success,
+      data: out.data || [],
+      dictionaries: out.dictionaries,
+      meta: out.meta
     });
   } catch (error) {
     console.error('❌ Inspiration search error:', error);
@@ -2120,15 +2309,21 @@ router.get('/price-analysis', async (req, res) => {
     }
 
     console.log(`📊 Price analysis: ${origin} → ${destination} on ${departureDate}`);
-    const result = await AmadeusService.getFlightPriceAnalysis(origin, destination, departureDate, {
-      currencyCode: currencyCode || 'USD',
-      oneWay: oneWay === 'true'
+    const cacheKey = CacheKeys.flightBrowse('price-analysis', [origin, destination, departureDate, currencyCode || 'USD', oneWay]);
+    const result = await withCache(cacheKey, TTL.FLIGHT_BROWSE, async () => {
+      const r = await AmadeusService.getFlightPriceAnalysis(origin, destination, departureDate, {
+        currencyCode: currencyCode || 'USD',
+        oneWay: oneWay === 'true'
+      });
+      // Only cache successful, non-empty responses — never cache failures/empties.
+      return (r && r.success && Array.isArray(r.data) && r.data.length) ? r : null;
     });
 
+    const out = result || { success: false, data: [] };
     res.json({
-      success: result.success,
-      data: result.data || [],
-      meta: result.meta
+      success: out.success,
+      data: out.data || [],
+      meta: out.meta
     });
   } catch (error) {
     console.error('❌ Price analysis error:', error);
@@ -2296,240 +2491,16 @@ router.post('/admin-bookings/:id/cancel', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Booking is already cancelled' });
     }
 
-    // Direct ARC Pay cancel flow (no self-fetch — works on Vercel serverless)
+    // Delegate to the single orchestrated cancel handler (Amadeus cancel + ARC Pay
+    // refund/void + DB update + email). No HTTP self-call, so it works on serverless.
     const bookingRef = booking.booking_reference || booking.booking_details?.order_id;
-    const arcPayOrderId = booking.booking_details?.order_id || booking.booking_reference;
+    const { statusCode, payload } = await invokeOrchestratedCancel(bookingRef, reason);
 
-    // ARC Pay config
-    const ARC_MERCHANT_ID = process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704';
-    const ARC_API_PASSWORD = process.env.ARC_PAY_API_PASSWORD;
-    const ARC_BASE_URL = process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77';
-    const arcAuthHeader = 'Basic ' + Buffer.from(`merchant.${ARC_MERCHANT_ID}:${ARC_API_PASSWORD}`).toString('base64');
-    const arcHeaders = { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': arcAuthHeader };
-
-    const cancellationResult = {
-      bookingId: booking.id,
-      bookingReference: bookingRef,
-      amadeusCancelled: false,
-      paymentProcessed: false,
-      refundAmount: null,
-      paymentAction: null,
-      cancellationFee: 0
-    };
-
-    // 1. Cancel flight via Amadeus API
-    try {
-      const amadeus_client_id = process.env.AMADEUS_API_KEY || process.env.AMADEUS_CLIENT_ID;
-      const amadeus_client_secret = process.env.AMADEUS_API_SECRET || process.env.AMADEUS_CLIENT_SECRET;
-      const amadeus_base_url = process.env.AMADEUS_BASE_URL || 'https://test.api.amadeus.com';
-
-      if (amadeus_client_id && amadeus_client_secret) {
-        const tokenResponse = await fetch(`${amadeus_base_url}/v1/security/oauth2/token`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `grant_type=client_credentials&client_id=${amadeus_client_id}&client_secret=${amadeus_client_secret}`
-        });
-        if (tokenResponse.ok) {
-          const tokenData = await tokenResponse.json();
-          const cancelResponse = await fetch(`${amadeus_base_url}/v1/booking/flight-orders/${bookingRef}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'Accept': 'application/vnd.amadeus+json' }
-          });
-          if (cancelResponse.ok || cancelResponse.status === 204) {
-            console.log('✅ Amadeus flight order cancelled');
-            cancellationResult.amadeusCancelled = true;
-          } else {
-            console.warn('⚠️ Amadeus cancellation failed:', cancelResponse.status);
-          }
-        }
-      }
-    } catch (amadeusError) {
-      console.warn('⚠️ Amadeus cancellation error:', amadeusError.message);
+    if (!payload?.success) {
+      return res.status(statusCode || 500).json(payload || { success: false, error: 'Cancellation failed' });
     }
 
-    // 2. Process refund/void via ARC Pay directly
-    let cancellationFee = 0;
-    try {
-      const { data: priceSettings } = await supabase.from('price_settings').select('settings').single();
-      cancellationFee = priceSettings?.settings?.cancellation_fee || 50.00;
-    } catch (e) { cancellationFee = 50.00; }
-    cancellationResult.cancellationFee = cancellationFee;
-
-    if (booking.payment_status === 'paid' || booking.payment_status === 'completed') {
-      try {
-        // Look up the payment record
-        const { data: payment } = await supabase
-          .from('payments')
-          .select('*')
-          .or(`quote_id.eq.${booking.id},id.eq.${booking.payment_id || 'none'}`)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (payment) {
-          const originalAmount = parseFloat(payment.amount || booking.total_amount || 0);
-          const netRefundAmount = Math.max(0, originalAmount - cancellationFee);
-          // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
-          const orderIdForArc = booking.booking_details?.order_id || payment.arc_order_id || booking.booking_reference || payment.id;
-          console.log('🔑 ARC Pay Order ID for refund/void:', orderIdForArc);
-
-          if ((payment.payment_status === 'completed' || payment.payment_status === 'paid') && netRefundAmount > 0) {
-            // Issue partial REFUND (original - cancellation fee)
-            const refundTxnId = `refund-admin-${Date.now()}`;
-            const refundUrl = `${ARC_BASE_URL}/merchant/${ARC_MERCHANT_ID}/order/${orderIdForArc}/transaction/${refundTxnId}`;
-            console.log('💸 Issuing REFUND:', netRefundAmount.toFixed(2));
-
-            const refundResp = await fetch(refundUrl, {
-              method: 'PUT',
-              headers: arcHeaders,
-              body: JSON.stringify({
-                apiOperation: 'REFUND',
-                transaction: {
-                  amount: netRefundAmount.toFixed(2),
-                  currency: payment.currency || 'USD',
-                  reference: `Admin cancel refund (fee: ${cancellationFee}): ${reason}`
-                }
-              })
-            });
-
-            if (refundResp.ok) {
-              console.log('✅ ARC Pay REFUND successful');
-              cancellationResult.paymentProcessed = true;
-              cancellationResult.paymentAction = 'PARTIAL_REFUND';
-              cancellationResult.refundAmount = netRefundAmount;
-              await supabase.from('payments').update({ payment_status: 'partially_refunded' }).eq('id', payment.id);
-            } else {
-              const errText = await refundResp.text();
-              console.error('❌ ARC Pay REFUND failed:', refundResp.status, errText);
-              cancellationResult.paymentAction = 'REFUND_FAILED';
-            }
-          } else if (payment.payment_status === 'pending' || payment.payment_status === 'authorized') {
-            // VOID the authorization
-            let targetTxnId = payment.arc_transaction_id;
-            if (!targetTxnId) {
-              try {
-                const orderResp = await fetch(`${ARC_BASE_URL}/merchant/${ARC_MERCHANT_ID}/order/${orderIdForArc}`, { method: 'GET', headers: arcHeaders });
-                if (orderResp.ok) {
-                  const orderData = await orderResp.json();
-                  const txns = orderData.transaction || [];
-                  const payTxn = txns.find(t => t.transaction?.type === 'PAYMENT' || t.transaction?.type === 'AUTHORIZATION');
-                  targetTxnId = payTxn?.transaction?.id || txns[txns.length - 1]?.transaction?.id;
-                }
-              } catch (e) { console.warn('⚠️ Could not retrieve order for txn ID:', e.message); }
-            }
-            if (targetTxnId) {
-              const voidTxnId = `void-admin-${Date.now()}`;
-              const voidUrl = `${ARC_BASE_URL}/merchant/${ARC_MERCHANT_ID}/order/${orderIdForArc}/transaction/${voidTxnId}`;
-              console.log('🚫 Issuing VOID for transaction:', targetTxnId);
-              const voidResp = await fetch(voidUrl, {
-                method: 'PUT',
-                headers: arcHeaders,
-                body: JSON.stringify({ apiOperation: 'VOID', transaction: { targetTransactionId: targetTxnId, reference: `Admin cancel: ${reason}` } })
-              });
-              if (voidResp.ok) {
-                console.log('✅ ARC Pay VOID successful');
-                cancellationResult.paymentProcessed = true;
-                cancellationResult.paymentAction = 'VOID';
-                cancellationResult.refundAmount = originalAmount;
-                cancellationResult.cancellationFee = 0;
-                await supabase.from('payments').update({ payment_status: 'voided' }).eq('id', payment.id);
-              } else {
-                console.error('❌ ARC Pay VOID failed:', voidResp.status);
-                cancellationResult.paymentAction = 'VOID_FAILED';
-              }
-            }
-          } else if ((payment.payment_status === 'completed' || payment.payment_status === 'paid') && netRefundAmount <= 0) {
-            cancellationResult.paymentProcessed = true;
-            cancellationResult.paymentAction = 'NO_REFUND_FEE_COVERS';
-            cancellationResult.refundAmount = 0;
-            await supabase.from('payments').update({ payment_status: 'cancelled' }).eq('id', payment.id);
-          }
-        } else {
-          // No payment record found — direct booking via hosted checkout
-          // Use booking data directly for ARC Pay refund
-          console.log('⚠️ No payment record found, using booking data for refund');
-          const originalAmount = parseFloat(booking.total_amount || 0);
-          const netRefundAmount = Math.max(0, originalAmount - cancellationFee);
-          const orderIdForArc = booking.booking_details?.order_id || booking.booking_reference;
-          console.log('🔑 ARC Pay Order ID (from booking):', orderIdForArc, 'Amount:', originalAmount, 'Net refund:', netRefundAmount);
-
-          if (netRefundAmount > 0) {
-            const refundTxnId = `refund-admin-${Date.now()}`;
-            const refundUrl = `${ARC_BASE_URL}/merchant/${ARC_MERCHANT_ID}/order/${orderIdForArc}/transaction/${refundTxnId}`;
-            console.log('💸 Issuing REFUND (no payment record):', netRefundAmount.toFixed(2));
-
-            const refundResp = await fetch(refundUrl, {
-              method: 'PUT',
-              headers: arcHeaders,
-              body: JSON.stringify({
-                apiOperation: 'REFUND',
-                transaction: {
-                  amount: netRefundAmount.toFixed(2),
-                  currency: 'USD',
-                  reference: `Admin cancel refund (fee: ${cancellationFee}): ${reason}`
-                }
-              })
-            });
-
-            if (refundResp.ok) {
-              console.log('✅ ARC Pay REFUND successful (no payment record)');
-              cancellationResult.paymentProcessed = true;
-              cancellationResult.paymentAction = 'PARTIAL_REFUND';
-              cancellationResult.refundAmount = netRefundAmount;
-            } else {
-              const errText = await refundResp.text();
-              console.error('❌ ARC Pay REFUND failed:', refundResp.status, errText);
-              cancellationResult.paymentAction = 'REFUND_FAILED';
-            }
-          } else {
-            // Fee covers the full amount
-            cancellationResult.paymentProcessed = true;
-            cancellationResult.paymentAction = 'NO_REFUND_FEE_COVERS';
-            cancellationResult.refundAmount = 0;
-          }
-        }
-      } catch (paymentError) {
-        console.warn('⚠️ Payment refund/void error:', paymentError.message);
-        cancellationResult.paymentAction = 'MANUAL_PROCESS_REQUIRED';
-      }
-    }
-
-    // 3. Update booking status in DB
-    // DB constraint: payment_status IN ('unpaid','partial','paid','refunded','partially_refunded')
-    // Always mark as partially_refunded when cancelling a paid booking — even if ARC Pay refund
-    // fails (sandbox/test), the booking IS cancelled. Refund details tracked in booking_details.cancellation
-    const newPaymentStatus = cancellationResult.paymentProcessed
-      ? (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded'
-        : cancellationResult.paymentAction === 'VOID' ? 'refunded' : 'refunded')
-      : (booking.payment_status === 'paid' ? 'partially_refunded' : booking.payment_status);
-
-    const { error: updateError } = await supabase
-      .from('bookings')
-      .update({
-        status: 'cancelled',
-        payment_status: newPaymentStatus,
-        booking_details: {
-          ...booking.booking_details,
-          cancellation: {
-            cancelledAt: new Date().toISOString(),
-            reason,
-            adminCancelled: true,
-            amadeusCancelled: cancellationResult.amadeusCancelled,
-            paymentAction: cancellationResult.paymentAction,
-            refundAmount: cancellationResult.refundAmount,
-            cancellationFee: cancellationResult.cancellationFee,
-            netRefund: cancellationResult.refundAmount || 0
-          }
-        },
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id);
-
-    if (updateError) {
-      return res.status(500).json({ success: false, error: updateError.message });
-    }
-
-    console.log('✅ Admin booking cancelled:', id, 'Payment action:', cancellationResult.paymentAction);
+    console.log('✅ Admin booking cancelled:', id, 'Payment action:', payload.cancellation?.paymentAction);
 
     res.json({
       success: true,
@@ -2540,7 +2511,7 @@ router.post('/admin-bookings/:id/cancel', async (req, res) => {
         previousStatus: booking.status,
         newStatus: 'cancelled',
         reason,
-        cancellation: cancellationResult
+        cancellation: payload.cancellation
       }
     });
   } catch (error) {

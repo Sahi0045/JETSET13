@@ -4,6 +4,7 @@ import { Search, MapPin, Calendar, Users, Star, ArrowRight, Sparkles, Shield, Cl
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import Navbar from '../Navbar';
+import ServiceTabs from '../../../Components/ServiceTabs';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
@@ -251,7 +252,8 @@ const HotelsLanding = () => {
                     </div>
 
                     {/* Search Form Card */}
-                    <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 md:p-8 max-w-5xl mx-auto transform hover:scale-[1.01] transition-all duration-300">
+                    <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 md:p-8 max-w-5xl mx-auto transform hover:scale-[1.01] transition-all duration-300 animate-in fade-in slide-in-from-bottom-6 duration-700 ease-out">
+                        <ServiceTabs active="hotels" className="-mx-6 md:-mx-8 -mt-6 md:-mt-8 mb-5 pt-3 border-b border-gray-100 bg-transparent" />
                         <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4 items-end">
                             {/* Destination */}
                             <div className="flex-1 w-full relative" ref={destinationInputRef}>

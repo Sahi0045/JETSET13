@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendBookingNotificationEmails } from '../../services/emailService.js';
 
 // Initialize Supabase client for database storage
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://qqmagqwumjipdqvxbiqu.supabase.co';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
@@ -62,9 +62,9 @@ async function saveBookingToDatabase(bookingData) {
 
 // ARC Pay configuration
 const ARC_PAY_CONFIG = {
-    API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/77/merchant/TESTARC05511704',
-    MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704',
-    API_USERNAME: process.env.ARC_PAY_API_USERNAME || 'TESTARC05511704',
+    API_URL: process.env.ARC_PAY_API_URL,
+    MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID,
+    API_USERNAME: process.env.ARC_PAY_API_USERNAME,
     API_PASSWORD: process.env.ARC_PAY_API_PASSWORD,
     BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77',
     PORTAL_URL: process.env.ARC_PAY_PORTAL_URL || 'https://api.arcpay.travel/ma/'

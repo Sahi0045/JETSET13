@@ -183,6 +183,8 @@ const BookingsList = () => {
                 credentials: 'include',
                 body: JSON.stringify({
                     paymentId: orderId,
+                    orderId: orderId,
+                    bookingReference: bookingRef,
                     reason: voidReason || 'Admin initiated void'
                 })
             });

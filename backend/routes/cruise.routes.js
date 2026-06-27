@@ -76,54 +76,87 @@ router.post('/bookings', async (req, res) => {
       });
     }
 
-    const { data, error } = await supabase
+    // Fetch the pending row created at checkout (carries success_indicator + session)
+    let existing = null;
+    try {
+      const { data: found } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('booking_reference', orderId)
+        .single();
+      existing = found;
+    } catch (_) { /* no pending row — proceed */ }
+
+    // Verify payment: ARC Pay resultIndicator must match the stored successIndicator
+    const storedIndicator = existing?.booking_details?.success_indicator;
+    const providedIndicator = transactionId || sessionId;
+    if (storedIndicator && providedIndicator && storedIndicator !== providedIndicator) {
+      console.warn('⚠️ Payment indicator mismatch for cruise order:', orderId);
+      try {
+        await supabase
+          .from('bookings')
+          .update({ status: 'pending', payment_status: 'unpaid' })
+          .eq('booking_reference', orderId);
+      } catch (_) { /* non-blocking */ }
+      return res.status(400).json({ success: false, verified: false, error: 'Payment could not be verified' });
+    }
+
+    const buildRow = (uid) => ({
+      user_id: uid || null,
+      booking_reference: orderId,
+      travel_type: 'cruise',
+      status: 'confirmed',
+      total_amount: parseFloat(totalAmount) || 0,
+      payment_status: 'paid',
+      booking_details: {
+        ...(existing?.booking_details || {}),
+        order_id: orderId,
+        transaction_id: providedIndicator || existing?.booking_details?.transaction_id || null,
+        cruise_name: cruiseName || '',
+        cruise_image: cruiseImage || '',
+        duration: duration || '',
+        departure: departure || '',
+        arrival: arrival || '',
+        departure_date: departureDate || '',
+        return_date: returnDate || '',
+        base_price: parseFloat(basePrice) || 0,
+        taxes_and_fees: parseFloat(taxesAndFees) || 0,
+        port_charges: parseFloat(portCharges) || 0,
+        amount: parseFloat(totalAmount) || 0,
+        currency: 'USD',
+        paid_at: new Date().toISOString(),
+        original_user_id: userId || null
+      },
+      passenger_details: passengers
+    });
+
+    // Upsert on booking_reference so the pending/unpaid row is upgraded to confirmed/paid
+    let { data, error } = await supabase
       .from('bookings')
-      .insert({
-        user_id: userId || null,
-        booking_reference: orderId,
-        travel_type: 'cruise',
-        status: 'confirmed',
-        total_amount: parseFloat(totalAmount) || 0,
-        payment_status: 'paid',
-        booking_details: {
-          order_id: orderId,
-          transaction_id: transactionId || sessionId || null,
-          cruise_name: cruiseName || '',
-          cruise_image: cruiseImage || '',
-          duration: duration || '',
-          departure: departure || '',
-          arrival: arrival || '',
-          departure_date: departureDate || '',
-          return_date: returnDate || '',
-          base_price: parseFloat(basePrice) || 0,
-          taxes_and_fees: parseFloat(taxesAndFees) || 0,
-          port_charges: parseFloat(portCharges) || 0,
-          amount: parseFloat(totalAmount) || 0,
-          currency: 'USD'
-        },
-        passenger_details: passengers
-      })
+      .upsert(buildRow(userId), { onConflict: 'booking_reference' })
       .select()
       .single();
 
+    // FK (user_id not in auth.users) or RLS violation → retry without user_id
+    if (error && userId && (error.code === '23503' || error.code === '42501' ||
+        error.message?.includes('violates foreign key') || error.message?.includes('row-level security'))) {
+      console.log('🔄 Retrying cruise booking save without user_id (FK/RLS constraint issue)...');
+      ({ data, error } = await supabase
+        .from('bookings')
+        .upsert(buildRow(null), { onConflict: 'booking_reference' })
+        .select()
+        .single());
+    }
+
     if (error) {
       console.error('❌ Error saving cruise booking:', error);
-      // If it's a duplicate, that's okay
-      if (error.code === '23505') {
-        console.log('ℹ️ Cruise booking already exists for order:', orderId);
-        return res.json({
-          success: true,
-          message: 'Booking already exists',
-          data: { orderId }
-        });
-      }
       return res.status(500).json({
         success: false,
         error: error.message || 'Failed to save booking'
       });
     }
 
-    console.log('✅ Cruise booking saved to database:', data.id);
+    console.log('✅ Cruise booking saved/confirmed in database:', data.id);
 
     res.json({
       success: true,

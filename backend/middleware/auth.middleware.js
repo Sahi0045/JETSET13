@@ -3,6 +3,7 @@ import axios from 'axios';
 import crypto from 'crypto';
 import User from '../models/user.model.js';
 import supabase from '../config/supabase.js';
+import { JWT_SECRET } from '../config/jwt.js';
 
 // Simple in-memory cache for Google/Firebase JWKS certificates
 let googleCertsCache = { certs: null, fetchedAt: 0 };
@@ -227,7 +228,7 @@ export const protect = async (req, res, next) => {
       // Try HS256 first
       let decoded;
       try {
-        decoded = jwt.verify(token, process.env.JWT_SECRET || 'jetset-app-secret-key');
+        decoded = jwt.verify(token, JWT_SECRET);
       } catch (hsErr) {
         decoded = await verifySupabaseToken(token);
 
@@ -379,7 +380,7 @@ export const optionalProtect = async (req, res, next) => {
       // Verify token (HS256 first, fallback to RS256 via Google/Firebase certs)
       let decoded = null;
       try {
-        decoded = jwt.verify(token, process.env.JWT_SECRET || 'jetset-app-secret-key');
+        decoded = jwt.verify(token, JWT_SECRET);
       } catch (hsErr) {
         decoded = await verifySupabaseToken(token);
 

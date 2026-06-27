@@ -4,6 +4,7 @@ import axios from 'axios';
 import dayjs from 'dayjs';
 import dotenv from 'dotenv';
 import amadeusService from '../services/amadeusService.js';
+import supabase from '../config/supabase.js';
 
 // Ensure environment variables are loaded
 dotenv.config();
@@ -119,6 +120,206 @@ router.get('/offers/:hotelId', async (req, res) => {
 
 // Book a hotel
 router.post('/book/:hotelId', bookHotel);
+
+// Save a hotel booking to the database (called after ARC Pay payment succeeds)
+router.post('/bookings', async (req, res) => {
+  try {
+    const {
+      orderId,
+      hotelId,
+      hotelName,
+      hotelImage,
+      location,
+      roomType,
+      checkInDate,
+      checkOutDate,
+      nights,
+      guests,
+      pricePerNight,
+      subtotal,
+      taxes,
+      serviceFee,
+      totalAmount,
+      currency = 'USD',
+      guestInfo,
+      transactionId,
+      resultIndicator,
+      sessionId,
+      userId
+    } = req.body;
+
+    console.log('🏨 Saving hotel booking to database:', {
+      orderId,
+      hotelName,
+      totalAmount,
+      nights
+    });
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Order ID is required'
+      });
+    }
+
+    if (!supabase) {
+      console.log('⚠️ Supabase not configured, skipping database save');
+      return res.json({
+        success: true,
+        message: 'Booking processed (database not available)',
+        data: { orderId }
+      });
+    }
+
+    // Fetch the pending booking row created at checkout time. It carries the
+    // ARC Pay success_indicator we use to verify the payment really succeeded.
+    let existing = null;
+    try {
+      const { data: found } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('booking_reference', orderId)
+        .single();
+      existing = found;
+    } catch (_) { /* no pending row — proceed */ }
+
+    // Verify payment: ARC Pay returns resultIndicator on success which must match
+    // the successIndicator captured when the checkout session was created.
+    const storedIndicator = existing?.booking_details?.success_indicator;
+    const providedIndicator = resultIndicator || transactionId;
+    if (storedIndicator && providedIndicator && storedIndicator !== providedIndicator) {
+      console.warn('⚠️ Payment indicator mismatch for hotel order:', orderId);
+      try {
+        await supabase
+          .from('bookings')
+          .update({ status: 'pending', payment_status: 'unpaid' })
+          .eq('booking_reference', orderId);
+      } catch (_) { /* non-blocking */ }
+      return res.status(400).json({
+        success: false,
+        verified: false,
+        error: 'Payment could not be verified'
+      });
+    }
+
+    // Build the guest/passenger array from guestInfo
+    const guest = guestInfo || {};
+    const passengers = [{
+      id: 'G1',
+      type: 'adult',
+      firstName: guest.firstName || guest.first_name || '',
+      lastName: guest.lastName || guest.last_name || '',
+      email: guest.email || '',
+      phone: guest.phone || ''
+    }];
+
+    const buildRow = (uid) => ({
+      user_id: uid || null,
+      booking_reference: orderId,
+      travel_type: 'hotel',
+      status: 'confirmed',
+      total_amount: parseFloat(totalAmount) || 0,
+      payment_status: 'paid',
+      booking_details: {
+        // preserve checkout-time fields (session_id, success_indicator, etc.)
+        ...(existing?.booking_details || {}),
+        order_id: orderId,
+        transaction_id: providedIndicator || sessionId || existing?.booking_details?.transaction_id || null,
+        hotel_id: hotelId || '',
+        hotel_name: hotelName || '',
+        hotel_image: hotelImage || '',
+        location: location || '',
+        room_type: roomType || '',
+        check_in_date: checkInDate || '',
+        check_out_date: checkOutDate || '',
+        nights: parseInt(nights) || 0,
+        guests: parseInt(guests) || 0,
+        price_per_night: parseFloat(pricePerNight) || 0,
+        subtotal: parseFloat(subtotal) || 0,
+        taxes: parseFloat(taxes) || 0,
+        service_fee: parseFloat(serviceFee) || 0,
+        amount: parseFloat(totalAmount) || 0,
+        currency,
+        guest_info: guest,
+        paid_at: new Date().toISOString(),
+        original_user_id: userId || null
+      },
+      passenger_details: passengers
+    });
+
+    // Upsert on booking_reference so the existing pending/unpaid row is upgraded
+    // to confirmed/paid (rather than colliding with the unique constraint).
+    let { data, error } = await supabase
+      .from('bookings')
+      .upsert(buildRow(userId), { onConflict: 'booking_reference' })
+      .select()
+      .single();
+
+    // FK (user_id not in auth.users) or RLS violation → retry without user_id
+    if (error && userId && (error.code === '23503' || error.code === '42501' ||
+        error.message?.includes('violates foreign key') || error.message?.includes('row-level security'))) {
+      console.log('🔄 Retrying hotel booking save without user_id (FK/RLS constraint issue)...');
+      ({ data, error } = await supabase
+        .from('bookings')
+        .upsert(buildRow(null), { onConflict: 'booking_reference' })
+        .select()
+        .single());
+    }
+
+    if (error) {
+      console.error('❌ Error saving hotel booking:', error);
+      return res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to save booking'
+      });
+    }
+
+    console.log('✅ Hotel booking saved/confirmed in database:', data.id);
+
+    res.json({
+      success: true,
+      message: 'Hotel booking saved successfully',
+      data: {
+        id: data.id,
+        orderId,
+        bookingReference: orderId,
+        status: 'confirmed'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Hotel booking save error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to save hotel booking'
+    });
+  }
+});
+
+// Get all hotel bookings
+router.get('/bookings', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('travel_type', 'hotel')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ Error fetching hotel bookings:', error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    res.json({ success: true, data: data || [] });
+  } catch (error) {
+    console.error('❌ Error fetching hotel bookings:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to fetch hotel bookings' });
+  }
+});
 
 // Add a test endpoint
 router.get('/test', (req, res) => {

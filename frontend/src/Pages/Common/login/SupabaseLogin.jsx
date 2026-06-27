@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaGoogle, FaApple, FaEye, FaEyeSlash, FaSpinner, FaLock, FaEnvelope } from 'react-icons/fa';
+import {
+    FaGoogle, FaApple, FaEye, FaEyeSlash, FaSpinner,
+    FaShieldAlt, FaGlobeAmericas, FaTags, FaArrowLeft
+} from 'react-icons/fa';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import supabase from '../../../lib/supabase';
-import './login.css';
+import './loginV2.css';
+
+const LOGO_WEBP = '/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.webp';
+const LOGO_PNG = '/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png';
 
 export default function SupabaseLogin() {
     const navigate = useNavigate();
@@ -162,143 +168,185 @@ export default function SupabaseLogin() {
         }
     };
 
+    const isBusy = processing || authLoading;
+
     return (
-        <div className="login-container">
-            <div className="login-card">
-                {/* Image Section */}
-                <div
-                    className="login-image"
-                    style={{
-                        backgroundImage: `image-set(url('/images/Rectangle 1434 (1).webp') type('image/webp'), url('/images/Rectangle 1434 (1).png') type('image/png'))`,
-                    }}
-                ></div>
+        <div className="jsl-page">
+            <div className="jsl-card">
+                {/* ---------- Brand / Hero panel ---------- */}
+                <aside className="jsl-hero">
+                    <div className="jsl-hero-overlay" />
+                    <div className="jsl-hero-content">
+                        <Link to="/" className="jsl-hero-brand" aria-label="Jetsetters home">
+                            <picture>
+                                <source srcSet={LOGO_WEBP} type="image/webp" />
+                                <img src={LOGO_PNG} alt="Jetsetters" className="jsl-hero-logo" />
+                            </picture>
+                        </Link>
 
-                {/* Login Form Section */}
-                <div className="login-content">
-                    <h2 className="login-title">
-                        <FaLock className="inline mr-2" />
-                        Let's travel with Jetsetters
-                    </h2>
+                        <h1 className="jsl-hero-title">
+                            Your next journey<br />begins here.
+                        </h1>
+                        <p className="jsl-hero-subtitle">
+                            Flights, hotels, cruises and curated holidays — all in one place,
+                            tailored to the way you travel.
+                        </p>
 
-                    {authError && (
-                        <div className="error-message mb-4">
-                            {authError}
+                        <ul className="jsl-hero-features">
+                            <li>
+                                <span className="jsl-feature-icon"><FaGlobeAmericas /></span>
+                                <span>Explore worldwide destinations with confidence</span>
+                            </li>
+                            <li>
+                                <span className="jsl-feature-icon"><FaTags /></span>
+                                <span>Member-only fares and seasonal deals</span>
+                            </li>
+                            <li>
+                                <span className="jsl-feature-icon"><FaShieldAlt /></span>
+                                <span>Secure, SSL-encrypted bookings</span>
+                            </li>
+                        </ul>
+                    </div>
+                </aside>
+
+                {/* ---------- Form panel ---------- */}
+                <main className="jsl-form-panel">
+                    <div className="jsl-form-inner">
+                        <Link to="/" className="jsl-back">
+                            <FaArrowLeft size={12} /> Back to home
+                        </Link>
+
+                        {/* Teal brand header for mobile (full hero hidden on small screens) */}
+                        <div className="jsl-mobile-hero">
+                            <Link to="/" className="jsl-mobile-brand" aria-label="Jetsetters home">
+                                <picture>
+                                    <source srcSet={LOGO_WEBP} type="image/webp" />
+                                    <img src={LOGO_PNG} alt="Jetsetters" />
+                                </picture>
+                            </Link>
+                            <p className="jsl-mobile-tagline">Your next journey begins here.</p>
                         </div>
-                    )}
 
-                    <form className="login-form" onSubmit={submit}>
-                        <div className="form-group">
-                            <label htmlFor="email">
-                                <FaEnvelope className="inline mr-2" />
-                                Email
-                            </label>
-                            <input
-                                value={data.email}
-                                type="email"
-                                name="email"
-                                onChange={handleChange}
-                                id="email"
-                                placeholder="username@gmail.com"
-                                className={`form-input ${errors.email ? 'error' : ''}`}
-                                disabled={processing || authLoading}
-                            />
-                            {errors.email && <div className="error-message">{errors.email}</div>}
-                        </div>
+                        <header className="jsl-form-head">
+                            <h2 className="jsl-form-title">Welcome back</h2>
+                            <p className="jsl-form-sub">Sign in to manage your trips and bookings.</p>
+                        </header>
 
-                        <div className="form-group">
-                            <label htmlFor="password">
-                                <FaLock className="inline mr-2" />
-                                Password
-                            </label>
-                            <div className="password-input-wrapper">
+                        {authError && (
+                            <div className="jsl-alert" role="alert">{authError}</div>
+                        )}
+                        {errors.login && (
+                            <div className="jsl-alert" role="alert">{errors.login}</div>
+                        )}
+
+                        <form className="jsl-form" onSubmit={submit} noValidate>
+                            <div className="jsl-field">
+                                <label htmlFor="email">Email address</label>
                                 <input
-                                    type={showPassword ? "text" : "password"}
-                                    name="password"
-                                    value={data.password}
+                                    value={data.email}
+                                    type="email"
+                                    name="email"
                                     onChange={handleChange}
-                                    id="password"
-                                    placeholder="Password"
-                                    className={`form-input ${errors.password ? 'error' : ''}`}
-                                    disabled={processing || authLoading}
+                                    id="email"
+                                    autoComplete="email"
+                                    placeholder="you@example.com"
+                                    className={`jsl-input ${errors.email ? 'has-error' : ''}`}
+                                    disabled={isBusy}
                                 />
+                                {errors.email && <span className="jsl-field-error">{errors.email}</span>}
+                            </div>
+
+                            <div className="jsl-field">
+                                <label htmlFor="password">Password</label>
+                                <div className="jsl-password">
+                                    <input
+                                        type={showPassword ? 'text' : 'password'}
+                                        name="password"
+                                        value={data.password}
+                                        onChange={handleChange}
+                                        id="password"
+                                        autoComplete="current-password"
+                                        placeholder="Enter your password"
+                                        className={`jsl-input ${errors.password ? 'has-error' : ''}`}
+                                        disabled={isBusy}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="jsl-password-toggle"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        disabled={isBusy}
+                                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                    >
+                                        {showPassword ? <FaEyeSlash /> : <FaEye />}
+                                    </button>
+                                </div>
+                                {errors.password && <span className="jsl-field-error">{errors.password}</span>}
+                            </div>
+
+                            <div className="jsl-options">
+                                <label className="jsl-checkbox">
+                                    <input
+                                        type="checkbox"
+                                        name="rememberMe"
+                                        checked={data.rememberMe}
+                                        onChange={handleChange}
+                                        disabled={isBusy}
+                                    />
+                                    <span className="jsl-checkbox-box" aria-hidden="true" />
+                                    Remember me
+                                </label>
+                                <Link to="/forgot-password" className="jsl-link">
+                                    Forgot password?
+                                </Link>
+                            </div>
+
+                            <button type="submit" className="jsl-submit" disabled={isBusy}>
+                                {isBusy ? (
+                                    <>
+                                        <FaSpinner className="jsl-spin" />
+                                        Signing in…
+                                    </>
+                                ) : (
+                                    'Sign in'
+                                )}
+                            </button>
+
+                            <div className="jsl-divider"><span>or continue with</span></div>
+
+                            <div className="jsl-social">
                                 <button
                                     type="button"
-                                    className="password-toggle"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    disabled={processing || authLoading}
+                                    className="jsl-social-btn"
+                                    onClick={handleGoogleSignIn}
+                                    disabled={isBusy}
                                 >
-                                    {showPassword ? <FaEyeSlash /> : <FaEye />}
+                                    <FaGoogle color="#DB4437" />
+                                    <span>Google</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    className="jsl-social-btn"
+                                    onClick={handleAppleSignIn}
+                                    disabled={isBusy}
+                                >
+                                    <FaApple color="#000000" />
+                                    <span>Apple</span>
                                 </button>
                             </div>
-                            {errors.password && <div className="error-message">{errors.password}</div>}
-                        </div>
 
-                        <div className="form-options">
-                            <label className="remember-me">
-                                <input
-                                    type="checkbox"
-                                    name="rememberMe"
-                                    checked={data.rememberMe}
-                                    onChange={handleChange}
-                                    disabled={processing || authLoading}
-                                />
-                                Remember me
-                            </label>
-                            <Link to="/forgot-password" className="forgot-password">
-                                Forgot Password?
-                            </Link>
-                        </div>
+                            <p className="jsl-signup">
+                                Don&apos;t have an account?{' '}
+                                <Link to="/supabase-signup" className="jsl-link strong">Create one</Link>
+                            </p>
+                        </form>
 
-                        <button
-                            className="login-button"
-                            disabled={processing || authLoading}
-                        >
-                            {processing || authLoading ? (
-                                <>
-                                    <FaSpinner className="animate-spin inline mr-2" />
-                                    Logging in...
-                                </>
-                            ) : (
-                                'Login'
-                            )}
-                        </button>
-
-                        {errors.login && <div className="error-message">{errors.login}</div>}
-
-                        <div className="login-divider">or continue with</div>
-
-                        <div className="social-login">
-                            <button
-                                type="button"
-                                className="social-button google"
-                                onClick={handleGoogleSignIn}
-                                disabled={processing || authLoading}
-                                title="Sign in with Google"
-                            >
-                                <FaGoogle size={22} color="#DB4437" />
-                                <span>Google</span>
-                            </button>
-                            <button
-                                type="button"
-                                className="social-button apple"
-                                onClick={handleAppleSignIn}
-                                disabled={processing || authLoading}
-                                title="Sign in with Apple"
-                            >
-                                <FaApple size={22} color="#000000" />
-                                <span>Apple</span>
-                            </button>
-                        </div>
-
-                        <div className="signup-link">
-                            Don't have an account? <Link to="/supabase-signup" className="text-link">Sign Up</Link>
-                        </div>
-                    </form>
-
-                    <p className="login-footer">
-                        By proceeding, you agree to our <Link to="/privacy" className="text-link">Privacy Policy</Link> and <Link to="/terms" className="text-link">Terms of Service</Link>.
-                    </p>
-                </div>
+                        <p className="jsl-legal">
+                            By continuing, you agree to our{' '}
+                            <Link to="/privacy" className="jsl-link">Privacy Policy</Link> and{' '}
+                            <Link to="/terms" className="jsl-link">Terms of Service</Link>.
+                        </p>
+                    </div>
+                </main>
             </div>
         </div>
     );

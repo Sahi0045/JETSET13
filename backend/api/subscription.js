@@ -8,9 +8,9 @@ const supabase = createClient(
 );
 
 const ARC_PAY_CONFIG = {
-  API_URL: process.env.ARC_PAY_API_URL || 'https://api.arcpay.travel/api/rest/version/77/merchant/TESTARC05511704',
-  MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID || 'TESTARC05511704',
-  API_USERNAME: process.env.ARC_PAY_API_USERNAME || 'TESTARC05511704',
+  API_URL: process.env.ARC_PAY_API_URL,
+  MERCHANT_ID: process.env.ARC_PAY_MERCHANT_ID,
+  API_USERNAME: process.env.ARC_PAY_API_USERNAME,
   API_PASSWORD: process.env.ARC_PAY_API_PASSWORD,
   BASE_URL: process.env.ARC_PAY_BASE_URL || 'https://api.arcpay.travel/api/rest/version/77',
   PORTAL_URL: process.env.ARC_PAY_PORTAL_URL || 'https://api.arcpay.travel/ma/',

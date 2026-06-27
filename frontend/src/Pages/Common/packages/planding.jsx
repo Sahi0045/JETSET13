@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import packagesData from '../../../data/packages.json'
 import { Link } from "react-router-dom"
 import Navbar from '../Navbar'
+import ServiceTabs from '../../../Components/ServiceTabs'
 import Footer from '../Footer'
 import withPageElements from '../PageWrapper'
 import Price from '../../../Components/Price'
@@ -504,6 +505,7 @@ const TravelPackages = () => {
 
           {/* Mobile Form - Shown only on small screens */}
           <form onSubmit={handleSearch} className="md:hidden bg-white/95 backdrop-blur-sm rounded-xl p-6 max-w-5xl mx-auto shadow-2xl w-full">
+            <ServiceTabs active="packages" className="-mx-6 -mt-6 mb-5 pt-3 border-b border-gray-100 bg-transparent" />
             <div className="flex flex-col gap-6">
               <div className="w-full">
                 <label className="block text-gray-800 text-base font-medium mb-2">Destination</label>
@@ -630,6 +632,7 @@ const TravelPackages = () => {
 
           {/* Desktop Form - Original layout preserved with enhancements */}
           <form onSubmit={handleSearch} className="hidden md:block bg-white/95 backdrop-blur-sm rounded-xl p-8 max-w-5xl mx-auto shadow-2xl transform hover:scale-[1.02] transition-all duration-300 w-full">
+            <ServiceTabs active="packages" className="-mx-8 -mt-8 mb-6 pt-3 border-b border-gray-100 bg-transparent" />
             <div className="flex flex-row gap-6">
               <div className="flex-1" ref={searchRef}>
                 <label className="block text-gray-700 text-sm font-medium mb-1">Destination</label>

@@ -30,10 +30,12 @@ export const getConversionRates = async (req, res) => {
 
       if (iErr) throw new Error(iErr.message);
 
-      // Count payments completed (bottom of funnel)
+      // Count paid bookings (bottom of funnel). Real paid transactions live in
+      // the `bookings` table (payment_status = 'paid'); the legacy `payments`
+      // table is unused for direct hosted-checkout bookings.
       const { data: payments, error: pErr } = await supabase
-        .from('payments')
-        .select('id, status, amount, created_at', { count: 'exact' });
+        .from('bookings')
+        .select('id, payment_status, total_amount, created_at');
 
       if (pErr) throw new Error(pErr.message);
 
@@ -41,8 +43,9 @@ export const getConversionRates = async (req, res) => {
       const approved      = inquiries?.filter(i => i.status === 'approved').length || 0;
       const rejected      = inquiries?.filter(i => i.status === 'rejected').length || 0;
       const pending       = inquiries?.filter(i => ['pending', 'in_progress'].includes(i.status)).length || 0;
-      const paid          = payments?.filter(p => p.status === 'completed').length || 0;
-      const totalRevenue  = payments?.filter(p => p.status === 'completed').reduce((s, p) => s + (parseFloat(p.amount) || 0), 0) || 0;
+      const isPaid        = (p) => p.payment_status === 'paid';
+      const paid          = payments?.filter(isPaid).length || 0;
+      const totalRevenue  = payments?.filter(isPaid).reduce((s, p) => s + (parseFloat(p.total_amount) || 0), 0) || 0;
 
       return {
         funnel: {
@@ -126,9 +129,9 @@ export const getRevenue = async (req, res) => {
 
     const data = await withCache(cacheKey, TTL.ANALYTICS_DASH, async () => {
       const { data: payments, error } = await supabase
-        .from('payments')
-        .select('amount, status, created_at')
-        .eq('status', 'completed')
+        .from('bookings')
+        .select('total_amount, payment_status, created_at')
+        .eq('payment_status', 'paid')
         .order('created_at', { ascending: false });
 
       if (error) throw new Error(error.message);
@@ -146,7 +149,7 @@ export const getRevenue = async (req, res) => {
         else key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
         if (!periodMap[key]) periodMap[key] = { period: key, total: 0, count: 0 };
-        periodMap[key].total += parseFloat(p.amount) || 0;
+        periodMap[key].total += parseFloat(p.total_amount) || 0;
         periodMap[key].count += 1;
       });
 
@@ -158,7 +161,7 @@ export const getRevenue = async (req, res) => {
           avg:   r.count > 0 ? (r.total / r.count).toFixed(2) : '0.00',
         }));
 
-      const grandTotal = (payments || []).reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+      const grandTotal = (payments || []).reduce((s, p) => s + (parseFloat(p.total_amount) || 0), 0);
 
       return {
         series,
@@ -272,7 +275,7 @@ export const getDashboardOverview = async (req, res) => {
   try {
     const [inquiryRes, paymentRes] = await Promise.all([
       supabase.from('inquiries').select('status, created_at', { count: 'exact' }),
-      supabase.from('payments').select('amount, status', { count: 'exact' }).eq('status', 'completed'),
+      supabase.from('bookings').select('total_amount, payment_status', { count: 'exact' }).eq('payment_status', 'paid'),
     ]);
 
     if (inquiryRes.error) throw new Error(inquiryRes.error.message);
@@ -294,7 +297,7 @@ export const getDashboardOverview = async (req, res) => {
         in_progress:      inquiries.filter(i => i.status === 'in_progress').length,
         approved:         inquiries.filter(i => i.status === 'approved').length,
         rejected:         inquiries.filter(i => i.status === 'rejected').length,
-        revenue:          payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0).toFixed(2),
+        revenue:          payments.reduce((s, p) => s + (parseFloat(p.total_amount) || 0), 0).toFixed(2),
         transactions:     payments.length,
       },
     };

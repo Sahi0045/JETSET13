@@ -75,7 +75,7 @@ export default async function handler(req, res) {
       cardLast4: cardNumber.slice(-4),
       processedAt: new Date().toISOString(),
       authCode: `AUTH${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-      merchantId: 'TESTARC05511704'
+      merchantId: process.env.ARC_PAY_MERCHANT_ID
     };
 
     res.status(200).json({

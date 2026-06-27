@@ -4,9 +4,7 @@ import axios from 'axios';
 import crypto from 'crypto';
 import supabase from '../config/supabase.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
-// Environment variable for JWT secret (should be in .env file)
-const JWT_SECRET = process.env.JWT_SECRET || 'jetset-app-secret-key';
-const JWT_EXPIRE = process.env.JWT_EXPIRE || '30d';
+import { JWT_SECRET, JWT_EXPIRE } from '../config/jwt.js';
 
 // Generate JWT Token
 const generateToken = (id) => {

@@ -84,6 +84,7 @@ export default function PaymentCallback() {
           // Retrieve booking data: DB first, localStorage fallback
           let bookingData = {};
           let sessionData = {};
+          const pendingBookingKey = `pending${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)}Booking`;
 
           // 1. Try retrieving from database (survives browser clears/device changes)
           try {
@@ -110,7 +111,6 @@ export default function PaymentCallback() {
           // 2. Fallback to localStorage if DB didn't have data
           if (!bookingData?.selectedFlight && !bookingData?.flightData && !bookingData?.amount) {
             console.log('📦 Falling back to localStorage...');
-            const pendingBookingKey = `pending${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)}Booking`;
             const storedBookingData = localStorage.getItem(pendingBookingKey);
             const pendingSession = localStorage.getItem('pendingPaymentSession');
 
@@ -128,6 +128,24 @@ export default function PaymentCallback() {
           }
 
           console.log('📋 Final booking data source:', bookingData?.selectedFlight ? 'has flight data' : 'no flight data');
+
+          // Durably record the payment server-side BEFORE handing off to the (browser-driven)
+          // order-creation step. If that step never completes (tab closed / order-create error),
+          // the booking is still marked paid from the gateway and is recoverable. Best-effort:
+          // never block the redirect on this.
+          if (orderId) {
+            try {
+              const reconcileRes = await fetch(getApiUrl('payments?action=reconcile-booking-payment'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId })
+              });
+              const reconcileData = await reconcileRes.json().catch(() => null);
+              console.log('🧾 Booking payment reconciled:', reconcileData);
+            } catch (reconcileErr) {
+              console.warn('⚠️ Booking payment reconcile failed (non-blocking):', reconcileErr?.message);
+            }
+          }
 
           // For flights, navigate to FlightCreateOrders to complete the booking
           if (bookingType === 'flight') {
@@ -232,6 +250,58 @@ export default function PaymentCallback() {
               console.log('🚢 Database save result:', saveResult);
             } catch (saveError) {
               console.error('⚠️ Failed to save cruise booking to database:', saveError);
+              // Continue even if DB save fails - we still redirect to success
+            }
+          }
+
+          // Save hotel booking to database
+          if (bookingType === 'hotel') {
+            try {
+              setStatus('Saving hotel booking...');
+              console.log('🏨 Saving hotel booking to database...', bookingData);
+
+              // Get user ID from localStorage
+              let userId = null;
+              const userStr = localStorage.getItem('user');
+              if (userStr) {
+                try {
+                  userId = JSON.parse(userStr).id;
+                } catch (e) {
+                  console.error('Error parsing user from localStorage:', e);
+                }
+              }
+
+              const saveResponse = await fetch(getApiUrl('hotels/bookings'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  orderId,
+                  hotelId: bookingData.hotelId || '',
+                  hotelName: bookingData.hotel?.name || bookingData.hotelName || '',
+                  hotelImage: bookingData.hotel?.image || bookingData.hotelImage || '',
+                  location: bookingData.hotel?.location || bookingData.location || '',
+                  roomType: bookingData.roomType || '',
+                  checkInDate: bookingData.checkInDate || '',
+                  checkOutDate: bookingData.checkOutDate || '',
+                  nights: bookingData.nights || 0,
+                  guests: bookingData.guests || 0,
+                  pricePerNight: bookingData.pricePerNight || 0,
+                  subtotal: bookingData.subtotal || 0,
+                  taxes: bookingData.taxes || 0,
+                  serviceFee: bookingData.serviceFee || 0,
+                  totalAmount: bookingData.totalPrice || bookingData.totalAmount || sessionData?.amount || 0,
+                  guestInfo: bookingData.guestInfo || {},
+                  transactionId: resultIndicator || '',
+                  resultIndicator: resultIndicator || '',
+                  sessionId: sessionId || sessionData?.sessionId || '',
+                  userId: userId
+                })
+              });
+
+              const saveResult = await saveResponse.json();
+              console.log('🏨 Database save result:', saveResult);
+            } catch (saveError) {
+              console.error('⚠️ Failed to save hotel booking to database:', saveError);
               // Continue even if DB save fails - we still redirect to success
             }
           }

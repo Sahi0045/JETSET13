@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Calendar, Users, MapPin, CreditCard, User, Mail, Phone, Check, Shield, ChevronLeft, Clock, AlertCircle, Lock } from 'lucide-react';
+import { Calendar, Users, MapPin, User, Mail, Phone, Check, Shield, ChevronLeft, Clock, AlertCircle, Lock } from 'lucide-react';
 import axios from 'axios';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
@@ -40,14 +40,6 @@ const HotelBookingSummary = () => {
         phone: '',
         nationality: '',
         specialRequests: ''
-    });
-
-    const [paymentInfo, setPaymentInfo] = useState({
-        cardNumber: '',
-        cardName: '',
-        expiry: '',
-        cvv: '',
-        billingAddress: ''
     });
 
     const [errors, setErrors] = useState({});
@@ -100,14 +92,6 @@ const HotelBookingSummary = () => {
     };
 
     // Handle payment info change
-    const handlePaymentChange = (e) => {
-        const { name, value } = e.target;
-        setPaymentInfo(prev => ({ ...prev, [name]: value }));
-        if (errors[name]) {
-            setErrors(prev => ({ ...prev, [name]: null }));
-        }
-    };
-
     // Validate guest info
     const validateGuestInfo = () => {
         const newErrors = {};
@@ -122,19 +106,6 @@ const HotelBookingSummary = () => {
     };
 
     // Validate payment info
-    const validatePaymentInfo = () => {
-        const newErrors = {};
-        if (!paymentInfo.cardNumber.trim()) newErrors.cardNumber = 'Card number is required';
-        else if (paymentInfo.cardNumber.replace(/\s/g, '').length < 16) newErrors.cardNumber = 'Invalid card number';
-        if (!paymentInfo.cardName.trim()) newErrors.cardName = 'Name on card is required';
-        if (!paymentInfo.expiry.trim()) newErrors.expiry = 'Expiry date is required';
-        if (!paymentInfo.cvv.trim()) newErrors.cvv = 'CVV is required';
-        else if (paymentInfo.cvv.length < 3) newErrors.cvv = 'Invalid CVV';
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
     // Handle next step
     const handleNextStep = () => {
         if (step === 1 && validateGuestInfo()) {
@@ -144,8 +115,6 @@ const HotelBookingSummary = () => {
 
     // Handle booking submission - Redirect to ArcPay gateway
     const handleSubmitBooking = async () => {
-        if (!validatePaymentInfo()) return;
-
         setFormSubmitting(true);
 
         try {
@@ -169,7 +138,9 @@ const HotelBookingSummary = () => {
                 subtotal,
                 taxes,
                 serviceFee,
-                totalPrice: total,
+                totalPrice: appliedCoupon ? appliedCoupon.finalTotal : total,
+                couponCode: appliedCoupon ? appliedCoupon.code : null,
+                discountAmount: appliedCoupon ? appliedCoupon.discountAmount : 0,
                 guestInfo,
                 hotel: {
                     name: hotel.name,
@@ -495,109 +466,60 @@ const HotelBookingSummary = () => {
                             </div>
                         )}
 
-                        {/* Payment Form */}
+                        {/* Payment — secure ARC Pay hosted checkout */}
                         {step === 2 && (
                             <div className="bg-white rounded-xl p-6 shadow-sm">
-                                <h2 className="text-xl font-bold text-gray-900 mb-6">Payment Details</h2>
+                                <h2 className="text-xl font-bold text-gray-900 mb-2">Review &amp; Pay</h2>
+                                <p className="text-sm text-gray-500 mb-6">
+                                    You'll be redirected to our secure ARC Pay payment page to complete your booking. We never see or store your card details.
+                                </p>
 
-                                {/* Payment Methods */}
-                                <div className="flex gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
-                                    {['Visa', 'Mastercard', 'Amex', 'PayPal'].map((method) => (
-                                        <div key={method} className="text-sm font-medium text-gray-600">{method}</div>
+                                {/* Guest summary */}
+                                <div className="border border-gray-100 rounded-lg p-4 mb-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className="text-sm font-semibold text-gray-700">Guest details</h3>
+                                        <button
+                                            type="button"
+                                            onClick={() => setStep(1)}
+                                            className="text-xs font-semibold text-[#0890BC] hover:text-[#034457]"
+                                        >
+                                            Edit
+                                        </button>
+                                    </div>
+                                    <div className="space-y-1 text-sm text-gray-600">
+                                        <p className="font-medium text-gray-900">{guestInfo.firstName} {guestInfo.lastName}</p>
+                                        <p>{guestInfo.email}</p>
+                                        <p>{guestInfo.phone}</p>
+                                    </div>
+                                </div>
+
+                                {/* What you'll pay */}
+                                <div className="bg-[#F0FAFC] rounded-lg p-4 mb-4">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-gray-600">Amount due now</span>
+                                        <span className="text-2xl font-bold text-[#055B75]">
+                                            <Price amount={appliedCoupon ? appliedCoupon.finalTotal : total} />
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Accepted cards (informational only) */}
+                                <div className="flex items-center gap-3 mb-4 text-xs text-gray-400">
+                                    <span>We accept</span>
+                                    {['Visa', 'Mastercard', 'Amex'].map((method) => (
+                                        <span key={method} className="font-medium text-gray-500">{method}</span>
                                     ))}
                                 </div>
 
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Card Number *</label>
-                                        <div className="relative">
-                                            <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                                            <input
-                                                type="text"
-                                                name="cardNumber"
-                                                value={paymentInfo.cardNumber}
-                                                onChange={(e) => {
-                                                    const value = e.target.value.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim();
-                                                    handlePaymentChange({ target: { name: 'cardNumber', value: value.substring(0, 19) } });
-                                                }}
-                                                className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#65B3CF] ${errors.cardNumber ? 'border-red-500' : 'border-gray-200'
-                                                    }`}
-                                                placeholder="1234 5678 9012 3456"
-                                            />
-                                        </div>
-                                        {errors.cardNumber && <p className="text-red-500 text-sm mt-1">{errors.cardNumber}</p>}
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Name on Card *</label>
-                                        <input
-                                            type="text"
-                                            name="cardName"
-                                            value={paymentInfo.cardName}
-                                            onChange={handlePaymentChange}
-                                            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#65B3CF] ${errors.cardName ? 'border-red-500' : 'border-gray-200'
-                                                }`}
-                                            placeholder="JOHN SMITH"
-                                        />
-                                        {errors.cardName && <p className="text-red-500 text-sm mt-1">{errors.cardName}</p>}
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date *</label>
-                                            <input
-                                                type="text"
-                                                name="expiry"
-                                                value={paymentInfo.expiry}
-                                                onChange={(e) => {
-                                                    let value = e.target.value.replace(/\D/g, '');
-                                                    if (value.length >= 2) value = value.substring(0, 2) + '/' + value.substring(2, 4);
-                                                    handlePaymentChange({ target: { name: 'expiry', value } });
-                                                }}
-                                                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#65B3CF] ${errors.expiry ? 'border-red-500' : 'border-gray-200'
-                                                    }`}
-                                                placeholder="MM/YY"
-                                                maxLength={5}
-                                            />
-                                            {errors.expiry && <p className="text-red-500 text-sm mt-1">{errors.expiry}</p>}
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">CVV *</label>
-                                            <input
-                                                type="password"
-                                                name="cvv"
-                                                value={paymentInfo.cvv}
-                                                onChange={(e) => {
-                                                    const value = e.target.value.replace(/\D/g, '').substring(0, 4);
-                                                    handlePaymentChange({ target: { name: 'cvv', value } });
-                                                }}
-                                                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#65B3CF] ${errors.cvv ? 'border-red-500' : 'border-gray-200'
-                                                    }`}
-                                                placeholder="•••"
-                                            />
-                                            {errors.cvv && <p className="text-red-500 text-sm mt-1">{errors.cvv}</p>}
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Billing Address</label>
-                                        <input
-                                            type="text"
-                                            name="billingAddress"
-                                            value={paymentInfo.billingAddress}
-                                            onChange={handlePaymentChange}
-                                            className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#65B3CF]"
-                                            placeholder="123 Main Street, City, Country"
-                                        />
-                                    </div>
-                                </div>
-
                                 {/* Security Notice */}
-                                <div className="flex items-center gap-2 mt-6 p-4 bg-green-50 rounded-lg text-green-700">
+                                <div className="flex items-center gap-2 p-4 bg-green-50 rounded-lg text-green-700">
                                     <Shield size={20} />
-                                    <span className="text-sm">Your payment information is encrypted and secure</span>
+                                    <span className="text-sm">256-bit SSL encrypted. Payments are processed securely by ARC Pay.</span>
                                 </div>
+
+                                {errors.login && (
+                                    <p className="text-red-500 text-sm mt-3">{errors.login}</p>
+                                )}
 
                                 <button
                                     onClick={handleSubmitBooking}
@@ -607,12 +529,12 @@ const HotelBookingSummary = () => {
                                     {formSubmitting ? (
                                         <span className="flex items-center justify-center gap-2">
                                             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                            Redirecting to Payment...
+                                            Redirecting to secure payment…
                                         </span>
                                     ) : (
                                         <>
                                             <Lock size={20} />
-                                            Proceed to Secure Payment - ${total.toLocaleString()}
+                                            Proceed to Secure Payment - ${(appliedCoupon ? appliedCoupon.finalTotal : total).toLocaleString()}
                                         </>
                                     )}
                                 </button>

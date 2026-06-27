@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { JWT_SECRET as jwtSecret } from '../config/jwt.js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-const jwtSecret = process.env.JWT_SECRET || 'jetset-app-secret-key';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 

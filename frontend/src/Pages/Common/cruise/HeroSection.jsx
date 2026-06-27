@@ -9,6 +9,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { formatDateToISO } from "../../../utils/dateUtils";
 import currencyService from "../../../Services/CurrencyService";
+import ServiceTabs from '../../../Components/ServiceTabs';
 
 const HeroSection = () => {
   const navigate = useNavigate();
@@ -297,6 +298,7 @@ const HeroSection = () => {
         {/* Search Form */}
         <div className="max-w-6xl mx-auto w-full">
           <form onSubmit={handleSearch} className="search-container w-full">
+            <ServiceTabs active="cruise" className="-mx-6 md:-mx-7 -mt-6 md:-mt-7 mb-5 pt-3 border-b border-gray-100 bg-transparent" />
             <div className="search-grid">
               {/* Destination */}
               <div className="search-field relative">
