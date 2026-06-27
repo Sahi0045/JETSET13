@@ -88,13 +88,25 @@ export async function handleCancelBookingAction(req, res) {
             booking.booking_details?.order_id ||
             booking.booking_reference;
 
-        if (orderId && (booking.travel_type === 'flight' || booking.travel_type == null)) {
+        // Cancel the underlying reservation at the supplier, routed by booking type.
+        // Mock-aware: with no real order id the service no-ops cleanly. Failure here is
+        // logged but does NOT block the ARC refund below (better to refund than to strand).
+        if (orderId) {
+            const type = booking.travel_type;
             try {
-                const amaResult = await AmadeusService.cancelFlightOrder(orderId);
-                cancellationResult.amadeusCancelled = !!amaResult?.success;
-                console.log(`🛫 Amadeus cancellation: ${cancellationResult.amadeusCancelled ? 'success' : 'no-op'} (${amaResult?.mode || 'LIVE'})`);
-            } catch (amadeusError) {
-                console.warn('⚠️ Amadeus cancellation error:', amadeusError.error || amadeusError.message);
+                let amaResult = null;
+                if (type === 'flight' || type == null) {
+                    amaResult = await AmadeusService.cancelFlightOrder(orderId);
+                } else if (type === 'hotel') {
+                    amaResult = await AmadeusService.cancelHotelBooking(orderId);
+                }
+                // (cruise/package have no Amadeus self-service cancel — ARC refund still runs)
+                if (amaResult) {
+                    cancellationResult.amadeusCancelled = !!amaResult.success;
+                    console.log(`🧳 Supplier cancellation (${type || 'flight'}): ${cancellationResult.amadeusCancelled ? 'success' : 'no-op'} (${amaResult.mode || 'LIVE'})`);
+                }
+            } catch (supplierError) {
+                console.warn(`⚠️ Supplier (${type || 'flight'}) cancellation error:`, supplierError.error || supplierError.message);
             }
         }
 

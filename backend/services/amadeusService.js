@@ -472,6 +472,44 @@ class AmadeusService {
     }
   }
 
+  // Cancel a hotel reservation. Mirrors cancelFlightOrder: attempts the Amadeus cancel,
+  // is mock-aware (no-ops cleanly for test/mock bookings), and throws a structured error
+  // on real failure so callers can surface "supplier not cancelled" while still refunding.
+  async cancelHotelBooking(orderId) {
+    const token = await this.getAccessToken();
+    console.log(`🗑️ Cancelling hotel booking: ${orderId}`);
+
+    try {
+      await axios.delete(
+        `${this.baseUrls.v1}/booking/hotel-bookings/${orderId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.amadeus+json'
+          }
+        }
+      );
+
+      console.log(`✅ Hotel booking ${orderId} cancelled successfully`);
+      return { success: true, message: `Hotel booking ${orderId} has been cancelled` };
+    } catch (error) {
+      // Mock/test booking? remove from in-memory storage and report success.
+      const mockOrder = this.getMockOrder(orderId);
+      if (mockOrder) {
+        AmadeusService.mockOrders.delete(orderId);
+        console.log(`✅ Mock hotel order ${orderId} removed from storage`);
+        return { success: true, message: `Mock hotel order ${orderId} has been cancelled`, mode: 'MOCK_CANCELLATION' };
+      }
+
+      console.error('❌ Error cancelling hotel booking:', error.response?.data || error.message);
+      throw {
+        success: false,
+        error: error.response?.data?.errors?.[0]?.detail || error.message,
+        code: error.response?.status || 500
+      };
+    }
+  }
+
   // ===== FLIGHT PRICING AND CONFIRMATION =====
 
   /**
