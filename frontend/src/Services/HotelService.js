@@ -11,6 +11,35 @@ const isProduction = typeof window !== 'undefined' &&
         window.location.hostname.includes('vercel.app'));
 const API_BASE_URL = isProduction ? 'https://www.jetsetterss.com/api' : '/api';
 
+// Deterministic per-hotel images (Amadeus returns none). Keyed on hotelId so a
+// given hotel always shows the same distinct photos instead of one shared image.
+const HOTEL_PHOTO_IDS = [
+    'photo-1566073771259-6a8506099945', 'photo-1551882547-ff40c63fe5fa',
+    'photo-1542314831-068cd1dbfeeb', 'photo-1564501049412-61c2a3083791',
+    'photo-1571896349842-33c89424de2d', 'photo-1582719478250-c89cae4dc85b',
+    'photo-1520250497591-112f2f40a3f4', 'photo-1611892440504-42a792e24d32',
+    'photo-1618773928121-c32242e63f39', 'photo-1590490360182-c33d57733427',
+    'photo-1535827841776-24afc1e255ac', 'photo-1445019980597-93fa8acb246c',
+    'photo-1631049307264-da0ec9d70304', 'photo-1578683010236-d716f9a3f461',
+    'photo-1551776235-dde6d482980b', 'photo-1596436889106-be35e843f974',
+    'photo-1606402179428-a57976d71fa4', 'photo-1551918120-9739cb430c6d',
+    'photo-1582719508461-905c673771fd', 'photo-1542317854-2c8a30c2adb0',
+    'photo-1584132967334-10e028bd69f7', 'photo-1455587734955-081b22074882',
+    'photo-1517840901100-8179e982acb7', 'photo-1605346434674-a440ca4dc4c0',
+];
+const photoUrl = (id) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1600&q=80`;
+const pickHotelImages = (seed) => {
+    const s = String(seed || 'hotel');
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h |= 0; }
+    h = Math.abs(h);
+    const a = HOTEL_PHOTO_IDS[h % HOTEL_PHOTO_IDS.length];
+    const b = HOTEL_PHOTO_IDS[(h + 7) % HOTEL_PHOTO_IDS.length];
+    const c = HOTEL_PHOTO_IDS[(h + 13) % HOTEL_PHOTO_IDS.length];
+    const d = HOTEL_PHOTO_IDS[(h + 19) % HOTEL_PHOTO_IDS.length];
+    return [photoUrl(a), photoUrl(b), photoUrl(c), photoUrl(d)];
+};
+
 class HotelService {
     constructor() {
         this._fallbackPromise = null;
@@ -246,6 +275,7 @@ class HotelService {
      */
     createFallbackHotelObject(rawHotelId, checkInDate, checkOutDate) {
         const nights = this.calculateNights(checkInDate, checkOutDate);
+        const imgs = pickHotelImages(rawHotelId);
 
         return {
             id: `amadeus-${rawHotelId}`,
@@ -255,11 +285,8 @@ class HotelService {
             destinationName: '',
             country: '',
             description: 'This hotel is available for booking. Contact us for the latest availability and pricing.',
-            image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80',
-            images: [
-                'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80',
-                'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1600&q=80'
-            ],
+            image: imgs[0],
+            images: imgs,
             rating: 4.0,
             reviews: 0,
             stars: 4,
@@ -298,10 +325,7 @@ class HotelService {
         const hotel = offerData.hotel || {};
         const offers = offerData.offers || [];
 
-        const images = [
-            'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80',
-            'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1600&q=80'
-        ];
+        const images = pickHotelImages(hotel.hotelId || rawHotelId);
 
         return {
             id: `amadeus-${(hotel.hotelId || rawHotelId)}`,

@@ -12,6 +12,7 @@ const PriceSettings = () => {
     cruise_port_charges: 50.00,
     hotel_taxes_fees: 35.00,
     hotel_taxes_fees_percentage: 12.0,
+    hotel_service_fee_percentage: 5.0,
     package_markup_percentage: 10.0,
     service_fee_percentage: 2.5,
     cancellation_fee: 50.00
@@ -98,6 +99,7 @@ const PriceSettings = () => {
       cruise_port_charges: 50.00,
       hotel_taxes_fees: 35.00,
       hotel_taxes_fees_percentage: 12.0,
+      hotel_service_fee_percentage: 5.0,
       package_markup_percentage: 10.0,
       service_fee_percentage: 2.5,
       cancellation_fee: 50.00
@@ -340,6 +342,13 @@ const PriceSettings = () => {
                   suffix="%"
                   description="Percentage of room rate for occupancy taxes and service charges"
                 />
+                <InputField
+                  label="Service Fee Percentage"
+                  value={settings.hotel_service_fee_percentage}
+                  onChange={(value) => handleInputChange('hotel_service_fee_percentage', value)}
+                  suffix="%"
+                  description="Platform service fee charged on the room subtotal (shown on hotel detail & checkout)"
+                />
               </div>
               <div style={{
                 padding: '20px',
@@ -349,8 +358,9 @@ const PriceSettings = () => {
               }}>
                 <h4 style={{ margin: '0 0 12px', color: '#ca8a04' }}>💡 Current Hotel Pricing Formula</h4>
                 <div style={{ fontSize: '14px', color: '#713f12', lineHeight: '1.6' }}>
-                  <strong>Total = Room Rate + Fixed Fee + (Room Rate × Percentage)</strong><br/>
-                  Example: $150/night + ${settings.hotel_taxes_fees} + ($150 × {settings.hotel_taxes_fees_percentage}%) = {formatCurrency(150 + settings.hotel_taxes_fees + (150 * settings.hotel_taxes_fees_percentage / 100))}/night
+                  <strong>Subtotal = Room Rate × Nights</strong><br/>
+                  <strong>Total = Subtotal + (Subtotal × Taxes%) + (Subtotal × Service Fee%)</strong><br/>
+                  Example: $150 × 3 = $450 + ($450 × {settings.hotel_taxes_fees_percentage}%) + ($450 × {settings.hotel_service_fee_percentage}%) = {formatCurrency(450 + (450 * settings.hotel_taxes_fees_percentage / 100) + (450 * settings.hotel_service_fee_percentage / 100))}
                 </div>
               </div>
             </div>

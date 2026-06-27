@@ -139,6 +139,7 @@ router.post('/bookings', async (req, res) => {
       subtotal,
       taxes,
       serviceFee,
+      fixedFees,
       totalAmount,
       currency = 'USD',
       guestInfo,
@@ -238,6 +239,7 @@ router.post('/bookings', async (req, res) => {
         subtotal: parseFloat(subtotal) || 0,
         taxes: parseFloat(taxes) || 0,
         service_fee: parseFloat(serviceFee) || 0,
+        fixed_fees: parseFloat(fixedFees) || 0,
         amount: parseFloat(totalAmount) || 0,
         currency,
         guest_info: guest,
@@ -630,5 +632,55 @@ const getAccessToken = async () => {
     throw new Error('Could not generate access token: ' + (error.response?.data?.error_description || error.message));
   }
 };
+
+// Confirm/re-price a specific hotel offer before payment (offers expire)
+router.get('/offer/:offerId', async (req, res) => {
+  try {
+    const { offerId } = req.params;
+    if (!offerId) {
+      return res.status(400).json({ success: false, message: 'offerId is required' });
+    }
+    const data = await amadeusService.getHotelOfferById(offerId);
+    return res.json({ success: true, data });
+  } catch (error) {
+    const detail = error.response?.data?.errors?.[0]?.detail || error.message;
+    // 400/410 from Amadeus typically means the offer expired or is unavailable
+    const expired = /expired|not\s*found|unavailable|410|400/i.test(detail) || error.response?.status === 410;
+    return res.status(expired ? 409 : 500).json({
+      success: false,
+      expired,
+      message: expired ? 'This offer is no longer available. Please search again.' : 'Failed to confirm offer',
+      error: detail
+    });
+  }
+});
+
+// Hotel ratings / review sentiments by hotelIds (comma-separated)
+router.get('/ratings', async (req, res) => {
+  try {
+    const { hotelIds } = req.query;
+    if (!hotelIds) {
+      return res.status(400).json({ success: false, message: 'hotelIds is required' });
+    }
+    const ratings = await amadeusService.getHotelSentiments(hotelIds);
+    return res.json({ success: true, data: ratings });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch ratings', error: error.message });
+  }
+});
+
+// Hotel name autocomplete (distinct from city autocomplete at /locations)
+router.get('/autocomplete', async (req, res) => {
+  try {
+    const { keyword, subType } = req.query;
+    if (!keyword || keyword.length < 2) {
+      return res.status(400).json({ success: false, message: 'keyword must be at least 2 characters' });
+    }
+    const results = await amadeusService.autocompleteHotels(keyword, subType || 'HOTEL_LEISURE');
+    return res.json({ success: true, data: results });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to autocomplete hotels', error: error.message });
+  }
+});
 
 export default router;

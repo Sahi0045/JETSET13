@@ -1,14 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MapPin, Star, Calendar, Users, ChevronLeft, ChevronRight, X, Wifi, Coffee, Car, Dumbbell, Bath, Check, Phone, Mail, Clock, Shield, Award, Heart } from 'lucide-react';
+import { MapPin, Star, Calendar, Users, ChevronLeft, ChevronRight, X, Wifi, Coffee, Car, Dumbbell, Bath, Check, Phone, Mail, Clock, Shield, Award, Heart, Share2 } from 'lucide-react';
 import { FaSwimmingPool, FaConciergeBell, FaUtensils, FaSpa, FaParking, FaWifi, FaPlane } from 'react-icons/fa';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
 import currencyService from '../../../Services/CurrencyService';
+import pricingService from '../../../Services/PricingService';
 import Price from '../../../Components/Price';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
+
+// Map a 0-5 rating to a MakeMyTrip-style word label
+const ratingWord = (r) => {
+    if (r == null) return 'New';
+    if (r >= 4.5) return 'Excellent';
+    if (r >= 4) return 'Very Good';
+    if (r >= 3.5) return 'Good';
+    return 'Pleasant';
+};
 
 const HotelDetailsPage = () => {
     const navigate = useNavigate();
@@ -29,6 +39,7 @@ const HotelDetailsPage = () => {
     const [selectedRoom, setSelectedRoom] = useState(null);
     const [showQuoteModal, setShowQuoteModal] = useState(false);
     const [isLiked, setIsLiked] = useState(false);
+    const [rates, setRates] = useState({ taxPercent: 12, serviceFeePercent: 5, fixedFeePerNight: 0 });
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -117,6 +128,13 @@ const HotelDetailsPage = () => {
             setCurrentImageIndex((prev) => (prev - 1 + hotel.images.length) % hotel.images.length);
         }
     };
+
+    // Load admin-configurable hotel tax & service-fee rates
+    useEffect(() => {
+        let active = true;
+        pricingService.getHotelRates().then((r) => { if (active) setRates(r); }).catch(() => {});
+        return () => { active = false; };
+    }, []);
 
     // Calculate nights
     const calculateNights = () => {
@@ -290,97 +308,144 @@ const HotelDetailsPage = () => {
 
     const images = hotel.images || [hotel.image];
     const nights = calculateNights();
+    // Total for the mobile sticky bottom bar (matches the sidebar breakdown)
+    const mobileSubtotal = (selectedRoom?.price || hotel.price || 0) * nights;
+    const mobileTotal = Math.round(
+        mobileSubtotal
+        + mobileSubtotal * ((rates.taxPercent + rates.serviceFeePercent) / 100)
+        + (rates.fixedFeePerNight || 0) * nights
+    );
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 pb-24 md:pb-0">
             <Navbar forceScrolled={true} />
 
-            {/* Hero Image Gallery */}
-            <div className="relative h-[300px] md:h-[450px] overflow-hidden group">
-                <img loading="lazy" decoding="async"
-                    src={images[currentImageIndex]}
-                    alt={hotel.name}
-                    className="w-full h-full object-cover transition-transform duration-700"
-                    onError={(e) => {
-                        e.target.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80';
-                    }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
-
-                {/* Navigation Arrows */}
-                {images.length > 1 && (
-                    <>
-                        <button
-                            onClick={prevImage}
-                            className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/30 hover:bg-white/50 w-12 h-12 rounded-full flex items-center justify-center text-white transition-all opacity-0 group-hover:opacity-100"
-                        >
-                            <ChevronLeft size={28} />
-                        </button>
-                        <button
-                            onClick={nextImage}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/30 hover:bg-white/50 w-12 h-12 rounded-full flex items-center justify-center text-white transition-all opacity-0 group-hover:opacity-100"
-                        >
-                            <ChevronRight size={28} />
-                        </button>
-                    </>
-                )}
-
-                {/* Like Button */}
-                <button
-                    onClick={() => setIsLiked(!isLiked)}
-                    className="absolute top-4 right-4 p-3 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/40 transition-all"
-                >
-                    <Heart size={24} className={`${isLiked ? 'fill-red-500 text-red-500' : 'text-white'}`} />
-                </button>
-
-                {/* Image Indicators */}
-                {images.length > 1 && (
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
-                        {images.map((_, idx) => (
-                            <button
-                                key={idx}
-                                onClick={() => setCurrentImageIndex(idx)}
-                                className={`w-2 h-2 rounded-full transition-all ${idx === currentImageIndex ? 'bg-white w-8' : 'bg-white/50'
-                                    }`}
-                            />
-                        ))}
+            {/* Header: breadcrumb + title + location */}
+            <div className="container mx-auto px-4 pt-6">
+                <nav className="text-sm text-gray-400 mb-3 flex items-center gap-1.5">
+                    <span className="hover:text-[#055B75] cursor-pointer" onClick={() => navigate('/')}>Home</span>
+                    <span>/</span>
+                    <span className="hover:text-[#055B75] cursor-pointer" onClick={() => navigate('/hotels')}>Hotels</span>
+                    <span>/</span>
+                    <span className="text-gray-700 font-medium line-clamp-1">{hotel.name}</span>
+                </nav>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <span className="flex items-center gap-0.5">
+                                {[...Array(hotel.stars || 4)].map((_, i) => (
+                                    <Star key={i} size={16} className="fill-[#0890BC] text-[#0890BC]" />
+                                ))}
+                            </span>
+                            <span className="text-sm text-gray-500 ml-1">
+                                {(hotel.stars || 4) >= 5 ? 'Luxury Resort' : (hotel.stars || 4) >= 4 ? 'Premium Hotel' : 'Hotel'}
+                            </span>
+                        </div>
+                        <h1 className="text-3xl md:text-4xl font-bold text-[#034457] tracking-tight">{hotel.name}</h1>
+                        <div className="flex items-center gap-1.5 text-gray-500 text-sm mt-2">
+                            <MapPin size={16} className="text-[#0890BC]" />
+                            <span>{hotel.location || `${hotel.destinationName}${hotel.country ? ', ' + hotel.country : ''}`}</span>
+                        </div>
                     </div>
-                )}
-
-                {/* Hotel Title Overlay */}
-                <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
-                    <div className="container mx-auto">
-                        <div className="flex items-center gap-2 mb-2">
-                            {[...Array(hotel.stars || 5)].map((_, i) => (
-                                <Star key={i} size={16} className="fill-yellow-400 text-yellow-400" />
-                            ))}
-                        </div>
-                        <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{hotel.name}</h1>
-                        <div className="flex items-center gap-2 text-white/90">
-                            <MapPin size={18} />
-                            <span>{hotel.location || `${hotel.destinationName}, ${hotel.country}`}</span>
-                        </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        {hotel.rating != null && (
+                            <div className="hidden sm:flex items-center gap-2 mr-1">
+                                <div className="text-right">
+                                    <div className="text-sm font-semibold text-gray-700">{ratingWord(hotel.rating)}</div>
+                                    {hotel.reviews > 0 && <div className="text-xs text-gray-400">{hotel.reviews} ratings</div>}
+                                </div>
+                                <span className="bg-[#055B75] text-white font-bold px-2.5 py-1 rounded-lg">{hotel.rating}</span>
+                            </div>
+                        )}
+                        <button
+                            onClick={() => setIsLiked(!isLiked)}
+                            className="p-2.5 rounded-full border border-gray-200 hover:border-[#65B3CF] transition-colors"
+                            aria-label="Save"
+                        >
+                            <Heart size={18} className={isLiked ? 'fill-red-500 text-red-500' : 'text-gray-500'} />
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (navigator.share) {
+                                    navigator.share({ title: hotel.name, url: window.location.href }).catch(() => {});
+                                } else {
+                                    navigator.clipboard?.writeText(window.location.href);
+                                }
+                            }}
+                            className="p-2.5 rounded-full border border-gray-200 hover:border-[#65B3CF] transition-colors"
+                            aria-label="Share"
+                        >
+                            <Share2 size={18} className="text-gray-500" />
+                        </button>
                     </div>
                 </div>
             </div>
 
-            {/* Thumbnail Gallery */}
-            {images.length > 1 && (
-                <div className="container mx-auto px-4 py-4">
-                    <div className="flex gap-2 overflow-x-auto pb-2">
-                        {images.map((img, idx) => (
+            {/* Photo gallery: large image + thumbnail grid */}
+            <div className="container mx-auto px-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 rounded-2xl overflow-hidden h-[260px] md:h-[420px]">
+                    {/* Large image */}
+                    <div className="relative h-full group">
+                        <img loading="lazy" decoding="async"
+                            src={images[currentImageIndex]}
+                            alt={hotel.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80'; }}
+                        />
+                        {images.length > 1 && (
+                            <>
+                                <button onClick={prevImage} className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/40 hover:bg-white/70 w-10 h-10 rounded-full flex items-center justify-center text-gray-800 transition-all opacity-0 group-hover:opacity-100">
+                                    <ChevronLeft size={22} />
+                                </button>
+                                <button onClick={nextImage} className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/40 hover:bg-white/70 w-10 h-10 rounded-full flex items-center justify-center text-gray-800 transition-all opacity-0 group-hover:opacity-100">
+                                    <ChevronRight size={22} />
+                                </button>
+                            </>
+                        )}
+                        <div className="absolute bottom-3 left-3 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full">
+                            {images.length} Photos
+                        </div>
+                    </div>
+
+                    {/* Thumbnail grid (2x2) — hidden on small screens */}
+                    <div className="hidden md:grid grid-cols-2 gap-2 h-full">
+                        {images.slice(0, 4).map((img, idx) => (
                             <button
                                 key={idx}
                                 onClick={() => setCurrentImageIndex(idx)}
-                                className={`flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden ${idx === currentImageIndex ? 'ring-2 ring-[#055B75]' : ''
-                                    }`}
+                                className={`relative h-full overflow-hidden ${idx === currentImageIndex ? 'ring-2 ring-[#055B75]' : ''}`}
                             >
-                                <img loading="lazy" decoding="async" src={img} alt="" className="w-full h-full object-cover" />
+                                <img loading="lazy" decoding="async" src={img} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                                    onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1200&q=80'; }} />
+                                {idx === 3 && images.length > 4 && (
+                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-semibold">
+                                        +{images.length - 4} more
+                                    </div>
+                                )}
                             </button>
                         ))}
                     </div>
                 </div>
-            )}
+
+                {/* Mobile: horizontal thumbnail carousel + view-all button */}
+                <div className="md:hidden mt-3">
+                    <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-1 snap-x">
+                        {images.map((img, idx) => (
+                            <button
+                                key={idx}
+                                onClick={() => setCurrentImageIndex(idx)}
+                                className={`w-40 h-28 flex-shrink-0 rounded-xl overflow-hidden snap-start ${idx === currentImageIndex ? 'ring-2 ring-[#055B75]' : 'border border-gray-100'}`}
+                            >
+                                <img loading="lazy" decoding="async" src={img} alt="" className="w-full h-full object-cover"
+                                    onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=800&q=70'; }} />
+                            </button>
+                        ))}
+                    </div>
+                    <button className="w-full mt-2 bg-white border border-gray-200 px-4 py-2 rounded-lg text-sm font-semibold text-[#055B75] shadow-sm flex items-center justify-center gap-2">
+                        View {images.length} Photos
+                    </button>
+                </div>
+            </div>
 
             {/* Main Content */}
             <div className="container mx-auto px-4 py-8">
@@ -392,11 +457,13 @@ const HotelDetailsPage = () => {
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-4">
                                     <div className="bg-[#055B75] text-white px-4 py-2 rounded-lg font-bold text-xl">
-                                        {hotel.rating}
+                                        {hotel.rating != null ? hotel.rating : '—'}
                                     </div>
                                     <div>
-                                        <div className="font-semibold text-gray-900">Excellent</div>
-                                        <div className="text-gray-500 text-sm">{hotel.reviews} reviews</div>
+                                        <div className="font-semibold text-gray-900">{ratingWord(hotel.rating)}</div>
+                                        <div className="text-gray-500 text-sm">
+                                            {hotel.reviews > 0 ? `${hotel.reviews} reviews` : 'No reviews yet'}
+                                        </div>
                                     </div>
                                 </div>
                                 {hotel.tags && (
@@ -419,11 +486,16 @@ const HotelDetailsPage = () => {
 
                         {/* Amenities */}
                         <div className="bg-white rounded-xl p-6 shadow-sm">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4">Amenities</h2>
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xl font-bold text-gray-900">Amenities</h2>
+                                {(hotel.amenities || []).length > 6 && (
+                                    <span className="text-sm text-[#0890BC] font-semibold cursor-pointer hover:underline">View All</span>
+                                )}
+                            </div>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {(hotel.amenities || []).map((amenity, idx) => (
                                     <div key={idx} className="flex items-center gap-3 text-gray-700">
-                                        <div className="w-10 h-10 bg-[#F0FAFC] rounded-lg flex items-center justify-center text-[#055B75]">
+                                        <div className="w-10 h-10 bg-[#0890BC]/10 rounded-full flex items-center justify-center text-[#0890BC]">
                                             {getAmenityIcon(amenity)}
                                         </div>
                                         <span>{amenity}</span>
@@ -436,74 +508,64 @@ const HotelDetailsPage = () => {
                         <div className="bg-white rounded-xl p-6 shadow-sm">
                             <h2 className="text-xl font-bold text-gray-900 mb-4">Available Rooms</h2>
                             <div className="space-y-4">
-                                {(hotel.rooms || []).map((room, idx) => (
-                                    <div
-                                        key={idx}
-                                        onClick={() => setSelectedRoom(room)}
-                                        className={`border rounded-xl p-4 cursor-pointer transition-all ${selectedRoom?.type === room.type
-                                            ? 'border-[#055B75] bg-[#F0FAFC]'
-                                            : 'border-gray-200 hover:border-[#65B3CF]'
-                                            }`}
-                                    >
-                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                            <div className="flex-1">
-                                                <h3 className="font-semibold text-gray-900 mb-1">{room.type}</h3>
-                                                <div className="flex flex-wrap gap-3 text-sm text-gray-500">
-                                                    <span>{room.beds}</span>
-                                                    <span>•</span>
-                                                    <span>{room.size}</span>
-                                                    <span>•</span>
-                                                    <span>{room.view}</span>
+                                {(hotel.rooms || []).map((room, idx) => {
+                                    const isSelected = selectedRoom?.type === room.type;
+                                    const roomImg = (hotel.images && hotel.images[(idx + 1) % hotel.images.length]) || hotel.image;
+                                    return (
+                                        <div
+                                            key={idx}
+                                            className={`relative border rounded-xl overflow-hidden transition-all ${isSelected ? 'border-[#055B75] ring-1 ring-[#055B75]' : 'border-gray-200'}`}
+                                        >
+                                            {idx === 1 && (
+                                                <span className="absolute top-3 right-3 z-10 bg-amber-400 text-amber-900 text-[10px] font-bold px-2 py-1 rounded-full tracking-wide">POPULAR</span>
+                                            )}
+                                            <div className="flex flex-col sm:flex-row">
+                                                {/* Room image */}
+                                                <div className="sm:w-44 h-40 sm:h-auto flex-shrink-0">
+                                                    <img loading="lazy" decoding="async" src={roomImg} alt={room.type}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1618773928121-c32242e63f39?auto=format&fit=crop&w=800&q=70'; }} />
                                                 </div>
-                                                <div className="flex flex-wrap gap-2 mt-2">
-                                                    {(room.amenities || []).map((a, i) => (
-                                                        <span key={i} className="text-xs bg-gray-100 px-2 py-1 rounded">
-                                                            {a}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-2xl font-bold text-gray-900">
-                                                    <Price amount={room.price} />
-                                                </div>
-                                                <div className="text-gray-500 text-sm">per night</div>
-                                                {selectedRoom?.type === room.type && (
-                                                    <div className="mt-2 text-[#055B75] font-medium flex items-center gap-1 justify-end">
-                                                        <Check size={16} /> Selected
+                                                {/* Room details */}
+                                                <div className="flex-1 p-4">
+                                                    <h3 className="font-semibold text-gray-900 mb-1">{room.type}</h3>
+                                                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 mb-3">
+                                                        {room.beds && <span>{room.beds}</span>}
+                                                        {room.size && <span>• {room.size}</span>}
+                                                        {room.view && <span>• {room.view}</span>}
                                                     </div>
-                                                )}
+                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mb-3">
+                                                        {(room.amenities || []).slice(0, 4).map((a, i) => (
+                                                            <div key={i} className="flex items-center gap-1.5 text-xs text-gray-600">
+                                                                <Check size={13} className="text-green-500 flex-shrink-0" /> {a}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <div className="flex items-end justify-between">
+                                                        <div>
+                                                            <span className="text-xl font-bold text-gray-900"><Price amount={room.price} /></span>
+                                                            <span className="text-gray-500 text-sm"> /night</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setSelectedRoom(room)}
+                                                            className={`px-5 py-2 rounded-lg font-semibold text-sm transition-all ${isSelected ? 'bg-[#034457] text-white' : 'bg-[#055B75] text-white hover:bg-[#034457]'}`}
+                                                        >
+                                                            {isSelected ? (<span className="flex items-center gap-1"><Check size={15} /> Selected</span>) : 'Select'}
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Why Book With Us */}
-                        <div className="bg-white rounded-xl p-6 shadow-sm">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4">Why Book With Us</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {[
-                                    { icon: Shield, title: 'Secure Booking', desc: 'Safe & encrypted payments' },
-                                    { icon: Award, title: 'Best Price', desc: 'Price match guarantee' },
-                                    { icon: Clock, title: '24/7 Support', desc: 'Always here to help' }
-                                ].map((item, idx) => (
-                                    <div key={idx} className="text-center p-4">
-                                        <div className="w-12 h-12 bg-[#055B75] rounded-xl mx-auto mb-3 flex items-center justify-center">
-                                            <item.icon className="text-white" size={24} />
-                                        </div>
-                                        <h3 className="font-semibold text-gray-900">{item.title}</h3>
-                                        <p className="text-gray-500 text-sm">{item.desc}</p>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
 
                     {/* Right Column - Booking Card */}
                     <div className="lg:col-span-1">
-                        <div className="sticky top-24 bg-white rounded-xl p-6 shadow-lg border border-gray-100">
+                        <div className="sticky top-24 space-y-4">
+                        <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-100">
                             {/* Price */}
                             <div className="text-center mb-6 pb-6 border-b">
                                 <div className="text-gray-500 mb-1">Starting from</div>
@@ -564,31 +626,55 @@ const HotelDetailsPage = () => {
                                 </div>
                             </div>
 
-                            {/* Price Breakdown */}
-                            {selectedRoom && formData.checkIn && formData.checkOut && (
-                                <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                                    <div className="flex justify-between mb-2">
-                                        <span className="text-gray-600">
-                                            <Price amount={selectedRoom.price} /> × {nights} night{nights > 1 ? 's' : ''}
-                                        </span>
-                                        <span className="font-medium">
-                                            <Price amount={selectedRoom.price * nights} />
-                                        </span>
+                            {/* Price Breakdown — itemized to match checkout exactly */}
+                            {selectedRoom && formData.checkIn && formData.checkOut && (() => {
+                                const subtotal = selectedRoom.price * nights;
+                                const taxes = Math.round(subtotal * (rates.taxPercent / 100));
+                                const serviceFee = Math.round(subtotal * (rates.serviceFeePercent / 100));
+                                const fixedFees = Math.round((rates.fixedFeePerNight || 0) * nights);
+                                const total = subtotal + taxes + serviceFee + fixedFees;
+                                return (
+                                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                                        <div className="flex justify-between mb-2">
+                                            <span className="text-gray-600">
+                                                <Price amount={selectedRoom.price} /> × {nights} night{nights > 1 ? 's' : ''}
+                                            </span>
+                                            <span className="font-medium">
+                                                <Price amount={subtotal} />
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between mb-2">
+                                            <span className="text-gray-600">Taxes ({rates.taxPercent}%)</span>
+                                            <span className="font-medium">
+                                                <Price amount={taxes} />
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between mb-2">
+                                            <span className="text-gray-600">Service fee ({rates.serviceFeePercent}%)</span>
+                                            <span className="font-medium">
+                                                <Price amount={serviceFee} />
+                                            </span>
+                                        </div>
+                                        {fixedFees > 0 && (
+                                            <div className="flex justify-between mb-2">
+                                                <span className="text-gray-600">Resort &amp; city fees</span>
+                                                <span className="font-medium">
+                                                    <Price amount={fixedFees} />
+                                                </span>
+                                            </div>
+                                        )}
+                                        <div className="border-t pt-2 mt-2 flex justify-between">
+                                            <span className="font-bold text-gray-900">Total</span>
+                                            <span className="font-bold text-[#055B75]">
+                                                <Price amount={total} />
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-400 mt-2">
+                                            Final price confirmed at checkout. Taxes &amp; fees are estimates.
+                                        </p>
                                     </div>
-                                    <div className="flex justify-between mb-2">
-                                        <span className="text-gray-600">Taxes & fees</span>
-                                        <span className="font-medium">
-                                            <Price amount={Math.round(selectedRoom.price * nights * 0.12)} />
-                                        </span>
-                                    </div>
-                                    <div className="border-t pt-2 mt-2 flex justify-between">
-                                        <span className="font-bold text-gray-900">Total</span>
-                                        <span className="font-bold text-gray-900">
-                                            <Price amount={Math.round(selectedRoom.price * nights * 1.12)} />
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
+                                );
+                            })()}
 
                             {/* Action Buttons */}
                             <div className="space-y-3">
@@ -605,8 +691,75 @@ const HotelDetailsPage = () => {
                                     Request Quote
                                 </button>
                             </div>
+                            <p className="text-center text-[11px] text-gray-400 mt-4 px-2">
+                                You won't be charged yet. Flexible cancellation available up to 48 hours before check-in.
+                            </p>
+                        </div>
+
+                        {/* Rating card */}
+                        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
+                            <span className="bg-[#055B75] text-white font-bold px-3 py-2 rounded-lg text-lg">
+                                {hotel.rating != null ? hotel.rating : '—'}
+                            </span>
+                            <div className="flex-1">
+                                <div className="font-semibold text-gray-900">{ratingWord(hotel.rating)}</div>
+                                <div className="text-xs text-gray-400">
+                                    {hotel.reviews > 0 ? `${hotel.reviews} verified ratings` : 'No ratings yet'}
+                                </div>
+                            </div>
+                            <span className="text-sm text-[#0890BC] font-semibold cursor-pointer hover:text-[#034457]">All reviews</span>
+                        </div>
+
+                        {/* Location / map card */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div
+                                className="relative h-32 flex items-center justify-center"
+                                style={{
+                                    background:
+                                        'linear-gradient(135deg, #E3F1F6 0%, #D1E9F0 100%)',
+                                    backgroundImage:
+                                        "url('https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=600&q=60')",
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                }}
+                            >
+                                <div className="absolute inset-0 bg-white/30" />
+                                <a
+                                    href={
+                                        hotel.geoCode?.latitude && hotel.geoCode?.longitude
+                                            ? `https://www.google.com/maps/search/?api=1&query=${hotel.geoCode.latitude},${hotel.geoCode.longitude}`
+                                            : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((hotel.name || '') + ' ' + (hotel.location || ''))}`
+                                    }
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="relative bg-white shadow px-4 py-2 rounded-full text-sm font-semibold text-[#055B75] hover:bg-[#F0FAFC] inline-flex items-center gap-2"
+                                >
+                                    <MapPin size={16} /> Show on map
+                                </a>
+                            </div>
+                            <div className="p-3 flex items-center gap-1.5 text-sm text-gray-700">
+                                <MapPin size={14} className="text-[#65B3CF]" />
+                                <span className="line-clamp-1">{hotel.location || hotel.destinationName || 'Location available on map'}</span>
+                            </div>
+                        </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {/* Mobile sticky bottom bar */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-4px_20px_rgba(3,68,87,0.08)] p-4 z-40">
+                <div className="flex justify-between items-center">
+                    <div className="flex flex-col">
+                        <span className="text-xs text-gray-400">Total</span>
+                        <span className="text-lg font-bold text-[#034457]"><Price amount={mobileTotal} /></span>
+                    </div>
+                    <button
+                        onClick={handleBookNow}
+                        className="bg-[#055B75] text-white px-8 py-3 rounded-xl font-bold hover:bg-[#034457] transition-all"
+                    >
+                        Book Now
+                    </button>
                 </div>
             </div>
 

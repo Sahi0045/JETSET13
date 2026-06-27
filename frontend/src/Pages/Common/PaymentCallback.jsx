@@ -289,6 +289,7 @@ export default function PaymentCallback() {
                   subtotal: bookingData.subtotal || 0,
                   taxes: bookingData.taxes || 0,
                   serviceFee: bookingData.serviceFee || 0,
+                  fixedFees: bookingData.fixedFees || 0,
                   totalAmount: bookingData.totalPrice || bookingData.totalAmount || sessionData?.amount || 0,
                   guestInfo: bookingData.guestInfo || {},
                   transactionId: resultIndicator || '',

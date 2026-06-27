@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS = {
   cruise_port_charges: 50.00,
   hotel_taxes_fees: 35.00,
   hotel_taxes_fees_percentage: 12.0,
+  hotel_service_fee_percentage: 5.0,
   package_markup_percentage: 10.0,
   service_fee_percentage: 2.5,
   cancellation_fee: 50.00

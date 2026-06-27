@@ -2,9 +2,19 @@ import amadeusService from '../services/amadeusService.js';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { get as cacheGet, set as cacheSet, CacheKeys, TTL } from '../services/cache.service.js';
+import { getHotelImages } from '../services/hotelImages.js';
 
 // Ensure environment variables are loaded
 dotenv.config();
+
+// Convert Amadeus amenity codes (e.g. SWIMMING_POOL) to readable labels.
+const formatAmenity = (code) =>
+  String(code || '')
+    .toLowerCase()
+    .split('_')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 
 // const getAccessToken = async () => {
 //   const response = await axios.post('https://test.api.amadeus.com/v1/security/oauth2/token', null, {
@@ -175,181 +185,113 @@ export const searchHotels = async (req, res) => {
       console.log(`No dates provided, using future dates: ${searchParams.checkInDate} to ${searchParams.checkOutDate}`);
     }
 
-    // Use the AmadeusService directly for more consistent behavior
+    // Correct Amadeus hotel flow: Hotel List (by-city) -> hotelIds ->
+    // Hotel Offers (by hotelIds) + Hotel Sentiments (real ratings).
     try {
-      console.log('Searching hotels using AmadeusService with params:', searchParams);
-      // Served from Redis cache when available; passthrough when REDIS_URL unset
       const hotelCacheKey = CacheKeys.hotelSearch(
         searchParams.cityCode,
         searchParams.checkInDate,
         searchParams.checkOutDate,
         searchParams.adults
       );
-      let searchResults = await cacheGet(hotelCacheKey);
-      if (searchResults) {
+      let formattedHotels = await cacheGet(hotelCacheKey);
+      if (formattedHotels) {
         console.log('✅ Hotel search served from cache');
-      } else {
-        searchResults = await amadeusService.searchHotels(searchParams);
-        // Only cache non-empty results (handles both array and object shapes)
-        const hasResults = searchResults && (Array.isArray(searchResults) ? searchResults.length : Object.keys(searchResults).length);
-        if (hasResults) {
-          await cacheSet(hotelCacheKey, searchResults, TTL.HOTEL_SEARCH);
-        }
+        return res.json({ success: true, data: { hotels: formattedHotels } });
       }
-      
-      // Format hotel data for frontend
-      const formattedHotels = [];
-      
-      // Check if searchResults has 'hotels' property (when availability check fails, it returns just hotel list)
-      const hotelList = searchResults.hotels || searchResults.data || [];
-      
-      if (!hotelList || (Array.isArray(hotelList) && hotelList.length === 0)) {
-        console.log('No hotels found in the search results');
-        
-        // Return empty results with a friendly message
-        return res.json({
-          success: true,
-          message: 'No hotels found for your search criteria',
-          data: {
-            hotels: []
-          }
-        });
+
+      // 1. Directory list -> hotelIds
+      const directory = await amadeusService.getHotelsByCity(searchParams.cityCode, searchParams.radius || 20);
+      if (!directory || directory.length === 0) {
+        return res.json({ success: true, message: 'No hotels found for your search criteria', data: { hotels: [] } });
       }
-      
-      // If we have hotel offers with prices (searchResults.data is offer array)
-      if (searchResults.data && Array.isArray(searchResults.data) && searchResults.data.length > 0 && searchResults.data[0].offers) {
-        console.log('Processing hotels WITH availability/offers');
-        
-        // Get mapped hotels for additional info
-        const hotelInfoMap = {};
-        if (searchResults.hotels && Array.isArray(searchResults.hotels)) {
-          searchResults.hotels.forEach(hotel => {
-            hotelInfoMap[hotel.hotelId] = hotel;
-          });
-        }
-        
-        // Process each hotel with availability
-        searchResults.data.forEach(hotelOffer => {
-          const hotelId = hotelOffer.hotel.hotelId;
-          const basicInfo = hotelInfoMap[hotelId] || {};
-          const cityName = basicInfo.address?.cityName || hotelOffer.hotel.name || searchParams.cityCode;
-          const countryCode = basicInfo.address?.countryCode || '';
-          
-          if (hotelOffer.offers && hotelOffer.offers.length > 0) {
-            const offer = hotelOffer.offers[0];
-            formattedHotels.push({
-              id: `amadeus-${hotelId}`,
-              hotelId,
-              name: hotelOffer.hotel.name,
-              cityCode: searchParams.cityCode,
-              location: countryCode ? `${cityName}, ${countryCode}` : cityName,
-              address: basicInfo.address || {},
-              geoCode: basicInfo.geoCode || {},
-              rating: Math.floor(Math.random() * 2) + 4,
-              price: offer.price.total,
-              currency: offer.price.currency,
-              stars: 4,
-              image: `https://source.unsplash.com/random/300x200/?hotel,${hotelId}`,
-              images: [
-                `https://source.unsplash.com/random/300x200/?hotel,${hotelId}`,
-                `https://source.unsplash.com/random/300x200/?room,${hotelId}`
-              ],
-              amenities: ['Free WiFi', 'Air Conditioning', 'Pool', '24-hour Front Desk'].sort(() => 0.5 - Math.random()).slice(0, 3)
-            });
-          }
-        });
-      } 
-      // Otherwise, process all hotels from the list (no availability check)
-      else {
-        console.log(`Processing ALL ${hotelList.length} hotels WITHOUT availability check`);
-        
-        hotelList.slice(0, 20).forEach((hotel, index) => {
-          const cityName = hotel.address?.cityName || searchParams.cityCode;
-          const countryCode = hotel.address?.countryCode || '';
-          
-          formattedHotels.push({
-            id: `amadeus-${hotel.hotelId}`,
-            hotelId: hotel.hotelId,
-            name: hotel.name,
-            cityCode: searchParams.cityCode,
-            location: countryCode ? `${cityName}, ${countryCode}` : cityName,
-            address: hotel.address,
-            geoCode: hotel.geoCode,
-            rating: Math.floor(Math.random() * 2) + 4,
-            price: (150 + index * 25).toString(),
-            currency: 'USD',
-            stars: 4,
-            image: `https://source.unsplash.com/random/300x200/?hotel,${index}`,
-            images: [
-              `https://source.unsplash.com/random/300x200/?hotel,${index}`,
-              `https://source.unsplash.com/random/300x200/?room,${index}`
-            ],
-            amenities: ['Free WiFi', 'Air Conditioning', 'Pool', '24-hour Front Desk'].sort(() => 0.5 - Math.random()).slice(0, 3)
-          });
-        });
-      }
-      
-      // If we still have no hotels, try a fallback solution with a known working hotel
-      if (formattedHotels.length === 0) {
-        console.log('Using fallback hotel for empty results');
-        formattedHotels.push({
-          id: 'amadeus-EDLONDER', // Known working hotel ID from tests
-          hotelId: 'EDLONDER',
-          name: 'ED Hotel London',
-          cityCode: searchParams.cityCode,
-          location: 'London, GB',
-          address: {
-            cityName: 'London',
-            countryCode: 'GB'
-          },
-          rating: 4,
-          price: '1957.50',
-          currency: 'GBP',
-          image: 'https://source.unsplash.com/random/300x200/?hotel,london',
-          images: [
-            'https://source.unsplash.com/random/300x200/?hotel,london',
-            'https://source.unsplash.com/random/300x200/?room,luxury'
-          ],
-          amenities: ['Free WiFi', 'Executive Room', 'Breakfast Included']
-        });
-      }
-      
-      // Return the formatted results
-      return res.json({
-        success: true,
-        data: {
-          hotels: formattedHotels
+
+      // Cap the working set so we don't blow rate limits / URL length
+      const working = directory.slice(0, 40);
+      const ids = working.map((h) => h.hotelId).filter(Boolean);
+
+      // 2 + 3. Offers (priced) and sentiments (ratings) in parallel
+      const [offers, sentiments] = await Promise.all([
+        amadeusService.getHotelOffersByIds(ids, {
+          checkInDate: searchParams.checkInDate,
+          checkOutDate: searchParams.checkOutDate,
+          adults: searchParams.adults
+        }),
+        amadeusService.getHotelSentiments(ids)
+      ]);
+
+      // Map hotelId -> best offer
+      const offerMap = {};
+      (offers || []).forEach((o) => {
+        const hid = o.hotel?.hotelId;
+        if (hid && o.offers && o.offers.length) {
+          offerMap[hid] = { offer: o.offers[0], hotel: o.hotel };
         }
       });
-      
+
+      // Stable pseudo-price (USD) when a live offer isn't returned (test env).
+      const estimatePrice = (hotelId) => {
+        let h = 0; const s = String(hotelId);
+        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+        return 90 + (Math.abs(h) % 360); // $90–$449, stable per hotel
+      };
+
+      formattedHotels = working.map((h) => {
+        const hid = h.hotelId;
+        const cityName = h.address?.cityName || searchParams.cityCode;
+        const countryCode = h.address?.countryCode || '';
+        const matched = offerMap[hid];
+        const sentiment = sentiments[hid];
+        const { image, images } = getHotelImages(hid);
+
+        // Real rating from sentiments (0-100 -> 0-5), else neutral default
+        const rating = sentiment?.overallRating != null
+          ? Math.round((sentiment.overallRating / 20) * 10) / 10
+          : null;
+        const stars = rating ? Math.max(3, Math.min(5, Math.round(rating))) : 4;
+
+        // Amenities from the offer's room description / hotel amenities when present
+        const amenities = Array.isArray(matched?.hotel?.amenities) && matched.hotel.amenities.length
+          ? matched.hotel.amenities.slice(0, 4).map(formatAmenity)
+          : ['Free WiFi', 'Air Conditioning', '24-hour Front Desk'];
+
+        const priced = !!matched?.offer?.price?.total;
+        return {
+          id: `amadeus-${hid}`,
+          hotelId: hid,
+          name: matched?.hotel?.name || h.name,
+          cityCode: searchParams.cityCode,
+          location: countryCode ? `${cityName}, ${countryCode}` : cityName,
+          address: h.address || {},
+          geoCode: h.geoCode || {},
+          rating,
+          reviews: sentiment?.numberOfReviews || 0,
+          stars,
+          price: priced ? matched.offer.price.total : String(estimatePrice(hid)),
+          currency: priced ? matched.offer.price.currency : 'USD',
+          estimated: !priced,
+          available: priced,
+          offerId: priced ? matched.offer.id : null,
+          image,
+          images,
+          amenities
+        };
+      });
+
+      // Bookable (priced) hotels first, then estimates
+      formattedHotels.sort((a, b) => (b.available === a.available ? 0 : b.available ? 1 : -1));
+
+      if (formattedHotels.length) {
+        await cacheSet(hotelCacheKey, formattedHotels, TTL.HOTEL_SEARCH);
+      }
+      return res.json({ success: true, data: { hotels: formattedHotels } });
+
     } catch (searchError) {
-      console.error('Error from AmadeusService:', searchError);
-      
-      // Handle error gracefully with a fallback hotel
-      return res.json({
-        success: true,
-        message: 'Using fallback results due to a search issue',
-        data: {
-          hotels: [{
-            id: 'EDLONDER',
-            name: 'ED Hotel London (Fallback)',
-            cityCode: searchParams.cityCode,
-            location: 'London, GB',
-            address: {
-              cityName: 'London',
-              countryCode: 'GB'
-            },
-            rating: 4,
-            price: '1957.50',
-            currency: 'GBP',
-            image: 'https://source.unsplash.com/random/300x200/?hotel,london',
-            images: [
-              'https://source.unsplash.com/random/300x200/?hotel,london',
-              'https://source.unsplash.com/random/300x200/?room,luxury'
-            ],
-            amenities: ['Free WiFi', 'Executive Room', 'Breakfast Included']
-          }]
-        }
+      console.error('❌ Hotel search error:', searchError.response?.data || searchError.message);
+      return res.status(502).json({
+        success: false,
+        message: 'Hotel search is temporarily unavailable. Please try again.',
+        data: { hotels: [] }
       });
     }
   } catch (error) {

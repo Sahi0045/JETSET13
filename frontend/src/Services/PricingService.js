@@ -156,6 +156,22 @@ class PricingService {
     };
   }
 
+  // Get hotel tax & service-fee percentages (admin-configurable).
+  // Falls back to 12% tax / 5% service fee if settings are unavailable.
+  async getHotelRates() {
+    const num = (v, d) => { const n = parseFloat(v); return Number.isFinite(n) ? n : d; };
+    try {
+      const cfg = await this.getPriceConfig('all');
+      return {
+        taxPercent: num(cfg?.hotel_taxes_fees_percentage, 12),
+        serviceFeePercent: num(cfg?.hotel_service_fee_percentage, 5),
+        fixedFeePerNight: num(cfg?.hotel_taxes_fees, 0), // USD, applied per night
+      };
+    } catch (e) {
+      return { taxPercent: 12, serviceFeePercent: 5, fixedFeePerNight: 0 };
+    }
+  }
+
   // Get cancellation fee
   async getCancellationFee() {
     const config = await this.getPriceConfig('general');

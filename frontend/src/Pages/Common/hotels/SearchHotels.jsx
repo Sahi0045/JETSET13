@@ -6,7 +6,26 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
 import currencyService from '../../../Services/CurrencyService';
+import pricingService from '../../../Services/PricingService';
 import Price from '../../../Components/Price';
+
+// USD price-per-night buckets (hotel prices are USD base; Price renders in user currency)
+const PRICE_BUCKETS = [
+    { id: 'b1', label: 'Under', min: 0, max: 75 },
+    { id: 'b2', label: '', min: 75, max: 150 },
+    { id: 'b3', label: '', min: 150, max: 250 },
+    { id: 'b4', label: '', min: 250, max: 400 },
+    { id: 'b5', label: 'Above', min: 400, max: Infinity },
+];
+
+// Map a 0-5 rating to a MakeMyTrip-style word label
+const ratingLabel = (r) => {
+    if (r == null) return null;
+    if (r >= 4.5) return 'Excellent';
+    if (r >= 4) return 'Very Good';
+    if (r >= 3.5) return 'Good';
+    return 'Pleasant';
+};
 
 const SearchHotels = () => {
     const navigate = useNavigate();
@@ -37,15 +56,31 @@ const SearchHotels = () => {
     const [error, setError] = useState(null);
     const [likedHotels, setLikedHotels] = useState([]);
     const [sortBy, setSortBy] = useState('recommended');
-    const [priceRange, setPriceRange] = useState([0, 5000]);
+    const [priceBuckets, setPriceBuckets] = useState([]); // selected bucket ids
     const [starFilter, setStarFilter] = useState([]);
+    const [ratingFilter, setRatingFilter] = useState(0);
+    const [rates, setRates] = useState({ taxPercent: 12, serviceFeePercent: 5, fixedFeePerNight: 0 });
 
-    const sortOptions = [
-        { value: 'recommended', label: 'Recommended' },
+    // Admin-configured tax/fee rates (for the "+ taxes & fees" line)
+    useEffect(() => {
+        let active = true;
+        pricingService.getHotelRates().then((r) => { if (active) setRates(r); }).catch(() => {});
+        return () => { active = false; };
+    }, []);
+
+    const perNightTaxes = (price) => {
+        const p = parseFloat(price) || 0;
+        return Math.round(p * ((rates.taxPercent + rates.serviceFeePercent) / 100) + (rates.fixedFeePerNight || 0));
+    };
+
+    const toggleBucket = (id) => setPriceBuckets((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+    const toggleStar = (s) => setStarFilter((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
+
+    const sortTabs = [
+        { value: 'recommended', label: 'Popularity' },
         { value: 'price_low', label: 'Price: Low to High' },
         { value: 'price_high', label: 'Price: High to Low' },
-        { value: 'rating', label: 'Highest Rated' },
-        { value: 'stars', label: 'Star Rating' }
+        { value: 'rating', label: 'User Rating' },
     ];
 
     // Debounced search for locations
@@ -152,15 +187,16 @@ const SearchHotels = () => {
 
     // Filter and sort hotels
     const filteredHotels = useMemo(() => {
+        const selectedRanges = PRICE_BUCKETS.filter((b) => priceBuckets.includes(b.id));
         return hotels
             .filter(hotel => {
-                // Price filter
                 const price = parseFloat(hotel.price) || 0;
-                if (price < priceRange[0] || price > priceRange[1]) return false;
-
+                // Price buckets (OR across selected); none selected = all
+                if (selectedRanges.length > 0 && !selectedRanges.some((b) => price >= b.min && price < b.max)) return false;
                 // Star filter
                 if (starFilter.length > 0 && !starFilter.includes(hotel.stars)) return false;
-
+                // Guest rating filter
+                if (ratingFilter > 0 && (parseFloat(hotel.rating) || 0) < ratingFilter) return false;
                 return true;
             })
             .sort((a, b) => {
@@ -180,7 +216,7 @@ const SearchHotels = () => {
                         return bScore - aScore;
                 }
             });
-    }, [hotels, sortBy, priceRange, starFilter]);
+    }, [hotels, sortBy, priceBuckets, starFilter, ratingFilter]);
 
     // Navigate to hotel details
     const handleHotelClick = (hotel) => {
@@ -333,19 +369,7 @@ const SearchHotels = () => {
                             />
                         </div>
 
-                        {/* Sort Dropdown */}
-                        <div className="relative w-full md:w-48">
-                            <select
-                                value={sortBy}
-                                onChange={(e) => setSortBy(e.target.value)}
-                                className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-white pr-10 cursor-pointer hover:border-[#055B75] focus:ring-2 focus:ring-[#65B3CF] appearance-none"
-                            >
-                                {sortOptions.map((option) => (
-                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
-                            </select>
-                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={20} />
-                        </div>
+                        {/* Sort moved to tabs below */}
 
                         <button
                             type="submit"
@@ -357,172 +381,219 @@ const SearchHotels = () => {
                 </div>
             </div>
 
-            {/* Results Section */}
-            <div className="container mx-auto px-4 py-8">
-                {/* Results Count */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-2">
-                    <h2 className="text-xl font-semibold text-gray-800">
+            {/* Header + sort tabs */}
+            <div className="container mx-auto px-4 pt-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+                    <h2 className="text-xl font-bold text-gray-900">
                         {loading ? (
                             <span className="flex items-center gap-2">
                                 <div className="w-5 h-5 border-2 border-[#055B75] border-t-transparent rounded-full animate-spin"></div>
-                                Searching hotels...
+                                Searching hotels…
                             </span>
                         ) : (
                             <span>
-                                {filteredHotels.length} hotels found
-                                {searchQuery && <span className="text-gray-500 font-normal"> for "{searchQuery}"</span>}
+                                {filteredHotels.length} {filteredHotels.length === 1 ? 'Property' : 'Properties'}
+                                {searchQuery && <span className="text-gray-500 font-normal"> in {searchQuery}</span>}
                             </span>
                         )}
                     </h2>
-
-                    {(searchQuery || starFilter.length > 0) && (
-                        <button
-                            onClick={() => {
-                                setSearchQuery('');
-                                setStarFilter([]);
-                            }}
-                            className="text-[#055B75] hover:text-[#034457] flex items-center gap-2 text-sm"
-                        >
-                            <X size={16} />
-                            Clear filters
-                        </button>
-                    )}
-                </div>
-
-                {/* Hotel Grid */}
-                {loading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                            <div key={i} className="bg-white rounded-xl overflow-hidden shadow-md animate-pulse">
-                                <div className="h-48 bg-gray-200"></div>
-                                <div className="p-4">
-                                    <div className="h-4 bg-gray-200 rounded mb-2 w-3/4"></div>
-                                    <div className="h-3 bg-gray-200 rounded mb-4 w-1/2"></div>
-                                    <div className="flex gap-2 mb-3">
-                                        <div className="h-6 bg-gray-200 rounded w-16"></div>
-                                        <div className="h-6 bg-gray-200 rounded w-16"></div>
-                                    </div>
-                                    <div className="h-8 bg-gray-200 rounded w-24"></div>
-                                </div>
-                            </div>
+                    <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar text-sm">
+                        {sortTabs.map((tab) => (
+                            <button
+                                key={tab.value}
+                                onClick={() => setSortBy(tab.value)}
+                                className={`px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${sortBy === tab.value ? 'bg-[#055B75] text-white font-semibold' : 'text-gray-600 hover:bg-[#F0FAFC]'}`}
+                            >
+                                {tab.label}
+                            </button>
                         ))}
                     </div>
-                ) : filteredHotels.length === 0 ? (
-                    <div className="text-center py-16">
-                        <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <MapPin size={40} className="text-gray-400" />
+                </div>
+            </div>
+
+            {/* Two-column: filters + list */}
+            <div className="container mx-auto px-4 pb-12 flex gap-6 items-start">
+                {/* Filter sidebar */}
+                <aside className="hidden lg:block w-72 flex-shrink-0 sticky top-24">
+                    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                            <span className="font-bold text-gray-900">Filters</span>
+                            {(priceBuckets.length > 0 || starFilter.length > 0 || ratingFilter > 0) && (
+                                <button
+                                    onClick={() => { setPriceBuckets([]); setStarFilter([]); setRatingFilter(0); }}
+                                    className="text-xs text-[#0890BC] font-semibold hover:text-[#034457]"
+                                >
+                                    Clear all
+                                </button>
+                            )}
                         </div>
-                        <h3 className="text-xl font-semibold text-gray-800 mb-2">No hotels found</h3>
-                        <p className="text-gray-600 mb-6">
-                            {searchQuery
-                                ? `We couldn't find any hotels matching "${searchQuery}". Try a different destination.`
-                                : 'Try adjusting your search filters.'}
-                        </p>
-                        <button
-                            onClick={() => {
-                                setSearchQuery('');
-                                setStarFilter([]);
-                            }}
-                            className="bg-[#055B75] text-white px-6 py-2 rounded-lg hover:bg-[#034457] transition-all"
-                        >
-                            Show all hotels
-                        </button>
+
+                        {/* Price per night */}
+                        <div className="px-4 py-4 border-b border-gray-100">
+                            <h4 className="text-sm font-bold text-gray-800 mb-3">Price per night</h4>
+                            <div className="space-y-2">
+                                {PRICE_BUCKETS.map((b) => (
+                                    <label key={b.id} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                                        <input type="checkbox" checked={priceBuckets.includes(b.id)} onChange={() => toggleBucket(b.id)}
+                                            className="w-4 h-4 rounded accent-[#055B75]" />
+                                        <span>
+                                            {b.label === 'Under' && <>Under <Price amount={b.max} /></>}
+                                            {b.label === 'Above' && <>Above <Price amount={b.min} /></>}
+                                            {!b.label && <><Price amount={b.min} /> – <Price amount={b.max} /></>}
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Star category */}
+                        <div className="px-4 py-4 border-b border-gray-100">
+                            <h4 className="text-sm font-bold text-gray-800 mb-3">Star category</h4>
+                            <div className="space-y-2">
+                                {[5, 4, 3].map((s) => (
+                                    <label key={s} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                                        <input type="checkbox" checked={starFilter.includes(s)} onChange={() => toggleStar(s)}
+                                            className="w-4 h-4 rounded accent-[#055B75]" />
+                                        <span className="flex items-center gap-0.5">
+                                            {[...Array(s)].map((_, i) => <Star key={i} size={13} className="fill-yellow-400 text-yellow-400" />)}
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Guest rating */}
+                        <div className="px-4 py-4">
+                            <h4 className="text-sm font-bold text-gray-800 mb-3">Guest rating</h4>
+                            <div className="space-y-2">
+                                {[{ v: 4.5, l: 'Excellent 4.5+' }, { v: 4, l: 'Very Good 4+' }, { v: 3.5, l: 'Good 3.5+' }].map((r) => (
+                                    <label key={r.v} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                                        <input type="radio" name="rating" checked={ratingFilter === r.v} onChange={() => setRatingFilter(r.v)}
+                                            className="w-4 h-4 accent-[#055B75]" />
+                                        {r.l}
+                                    </label>
+                                ))}
+                                {ratingFilter > 0 && (
+                                    <button onClick={() => setRatingFilter(0)} className="text-xs text-[#0890BC] font-semibold mt-1">Any rating</button>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {filteredHotels.map((hotel) => (
-                            <div
-                                key={hotel.id}
-                                className="group bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer"
-                                onClick={() => handleHotelClick(hotel)}
-                            >
-                                {/* Hotel Image */}
-                                <div className="relative h-48 overflow-hidden">
-                                    <img loading="lazy" decoding="async"
-                                        src={hotel.image}
-                                        alt={hotel.name}
-                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                        onError={(e) => {
-                                            e.target.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80';
-                                        }}
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                </aside>
 
-                                    {/* Like Button */}
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            toggleLike(hotel.id);
-                                        }}
-                                        className="absolute top-3 right-3 p-2 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/40 transition-all"
-                                    >
-                                        <Heart
-                                            size={18}
-                                            className={`${likedHotels.includes(hotel.id) ? 'fill-red-500 text-red-500' : 'text-white'} transition-colors`}
-                                        />
-                                    </button>
-
-                                    {/* Discount Badge */}
-                                    {hotel.discount > 0 && (
-                                        <div className="absolute top-3 left-3 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-medium">
-                                            {hotel.discount}% OFF
-                                        </div>
-                                    )}
-
-                                    {/* Star Rating */}
-                                    <div className="absolute bottom-3 left-3 flex items-center gap-1">
-                                        {[...Array(hotel.stars || 5)].map((_, i) => (
-                                            <Star key={i} size={12} className="fill-yellow-400 text-yellow-400" />
-                                        ))}
+                {/* Results list */}
+                <div className="flex-1 min-w-0">
+                    {loading ? (
+                        <div className="space-y-4">
+                            {[1, 2, 3, 4].map((i) => (
+                                <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-pulse flex">
+                                    <div className="w-64 h-48 bg-gray-200 flex-shrink-0"></div>
+                                    <div className="p-4 flex-1">
+                                        <div className="h-5 bg-gray-200 rounded w-2/3 mb-3"></div>
+                                        <div className="h-3 bg-gray-200 rounded w-1/2 mb-4"></div>
+                                        <div className="flex gap-2"><div className="h-6 bg-gray-200 rounded w-20"></div><div className="h-6 bg-gray-200 rounded w-24"></div></div>
                                     </div>
-
-                                    {/* Price on Image */}
-                                    <div className="absolute bottom-3 right-3 text-white">
-                                        <div className="text-sm opacity-80">from</div>
-                                        <div className="text-xl font-bold">
-                                            <Price amount={hotel.price} />
-                                        </div>
-                                    </div>
+                                    <div className="w-44 border-l border-gray-100 p-4"><div className="h-8 bg-gray-200 rounded mb-3"></div><div className="h-6 bg-gray-200 rounded w-24 ml-auto"></div></div>
                                 </div>
-
-                                {/* Hotel Info */}
-                                <div className="p-4">
-                                    <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-[#055B75] transition-colors line-clamp-1">
-                                        {hotel.name}
-                                    </h3>
-                                    <div className="flex items-center gap-1 text-gray-500 text-sm mb-3">
-                                        <MapPin size={14} className="text-[#65B3CF]" />
-                                        <span className="line-clamp-1">{hotel.location || hotel.destinationName}</span>
-                                    </div>
-
-                                    {/* Amenities */}
-                                    <div className="flex flex-wrap gap-1 mb-3">
-                                        {(hotel.amenities || []).slice(0, 3).map((amenity, idx) => (
-                                            <span
-                                                key={idx}
-                                                className="text-xs bg-[#F0FAFC] text-[#055B75] px-2 py-1 rounded-full"
+                            ))}
+                        </div>
+                    ) : filteredHotels.length === 0 ? (
+                        <div className="text-center py-16 bg-white rounded-xl border border-gray-100">
+                            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <MapPin size={40} className="text-gray-400" />
+                            </div>
+                            <h3 className="text-xl font-semibold text-gray-800 mb-2">No properties found</h3>
+                            <p className="text-gray-600 mb-6">
+                                {searchQuery ? `We couldn't find hotels matching your filters in "${searchQuery}".` : 'Try adjusting your filters.'}
+                            </p>
+                            <button
+                                onClick={() => { setPriceBuckets([]); setStarFilter([]); setRatingFilter(0); }}
+                                className="bg-[#055B75] text-white px-6 py-2 rounded-lg hover:bg-[#034457] transition-all"
+                            >
+                                Clear filters
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {filteredHotels.map((hotel) => {
+                                const label = ratingLabel(hotel.rating);
+                                return (
+                                    <div
+                                        key={hotel.id}
+                                        onClick={() => handleHotelClick(hotel)}
+                                        className="group bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-lg transition-all cursor-pointer flex flex-col sm:flex-row overflow-hidden"
+                                    >
+                                        {/* Image */}
+                                        <div className="relative sm:w-64 h-52 sm:h-auto flex-shrink-0 overflow-hidden">
+                                            <img loading="lazy" decoding="async"
+                                                src={hotel.image}
+                                                alt={hotel.name}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80'; }}
+                                            />
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); toggleLike(hotel.id); }}
+                                                className="absolute top-3 right-3 p-2 rounded-full bg-white/30 backdrop-blur-sm hover:bg-white/50 transition-all"
                                             >
-                                                {amenity}
-                                            </span>
-                                        ))}
-                                    </div>
-
-                                    {/* Rating */}
-                                    <div className="flex items-center justify-between border-t pt-3">
-                                        <div className="flex items-center gap-1">
-                                            <Star size={14} className="fill-yellow-400 text-yellow-400" />
-                                            <span className="font-medium text-sm">{hotel.rating}</span>
-                                            {hotel.reviews > 0 && (
-                                                <span className="text-gray-500 text-sm">({hotel.reviews} reviews)</span>
+                                                <Heart size={16} className={likedHotels.includes(hotel.id) ? 'fill-red-500 text-red-500' : 'text-white'} />
+                                            </button>
+                                            {(hotel.images?.length > 1) && (
+                                                <div className="absolute bottom-3 left-3 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                                                    {hotel.images.length} Photos
+                                                </div>
                                             )}
                                         </div>
-                                        <ArrowRight size={18} className="text-[#055B75] group-hover:translate-x-1 transition-transform" />
+
+                                        {/* Middle: details */}
+                                        <div className="flex-1 p-4 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <h3 className="font-bold text-gray-900 text-lg group-hover:text-[#055B75] transition-colors line-clamp-1">{hotel.name}</h3>
+                                                <span className="flex items-center gap-0.5 flex-shrink-0">
+                                                    {[...Array(hotel.stars || 4)].map((_, i) => <Star key={i} size={12} className="fill-yellow-400 text-yellow-400" />)}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1 text-gray-500 text-sm mb-3">
+                                                <MapPin size={14} className="text-[#65B3CF]" />
+                                                <span className="line-clamp-1">{hotel.location || hotel.destinationName}</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5 mb-3">
+                                                {(hotel.amenities || []).slice(0, 4).map((a, idx) => (
+                                                    <span key={idx} className="text-xs bg-[#F0FAFC] text-[#055B75] px-2 py-1 rounded-full">{a}</span>
+                                                ))}
+                                            </div>
+                                            {hotel.estimated && (
+                                                <p className="text-xs text-amber-600">Estimated rate — confirmed at checkout</p>
+                                            )}
+                                        </div>
+
+                                        {/* Right: rating + price */}
+                                        <div className="sm:w-48 flex-shrink-0 sm:border-l border-gray-100 p-4 flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 sm:text-right">
+                                            {label ? (
+                                                <div className="flex items-center gap-2 sm:flex-col sm:items-end">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-semibold text-gray-700">{label}</span>
+                                                        <span className="bg-[#055B75] text-white text-sm font-bold px-2 py-0.5 rounded">{hotel.rating}</span>
+                                                    </div>
+                                                    {hotel.reviews > 0 && <span className="text-xs text-gray-400">({hotel.reviews} ratings)</span>}
+                                                </div>
+                                            ) : (
+                                                <span className="text-xs text-gray-400">New property</span>
+                                            )}
+                                            <div className="sm:mt-auto">
+                                                <div className="text-2xl font-bold text-gray-900"><Price amount={hotel.price} /></div>
+                                                <div className="text-xs text-gray-400">+ <Price amount={perNightTaxes(hotel.price)} /> taxes &amp; fees</div>
+                                                <div className="text-xs text-gray-400 mb-2">per night</div>
+                                                <span className="inline-flex items-center gap-1 text-[#055B75] font-semibold text-sm group-hover:translate-x-0.5 transition-transform">
+                                                    View <ArrowRight size={15} />
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
             </div>
 
             <Footer />

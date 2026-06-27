@@ -7,6 +7,7 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
 import currencyService from '../../../Services/CurrencyService';
+import pricingService from '../../../Services/PricingService';
 import Price from '../../../Components/Price';
 import ArcPayService from '../../../Services/ArcPayService';
 import CouponInput from '../../../components/CouponInput';
@@ -77,9 +78,16 @@ const HotelBookingSummary = () => {
         : '/api';
 
     const subtotal = pricePerNight * nights;
-    const taxes = Math.round(subtotal * 0.12);
-    const serviceFee = Math.round(subtotal * 0.05);
-    const total = subtotal + taxes + serviceFee;
+    const [rates, setRates] = useState({ taxPercent: 12, serviceFeePercent: 5, fixedFeePerNight: 0 });
+    useEffect(() => {
+        let active = true;
+        pricingService.getHotelRates().then((r) => { if (active) setRates(r); }).catch(() => {});
+        return () => { active = false; };
+    }, []);
+    const taxes = Math.round(subtotal * (rates.taxPercent / 100));
+    const serviceFee = Math.round(subtotal * (rates.serviceFeePercent / 100));
+    const fixedFees = Math.round((rates.fixedFeePerNight || 0) * nights);
+    const total = subtotal + taxes + serviceFee + fixedFees;
 
     // Handle guest info change
     const handleGuestChange = (e) => {
@@ -138,6 +146,7 @@ const HotelBookingSummary = () => {
                 subtotal,
                 taxes,
                 serviceFee,
+                fixedFees,
                 totalPrice: appliedCoupon ? appliedCoupon.finalTotal : total,
                 couponCode: appliedCoupon ? appliedCoupon.code : null,
                 discountAmount: appliedCoupon ? appliedCoupon.discountAmount : 0,
@@ -295,7 +304,7 @@ const HotelBookingSummary = () => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
                     {/* Main Content */}
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2 order-2 lg:order-1">
                         {/* Booking Confirmation */}
                         {step === 3 && bookingComplete && (
                             <div className="bg-white rounded-xl p-8 shadow-sm text-center">
@@ -543,7 +552,7 @@ const HotelBookingSummary = () => {
                     </div>
 
                     {/* Booking Summary Sidebar */}
-                    <div className="lg:col-span-1">
+                    <div className="lg:col-span-1 order-1 lg:order-2">
                         <div className="sticky top-24 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                             {/* Hotel Image */}
                             <div className="relative h-40 rounded-lg overflow-hidden mb-4">
@@ -611,13 +620,19 @@ const HotelBookingSummary = () => {
                                     <span><Price amount={subtotal} /></span>
                                 </div>
                                 <div className="flex justify-between text-gray-600">
-                                    <span>Taxes (12%)</span>
+                                    <span>Taxes ({rates.taxPercent}%)</span>
                                     <span><Price amount={taxes} /></span>
                                 </div>
                                 <div className="flex justify-between text-gray-600">
-                                    <span>Service fee</span>
+                                    <span>Service fee ({rates.serviceFeePercent}%)</span>
                                     <span><Price amount={serviceFee} /></span>
                                 </div>
+                                {fixedFees > 0 && (
+                                    <div className="flex justify-between text-gray-600">
+                                        <span>Resort &amp; city fees</span>
+                                        <span><Price amount={fixedFees} /></span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2">
                                     <span>Total</span>
                                     <span className="text-[#055B75]"><Price amount={appliedCoupon ? appliedCoupon.finalTotal : total} /></span>

@@ -1346,6 +1346,149 @@ class AmadeusService {
     }
   }
 
+  /**
+   * Hotel List by city — returns hotel directory entries (incl. hotelId, name,
+   * address, geoCode). Step 1 of the correct Amadeus hotel flow.
+   */
+  async getHotelsByCity(cityCode, radius = 20) {
+    const token = await this.getAccessToken();
+    const response = await axios.get(`${this.baseUrls.v1}/reference-data/locations/hotels/by-city`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      params: { cityCode, radius, radiusUnit: 'KM', hotelSource: 'ALL' }
+    });
+    return response.data.data || [];
+  }
+
+  /**
+   * Hotel List by geocode (lat/long).
+   */
+  async getHotelsByGeocode(latitude, longitude, radius = 20) {
+    const token = await this.getAccessToken();
+    const response = await axios.get(`${this.baseUrls.v1}/reference-data/locations/hotels/by-geocode`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      params: { latitude, longitude, radius, radiusUnit: 'KM', hotelSource: 'ALL' }
+    });
+    return response.data.data || [];
+  }
+
+  /**
+   * Hotel Search (offers) by hotelIds. v3 /shopping/hotel-offers requires
+   * hotelIds (NOT cityCode). Batches large id lists to stay under URL limits.
+   * Returns the combined offers array.
+   */
+  async getHotelOffersByIds(hotelIds, { checkInDate, checkOutDate, adults = 2, roomQuantity = 1, currency = 'USD' } = {}) {
+    const token = await this.getAccessToken();
+    const ids = Array.isArray(hotelIds) ? hotelIds : String(hotelIds).split(',');
+    const BATCH = 20;
+    const all = [];
+
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const batch = ids.slice(i, i + BATCH).join(',');
+      try {
+        const response = await axios.get(`${this.baseUrls.v3}/shopping/hotel-offers`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          params: {
+            hotelIds: batch,
+            checkInDate,
+            checkOutDate,
+            adults,
+            roomQuantity,
+            currency,
+            bestRateOnly: true,
+            paymentPolicy: 'NONE',
+            includeClosed: false
+          }
+        });
+        if (Array.isArray(response.data.data)) all.push(...response.data.data);
+      } catch (err) {
+        // A bad hotelId in a batch can 400 the whole batch — log and continue
+        console.warn(`⚠️ hotel-offers batch failed (${i}-${i + BATCH}):`, err.response?.data?.errors?.[0]?.detail || err.message);
+      }
+    }
+    return all;
+  }
+
+  /**
+   * Confirm/repricing a single offer before booking (offer can expire).
+   */
+  async getHotelOfferById(offerId) {
+    const token = await this.getAccessToken();
+    const response = await axios.get(`${this.baseUrls.v3}/shopping/hotel-offers/${offerId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return response.data;
+  }
+
+  /**
+   * Hotel Ratings / sentiments — real review scores per hotelId.
+   * Returns a map { hotelId: { overallRating, numberOfReviews, sentiments } }.
+   * Graceful: returns {} if the API has no data (common in test env).
+   */
+  async getHotelSentiments(hotelIds) {
+    try {
+      const token = await this.getAccessToken();
+      const ids = (Array.isArray(hotelIds) ? hotelIds : String(hotelIds).split(',')).slice(0, 100);
+      if (!ids.length) return {};
+      const response = await axios.get(`${this.baseUrls.v2}/e-reputation/hotel-sentiments`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        params: { hotelIds: ids.join(',') }
+      });
+      const map = {};
+      (response.data.data || []).forEach((s) => {
+        map[s.hotelId] = {
+          overallRating: s.overallRating,        // 0-100
+          numberOfReviews: s.numberOfReviews || 0,
+          numberOfRatings: s.numberOfRatings || 0,
+          sentiments: s.sentiments || {}
+        };
+      });
+      return map;
+    } catch (error) {
+      console.warn('⚠️ Hotel sentiments unavailable:', error.response?.data?.errors?.[0]?.detail || error.message);
+      return {};
+    }
+  }
+
+  /**
+   * Hotel name autocomplete. Amadeus expects subType as one or more of
+   * HOTEL_LEISURE / HOTEL_GDS (repeated query params) plus an optional countryCode.
+   */
+  async autocompleteHotels(keyword, subType = 'HOTEL_LEISURE', countryCode) {
+    const token = await this.getAccessToken();
+    const subTypes = Array.isArray(subType) ? subType : [subType];
+    const params = new URLSearchParams();
+    params.set('keyword', keyword);
+    subTypes.forEach((st) => params.append('subType', st));
+    params.set('max', '15');
+    if (countryCode) params.set('countryCode', countryCode);
+    const response = await axios.get(
+      `${this.baseUrls.v1}/reference-data/locations/hotels?${params.toString()}`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    return response.data.data || [];
+  }
+
+  /**
+   * Create a hotel booking via the current v2 Hotel Orders API
+   * (v1 /booking/hotel-bookings is deprecated).
+   */
+  async createHotelOrder({ offerId, guests, travelAgent, payment, roomAssociations }) {
+    const token = await this.getAccessToken();
+    const body = {
+      data: {
+        type: 'hotel-order',
+        guests,
+        travelAgent: travelAgent || undefined,
+        roomAssociations: roomAssociations || [{ guestReferences: [{ guestReference: '1' }], hotelOfferId: offerId }],
+        payment: payment || { method: 'CREDIT_CARD' }
+      }
+    };
+    const response = await axios.post(`${this.baseUrls.v2}/booking/hotel-orders`, body, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/vnd.amadeus+json' }
+    });
+    return response.data;
+  }
+
   async getHotelDetails(hotelId) {
     try {
       const token = await this.getAccessToken();
