@@ -197,6 +197,16 @@ router.post('/complete', async (req, res) => {
             return res.json({ success: true, alreadyActive: true });
         }
 
+        // Only a PENDING subscription may be activated. If an admin cancelled/expired it,
+        // do NOT resurrect it just because the success tx is still in the URL on refresh
+        // (the ARC order stays "paid" forever, so /complete would otherwise reactivate it).
+        if (sub.status !== 'pending') {
+            return res.json({
+                success: false,
+                message: 'This subscription is no longer active. Please contact support if this is unexpected.',
+            });
+        }
+
         const arcMerchantId = ARC_PAY_CONFIG.MERCHANT_ID;
         const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
         if (!arcMerchantId || !arcApiPassword) {
@@ -327,26 +337,47 @@ router.put('/:id', async (req, res) => {
         const { id } = req.params;
         const { status, plan_type, end_date } = req.body;
 
-        // Update user_subscriptions table
+        // Build the update from provided fields only — never write an empty string into the
+        // NOT NULL timestamptz end_date (that errors and leaves the row unchanged → the
+        // dreaded "I changed it but nothing happened").
+        const subUpdate = {};
+        if (status !== undefined) subUpdate.status = status;
+        if (plan_type !== undefined) subUpdate.plan_type = plan_type;
+        if (end_date) subUpdate.end_date = end_date;
+
         const { data: subData, error: subError } = await supabase
             .from('user_subscriptions')
-            .update({ status, plan_type, end_date })
+            .update(subUpdate)
             .eq('id', id)
             .select()
             .single();
 
         if (subError) throw subError;
 
-        // Also update the users table if active
+        // Recompute the user's membership from ALL their subscription rows (source of truth)
+        // so an admin change ALWAYS reflects on the user side. A user is a member iff they
+        // have at least one ACTIVE, non-expired subscription — this correctly handles users
+        // with multiple rows (several pending + one active, etc.).
         if (subData && subData.user_id) {
-            const userUpdate = {
-                subscription_tier: status === 'active' ? plan_type : null,
-                subscription_end_date: status === 'active' ? end_date : null
-            };
-            await supabase
+            const { data: rows } = await supabase
+                .from('user_subscriptions')
+                .select('plan_type, status, end_date')
+                .eq('user_id', subData.user_id)
+                .eq('status', 'active');
+
+            const now = Date.now();
+            const activeRow = (rows || [])
+                .filter((r) => !r.end_date || new Date(r.end_date).getTime() > now)
+                .sort((a, b) => new Date(b.end_date || 0) - new Date(a.end_date || 0))[0];
+
+            const { error: userErr } = await supabase
                 .from('users')
-                .update(userUpdate)
+                .update({
+                    subscription_tier: activeRow ? activeRow.plan_type : null,
+                    subscription_end_date: activeRow ? activeRow.end_date : null,
+                })
                 .eq('id', subData.user_id);
+            if (userErr) console.error('⚠️ users membership sync failed:', userErr.message);
         }
 
         res.json({ success: true, message: 'Subscription updated successfully', data: subData });
