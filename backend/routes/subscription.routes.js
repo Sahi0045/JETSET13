@@ -142,7 +142,16 @@ router.post('/checkout', async (req, res) => {
         const sessionId = response.data?.session?.id || response.data?.sessionId || response.data?.id;
 
         if (sessionId) {
-            // Save pending subscription intent
+            // Clean up this user's prior UNPAID pending intents so retries/abandoned
+            // checkouts don't pile up duplicate rows. Only 'pending' is removed — active,
+            // cancelled and expired rows are preserved for history.
+            await supabase
+                .from('user_subscriptions')
+                .delete()
+                .eq('user_id', userId)
+                .eq('status', 'pending');
+
+            // Save the new pending subscription intent
             await supabase.from('user_subscriptions').insert([{
                 user_id: userId,
                 plan_type: planId,
