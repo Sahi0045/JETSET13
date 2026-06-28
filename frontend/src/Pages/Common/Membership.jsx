@@ -88,7 +88,10 @@ const Membership = () => {
         planName,
         price,
         email: user.email,
-        userId: user.id
+        userId: user.id,
+        // So ARC returns to wherever checkout started (localhost in dev, prod in prod)
+        // instead of always bouncing to FRONTEND_URL.
+        returnOrigin: window.location.origin
       });
 
       if (response.success && response.checkoutUrl) {

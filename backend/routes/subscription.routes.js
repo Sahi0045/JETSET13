@@ -95,7 +95,15 @@ router.post('/checkout', async (req, res) => {
 
         const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
         const transactionRef = `SUB-${Date.now()}-${uuidv4().substring(0, 8)}`;
-        const frontend = process.env.FRONTEND_URL || 'http://localhost:5173';
+        // Return to the ORIGIN the checkout was started from, so a payment initiated on
+        // localhost comes back to localhost (and completes against the same backend/ARC
+        // session) instead of bouncing to the prod site. Falls back to an explicit
+        // returnOrigin from the client, then FRONTEND_URL for callers without an Origin.
+        const frontend =
+            req.get('origin') ||
+            req.body?.returnOrigin ||
+            process.env.FRONTEND_URL ||
+            'http://localhost:5173';
 
         // Mirror the proven hosted-checkout payload (apiOperation INITIATE_CHECKOUT).
         // The previous "DEFAULT" operation rejected customer.email / order.description.
@@ -201,7 +209,7 @@ router.post('/complete', async (req, res) => {
         try {
             const orderResponse = await axios.get(
                 `${ARC_PAY_CONFIG.BASE_URL}/merchant/${arcMerchantId}/order/${encodeURIComponent(transactionId.trim())}`,
-                { headers: { Authorization: authHeader, Accept: 'application/json' } }
+                { headers: { Authorization: authHeader, Accept: 'application/json' }, timeout: 30000 }
             );
             transaction = orderResponse.data;
         } catch (e) {
