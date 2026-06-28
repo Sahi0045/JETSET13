@@ -107,6 +107,10 @@ const Membership = () => {
   };
 
   const isPremium = userStatus?.subscription_tier === 'premium_monthly' || userStatus?.subscription_tier === 'premium_annual';
+  // Per-tier so only the plan the user actually holds shows "Current Plan"; the other
+  // remains subscribable (switch/upgrade).
+  const isMonthlyCurrent = userStatus?.subscription_tier === 'premium_monthly';
+  const isAnnualCurrent = userStatus?.subscription_tier === 'premium_annual';
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
@@ -165,10 +169,10 @@ const Membership = () => {
 
             <button
               onClick={() => handleSubscribe('premium_monthly', 'Monthly Premium', 9.99)}
-              disabled={loading || isPremium}
+              disabled={loading || isMonthlyCurrent}
               className="w-full py-4 px-6 rounded-xl font-bold text-white bg-gray-900 hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Processing...' : isPremium ? 'Current Plan' : 'Subscribe Monthly'}
+              {loading ? 'Processing...' : isMonthlyCurrent ? 'Current Plan' : 'Subscribe Monthly'}
             </button>
           </div>
 
@@ -201,10 +205,10 @@ const Membership = () => {
 
             <button
               onClick={() => handleSubscribe('premium_annual', 'Annual Premium', 95.00)}
-              disabled={loading || isPremium}
+              disabled={loading || isAnnualCurrent}
               className="w-full py-4 px-6 rounded-xl font-bold text-blue-900 bg-white hover:bg-gray-100 transition-colors disabled:opacity-90 disabled:cursor-not-allowed shadow-lg"
             >
-              {loading ? 'Processing...' : isPremium ? 'Current Plan' : 'Subscribe Annually'}
+              {loading ? 'Processing...' : isAnnualCurrent ? 'Current Plan' : 'Subscribe Annually'}
             </button>
           </div>
         </div>
