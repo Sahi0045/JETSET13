@@ -478,7 +478,7 @@ const HotelsLanding = () => {
 
                                         <div className="mt-auto pt-4 border-t border-gray-100">
                                             <button
-                                                onClick={() => handleHotelClick(hotel.hotelId || hotel.id)} // Prefer raw ID for API hotels
+                                                onClick={() => handleHotelClick(hotel.id || hotel.hotelId)} // Use prefixed id (amadeus-XXX / json slug) the details page can resolve
                                                 className="w-full bg-white border-2 border-[#055B75] text-[#055B75] py-3 rounded-xl font-bold hover:bg-[#055B75] hover:text-white transition-all duration-300 flex items-center justify-center gap-2 group/btn"
                                             >
                                                 Check Availability

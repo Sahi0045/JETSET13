@@ -523,7 +523,9 @@
       }
 
       .navbar.scrolled {
-        background-color: rgba(45, 45, 50, 0.6);
+        background-color: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 2px 12px rgba(8, 40, 52, 0.08);
       }
 
       .navbar-center {
@@ -567,13 +569,20 @@
         background: rgba(5, 91, 117, 0.2);
       }
 
-      .navbar.scrolled .mobile-profile-icon,
       .navbar.transparent .mobile-profile-icon {
         background: rgba(255, 255, 255, 0.12);
         color: #ffffff;
       }
 
-      .navbar.scrolled .mobile-profile-icon:hover,
+      .navbar.scrolled .mobile-profile-icon {
+        background: rgba(5, 91, 117, 0.1);
+        color: #055B75;
+      }
+
+      .navbar.scrolled .mobile-profile-icon:hover {
+        background: rgba(5, 91, 117, 0.2);
+      }
+
       .navbar.transparent .mobile-profile-icon:hover {
         background: rgba(255, 255, 255, 0.2);
       }
