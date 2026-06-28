@@ -320,15 +320,8 @@ const HotelDetailsPage = () => {
         <div className="min-h-screen bg-gray-50 pb-24 md:pb-0">
             <Navbar forceScrolled={true} />
 
-            {/* Header: breadcrumb + title + location */}
+            {/* Header: title + location */}
             <div className="container mx-auto px-4 pt-6">
-                <nav className="text-sm text-gray-400 mb-3 flex items-center gap-1.5">
-                    <span className="hover:text-[#055B75] cursor-pointer" onClick={() => navigate('/')}>Home</span>
-                    <span>/</span>
-                    <span className="hover:text-[#055B75] cursor-pointer" onClick={() => navigate('/hotels')}>Hotels</span>
-                    <span>/</span>
-                    <span className="text-gray-700 font-medium line-clamp-1">{hotel.name}</span>
-                </nav>
                 <div className="flex items-start justify-between gap-4 mb-4">
                     <div>
                         <div className="flex items-center gap-2 mb-1.5">
