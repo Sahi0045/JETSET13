@@ -207,28 +207,22 @@ const HotelsLanding = () => {
             {/* Special Offer Banner */}
             <div className="relative">
                 <div className="w-full text-center bg-gradient-to-r from-[#055B75] to-[#034457] py-2 backdrop-blur-sm z-20 border-y border-white/10 px-3 md:px-0">
-                    <div className="container mx-auto px-4 py-1 flex justify-center items-center">
-                        <Sparkles className="h-4 w-4 text-yellow-300 mr-2 flex-shrink-0" />
-                        <p className="text-white text-[10px] md:text-sm font-medium tracking-wide text-center leading-tight">
-                            <span className="font-bold">Self-Service Portal Coming Soon!</span> For bookings, call <span className="text-yellow-300 font-bold">(877) 538-7380</span> or email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>. 
-                            <span className="inline-flex items-center ml-2.5 align-middle group cursor-default">
-                                <span className="relative bg-[#0066FF] px-3.5 py-1.5 md:px-4 md:py-1.5 rounded-md inline-flex items-center gap-1.5 ring-2 ring-yellow-300/80 shadow-[0_0_18px_rgba(255,221,51,0.75)] overflow-hidden animate-pulse">
-                                    <div className="absolute -top-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></div>
-                                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></div>
-                                    <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></div>
-                                    <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></div>
-                                    <Ticket className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
-                                    <span className="text-sm md:text-lg font-black text-white px-1 tracking-wide">$50 OFF</span>
-                                </span>
-                            </span>
-                            <span className="ml-1">Grab your exclusive travel voucher — today only!</span>
-                        </p>
+                    <div className="container mx-auto px-4 py-1 flex flex-wrap justify-center items-center gap-x-2 gap-y-2 text-center">
+                        <Sparkles className="h-4 w-4 text-yellow-300 flex-shrink-0" />
+                        <span className="text-white text-[11px] md:text-sm font-medium tracking-wide leading-relaxed">
+                            <span className="font-bold">Self-Service Portal Coming Soon!</span> For bookings, call <span className="text-yellow-300 font-bold">(877) 538-7380</span> or email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>
+                        </span>
+                        <span className="bg-[#0890BC] px-3.5 py-1 rounded-md inline-flex items-center gap-1.5 ring-2 ring-yellow-300/80 shadow-[0_0_14px_rgba(255,221,51,0.6)]">
+                            <Ticket className="w-3.5 h-3.5 md:w-4 md:h-4 text-white flex-shrink-0" />
+                            <span className="text-sm md:text-base font-black text-white tracking-wide">$50 OFF</span>
+                        </span>
+                        <span className="text-white text-[11px] md:text-sm font-medium tracking-wide">Grab your exclusive travel voucher — today only!</span>
                     </div>
                 </div>
             </div>
 
             {/* Hero Section */}
-            <div className="relative h-[75vh] flex items-center justify-center">
+            <div className="relative min-h-[75vh] flex items-center justify-center py-12 md:py-0">
                 {/* Background Image */}
                 <div
                     className="absolute inset-0 z-0"
@@ -393,45 +387,6 @@ const HotelsLanding = () => {
                 </div>
             </div>
 
-            {/* Why Choose Us - Enhanced */}
-            <section className="py-12 bg-[#F0FAFC]">
-                <div className="container mx-auto px-4">
-                    <div className="text-center mb-16">
-                        <span className="text-[#65B3CF] font-semibold tracking-wider text-sm uppercase mb-2 block">Why Choose Jetsetters</span>
-                        <h2 className="text-3xl md:text-4xl font-bold text-[#055B75] mb-4">Experience the Difference</h2>
-                        <div className="w-24 h-1.5 bg-[#055B75]/20 mx-auto rounded-full"></div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12 max-w-7xl mx-auto">
-                        {[
-                            {
-                                icon: Shield,
-                                title: "Best Price Guarantee",
-                                desc: "Find a lower price? We'll match it. Book with confidence knowing you're getting the best deal."
-                            },
-                            {
-                                icon: Award,
-                                title: "Handpicked Selection",
-                                desc: "Every hotel is verified for quality, comfort, and service standards by our travel experts."
-                            },
-                            {
-                                icon: Clock,
-                                title: "24/7 Support",
-                                desc: "Our dedicated support team is available around the clock to assist with your booking."
-                            }
-                        ].map((item, idx) => (
-                            <div key={idx} className="bg-white p-10 rounded-3xl shadow-lg border border-gray-100 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 text-center group cursor-default">
-                                <div className="w-20 h-20 bg-[#055B75] rounded-2xl rotate-3 mx-auto mb-6 group-hover:rotate-12 transition-transform duration-300 flex items-center justify-center shadow-lg shadow-[#055B75]/20">
-                                    <item.icon className="text-white -rotate-3 group-hover:-rotate-12 transition-transform duration-300" size={36} />
-                                </div>
-                                <h3 className="text-xl font-bold text-gray-900 mb-3">{item.title}</h3>
-                                <p className="text-gray-600 leading-relaxed">{item.desc}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
             {/* Featured Hotels - Enhanced */}
             <section className="py-12 bg-white">
                 <div className="container mx-auto px-4">
@@ -542,6 +497,45 @@ const HotelsLanding = () => {
                     >
                         View All Hotels <ArrowRight size={20} />
                     </button>
+                </div>
+            </section>
+
+            {/* Why Choose Us - Enhanced */}
+            <section className="py-12 bg-[#F0FAFC]">
+                <div className="container mx-auto px-4">
+                    <div className="text-center mb-16">
+                        <span className="text-[#65B3CF] font-semibold tracking-wider text-sm uppercase mb-2 block">Why Choose Jetsetters</span>
+                        <h2 className="text-3xl md:text-4xl font-bold text-[#055B75] mb-4">Experience the Difference</h2>
+                        <div className="w-24 h-1.5 bg-[#055B75]/20 mx-auto rounded-full"></div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12 max-w-7xl mx-auto">
+                        {[
+                            {
+                                icon: Shield,
+                                title: "Best Price Guarantee",
+                                desc: "Find a lower price? We'll match it. Book with confidence knowing you're getting the best deal."
+                            },
+                            {
+                                icon: Award,
+                                title: "Handpicked Selection",
+                                desc: "Every hotel is verified for quality, comfort, and service standards by our travel experts."
+                            },
+                            {
+                                icon: Clock,
+                                title: "24/7 Support",
+                                desc: "Our dedicated support team is available around the clock to assist with your booking."
+                            }
+                        ].map((item, idx) => (
+                            <div key={idx} className="bg-white p-10 rounded-3xl shadow-lg border border-gray-100 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 text-center group cursor-default">
+                                <div className="w-20 h-20 bg-[#055B75] rounded-2xl rotate-3 mx-auto mb-6 group-hover:rotate-12 transition-transform duration-300 flex items-center justify-center shadow-lg shadow-[#055B75]/20">
+                                    <item.icon className="text-white -rotate-3 group-hover:-rotate-12 transition-transform duration-300" size={36} />
+                                </div>
+                                <h3 className="text-xl font-bold text-gray-900 mb-3">{item.title}</h3>
+                                <p className="text-gray-600 leading-relaxed">{item.desc}</p>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </section>
 
