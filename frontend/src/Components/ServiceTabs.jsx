@@ -21,8 +21,8 @@ export default function ServiceTabs({ active, className = '' }) {
   const navigate = useNavigate();
 
   return (
-    <div className={`w-full ${className}`}>
-      <div className="flex items-center justify-center gap-1 px-2 sm:px-4 overflow-x-auto hide-scrollbar">
+    <div className={className}>
+      <div className="flex items-stretch w-full gap-0.5 sm:gap-2 px-1 sm:px-4">
         {TABS.map(({ key, label, Icon, to }) => {
           const isActive = active === key;
           return (
@@ -31,10 +31,10 @@ export default function ServiceTabs({ active, className = '' }) {
               type="button"
               onClick={() => navigate(to)}
               aria-current={isActive ? 'page' : undefined}
-              className={`relative flex flex-col items-center gap-1 px-5 sm:px-8 pb-3 pt-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/40 rounded-lg ${isActive ? 'text-[#055B75]' : 'text-gray-500 hover:text-[#055B75]'}`}
+              className={`relative flex flex-1 basis-0 flex-col items-center justify-center gap-1 px-1 sm:px-4 pb-3 pt-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/40 rounded-lg ${isActive ? 'text-[#055B75]' : 'text-gray-500 hover:text-[#055B75]'}`}
             >
-              <Icon className="h-6 w-6" strokeWidth={1.75} />
-              <span className="relative text-[13px] font-semibold whitespace-nowrap">
+              <Icon className="h-6 w-6 flex-shrink-0" strokeWidth={1.75} />
+              <span className="relative text-[12px] sm:text-[13px] font-semibold whitespace-nowrap">
                 {label}
                 {isActive && <span className="absolute -bottom-3 inset-x-0 h-[3px] rounded-full bg-[#055B75]" />}
               </span>
