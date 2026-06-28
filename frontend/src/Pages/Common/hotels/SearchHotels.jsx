@@ -567,26 +567,31 @@ const SearchHotels = () => {
                                         </div>
 
                                         {/* Right: rating + price */}
-                                        <div className="sm:w-48 flex-shrink-0 sm:border-l border-gray-100 p-4 flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 sm:text-right">
-                                            {label ? (
-                                                <div className="flex items-center gap-2 sm:flex-col sm:items-end">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-sm font-semibold text-gray-700">{label}</span>
-                                                        <span className="bg-[#055B75] text-white text-sm font-bold px-2 py-0.5 rounded">{hotel.rating}</span>
+                                        <div className="sm:w-56 flex-shrink-0 sm:border-l border-t sm:border-t-0 border-gray-100 p-4 flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3">
+                                            <div className="flex flex-col items-start sm:items-end gap-1.5">
+                                                {label ? (
+                                                    <div className="flex flex-col items-start sm:items-end gap-0.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm font-semibold text-gray-700">{label}</span>
+                                                            <span className="bg-[#055B75] text-white text-sm font-bold px-2 py-0.5 rounded">{hotel.rating}</span>
+                                                        </div>
+                                                        {hotel.reviews > 0 && <span className="text-xs text-gray-400">({hotel.reviews} ratings)</span>}
                                                     </div>
-                                                    {hotel.reviews > 0 && <span className="text-xs text-gray-400">({hotel.reviews} ratings)</span>}
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">New property</span>
+                                                )}
+                                                <div className="flex flex-col items-start sm:items-end">
+                                                    <div className="text-2xl font-bold text-gray-900"><Price amount={hotel.price} /></div>
+                                                    <div className="text-xs text-gray-400">+ <Price amount={perNightTaxes(hotel.price)} /> taxes &amp; fees</div>
+                                                    <div className="text-[11px] font-semibold tracking-wide text-gray-400 uppercase">per night</div>
                                                 </div>
-                                            ) : (
-                                                <span className="text-xs text-gray-400">New property</span>
-                                            )}
-                                            <div className="sm:mt-auto">
-                                                <div className="text-2xl font-bold text-gray-900"><Price amount={hotel.price} /></div>
-                                                <div className="text-xs text-gray-400">+ <Price amount={perNightTaxes(hotel.price)} /> taxes &amp; fees</div>
-                                                <div className="text-xs text-gray-400 mb-2">per night</div>
-                                                <span className="inline-flex items-center gap-1 text-[#055B75] font-semibold text-sm group-hover:translate-x-0.5 transition-transform">
-                                                    View <ArrowRight size={15} />
-                                                </span>
                                             </div>
+                                            <button
+                                                type="button"
+                                                className="flex-shrink-0 inline-flex items-center gap-2 bg-[#055B75] hover:bg-[#034457] text-white font-semibold text-sm px-5 py-2.5 rounded-lg shadow-sm transition-all"
+                                            >
+                                                View <ArrowRight size={16} />
+                                            </button>
                                         </div>
                                     </div>
                                 );
