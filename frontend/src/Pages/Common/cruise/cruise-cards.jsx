@@ -161,9 +161,11 @@ const CruiseCards = () => {
         <div className="absolute inset-0 opacity-10 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, #fff 1px, transparent 0)', backgroundSize: '26px 26px' }} />
         <div className="relative z-10 max-w-4xl mx-auto px-4">
-          <Link to="/cruises" className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium mb-4 transition-colors">
-            <FaArrowLeft /> All Cruises
-          </Link>
+          <div className="text-left mb-4">
+            <Link to="/cruises" className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors">
+              <FaArrowLeft /> All Cruises
+            </Link>
+          </div>
           <h1 className="text-3xl md:text-5xl font-bold text-white mb-2 leading-tight tracking-tight flex items-center justify-center gap-3">
             <FaAnchor className="hidden md:inline text-[#65B3CF]" />
             {title}
