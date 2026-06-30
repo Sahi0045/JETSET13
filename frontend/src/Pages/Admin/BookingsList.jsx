@@ -77,7 +77,8 @@ const BookingsList = () => {
             params.append('page', currentPage);
             params.append('limit', 25);
 
-            const response = await fetch(getApiUrl(`flights/admin-bookings?${params.toString()}`), {
+            // Unified endpoint: flights + hotels + cruises (bookings table) + packages (quotes).
+            const response = await fetch(getApiUrl(`flights/admin-bookings-all?${params.toString()}`), {
                 headers: getAuthHeaders(),
                 credentials: 'include'
             });
@@ -512,6 +513,8 @@ const BookingsList = () => {
                                                             </div>
                                                         )}
                                                     </div>
+                                                ) : booking.service ? (
+                                                    <div style={{ fontWeight: '500' }}>{booking.service}</div>
                                                 ) : (
                                                     <span style={{ color: '#94a3b8' }}>—</span>
                                                 )}
@@ -533,7 +536,16 @@ const BookingsList = () => {
                                                         title="View Details"
                                                         style={actionBtnStyle('#3b82f6')}
                                                     >🔍</button>
-                                                    {booking.status !== 'cancelled' && (
+                                                    {/* Packages are managed via the Quotes workflow, not the direct-booking
+                                                        cancel/void/refund (those hit flight/hotel/cruise booking endpoints). */}
+                                                    {booking.isPackage && (
+                                                        <a
+                                                            href={`/admin/quotes/${booking.quoteId}`}
+                                                            title="Manage in Quotes"
+                                                            style={{ ...actionBtnStyle('#7c3aed'), textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                        >📄</a>
+                                                    )}
+                                                    {!booking.isPackage && booking.status !== 'cancelled' && (
                                                         <>
                                                             <button
                                                                 onClick={() => setCancelModal(booking)}

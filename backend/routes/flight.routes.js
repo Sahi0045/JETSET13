@@ -2432,6 +2432,154 @@ router.get('/admin-bookings', async (req, res) => {
   }
 });
 
+// ── Unified bookings (flight/hotel/cruise from `bookings` + packages from quotes) ──
+// Normalize a `bookings` row to the shared admin shape.
+function normalizeBookingRow(b) {
+  const amount = b.total_amount || b.booking_details?.amount || b.booking_details?.flight_offer?.price?.total || 0;
+  let customerName = 'N/A', customerEmail = '';
+  if (Array.isArray(b.passenger_details) && b.passenger_details.length) {
+    const p = b.passenger_details[0];
+    customerName = `${p.firstName || p.first_name || ''} ${p.lastName || p.last_name || ''}`.trim() || 'N/A';
+    customerEmail = p.email || '';
+  } else if (b.booking_details?.guest_info) {
+    const g = b.booking_details.guest_info;
+    customerName = `${g.firstName || g.first_name || ''} ${g.lastName || g.last_name || ''}`.trim() || customerName;
+    customerEmail = g.email || '';
+  } else if (b.booking_details?.contact?.email) {
+    customerEmail = b.booking_details.contact.email;
+  }
+  const d = b.booking_details || {};
+  const service =
+    b.travel_type === 'hotel' ? (d.hotel_name || d.location || 'Hotel') :
+    b.travel_type === 'cruise' ? (d.cruise_name || `${d.departure || ''}→${d.arrival || ''}`) :
+    b.travel_type === 'flight' ? (`${d.origin || ''}${d.origin ? '→' : ''}${d.destination || ''}`.trim() || d.airline_name || 'Flight') :
+    (d.destination || '');
+  return {
+    id: b.id, userId: b.user_id, type: b.travel_type,
+    bookingReference: b.booking_reference,
+    status: b.status, paymentStatus: b.payment_status,
+    totalAmount: parseFloat(amount) || 0, currency: d.currency || 'USD',
+    bookingDate: b.created_at, customerName, customerEmail,
+    service,
+    bookingDetails: d, passengerDetails: b.passenger_details, isPackage: false,
+    arcOrderId: d.arc_order_id || d.order_id || b.booking_reference,
+  };
+}
+
+// Fetch + normalize package "bookings" from the quote system.
+async function fetchPackageBookings() {
+  const { data: quotes } = await supabase
+    .from('quotes')
+    .select('id, quote_number, title, total_amount, currency, status, payment_status, inquiry_id, created_at')
+    .neq('status', 'draft');
+  if (!quotes || !quotes.length) return [];
+  const inquiryIds = [...new Set(quotes.map((q) => q.inquiry_id).filter(Boolean))];
+  let invById = {};
+  if (inquiryIds.length) {
+    const { data: inquiries } = await supabase
+      .from('inquiries')
+      .select('id, customer_name, customer_email, inquiry_type, package_destination, travel_details')
+      .in('id', inquiryIds);
+    invById = Object.fromEntries((inquiries || []).map((i) => [i.id, i]));
+  }
+  return quotes.map((q) => {
+    const inv = invById[q.inquiry_id] || {};
+    const status = q.status === 'paid' ? 'paid' : q.status === 'accepted' ? 'confirmed' : 'pending';
+    return {
+      id: q.id, type: 'package',
+      bookingReference: q.quote_number || `QUOTE-${String(q.id).slice(0, 8)}`,
+      status, paymentStatus: q.payment_status === 'completed' ? 'paid' : (q.payment_status || 'unpaid'),
+      totalAmount: parseFloat(q.total_amount) || 0, currency: q.currency || 'USD',
+      bookingDate: q.created_at,
+      customerName: inv.customer_name || 'N/A', customerEmail: inv.customer_email || '',
+      service: inv.package_destination || inv.travel_details?.destination || q.title || 'Package',
+      isPackage: true, quoteId: q.id, inquiryId: q.inquiry_id,
+    };
+  });
+}
+
+// GET /api/flights/admin-bookings-all — every booking across all four services.
+router.get('/admin-bookings-all', async (req, res) => {
+  try {
+    if (!supabase) return res.status(503).json({ success: false, error: 'Database not configured' });
+    const { type, status, payment_status, search, page = 1, limit = 50 } = req.query;
+
+    let rows = [];
+    if (type !== 'package') {
+      let q = supabase.from('bookings').select('*');
+      if (type && type !== 'all') q = q.eq('travel_type', type);
+      const { data, error } = await q.order('created_at', { ascending: false }).limit(2000);
+      if (error) throw error;
+      rows = (data || []).map(normalizeBookingRow);
+    }
+    if (!type || type === 'all' || type === 'package') {
+      rows = rows.concat(await fetchPackageBookings());
+    }
+
+    if (status && status !== 'all') rows = rows.filter((b) => b.status === status);
+    if (payment_status && payment_status !== 'all') rows = rows.filter((b) => b.paymentStatus === payment_status);
+    if (search) {
+      const s = String(search).toLowerCase();
+      rows = rows.filter((b) =>
+        (b.bookingReference || '').toLowerCase().includes(s) ||
+        (b.customerName || '').toLowerCase().includes(s) ||
+        (b.customerEmail || '').toLowerCase().includes(s) ||
+        (b.service || '').toLowerCase().includes(s));
+    }
+    rows.sort((a, b) => new Date(b.bookingDate || 0) - new Date(a.bookingDate || 0));
+
+    const count = rows.length;
+    const off = (parseInt(page) - 1) * parseInt(limit);
+    const data = rows.slice(off, off + parseInt(limit));
+    res.json({ success: true, data, count, page: parseInt(page), totalPages: Math.ceil(count / parseInt(limit)) || 1 });
+  } catch (error) {
+    console.error('❌ Unified bookings error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/flights/admin-bookings-stats — real revenue + counts, broken down by service.
+router.get('/admin-bookings-stats', async (req, res) => {
+  try {
+    if (!supabase) return res.status(503).json({ success: false, error: 'Database not configured' });
+    const byType = {};
+    const ensure = (t) => (byType[t] = byType[t] || { count: 0, revenue: 0, paid: 0 });
+    let totalRevenue = 0, totalBookings = 0, paidBookings = 0, pendingBookings = 0;
+    const byStatus = {};
+
+    const { data: bookings } = await supabase
+      .from('bookings').select('travel_type, status, payment_status, total_amount');
+    for (const b of bookings || []) {
+      const t = b.travel_type || 'other';
+      ensure(t); byType[t].count += 1; totalBookings += 1;
+      byStatus[b.status] = (byStatus[b.status] || 0) + 1;
+      if (b.payment_status === 'paid') {
+        const amt = parseFloat(b.total_amount) || 0;
+        byType[t].revenue += amt; byType[t].paid += 1; totalRevenue += amt; paidBookings += 1;
+      } else if (b.payment_status !== 'refunded') pendingBookings += 1;
+    }
+
+    const { data: quotes } = await supabase.from('quotes').select('total_amount, status, payment_status').neq('status', 'draft');
+    ensure('package');
+    for (const q of quotes || []) {
+      byType.package.count += 1; totalBookings += 1;
+      if (q.payment_status === 'completed' || q.status === 'paid') {
+        const amt = parseFloat(q.total_amount) || 0;
+        byType.package.revenue += amt; byType.package.paid += 1; totalRevenue += amt; paidBookings += 1;
+      } else pendingBookings += 1;
+    }
+
+    Object.values(byType).forEach((v) => { v.revenue = +v.revenue.toFixed(2); });
+    res.json({
+      success: true,
+      stats: { totalRevenue: +totalRevenue.toFixed(2), totalBookings, paidBookings, pendingBookings, byType, byStatus },
+    });
+  } catch (error) {
+    console.error('❌ Bookings stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // PUT update booking status (admin)
 router.put('/admin-bookings/:id', async (req, res) => {
   try {

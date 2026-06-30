@@ -26,6 +26,7 @@ const AdminDashboard = () => {
   });
   const [agentLinks, setAgentLinks] = useState([]);
   const [recentInquiries, setRecentInquiries] = useState([]);
+  const [bookingStats, setBookingStats] = useState(null); // real revenue across all services
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('7d');
   // Determine user role (admin vs agent)
@@ -90,6 +91,19 @@ const AdminDashboard = () => {
       });
       const statsData = await statsResponse.json();
 
+      // Real booking revenue across flights/hotels/cruises + packages.
+      let realRevenue = 0;
+      try {
+        const bRes = await fetch(getApiUrl('flights/admin-bookings-stats'), { headers, credentials: 'include' });
+        const bData = await bRes.json();
+        if (bData.success && bData.stats) {
+          setBookingStats(bData.stats);
+          realRevenue = bData.stats.totalRevenue || 0;
+        }
+      } catch (e) {
+        console.warn('Booking stats fetch failed:', e.message);
+      }
+
       if (statsData.success && statsData.data) {
         setStats({
           totalInquiries: statsData.data.total || 0,
@@ -100,11 +114,12 @@ const AdminDashboard = () => {
           cancelledInquiries: statsData.data.byStatus?.cancelled || 0,
           activeQuotes: statsData.data.byStatus?.quoted || 0,
           expiredQuotes: 0,
-          totalRevenue: 0,
+          totalRevenue: realRevenue,
           monthlyRevenue: 0
         });
       } else {
         console.warn('Failed to fetch stats or invalid response:', statsData);
+        if (realRevenue) setStats((prev) => ({ ...prev, totalRevenue: realRevenue }));
       }
 
       // Fetch recent inquiries
@@ -273,7 +288,7 @@ const AdminDashboard = () => {
           <StatCard icon="W" title="Processing" value={stats.processingInquiries} change={8} changeType="positive" color="purple" />
           <StatCard icon="Q" title="Quoted" value={stats.quotedInquiries} change={15} changeType="positive" color="green" />
           <StatCard icon="B" title="Booked" value={stats.bookedInquiries} change={22} changeType="positive" color="success" />
-          <StatCard icon="$" title="Revenue" value={formatCurrency(stats.totalRevenue)} change={18} changeType="positive" color="gold" />
+          <StatCard icon="$" title="Revenue" value={formatCurrency(stats.totalRevenue)} color="gold" />
         </div>
       )}
 
@@ -327,17 +342,41 @@ const AdminDashboard = () => {
         <div className="analytics-row">
           <div className="analytics-card chart-card">
             <div className="card-header">
-              <h3>Inquiry Trends</h3>
-              <div className="chart-legend">
-                <span className="legend-item"><span className="legend-dot pending"></span>Pending</span>
-                <span className="legend-item"><span className="legend-dot processing"></span>Processing</span>
-                <span className="legend-item"><span className="legend-dot quoted"></span>Quoted</span>
-              </div>
+              <h3>Revenue by Service</h3>
+              <span style={{ fontSize: 13, color: '#64748b', fontWeight: 700 }}>{formatCurrency(stats.totalRevenue)} total</span>
             </div>
-            <div className="chart-placeholder">
-              <div className="chart-icon">📈</div>
-              <p>Interactive chart will be displayed here</p>
-              <small>Showing data for last {timeRange}</small>
+            <div style={{ padding: '12px 6px' }}>
+              {bookingStats && bookingStats.byType && Object.keys(bookingStats.byType).length > 0 ? (
+                (() => {
+                  const META = {
+                    flight: { i: '✈️', l: 'Flights' }, hotel: { i: '🏨', l: 'Hotels' },
+                    cruise: { i: '🚢', l: 'Cruises' }, package: { i: '📦', l: 'Packages' },
+                  };
+                  const entries = ['flight', 'hotel', 'cruise', 'package']
+                    .filter((k) => bookingStats.byType[k])
+                    .map((k) => [k, bookingStats.byType[k]]);
+                  const max = Math.max(1, ...entries.map(([, v]) => v.revenue));
+                  return entries.map(([k, v]) => (
+                    <div key={k} style={{ marginBottom: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+                        <span style={{ fontWeight: 600 }}>{META[k]?.i} {META[k]?.l || k}</span>
+                        <span style={{ color: '#475569' }}>
+                          {formatCurrency(v.revenue)} · <span style={{ color: '#94a3b8' }}>{v.paid}/{v.count} paid</span>
+                        </span>
+                      </div>
+                      <div style={{ height: 8, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${(v.revenue / max) * 100}%`, background: 'linear-gradient(90deg,#055B75,#0a7d9e)', borderRadius: 6, transition: 'width .4s' }}></div>
+                      </div>
+                    </div>
+                  ));
+                })()
+              ) : (
+                <div className="chart-placeholder">
+                  <div className="chart-icon">📊</div>
+                  <p>No booking revenue yet</p>
+                  <small>Paid bookings will appear here</small>
+                </div>
+              )}
             </div>
           </div>
           <div className="analytics-card conversion-card">
