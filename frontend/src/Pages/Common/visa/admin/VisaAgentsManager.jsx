@@ -36,6 +36,9 @@ const VisaAgentsManager = () => {
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState(null); // { type: 'success'|'error', text }
   const [busyId, setBusyId] = useState(null);
+  const [viewing, setViewing] = useState(null);     // agent whose activity is open
+  const [activity, setActivity] = useState(null);    // { agent, stats, applications }
+  const [activityLoading, setActivityLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +86,14 @@ const VisaAgentsManager = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const viewActivity = async (agent) => {
+    setViewing(agent); setActivity(null); setActivityLoading(true);
+    const res = await send(apiGet(`visa/admin/agents/${agent.id}/activity`));
+    setActivityLoading(false);
+    if (res.ok && res.success) setActivity(res);
+    else setNotice({ type: "error", text: res.message || "Failed to load activity." });
   };
 
   const setStatus = async (agent, status) => {
@@ -296,6 +307,15 @@ const VisaAgentsManager = () => {
                     <td className="px-3 py-3 text-center font-bold text-slate-700">{a.assignedCount}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => viewActivity(a)}
+                          disabled={busyId === a.id}
+                          title="View activity"
+                          className="px-2.5 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg ring-1 ring-indigo-200 disabled:opacity-50 flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-sm">analytics</span>
+                          View
+                        </button>
                         {a.status === "invited" && (
                           <button
                             onClick={() => resendInvite(a)}
@@ -343,6 +363,102 @@ const VisaAgentsManager = () => {
           </div>
         )}
       </div>
+
+      {/* Agent activity panel */}
+      {viewing && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 sm:p-10 overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) { setViewing(null); setActivity(null); } }}
+        >
+          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[88vh] overflow-y-auto shadow-2xl">
+            <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">{viewing.name || viewing.email}</h3>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  {viewing.email}{viewing.specialization ? ` · ${viewing.specialization}` : ""} ·{" "}
+                  <span className="capitalize">{viewing.status}</span>
+                </div>
+              </div>
+              <button onClick={() => { setViewing(null); setActivity(null); }} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            <div className="p-6">
+              {activityLoading ? (
+                <div className="py-12 text-center text-slate-400 text-sm">Loading activity…</div>
+              ) : !activity ? (
+                <div className="py-12 text-center text-red-500 text-sm">Could not load this agent's activity.</div>
+              ) : (
+                <>
+                  {/* Summary */}
+                  <div className="grid grid-cols-3 gap-3 mb-5">
+                    <div className="bg-slate-50 rounded-xl p-3">
+                      <div className="text-2xl font-black text-[#1152d4]">{activity.stats.total}</div>
+                      <div className="text-[11px] font-bold uppercase text-slate-400">Assigned</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-3">
+                      <div className="text-2xl font-black text-amber-600">{activity.stats.active}</div>
+                      <div className="text-[11px] font-bold uppercase text-slate-400">In progress</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-3">
+                      <div className="text-sm font-black text-slate-700 mt-1">
+                        {activity.stats.lastActivity ? new Date(activity.stats.lastActivity).toLocaleDateString() : "—"}
+                      </div>
+                      <div className="text-[11px] font-bold uppercase text-slate-400">Last activity</div>
+                    </div>
+                  </div>
+
+                  {activity.stats.byStatus && Object.keys(activity.stats.byStatus).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-5">
+                      {Object.entries(activity.stats.byStatus).map(([st, n]) => (
+                        <span key={st} className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold capitalize">
+                          {st.replace(/_/g, " ")}: {n}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Assigned applications */}
+                  <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+                    <div className="px-4 py-2.5 bg-slate-50 text-[11px] font-black uppercase tracking-wide text-slate-500">
+                      Assigned applications ({activity.applications.length})
+                    </div>
+                    {activity.applications.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 text-sm">No applications assigned yet.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-[11px] uppercase text-slate-400 border-b border-slate-100">
+                              <th className="px-4 py-2 font-bold">Reference</th>
+                              <th className="px-3 py-2 font-bold">Applicant</th>
+                              <th className="px-3 py-2 font-bold">Destination</th>
+                              <th className="px-3 py-2 font-bold">Status</th>
+                              <th className="px-4 py-2 font-bold">Updated</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activity.applications.map((a) => (
+                              <tr key={a.id} className="border-b border-slate-50 last:border-0">
+                                <td className="px-4 py-2.5 font-mono font-bold text-[#1152d4] text-xs">{a.ref}</td>
+                                <td className="px-3 py-2.5 text-slate-700">{a.applicant}</td>
+                                <td className="px-3 py-2.5 text-slate-500 capitalize">{a.destination}</td>
+                                <td className="px-3 py-2.5"><span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-bold capitalize">{(a.status || "").replace(/_/g, " ")}</span></td>
+                                <td className="px-4 py-2.5 text-slate-400 text-xs">{a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

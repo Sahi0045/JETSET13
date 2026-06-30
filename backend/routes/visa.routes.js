@@ -44,6 +44,7 @@ import {
   checkEligibility,
   getRequirements,
   getDocumentUrl,
+  getAgentActivity,
   createRequirement,
   updateRequirement,
   uploadFile,
@@ -146,6 +147,8 @@ router.post('/admin/agents', protect, superAdmin, createAgent);
 router.get('/admin/agents', protect, superAdmin, listAgents);
 // Active-agent picklist for assignment — admins may assign even though only superadmin manages agents.
 router.get('/admin/assignable-agents', protect, admin, listAssignableAgents);
+// A visa agent's activity (assigned applications + status breakdown) for the super admin.
+router.get('/admin/agents/:userId/activity', protect, superAdmin, getAgentActivity);
 router.put('/admin/agents/:userId', protect, superAdmin, updateAgent);
 router.delete('/admin/agents/:userId', protect, superAdmin, deleteAgent);
 router.post('/admin/agents/:userId/resend-invite', protect, superAdmin, resendInvite);

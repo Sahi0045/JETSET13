@@ -283,6 +283,65 @@ export const verifyAdmin = async (req, res) => {
 };
 
 /**
+ * GET /api/visa/admin/agents/:userId/activity
+ * A visa agent's activity for the super admin: their assigned applications, status
+ * breakdown, and recent items (most-recently-updated first).
+ */
+export const getAgentActivity = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const { data: profile } = await supabase
+      .from('visa_agents').select('status, specialization, accepted_at').eq('user_id', userId).maybeSingle();
+    if (!profile) return res.status(404).json({ success: false, message: 'Agent not found' });
+    const { data: user } = await supabase
+      .from('users').select('name, email, phone').eq('id', userId).maybeSingle();
+
+    const { applications = [] } = await VisaApplication.findAll(
+      { assignedAgent: String(userId) },
+      { limit: 500, orderBy: 'updated_at:desc' }
+    );
+
+    const byStatus = {};
+    let lastActivity = null;
+    for (const a of applications) {
+      byStatus[a.status] = (byStatus[a.status] || 0) + 1;
+      const upd = a.updated_at || a.created_at;
+      if (upd && (!lastActivity || upd > lastActivity)) lastActivity = upd;
+    }
+    const TERMINAL = ['approved', 'rejected', 'cancelled', 'completed'];
+    const active = applications.filter((a) => !TERMINAL.includes(a.status)).length;
+
+    const recent = applications.slice(0, 25).map((a) => {
+      const pi = a.personal_info || {};
+      return {
+        id: a.id,
+        ref: a.application_ref,
+        status: a.status,
+        destination: a.travel_details?.destination || a.travel_details?.country || '—',
+        applicant: `${pi.firstName || ''} ${pi.lastName || ''}`.trim() || pi.email || '—',
+        timelineCount: Array.isArray(a.timeline) ? a.timeline.length : 0,
+        createdAt: a.created_at,
+        updatedAt: a.updated_at,
+      };
+    });
+
+    return res.json({
+      success: true,
+      agent: {
+        id: userId, name: user?.name || null, email: user?.email || null, phone: user?.phone || null,
+        status: profile.status, specialization: profile.specialization, acceptedAt: profile.accepted_at,
+      },
+      stats: { total: applications.length, active, lastActivity, byStatus },
+      applications: recent,
+    });
+  } catch (err) {
+    console.error('getAgentActivity error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to load agent activity' });
+  }
+};
+
+/**
  * GET /api/visa/applications
  * List all applications (admin). Supports query filters:
  * ?status=&serviceTier=&priority=&destination=&limit=&offset=&orderBy=
