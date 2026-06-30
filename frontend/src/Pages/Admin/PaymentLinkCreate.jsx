@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import './AdminPanel.css';
 
 const PaymentLinkCreate = () => {
+  // Works under both the admin panel (/admin) and the agent portal (/agent).
+  const base = useLocation().pathname.startsWith('/agent') ? '/agent' : '/admin';
   const [formData, setFormData] = useState({
     customerName: '',
     customerEmail: '',
@@ -217,7 +219,7 @@ const PaymentLinkCreate = () => {
             <button onClick={resetForm} className="action-button secondary" style={{ flex: 1 }}>
               + Create Another Link
             </button>
-            <Link to="/admin/payment-links" className="action-button secondary" style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}>
+            <Link to={`${base}/payment-links`} className="action-button secondary" style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}>
               View All Links
             </Link>
           </div>
@@ -230,7 +232,7 @@ const PaymentLinkCreate = () => {
     <div className="payment-link-create">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
         <p style={{ color: '#6b7280', margin: 0, fontSize: '0.95rem' }}>Enter travel details and generate a payment link for your client.</p>
-        <Link to="/admin/payment-links" style={{
+        <Link to={`${base}/payment-links`} style={{
           padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: 8,
           color: '#374151', textDecoration: 'none', fontWeight: 600, fontSize: '0.875rem'
         }}>
@@ -428,7 +430,7 @@ const PaymentLinkCreate = () => {
 
         {/* Submit */}
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
-          <Link to="/admin/payment-links" className="action-button secondary" style={{ textDecoration: 'none' }}>
+          <Link to={`${base}/payment-links`} className="action-button secondary" style={{ textDecoration: 'none' }}>
             Cancel
           </Link>
           <button type="submit" className="action-button primary" disabled={submitting} style={{

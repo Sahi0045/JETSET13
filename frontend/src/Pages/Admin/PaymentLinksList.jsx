@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
 const PaymentLinksList = () => {
+  // Works under both the admin panel (/admin) and the agent portal (/agent).
+  const base = useLocation().pathname.startsWith('/agent') ? '/agent' : '/admin';
   const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState(null);
@@ -119,7 +121,7 @@ const PaymentLinksList = () => {
     <div className="payment-links-list">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
         <p style={{ color: '#6b7280', margin: 0, fontSize: '0.95rem' }}>Manage all generated payment links.</p>
-        <Link to="/admin/payment-links/create" style={{
+        <Link to={`${base}/payment-links/create`} style={{
           background: '#055B75', color: '#fff', textDecoration: 'none',
           padding: '10px 20px', borderRadius: 8, fontWeight: 600,
           display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.875rem'
@@ -174,7 +176,7 @@ const PaymentLinksList = () => {
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔗</div>
           <h3>No Payment Links Yet</h3>
           <p style={{ color: '#64748b' }}>Create your first payment link to share with clients</p>
-          <Link to="/admin/payment-links/create" style={{
+          <Link to={`${base}/payment-links/create`} style={{
             display: 'inline-block',
             marginTop: '16px',
             background: '#055B75',

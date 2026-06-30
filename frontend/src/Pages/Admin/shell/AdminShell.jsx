@@ -60,6 +60,14 @@ export default function AdminShell() {
   const meta = useMemo(() => resolveMeta(location.pathname), [location.pathname]);
   const user = useMemo(readAdminUser, []);
 
+  // Separate endpoints: agents belong in the /agent portal, not the admin panel.
+  useEffect(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem('adminUser') || localStorage.getItem('user') || 'null');
+      if (u?.role === 'agent') navigate('/agent', { replace: true });
+    } catch { /* ignore */ }
+  }, [location.pathname, navigate]);
+
   const toggleSidebar = useCallback(() => {
     if (window.innerWidth <= 768) {
       setMobileOpen((v) => !v);

@@ -801,9 +801,9 @@ const App = () => {
             </ProtectedRoute>
           } />
 
-          {/* Travel agent portal — scoped home for sales agents */}
+          {/* Travel agent portal — scoped, separate endpoint for sales agents */}
           <Route path="/agent/set-password" element={<TravelAgentSetPassword />} />
-          <Route path="/agent" element={<TravelAgentPortal />} />
+          <Route path="/agent/*" element={<TravelAgentPortal />} />
 
           {/* Legacy redirects for backward compatibility */}
           <Route path="/blog" element={<Navigate to="/travel-blog" />} />
