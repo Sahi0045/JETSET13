@@ -26,8 +26,11 @@ export async function handleCreatePaymentLink(req, res) {
             expiryDays = 30
         } = req.body;
 
-        // Get caller info (admin or agent)
+        // Get caller info (admin or agent) — only staff may create payment links.
         const caller = getCallerInfo(req);
+        if (!['admin', 'superadmin', 'agent'].includes(caller.role)) {
+            return res.status(403).json({ success: false, error: 'Not authorized to create payment links.' });
+        }
 
         // Validate
         if (!customerName || !amount) {
@@ -453,13 +456,19 @@ export async function handleCompletePaymentLink(req, res) {
 export async function handleListPaymentLinks(req, res) {
     try {
         const caller = getCallerInfo(req);
+        // Auth required — these contain customer payment data. Staff only.
+        if (!['admin', 'superadmin', 'agent'].includes(caller.role)) {
+            return res.status(403).json({ success: false, error: 'Not authorized' });
+        }
 
-        // Agent sees only their own links; admin sees all
+        // Agent sees only their own links; admin sees all. An agent can never widen scope
+        // to another agent via ?agentId — they are always pinned to their own.
         let query = supabase.from('payment_links').select('*').order('created_at', { ascending: false });
         const agentIdParam = req.query.agentId;
-        if ((caller.role === 'agent' && caller.agentId) || agentIdParam) {
-            const filterAgentId = caller.agentId || agentIdParam;
-            query = query.eq('agent_id', filterAgentId);
+        if (caller.role === 'agent') {
+            query = query.eq('agent_id', caller.agentId);
+        } else if (agentIdParam) {
+            query = query.eq('agent_id', agentIdParam);
         }
 
         const { data: links, error } = await query;

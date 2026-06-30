@@ -5,6 +5,7 @@ import fetch from 'node-fetch';
 import { get as cacheGet, set as cacheSet, withCache, CacheKeys, TTL } from '../services/cache.service.js';
 import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
+import { protect, admin } from '../middleware/auth.middleware.js';
 import { handleCancelBookingAction, reverseArcPaymentForOrder } from './payment/operations.handlers.js';
 
 // Only the fields the handler genuinely requires; passthrough keeps the rest.
@@ -2337,7 +2338,7 @@ router.get('/price-analysis', async (req, res) => {
 // ============================================
 
 // GET all bookings for admin (no userId filter)
-router.get('/admin-bookings', async (req, res) => {
+router.get('/admin-bookings', protect, admin, async (req, res) => {
   try {
     if (!supabase) {
       return res.status(503).json({ success: false, error: 'Database not configured' });
@@ -2499,7 +2500,7 @@ async function fetchPackageBookings() {
 }
 
 // GET /api/flights/admin-bookings-all — every booking across all four services.
-router.get('/admin-bookings-all', async (req, res) => {
+router.get('/admin-bookings-all', protect, admin, async (req, res) => {
   try {
     if (!supabase) return res.status(503).json({ success: false, error: 'Database not configured' });
     const { type, status, payment_status, search, page = 1, limit = 50 } = req.query;
@@ -2539,7 +2540,7 @@ router.get('/admin-bookings-all', async (req, res) => {
 });
 
 // GET /api/flights/admin-bookings-stats — real revenue + counts, broken down by service.
-router.get('/admin-bookings-stats', async (req, res) => {
+router.get('/admin-bookings-stats', protect, admin, async (req, res) => {
   try {
     if (!supabase) return res.status(503).json({ success: false, error: 'Database not configured' });
     const byType = {};
@@ -2581,7 +2582,7 @@ router.get('/admin-bookings-stats', async (req, res) => {
 });
 
 // GET /api/flights/admin-customers — unified customer list across bookings + inquiries.
-router.get('/admin-customers', async (req, res) => {
+router.get('/admin-customers', protect, admin, async (req, res) => {
   try {
     if (!supabase) return res.status(503).json({ success: false, error: 'Database not configured' });
     const { search } = req.query;
@@ -2638,7 +2639,7 @@ router.get('/admin-customers', async (req, res) => {
 });
 
 // PUT update booking status (admin)
-router.put('/admin-bookings/:id', async (req, res) => {
+router.put('/admin-bookings/:id', protect, admin, async (req, res) => {
   try {
     if (!supabase) {
       return res.status(503).json({ success: false, error: 'Database not configured' });
@@ -2672,7 +2673,7 @@ router.put('/admin-bookings/:id', async (req, res) => {
 });
 
 // POST cancel booking (admin) — cancel via Amadeus + ARC Pay refund/void + DB update
-router.post('/admin-bookings/:id/cancel', async (req, res) => {
+router.post('/admin-bookings/:id/cancel', protect, admin, async (req, res) => {
   try {
     if (!supabase) {
       return res.status(503).json({ success: false, error: 'Database not configured' });
