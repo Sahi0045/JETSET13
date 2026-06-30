@@ -109,9 +109,9 @@ const AdminSubHeader = ({ user, onLogout }) => {
         <div className="shrink-0 hidden sm:flex items-center gap-2">
           <span className="text-[10px] font-black uppercase tracking-widest text-[#1152d4] bg-[#1152d4]/5 px-3 py-1.5 rounded-lg border border-[#1152d4]/10 flex items-center gap-1.5 whitespace-nowrap">
             <span className="material-symbols-outlined text-xs">
-              admin_panel_settings
+              {role === "agent" ? "badge" : "admin_panel_settings"}
             </span>
-            Visa Admin
+            {role === "agent" ? "Visa Agent" : isSuper ? "Super Admin" : "Visa Admin"}
           </span>
           {user && (
             <span className="hidden lg:inline text-[10px] font-bold text-slate-400 truncate max-w-[140px]">

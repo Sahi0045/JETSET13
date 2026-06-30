@@ -33,6 +33,20 @@ const prettify = (s) =>
 // Dynamic segments (ids / uuids) → a generic label rather than a raw id.
 const isId = (s) => /^\d+$/.test(s) || /^[0-9a-f]{8,}$/i.test(s);
 
+// The /visa/admin panel is shared by admins and agents, so the "admin" URL segment
+// shouldn't read "Admin" for an agent. Reflect the logged-in panel role instead.
+function storedPanelRole() {
+  try {
+    const raw =
+      localStorage.getItem('visaAdminUser') ||
+      localStorage.getItem('adminUser') ||
+      localStorage.getItem('user');
+    return raw ? JSON.parse(raw)?.role || null : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function Breadcrumbs() {
   const { pathname } = useLocation();
   if (HIDE_ON.has(pathname)) return null;
@@ -40,11 +54,16 @@ export default function Breadcrumbs() {
   const segments = pathname.split('/').filter(Boolean);
   if (segments.length === 0) return null;
 
+  // On the shared visa panel, relabel the "admin" crumb for agents.
+  const isAgentOnVisaPanel =
+    pathname.startsWith('/visa/admin') && storedPanelRole() === 'agent';
+
   let acc = '';
   const crumbs = segments.map((seg, i) => {
     acc += `/${seg}`;
     const key = seg.toLowerCase();
-    const label = LABELS[key] || (isId(seg) ? 'Details' : prettify(seg));
+    let label = LABELS[key] || (isId(seg) ? 'Details' : prettify(seg));
+    if (isAgentOnVisaPanel && key === 'admin') label = 'Agent';
     return { label, to: acc, last: i === segments.length - 1 };
   });
 
