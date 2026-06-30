@@ -31,7 +31,10 @@ const prettify = (s) =>
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
 // Dynamic segments (ids / uuids) → a generic label rather than a raw id.
-const isId = (s) => /^\d+$/.test(s) || /^[0-9a-f]{8,}$/i.test(s);
+const isId = (s) =>
+  /^\d+$/.test(s) ||
+  /^[0-9a-f]{8,}$/i.test(s) ||
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s); // UUID
 
 // The /visa/admin panel is shared by admins and agents, so the "admin" URL segment
 // shouldn't read "Admin" for an agent. Reflect the logged-in panel role instead.

@@ -1167,15 +1167,17 @@ useEffect(() => {
                   </span>
                   Quick Chat with Applicant
                 </Link>
-                <Link
-                  to={base}
-                  className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-100 transition-colors no-underline"
-                >
-                  <span className="material-symbols-outlined text-lg">
-                    dashboard
-                  </span>
-                  Admin Dashboard
-                </Link>
+                {role !== "agent" && (
+                  <Link
+                    to={base}
+                    className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-100 transition-colors no-underline"
+                  >
+                    <span className="material-symbols-outlined text-lg">
+                      dashboard
+                    </span>
+                    Dashboard
+                  </Link>
+                )}
               </div>
             </div>
           </div>

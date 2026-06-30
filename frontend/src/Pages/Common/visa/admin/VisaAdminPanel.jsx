@@ -294,12 +294,14 @@ const VisaAdminPanel = () => {
   }
 
   // ── Verifying the session with the backend ──────────────────────────────────
-  if (verifying) {
+  // Only BLOCK on the first load (no session yet). Re-verification on later navigations
+  // runs in the background so opening an application doesn't flash a full-screen spinner.
+  if (verifying && !session) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8f9fc]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-[#055B75]/30 border-t-[#055B75] rounded-full animate-spin"></div>
-          <p className="text-slate-500 text-sm font-medium">Verifying admin access…</p>
+          <p className="text-slate-500 text-sm font-medium">Verifying access…</p>
         </div>
       </div>
     );
