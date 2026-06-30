@@ -421,8 +421,9 @@ const VisaAgentsManager = () => {
 
                   {/* Assigned applications */}
                   <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
-                    <div className="px-4 py-2.5 bg-slate-50 text-[11px] font-black uppercase tracking-wide text-slate-500">
-                      Assigned applications ({activity.applications.length})
+                    <div className="px-4 py-2.5 bg-slate-50 text-[11px] font-black uppercase tracking-wide text-slate-500 flex items-center justify-between">
+                      <span>Assigned applications ({activity.applications.length})</span>
+                      <span className="normal-case font-medium text-slate-400 tracking-normal">Click a reference to open &amp; manage →</span>
                     </div>
                     {activity.applications.length === 0 ? (
                       <div className="p-8 text-center text-slate-400 text-sm">No applications assigned yet.</div>
@@ -440,8 +441,10 @@ const VisaAgentsManager = () => {
                           </thead>
                           <tbody>
                             {activity.applications.map((a) => (
-                              <tr key={a.id} className="border-b border-slate-50 last:border-0">
-                                <td className="px-4 py-2.5 font-mono font-bold text-[#1152d4] text-xs">{a.ref}</td>
+                              <tr key={a.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
+                                <td className="px-4 py-2.5">
+                                  <Link to={`/visa/admin/applications/${a.id}`} className="font-mono font-bold text-[#1152d4] text-xs hover:underline no-underline">{a.ref}</Link>
+                                </td>
                                 <td className="px-3 py-2.5 text-slate-700">{a.applicant}</td>
                                 <td className="px-3 py-2.5 text-slate-500 capitalize">{a.destination}</td>
                                 <td className="px-3 py-2.5"><span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-bold capitalize">{(a.status || "").replace(/_/g, " ")}</span></td>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
@@ -360,11 +361,13 @@ const AgentManagement = () => {
                               <th style={{ padding: '8px', textAlign: 'right' }}>Amount</th>
                               <th style={{ padding: '8px' }}>Status</th>
                               <th style={{ padding: '8px 16px' }}>Date</th>
+                              <th style={{ padding: '8px 16px', textAlign: 'right' }}>Manage</th>
                             </tr>
                           </thead>
                           <tbody>
                             {detail.sales.map((l) => {
                               const sb = STATUS_STYLE[l.status === 'paid' ? 'active' : l.status === 'pending' ? 'invited' : 'disabled'];
+                              const q = encodeURIComponent(l.customer_email || l.customer_name || '');
                               return (
                                 <tr key={l.id} style={{ borderTop: '1px solid #f1f5f9' }}>
                                   <td style={{ padding: '8px 16px' }}>
@@ -377,6 +380,11 @@ const AgentManagement = () => {
                                     <span style={{ background: sb.bg, color: sb.color, padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600, textTransform: 'capitalize' }}>{l.status}</span>
                                   </td>
                                   <td style={{ padding: '8px 16px', color: '#94a3b8', fontSize: 12 }}>{l.created_at ? new Date(l.created_at).toLocaleDateString() : '—'}</td>
+                                  <td style={{ padding: '8px 16px', textAlign: 'right' }}>
+                                    {q ? (
+                                      <Link to={`/admin/bookings?search=${q}`} title="Open this customer's bookings" style={{ color: '#055B75', fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>Bookings →</Link>
+                                    ) : <span style={{ color: '#cbd5e1' }}>—</span>}
+                                  </td>
                                 </tr>
                               );
                             })}

@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { getApiUrl } from '../../utils/apiHelper';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
 const BookingsList = () => {
+    const [searchParams] = useSearchParams();
+    const initialSearch = searchParams.get('search') || '';   // deep-link, e.g. from an agent's sale
+
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [totalCount, setTotalCount] = useState(0);
@@ -15,8 +18,8 @@ const BookingsList = () => {
     const [typeFilter, setTypeFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
     const [paymentFilter, setPaymentFilter] = useState('all');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchInput, setSearchInput] = useState('');
+    const [searchQuery, setSearchQuery] = useState(initialSearch);
+    const [searchInput, setSearchInput] = useState(initialSearch);
 
     // Action modals
     const [cancelModal, setCancelModal] = useState(null);
