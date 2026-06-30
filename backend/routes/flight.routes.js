@@ -2580,6 +2580,63 @@ router.get('/admin-bookings-stats', async (req, res) => {
   }
 });
 
+// GET /api/flights/admin-customers — unified customer list across bookings + inquiries.
+router.get('/admin-customers', async (req, res) => {
+  try {
+    if (!supabase) return res.status(503).json({ success: false, error: 'Database not configured' });
+    const { search } = req.query;
+
+    const map = {}; // email(lower) → aggregate
+    const ensure = (email, name, phone) => {
+      const key = (email || '').toLowerCase().trim();
+      if (!key) return null;
+      if (!map[key]) map[key] = { name: name || '', email, phone: phone || '', bookings: 0, spent: 0, inquiries: 0, lastActivity: null };
+      const c = map[key];
+      if (name && !c.name) c.name = name;
+      if (phone && !c.phone) c.phone = phone;
+      return c;
+    };
+    const touch = (c, date) => { if (date && (!c.lastActivity || date > c.lastActivity)) c.lastActivity = date; };
+
+    const { data: bookings } = await supabase.from('bookings').select('*').limit(5000);
+    for (const b of bookings || []) {
+      const n = normalizeBookingRow(b);
+      const phone = b.booking_details?.contact?.phone || b.booking_details?.guest_info?.phone || '';
+      const c = ensure(n.customerEmail, n.customerName !== 'N/A' ? n.customerName : '', phone);
+      if (c) { c.bookings += 1; if (b.payment_status === 'paid') c.spent += parseFloat(n.totalAmount) || 0; touch(c, b.created_at); }
+    }
+
+    const { data: inquiries } = await supabase
+      .from('inquiries').select('customer_name, customer_email, customer_phone, created_at').limit(5000);
+    for (const i of inquiries || []) {
+      const c = ensure(i.customer_email, i.customer_name, i.customer_phone);
+      if (c) { c.inquiries += 1; touch(c, i.created_at); }
+    }
+
+    let customers = Object.values(map);
+    if (search) {
+      const s = String(search).toLowerCase();
+      customers = customers.filter((c) =>
+        (c.name || '').toLowerCase().includes(s) ||
+        (c.email || '').toLowerCase().includes(s) ||
+        (c.phone || '').includes(s));
+    }
+    customers.forEach((c) => { c.spent = +c.spent.toFixed(2); });
+    customers.sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0));
+
+    const totalSpent = customers.reduce((s, c) => s + c.spent, 0);
+    res.json({
+      success: true,
+      data: customers,
+      count: customers.length,
+      summary: { totalCustomers: customers.length, totalSpent: +totalSpent.toFixed(2) },
+    });
+  } catch (error) {
+    console.error('❌ Admin customers error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // PUT update booking status (admin)
 router.put('/admin-bookings/:id', async (req, res) => {
   try {

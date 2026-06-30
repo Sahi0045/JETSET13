@@ -9,6 +9,7 @@ import PriceSettings from './PriceSettings';
 import QuoteCreate from './QuoteCreate';
 import QuoteDetail from './QuoteDetail';
 import BookingsList from './BookingsList';
+import CustomersList from './CustomersList';
 import PaymentLinkCreate from './PaymentLinkCreate';
 import PaymentLinksList from './PaymentLinksList';
 import AgentManagement from './AgentManagement';
@@ -32,6 +33,7 @@ const AdminPanel = () => {
         <Route path="feature-flags" element={<FeatureFlags />} />
         <Route path="price-settings" element={<PriceSettings />} />
         <Route path="bookings" element={<BookingsList />} />
+        <Route path="customers" element={<CustomersList />} />
         <Route path="payment-links" element={<PaymentLinksList />} />
         <Route path="payment-links/create" element={<PaymentLinkCreate />} />
         <Route path="agents" element={<AgentManagement />} />

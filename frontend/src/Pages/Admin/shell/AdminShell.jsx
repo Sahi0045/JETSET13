@@ -11,6 +11,7 @@ const ROUTE_META = {
   '/admin/reports': { title: 'Analytics', crumb: 'Overview' },
   '/admin/inquiries': { title: 'Inquiries', crumb: 'Sales' },
   '/admin/bookings': { title: 'Bookings', crumb: 'Sales' },
+  '/admin/customers': { title: 'Customers', crumb: 'Sales' },
   '/admin/coupons': { title: 'Coupons', crumb: 'Sales' },
   '/admin/payment-links': { title: 'Payment Links', crumb: 'Payments' },
   '/admin/payment-links/create': { title: 'Create Payment Link', crumb: 'Payments' },

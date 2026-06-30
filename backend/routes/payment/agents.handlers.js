@@ -436,6 +436,14 @@ export async function handleAdminAgentDetail(req, res) {
         }
         Object.values(byType).forEach((v) => { v.revenue = +v.revenue.toFixed(2); });
 
+        const commissionEarned = +(totalRevenue * rate / 100).toFixed(2);
+        const { data: payouts } = await supabase
+            .from('commission_payouts')
+            .select('id, amount, note, created_at')
+            .eq('agent_id', agentId)
+            .order('created_at', { ascending: false });
+        const commissionPaidOut = +(payouts || []).reduce((s, p) => s + parseFloat(p.amount || 0), 0).toFixed(2);
+
         return res.json({
             success: true,
             agent: {
@@ -446,15 +454,48 @@ export async function handleAdminAgentDetail(req, res) {
                 totalLinks: all.length, paidCount: paid.length, pendingCount: pending.length,
                 expiredCount: all.filter((l) => l.status === 'expired').length,
                 totalRevenue: +totalRevenue.toFixed(2), pendingRevenue: +pendingRevenue.toFixed(2),
-                commissionEarned: +(totalRevenue * rate / 100).toFixed(2),
+                commissionEarned,
                 commissionPending: +(pendingRevenue * rate / 100).toFixed(2),
+                commissionPaidOut,
+                commissionOutstanding: +(commissionEarned - commissionPaidOut).toFixed(2),
                 byType,
             },
             sales: all,
+            payouts: payouts || [],
         });
     } catch (error) {
         console.error('❌ admin-agent-detail error:', error);
         return res.status(500).json({ success: false, error: 'Failed to load agent detail' });
+    }
+}
+
+/**
+ * Record a commission payout to an agent. POST { agentId, amount, note? }  (super admin)
+ */
+export async function handleRecordPayout(req, res) {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+    const caller = await getCaller(req);
+    if (!caller || !caller.isSuper) {
+        return res.status(403).json({ success: false, error: 'Not authorized — super admin only.' });
+    }
+    try {
+        const { agentId, amount, note } = req.body || {};
+        const amt = parseFloat(amount);
+        if (!agentId || !amt || amt <= 0) {
+            return res.status(400).json({ success: false, error: 'agentId and a positive amount are required.' });
+        }
+        const { data: agent } = await supabase.from('agents').select('id').eq('id', agentId).maybeSingle();
+        if (!agent) return res.status(404).json({ success: false, error: 'Agent not found' });
+
+        const { data, error } = await supabase
+            .from('commission_payouts')
+            .insert({ agent_id: agentId, amount: amt, note: note || null, paid_by: caller.id || null })
+            .select().single();
+        if (error) throw error;
+        return res.json({ success: true, payout: data, message: `Recorded $${amt.toFixed(2)} payout.` });
+    } catch (error) {
+        console.error('❌ record-payout error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to record payout' });
     }
 }
 

@@ -34,6 +34,7 @@ import {
     handleResendAgentInvite,
     handleAgentStats,
     handleAdminAgentDetail,
+    handleRecordPayout,
 } from './payment/agents.handlers.js';
 import restRoutes from './payment/rest.routes.js';
 
@@ -118,6 +119,8 @@ router.all('/', async (req, res) => {
                 return handleAgentStats(req, res);
             case 'admin-agent-detail':      // super admin: any agent's full work/stats
                 return handleAdminAgentDetail(req, res);
+            case 'record-payout':           // super admin: record a commission payout
+                return handleRecordPayout(req, res);
             case 'complete-payment-link':
                 return handleCompletePaymentLink(req, res);
             default:

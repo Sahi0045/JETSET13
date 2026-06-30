@@ -36,8 +36,11 @@ const AgentManagement = () => {
   const [success, setSuccess] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [viewing, setViewing] = useState(null);   // agent whose detail panel is open
-  const [detail, setDetail] = useState(null);      // fetched { agent, stats, sales }
+  const [detail, setDetail] = useState(null);      // fetched { agent, stats, sales, payouts }
   const [detailLoading, setDetailLoading] = useState(false);
+  const [payoutAmt, setPayoutAmt] = useState('');
+  const [payoutNote, setPayoutNote] = useState('');
+  const [payoutSaving, setPayoutSaving] = useState(false);
   const canManage = isSuperAdmin();
 
   const fetchAgents = useCallback(async () => {
@@ -111,10 +114,31 @@ const AgentManagement = () => {
 
   const viewAgent = async (agent) => {
     setViewing(agent); setDetail(null); setDetailLoading(true); setError('');
+    setPayoutAmt(''); setPayoutNote('');
     const res = await call(`admin-agent-detail&agentId=${agent.id}`, null, 'GET');
     setDetailLoading(false);
     if (res.ok && res.success) setDetail(res);
     else setError(res.error || 'Failed to load agent detail.');
+  };
+
+  const refreshDetail = async (agentId) => {
+    const res = await call(`admin-agent-detail&agentId=${agentId}`, null, 'GET');
+    if (res.ok && res.success) setDetail(res);
+  };
+
+  const recordPayout = async () => {
+    const amt = parseFloat(payoutAmt);
+    if (!amt || amt <= 0) { setError('Enter a payout amount greater than 0.'); return; }
+    setPayoutSaving(true); setError('');
+    const res = await call('record-payout', { agentId: viewing.id, amount: amt, note: payoutNote });
+    setPayoutSaving(false);
+    if (res.ok && res.success) {
+      setPayoutAmt(''); setPayoutNote('');
+      setSuccess(res.message || 'Payout recorded.');
+      refreshDetail(viewing.id);
+    } else {
+      setError(res.error || 'Failed to record payout.');
+    }
   };
 
   const openEditModal = (agent) => {
@@ -270,6 +294,38 @@ const AgentManagement = () => {
                         <div style={{ fontSize: '11px', color: '#94a3b8' }}>{c.sub}</div>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Commission ledger */}
+                  <div style={{ background: 'white', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>Commission ledger</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: detail.payouts?.length || canManage ? 14 : 0 }}>
+                      <div><div style={{ fontSize: 18, fontWeight: 700, color: '#055B75' }}>${detail.stats.commissionEarned.toFixed(2)}</div><div style={{ fontSize: 11, color: '#64748b' }}>Earned (paid sales)</div></div>
+                      <div><div style={{ fontSize: 18, fontWeight: 700, color: '#16a34a' }}>${(detail.stats.commissionPaidOut || 0).toFixed(2)}</div><div style={{ fontSize: 11, color: '#64748b' }}>Paid out</div></div>
+                      <div><div style={{ fontSize: 18, fontWeight: 700, color: (detail.stats.commissionOutstanding || 0) > 0 ? '#d97706' : '#94a3b8' }}>${(detail.stats.commissionOutstanding || 0).toFixed(2)}</div><div style={{ fontSize: 11, color: '#64748b' }}>Outstanding</div></div>
+                    </div>
+
+                    {canManage && (
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
+                        <input type="number" min="0" step="0.01" value={payoutAmt} onChange={(e) => setPayoutAmt(e.target.value)} placeholder="Amount $" style={{ ...inputStyle, width: 120 }} />
+                        <input type="text" value={payoutNote} onChange={(e) => setPayoutNote(e.target.value)} placeholder="Note (optional)" style={{ ...inputStyle, flex: 1, minWidth: 140 }} />
+                        <button onClick={recordPayout} disabled={payoutSaving} style={{ background: '#055B75', color: 'white', border: 'none', padding: '9px 16px', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap' }}>
+                          {payoutSaving ? 'Saving…' : 'Record Payout'}
+                        </button>
+                      </div>
+                    )}
+
+                    {detail.payouts && detail.payouts.length > 0 && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>Payout history</div>
+                        {detail.payouts.map((p) => (
+                          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '6px 0', borderTop: '1px solid #f8fafc' }}>
+                            <span style={{ color: '#64748b' }}>{new Date(p.created_at).toLocaleDateString()}{p.note ? ` · ${p.note}` : ''}</span>
+                            <span style={{ fontWeight: 600, color: '#16a34a' }}>${parseFloat(p.amount).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* By type */}

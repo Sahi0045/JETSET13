@@ -28,6 +28,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/admin/inquiries', icon: LuMessageSquare, label: 'Inquiries', roles: ADMINS },
       { to: '/admin/bookings', icon: LuBriefcase, label: 'Bookings', roles: ADMINS },
+      { to: '/admin/customers', icon: LuUsers, label: 'Customers', roles: ADMINS },
       { to: '/admin/coupons', icon: LuTag, label: 'Coupons', roles: ADMINS },
     ],
   },
