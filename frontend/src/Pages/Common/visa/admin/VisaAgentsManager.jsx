@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { apiGet, apiPost, apiPut } from "../../../../utils/apiHelper";
+import { apiGet, apiPost, apiPut, apiDelete } from "../../../../utils/apiHelper";
 
 // apiGet/apiPost/apiPut resolve to a raw fetch Response — normalise to { ok, ...json }.
 async function send(promise) {
@@ -94,6 +94,30 @@ const VisaAgentsManager = () => {
       else setNotice({ type: "error", text: res.message || "Update failed." });
     } catch (e) {
       setNotice({ type: "error", text: e.message || "Update failed." });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const removeAgent = async (agent) => {
+    const ok = window.confirm(
+      `Remove agent "${agent.name || agent.email}"?\n\n` +
+        `Their assigned applications will be unassigned and returned to the pool, and they'll lose panel access. ` +
+        `This cannot be undone.`
+    );
+    if (!ok) return;
+    setBusyId(agent.id);
+    setNotice(null);
+    try {
+      const res = await send(apiDelete(`visa/admin/agents/${agent.id}`));
+      if (res.ok && res.success) {
+        setNotice({ type: "success", text: res.message || "Agent removed." });
+        load();
+      } else {
+        setNotice({ type: "error", text: res.message || "Failed to remove agent." });
+      }
+    } catch (e) {
+      setNotice({ type: "error", text: e.message || "Failed to remove agent." });
     } finally {
       setBusyId(null);
     }
@@ -301,6 +325,15 @@ const VisaAgentsManager = () => {
                             Disable
                           </button>
                         )}
+                        <button
+                          onClick={() => removeAgent(a)}
+                          disabled={busyId === a.id}
+                          title="Remove agent"
+                          className="px-2.5 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg ring-1 ring-red-200 disabled:opacity-50 flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                          Remove
+                        </button>
                       </div>
                     </td>
                   </tr>

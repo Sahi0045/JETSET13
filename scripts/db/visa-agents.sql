@@ -34,6 +34,9 @@ create table if not exists public.visa_agents (
   status             text not null default 'invited'
                        check (status in ('invited', 'active', 'disabled')),
   specialization     text,                 -- e.g. "India, UAE eVisa" (free text for now)
+  created_user       boolean not null default false,  -- true = we created this account (safe to
+                                            -- hard-delete on removal); false = promoted an existing
+                                            -- user (demote to 'user' on removal, never delete)
   invite_token_hash  text,                 -- sha256 of the one-time invite token (null once accepted)
   invite_expires_at  timestamptz,
   invited_at         timestamptz default now(),

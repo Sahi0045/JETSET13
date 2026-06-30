@@ -6,6 +6,7 @@ import {
   listAgents,
   listAssignableAgents,
   updateAgent,
+  deleteAgent,
   resendInvite,
   getInvite,
   acceptInvite,
@@ -138,6 +139,7 @@ router.get('/admin/verify', protect, verifyAdmin);
  * POST   /api/visa/admin/agents                       create + invite an agent
  * GET    /api/visa/admin/agents                       list agents (+ assigned counts)
  * PUT    /api/visa/admin/agents/:userId               update (status/specialization/name/phone)
+ * DELETE /api/visa/admin/agents/:userId               remove the agent (unassign + delete/demote)
  * POST   /api/visa/admin/agents/:userId/resend-invite re-send the set-password invite
  */
 router.post('/admin/agents', protect, superAdmin, createAgent);
@@ -145,6 +147,7 @@ router.get('/admin/agents', protect, superAdmin, listAgents);
 // Active-agent picklist for assignment — admins may assign even though only superadmin manages agents.
 router.get('/admin/assignable-agents', protect, admin, listAssignableAgents);
 router.put('/admin/agents/:userId', protect, superAdmin, updateAgent);
+router.delete('/admin/agents/:userId', protect, superAdmin, deleteAgent);
 router.post('/admin/agents/:userId/resend-invite', protect, superAdmin, resendInvite);
 
 // ─── Agent invite acceptance (public — token-gated) ──────────────────────────

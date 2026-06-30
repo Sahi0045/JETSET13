@@ -52,6 +52,7 @@ export const createAgent = async (req, res) => {
     }
 
     let userId;
+    let createdUser; // did WE create this account (staff-only) vs promote an existing user?
     if (existing) {
       // Promote an existing customer account to an agent (keep their password until they accept).
       const { data: alreadyAgent } = await supabase
@@ -60,6 +61,7 @@ export const createAgent = async (req, res) => {
         return res.status(409).json({ success: false, message: 'That person is already a visa agent.' });
       }
       userId = existing.id;
+      createdUser = false; // pre-existing account — must be preserved on removal
       await supabase.from('users')
         .update({ role: 'agent', name, ...(phone ? { phone } : {}), updated_at: new Date().toISOString() })
         .eq('id', userId);
@@ -73,6 +75,7 @@ export const createAgent = async (req, res) => {
         .single();
       if (createErr) throw createErr;
       userId = created.id;
+      createdUser = true; // staff-only account we made — safe to hard-delete on removal
     }
 
     const invite = makeInvite();
@@ -85,6 +88,7 @@ export const createAgent = async (req, res) => {
         invite_token_hash: invite.hash,
         invite_expires_at: invite.expiresAt,
         created_by: req.user?.id || null,
+        created_user: createdUser,
       }]);
     if (profErr) throw profErr;
 
@@ -263,6 +267,49 @@ export const resendInvite = async (req, res) => {
   } catch (err) {
     console.error('resendInvite error:', err);
     return res.status(500).json({ success: false, message: err.message || 'Failed to resend invite' });
+  }
+};
+
+/**
+ * DELETE /api/visa/admin/agents/:userId   (superadmin)
+ * Fully remove an agent. Safe by design:
+ *   1. Un-assign any applications they hold (assigned_agent → null) so work returns to the pool.
+ *   2. Delete their visa_agents profile (removes them from the agents list + revokes the role).
+ *   3. If WE created the account just to be an agent (created_user), hard-delete it. If it was a
+ *      pre-existing user we promoted, only demote it to 'user' so their account/data survives.
+ *      (created_user is the reliable signal — visa_applications.user_id references auth.users,
+ *      not public.users, so a customer-footprint lookup against public.users can't be trusted.)
+ */
+export const deleteAgent = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { data: profile } = await supabase
+      .from('visa_agents').select('id, created_user').eq('user_id', userId).maybeSingle();
+    if (!profile) return res.status(404).json({ success: false, message: 'Agent not found' });
+
+    // 1. Free up their assigned applications.
+    await supabase.from('visa_applications')
+      .update({ assigned_agent: null }).eq('assigned_agent', String(userId));
+
+    // 2. Remove the agent profile.
+    const { error: pErr } = await supabase.from('visa_agents').delete().eq('user_id', userId);
+    if (pErr) throw pErr;
+
+    // 3. Demote a promoted account; hard-delete a staff-only account.
+    if (!profile.created_user) {
+      await supabase.from('users').update({ role: 'user', updated_at: new Date().toISOString() }).eq('id', userId);
+      return res.json({ success: true, message: 'Agent removed. Their existing account was kept (demoted to a normal user).' });
+    }
+    // Staff-only account — try a clean delete; fall back to demote if a FK blocks it.
+    const { error: dErr } = await supabase.from('users').delete().eq('id', userId);
+    if (dErr) {
+      await supabase.from('users').update({ role: 'user', updated_at: new Date().toISOString() }).eq('id', userId);
+      return res.json({ success: true, message: 'Agent removed (account retained — it is linked to other records).' });
+    }
+    return res.json({ success: true, message: 'Agent deleted.' });
+  } catch (err) {
+    console.error('deleteAgent error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to remove agent' });
   }
 };
 
