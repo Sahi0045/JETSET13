@@ -18,6 +18,7 @@ import {
   createApplicationCheckout,
   completeApplicationPayment,
   verifyAdmin,
+  refundApplication,
   // Consultation controllers
   bookConsultation,
   getConsultations,
@@ -94,6 +95,12 @@ router.put('/applications/:id', protect, admin, updateApplication);
  * Cancel an application.
  */
 router.patch('/applications/:id/cancel', protect, cancelApplication);
+
+/**
+ * POST /api/visa/applications/:id/refund — admin issues a service-fee refund
+ * (on rejection or discretionary). Reverses the ARC payment + marks 'refunded'.
+ */
+router.post('/applications/:id/refund', protect, admin, refundApplication);
 
 /**
  * POST   /api/visa/applications/:id/documents

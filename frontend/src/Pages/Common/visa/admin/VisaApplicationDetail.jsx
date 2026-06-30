@@ -161,6 +161,29 @@ useEffect(() => {
     }
   };
 
+  // ── Refund the service fee (reverses the ARC payment) ──────────────────────
+  const handleRefund = async () => {
+    if (!window.confirm("Refund the visa service fee for this application? This reverses the payment via ARC Pay.")) return;
+    setStatusUpdating(true);
+    try {
+      const response = await apiPost(`visa/applications/${id}/refund`, {
+        reason: "Refund issued from admin panel",
+      });
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`Server error (${response.status})`); }
+      if (!response.ok || !(data.success || data.alreadyRefunded)) {
+        throw new Error(data.message || "Refund failed.");
+      }
+      alert(data.alreadyRefunded ? "Already refunded." : `Refund issued (${data.action || "OK"}).`);
+      fetchApp();
+    } catch (err) {
+      console.error("Refund error:", err);
+      alert(err.message || "Refund failed.");
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
+
   // ── Save internal notes ────────────────────────────────────────────────────
   const handleSaveNotes = async () => {
     setNotesSaving(true);
@@ -969,6 +992,24 @@ useEffect(() => {
                     </span>
                     Mark Completed
                   </button>
+                )}
+                {app.payment_status === "paid" && (
+                  <button
+                    onClick={handleRefund}
+                    disabled={statusUpdating}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 bg-rose-50 text-rose-700 rounded-lg font-bold text-sm hover:bg-rose-100 transition-colors text-left disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-lg">
+                      currency_exchange
+                    </span>
+                    Refund Service Fee
+                  </button>
+                )}
+                {app.payment_status === "refunded" && (
+                  <div className="w-full flex items-center gap-2 px-3 py-2.5 bg-slate-50 text-slate-500 rounded-lg font-bold text-sm">
+                    <span className="material-symbols-outlined text-lg">task_alt</span>
+                    Service fee refunded
+                  </div>
                 )}
               </div>
 

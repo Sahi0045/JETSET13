@@ -4,6 +4,30 @@ import supabase from '../config/supabase.js';
 import crypto from 'crypto';
 import axios from 'axios';
 import { ARC_PAY_CONFIG, getArcPayAuthConfig } from '../routes/payment/arcpay.config.js';
+import { reverseArcPaymentForOrder } from '../routes/payment/operations.handlers.js';
+
+// Refund a paid visa application's service fee via ARC (VOID if unsettled, else REFUND),
+// then mark the application 'refunded' + add a timeline note. Reuses the same gateway
+// reversal helper as flights/membership. Returns the reversal result.
+async function refundVisaApplication(app, reason = 'Visa application cancelled') {
+  if (!app || app.payment_status !== 'paid') {
+    return { reversed: false, refunded: false, action: 'NONE', reason: 'no captured payment to refund' };
+  }
+  const reversal = await reverseArcPaymentForOrder(app.application_ref, {
+    amount: app.amount,
+    currency: 'USD',
+    reason,
+  });
+  if (reversal.reversed) {
+    await VisaApplication.update(app.id, { payment_status: 'refunded' });
+    await VisaApplication.addTimelineEvent(app.id, {
+      status: app.status,
+      note: `Service fee refunded (${reversal.action}).`,
+      by: 'System',
+    });
+  }
+  return { ...reversal, refunded: !!reversal.reversed };
+}
 
 // Map common country name variants to the canonical form stored in visa_requirements
 // (so "USA"/"US"/"America" → "United States", "UK"/"Britain" → "United Kingdom", etc.).
@@ -502,12 +526,37 @@ export const updateApplication = async (req, res) => {
 export const cancelApplication = async (req, res) => {
   try {
     const { id } = req.params;
+    const reason = req.body?.reason || 'Cancelled by applicant';
+
+    const app = await VisaApplication.findById(id);
+    if (!app) {
+      return res.status(404).json({ success: false, message: 'Application not found' });
+    }
+
+    // Staged refund policy: the service fee is refunded in full ONLY while the application
+    // is still pre-processing. Once our team has started review/submission, refunds are
+    // handled by staff (the admin Refund action) — mirrors Atlys/VisaHQ stage-based rules.
+    const PRE_REVIEW = ['submitted', 'documents_pending', 'additional_info_required'];
+    let refund = { refunded: false, action: 'NONE' };
+    if (app.payment_status === 'paid' && PRE_REVIEW.includes(app.status)) {
+      refund = await refundVisaApplication(app, `Applicant cancellation: ${reason}`);
+    }
+
     const updated = await VisaApplication.cancel(id);
 
     return res.json({
       success: true,
       message: 'Application cancelled successfully',
       data: updated,
+      refund: {
+        refunded: refund.refunded,
+        action: refund.action,
+        note: refund.refunded
+          ? 'Your visa service fee has been refunded to your original payment method.'
+          : app.payment_status === 'paid'
+            ? 'Your application is already in processing — service-fee refunds at this stage are handled by our team; please contact support.'
+            : 'No payment on file to refund.',
+      },
     });
   } catch (err) {
     console.error('cancelApplication error:', err);
@@ -516,6 +565,41 @@ export const cancelApplication = async (req, res) => {
       success: false,
       message: err.message || 'Failed to cancel application',
     });
+  }
+};
+
+/**
+ * POST /api/visa/applications/:id/refund  (admin)
+ * Discretionary / on-rejection refund of the service fee.
+ */
+export const refundApplication = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reason = req.body?.reason || 'Refund issued by admin';
+
+    const app = await VisaApplication.findById(id);
+    if (!app) {
+      return res.status(404).json({ success: false, message: 'Application not found' });
+    }
+    if (app.payment_status === 'refunded') {
+      return res.json({ success: true, alreadyRefunded: true, message: 'Already refunded.' });
+    }
+    if (app.payment_status !== 'paid') {
+      return res.status(400).json({ success: false, message: 'This application has no captured payment to refund.' });
+    }
+
+    const reversal = await refundVisaApplication(app, reason);
+    if (!reversal.refunded) {
+      return res.status(502).json({
+        success: false,
+        message: 'Refund could not be processed at the gateway. It may have already settled — try again shortly or contact support.',
+        details: reversal,
+      });
+    }
+    return res.json({ success: true, refunded: true, action: reversal.action, message: 'Refund issued.' });
+  } catch (err) {
+    console.error('refundApplication error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to issue refund.' });
   }
 };
 
