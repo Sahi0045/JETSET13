@@ -1072,46 +1072,38 @@ export const uploadFile = async (req, res) => {
     const fileExt = originalname.split('.').pop();
     const fileName = `${crypto.randomUUID()}.${fileExt}`;
     const filePath = `documents/${fileName}`;
+    const BUCKET = 'visa-documents';
 
-    // Upload to 'visa-documents' bucket
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('visa-documents')
-      .upload(filePath, buffer, {
-        contentType: mimetype,
-        upsert: true,
-      });
+    // supabase-js (2.80) rejects a raw Node Buffer with "Invalid Content-Type header";
+    // wrapping it in a Blob with the mimetype uploads correctly.
+    const fileBlob = new Blob([buffer], { type: mimetype || 'application/octet-stream' });
+    const doUpload = () =>
+      supabase.storage.from(BUCKET).upload(filePath, fileBlob, { upsert: true });
 
+    let { error: uploadError } = await doUpload();
     if (uploadError) {
-      // If bucket doesn't exist, try to create it (if possible with service role)
-      if (uploadError.message === 'bucket not found') {
-        const { error: createError } = await supabase.storage.createBucket('visa-documents', {
-          public: true,
-        });
-        if (createError) throw createError;
-        
-        // Retry upload
-        const { data: retryData, error: retryError } = await supabase.storage
-          .from('visa-documents')
-          .upload(filePath, buffer, {
-            contentType: mimetype,
-            upsert: true,
-          });
-        if (retryError) throw retryError;
-      } else {
-        throw uploadError;
+      // Bucket missing — message casing/shape varies ("Bucket not found", 404). Create it
+      // as PRIVATE (these are passport/bank documents — must not be public) and retry.
+      const msg = (uploadError.message || '').toLowerCase();
+      const missing = msg.includes('bucket not found') || `${uploadError.statusCode}` === '404' || uploadError.status === 404;
+      if (missing) {
+        await supabase.storage.createBucket(BUCKET, { public: false });
+        ({ error: uploadError } = await doUpload());
       }
+      if (uploadError) throw uploadError;
     }
 
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('visa-documents')
-      .getPublicUrl(filePath);
+    // Private bucket → return a short-lived signed URL for immediate preview, and store the
+    // stable PATH (the frontend saves this as file_url). Viewing later re-signs on demand
+    // via GET /api/visa/document-url, so links never become permanently public.
+    const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(filePath, 60 * 60);
 
     return res.json({
       success: true,
       message: 'File uploaded successfully',
       data: {
-        url: publicUrl,
+        path: filePath,
+        url: signed?.signedUrl || null,
         fileName: originalname,
       },
     });
@@ -1121,5 +1113,34 @@ export const uploadFile = async (req, res) => {
       success: false,
       message: err.message || 'Failed to upload file',
     });
+  }
+};
+
+/**
+ * GET /api/visa/document-url?path=documents/<file>
+ * Returns a short-lived signed URL to view a private document. `protect` ensures the
+ * caller is authenticated (admin staff verifying, or the applicant). Also tolerates a
+ * full legacy public URL by extracting the path.
+ */
+export const getDocumentUrl = async (req, res) => {
+  try {
+    let { path } = req.query;
+    if (!path) return res.status(400).json({ success: false, message: 'path is required' });
+
+    // Legacy/full-URL tolerance: pull the storage path out of a getPublicUrl-style URL.
+    const marker = '/visa-documents/';
+    if (path.includes(marker)) path = path.split(marker)[1].split('?')[0];
+
+    const { data, error } = await supabase.storage
+      .from('visa-documents')
+      .createSignedUrl(path, 60 * 60);
+
+    if (error || !data?.signedUrl) {
+      return res.status(404).json({ success: false, message: 'Document not found or link could not be generated.' });
+    }
+    return res.json({ success: true, url: data.signedUrl });
+  } catch (err) {
+    console.error('getDocumentUrl error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to generate document link.' });
   }
 };

@@ -184,6 +184,22 @@ useEffect(() => {
     }
   };
 
+  // ── Open a private document via a short-lived signed URL ───────────────────
+  const viewDocument = async (pathOrUrl) => {
+    try {
+      const response = await apiGet(`visa/document-url?path=${encodeURIComponent(pathOrUrl)}`);
+      const data = await response.json();
+      if (data?.success && data.url) {
+        window.open(data.url, "_blank", "noopener");
+      } else {
+        alert(data?.message || "Could not open this document.");
+      }
+    } catch (err) {
+      console.error("viewDocument error:", err);
+      alert("Could not open this document.");
+    }
+  };
+
   // ── Save internal notes ────────────────────────────────────────────────────
   const handleSaveNotes = async () => {
     setNotesSaving(true);
@@ -636,15 +652,18 @@ useEffect(() => {
                               <p className="text-[13px] font-black text-slate-900 truncate">
                                 {docName}
                               </p>
-                              {doc.file_url && (
-                                <a
-                                  href={doc.file_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-[10px] font-bold text-[#1152d4] hover:underline truncate block"
+                              {doc.file_url ? (
+                                <button
+                                  type="button"
+                                  onClick={() => viewDocument(doc.file_url)}
+                                  className="text-[10px] font-bold text-[#1152d4] hover:underline truncate block bg-transparent border-none p-0 cursor-pointer text-left"
                                 >
                                   View File ↗
-                                </a>
+                                </button>
+                              ) : (
+                                <span className="text-[10px] font-bold text-slate-400 truncate block">
+                                  No file uploaded
+                                </span>
                               )}
                             </div>
                           </div>

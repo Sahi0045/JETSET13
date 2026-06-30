@@ -217,7 +217,8 @@ const VisaApplication = () => {
             const uploadData = await uploadRes.json();
             
             if (uploadRes.ok && uploadData.success) {
-              uploadedUrls[docId] = uploadData.data.url;
+              // Store the stable storage PATH (private bucket); viewing re-signs on demand.
+              uploadedUrls[docId] = uploadData.data.path || uploadData.data.url;
             } else {
               console.warn(`Failed to upload ${docId}:`, uploadData.message);
             }

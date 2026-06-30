@@ -33,6 +33,7 @@ import {
   // Requirements controllers
   checkEligibility,
   getRequirements,
+  getDocumentUrl,
   createRequirement,
   updateRequirement,
   uploadFile,
@@ -142,6 +143,12 @@ router.delete('/applications/:id', protect, admin, deleteApplication);
  * Upload a document to storage.
  */
 router.post('/upload', optionalProtect, upload.single('file'), uploadFile);
+
+/**
+ * GET /api/visa/document-url?path=... — short-lived signed URL to view a private
+ * document (passport/bank docs live in a private bucket). Auth required.
+ */
+router.get('/document-url', protect, getDocumentUrl);
 
 // ─── Visa Consultations ──────────────────────────────────────────────────────
 
