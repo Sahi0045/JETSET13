@@ -21,6 +21,7 @@ const VisaApplication = () => {
   const [searchParams] = useSearchParams();
   const [currentStep, setCurrentStep] = useState(1);
   const [uploadedFiles, setUploadedFiles] = useState({});
+  const [uploadErrors, setUploadErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
@@ -131,12 +132,24 @@ const VisaApplication = () => {
   ];
 
   const handleFileUpload = (docId, file) => {
-    if (file) {
-      setUploadedFiles((prev) => ({
-        ...prev,
-        [docId]: { name: file.name, file },
-      }));
+    if (!file) return;
+    // Validate before accepting: allowed types + max 5 MB (embassies reject oversized/odd files).
+    const ALLOWED = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
+    const MAX_BYTES = 5 * 1024 * 1024;
+    const extOk = /\.(pdf|jpe?g|png)$/i.test(file.name || "");
+    if (!(ALLOWED.includes(file.type) || extOk)) {
+      setUploadErrors((prev) => ({ ...prev, [docId]: "Only PDF, JPG or PNG files are allowed." }));
+      return;
     }
+    if (file.size > MAX_BYTES) {
+      setUploadErrors((prev) => ({ ...prev, [docId]: `File is too large (${(file.size / 1048576).toFixed(1)} MB). Max 5 MB.` }));
+      return;
+    }
+    setUploadErrors((prev) => { const n = { ...prev }; delete n[docId]; return n; });
+    setUploadedFiles((prev) => ({
+      ...prev,
+      [docId]: { name: file.name, file },
+    }));
   };
 
   const validateStep = (step) => {
@@ -827,6 +840,12 @@ const VisaApplication = () => {
                           />
                         </label>
                       </div>
+                      {uploadErrors[doc.id] && (
+                        <p className="mt-3 text-xs font-semibold text-red-600 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-sm">error</span>
+                          {uploadErrors[doc.id]}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

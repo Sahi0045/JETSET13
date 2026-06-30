@@ -1,5 +1,5 @@
 import { VisaApplication, VisaConsultation, VisaRequirements, VisaMessage } from '../models/visa.model.js';
-import { sendVisaApplicationConfirmation } from '../services/emailService.js';
+import { sendVisaApplicationConfirmation, sendVisaStatusUpdate } from '../services/emailService.js';
 import supabase from '../config/supabase.js';
 import crypto from 'crypto';
 import axios from 'axios';
@@ -656,6 +656,10 @@ export const addTimelineEvent = async (req, res) => {
       note: note || '',
       by: by || 'Admin',
     });
+
+    // Notify the applicant of the status change (non-blocking).
+    sendVisaStatusUpdate(updated, eventStatus, note).catch((e) =>
+      console.error('Failed to send visa status email:', e.message));
 
     return res.json({
       success: true,

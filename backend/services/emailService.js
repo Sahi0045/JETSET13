@@ -562,6 +562,42 @@ export const sendVisaApplicationConfirmation = async (appData) => {
 };
 
 /**
+ * Email the applicant when their visa application status changes. Non-fatal.
+ */
+export const sendVisaStatusUpdate = async (appData, status, note) => {
+  try {
+    const to = appData?.personal_info?.email;
+    if (!to) return { skipped: true };
+    const ref = appData.application_ref;
+    const labels = {
+      submitted: 'Submitted', documents_pending: 'Documents Pending', under_review: 'Under Review',
+      additional_info_required: 'Additional Information Required', approved: 'Approved',
+      rejected: 'Rejected', cancelled: 'Cancelled', completed: 'Completed',
+    };
+    const label = labels[status] || status;
+    const frontend = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#0f172a">
+        <h2 style="color:#1152d4;margin-bottom:4px">Visa application update</h2>
+        <p>Your application <strong>${ref}</strong> has a new status:</p>
+        <p style="font-size:18px;font-weight:bold;padding:12px 16px;background:#f1f5f9;border-radius:8px;display:inline-block">${label}</p>
+        ${note ? `<p style="color:#475569">${note}</p>` : ''}
+        <p style="margin-top:20px">
+          <a href="${frontend}/visa/track?ref=${encodeURIComponent(ref)}"
+             style="display:inline-block;background:#1152d4;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:bold">
+            Track your application
+          </a>
+        </p>
+        <p style="color:#94a3b8;font-size:12px;margin-top:24px">Jetsetters Visa Services</p>
+      </div>`;
+    return await sendEmail({ to, subject: `🛂 Visa ${ref}: ${label}`, html });
+  } catch (error) {
+    console.error('Error sending visa status update email:', error);
+    return { error: error.message };
+  }
+};
+
+/**
  * Generate HTML template for visa application confirmation
  */
 
