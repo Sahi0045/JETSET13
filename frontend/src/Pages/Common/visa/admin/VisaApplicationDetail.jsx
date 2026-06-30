@@ -51,21 +51,26 @@ function currentRole() {
 const VisaApplicationDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   // Keep links/redirects on the current panel base (/visa/admin or /visa/agent).
-  const base = useLocation().pathname.startsWith("/visa/agent") ? "/visa/agent" : "/visa/admin";
+  const base = location.pathname.startsWith("/visa/agent") ? "/visa/agent" : "/visa/admin";
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [app, setApp] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Seed from the list row the user just clicked (passed via Link state) so the page
+  // renders immediately and the network fetch refreshes it in the background — no skeleton.
+  const seedApp =
+    location.state?.app && location.state.app.id === id ? location.state.app : null;
+  const [app, setApp] = useState(seedApp);
+  const [loading, setLoading] = useState(!seedApp);
   const [error, setError] = useState("");
 
-  const [newStatus, setNewStatus] = useState("");
+  const [newStatus, setNewStatus] = useState(seedApp?.status || "");
   const [statusNote, setStatusNote] = useState("");
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [statusError, setStatusError] = useState("");
 
-  const [internalNote, setInternalNote] = useState("");
+  const [internalNote, setInternalNote] = useState(seedApp?.notes || "");
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
 
@@ -81,8 +86,10 @@ const VisaApplicationDetail = () => {
   const [assigning, setAssigning] = useState(false);
 
   // ── Fetch application ──────────────────────────────────────────────────────
-  const fetchApp = useCallback(async () => {
-    setLoading(true);
+  // `silent` = refresh in the background without flashing the skeleton (used when we
+  // already rendered from seed data, and for realtime/poll refreshes).
+  const fetchApp = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError("");
     try {
       const response = await apiGet(`visa/applications/${id}`);
@@ -106,8 +113,10 @@ const VisaApplicationDetail = () => {
     }
   }, [id]);
 
-useEffect(() => {
-    fetchApp();
+  useEffect(() => {
+    // If we seeded from the list, refresh silently (no skeleton); otherwise show it.
+    fetchApp({ silent: !!seedApp });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchApp, id]);
 
   // Load the active-agent picklist for the assignment dropdown (admin/superadmin only).
@@ -153,9 +162,9 @@ useEffect(() => {
     tables: ['visa_applications'],
     applicationId: id,
     onApplicationUpdate: () => {
-      fetchApp();
+      fetchApp({ silent: true });
     },
-    getDataFn: fetchApp,
+    getDataFn: () => fetchApp({ silent: true }),
     fetchOnMount: false,
     fallbackPollingMs: 10000
   });
@@ -323,7 +332,7 @@ useEffect(() => {
   };
 
   // ── Loading State ──────────────────────────────────────────────────────────
-  if (loading) {
+  if (loading && !app) {
     return (
       <div className="min-h-screen bg-[#f6f6f8] font-sans">
         <link
@@ -385,7 +394,7 @@ useEffect(() => {
   }
 
   // ── Error State ────────────────────────────────────────────────────────────
-  if (error || !app) {
+  if (!app) {
     return (
       <div className="min-h-screen bg-[#f6f6f8] font-sans flex items-center justify-center px-4">
         <link

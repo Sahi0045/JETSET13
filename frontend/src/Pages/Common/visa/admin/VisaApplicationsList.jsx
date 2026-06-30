@@ -492,6 +492,7 @@ useEffect(() => {
                         <td className="px-4 lg:px-5 py-3 lg:py-4">
                           <Link
                             to={`${base}/applications/${app.id}`}
+                            state={{ app }}
                             className="font-mono font-bold text-[#1152d4] text-xs hover:underline no-underline"
                           >
                             {app.application_ref}
@@ -568,6 +569,7 @@ useEffect(() => {
                         <td className="px-4 lg:px-6 py-3 lg:py-4 text-right">
                           <Link
                             to={`${base}/applications/${app.id}`}
+                            state={{ app }}
                             className="text-[#1152d4] text-xs font-bold hover:underline no-underline"
                           >
                             Review →
