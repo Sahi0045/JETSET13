@@ -89,7 +89,7 @@ const AdminSubHeader = ({ user, onLogout }) => {
   const isActive = (path) => location.pathname === path;
 
   return (
-    <header className="sticky top-16 z-40 bg-white border-b border-slate-200 shadow-sm">
+    <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
       <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-10 flex items-center justify-between h-12 sm:h-14 gap-2 overflow-x-auto scrollbar-none">
         {/* Brand badge */}
         <div className="shrink-0 hidden sm:flex items-center gap-2">
