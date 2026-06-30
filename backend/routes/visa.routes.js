@@ -17,6 +17,7 @@ import {
   deleteApplication,
   createApplicationCheckout,
   completeApplicationPayment,
+  verifyAdmin,
   // Consultation controllers
   bookConsultation,
   getConsultations,
@@ -108,6 +109,12 @@ router.post('/applications/:id/documents', protect, uploadDocument);
  */
 router.post('/applications/:id/checkout', optionalProtect, createApplicationCheckout);
 router.post('/applications/:id/payment-complete', optionalProtect, completeApplicationPayment);
+
+/**
+ * GET /api/visa/admin/verify — server-side admin/agent session check for the panel guard.
+ * `protect` verifies the JWT; the handler checks the role.
+ */
+router.get('/admin/verify', protect, verifyAdmin);
 
 /**
  * POST   /api/visa/applications/:id/timeline

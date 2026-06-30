@@ -235,6 +235,20 @@ export const completeApplicationPayment = async (req, res) => {
 };
 
 /**
+ * GET /api/visa/admin/verify
+ * Confirms the caller holds a real admin/agent token (route runs `protect`, which
+ * verifies the JWT). The visa admin panel calls this on load so a spoofed/edited
+ * localStorage session can't render the admin UI — only a server-validated admin can.
+ */
+export const verifyAdmin = async (req, res) => {
+  const role = req.user?.role;
+  if (role !== 'admin' && role !== 'agent') {
+    return res.status(403).json({ success: false, message: 'Not authorized for the visa admin panel.' });
+  }
+  return res.json({ success: true, role, email: req.user?.email || req.user?.user_email || null });
+};
+
+/**
  * GET /api/visa/applications
  * List all applications (admin). Supports query filters:
  * ?status=&serviceTier=&priority=&destination=&limit=&offset=&orderBy=

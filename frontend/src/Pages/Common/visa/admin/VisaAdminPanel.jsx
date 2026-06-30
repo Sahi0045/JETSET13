@@ -18,6 +18,7 @@ import AppointmentDetail from "./AppointmentDetail";
 import AdminDocumentReview from "./AdminDocumentReview";
 import AdminMessagingHub from "./AdminMessagingHub";
 import VisaAdminLogin from "./VisaAdminLogin";
+import { getApiUrl } from "../../../../utils/apiHelper";
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
@@ -197,17 +198,47 @@ const VisaAdminPanel = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Derive auth state from localStorage on every render so it stays in sync
-  // with what VisaAdminLogin stores after a successful auth.
+  // Derive auth state from localStorage, then VALIDATE it against the backend.
   const [session, setSession] = useState(() => getStoredAdminSession());
+  const [verifying, setVerifying] = useState(true);
 
   /**
-   * Re-check localStorage on location change so that if the user just logged
-   * in via VisaAdminLogin (which navigates to /visa/admin), we immediately
-   * pick up the new session without needing a page reload.
+   * localStorage alone is spoofable (anyone could set user.role='admin'), so confirm
+   * with the server that the token really belongs to an admin/agent before rendering
+   * the panel. A token the backend rejects clears the session → login screen. This runs
+   * on mount and whenever the route changes (e.g. right after VisaAdminLogin redirects).
    */
   useEffect(() => {
-    setSession(getStoredAdminSession());
+    let cancelled = false;
+    const stored = getStoredAdminSession();
+    if (!stored) {
+      setSession(null);
+      setVerifying(false);
+      return;
+    }
+    setVerifying(true);
+    (async () => {
+      try {
+        const res = await fetch(getApiUrl("visa/admin/verify"), {
+          headers: { Authorization: `Bearer ${stored.token}` },
+        });
+        if (cancelled) return;
+        if (res.ok) {
+          setSession(stored);
+        } else {
+          // Backend says this isn't a real admin → drop the (possibly spoofed) session.
+          clearAdminSession();
+          setSession(null);
+        }
+      } catch {
+        // Network hiccup: keep the stored session — every data call is still enforced
+        // server-side, so nothing sensitive loads without a real admin token anyway.
+        if (!cancelled) setSession(stored);
+      } finally {
+        if (!cancelled) setVerifying(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [location.pathname]);
 
   // ── Logout ──────────────────────────────────────────────────────────────────
@@ -220,6 +251,18 @@ const VisaAdminPanel = () => {
   // ── Route: dedicated login page ────────────────────────────────────────────
   if (location.pathname === "/visa/admin/login") {
     return <VisaAdminLogin />;
+  }
+
+  // ── Verifying the session with the backend ──────────────────────────────────
+  if (verifying) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fc]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-[#055B75]/30 border-t-[#055B75] rounded-full animate-spin"></div>
+          <p className="text-slate-500 text-sm font-medium">Verifying admin access…</p>
+        </div>
+      </div>
+    );
   }
 
   // ── Route: not authenticated → show login ──────────────────────────────────
