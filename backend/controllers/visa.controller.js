@@ -1073,12 +1073,16 @@ export const uploadFile = async (req, res) => {
     const fileName = `${crypto.randomUUID()}.${fileExt}`;
     const filePath = `documents/${fileName}`;
     const BUCKET = 'visa-documents';
+    const contentType = mimetype || 'application/octet-stream';
 
-    // supabase-js (2.80) rejects a raw Node Buffer with "Invalid Content-Type header";
-    // wrapping it in a Blob with the mimetype uploads correctly.
-    const fileBlob = new Blob([buffer], { type: mimetype || 'application/octet-stream' });
+    // IMPORTANT: upload the raw Buffer WITH an explicit contentType — do NOT wrap it in a
+    // Blob. supabase-js sends a Blob as multipart/form-data; on some runtimes (notably
+    // Vercel serverless) the storage backend stores that multipart envelope verbatim instead
+    // of parsing it, so the saved "image" is actually `------formdata-undici-…\r\nContent-
+    // Disposition…\r\n\r\n<png>` and won't render. A Buffer + contentType is sent as raw
+    // bytes (no FormData), which is correct on every runtime.
     const doUpload = () =>
-      supabase.storage.from(BUCKET).upload(filePath, fileBlob, { upsert: true });
+      supabase.storage.from(BUCKET).upload(filePath, buffer, { upsert: true, contentType });
 
     let { error: uploadError } = await doUpload();
     if (uploadError) {
