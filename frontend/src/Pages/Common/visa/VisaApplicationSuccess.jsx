@@ -17,6 +17,8 @@ const VisaApplicationSuccess = () => {
 
     const [resending, setResending] = useState(false);
     const [resendStatus, setResendStatus] = useState(null); // 'success' | 'error'
+    const [paymentState, setPaymentState] = useState(searchParams.get('payment') === 'success' ? 'verifying' : 'idle'); // idle|verifying|paid|pending|error
+    const [paying, setPaying] = useState(false);
 
     const estimatedDays = tier === 'premium' ? '1-2' : tier === 'express' ? '2-3' : '5-7';
 
@@ -49,9 +51,41 @@ const VisaApplicationSuccess = () => {
         }
     };
 
+    const handlePayNow = async () => {
+        if (!appId) return;
+        setPaying(true);
+        try {
+            const res = await apiPost(`visa/applications/${appId}/checkout`, { returnOrigin: window.location.origin });
+            const data = await res.json();
+            if (data?.success && data.checkoutUrl) {
+                window.location.href = data.checkoutUrl; // → ARC Pay
+                return;
+            }
+            if (data?.alreadyPaid) setPaymentState('paid');
+        } catch (err) {
+            console.error('visa pay-now error:', err);
+        } finally {
+            setPaying(false);
+        }
+    };
+
     useEffect(() => {
         window.scrollTo(0, 0);
-    }, []);
+        // Returned from ARC Pay → verify with the gateway and mark the application paid.
+        if (searchParams.get('payment') === 'success' && appId) {
+            (async () => {
+                try {
+                    const res = await apiPost(`visa/applications/${appId}/payment-complete`, {});
+                    const data = await res.json();
+                    setPaymentState(data?.paymentStatus === 'paid' ? 'paid' : 'pending');
+                } catch (err) {
+                    console.error('visa payment-complete error:', err);
+                    setPaymentState('error');
+                }
+            })();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [appId]);
 
     return (
         <div className="min-h-screen bg-[#f6f6f8] font-sans text-slate-900">
@@ -81,6 +115,45 @@ const VisaApplicationSuccess = () => {
                             Your visa application has been received and is being processed by our expert team.
                         </p>
                     </div>
+
+                    {/* Payment status banner */}
+                    {paymentState !== 'idle' && (
+                        <div className={`mb-6 rounded-xl border p-5 flex items-center justify-between gap-4 ${
+                            paymentState === 'paid' ? 'bg-green-50 border-green-200' :
+                            paymentState === 'verifying' ? 'bg-blue-50 border-blue-200' :
+                            'bg-amber-50 border-amber-200'
+                        }`}>
+                            <div className="flex items-center gap-3">
+                                <span className={`material-symbols-outlined ${
+                                    paymentState === 'paid' ? 'text-green-600' :
+                                    paymentState === 'verifying' ? 'text-blue-600' : 'text-amber-600'
+                                }`}>
+                                    {paymentState === 'paid' ? 'verified' : paymentState === 'verifying' ? 'hourglass_top' : 'payments'}
+                                </span>
+                                <div>
+                                    <p className="font-bold text-slate-900">
+                                        {paymentState === 'paid' ? 'Payment received' :
+                                         paymentState === 'verifying' ? 'Confirming your payment…' :
+                                         'Payment pending'}
+                                    </p>
+                                    <p className="text-sm text-slate-600">
+                                        {paymentState === 'paid' ? 'Your application is now in our processing queue.' :
+                                         paymentState === 'verifying' ? 'This only takes a moment.' :
+                                         'Complete your payment to put your application in the processing queue.'}
+                                    </p>
+                                </div>
+                            </div>
+                            {(paymentState === 'pending' || paymentState === 'error') && appId && (
+                                <button
+                                    onClick={handlePayNow}
+                                    disabled={paying}
+                                    className="shrink-0 px-5 py-2.5 rounded-lg font-bold text-white bg-[#1152d4] hover:bg-[#0e44b0] transition-colors disabled:opacity-60"
+                                >
+                                    {paying ? 'Starting…' : 'Pay now'}
+                                </button>
+                            )}
+                        </div>
+                    )}
 
                     {/* Application Reference Card */}
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 mb-6">

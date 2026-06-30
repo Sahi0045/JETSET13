@@ -15,6 +15,8 @@ import {
   addTimelineEvent,
   resendConfirmationEmail,
   deleteApplication,
+  createApplicationCheckout,
+  completeApplicationPayment,
   // Consultation controllers
   bookConsultation,
   getConsultations,
@@ -98,6 +100,14 @@ router.patch('/applications/:id/cancel', protect, cancelApplication);
  * Body: { docName, status, fileUrl? }
  */
 router.post('/applications/:id/documents', protect, uploadDocument);
+
+/**
+ * POST /api/visa/applications/:id/checkout         → start ARC Pay payment (returns checkoutUrl)
+ * POST /api/visa/applications/:id/payment-complete → verify ARC order, mark application paid
+ * Public (optionalProtect): the applicant pays right after creating the application.
+ */
+router.post('/applications/:id/checkout', optionalProtect, createApplicationCheckout);
+router.post('/applications/:id/payment-complete', optionalProtect, completeApplicationPayment);
 
 /**
  * POST   /api/visa/applications/:id/timeline

@@ -2,6 +2,20 @@ import { VisaApplication, VisaConsultation, VisaRequirements, VisaMessage } from
 import { sendVisaApplicationConfirmation } from '../services/emailService.js';
 import supabase from '../config/supabase.js';
 import crypto from 'crypto';
+import axios from 'axios';
+import { ARC_PAY_CONFIG, getArcPayAuthConfig } from '../routes/payment/arcpay.config.js';
+
+// True if an ARC order has been captured/paid.
+function isArcOrderPaid(order) {
+  if (!order) return false;
+  if (['CAPTURED', 'PARTIALLY_CAPTURED'].includes(order.status)) return true;
+  const txns = Array.isArray(order.transaction) ? order.transaction : [];
+  return txns.some((t) => {
+    const type = t.transaction?.type;
+    const ok = t.result === 'SUCCESS' || t.response?.gatewayCode === 'APPROVED';
+    return ok && ['PAYMENT', 'CAPTURE'].includes(type);
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  APPLICATION CONTROLLERS
@@ -80,6 +94,124 @@ export const submitApplication = async (req, res) => {
       message: err.message || 'Failed to submit application',
       error: process.env.NODE_ENV === 'development' ? err : undefined
     });
+  }
+};
+
+/**
+ * POST /api/visa/applications/:id/checkout
+ * Create an ARC Pay hosted-checkout session for the application's service fee.
+ * The application's `application_ref` is the ARC order id; `amount` comes from the
+ * server-side tier price (never trust a client amount). Returns { checkoutUrl }.
+ */
+export const createApplicationCheckout = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const app = await VisaApplication.findById(id);
+    if (!app) {
+      return res.status(404).json({ success: false, message: 'Application not found' });
+    }
+    if (app.payment_status === 'paid') {
+      return res.json({ success: true, alreadyPaid: true, message: 'This application is already paid.' });
+    }
+
+    const amount = parseFloat(app.amount || 0);
+    if (!(amount > 0)) {
+      return res.status(400).json({ success: false, message: 'No payable amount for this application.' });
+    }
+
+    // Return to wherever checkout started (localhost in dev, prod in prod).
+    const origin = req.get('origin') || req.body?.returnOrigin || process.env.FRONTEND_URL || 'http://localhost:5173';
+    const ref = app.application_ref;
+    const authConfig = getArcPayAuthConfig();
+    const sessionUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/session`;
+
+    const resp = await axios.post(
+      sessionUrl,
+      {
+        apiOperation: 'INITIATE_CHECKOUT',
+        interaction: {
+          operation: 'PURCHASE',
+          returnUrl: `${origin}/visa/success?id=${app.id}&ref=${encodeURIComponent(ref)}&tier=${app.service_tier}&payment=success`,
+          cancelUrl: `${origin}/visa/apply?payment=cancelled`,
+          merchant: { name: 'Jetsetter Travel' },
+          displayControl: { billingAddress: 'MANDATORY', customerEmail: 'MANDATORY' },
+          timeout: 900,
+        },
+        order: {
+          id: ref,
+          reference: ref,
+          amount: amount.toFixed(2),
+          currency: 'USD',
+          description: `Visa service (${app.service_tier}) - ${ref}`,
+        },
+        ...(app.personal_info?.email ? { customer: { email: app.personal_info.email } } : {}),
+      },
+      { headers: authConfig.headers, timeout: 30000 }
+    );
+
+    const sessionId = resp.data?.session?.id || resp.data?.sessionId || resp.data?.id;
+    if (!sessionId) {
+      console.error('Visa checkout: no session id from ARC', resp.data);
+      return res.status(502).json({ success: false, message: 'Failed to create payment session.' });
+    }
+
+    return res.json({
+      success: true,
+      checkoutUrl: `https://api.arcpay.travel/checkout/pay/${sessionId}`,
+      sessionId,
+      orderId: ref,
+      amount: amount.toFixed(2),
+    });
+  } catch (err) {
+    console.error('createApplicationCheckout error:', err.response?.data || err.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to start payment.',
+      error: err.response?.data?.error?.explanation || err.message,
+    });
+  }
+};
+
+/**
+ * POST /api/visa/applications/:id/payment-complete
+ * Verify the ARC order and mark the application paid. Idempotent — only flips a
+ * still-pending application, and only when ARC confirms the order was captured.
+ */
+export const completeApplicationPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let app = await VisaApplication.findById(id);
+    if (!app && req.body?.ref) app = await VisaApplication.findByRef(req.body.ref);
+    if (!app) {
+      return res.status(404).json({ success: false, message: 'Application not found' });
+    }
+    if (app.payment_status === 'paid') {
+      return res.json({ success: true, paymentStatus: 'paid', alreadyPaid: true });
+    }
+
+    const authConfig = getArcPayAuthConfig();
+    const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${encodeURIComponent(app.application_ref)}`;
+    const orderResp = await axios.get(orderUrl, {
+      headers: authConfig.headers,
+      timeout: 30000,
+      validateStatus: () => true,
+    });
+
+    if (orderResp.status !== 200 || !isArcOrderPaid(orderResp.data)) {
+      return res.json({ success: false, paymentStatus: 'pending', message: 'Payment not completed or still processing.' });
+    }
+
+    await VisaApplication.update(app.id, { payment_status: 'paid' });
+    await VisaApplication.addTimelineEvent(app.id, {
+      status: app.status, // keep current status; payment just funds the queue
+      note: 'Payment received — your application is now in the processing queue.',
+      by: 'System',
+    });
+
+    return res.json({ success: true, paymentStatus: 'paid' });
+  } catch (err) {
+    console.error('completeApplicationPayment error:', err.response?.data || err.message);
+    return res.status(500).json({ success: false, message: 'Failed to verify payment.' });
   }
 };
 

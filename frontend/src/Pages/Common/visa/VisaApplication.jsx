@@ -266,9 +266,30 @@ const VisaApplication = () => {
       const appRef = data.data?.applicationRef || "";
       const appId = data.data?.id || "";
       const dest = travelDetails.destination || destination;
-      navigate(
-        `/visa/success?id=${encodeURIComponent(appId)}&ref=${encodeURIComponent(appRef)}&destination=${encodeURIComponent(dest)}&tier=${selectedTier}`
-      );
+      const successUrl = `/visa/success?id=${encodeURIComponent(appId)}&ref=${encodeURIComponent(appRef)}&destination=${encodeURIComponent(dest)}&tier=${selectedTier}`;
+
+      // Collect the service fee via ARC Pay before finishing — redirect to hosted checkout.
+      try {
+        const checkoutRes = await apiPost(`visa/applications/${appId}/checkout`, {
+          returnOrigin: window.location.origin,
+        });
+        const checkoutData = await checkoutRes.json();
+        if (checkoutData?.success && checkoutData.checkoutUrl) {
+          window.location.href = checkoutData.checkoutUrl; // → ARC Pay, returns to /visa/success?payment=success
+          return;
+        }
+        if (checkoutData?.alreadyPaid) {
+          navigate(`${successUrl}&payment=success`);
+          return;
+        }
+        throw new Error(checkoutData?.message || "Could not start payment.");
+      } catch (payErr) {
+        // Application is saved but payment didn't start — send them to success where they
+        // can retry payment with the "Pay now" button.
+        console.error("visa checkout error:", payErr);
+        navigate(successUrl);
+        return;
+      }
     } catch (err) {
       console.error("submitApplication error:", err);
       setSubmitError(
