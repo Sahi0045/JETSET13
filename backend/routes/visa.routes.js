@@ -1,6 +1,15 @@
 import express from 'express';
 import multer from 'multer';
-import { protect, admin, optionalProtect } from '../middleware/auth.middleware.js';
+import { protect, admin, superAdmin, visaStaff, optionalProtect } from '../middleware/auth.middleware.js';
+import {
+  createAgent,
+  listAgents,
+  listAssignableAgents,
+  updateAgent,
+  resendInvite,
+  getInvite,
+  acceptInvite,
+} from '../controllers/visaAgents.controller.js';
 import {
   // Application controllers
   submitApplication,
@@ -56,7 +65,7 @@ router.post('/applications', optionalProtect, submitApplication);
  * List all applications (admin).
  * Query: ?status=&serviceTier=&priority=&destination=&paymentStatus=&limit=&offset=&orderBy=
  */
-router.get('/applications', protect, admin, getApplications);
+router.get('/applications', protect, visaStaff, getApplications);
 
 /**
  * GET    /api/visa/applications/stats
@@ -124,12 +133,34 @@ router.post('/applications/:id/payment-complete', optionalProtect, completeAppli
  */
 router.get('/admin/verify', protect, verifyAdmin);
 
+// ─── Agent management (super admin only) ─────────────────────────────────────
+/**
+ * POST   /api/visa/admin/agents                       create + invite an agent
+ * GET    /api/visa/admin/agents                       list agents (+ assigned counts)
+ * PUT    /api/visa/admin/agents/:userId               update (status/specialization/name/phone)
+ * POST   /api/visa/admin/agents/:userId/resend-invite re-send the set-password invite
+ */
+router.post('/admin/agents', protect, superAdmin, createAgent);
+router.get('/admin/agents', protect, superAdmin, listAgents);
+// Active-agent picklist for assignment — admins may assign even though only superadmin manages agents.
+router.get('/admin/assignable-agents', protect, admin, listAssignableAgents);
+router.put('/admin/agents/:userId', protect, superAdmin, updateAgent);
+router.post('/admin/agents/:userId/resend-invite', protect, superAdmin, resendInvite);
+
+// ─── Agent invite acceptance (public — token-gated) ──────────────────────────
+/**
+ * GET  /api/visa/agent/invite/:token  validate an invite, return who it's for
+ * POST /api/visa/agent/accept-invite  { token, password } → set password, activate
+ */
+router.get('/agent/invite/:token', getInvite);
+router.post('/agent/accept-invite', acceptInvite);
+
 /**
  * POST   /api/visa/applications/:id/timeline
  * Admin: append a status/timeline event to an application.
  * Body: { status, note, by }
  */
-router.post('/applications/:id/timeline', protect, admin, addTimelineEvent);
+router.post('/applications/:id/timeline', protect, visaStaff, addTimelineEvent);
 router.post('/applications/:id/resend-email', optionalProtect, resendConfirmationEmail);
 
 /**

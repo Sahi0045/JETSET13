@@ -116,6 +116,36 @@ export const sendPasswordResetEmail = async (email, resetLink) => {
 };
 
 /**
+ * Invite a new visa processing agent to set their password and access the panel.
+ * @param {string} email     - agent's email
+ * @param {string} name      - agent's display name
+ * @param {string} inviteLink- one-time set-password link (token in query)
+ */
+export const sendAgentInviteEmail = async (email, name, inviteLink) => {
+  try {
+    const subject = 'You\'ve been invited as a Jetsetters Visa Agent';
+    const html = renderBrandedEmail({
+      preheader: 'Set your password to access the Jetsetters visa panel',
+      headerLabel: 'Visa Team Invitation',
+      emoji: '🛂',
+      heading: `Welcome${name ? ', ' + name : ''}!`,
+      subheading: 'You\'ve been added as a visa processing agent',
+      contentHtml: `
+        ${paragraph('A Jetsetters super admin has invited you to the visa team. You\'ll review and process the visa applications assigned to you.')}
+        ${paragraph('Click below to set your password and sign in. You\'ll log in with this email address.')}
+        ${paragraph('<span style="font-size:13px; color:#64748B;">This invitation link expires in 48 hours. If you weren\'t expecting this, you can ignore this email.</span>')}
+      `,
+      cta: { text: 'Set Your Password', url: inviteLink },
+    });
+
+    return await sendEmail({ to: email, subject, html });
+  } catch (error) {
+    console.error('Error in sendAgentInviteEmail:', error);
+    throw error;
+  }
+};
+
+/**
  * Email service for sending notifications
  */
 const emailService = {

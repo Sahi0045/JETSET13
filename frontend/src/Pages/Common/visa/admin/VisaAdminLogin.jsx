@@ -34,7 +34,7 @@ const VisaAdminLogin = () => {
 
       const data = await response.json();
 
-      if (response.ok && (data.role === "admin" || data.role === "agent")) {
+      if (response.ok && ["superadmin", "admin", "agent"].includes(data.role)) {
         // Store auth tokens
         localStorage.setItem("adminToken", data.token);
         localStorage.setItem("visaAdminToken", data.token);

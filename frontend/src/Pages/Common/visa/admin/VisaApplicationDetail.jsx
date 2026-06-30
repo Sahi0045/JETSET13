@@ -35,6 +35,19 @@ const DOC_STATUS_COLORS = {
   pending: "bg-amber-50 text-amber-600",
 };
 
+/** Logged-in user's role, from whichever key the login flow used. */
+function currentRole() {
+  try {
+    const raw =
+      localStorage.getItem("visaAdminUser") ||
+      localStorage.getItem("adminUser") ||
+      localStorage.getItem("user");
+    return raw ? JSON.parse(raw)?.role || null : null;
+  } catch {
+    return null;
+  }
+}
+
 const VisaApplicationDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -58,6 +71,12 @@ const VisaApplicationDetail = () => {
 
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Agent assignment (admin/superadmin only).
+  const role = currentRole();
+  const canAssign = role === "admin" || role === "superadmin";
+  const [assignableAgents, setAssignableAgents] = useState([]);
+  const [assigning, setAssigning] = useState(false);
 
   // ── Fetch application ──────────────────────────────────────────────────────
   const fetchApp = useCallback(async () => {
@@ -88,6 +107,45 @@ const VisaApplicationDetail = () => {
 useEffect(() => {
     fetchApp();
   }, [fetchApp, id]);
+
+  // Load the active-agent picklist for the assignment dropdown (admin/superadmin only).
+  useEffect(() => {
+    if (!canAssign) return;
+    (async () => {
+      try {
+        const response = await apiGet("visa/admin/assignable-agents");
+        const data = await response.json();
+        if (response.ok && data.success) setAssignableAgents(data.agents || []);
+      } catch (e) {
+        console.warn("Could not load assignable agents:", e.message);
+      }
+    })();
+  }, [canAssign]);
+
+  // Assign / reassign / unassign the application's agent.
+  const assignAgent = async (agentId) => {
+    setAssigning(true);
+    try {
+      const response = await apiPut(`visa/applications/${id}`, {
+        assigned_agent: agentId || null,
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.message || "Failed to assign agent.");
+      setApp(data.data);
+    } catch (err) {
+      console.error("assignAgent error:", err);
+      alert(err.message || "Failed to assign agent.");
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  // Resolve an assigned_agent id to a readable name (falls back to the raw value).
+  const assignedAgentName = (() => {
+    if (!app?.assigned_agent) return "Unassigned";
+    const match = assignableAgents.find((a) => String(a.id) === String(app.assigned_agent));
+    return match ? match.name : app.assigned_agent;
+  })();
 
   useVisaRealtime({
     tables: ['visa_applications'],
@@ -483,13 +541,15 @@ useEffect(() => {
               </span>
               Refresh
             </button>
-            <button
-              onClick={() => setDeleteConfirm(true)}
-              className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-white border border-red-200 text-red-500 rounded-xl font-black text-[11px] lg:text-xs uppercase tracking-[0.15em] hover:bg-red-50 transition-all shadow-sm"
-            >
-              <span className="material-symbols-outlined text-lg">delete</span>
-              Delete
-            </button>
+            {canAssign && (
+              <button
+                onClick={() => setDeleteConfirm(true)}
+                className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-white border border-red-200 text-red-500 rounded-xl font-black text-[11px] lg:text-xs uppercase tracking-[0.15em] hover:bg-red-50 transition-all shadow-sm"
+              >
+                <span className="material-symbols-outlined text-lg">delete</span>
+                Delete
+              </button>
+            )}
           </div>
         </div>
 
@@ -803,10 +863,6 @@ useEffect(() => {
                         app.priority.slice(1)
                       : "—",
                   },
-                  {
-                    label: "Assigned Agent",
-                    value: app.assigned_agent || "Unassigned",
-                  },
                 ].map((item, i) => (
                   <div
                     key={i}
@@ -830,6 +886,29 @@ useEffect(() => {
                     )}
                   </div>
                 ))}
+
+                {/* Assigned agent — dropdown for admin/superadmin, read-only otherwise. */}
+                <div className="flex justify-between items-center text-sm py-1.5">
+                  <span className="text-slate-500">Assigned Agent</span>
+                  {canAssign ? (
+                    <select
+                      value={app.assigned_agent || ""}
+                      disabled={assigning}
+                      onChange={(e) => assignAgent(e.target.value)}
+                      className="text-xs font-bold rounded-lg border border-slate-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#1152d4]/30 disabled:opacity-50 max-w-[160px]"
+                    >
+                      <option value="">Unassigned</option>
+                      {assignableAgents.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                          {a.specialization ? ` · ${a.specialization}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="font-bold">{assignedAgentName}</span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1012,7 +1091,7 @@ useEffect(() => {
                     Mark Completed
                   </button>
                 )}
-                {app.payment_status === "paid" && (
+                {canAssign && app.payment_status === "paid" && (
                   <button
                     onClick={handleRefund}
                     disabled={statusUpdating}

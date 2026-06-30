@@ -358,12 +358,53 @@ export const protect = async (req, res, next) => {
   }
 };
 
-// Admin middleware
+// Visa back-office access tiers:
+//  • admin      — full operations (the existing platform admins).
+//  • super admin— an admin ALSO allowed to manage agents. This is NOT a DB role (the codebase
+//                 has many flat `role === 'admin'` checks that a 'superadmin' role would fail);
+//                 instead it's an email allowlist, so the super admin stays a normal admin
+//                 everywhere and just gains the "manage agents" capability here.
+//  • visaStaff  — any panel user (admin or agent). An agent is row-scoped to their assigned
+//                 applications in the controllers, not here.
+
+const SUPERADMIN_EMAILS = (process.env.VISA_SUPERADMIN_EMAILS || 'shubhamkush012@gmail.com')
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+/** Is this user a visa super admin? (explicit 'superadmin' role, or an admin on the allowlist) */
+export const isSuperAdmin = (user) => {
+  if (!user) return false;
+  if (user.role === 'superadmin') return true;
+  const email = (user.email || user.user_email || '').toLowerCase();
+  return user.role === 'admin' && SUPERADMIN_EMAILS.includes(email);
+};
+
+// Admin middleware — admin OR superadmin role.
 export const admin = (req, res, next) => {
-  if (req.user && req.user.role === 'admin') {
+  if (req.user && (req.user.role === 'admin' || req.user.role === 'superadmin')) {
     next();
   } else {
     res.status(403).json({ message: 'Not authorized as an admin' });
+  }
+};
+
+// Super-admin middleware — manages agents. Allowlisted admin (or explicit superadmin role).
+export const superAdmin = (req, res, next) => {
+  if (isSuperAdmin(req.user)) {
+    next();
+  } else {
+    res.status(403).json({ message: 'Not authorized — super admin only' });
+  }
+};
+
+// Visa staff middleware — admin, superadmin, or agent. Controllers further scope an
+// agent to only the applications assigned to them.
+export const visaStaff = (req, res, next) => {
+  if (req.user && ['superadmin', 'admin', 'agent'].includes(req.user.role)) {
+    next();
+  } else {
+    res.status(403).json({ message: 'Not authorized for the visa panel' });
   }
 };
 

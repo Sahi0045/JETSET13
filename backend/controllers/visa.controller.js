@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { ARC_PAY_CONFIG, getArcPayAuthConfig } from '../routes/payment/arcpay.config.js';
 import { reverseArcPaymentForOrder } from '../routes/payment/operations.handlers.js';
+import { isSuperAdmin } from '../middleware/auth.middleware.js';
 
 // Refund a paid visa application's service fee via ARC (VOID if unsettled, else REFUND),
 // then mark the application 'refunded' + add a timeline note. Reuses the same gateway
@@ -266,10 +267,19 @@ export const completeApplicationPayment = async (req, res) => {
  */
 export const verifyAdmin = async (req, res) => {
   const role = req.user?.role;
-  if (role !== 'admin' && role !== 'agent') {
+  if (!['superadmin', 'admin', 'agent'].includes(role)) {
     return res.status(403).json({ success: false, message: 'Not authorized for the visa admin panel.' });
   }
-  return res.json({ success: true, role, email: req.user?.email || req.user?.user_email || null });
+  // The panel branches UI on these: `isSuperAdmin` shows the Agents manager; an `agent`
+  // role sees only their assigned applications. `id` lets the panel scope views client-side.
+  return res.json({
+    success: true,
+    role,
+    isSuperAdmin: isSuperAdmin(req.user),
+    id: req.user?.id || null,
+    email: req.user?.email || req.user?.user_email || null,
+    name: req.user?.name || null,
+  });
 };
 
 /**
@@ -287,6 +297,15 @@ export const getApplications = async (req, res) => {
     if (priority) filters.priority = priority;
     if (destination) filters.destination = destination;
     if (paymentStatus) filters.paymentStatus = paymentStatus;
+
+    // Scope: an agent sees ONLY the applications assigned to them. This overrides any
+    // client-supplied filter, so an agent cannot list other applicants' data. Superadmin
+    // and admin see everything (and may optionally filter by ?assignedAgent=).
+    if (req.user?.role === 'agent') {
+      filters.assignedAgent = req.user.id;
+    } else if (req.query.assignedAgent) {
+      filters.assignedAgent = req.query.assignedAgent;
+    }
 
     const options = {};
     if (limit) options.limit = limit;
@@ -481,6 +500,12 @@ export const getApplicationById = async (req, res) => {
       });
     }
 
+    // An agent may only open an application that is assigned to them. (Admins, superadmin,
+    // and the public success/track flow are unaffected — this guard is agent-specific.)
+    if (req.user?.role === 'agent' && String(application.assigned_agent || '') !== String(req.user.id)) {
+      return res.status(403).json({ success: false, message: 'This application is not assigned to you.' });
+    }
+
     return res.json({
       success: true,
       data: application,
@@ -649,6 +674,15 @@ export const addTimelineEvent = async (req, res) => {
 
     if (!eventStatus) {
       return res.status(400).json({ success: false, message: 'status is required in request body' });
+    }
+
+    // An agent may only update applications assigned to them.
+    if (req.user?.role === 'agent') {
+      const existing = await VisaApplication.findById(id);
+      if (!existing) return res.status(404).json({ success: false, message: 'Application not found' });
+      if (String(existing.assigned_agent || '') !== String(req.user.id)) {
+        return res.status(403).json({ success: false, message: 'This application is not assigned to you.' });
+      }
     }
 
     const updated = await VisaApplication.addTimelineEvent(id, {

@@ -18,6 +18,7 @@ import AppointmentDetail from "./AppointmentDetail";
 import AdminDocumentReview from "./AdminDocumentReview";
 import AdminMessagingHub from "./AdminMessagingHub";
 import VisaAdminLogin from "./VisaAdminLogin";
+import VisaAgentsManager from "./VisaAgentsManager";
 import { getApiUrl } from "../../../../utils/apiHelper";
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
@@ -48,8 +49,8 @@ function getStoredAdminSession() {
 
     const user = JSON.parse(userStr);
 
-    // Only admin and agent roles are permitted in the visa admin panel.
-    if (!user || !["admin", "agent"].includes(user.role)) return null;
+    // Only superadmin, admin, and agent roles are permitted in the visa admin panel.
+    if (!user || !["superadmin", "admin", "agent"].includes(user.role)) return null;
 
     return { token, user };
   } catch (_) {
@@ -66,27 +67,40 @@ function clearAdminSession() {
     "token",
     "user",
     "isAuthenticated",
+    "visaIsSuperAdmin",
   ].forEach((key) => localStorage.removeItem(key));
 }
 
 // ─── Sub-header nav ───────────────────────────────────────────────────────────
 
+// `roles` controls visibility. STAFF = everyone in the panel; ADMINS = back-office config.
+// `superOnly` items (agent management) show only to a super admin (see isSuperAdmin flag).
+const STAFF = ["superadmin", "admin", "agent"];
+const ADMINS = ["superadmin", "admin"];
+
 const NAV_ITEMS = [
-  { to: "/visa/admin", label: "Dashboard", icon: "dashboard" },
-  { to: "/visa/admin/applications", label: "Applications", icon: "assignment" },
-  { to: "/visa/admin/requirements", label: "Requirements", icon: "checklist" },
+  { to: "/visa/admin", label: "Dashboard", icon: "dashboard", roles: ADMINS },
+  { to: "/visa/admin/applications", label: "Applications", icon: "assignment", roles: STAFF },
+  { to: "/visa/admin/requirements", label: "Requirements", icon: "checklist", roles: ADMINS },
   {
     to: "/visa/admin/document-services",
     label: "Doc Services",
     icon: "folder_open",
+    roles: ADMINS,
   },
-  { to: "/visa/admin/schedule", label: "Schedule", icon: "calendar_month" },
-  { to: "/visa/admin/messages", label: "Messages", icon: "chat" },
+  { to: "/visa/admin/schedule", label: "Schedule", icon: "calendar_month", roles: ADMINS },
+  { to: "/visa/admin/messages", label: "Messages", icon: "chat", roles: STAFF },
+  { to: "/visa/admin/agents", label: "Agents", icon: "groups", superOnly: true },
 ];
 
 const AdminSubHeader = ({ user, onLogout }) => {
   const location = useLocation();
   const isActive = (path) => location.pathname === path;
+  const role = user?.role || "agent";
+  const isSuper = !!user?.isSuperAdmin;
+  const navItems = NAV_ITEMS.filter((item) =>
+    item.superOnly ? isSuper : item.roles.includes(role)
+  );
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
@@ -108,7 +122,7 @@ const AdminSubHeader = ({ user, onLogout }) => {
 
         {/* Nav links */}
         <nav className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-none flex-1 px-1">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.to}
               to={item.to}
@@ -224,7 +238,19 @@ const VisaAdminPanel = () => {
         });
         if (cancelled) return;
         if (res.ok) {
-          setSession(stored);
+          // Capture the server's authoritative role + super-admin flag (the super admin is an
+          // allowlisted admin, not a DB role, so the client can't derive it on its own).
+          let v = {};
+          try { v = await res.json(); } catch { /* ignore */ }
+          localStorage.setItem("visaIsSuperAdmin", String(!!v.isSuperAdmin));
+          setSession({
+            ...stored,
+            user: {
+              ...stored.user,
+              role: v.role || stored.user.role,
+              isSuperAdmin: !!v.isSuperAdmin,
+            },
+          });
         } else {
           // Backend says this isn't a real admin → drop the (possibly spoofed) session.
           clearAdminSession();
@@ -287,8 +313,21 @@ const VisaAdminPanel = () => {
 
       <main className="flex-1 bg-[#f8f9fc] pt-4">
         <Routes>
-          {/* Dashboard */}
-          <Route path="/" element={<VisaAdminDashboard />} />
+          {/* Dashboard. Agents have no aggregate dashboard (the stats endpoint is
+              admin-only) — their home is their assigned-applications list. */}
+          <Route
+            path="/"
+            element={
+              session.user?.role === "agent" ? (
+                <VisaApplicationsList />
+              ) : (
+                <VisaAdminDashboard />
+              )
+            }
+          />
+
+          {/* Agent management — superadmin only (backend also enforces). */}
+          <Route path="/agents" element={<VisaAgentsManager />} />
 
           {/* Dedicated login route (already handled above, but keep as
               fallback in case React Router renders it internally) */}
