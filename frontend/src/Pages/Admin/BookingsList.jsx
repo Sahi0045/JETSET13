@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getApiUrl } from '../../utils/apiHelper';
+import { downloadCSV } from '../../utils/csv';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 
@@ -98,6 +99,29 @@ const BookingsList = () => {
             setLoading(false);
         }
     }, [typeFilter, statusFilter, paymentFilter, searchQuery, currentPage]);
+
+    // Export every booking matching the current filters (not just the page) to CSV.
+    const exportCSV = async () => {
+        const params = new URLSearchParams();
+        if (typeFilter !== 'all') params.append('type', typeFilter);
+        if (statusFilter !== 'all') params.append('status', statusFilter);
+        if (paymentFilter !== 'all') params.append('payment_status', paymentFilter);
+        if (searchQuery) params.append('search', searchQuery);
+        params.append('page', 1); params.append('limit', 5000);
+        try {
+            const res = await fetch(getApiUrl(`flights/admin-bookings-all?${params.toString()}`), { headers: getAuthHeaders(), credentials: 'include' });
+            const data = await res.json();
+            downloadCSV(`bookings-${Date.now()}.csv`, data.data || [], [
+                { label: 'Type', key: 'type' }, { label: 'Reference', key: 'bookingReference' },
+                { label: 'Customer', key: 'customerName' }, { label: 'Email', key: 'customerEmail' },
+                { label: 'Service', key: 'service' }, { label: 'Amount', key: 'totalAmount' }, { label: 'Currency', key: 'currency' },
+                { label: 'Status', key: 'status' }, { label: 'Payment', key: 'paymentStatus' },
+                { label: 'Date', get: (r) => (r.bookingDate ? new Date(r.bookingDate).toISOString() : '') },
+            ]);
+        } catch (e) {
+            setActionMessage({ type: 'error', text: 'Export failed: ' + e.message });
+        }
+    };
 
     useEffect(() => {
         fetchBookings();
@@ -420,6 +444,13 @@ const BookingsList = () => {
                             🔍 Search
                         </button>
                     </form>
+
+                    <button onClick={exportCSV} title="Export matching bookings to CSV" style={{
+                        padding: '8px 14px', borderRadius: '8px', backgroundColor: '#fff',
+                        color: '#055B75', border: '1px solid #cbd5e1', cursor: 'pointer', fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap'
+                    }}>
+                        ⬇ Export CSV
+                    </button>
 
                     <div style={{ fontSize: '13px', color: '#64748b', fontWeight: '500', whiteSpace: 'nowrap' }}>
                         {totalCount} booking{totalCount !== 1 ? 's' : ''}

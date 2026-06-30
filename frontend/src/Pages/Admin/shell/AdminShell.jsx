@@ -23,6 +23,8 @@ const ROUTE_META = {
   '/admin/templates': { title: 'Templates', crumb: 'Operations' },
   '/admin/feature-flags': { title: 'Feature Flags', crumb: 'Settings' },
   '/admin/price-settings': { title: 'Price Settings', crumb: 'Settings' },
+  '/admin/account': { title: 'My Account', crumb: 'Settings' },
+  '/admin/activity': { title: 'Activity Log', crumb: 'Overview' },
 };
 
 function resolveMeta(pathname) {

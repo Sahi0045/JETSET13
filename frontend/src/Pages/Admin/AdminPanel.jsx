@@ -14,6 +14,8 @@ import PaymentLinkCreate from './PaymentLinkCreate';
 import PaymentLinksList from './PaymentLinksList';
 import AgentManagement from './AgentManagement';
 import AdminsManager from './AdminsManager';
+import ActivityLog from './ActivityLog';
+import AccountSettings from './AccountSettings';
 import CouponManagement from './CouponManagement';
 import SubscriptionManagement from './SubscriptionManagement';
 import SLADashboard from './SLADashboard';
@@ -39,6 +41,8 @@ const AdminPanel = () => {
         <Route path="payment-links/create" element={<PaymentLinkCreate />} />
         <Route path="agents" element={<AgentManagement />} />
         <Route path="admins" element={<AdminsManager />} />
+        <Route path="activity" element={<ActivityLog />} />
+        <Route path="account" element={<AccountSettings />} />
         <Route path="coupons" element={<CouponManagement />} />
         <Route path="subscriptions" element={<SubscriptionManagement />} />
         <Route path="sla" element={<SLADashboard />} />

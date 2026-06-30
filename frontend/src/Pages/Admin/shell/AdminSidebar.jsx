@@ -22,6 +22,7 @@ const NAV_GROUPS = [
       { to: '/admin', end: true, icon: LuLayoutDashboard, label: 'Dashboard', roles: ADMINS },
       { to: '/admin/sla', icon: LuTimer, label: 'SLA Monitor', roles: ADMINS },
       { to: '/admin/reports', icon: LuChartColumn, label: 'Analytics', roles: ADMINS },
+      { to: '/admin/activity', icon: LuListChecks, label: 'Activity Log', roles: ADMINS },
     ],
   },
   {
@@ -56,6 +57,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/admin/feature-flags', icon: LuFlag, label: 'Feature Flags', roles: SUPER },
       { to: '/admin/price-settings', icon: LuSettings2, label: 'Price Settings', roles: SUPER },
+      { to: '/admin/account', icon: LuShield, label: 'My Account', roles: ADMINS },
     ],
   },
 ];

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import { getApiUrl } from '../../utils/apiHelper';
+import { downloadCSV } from '../../utils/csv';
 import './AdminPanel.css';
 
 const getToken = () =>
@@ -45,11 +46,23 @@ const CustomersList = () => {
     <div className="customers-list">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
         <p style={{ color: '#6b7280', margin: 0, fontSize: '0.95rem' }}>Everyone who has booked or enquired, across all services.</p>
-        <form onSubmit={(e) => { e.preventDefault(); setQuery(search); }} style={{ display: 'flex', gap: 8 }}>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, phone…"
-            style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 220 }} />
-          <button type="submit" style={{ background: '#055B75', color: 'white', border: 'none', padding: '9px 18px', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>Search</button>
-        </form>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => downloadCSV(`customers-${Date.now()}.csv`, customers, [
+              { label: 'Name', key: 'name' }, { label: 'Email', key: 'email' }, { label: 'Phone', key: 'phone' },
+              { label: 'Bookings', key: 'bookings' }, { label: 'Total Spent', key: 'spent' }, { label: 'Inquiries', key: 'inquiries' },
+              { label: 'Last Activity', get: (c) => (c.lastActivity ? new Date(c.lastActivity).toISOString() : '') },
+            ])}
+            disabled={customers.length === 0}
+            style={{ background: 'white', color: '#055B75', border: '1px solid #cbd5e1', padding: '9px 16px', borderRadius: 8, fontWeight: 600, cursor: 'pointer', opacity: customers.length === 0 ? 0.5 : 1 }}>
+            ⬇ Export CSV
+          </button>
+          <form onSubmit={(e) => { e.preventDefault(); setQuery(search); }} style={{ display: 'flex', gap: 8 }}>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, phone…"
+              style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, minWidth: 220 }} />
+            <button type="submit" style={{ background: '#055B75', color: 'white', border: 'none', padding: '9px 18px', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>Search</button>
+          </form>
+        </div>
       </div>
 
       {/* Summary */}

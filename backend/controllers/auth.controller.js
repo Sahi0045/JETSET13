@@ -354,6 +354,70 @@ export const removeAdmin = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/auth/audit-logs — the activity log (who did what). (admin + super admin)
+ * Query: ?actorType=&targetType=&action=&page=&limit=
+ */
+export const listAuditLogs = async (req, res) => {
+  try {
+    const { actorType, targetType, action, page = 1, limit = 50 } = req.query;
+    let q = supabase.from('audit_logs').select('*', { count: 'exact' });
+    if (actorType && actorType !== 'all') q = q.eq('actor_type', actorType);
+    if (targetType && targetType !== 'all') q = q.eq('target_type', targetType);
+    if (action) q = q.ilike('action', `%${action}%`);
+
+    const off = (parseInt(page) - 1) * parseInt(limit);
+    q = q.order('created_at', { ascending: false }).range(off, off + parseInt(limit) - 1);
+    const { data, count, error } = await q;
+    if (error) throw error;
+
+    const actorIds = [...new Set((data || []).map((l) => l.actor_id).filter(Boolean))];
+    let actorMap = {};
+    if (actorIds.length) {
+      const { data: users } = await supabase.from('users').select('id, name, email').in('id', actorIds);
+      (users || []).forEach((u) => { actorMap[u.id] = u; });
+    }
+    const logs = (data || []).map((l) => ({
+      ...l,
+      actor: actorMap[l.actor_id] ? { name: actorMap[l.actor_id].name, email: actorMap[l.actor_id].email } : null,
+    }));
+    return res.json({
+      success: true, logs, count: count || 0,
+      page: parseInt(page), totalPages: Math.ceil((count || 0) / parseInt(limit)) || 1,
+    });
+  } catch (err) {
+    console.error('listAuditLogs error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to load activity log' });
+  }
+};
+
+/** POST /api/auth/change-password — change the logged-in user's own password. */
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Current and new password are required.' });
+    }
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 8 characters.' });
+    }
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ success: false, message: 'Not authenticated.' });
+
+    const { data: user } = await supabase.from('users').select('password').eq('id', userId).maybeSingle();
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+    const match = await bcrypt.compare(currentPassword, user.password || '');
+    if (!match) return res.status(401).json({ success: false, message: 'Current password is incorrect.' });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await supabase.from('users').update({ password: hashed, updated_at: new Date().toISOString() }).eq('id', userId);
+    return res.json({ success: true, message: 'Password changed successfully.' });
+  } catch (err) {
+    console.error('changePassword error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to change password' });
+  }
+};
+
 let accessToken = null;
 let tokenExpiryTime = null;
 

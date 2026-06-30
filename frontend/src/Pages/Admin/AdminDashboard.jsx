@@ -293,11 +293,11 @@ const AdminDashboard = () => {
         </div>
       ) : (
         <div className="stats-grid">
-          <StatCard icon="#" title="Total Inquiries" value={stats.totalInquiries} change={12} changeType="positive" color="blue" />
-          <StatCard icon="P" title="Pending" value={stats.pendingInquiries} change={-5} changeType="negative" color="yellow" />
-          <StatCard icon="W" title="Processing" value={stats.processingInquiries} change={8} changeType="positive" color="purple" />
-          <StatCard icon="Q" title="Quoted" value={stats.quotedInquiries} change={15} changeType="positive" color="green" />
-          <StatCard icon="B" title="Booked" value={stats.bookedInquiries} change={22} changeType="positive" color="success" />
+          <StatCard icon="#" title="Total Inquiries" value={stats.totalInquiries} color="blue" />
+          <StatCard icon="P" title="Pending" value={stats.pendingInquiries} color="yellow" />
+          <StatCard icon="W" title="Processing" value={stats.processingInquiries} color="purple" />
+          <StatCard icon="Q" title="Quoted" value={stats.quotedInquiries} color="green" />
+          <StatCard icon="B" title="Booked" value={stats.bookedInquiries} color="success" />
           <StatCard icon="$" title="Revenue" value={formatCurrency(stats.totalRevenue)} color="gold" />
         </div>
       )}
