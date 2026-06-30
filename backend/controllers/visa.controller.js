@@ -5,6 +5,25 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { ARC_PAY_CONFIG, getArcPayAuthConfig } from '../routes/payment/arcpay.config.js';
 
+// Map common country name variants to the canonical form stored in visa_requirements
+// (so "USA"/"US"/"America" → "United States", "UK"/"Britain" → "United Kingdom", etc.).
+const COUNTRY_ALIASES = {
+  'usa': 'United States', 'us': 'United States', 'u.s.': 'United States', 'u.s.a.': 'United States',
+  'america': 'United States', 'united states of america': 'United States', 'the united states': 'United States',
+  'uk': 'United Kingdom', 'u.k.': 'United Kingdom', 'britain': 'United Kingdom', 'great britain': 'United Kingdom',
+  'england': 'United Kingdom', 'gb': 'United Kingdom',
+  'uae': 'UAE', 'u.a.e.': 'UAE', 'united arab emirates': 'UAE', 'emirates': 'UAE', 'dubai': 'UAE',
+  'korea': 'South Korea', 'south korea': 'South Korea',
+  'bharat': 'India', 'hindustan': 'India',
+  'prc': 'China', "people's republic of china": 'China',
+};
+
+function normalizeCountry(s) {
+  if (!s) return s;
+  const t = String(s).trim().replace(/\s+/g, ' ');
+  return COUNTRY_ALIASES[t.toLowerCase()] || t;
+}
+
 // True if an ARC order has been captured/paid.
 function isArcOrderPaid(order) {
   if (!order) return false;
@@ -876,8 +895,22 @@ export const checkEligibility = async (req, res) => {
     if (!nationality || !destination) {
       return res.status(400).json({ success: false, message: 'nationality and destination are required' });
     }
-    const requirement = await VisaRequirements.check(nationality, destination);
-    return res.json({ success: true, data: requirement });
+    const nat = normalizeCountry(nationality);
+    const dest = normalizeCountry(destination);
+    const requirement = await VisaRequirements.check(nat, dest);
+
+    // No published rule for this pair → don't show "nothing found". Return a helpful
+    // "our experts will confirm" result so the user can still proceed to apply.
+    if (!requirement) {
+      return res.json({
+        success: true,
+        data: null,
+        needsReview: true,
+        normalized: { nationality: nat, destination: dest },
+        message: `We don't have instant published requirements for ${nat} → ${dest} yet, but our visa experts will confirm the exact visa type, documents, fees and processing time for your trip. Start an application and we'll guide you through it.`,
+      });
+    }
+    return res.json({ success: true, data: requirement, normalized: { nationality: nat, destination: dest } });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
