@@ -511,6 +511,11 @@ const DocumentServices = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Document Services..." /> }))
 );
 
+const VisaPolicies = React.lazy(() =>
+  import('./Pages/Common/visa/VisaPolicies')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Policies..." /> }))
+);
+
 const VisaApplication = React.lazy(() =>
   import('./Pages/Common/visa/VisaApplication')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Visa Application..." /> }))
@@ -736,6 +741,9 @@ const App = () => {
           <Route path="/visa/track" element={<VisaApplicationTracker />} />
           <Route path="/visa/status" element={<CustomerStatusDashboard />} />
           <Route path="/visa/booking" element={<ConsultationBooking />} />
+          <Route path="/visa/refund-policy" element={<VisaPolicies tab="refund" />} />
+          <Route path="/visa/terms" element={<VisaPolicies tab="terms" />} />
+          <Route path="/visa/privacy" element={<VisaPolicies tab="privacy" />} />
           <Route path="/visa/consultation/:id" element={<VideoConsultation />} />
           <Route path="/visa/admin/*" element={<VisaAdminPanel />} />
 

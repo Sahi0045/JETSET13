@@ -1034,20 +1034,27 @@ const VisaApplication = () => {
                     </span>
                     By submitting this application you agree to our{" "}
                     <Link
-                      to="/terms-conditions"
+                      to="/visa/terms"
                       className="text-[#1152d4] font-semibold hover:underline"
                     >
                       Terms & Conditions
+                    </Link>
+                    ,{" "}
+                    <Link
+                      to="/visa/refund-policy"
+                      className="text-[#1152d4] font-semibold hover:underline"
+                    >
+                      Refund Policy
                     </Link>{" "}
                     and{" "}
                     <Link
-                      to="/privacy-policy"
+                      to="/visa/privacy"
                       className="text-[#1152d4] font-semibold hover:underline"
                     >
-                      Privacy Policy
+                      Privacy Notice
                     </Link>
-                    . Payment will be collected after our team reviews your
-                    application and confirms eligibility.
+                    . Your service fee is collected securely at submission via our
+                    payment provider; any government fees are separate.
                   </div>
                 </div>
               </div>
