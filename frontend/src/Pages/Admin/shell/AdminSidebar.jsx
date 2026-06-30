@@ -3,7 +3,8 @@ import { NavLink } from 'react-router-dom';
 import {
   LuLayoutDashboard, LuMessageSquare, LuBriefcase, LuTag,
   LuCreditCard, LuRefreshCw, LuUsers, LuCloudUpload, LuFilePen,
-  LuChartColumn, LuTimer, LuListChecks, LuFlag, LuSettings2, LuLogOut
+  LuChartColumn, LuTimer, LuListChecks, LuFlag, LuSettings2, LuLogOut,
+  LuShield, LuPlane
 } from 'react-icons/lu';
 
 // Role visibility: ADMINS = admin + super admin; SUPER = super admin only;
@@ -29,6 +30,7 @@ const NAV_GROUPS = [
       { to: '/admin/inquiries', icon: LuMessageSquare, label: 'Inquiries', roles: ADMINS },
       { to: '/admin/bookings', icon: LuBriefcase, label: 'Bookings', roles: ADMINS },
       { to: '/admin/customers', icon: LuUsers, label: 'Customers', roles: ADMINS },
+      { to: '/visa/admin', icon: LuPlane, label: 'Visa', roles: ADMINS },
       { to: '/admin/coupons', icon: LuTag, label: 'Coupons', roles: ADMINS },
     ],
   },
@@ -42,6 +44,7 @@ const NAV_GROUPS = [
   {
     title: 'Operations',
     items: [
+      { to: '/admin/admins', icon: LuShield, label: 'Admins', roles: SUPER },
       { to: '/admin/agents', icon: LuUsers, label: 'Agents', roles: SUPER },
       { to: '/admin/bulk', icon: LuListChecks, label: 'Bulk Actions', roles: ADMINS },
       { to: '/admin/bulk-upload', icon: LuCloudUpload, label: 'Bulk Upload', roles: ADMINS },

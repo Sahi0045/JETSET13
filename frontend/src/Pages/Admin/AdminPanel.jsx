@@ -13,6 +13,7 @@ import CustomersList from './CustomersList';
 import PaymentLinkCreate from './PaymentLinkCreate';
 import PaymentLinksList from './PaymentLinksList';
 import AgentManagement from './AgentManagement';
+import AdminsManager from './AdminsManager';
 import CouponManagement from './CouponManagement';
 import SubscriptionManagement from './SubscriptionManagement';
 import SLADashboard from './SLADashboard';
@@ -37,6 +38,7 @@ const AdminPanel = () => {
         <Route path="payment-links" element={<PaymentLinksList />} />
         <Route path="payment-links/create" element={<PaymentLinkCreate />} />
         <Route path="agents" element={<AgentManagement />} />
+        <Route path="admins" element={<AdminsManager />} />
         <Route path="coupons" element={<CouponManagement />} />
         <Route path="subscriptions" element={<SubscriptionManagement />} />
         <Route path="sla" element={<SLADashboard />} />

@@ -16,6 +16,7 @@ const ROUTE_META = {
   '/admin/payment-links': { title: 'Payment Links', crumb: 'Payments' },
   '/admin/payment-links/create': { title: 'Create Payment Link', crumb: 'Payments' },
   '/admin/subscriptions': { title: 'Subscriptions', crumb: 'Payments' },
+  '/admin/admins': { title: 'Admins', crumb: 'Operations' },
   '/admin/agents': { title: 'Agents', crumb: 'Operations' },
   '/admin/bulk': { title: 'Bulk Actions', crumb: 'Operations' },
   '/admin/bulk-upload': { title: 'Bulk Upload', crumb: 'Operations' },

@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import User from '../models/user.model.js';
 import axios from 'axios';
 import crypto from 'crypto';
@@ -263,6 +264,93 @@ export const login = async (req, res) => {
   } catch (error) {
     console.error('Error in login controller:', error);
     res.status(500).json({ message: 'Server error during login', error: error.message });
+  }
+};
+
+// ─── Admin management (super admin only) ─────────────────────────────────────
+
+/** GET /api/auth/admins — list all admins + super-admin flag. */
+export const listAdmins = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, name, first_name, last_name, email, role, created_at')
+      .in('role', ['admin', 'superadmin'])
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    const admins = (data || []).map((u) => ({
+      id: u.id,
+      name: u.name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email,
+      email: u.email,
+      role: u.role,
+      createdAt: u.created_at,
+      isSuperAdmin: isSuperAdmin({ role: u.role, email: u.email }),
+    }));
+    return res.json({ success: true, admins });
+  } catch (err) {
+    console.error('listAdmins error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to list admins' });
+  }
+};
+
+/**
+ * POST /api/auth/admins — make someone an admin.
+ * Body: { email, name?, password? }. Promotes an existing user, or creates a new admin
+ * account (password required, min 8, for a brand-new account).
+ */
+export const makeAdmin = async (req, res) => {
+  try {
+    const { email, name, password } = req.body || {};
+    if (!email) return res.status(400).json({ success: false, message: 'email is required' });
+    const normEmail = String(email).trim().toLowerCase();
+
+    const { data: existing } = await supabase
+      .from('users').select('id, role').eq('email', normEmail).maybeSingle();
+
+    if (existing) {
+      if (['admin', 'superadmin'].includes(existing.role)) {
+        return res.status(409).json({ success: false, message: 'That user is already an admin.' });
+      }
+      await supabase.from('users')
+        .update({ role: 'admin', ...(name ? { name } : {}), updated_at: new Date().toISOString() })
+        .eq('id', existing.id);
+      return res.json({ success: true, message: 'Existing user promoted to admin.', userId: existing.id, promoted: true });
+    }
+
+    // Brand-new admin account.
+    if (!password || String(password).length < 8) {
+      return res.status(400).json({ success: false, message: 'A password (min 8 chars) is required to create a new admin account.' });
+    }
+    const hashed = await bcrypt.hash(password, 10);
+    const { data: created, error } = await supabase
+      .from('users')
+      .insert({ name: name || normEmail, email: normEmail, password: hashed, role: 'admin' })
+      .select('id').single();
+    if (error) throw error;
+    return res.json({ success: true, message: 'Admin account created.', userId: created.id, promoted: false });
+  } catch (err) {
+    console.error('makeAdmin error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to make admin' });
+  }
+};
+
+/** DELETE /api/auth/admins/:id — demote an admin back to a normal user. */
+export const removeAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data: u } = await supabase.from('users').select('id, email, role').eq('id', id).maybeSingle();
+    if (!u) return res.status(404).json({ success: false, message: 'Admin not found' });
+    if (isSuperAdmin({ role: u.role, email: u.email })) {
+      return res.status(403).json({ success: false, message: 'A super admin cannot be demoted here (managed via the allowlist).' });
+    }
+    if (String(req.user?.id) === String(id)) {
+      return res.status(400).json({ success: false, message: 'You cannot demote yourself.' });
+    }
+    await supabase.from('users').update({ role: 'user', updated_at: new Date().toISOString() }).eq('id', id);
+    return res.json({ success: true, message: 'Admin demoted to a normal user.' });
+  } catch (err) {
+    console.error('removeAdmin error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to remove admin' });
   }
 };
 

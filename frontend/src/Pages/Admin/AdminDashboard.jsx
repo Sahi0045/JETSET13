@@ -27,6 +27,7 @@ const AdminDashboard = () => {
   const [agentLinks, setAgentLinks] = useState([]);
   const [recentInquiries, setRecentInquiries] = useState([]);
   const [bookingStats, setBookingStats] = useState(null); // real revenue across all services
+  const [visaStats, setVisaStats] = useState(null);        // visa applications summary
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('7d');
   // Determine user role (admin vs agent)
@@ -102,6 +103,15 @@ const AdminDashboard = () => {
         }
       } catch (e) {
         console.warn('Booking stats fetch failed:', e.message);
+      }
+
+      // Visa applications summary (so the super admin can track visa from here).
+      try {
+        const vRes = await fetch(getApiUrl('visa/applications/stats'), { headers, credentials: 'include' });
+        const vData = await vRes.json();
+        if (vData.success && vData.data?.applications) setVisaStats(vData.data.applications);
+      } catch (e) {
+        console.warn('Visa stats fetch failed:', e.message);
       }
 
       if (statsData.success && statsData.data) {
@@ -289,6 +299,31 @@ const AdminDashboard = () => {
           <StatCard icon="Q" title="Quoted" value={stats.quotedInquiries} change={15} changeType="positive" color="green" />
           <StatCard icon="B" title="Booked" value={stats.bookedInquiries} change={22} changeType="positive" color="success" />
           <StatCard icon="$" title="Revenue" value={formatCurrency(stats.totalRevenue)} color="gold" />
+        </div>
+      )}
+
+      {/* Visa applications — lets the super admin track visa from the main panel */}
+      {userRole !== 'agent' && visaStats && (
+        <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, margin: '0 0 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 16, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>✈️ Visa Applications</h3>
+            <Link to="/visa/admin" style={{ fontSize: 13, fontWeight: 600, color: '#055B75', textDecoration: 'none' }}>Manage Visa →</Link>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 12 }}>
+            {[
+              { label: 'Total', value: visaStats.total || 0, color: '#3b82f6' },
+              { label: 'Submitted', value: visaStats.byStatus?.submitted || 0, color: '#6366f1' },
+              { label: 'Under Review', value: visaStats.byStatus?.under_review || 0, color: '#8b5cf6' },
+              { label: 'Approved', value: visaStats.byStatus?.approved || 0, color: '#10b981' },
+              { label: 'Rejected', value: visaStats.byStatus?.rejected || 0, color: '#ef4444' },
+              { label: 'Revenue', value: formatCurrency(visaStats.totalRevenue || 0), color: '#f59e0b' },
+            ].map((s) => (
+              <div key={s.label} style={{ background: '#f8fafc', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: s.color }}>{s.value}</div>
+                <div style={{ fontSize: 12, color: '#64748b' }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
