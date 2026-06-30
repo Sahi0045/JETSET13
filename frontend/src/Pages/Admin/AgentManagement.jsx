@@ -35,6 +35,9 @@ const AgentManagement = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busyId, setBusyId] = useState(null);
+  const [viewing, setViewing] = useState(null);   // agent whose detail panel is open
+  const [detail, setDetail] = useState(null);      // fetched { agent, stats, sales }
+  const [detailLoading, setDetailLoading] = useState(false);
   const canManage = isSuperAdmin();
 
   const fetchAgents = useCallback(async () => {
@@ -104,6 +107,14 @@ const AgentManagement = () => {
     const res = await call('delete-agent', { agentId: agent.id });
     if (res.success) { setSuccess('Agent removed.'); fetchAgents(); } else setError(res.error || 'Failed to remove.');
     setBusyId(null);
+  };
+
+  const viewAgent = async (agent) => {
+    setViewing(agent); setDetail(null); setDetailLoading(true); setError('');
+    const res = await call(`admin-agent-detail&agentId=${agent.id}`, null, 'GET');
+    setDetailLoading(false);
+    if (res.ok && res.success) setDetail(res);
+    else setError(res.error || 'Failed to load agent detail.');
   };
 
   const openEditModal = (agent) => {
@@ -201,8 +212,9 @@ const AgentManagement = () => {
                     <span>📊 {agent.commission_rate || 0}% · ${(agent.commission || 0).toFixed(0)} comm.</span>
                   </div>
                 </div>
-                {canManage && (
-                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  <button disabled={busyId === agent.id} onClick={() => viewAgent(agent)} style={btn('#eef2ff', '#4338ca')}>📊 View</button>
+                  {canManage && (<>
                     {agent.status === 'invited' && (
                       <button disabled={busyId === agent.id} onClick={() => resendInvite(agent)} style={btn('#fef3c7', '#92400e')}>✉️ Resend</button>
                     )}
@@ -211,8 +223,8 @@ const AgentManagement = () => {
                       {agent.status === 'active' ? '🚫 Disable' : '✅ Enable'}
                     </button>
                     <button disabled={busyId === agent.id} onClick={() => removeAgent(agent)} style={btn('#fef2f2', '#dc2626')}>🗑️ Remove</button>
-                  </div>
-                )}
+                  </>)}
+                </div>
               </div>
             );
           })}
@@ -220,6 +232,110 @@ const AgentManagement = () => {
       )}
 
       {/* Create/Edit Modal */}
+      {/* Agent detail / performance panel */}
+      {viewing && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, padding: '40px 16px', overflowY: 'auto' }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setViewing(null); setDetail(null); } }}>
+          <div style={{ background: '#f8fafc', borderRadius: '16px', maxWidth: '760px', width: '100%', maxHeight: '88vh', overflowY: 'auto' }}>
+            {/* Header */}
+            <div style={{ background: 'white', borderRadius: '16px 16px 0 0', padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'sticky', top: 0 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', color: '#1e293b' }}>{viewing.name}</h3>
+                <div style={{ fontSize: '13px', color: '#64748b', marginTop: 2 }}>
+                  {viewing.email} · {viewing.commission_rate || 0}% commission ·{' '}
+                  <span style={{ textTransform: 'capitalize' }}>{viewing.status}</span>
+                </div>
+              </div>
+              <button onClick={() => { setViewing(null); setDetail(null); }} style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', width: 32, height: 32, cursor: 'pointer', fontSize: 16 }}>✕</button>
+            </div>
+
+            <div style={{ padding: '20px 24px' }}>
+              {detailLoading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading agent performance…</div>
+              ) : !detail ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#dc2626' }}>{error || 'Could not load this agent.'}</div>
+              ) : (
+                <>
+                  {/* KPIs */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
+                    {[
+                      { label: 'Sales Revenue', value: `$${detail.stats.totalRevenue.toFixed(2)}`, sub: `${detail.stats.paidCount} paid`, color: '#10b981' },
+                      { label: 'Commission Earned', value: `$${detail.stats.commissionEarned.toFixed(2)}`, sub: 'from paid', color: '#055B75' },
+                      { label: 'Pending Commission', value: `$${detail.stats.commissionPending.toFixed(2)}`, sub: `${detail.stats.pendingCount} pending`, color: '#f59e0b' },
+                      { label: 'Total Sales', value: detail.stats.totalLinks, sub: `${detail.stats.expiredCount} expired`, color: '#3b82f6' },
+                    ].map((c) => (
+                      <div key={c.label} style={{ background: 'white', borderRadius: '12px', padding: '14px 16px', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '20px', fontWeight: 700, color: c.color }}>{c.value}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{c.label}</div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{c.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* By type */}
+                  {detail.stats.byType && Object.keys(detail.stats.byType).length > 0 && (
+                    <div style={{ background: 'white', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 10 }}>Sales by type</div>
+                      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                        {Object.entries(detail.stats.byType).map(([t, v]) => (
+                          <div key={t}>
+                            <div style={{ fontWeight: 700, color: '#1e293b' }}>${v.revenue.toFixed(2)}</div>
+                            <div style={{ fontSize: '12px', color: '#64748b', textTransform: 'capitalize' }}>{t} · {v.count}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sales list */}
+                  <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', padding: '12px 16px', borderBottom: '1px solid #f1f5f9' }}>
+                      Sales ({detail.sales.length})
+                    </div>
+                    {detail.sales.length === 0 ? (
+                      <div style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No sales yet.</div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ textAlign: 'left', color: '#94a3b8', fontSize: '11px', textTransform: 'uppercase' }}>
+                              <th style={{ padding: '8px 16px' }}>Customer</th>
+                              <th style={{ padding: '8px' }}>Type</th>
+                              <th style={{ padding: '8px', textAlign: 'right' }}>Amount</th>
+                              <th style={{ padding: '8px' }}>Status</th>
+                              <th style={{ padding: '8px 16px' }}>Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {detail.sales.map((l) => {
+                              const sb = STATUS_STYLE[l.status === 'paid' ? 'active' : l.status === 'pending' ? 'invited' : 'disabled'];
+                              return (
+                                <tr key={l.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                                  <td style={{ padding: '8px 16px' }}>
+                                    <div style={{ fontWeight: 600, color: '#1e293b' }}>{l.customer_name || '—'}</div>
+                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{l.customer_email || ''}</div>
+                                  </td>
+                                  <td style={{ padding: '8px', textTransform: 'capitalize' }}>{l.booking_type || '—'}</td>
+                                  <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>{l.currency || '$'} {Number(l.amount || 0).toLocaleString()}</td>
+                                  <td style={{ padding: '8px' }}>
+                                    <span style={{ background: sb.bg, color: sb.color, padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600, textTransform: 'capitalize' }}>{l.status}</span>
+                                  </td>
+                                  <td style={{ padding: '8px 16px', color: '#94a3b8', fontSize: 12 }}>{l.created_at ? new Date(l.created_at).toLocaleDateString() : '—'}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}>
           <div style={{ background: 'white', borderRadius: '16px', padding: '30px', maxWidth: '480px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>

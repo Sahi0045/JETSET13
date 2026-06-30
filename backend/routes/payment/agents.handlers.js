@@ -401,6 +401,64 @@ export async function handleAgentStats(req, res) {
 }
 
 /**
+ * Super-admin view of ANY agent's full work: profile, stats, and their complete sales list.
+ * GET /api/payments?action=admin-agent-detail&agentId=...   (admin + super admin)
+ */
+export async function handleAdminAgentDetail(req, res) {
+    if (!(await requireAdmin(req, res))) return;
+    try {
+        const agentId = req.query?.agentId || req.body?.agentId;
+        if (!agentId) return res.status(400).json({ success: false, error: 'agentId is required' });
+
+        const { data: agent } = await supabase
+            .from('agents')
+            .select('id, name, email, phone, commission_rate, status, created_at, accepted_at')
+            .eq('id', agentId).maybeSingle();
+        if (!agent) return res.status(404).json({ success: false, error: 'Agent not found' });
+
+        const { data: links } = await supabase
+            .from('payment_links')
+            .select('id, customer_name, customer_email, booking_type, amount, currency, status, description, created_at, paid_at')
+            .eq('agent_id', agentId)
+            .order('created_at', { ascending: false });
+
+        const all = links || [];
+        const paid = all.filter((l) => l.status === 'paid');
+        const pending = all.filter((l) => l.status === 'pending');
+        const totalRevenue = paid.reduce((s, l) => s + parseFloat(l.amount || 0), 0);
+        const pendingRevenue = pending.reduce((s, l) => s + parseFloat(l.amount || 0), 0);
+        const rate = parseFloat(agent.commission_rate || 0);
+        const byType = {};
+        for (const l of paid) {
+            const t = l.booking_type || 'other';
+            byType[t] = byType[t] || { count: 0, revenue: 0 };
+            byType[t].count += 1; byType[t].revenue += parseFloat(l.amount || 0);
+        }
+        Object.values(byType).forEach((v) => { v.revenue = +v.revenue.toFixed(2); });
+
+        return res.json({
+            success: true,
+            agent: {
+                id: agent.id, name: agent.name, email: agent.email, phone: agent.phone,
+                commissionRate: rate, status: agent.status, createdAt: agent.created_at, acceptedAt: agent.accepted_at,
+            },
+            stats: {
+                totalLinks: all.length, paidCount: paid.length, pendingCount: pending.length,
+                expiredCount: all.filter((l) => l.status === 'expired').length,
+                totalRevenue: +totalRevenue.toFixed(2), pendingRevenue: +pendingRevenue.toFixed(2),
+                commissionEarned: +(totalRevenue * rate / 100).toFixed(2),
+                commissionPending: +(pendingRevenue * rate / 100).toFixed(2),
+                byType,
+            },
+            sales: all,
+        });
+    } catch (error) {
+        console.error('❌ admin-agent-detail error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load agent detail' });
+    }
+}
+
+/**
  * Update Agent (Admin only)
  */
 export async function handleUpdateAgent(req, res) {

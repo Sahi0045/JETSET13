@@ -33,6 +33,7 @@ import {
     handleAcceptAgentInvite,
     handleResendAgentInvite,
     handleAgentStats,
+    handleAdminAgentDetail,
 } from './payment/agents.handlers.js';
 import restRoutes from './payment/rest.routes.js';
 
@@ -115,6 +116,8 @@ router.all('/', async (req, res) => {
                 return handleResendAgentInvite(req, res);
             case 'agent-stats':             // agent: own scoped dashboard data
                 return handleAgentStats(req, res);
+            case 'admin-agent-detail':      // super admin: any agent's full work/stats
+                return handleAdminAgentDetail(req, res);
             case 'complete-payment-link':
                 return handleCompletePaymentLink(req, res);
             default:
