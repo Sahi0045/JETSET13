@@ -100,7 +100,8 @@ const VisaLanding = () => {
         { to: '/visa/status', icon: 'dashboard', label: 'My Status' },
         { to: '/visa/booking', icon: 'calendar_month', label: 'Book Consultation' },
         { to: '/visa/documents', icon: 'folder_open', label: 'Document Services' },
-        { to: '/visa/admin', icon: 'admin_panel_settings', label: 'Admin Panel' },
+        // Admin Panel intentionally NOT shown in the public nav — staff reach it via
+        // /visa/admin/login directly (the panel itself is server-verified, see P2a).
     ];
 
     return (

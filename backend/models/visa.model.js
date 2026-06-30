@@ -456,13 +456,35 @@ class VisaConsultation {
         amount: data.amount || 49.0,
         meeting_link: data.meetingLink || null,
         notes: data.notes || null,
+        // Explicit type so document-service requests and real consultations are cleanly
+        // separated, instead of inferring from the consultant_name string.
+        type:
+          data.type ||
+          (data.consultantName === "Document Services Team"
+            ? "document_service"
+            : "consultation"),
       };
 
-      const { data: created, error } = await supabase
+      let { data: created, error } = await supabase
         .from("visa_consultations")
         .insert([record])
         .select()
         .single();
+
+      // Forward-compatible: if the `type` column hasn't been migrated yet, retry without it.
+      if (
+        error &&
+        (error.code === "PGRST204" ||
+          error.code === "42703" ||
+          /column .*type.* does not exist/i.test(error.message || ""))
+      ) {
+        delete record.type;
+        ({ data: created, error } = await supabase
+          .from("visa_consultations")
+          .insert([record])
+          .select()
+          .single());
+      }
 
       if (error) {
         console.error("Supabase error creating consultation:", error);

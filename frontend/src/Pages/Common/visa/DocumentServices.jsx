@@ -158,8 +158,9 @@ const DocumentServices = () => {
         .filter(Boolean)
         .join("\n");
 
-      // Store as a consultation with Document Services team
+      // Store as a document-service request (explicitly typed, not a real consultation).
       const payload = {
+        type: "document_service",
         consultantName: "Document Services Team",
         consultantRole: selectedServiceData?.title || "Document Specialist",
         bookingDate: new Date().toISOString().split("T")[0],
