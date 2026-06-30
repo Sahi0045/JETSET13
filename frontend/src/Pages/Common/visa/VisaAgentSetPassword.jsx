@@ -68,7 +68,7 @@ const VisaAgentSetPassword = () => {
       if (res.ok && res.success) {
         setState("done");
         // Send them to the admin login after a short beat.
-        setTimeout(() => navigate("/visa/admin/login"), 2200);
+        setTimeout(() => navigate("/visa/agent/login"), 2200);
       } else {
         setError(res.message || "Could not set your password.");
       }
@@ -163,7 +163,7 @@ const VisaAgentSetPassword = () => {
             <p className="text-slate-700 font-bold mb-1">Password set!</p>
             <p className="text-slate-500 text-sm mb-6">Taking you to the sign-in page…</p>
             <Link
-              to="/visa/admin/login"
+              to="/visa/agent/login"
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1152d4] text-white rounded-xl font-bold text-sm no-underline"
             >
               <span className="material-symbols-outlined text-base">login</span>

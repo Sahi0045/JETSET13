@@ -78,29 +78,26 @@ function clearAdminSession() {
 const STAFF = ["superadmin", "admin", "agent"];
 const ADMINS = ["superadmin", "admin"];
 
+// `suffix` is appended to the panel base path (/visa/admin or /visa/agent) so the same
+// nav works under either endpoint.
 const NAV_ITEMS = [
-  { to: "/visa/admin", label: "Dashboard", icon: "dashboard", roles: ADMINS },
-  { to: "/visa/admin/applications", label: "Applications", icon: "assignment", roles: STAFF },
-  { to: "/visa/admin/requirements", label: "Requirements", icon: "checklist", roles: ADMINS },
-  {
-    to: "/visa/admin/document-services",
-    label: "Doc Services",
-    icon: "folder_open",
-    roles: ADMINS,
-  },
-  { to: "/visa/admin/schedule", label: "Schedule", icon: "calendar_month", roles: ADMINS },
-  { to: "/visa/admin/messages", label: "Messages", icon: "chat", roles: STAFF },
-  { to: "/visa/admin/agents", label: "Agents", icon: "groups", superOnly: true },
+  { suffix: "", label: "Dashboard", icon: "dashboard", roles: ADMINS },
+  { suffix: "/applications", label: "Applications", icon: "assignment", roles: STAFF },
+  { suffix: "/requirements", label: "Requirements", icon: "checklist", roles: ADMINS },
+  { suffix: "/document-services", label: "Doc Services", icon: "folder_open", roles: ADMINS },
+  { suffix: "/schedule", label: "Schedule", icon: "calendar_month", roles: ADMINS },
+  { suffix: "/messages", label: "Messages", icon: "chat", roles: STAFF },
+  { suffix: "/agents", label: "Agents", icon: "groups", superOnly: true },
 ];
 
-const AdminSubHeader = ({ user, onLogout }) => {
+const AdminSubHeader = ({ user, onLogout, basePath }) => {
   const location = useLocation();
   const isActive = (path) => location.pathname === path;
   const role = user?.role || "agent";
   const isSuper = !!user?.isSuperAdmin;
   const navItems = NAV_ITEMS.filter((item) =>
     item.superOnly ? isSuper : item.roles.includes(role)
-  );
+  ).map((item) => ({ ...item, to: basePath + item.suffix }));
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
@@ -212,6 +209,10 @@ const VisaAdminPanel = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Agents get their own endpoint (/visa/agent); admins use /visa/admin. The panel is the
+  // same component under both — basePath keeps nav links + redirects on the right one.
+  const basePath = location.pathname.startsWith("/visa/agent") ? "/visa/agent" : "/visa/admin";
+
   // Derive auth state from localStorage, then VALIDATE it against the backend.
   const [session, setSession] = useState(() => getStoredAdminSession());
   const [verifying, setVerifying] = useState(true);
@@ -267,15 +268,28 @@ const VisaAdminPanel = () => {
     return () => { cancelled = true; };
   }, [location.pathname]);
 
+  // Keep each role on its own endpoint: agents on /visa/agent, admins on /visa/admin.
+  // (Direct navigation or an old bookmark to the other base gets corrected here.)
+  useEffect(() => {
+    if (!session) return;
+    const role = session.user?.role;
+    const p = location.pathname;
+    if (role === "agent" && p.startsWith("/visa/admin")) {
+      navigate(p.replace("/visa/admin", "/visa/agent"), { replace: true });
+    } else if (role && role !== "agent" && p.startsWith("/visa/agent")) {
+      navigate(p.replace("/visa/agent", "/visa/admin"), { replace: true });
+    }
+  }, [session, location.pathname, navigate]);
+
   // ── Logout ──────────────────────────────────────────────────────────────────
   const handleLogout = useCallback(() => {
     clearAdminSession();
     setSession(null);
-    navigate("/visa/admin/login");
-  }, [navigate]);
+    navigate(`${basePath}/login`);
+  }, [navigate, basePath]);
 
   // ── Route: dedicated login page ────────────────────────────────────────────
-  if (location.pathname === "/visa/admin/login") {
+  if (location.pathname.endsWith("/login")) {
     return <VisaAdminLogin />;
   }
 
@@ -295,7 +309,7 @@ const VisaAdminPanel = () => {
   if (!session) {
     // If this is a direct navigation to an admin sub-route, show the
     // unauthorized helper which redirects to the login form.
-    return <UnauthorizedScreen onRetry={() => navigate("/visa/admin/login")} />;
+    return <UnauthorizedScreen onRetry={() => navigate(`${basePath}/login`)} />;
   }
 
   // ── Authenticated layout ───────────────────────────────────────────────────
@@ -309,7 +323,7 @@ const VisaAdminPanel = () => {
 
       <Navbar forceScrolled={true} />
 
-      <AdminSubHeader user={session.user} onLogout={handleLogout} />
+      <AdminSubHeader user={session.user} onLogout={handleLogout} basePath={basePath} />
 
       <main className="flex-1 bg-[#f8f9fc] pt-4">
         <Routes>

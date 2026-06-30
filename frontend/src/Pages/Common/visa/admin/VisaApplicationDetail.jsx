@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { getApiUrl, apiGet, apiPost, apiPut, apiDelete } from "../../../../utils/apiHelper";
 import { useVisaRealtime } from "../../../../hooks/useVisaRealtime";
 
@@ -51,6 +51,8 @@ function currentRole() {
 const VisaApplicationDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  // Keep links/redirects on the current panel base (/visa/admin or /visa/agent).
+  const base = useLocation().pathname.startsWith("/visa/agent") ? "/visa/agent" : "/visa/admin";
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [app, setApp] = useState(null);
@@ -310,7 +312,7 @@ useEffect(() => {
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Failed to delete application.");
       }
-      navigate("/visa/admin/applications");
+      navigate(`${base}/applications`);
     } catch (err) {
       console.error("Delete error:", err);
       alert(err.message || "Failed to delete application.");
@@ -404,7 +406,7 @@ useEffect(() => {
           </p>
           <div className="flex flex-col gap-3">
             <Link
-              to="/visa/admin/applications"
+              to={`${base}/applications`}
               className="flex items-center justify-center gap-2 py-3 bg-[#1152d4] text-white rounded-xl font-bold text-sm hover:bg-[#0e42b0] transition-all no-underline"
             >
               <span className="material-symbols-outlined text-lg">
@@ -446,7 +448,7 @@ useEffect(() => {
       {/* Mobile back nav */}
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 border-b border-slate-100 bg-white/50 backdrop-blur-sm lg:hidden">
         <Link
-          to="/visa/admin/applications"
+          to={`${base}/applications`}
           className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#1152d4] no-underline"
         >
           <span className="material-symbols-outlined text-sm">arrow_back</span>
@@ -458,7 +460,7 @@ useEffect(() => {
         {/* Breadcrumbs – desktop */}
         <nav className="hidden lg:flex items-center gap-2 mb-8 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
           <Link
-            to="/visa/admin"
+            to={base}
             className="hover:text-[#1152d4] no-underline flex items-center gap-1.5 transition-colors"
           >
             <span className="material-symbols-outlined text-sm">dashboard</span>
@@ -466,7 +468,7 @@ useEffect(() => {
           </Link>
           <span className="text-slate-200">/</span>
           <Link
-            to="/visa/admin/applications"
+            to={`${base}/applications`}
             className="hover:text-[#1152d4] no-underline flex items-center gap-1.5 transition-colors"
           >
             <span className="material-symbols-outlined text-sm">
@@ -1147,7 +1149,7 @@ useEffect(() => {
               </h3>
               <div className="space-y-2">
                 <Link
-                  to="/visa/admin/applications"
+                  to={`${base}/applications`}
                   className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-100 transition-colors no-underline"
                 >
                   <span className="material-symbols-outlined text-lg">
@@ -1156,7 +1158,7 @@ useEffect(() => {
                   All Applications
                 </Link>
                 <Link
-                  to="/visa/admin/messages"
+                  to={`${base}/messages`}
                   state={{ applicationId: app.id }}
                   className="flex items-center gap-2 px-3 py-2.5 bg-[#1152d4]/5 text-[#1152d4] rounded-lg font-bold text-sm hover:bg-[#1152d4]/10 transition-colors no-underline"
                 >
@@ -1166,7 +1168,7 @@ useEffect(() => {
                   Quick Chat with Applicant
                 </Link>
                 <Link
-                  to="/visa/admin"
+                  to={base}
                   className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-100 transition-colors no-underline"
                 >
                   <span className="material-symbols-outlined text-lg">

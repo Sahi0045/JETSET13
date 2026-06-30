@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+
+// Keep links on whichever panel base the user is under (/visa/admin or /visa/agent).
+function usePanelBase() {
+  const { pathname } = useLocation();
+  return pathname.startsWith("/visa/agent") ? "/visa/agent" : "/visa/admin";
+}
 import { getApiUrl, apiGet } from "../../../../utils/apiHelper";
 import { useVisaRealtime } from "../../../../hooks/useVisaRealtime";
 
@@ -36,6 +42,7 @@ const PRIORITY_CONFIG = {
 const PAGE_SIZE = 15;
 
 const VisaApplicationsList = () => {
+  const base = usePanelBase();
   const [applications, setApplications] = useState([]);
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -484,7 +491,7 @@ useEffect(() => {
                         {/* Reference */}
                         <td className="px-4 lg:px-5 py-3 lg:py-4">
                           <Link
-                            to={`/visa/admin/applications/${app.id}`}
+                            to={`${base}/applications/${app.id}`}
                             className="font-mono font-bold text-[#1152d4] text-xs hover:underline no-underline"
                           >
                             {app.application_ref}
@@ -560,7 +567,7 @@ useEffect(() => {
                         {/* Actions */}
                         <td className="px-4 lg:px-6 py-3 lg:py-4 text-right">
                           <Link
-                            to={`/visa/admin/applications/${app.id}`}
+                            to={`${base}/applications/${app.id}`}
                             className="text-[#1152d4] text-xs font-bold hover:underline no-underline"
                           >
                             Review →

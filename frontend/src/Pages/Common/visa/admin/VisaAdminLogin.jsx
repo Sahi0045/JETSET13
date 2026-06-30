@@ -52,7 +52,8 @@ const VisaAdminLogin = () => {
         localStorage.setItem("visaAdminUser", userPayload);
         localStorage.setItem("user", userPayload);
 
-        navigate("/visa/admin");
+        // Agents get their own portal; admins/superadmin use the admin one.
+        navigate(data.role === "agent" ? "/visa/agent" : "/visa/admin");
         return;
       }
 

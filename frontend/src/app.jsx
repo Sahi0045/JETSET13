@@ -751,6 +751,8 @@ const App = () => {
           <Route path="/visa/privacy" element={<VisaPolicies tab="privacy" />} />
           <Route path="/visa/consultation/:id" element={<VideoConsultation />} />
           <Route path="/visa/agent/set-password" element={<VisaAgentSetPassword />} />
+          {/* Agents get their own portal URL; it reuses the same (base-path-aware) panel. */}
+          <Route path="/visa/agent/*" element={<VisaAdminPanel />} />
           <Route path="/visa/admin/*" element={<VisaAdminPanel />} />
 
           {/* Footer Pages */}
