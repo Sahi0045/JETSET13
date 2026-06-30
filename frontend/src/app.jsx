@@ -600,6 +600,16 @@ const AdminPanel = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Admin Panel..." /> }))
 );
 
+// Travel agent portal (scoped) + invite set-password
+const TravelAgentPortal = React.lazy(() =>
+  import('./Pages/Agent/TravelAgentPortal')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Agent Portal..." /> }))
+);
+const TravelAgentSetPassword = React.lazy(() =>
+  import('./Pages/Agent/TravelAgentSetPassword')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading..." /> }))
+);
+
 const AdminLogin = React.lazy(() =>
   import('./Pages/Admin/AdminLogin')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Admin Login..." /> }))
@@ -790,6 +800,10 @@ const App = () => {
               <AdminPanel />
             </ProtectedRoute>
           } />
+
+          {/* Travel agent portal — scoped home for sales agents */}
+          <Route path="/agent/set-password" element={<TravelAgentSetPassword />} />
+          <Route path="/agent" element={<TravelAgentPortal />} />
 
           {/* Legacy redirects for backward compatibility */}
           <Route path="/blog" element={<Navigate to="/travel-blog" />} />

@@ -56,6 +56,7 @@ const AdminLogin = () => {
         }));
         localStorage.setItem('token', data.token);
         localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('isSuperAdmin', String(!!data.isSuperAdmin));
         localStorage.setItem('user', JSON.stringify({
           id: data.id, email: data.email,
           firstName: data.firstName, lastName: data.lastName,
@@ -89,7 +90,7 @@ const AdminLogin = () => {
           firstName: agentData.firstName, lastName: agentData.lastName,
           role: 'agent', agentId: agentData.agentId
         }));
-        navigate('/admin');
+        navigate('/agent');
         return;
       }
 

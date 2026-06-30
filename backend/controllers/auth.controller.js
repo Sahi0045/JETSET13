@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import supabase from '../config/supabase.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
 import { JWT_SECRET, JWT_EXPIRE } from '../config/jwt.js';
+import { isSuperAdmin } from '../middleware/auth.middleware.js';
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -256,6 +257,7 @@ export const login = async (req, res) => {
       lastName: user.lastName,
       email: user.email,
       role: user.role || 'user',
+      isSuperAdmin: isSuperAdmin({ role: user.role, email: user.email }),
       token
     });
   } catch (error) {

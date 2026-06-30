@@ -146,6 +146,35 @@ export const sendAgentInviteEmail = async (email, name, inviteLink) => {
 };
 
 /**
+ * Invite a new travel (sales) agent to set their password and access the agent portal.
+ * @param {string} email      - agent's email
+ * @param {string} name       - agent's display name
+ * @param {string} inviteLink - one-time set-password link (token in query)
+ */
+export const sendTravelAgentInviteEmail = async (email, name, inviteLink) => {
+  try {
+    const subject = 'You\'ve been invited as a Jetsetters Travel Agent';
+    const html = renderBrandedEmail({
+      preheader: 'Set your password to access the Jetsetters agent portal',
+      headerLabel: 'Travel Agent Invitation',
+      emoji: '✈️',
+      heading: `Welcome${name ? ', ' + name : ''}!`,
+      subheading: 'You\'ve been added as a travel sales agent',
+      contentHtml: `
+        ${paragraph('A Jetsetters super admin has invited you to the travel sales team. You\'ll create bookings & payment links for customers across flights, hotels, cruises and packages, and earn commission on your sales.')}
+        ${paragraph('Click below to set your password and sign in. You\'ll log in with this email address.')}
+        ${paragraph('<span style="font-size:13px; color:#64748B;">This invitation link expires in 48 hours. If you weren\'t expecting this, you can ignore this email.</span>')}
+      `,
+      cta: { text: 'Set Your Password', url: inviteLink },
+    });
+    return await sendEmail({ to: email, subject, html });
+  } catch (error) {
+    console.error('Error in sendTravelAgentInviteEmail:', error);
+    throw error;
+  }
+};
+
+/**
  * Email service for sending notifications
  */
 const emailService = {

@@ -29,6 +29,10 @@ import {
     handleListAgents,
     handleUpdateAgent,
     handleDeleteAgent,
+    handleGetAgentInvite,
+    handleAcceptAgentInvite,
+    handleResendAgentInvite,
+    handleAgentStats,
 } from './payment/agents.handlers.js';
 import restRoutes from './payment/rest.routes.js';
 
@@ -103,6 +107,14 @@ router.all('/', async (req, res) => {
                 return handleUpdateAgent(req, res);
             case 'delete-agent':
                 return handleDeleteAgent(req, res);
+            case 'agent-invite':            // public: validate a set-password token
+                return handleGetAgentInvite(req, res);
+            case 'agent-accept-invite':     // public: set password + activate
+                return handleAcceptAgentInvite(req, res);
+            case 'resend-agent-invite':     // super admin: re-send invite
+                return handleResendAgentInvite(req, res);
+            case 'agent-stats':             // agent: own scoped dashboard data
+                return handleAgentStats(req, res);
             case 'complete-payment-link':
                 return handleCompletePaymentLink(req, res);
             default:

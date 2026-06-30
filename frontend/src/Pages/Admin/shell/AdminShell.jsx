@@ -76,9 +76,8 @@ export default function AdminShell() {
 
   const handleLogout = useCallback(() => {
     try {
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('adminUser');
-      localStorage.removeItem('token');
+      ['adminToken', 'adminUser', 'token', 'user', 'isAuthenticated', 'isSuperAdmin']
+        .forEach((k) => localStorage.removeItem(k));
     } catch {}
     navigate('/admin/login', { replace: true });
   }, [navigate]);
