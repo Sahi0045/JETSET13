@@ -1,4 +1,7 @@
-{
+// Auto-generated from packages.json. Embedded as a JS module so Vercel's
+// serverless bundler always includes it (dynamic fs reads are NOT traced and
+// come back empty in production — that's the bug this fixes).
+export default {
   "stats": {
     "destinations": "25+",
     "happyTravelers": "20+",
@@ -438,4 +441,4 @@
       }
     ]
   }
-} 
+};

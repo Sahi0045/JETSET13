@@ -1,4 +1,7 @@
-{
+// Auto-generated from cruiselines.json. Embedded as a JS module so Vercel's
+// serverless bundler always includes it (dynamic fs reads are NOT traced and
+// come back empty in production — that's the bug this fixes).
+export default {
   "cruiseLines": [
     {
       "id": 1,
@@ -856,4 +859,4 @@
       ]
     }
   ]
-}
+};

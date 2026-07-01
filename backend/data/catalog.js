@@ -7,31 +7,21 @@
  * module owns a backend copy of that data and normalizes it into the shape the
  * clients render, so both web and mobile consume the SAME backend endpoints.
  *
- * JSON is read via fs (not import assertions) to stay portable across the three
- * entry points (server.js, backend/server.js, Vercel handler).
+ * The data is imported from .data.js modules (NOT read via fs): Vercel's
+ * serverless bundler only includes files reached through static imports, so an
+ * fs.readFileSync of a .json returns empty in production. Static imports are
+ * always bundled.
  */
 
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const dataDir = path.dirname(fileURLToPath(import.meta.url));
-
-function loadJson(name) {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(dataDir, name), 'utf-8'));
-  } catch (err) {
-    console.error(`[catalog] Failed to load ${name}:`, err.message);
-    return null;
-  }
-}
+import cruiselines from './cruiselines.data.js';
+import packagesRaw from './packages.data.js';
 
 // ── Cruises ──────────────────────────────────────────────────
-// Source shape (cruiselines.json): { cruiseLines: [{ id, name, image,
+// Source shape (cruiselines.data.js): { cruiseLines: [{ id, name, image,
 // priceValue, duration, destinations[], departurePorts[], rating, ... }] }.
 // The mobile CruiseResultsScreen reads both camelCase and snake_case with
 // fallbacks, so we expose both to be safe.
-const cruiseLinesRaw = (loadJson('cruiselines.json') || {}).cruiseLines || [];
+const cruiseLinesRaw = (cruiselines || {}).cruiseLines || [];
 
 export const cruises = cruiseLinesRaw.map((c, i) => ({
   id: c.id || i + 1,
@@ -59,11 +49,10 @@ export const cruises = cruiseLinesRaw.map((c, i) => ({
 }));
 
 // ── Packages ─────────────────────────────────────────────────
-// Source shape (packages.json): { stats, dubai:{packages:[...]}, europe:{...},
+// Source shape (packages.data.js): { stats, dubai:{packages:[...]}, europe:{...},
 // kashmir:{...}, northEast:{...} }. Package ids restart per-category, so we
 // reindex to a single globally-unique id space — the id the list hands to
 // PackageDetails must resolve unambiguously via GET /packages/:id.
-const packagesRaw = loadJson('packages.json') || {};
 const PKG_CATEGORIES = ['dubai', 'europe', 'kashmir', 'northEast'];
 
 export const packages = [];
