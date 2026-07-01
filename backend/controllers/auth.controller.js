@@ -631,10 +631,51 @@ export const getMe = async (req, res) => {
       id: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
-      email: user.email
+      email: user.email,
+      phone: user.phone || '',
+      gender: user.gender || '',
+      dateOfBirth: user.date_of_birth || '',
+      nationality: user.nationality || '',
+      city: user.city || '',
+      role: user.role || 'user',
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error while fetching user data', error: error.message });
+  }
+};
+
+// @desc    Update own profile
+// @route   PUT /api/auth/me
+// @access  Private
+export const updateMe = async (req, res) => {
+  try {
+    const { firstName, lastName, phone, gender, dateOfBirth, nationality, city } = req.body;
+
+    const updates = {};
+    if (firstName !== undefined) updates.firstName = firstName;
+    if (lastName !== undefined) updates.lastName = lastName;
+    if (phone !== undefined) updates.phone = phone;
+    if (gender !== undefined) updates.gender = gender;
+    if (dateOfBirth !== undefined) updates.date_of_birth = dateOfBirth || null; // DATE column: '' → null
+    if (nationality !== undefined) updates.nationality = nationality;
+    if (city !== undefined) updates.city = city;
+
+    const user = await User.update(req.user.id, updates);
+
+    res.json({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone || '',
+      gender: user.gender || '',
+      dateOfBirth: user.date_of_birth || '',
+      nationality: user.nationality || '',
+      city: user.city || '',
+    });
+  } catch (error) {
+    console.error('updateMe error:', error);
+    res.status(500).json({ message: 'Server error while updating profile', error: error.message });
   }
 };
 
