@@ -1,6 +1,9 @@
 import express from 'express';
 import supabase from '../config/supabase.js';
+import { cruises } from '../data/catalog.js';
 const router = express.Router();
+
+const norm = (s) => String(s || '').toLowerCase();
 
 // Save a cruise booking to the database
 router.post('/bookings', async (req, res) => {
@@ -211,6 +214,40 @@ router.get('/bookings', async (req, res) => {
       error: error.message || 'Failed to fetch cruise bookings'
     });
   }
+});
+
+// ── Cruise catalog (static inventory) ────────────────────────
+// Search / filter the catalog. No filters → full list, so the mobile
+// CruiseResultsScreen (searchCruises with empty params) gets everything.
+router.get('/search', (req, res) => {
+  const { destination, departurePort, cruiseLine, minPrice, maxPrice } = req.query;
+  let results = [...cruises];
+
+  if (destination) results = results.filter(
+    (c) => (c.destinations || []).some((d) => norm(d).includes(norm(destination)))
+  );
+  if (departurePort) results = results.filter(
+    (c) => norm(c.departure_port).includes(norm(departurePort)) ||
+           (c.departurePorts || []).some((p) => norm(p).includes(norm(departurePort)))
+  );
+  if (cruiseLine) results = results.filter((c) => norm(c.cruise_line).includes(norm(cruiseLine)));
+  if (minPrice) results = results.filter((c) => Number(c.priceValue || 0) >= Number(minPrice));
+  if (maxPrice) results = results.filter((c) => Number(c.priceValue || 0) <= Number(maxPrice));
+
+  res.json({ success: true, data: results, meta: { total: results.length } });
+});
+
+// Cruise details by id. Declared before the list root; /details prefix keeps it
+// clear of the /bookings routes above.
+router.get('/details/:id', (req, res) => {
+  const cruise = cruises.find((c) => String(c.id) === String(req.params.id));
+  if (!cruise) return res.status(404).json({ success: false, error: 'Cruise not found' });
+  res.json({ success: true, data: cruise });
+});
+
+// Full cruise catalog.
+router.get('/', (req, res) => {
+  res.json({ success: true, data: cruises, total: cruises.length });
 });
 
 export default router;

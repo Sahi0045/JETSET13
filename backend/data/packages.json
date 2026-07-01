@@ -1,0 +1,441 @@
+{
+  "stats": {
+    "destinations": "25+",
+    "happyTravelers": "20+",
+    "packages": "50+",
+    "support": "24/7"
+  },
+  "dubai": {
+    "title": "Luxury Escapes",
+    "subtitle": "Discover Luxury and Adventure",
+    "packages": [
+      {
+        "id": 1,
+        "title": "Burj Khalifa Experience",
+        "location": "Dubai",
+        "destination": "dubai",
+        "image": "https://images.unsplash.com/photo-1582672060674-bc2bd808a8b5?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+        "rating": 4.9,
+        "reviews": 128,
+        "price": 1299,
+        "duration": "5 Days",
+        "discount": 15,
+        "packageType": "All Inclusive",
+        "features": ["5-Star Hotel", "Guided Tours", "Airport Transfer", "All Inclusive"],
+        "highlights": [
+          "At The Top Burj Khalifa",
+          "Dubai Mall Shopping",
+          "Musical Fountains"
+        ],
+        "included": [
+          "Luxury Hotel Stay",
+          "Daily Breakfast",
+          "Airport Transfers",
+          "Guided City Tour"
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Burj Al Arab Luxury",
+        "location": "Dubai",
+        "destination": "dubai",
+        "image": "https://images.unsplash.com/photo-1578575436955-ef29da568c6c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+        "rating": 4.8,
+        "reviews": 96,
+        "price": 2499,
+        "duration": "7 Days",
+        "discount": 10,
+        "packageType": "Flight + Hotel",
+        "features": ["Butler Service", "Private Beach", "Gourmet Dining", "Flight + Hotel"],
+        "highlights": [
+          "Luxury Suite Stay",
+          "Private Beach Access",
+          "Spa Treatment"
+        ],
+        "included": [
+          "Butler Service",
+          "All Meals Included",
+          "Yacht Tour",
+          "Private Chef"
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Atlantis Adventure",
+        "location": "Dubai",
+        "destination": "dubai",
+        "image": "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+        "rating": 4.7,
+        "reviews": 87,
+        "price": 1899,
+        "duration": "6 Days",
+        "discount": 20,
+        "packageType": "Family Package",
+        "features": ["Water Park Access", "Aquarium Tour", "Family Activities", "Family Package"],
+        "highlights": [
+          "Aquaventure Waterpark",
+          "Lost Chambers Aquarium",
+          "Dolphin Bay"
+        ],
+        "included": [
+          "Family Suite",
+          "All-Day Dining",
+          "Water Park Passes",
+          "Kids Club Access"
+        ]
+      }
+    ]
+  },
+  "europe": {
+    "title": "Most Popular Choices",
+    "subtitle": "Discover Europe's Finest",
+    "packages": [
+      {
+        "id": 1,
+        "title": "Europe Grand Tour",
+        "location": "Multiple Countries",
+        "destination": "europe",
+        "image": "https://images.unsplash.com/photo-1499856871958-5b9627545d1a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2020&q=80",
+        "price": 2499,
+        "duration": "12 Days",
+        "discount": 10,
+        "packageType": "All Inclusive",
+        "countries": ["France", "Italy", "Switzerland", "Germany"],
+        "highlights": [
+          "Eiffel Tower",
+          "Vatican City",
+          "Swiss Alps",
+          "Berlin Wall"
+        ],
+        "rating": 4.9,
+        "reviews": 245,
+        "features": ["Multi-Country", "Guided Tours", "Luxury Hotels", "All Inclusive"],
+        "included": [
+          "11 Nights Accommodation",
+          "Daily Breakfast",
+          "Inter-city Transfers",
+          "Skip-the-line Attraction Tickets"
+        ]
+      },
+      {
+        "id": 2,
+        "title": "London Explorer",
+        "location": "United Kingdom",
+        "destination": "europe",
+        "image": "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+        "price": 1899,
+        "duration": "7 Days",
+        "discount": 5,
+        "packageType": "Flight + Hotel",
+        "highlights": [
+          "Big Ben",
+          "London Eye",
+          "Tower Bridge",
+          "Buckingham Palace"
+        ],
+        "rating": 4.8,
+        "reviews": 189,
+        "features": ["City Tours", "Thames Cruise", "Historic Sites", "Flight + Hotel"],
+        "included": [
+          "6 Nights Accommodation",
+          "Daily Breakfast",
+          "London Pass",
+          "Airport Transfers"
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Italian Dream",
+        "location": "Italy",
+        "destination": "europe",
+        "image": "https://images.unsplash.com/photo-1514890547357-a9ee288728e0?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+        "price": 2199,
+        "duration": "10 Days",
+        "discount": 8,
+        "packageType": "Activities Only",
+        "highlights": [
+          "Rome Colosseum",
+          "Venice Canals",
+          "Florence Art",
+          "Tuscan Wine"
+        ],
+        "rating": 4.9,
+        "reviews": 167,
+        "features": ["Wine Tasting", "Art Tours", "Cooking Classes", "Activities Only"],
+        "included": [
+          "9 Nights Accommodation",
+          "Daily Breakfast",
+          "Cooking Class",
+          "Museum Passes"
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Paris Romance",
+        "location": "France",
+        "destination": "europe",
+        "image": "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2073&q=80",
+        "price": 1799,
+        "duration": "6 Days",
+        "discount": 7,
+        "packageType": "Cruise Package",
+        "highlights": [
+          "Eiffel Tower",
+          "Louvre Museum",
+          "Seine River",
+          "Versailles"
+        ],
+        "rating": 4.7,
+        "reviews": 156,
+        "features": ["Seine Cruise", "Wine Tasting", "City Tours", "Cruise Package"],
+        "included": [
+          "5 Nights Accommodation",
+          "Daily Breakfast",
+          "Museum Pass",
+          "Seine River Cruise"
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Spanish Fiesta",
+        "location": "Spain",
+        "destination": "europe",
+        "image": "https://images.unsplash.com/photo-1583422409516-2895a77efded?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+        "price": 1999,
+        "duration": "8 Days",
+        "discount": 10,
+        "packageType": "All Inclusive",
+        "highlights": [
+          "Sagrada Familia",
+          "Royal Palace",
+          "Flamenco Show",
+          "Tapas Tour"
+        ],
+        "rating": 4.8,
+        "reviews": 134,
+        "features": ["Tapas Tour", "Flamenco Show", "Art Museums", "All Inclusive"],
+        "included": [
+          "7 Nights Accommodation",
+          "Daily Breakfast",
+          "Flamenco Show Tickets",
+          "Tapas Tour"
+        ]
+      }
+    ]
+  },
+  "kashmir": {
+    "title": "Paradise on Earth",
+    "subtitle": "Experience Heaven in Kashmir",
+    "packages": [
+      {
+        "id": 1,
+        "title": "Mughal Gardens Tour",
+        "location": "Srinagar, Kashmir",
+        "destination": "kashmir",
+        "image": "https://images.unsplash.com/photo-1566837945700-30057527ade0?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+        "price": 799,
+        "duration": "5 Days",
+        "discount": 15,
+        "packageType": "All Inclusive",
+        "rating": 4.8,
+        "reviews": 89,
+        "highlights": [
+          "Nishat Garden",
+          "Shalimar Garden",
+          "Chashme Shahi"
+        ],
+        "features": ["Garden Tours", "Photography", "Local Guides", "All Inclusive"],
+        "included": [
+          "4 Nights Accommodation",
+          "Daily Breakfast",
+          "Airport Transfers",
+          "Guided Tours"
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Gulmarg Adventure",
+        "location": "Gulmarg, Kashmir",
+        "destination": "kashmir",
+        "image": "https://images.unsplash.com/photo-1566837828676-d71608e815f7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+        "price": 999,
+        "duration": "6 Days",
+        "discount": 10,
+        "packageType": "Flight + Hotel",
+        "rating": 4.9,
+        "reviews": 156,
+        "highlights": [
+          "Gondola Ride",
+          "Skiing",
+          "Mountain Views"
+        ],
+        "features": ["Skiing", "Gondola Ride", "Adventure Sports", "Flight + Hotel"],
+        "included": [
+          "5 Nights Accommodation",
+          "Daily Breakfast",
+          "Adventure Activities",
+          "Airport Transfers"
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Srinagar Special",
+        "location": "Srinagar, Kashmir",
+        "destination": "kashmir",
+        "image": "https://images.unsplash.com/photo-1566837830183-6be3b8808783?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+        "price": 699,
+        "duration": "4 Days",
+        "discount": 20,
+        "packageType": "Activities Only",
+        "rating": 4.7,
+        "reviews": 112,
+        "highlights": [
+          "Dal Lake",
+          "Shikara Ride",
+          "Local Crafts"
+        ],
+        "features": ["Houseboat Stay", "Shikara Ride", "Local Markets", "Activities Only"],
+        "included": [
+          "3 Nights Houseboat Stay",
+          "All Meals",
+          "Shikara Rides",
+          "Market Tours"
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Pahalgam Retreat",
+        "location": "Pahalgam, Kashmir",
+        "destination": "kashmir",
+        "image": "https://images.unsplash.com/photo-1624309845812-a7c7e55fa104?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2033&q=80",
+        "price": 899,
+        "duration": "5 Days",
+        "discount": 12,
+        "packageType": "Cruise Package",
+        "rating": 4.8,
+        "reviews": 134,
+        "highlights": [
+          "Betaab Valley",
+          "Aru Valley",
+          "River Rafting"
+        ],
+        "features": ["Valley Tours", "River Rafting", "Camping", "Cruise Package"],
+        "included": [
+          "4 Nights Accommodation",
+          "Daily Breakfast",
+          "Adventure Activities",
+          "Transportation"
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Yousmarg Explorer",
+        "location": "Yousmarg, Kashmir",
+        "destination": "kashmir",
+        "image": "https://images.unsplash.com/photo-1623953653730-526967cf6f0f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+        "price": 749,
+        "duration": "4 Days",
+        "discount": 15,
+        "packageType": "All Inclusive",
+        "rating": 4.6,
+        "reviews": 78,
+        "highlights": [
+          "Alpine Meadows",
+          "Trekking",
+          "Photography"
+        ],
+        "features": ["Trekking", "Nature Walks", "Photography", "All Inclusive"],
+        "included": [
+          "3 Nights Accommodation",
+          "Daily Breakfast",
+          "Guided Treks",
+          "Transportation"
+        ]
+      }
+    ]
+  },
+  "northEast": {
+    "title": "Mystical Beauty",
+    "subtitle": "Explore North East & Bhutan",
+    "packages": [
+      {
+        "id": 1,
+        "title": "Meghalaya Magic",
+        "location": "Meghalaya, India",
+        "destination": "northEast",
+        "image": "https://images.unsplash.com/photo-1626014303757-6366ef55c4ab?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2069&q=80",
+        "description": "Living Root Bridges & Waterfalls",
+        "price": 1299,
+        "duration": "7 Days",
+        "discount": 10,
+        "packageType": "All Inclusive",
+        "rating": 4.8,
+        "reviews": 92,
+        "highlights": [
+          "Double Decker Root Bridge",
+          "Nohkalikai Falls",
+          "Mawlynnong Village"
+        ],
+        "features": ["Trekking", "Village Tours", "Photography", "All Inclusive"],
+        "included": [
+          "6 Nights Accommodation",
+          "Daily Breakfast",
+          "Guided Tours",
+          "All Transportation"
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Darjeeling Delight",
+        "location": "Darjeeling, India",
+        "destination": "northEast",
+        "image": "https://images.unsplash.com/photo-1626074353765-517a681e40be?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2069&q=80",
+        "description": "Tea Gardens & Himalayan Views",
+        "price": 999,
+        "duration": "5 Days",
+        "discount": 15,
+        "packageType": "Flight + Hotel",
+        "rating": 4.7,
+        "reviews": 145,
+        "highlights": [
+          "Tiger Hill Sunrise",
+          "Tea Plantation Tour",
+          "Toy Train Ride"
+        ],
+        "features": ["Tea Tasting", "Mountain Views", "Heritage Train", "Flight + Hotel"],
+        "included": [
+          "4 Nights Accommodation",
+          "Daily Breakfast",
+          "Tea Garden Tour",
+          "Toy Train Ticket"
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Bhutan Bliss",
+        "location": "Bhutan",
+        "destination": "northEast",
+        "image": "https://images.unsplash.com/photo-1623677375459-4302b76763c4?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+        "description": "Buddhist Monasteries & Culture",
+        "price": 1599,
+        "duration": "8 Days",
+        "discount": 8,
+        "packageType": "Activities Only",
+        "rating": 4.9,
+        "reviews": 167,
+        "highlights": [
+          "Tiger's Nest Monastery",
+          "Punakha Dzong",
+          "Traditional Festivals"
+        ],
+        "features": ["Cultural Tours", "Monastery Visits", "Festival Experience", "Activities Only"],
+        "included": [
+          "7 Nights Accommodation",
+          "All Meals",
+          "Bhutan Visa",
+          "Cultural Experiences"
+        ]
+      }
+    ]
+  }
+} 

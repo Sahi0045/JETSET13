@@ -68,6 +68,7 @@ router.all('/', async (req, res) => {
             case 'payment-callback':
                 return handlePaymentCallback(req, res);
             case 'get-payment-details':
+            case 'payment-verify': // mobile CruiseApiService.verifyPayment — same orderId lookup
                 return handleGetPaymentDetails(req, res);
             case 'gateway-status':
                 return res.json({

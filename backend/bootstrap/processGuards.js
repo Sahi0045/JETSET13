@@ -27,14 +27,14 @@ export function installProcessGuards({ server = null, logger = defaultLogger, on
 
   process.on('unhandledRejection', (reason) => {
     const err = reason instanceof Error ? reason : new Error(`Unhandled rejection: ${reason}`);
-    logger.error('[processGuards] Unhandled promise rejection:', err);
+    logger.error(`[processGuards] Unhandled promise rejection: ${err?.stack || err}`);
     reportError(err, { kind: 'unhandledRejection' });
     // Deliberately do NOT exit: one rejected promise shouldn't take the whole
     // server down, but it must be visible and reported instead of swallowed.
   });
 
   process.on('uncaughtException', (err) => {
-    logger.error('[processGuards] Uncaught exception:', err);
+    logger.error(`[processGuards] Uncaught exception: ${err?.stack || err}`);
     reportError(err, { kind: 'uncaughtException' });
     // An uncaught exception leaves the process in an undefined state — drain
     // and exit non-zero so the platform (Render/PM2/Docker) restarts cleanly.

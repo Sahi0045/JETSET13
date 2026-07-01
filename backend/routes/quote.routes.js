@@ -34,7 +34,76 @@ router.all('/', async (req, res, next) => {
     }
     
     console.log(`📥 Quote API: method=${req.method}, action=${action}, id=${id}, endpoint=${endpoint}`);
-    
+
+    // POST /quotes?action=create-for-booking — a customer creates a quote for a
+    // direct booking (flight/hotel/cruise/package) at checkout, without admin
+    // intervention. Ported from the legacy serverless handler so mobile + web
+    // hit the same Express route. Requires auth but NOT admin. Depends on the
+    // 20260701000000_quotes_direct_booking migration (admin_id nullable +
+    // quotes.booking_details).
+    if (action === 'create-for-booking' && req.method === 'POST') {
+        return protect(req, res, async () => {
+            try {
+                const {
+                    booking_type, title, description, total_amount, currency = 'USD',
+                    breakdown = {}, booking_details = {},
+                    customer_email, customer_name, customer_phone
+                } = req.body;
+
+                if (!booking_type || total_amount == null) {
+                    return res.status(400).json({ success: false, message: 'booking_type and total_amount are required' });
+                }
+                const validBookingTypes = ['flight', 'hotel', 'cruise', 'package'];
+                if (!validBookingTypes.includes(booking_type)) {
+                    return res.status(400).json({ success: false, message: `Invalid booking_type. Must be one of: ${validBookingTypes.join(', ')}` });
+                }
+
+                // 1) Auto-create the inquiry (travel_details holds the booking payload;
+                //    the inquiries table has no inquiry_details/travel_type column).
+                const inquiry = await Inquiry.create({
+                    user_id: req.user.id,
+                    inquiry_type: booking_type,
+                    customer_email: customer_email || req.user.email,
+                    customer_name: customer_name || req.user.name || req.user.email?.split('@')[0] || 'Customer',
+                    customer_phone: customer_phone || null,
+                    status: 'quoted',
+                    travel_details: booking_details || {}
+                });
+
+                // 2) Create the quote linked to the inquiry, ready for payment.
+                const quote = await Quote.create({
+                    inquiry_id: inquiry.id,
+                    quote_number: Quote.generateQuoteNumber(),
+                    title: title || `${booking_type.charAt(0).toUpperCase() + booking_type.slice(1)} Booking`,
+                    description: description || `Direct ${booking_type} booking`,
+                    total_amount: parseFloat(total_amount),
+                    currency,
+                    breakdown: breakdown || {},
+                    booking_details: booking_details || {},
+                    status: 'sent',
+                    validity_days: 30
+                });
+
+                return res.status(201).json({
+                    success: true,
+                    message: 'Quote created successfully',
+                    data: {
+                        id: quote.id,
+                        quote_number: quote.quote_number,
+                        inquiry_id: inquiry.id,
+                        total_amount: quote.total_amount,
+                        currency: quote.currency,
+                        status: quote.status,
+                        created_at: quote.created_at
+                    }
+                });
+            } catch (error) {
+                console.error('Create quote for booking error:', error);
+                return res.status(500).json({ success: false, message: 'Failed to create quote', error: error.message });
+            }
+        });
+    }
+
     // Handle booking-info endpoint (GET and POST)
     if (endpoint === 'booking-info' && id) {
         return protect(req, res, async () => {
