@@ -679,6 +679,23 @@ export const updateMe = async (req, res) => {
   }
 };
 
+// @desc    Delete own account (Play Store / GDPR requirement)
+// @route   DELETE /api/auth/me
+// @access  Private
+export const deleteMe = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    // Unlink references first so FK constraints don't block the delete — the
+    // business records stay, but the personal-account link is removed.
+    try { await supabase.from('inquiries').update({ user_id: null }).eq('user_id', userId); } catch (_) { /* best effort */ }
+    await User.delete(userId);
+    res.json({ success: true, message: 'Account deleted successfully' });
+  } catch (error) {
+    console.error('deleteMe error:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete account', error: error.message });
+  }
+};
+
 // @desc    Forgot Password - Send reset link
 // @route   POST /api/auth/forgot-password
 // @access  Public

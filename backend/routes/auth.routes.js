@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, getMe, updateMe, searchFlights, googleLogin, forgotPassword, resetPassword, listAdmins, makeAdmin, removeAdmin, listAuditLogs, changePassword } from '../controllers/auth.controller.js';
+import { register, login, getMe, updateMe, deleteMe, searchFlights, googleLogin, forgotPassword, resetPassword, listAdmins, makeAdmin, removeAdmin, listAuditLogs, changePassword } from '../controllers/auth.controller.js';
 import { protect, admin, superAdmin } from '../middleware/auth.middleware.js';
 
 // const { searchFlights } = require('../controllers/flights.controller');
@@ -19,6 +19,7 @@ router.post('/reset-password', resetPassword);
 router.post('/search', searchFlights);
 router.get('/me', protect, getMe);
 router.put('/me', protect, updateMe);
+router.delete('/me', protect, deleteMe);
 
 // Admin management — super admin only.
 router.get('/admins', protect, superAdmin, listAdmins);
