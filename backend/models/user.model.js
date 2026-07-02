@@ -33,7 +33,8 @@ class User {
           password: hashedPassword,
           name: fullName,
           first_name: firstName,
-          last_name: lastName
+          last_name: lastName,
+          ...(googleId ? { google_id: googleId, is_google_account: isGoogleAccount } : {})
         }])
         .select();
 
@@ -159,6 +160,16 @@ class User {
       if (updates.lastName) {
         supabaseUpdates.last_name = updates.lastName;
         delete supabaseUpdates.lastName;
+      }
+
+      // Map Google linkage fields to their snake_case columns.
+      if (updates.googleId !== undefined) {
+        supabaseUpdates.google_id = updates.googleId;
+        delete supabaseUpdates.googleId;
+      }
+      if (updates.isGoogleAccount !== undefined) {
+        supabaseUpdates.is_google_account = updates.isGoogleAccount;
+        delete supabaseUpdates.isGoogleAccount;
       }
 
       const { data, error } = await supabase
