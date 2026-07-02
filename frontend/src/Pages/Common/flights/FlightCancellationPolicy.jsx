@@ -93,16 +93,16 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
             <div className="max-w-2xl">
               {/* Amounts over the two tiers */}
               <div className="flex items-center mb-1.5">
-                <span className="text-xs text-gray-500 w-[150px] flex-shrink-0">Cancellation Penalty :</span>
+                <span className="text-[11px] sm:text-xs text-gray-500 w-[92px] sm:w-[150px] flex-shrink-0">Cancellation Penalty :</span>
                 <div className="relative flex-1 h-5">
-                  <span className="absolute text-sm font-bold text-gray-800 -translate-x-1/2 whitespace-nowrap" style={{ left: '32%' }}>{tier1}</span>
-                  <span className={`absolute right-0 text-sm font-bold whitespace-nowrap ${c.refundable ? 'text-gray-800' : 'text-red-500'}`}>{tier2}</span>
+                  <span className="absolute left-0 text-xs sm:text-sm font-bold text-gray-800 whitespace-nowrap">{tier1}</span>
+                  <span className={`absolute right-0 text-xs sm:text-sm font-bold whitespace-nowrap ${c.refundable ? 'text-gray-800' : 'text-red-500'}`}>{tier2}</span>
                 </div>
               </div>
 
               {/* Gradient bar with cutoff divider */}
               <div className="flex items-center">
-                <span className="w-[150px] flex-shrink-0" />
+                <span className="w-[92px] sm:w-[150px] flex-shrink-0" />
                 <div className="relative flex-1 h-2 rounded-full" style={{ background: 'linear-gradient(90deg, #16a34a 0%, #84cc16 45%, #eab308 65%, #ef4444 100%)' }}>
                   <span className="absolute top-1/2 -translate-y-1/2 h-4 w-0 border-l-2 border-dashed border-gray-500" style={{ left: '64%' }} />
                 </div>
@@ -110,11 +110,11 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
 
               {/* Time tiers */}
               <div className="flex items-start mt-1.5">
-                <span className="text-xs text-gray-500 w-[150px] flex-shrink-0">Cancel Between (IST) :</span>
-                <div className="relative flex-1 h-9 text-xs">
+                <span className="text-[11px] sm:text-xs text-gray-500 w-[92px] sm:w-[150px] flex-shrink-0">Cancel Between (IST) :</span>
+                <div className="relative flex-1 h-9 text-[11px] sm:text-xs">
                   <span className="absolute left-0 font-semibold text-gray-700">Now</span>
                   {cutoff && (
-                    <span className="absolute -translate-x-1/2 text-center" style={{ left: '64%' }}>
+                    <span className="absolute -translate-x-1/2 text-center" style={{ left: '58%' }}>
                       <span className="block font-semibold text-gray-700">{fmtDay(cutoff)}</span>
                       <span className="block text-gray-400">{fmtTime(cutoff)}</span>
                     </span>
