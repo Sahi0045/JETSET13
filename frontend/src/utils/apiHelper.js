@@ -17,14 +17,43 @@ export const getApiUrl = (endpoint) => {
 };
 
 /**
- * Make an authenticated API request
+ * Read a cookie value by name (used for the readable CSRF double-submit token).
+ */
+export const getCookie = (name) => {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+};
+
+// Serialize concurrent refresh attempts so a burst of 401s triggers a single /refresh.
+let refreshInFlight = null;
+const refreshSession = async () => {
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(getApiUrl('auth/refresh'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' },
+    })
+      .then((r) => r.ok)
+      .catch(() => false)
+      .finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+};
+
+/**
+ * Make an authenticated API request.
+ * Auth is cookie-based (httpOnly jt_access) with a CSRF double-submit token on
+ * mutations. A legacy Bearer token is attached only if one still exists in
+ * storage (mobile / transition); once cookie-only, this is a no-op.
+ * On a 401 we transparently refresh the session once and retry.
  * @param {string} endpoint - The endpoint path
  * @param {object} options - Fetch options (method, body, headers, etc.)
  * @returns {Promise<Response>} - Fetch response
  */
-export const apiRequest = async (endpoint, options = {}) => {
+export const apiRequest = async (endpoint, options = {}, _retried = false) => {
   const url = getApiUrl(endpoint);
-  
+  const method = (options.method || 'GET').toUpperCase();
+
   // Default headers
   const headers = {
     'Accept': 'application/json',
@@ -36,21 +65,34 @@ export const apiRequest = async (endpoint, options = {}) => {
     headers['Content-Type'] = 'application/json';
   }
 
-  // Add auth token if available
-  const token = localStorage.getItem('token') || 
-                localStorage.getItem('adminToken') || 
+  // Legacy Bearer token fallback (transition/mobile). No-op once cookie-only.
+  const token = localStorage.getItem('token') ||
+                localStorage.getItem('adminToken') ||
                 localStorage.getItem('supabase_token');
-  
-  if (token) {
+  if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  // Make the request
+  // CSRF double-submit: echo the readable jt_csrf cookie on state-changing requests.
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const csrf = getCookie('jt_csrf');
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
+
+  // Make the request (cookies always sent)
   const response = await fetch(url, {
     ...options,
     headers,
     credentials: 'include'
   });
+
+  // Transparent one-time refresh + retry on unauthorized (expired access cookie).
+  if (response.status === 401 && !_retried && !endpoint.includes('auth/refresh') && !endpoint.includes('auth/login')) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      return apiRequest(endpoint, options, true);
+    }
+  }
 
   return response;
 };

@@ -19,15 +19,32 @@ const minutes = (n) => n * 60 * 1000;
 
 /**
  * Security headers via helmet.
- * CSP is left OFF because this serves an SPA that pulls from many external
- * origins (Google Fonts, Supabase, Amadeus, the CDN) — a wrong CSP silently
- * breaks the UI. Enabling it later needs a tuned policy. Cross-origin resource
- * policy is set permissive so external images/assets still load.
+ *
+ * Helmet defaults already ship HSTS, X-Content-Type-Options: nosniff,
+ * X-Frame-Options, and a Referrer-Policy. A full script-src 'self' + nonce CSP
+ * is intentionally NOT enabled here: this SPA loads from many external origins
+ * (Google Fonts/GSI, Supabase, Amadeus, ARC Pay/Mastercard, Sentry, the CDN)
+ * and a wrong policy silently breaks the UI. Instead we enable only the CSP
+ * directives that harden without blocking resource loads — because there is no
+ * `default-src`, unspecified resource types (script/style/img/connect/font)
+ * stay unrestricted, so nothing breaks:
+ *   - frame-ancestors 'self'  → clickjacking protection (complements X-Frame-Options)
+ *   - base-uri 'self'         → blocks <base> tag injection
+ *   - object-src 'none'       → blocks Flash/plugin/object embedding
+ * A tuned, nonce-based script-src remains a follow-up (needs SSR of the nonce).
  */
 export const securityHeaders = helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      'frame-ancestors': ["'self'"],
+      'base-uri': ["'self'"],
+      'object-src': ["'none'"],
+    },
+  },
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 });
 
 /** gzip/deflate response compression. */

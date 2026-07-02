@@ -12,29 +12,60 @@ console.log('🔗 API Configuration:', {
 
 const api = axios.create({
   baseURL: API_URL,
+  withCredentials: true, // send/receive the httpOnly session cookies
   headers: {
     'Content-Type': 'application/json'
   }
 });
 
-// Add a request interceptor for authentication
+// Read a cookie value (readable CSRF double-submit token).
+const getCookie = (name) => {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+};
+
+// Add a request interceptor: cookie auth + CSRF on mutations (+ legacy Bearer fallback).
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
+    const token = localStorage.getItem('token'); // legacy/transition; no-op once cookie-only
+    if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log('API Request to:', config.url);
+    const method = (config.method || 'get').toUpperCase();
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+      const csrf = getCookie('jt_csrf');
+      if (csrf) config.headers['X-CSRF-Token'] = csrf;
+    }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Add a response interceptor for error handling
+// Serialize concurrent refreshes so a burst of 401s triggers a single /refresh.
+let refreshInFlight = null;
+const refreshSession = () => {
+  if (!refreshInFlight) {
+    refreshInFlight = api.post('auth/refresh')
+      .then(() => true)
+      .catch(() => false)
+      .finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+};
+
+// Response interceptor: on 401, refresh the session once and retry the request.
 api.interceptors.response.use(
   response => response,
-  error => {
-    console.error('API Error:', error.response?.status, error.response?.data);
+  async error => {
+    const original = error.config;
+    const status = error.response?.status;
+    const url = original?.url || '';
+    if (status === 401 && original && !original._retried && !url.includes('auth/refresh') && !url.includes('auth/login')) {
+      original._retried = true;
+      const refreshed = await refreshSession();
+      if (refreshed) return api(original);
+    }
+    console.error('API Error:', status, error.response?.data);
     return Promise.reject(error);
   }
 );
@@ -45,7 +76,11 @@ export const authAPI = {
   login: (credentials) => api.post('auth/login', credentials),
   googleLogin: (tokenData) => api.post('auth/google-login', tokenData),
   getCurrentUser: () => api.get('auth/me'),
-  logout: () => {
+  // Exchange a Supabase session for httpOnly cookies (call once right after sign-in).
+  createSession: (access_token, refresh_token) => api.post('auth/session', { access_token, refresh_token }),
+  refreshSession: () => api.post('auth/refresh'),
+  logout: async () => {
+    try { await api.post('auth/logout'); } catch (_) { /* clear client state regardless */ }
     localStorage.removeItem('token');
     return Promise.resolve();
   }

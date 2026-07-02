@@ -1,8 +1,32 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import supabase from '../lib/supabase';
+import { getApiUrl } from '../utils/apiHelper';
 
 // Create Auth Context
 const SupabaseAuthContext = createContext({});
+
+// Hand the Supabase tokens to the backend ONCE so it can set httpOnly session
+// cookies (jt_access/jt_refresh) + a readable CSRF token. Best-effort: the app
+// still works via the Supabase session if this fails, but cookie-auth'd API
+// calls depend on it. Deduped per access token to avoid redundant round-trips.
+let lastSessionToken = null;
+const establishServerSession = async (session) => {
+  if (!session?.access_token || session.access_token === lastSessionToken) return;
+  lastSessionToken = session.access_token;
+  try {
+    await fetch(getApiUrl('auth/session'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      }),
+    });
+  } catch (e) {
+    console.warn('Failed to establish server session cookie:', e?.message);
+  }
+};
 
 // Custom hook to use the auth context
 export const useSupabaseAuth = () => {
@@ -32,6 +56,9 @@ export const SupabaseAuthProvider = ({ children }) => {
         } else {
           setSession(session);
           setUser(session?.user ?? null);
+
+          // Establish the httpOnly cookie session on the backend (additive).
+          if (session?.access_token) establishServerSession(session);
 
           // Sync with localStorage
           if (session?.user) {
@@ -91,6 +118,9 @@ export const SupabaseAuthProvider = ({ children }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setError(null);
+
+      // Establish the httpOnly cookie session on the backend (additive).
+      if (session?.access_token) establishServerSession(session);
 
       // Sync with localStorage
       if (session?.user) {
@@ -224,6 +254,9 @@ export const SupabaseAuthProvider = ({ children }) => {
         setSession(data.session);
         setUser(data.session.user);
 
+        // Establish the httpOnly cookie session on the backend (additive).
+        establishServerSession(data.session);
+
         // Sync with localStorage immediately
         const role = data.session.user.user_metadata?.role || 'user';
         const serializedUser = {
@@ -337,6 +370,12 @@ export const SupabaseAuthProvider = ({ children }) => {
       const { error } = await supabase.auth.signOut();
 
       if (error) throw error;
+
+      // Clear the backend httpOnly cookie session too.
+      lastSessionToken = null;
+      try {
+        await fetch(getApiUrl('auth/logout'), { method: 'POST', credentials: 'include' });
+      } catch (_) { /* clear client state regardless */ }
 
       // 📧 Send logout notification email
       if (currentUserEmail) {
