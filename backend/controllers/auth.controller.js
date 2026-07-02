@@ -696,6 +696,83 @@ export const deleteMe = async (req, res) => {
   }
 };
 
+// ── httpOnly cookie session (web) ────────────────────────────
+// The web SPA signs in with Supabase, then hands the tokens here ONCE so the
+// browser never keeps a token in JS-readable storage. We verify the access
+// token and set httpOnly cookies; a readable CSRF token is returned + set for
+// double-submit protection on state-changing requests.
+const cookieBase = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  path: '/',
+});
+
+function setSessionCookies(res, accessToken, refreshToken) {
+  const csrf = crypto.randomBytes(24).toString('hex');
+  res.cookie('jt_access', accessToken, { ...cookieBase(), maxAge: 60 * 60 * 1000 }); // 1h
+  if (refreshToken) {
+    res.cookie('jt_refresh', refreshToken, { ...cookieBase(), sameSite: 'strict', maxAge: 30 * 24 * 60 * 60 * 1000 }); // 30d
+  }
+  res.cookie('jt_csrf', csrf, {
+    httpOnly: false, // must be readable by JS to echo back in the X-CSRF-Token header
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 1000,
+  });
+  return csrf;
+}
+
+// @desc  Exchange a Supabase session for httpOnly cookies
+// @route POST /api/auth/session
+// @access Public (verifies the supplied access token)
+export const createSession = async (req, res) => {
+  try {
+    const { access_token, refresh_token } = req.body || {};
+    if (!access_token) return res.status(400).json({ success: false, message: 'access_token is required' });
+
+    const { data: { user } = {}, error } = await supabase.auth.getUser(access_token);
+    if (error || !user) return res.status(401).json({ success: false, message: 'Invalid access token' });
+
+    const csrfToken = setSessionCookies(res, access_token, refresh_token);
+    return res.json({ success: true, csrfToken, user: { id: user.id, email: user.email } });
+  } catch (error) {
+    console.error('createSession error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create session', error: error.message });
+  }
+};
+
+// @desc  Rotate the session using the httpOnly refresh cookie
+// @route POST /api/auth/refresh
+// @access Public (requires the jt_refresh cookie)
+export const refreshSession = async (req, res) => {
+  try {
+    const refresh_token = req.cookies?.jt_refresh;
+    if (!refresh_token) return res.status(401).json({ success: false, message: 'No refresh token' });
+
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token });
+    if (error || !data?.session) return res.status(401).json({ success: false, message: 'Refresh failed' });
+
+    const csrfToken = setSessionCookies(res, data.session.access_token, data.session.refresh_token);
+    return res.json({ success: true, csrfToken });
+  } catch (error) {
+    console.error('refreshSession error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to refresh session', error: error.message });
+  }
+};
+
+// @desc  Clear the session cookies
+// @route POST /api/auth/logout
+// @access Public
+export const logoutSession = async (req, res) => {
+  const clear = { ...cookieBase() };
+  res.clearCookie('jt_access', clear);
+  res.clearCookie('jt_refresh', { ...clear, sameSite: 'strict' });
+  res.clearCookie('jt_csrf', { httpOnly: false, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
+  return res.json({ success: true, message: 'Logged out' });
+};
+
 // @desc    Forgot Password - Send reset link
 // @route   POST /api/auth/forgot-password
 // @access  Public

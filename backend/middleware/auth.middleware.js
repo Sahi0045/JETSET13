@@ -202,12 +202,27 @@ async function autoProvisionSupabaseUser(decodedToken) {
 // Protect routes
 export const protect = async (req, res, next) => {
   let token;
+  let fromCookie = false;
 
-  // Check if token exists in Authorization header
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+  // Prefer the httpOnly session cookie (web); fall back to Authorization: Bearer (mobile).
+  if (req.cookies && req.cookies.jt_access) {
+    token = req.cookies.jt_access;
+    fromCookie = true;
+  } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+
+  // CSRF (double-submit) for cookie-authenticated, state-changing requests.
+  if (fromCookie && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    const csrfCookie = req.cookies.jt_csrf;
+    const csrfHeader = req.headers['x-csrf-token'];
+    if (!csrfCookie || csrfCookie !== csrfHeader) {
+      return res.status(403).json({ success: false, message: 'CSRF token mismatch' });
+    }
+  }
+
+  if (token) {
     try {
-      // Get token from header
-      token = req.headers.authorization.split(' ')[1];
       console.log('🔐 Auth middleware: Token received, length:', token?.length);
 
       // Decode token header to see what type it is
@@ -412,12 +427,15 @@ export const visaStaff = (req, res, next) => {
 export const optionalProtect = async (req, res, next) => {
   let token;
 
-  // Check if token exists in Authorization header
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    try {
-      // Get token from header
-      token = req.headers.authorization.split(' ')[1];
+  // Prefer the httpOnly session cookie (web); fall back to Authorization: Bearer (mobile).
+  if (req.cookies && req.cookies.jt_access) {
+    token = req.cookies.jt_access;
+  } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
 
+  if (token) {
+    try {
       // Verify token (HS256 first, fallback to RS256 via Google/Firebase certs)
       let decoded = null;
       try {

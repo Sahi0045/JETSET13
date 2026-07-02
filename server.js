@@ -6,6 +6,7 @@ dotenv.config({ path: "./backend/.env" });
 
 // After loading env vars, import the rest of dependencies
 import express from "express";
+import cookieParser from "cookie-parser";
 import path from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
@@ -65,6 +66,7 @@ app.use(responseCompression);
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(cors(buildCorsOptions()));
 
 // Global rate limiting (general API + stricter on auth)
