@@ -40,6 +40,7 @@ const TemplateManager = ({
       setLoading(true);
       const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
       const response = await fetch(`${apiEndpoint}?action=list`, {
+        credentials: 'include',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -115,6 +116,7 @@ const TemplateManager = ({
       };
 
       const response = await fetch(apiEndpoint, {
+        credentials: 'include',
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -150,6 +152,7 @@ const TemplateManager = ({
       const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
       
       const response = await fetch(apiEndpoint, {
+        credentials: 'include',
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -184,6 +187,7 @@ const TemplateManager = ({
       const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
       
       const response = await fetch(apiEndpoint, {
+        credentials: 'include',
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

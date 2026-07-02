@@ -48,7 +48,26 @@ export const SupabaseAuthProvider = ({ children }) => {
     // Get initial session
     const initializeAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        let { data: { session }, error } = await supabase.auth.getSession();
+
+        // persistSession:false means the SDK has no session after a reload, but
+        // the httpOnly refresh cookie may still be valid. Re-hydrate the
+        // in-memory Supabase session from the backend so the client works again
+        // without any token ever touching localStorage.
+        if (!session) {
+          try {
+            const resp = await fetch(getApiUrl('auth/supabase-session'), { credentials: 'include' });
+            if (resp.ok) {
+              const { access_token, refresh_token } = await resp.json();
+              if (access_token && refresh_token) {
+                const { data: setData } = await supabase.auth.setSession({ access_token, refresh_token });
+                session = setData?.session ?? null;
+              }
+            }
+          } catch (e) {
+            console.warn('Session re-hydration skipped:', e?.message);
+          }
+        }
 
         if (error) {
           console.error('Error getting session:', error);
@@ -76,15 +95,6 @@ export const SupabaseAuthProvider = ({ children }) => {
             localStorage.setItem('isAuthenticated', 'true');
             localStorage.setItem('user', JSON.stringify(serializedUser));
 
-            if (session.access_token) {
-              localStorage.setItem('token', session.access_token);
-              localStorage.setItem('supabase_token', session.access_token);
-
-              if (role === 'admin') {
-                localStorage.setItem('adminToken', session.access_token);
-              }
-              // Don't remove adminToken for non-admin Supabase users — it may have been set by custom admin login
-            }
           } else {
             // No Supabase session — only clear Supabase-specific auth
             // Preserve adminToken/adminUser if admin logged in via custom login
@@ -138,15 +148,6 @@ export const SupabaseAuthProvider = ({ children }) => {
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('user', JSON.stringify(serializedUser));
 
-        if (session.access_token) {
-          localStorage.setItem('token', session.access_token);
-          localStorage.setItem('supabase_token', session.access_token);
-
-          if (role === 'admin') {
-            localStorage.setItem('adminToken', session.access_token);
-          }
-          // Don't remove adminToken for non-admin Supabase users — it may have been set by custom admin login
-        }
 
         // 📧 Send login notification only on a genuine new sign-in.
         // supabase-js fires SIGNED_IN on page reloads, tab refocus, and session
@@ -271,15 +272,6 @@ export const SupabaseAuthProvider = ({ children }) => {
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('user', JSON.stringify(serializedUser));
 
-        if (data.session.access_token) {
-          localStorage.setItem('token', data.session.access_token);
-          localStorage.setItem('supabase_token', data.session.access_token);
-
-          if (role === 'admin') {
-            localStorage.setItem('adminToken', data.session.access_token);
-          }
-          // Don't remove adminToken for non-admin Supabase users — it may have been set by custom admin login
-        }
 
         // 📧 Send login notification email
         try {

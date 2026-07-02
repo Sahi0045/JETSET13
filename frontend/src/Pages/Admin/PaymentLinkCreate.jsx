@@ -74,6 +74,7 @@ const PaymentLinkCreate = () => {
       }
 
       const response = await fetch('/api/payments?action=create-payment-link', {
+        credentials: 'include',
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

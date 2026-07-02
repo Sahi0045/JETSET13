@@ -47,14 +47,13 @@ const AdminLogin = () => {
       const data = await response.json();
 
       if (response.ok && data.role === 'admin') {
-        // Admin login success
-        localStorage.setItem('adminToken', data.token);
+        // Admin login success. Backend set the httpOnly session cookie; we keep
+        // only non-sensitive profile flags client-side (no token in storage).
         localStorage.setItem('adminUser', JSON.stringify({
           id: data.id, email: data.email,
           firstName: data.firstName, lastName: data.lastName,
           role: 'admin'
         }));
-        localStorage.setItem('token', data.token);
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('isSuperAdmin', String(!!data.isSuperAdmin));
         localStorage.setItem('user', JSON.stringify({
@@ -70,20 +69,20 @@ const AdminLogin = () => {
       const agentResponse = await fetch('/api/payments?action=agent-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(formData)
       });
 
       const agentData = await agentResponse.json();
 
       if (agentResponse.ok && agentData.success) {
-        // Agent login success
-        localStorage.setItem('adminToken', agentData.token);
+        // Agent login success. Backend set the httpOnly session cookie; keep
+        // only non-sensitive profile flags client-side (no token in storage).
         localStorage.setItem('adminUser', JSON.stringify({
           id: agentData.id, email: agentData.email,
           firstName: agentData.firstName, lastName: agentData.lastName,
           role: 'agent', agentId: agentData.agentId
         }));
-        localStorage.setItem('token', agentData.token);
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('user', JSON.stringify({
           id: agentData.id, email: agentData.email,

@@ -252,6 +252,12 @@ export const login = async (req, res) => {
 
     console.log('User logged in successfully:', { id: user.id, email: user.email, role: user.role });
 
+    // Set the httpOnly session cookie so the web SPA never keeps this JWT in
+    // JS-readable storage. This is an app JWT (no Supabase refresh), so we give
+    // it a 7-day cookie TTL and no jt_refresh; the mobile app keeps using the
+    // returned token via Authorization: Bearer.
+    const csrfToken = setSessionCookies(res, token, null, 7 * 24 * 60 * 60 * 1000);
+
     res.json({
       id: user.id,
       firstName: user.firstName,
@@ -259,7 +265,8 @@ export const login = async (req, res) => {
       email: user.email,
       role: user.role || 'user',
       isSuperAdmin: isSuperAdmin({ role: user.role, email: user.email }),
-      token
+      token,
+      csrfToken
     });
   } catch (error) {
     console.error('Error in login controller:', error);
@@ -708,9 +715,9 @@ const cookieBase = () => ({
   path: '/',
 });
 
-function setSessionCookies(res, accessToken, refreshToken) {
+function setSessionCookies(res, accessToken, refreshToken, accessMaxAge = 60 * 60 * 1000) {
   const csrf = crypto.randomBytes(24).toString('hex');
-  res.cookie('jt_access', accessToken, { ...cookieBase(), maxAge: 60 * 60 * 1000 }); // 1h
+  res.cookie('jt_access', accessToken, { ...cookieBase(), maxAge: accessMaxAge });
   if (refreshToken) {
     res.cookie('jt_refresh', refreshToken, { ...cookieBase(), sameSite: 'strict', maxAge: 30 * 24 * 60 * 60 * 1000 }); // 30d
   }
@@ -719,7 +726,7 @@ function setSessionCookies(res, accessToken, refreshToken) {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 60 * 1000,
+    maxAge: accessMaxAge,
   });
   return csrf;
 }
@@ -759,6 +766,32 @@ export const refreshSession = async (req, res) => {
   } catch (error) {
     console.error('refreshSession error:', error);
     return res.status(500).json({ success: false, message: 'Failed to refresh session', error: error.message });
+  }
+};
+
+// @desc  Re-hydrate the Supabase client session in memory from the httpOnly
+//        refresh cookie. Returns fresh tokens to JS memory ONLY (never stored)
+//        so the SPA's supabase-js client works after a reload without keeping
+//        any token in localStorage. Also rotates the cookies.
+// @route GET /api/auth/supabase-session
+// @access Public (requires the jt_refresh cookie)
+export const getSupabaseSession = async (req, res) => {
+  try {
+    const refresh_token = req.cookies?.jt_refresh;
+    if (!refresh_token) return res.status(401).json({ success: false, message: 'No session' });
+
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token });
+    if (error || !data?.session) return res.status(401).json({ success: false, message: 'Session expired' });
+
+    setSessionCookies(res, data.session.access_token, data.session.refresh_token);
+    return res.json({
+      success: true,
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+  } catch (error) {
+    console.error('getSupabaseSession error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load session' });
   }
 };
 

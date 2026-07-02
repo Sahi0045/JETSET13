@@ -30,16 +30,9 @@ import { getApiUrl } from "../../../../utils/apiHelper";
  */
 function getStoredAdminSession() {
   try {
-    // Prefer the dedicated visa-admin token first, then fall back to the
-    // general admin token that is set by AdminLogin.jsx.
-    const token =
-      localStorage.getItem("visaAdminToken") ||
-      localStorage.getItem("adminToken") ||
-      localStorage.getItem("token");
-
-    if (!token) return null;
-
-    // Check role from the user objects stored during login.
+    // The credential now lives in an httpOnly cookie (not readable here). We use
+    // the non-sensitive user object only for the UX role gate; the backend
+    // verify call (cookie-authenticated) is the real check.
     const userStr =
       localStorage.getItem("visaAdminUser") ||
       localStorage.getItem("adminUser") ||
@@ -52,7 +45,7 @@ function getStoredAdminSession() {
     // Only superadmin, admin, and agent roles are permitted in the visa admin panel.
     if (!user || !["superadmin", "admin", "agent"].includes(user.role)) return null;
 
-    return { token, user };
+    return { user };
   } catch (_) {
     return null;
   }
@@ -235,7 +228,7 @@ const VisaAdminPanel = () => {
     (async () => {
       try {
         const res = await fetch(getApiUrl("visa/admin/verify"), {
-          headers: { Authorization: `Bearer ${stored.token}` },
+          credentials: "include",
         });
         if (cancelled) return;
         if (res.ok) {

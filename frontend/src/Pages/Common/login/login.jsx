@@ -96,13 +96,11 @@ export default function Login() {
         setErrors({}); // Clear previous errors
         
         try {
-            // Make the login API call using the authAPI
+            // Make the login API call using the authAPI.
+            // The backend sets the httpOnly session cookie; no token is stored client-side.
             const response = await authAPI.login({ email: data.email, password: data.password });
 
-            // If login is successful, store the token in localStorage
-            localStorage.setItem('token', response.data.token);
-            
-            // Set authentication status to true in localStorage
+            // Set authentication status to true in localStorage (non-sensitive UX flag)
             localStorage.setItem('isAuthenticated', 'true');
             localStorage.setItem('user', JSON.stringify({
                 id: response.data.id,

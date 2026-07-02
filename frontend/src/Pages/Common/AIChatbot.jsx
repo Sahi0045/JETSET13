@@ -97,6 +97,7 @@ const AIChatbot = () => {
 
       try {
         const response = await fetch(url, {
+        credentials: 'include',
           ...options,
           signal: controller.signal,
         });

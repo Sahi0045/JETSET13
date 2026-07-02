@@ -154,10 +154,7 @@ const SignupForm = () => {
         throw new Error('No authentication token received');
       }
 
-      // Store the token
-      localStorage.setItem('token', data.token);
-      console.log('Token stored successfully');
-      
+      // The backend sets the httpOnly session cookie; nothing stored client-side.
       // Show success message
       alert('Account created successfully! Redirecting to dashboard...');
       

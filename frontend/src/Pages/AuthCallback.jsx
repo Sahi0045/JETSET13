@@ -62,15 +62,6 @@ const AuthCallback = () => {
               role
             }));
 
-            if (data.session.access_token) {
-              localStorage.setItem('token', data.session.access_token);
-            localStorage.setItem('supabase_token', data.session.access_token);
-
-              if (role === 'admin') {
-                localStorage.setItem('adminToken', data.session.access_token);
-              }
-              // Don't remove adminToken — it may have been set by custom admin login
-            }
 
             // Check if profile is complete
             const userMetadata = data.session.user.user_metadata || {};
@@ -131,15 +122,6 @@ const AuthCallback = () => {
               role
             }));
 
-            if (data.session.access_token) {
-              localStorage.setItem('token', data.session.access_token);
-            localStorage.setItem('supabase_token', data.session.access_token);
-
-              if (role === 'admin') {
-                localStorage.setItem('adminToken', data.session.access_token);
-              }
-              // Don't remove adminToken — it may have been set by custom admin login
-            }
 
             // Check if profile is complete
             const userMetadata = data.session.user.user_metadata || {};

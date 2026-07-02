@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, getMe, updateMe, deleteMe, searchFlights, googleLogin, forgotPassword, resetPassword, listAdmins, makeAdmin, removeAdmin, listAuditLogs, changePassword, createSession, refreshSession, logoutSession } from '../controllers/auth.controller.js';
+import { register, login, getMe, updateMe, deleteMe, searchFlights, googleLogin, forgotPassword, resetPassword, listAdmins, makeAdmin, removeAdmin, listAuditLogs, changePassword, createSession, refreshSession, logoutSession, getSupabaseSession } from '../controllers/auth.controller.js';
 import { protect, admin, superAdmin } from '../middleware/auth.middleware.js';
 
 // const { searchFlights } = require('../controllers/flights.controller');
@@ -17,6 +17,7 @@ router.post('/google-login', googleLogin);
 // httpOnly cookie session (web): exchange Supabase tokens → cookies, rotate, clear.
 router.post('/session', createSession);
 router.post('/refresh', refreshSession);
+router.get('/supabase-session', getSupabaseSession);
 router.post('/logout', logoutSession);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);

@@ -155,10 +155,8 @@ export default function Signup() {
 
             console.log('Registration successful:', response);
 
-            // If registration is successful, store the token in localStorage
-            localStorage.setItem('token', response.data.token);
-            
-            // Set authentication status to true in localStorage
+            // Backend sets the httpOnly session cookie; no token stored client-side.
+            // Set authentication status to true in localStorage (non-sensitive UX flag)
             localStorage.setItem('isAuthenticated', 'true');
 
             setProcessing(false);

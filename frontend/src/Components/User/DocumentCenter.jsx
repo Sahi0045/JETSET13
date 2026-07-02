@@ -25,6 +25,7 @@ const DocumentCenter = ({
         : `${apiEndpoint}?action=list&category=${activeCategory}`;
       
       const response = await fetch(url, {
+        credentials: 'include',
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
           'Content-Type': 'application/json'

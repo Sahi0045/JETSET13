@@ -23,11 +23,14 @@ function makeInvite() {
  * Returns { id, role, email, isSuper } or null if unauthenticated/invalid.
  */
 async function getCaller(req) {
+    // Prefer the httpOnly session cookie (web); fall back to Authorization: Bearer (mobile).
     const auth = req.headers.authorization;
-    if (!auth || !auth.startsWith('Bearer ')) return null;
+    const bearer = auth && auth.startsWith('Bearer ') ? auth.split(' ')[1] : null;
+    const token = req.cookies?.jt_access || bearer;
+    if (!token) return null;
     let decoded;
     try {
-        decoded = jwt.verify(auth.split(' ')[1], JWT_SECRET);
+        decoded = jwt.verify(token, JWT_SECRET);
     } catch {
         return null;
     }
@@ -104,6 +107,14 @@ export async function handleAgentLogin(req, res) {
 
         console.log('✅ Agent logged in:', agent.email);
 
+        // Set the httpOnly session cookie so the web SPA doesn't keep the JWT in
+        // JS-readable storage. App JWT (no Supabase refresh) → 7-day cookie TTL.
+        const isProd = process.env.NODE_ENV === 'production';
+        const csrfToken = crypto.randomBytes(24).toString('hex');
+        const week = 7 * 24 * 60 * 60 * 1000;
+        res.cookie('jt_access', token, { httpOnly: true, secure: isProd, sameSite: 'lax', path: '/', maxAge: week });
+        res.cookie('jt_csrf', csrfToken, { httpOnly: false, secure: isProd, sameSite: 'lax', path: '/', maxAge: week });
+
         return res.json({
             success: true,
             id: agent.id,
@@ -112,7 +123,8 @@ export async function handleAgentLogin(req, res) {
             email: agent.email,
             role: 'agent',
             agentId: agent.id,
-            token
+            token,
+            csrfToken
         });
     } catch (error) {
         console.error('❌ Agent login error:', error);

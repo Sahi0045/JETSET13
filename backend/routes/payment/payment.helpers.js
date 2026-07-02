@@ -56,9 +56,11 @@ export function getCardType(cardNumber) {
  */
 export function getCallerInfo(req) {
     try {
+        // Prefer the httpOnly session cookie (web); fall back to Bearer (mobile).
         const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) return { role: 'unknown', agentId: null };
-        const token = authHeader.split(' ')[1];
+        const bearer = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+        const token = req.cookies?.jt_access || bearer;
+        if (!token) return { role: 'unknown', agentId: null };
         const decoded = jwt.verify(token, JWT_SECRET);
         return {
             role: decoded.role || 'user',

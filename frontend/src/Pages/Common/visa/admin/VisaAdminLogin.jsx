@@ -35,10 +35,8 @@ const VisaAdminLogin = () => {
       const data = await response.json();
 
       if (response.ok && ["superadmin", "admin", "agent"].includes(data.role)) {
-        // Store auth tokens
-        localStorage.setItem("adminToken", data.token);
-        localStorage.setItem("visaAdminToken", data.token);
-        localStorage.setItem("token", data.token);
+        // Backend set the httpOnly session cookie; keep only non-sensitive
+        // profile flags client-side (no token in storage).
         localStorage.setItem("isAuthenticated", "true");
 
         const userPayload = JSON.stringify({

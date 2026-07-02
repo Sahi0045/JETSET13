@@ -31,6 +31,7 @@ const NotificationSettings = ({
       const token = localStorage.getItem('supabase_token') || localStorage.getItem('token');
       
       const response = await fetch(`${apiEndpoint}`, {
+        credentials: 'include',
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
           'Content-Type': 'application/json'
@@ -64,6 +65,7 @@ const NotificationSettings = ({
       const token = localStorage.getItem('supabase_token') || localStorage.getItem('token');
       
       const response = await fetch(apiEndpoint, {
+        credentials: 'include',
         method: 'POST',
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',

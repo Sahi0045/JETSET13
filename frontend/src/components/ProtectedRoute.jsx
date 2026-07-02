@@ -24,10 +24,10 @@ const ProtectedRoute = ({ children, requireAuth = true, requireAdmin = false }) 
         setLoading(false);
     }, []);
 
-    // Check for admin JWT token
-    const adminToken = localStorage.getItem('adminToken');
+    // Admin/agent gate. The credential now lives in an httpOnly cookie (not
+    // readable here); this is only a UX gate, real enforcement is server-side.
     const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
-    const isAdminLoggedIn = adminToken && (adminUser.role === 'admin' || adminUser.role === 'agent');
+    const isAdminLoggedIn = (adminUser.role === 'admin' || adminUser.role === 'agent');
 
     // Show loading spinner while checking authentication
     if (loading) {
