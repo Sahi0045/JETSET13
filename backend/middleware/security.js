@@ -37,6 +37,10 @@ export const securityHeaders = helmet({
   contentSecurityPolicy: {
     useDefaults: false,
     directives: {
+      // Disable default-src on purpose (helmet requires an explicit opt-out):
+      // unspecified resource types stay unrestricted so the multi-origin SPA
+      // doesn't break. We only add hardening directives below.
+      'default-src': helmet.contentSecurityPolicy.dangerouslyDisableDefaultSrc,
       'frame-ancestors': ["'self'"],
       'base-uri': ["'self'"],
       'object-src': ["'none'"],
