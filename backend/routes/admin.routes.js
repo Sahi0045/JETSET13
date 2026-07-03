@@ -182,35 +182,37 @@ router.get('/price-config/:service', async (req, res) => {
   }
 });
 
-// Helper function to extract service-specific settings
+// Helper function to extract service-specific settings.
+// Use `??` (not `||`) so an admin-configured 0 is respected — with `||`, setting
+// a fee/percentage to 0 in the panel was silently replaced by the default.
 const getServiceDefaults = (service, allSettings = DEFAULT_SETTINGS) => {
   switch (service) {
     case 'flights':
       return {
-        taxes_fees: allSettings.flight_taxes_fees || 25.00,
-        taxes_fees_percentage: allSettings.flight_taxes_fees_percentage || 5.0
+        taxes_fees: allSettings.flight_taxes_fees ?? 25.00,
+        taxes_fees_percentage: allSettings.flight_taxes_fees_percentage ?? 5.0
       };
-    
+
     case 'cruises':
       return {
-        taxes_fees: allSettings.cruise_taxes_fees || 150.00,
-        taxes_fees_percentage: allSettings.cruise_taxes_fees_percentage || 8.0,
-        port_charges: allSettings.cruise_port_charges || 50.00
+        taxes_fees: allSettings.cruise_taxes_fees ?? 150.00,
+        taxes_fees_percentage: allSettings.cruise_taxes_fees_percentage ?? 8.0,
+        port_charges: allSettings.cruise_port_charges ?? 50.00
       };
-    
+
     case 'hotels':
       return {
-        taxes_fees: allSettings.hotel_taxes_fees || 35.00,
-        taxes_fees_percentage: allSettings.hotel_taxes_fees_percentage || 12.0
+        taxes_fees: allSettings.hotel_taxes_fees ?? 35.00,
+        taxes_fees_percentage: allSettings.hotel_taxes_fees_percentage ?? 12.0
       };
-    
+
     case 'general':
       return {
-        package_markup_percentage: allSettings.package_markup_percentage || 10.0,
-        service_fee_percentage: allSettings.service_fee_percentage || 2.5,
-        cancellation_fee: allSettings.cancellation_fee || 50.00
+        package_markup_percentage: allSettings.package_markup_percentage ?? 10.0,
+        service_fee_percentage: allSettings.service_fee_percentage ?? 2.5,
+        cancellation_fee: allSettings.cancellation_fee ?? 50.00
       };
-    
+
     default:
       return allSettings;
   }
