@@ -77,10 +77,13 @@ export async function registerForPushNotifications() {
     }
 
     const authToken = await getAuthToken();
+    const csrf = document.cookie.match(/(?:^|; )jt_csrf=([^;]+)/)?.[1];
     const response = await fetch('/api/push/register-token', {
       method: 'POST',
+      credentials: 'include', // send the httpOnly session cookie
       headers: {
         'Content-Type': 'application/json',
+        ...(csrf ? { 'X-CSRF-Token': decodeURIComponent(csrf) } : {}),
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
       body: JSON.stringify({ token, platform: 'web' }),

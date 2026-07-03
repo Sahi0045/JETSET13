@@ -108,6 +108,9 @@ const BulkUpload = ({
         xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
         
         xhr.open('POST', endpoint);
+        xhr.withCredentials = true; // send the httpOnly session cookie
+        const csrf = document.cookie.match(/(?:^|; )jt_csrf=([^;]+)/)?.[1];
+        if (csrf) xhr.setRequestHeader('X-CSRF-Token', decodeURIComponent(csrf));
         if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         xhr.send(formData);
       });

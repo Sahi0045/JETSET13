@@ -21,6 +21,7 @@ const SubscriptionManagement = () => {
             setLoading(true);
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
             const response = await fetch(getApiUrl('subscription'), {
+                credentials: 'include', // send the httpOnly session cookie
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -49,10 +50,13 @@ const SubscriptionManagement = () => {
         e.preventDefault();
         try {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+            const csrf = document.cookie.match(/(?:^|; )jt_csrf=([^;]+)/)?.[1];
             const response = await fetch(getApiUrl(`subscription/${editingSub.id}`), {
                 method: 'PUT',
+                credentials: 'include', // send the httpOnly session cookie
                 headers: {
                     'Content-Type': 'application/json',
+                    ...(csrf ? { 'X-CSRF-Token': decodeURIComponent(csrf) } : {}),
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify(editForm)
