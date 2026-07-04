@@ -88,6 +88,9 @@ const Spinner = ({ label }) => (
 
 export default function TravelDashboard() {
   const navigate = useNavigate()
+  // Auth comes from the Supabase context (same source the navbar uses). Tokens
+  // now live in httpOnly cookies, not localStorage, so don't read localStorage.
+  const { user, isAuthenticated: authed, session, loading: authLoading } = useSupabaseAuth()
   const [activeTab, setActiveTab] = useState("Upcoming")
   const [activeSidebarItem, setActiveSidebarItem] = useState("All Bookings")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -102,56 +105,35 @@ export default function TravelDashboard() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(null)
 
   useEffect(() => {
-    // Check if user is authenticated
-    const authStatus = localStorage.getItem('isAuthenticated')
-    const userStr = localStorage.getItem('user')
+    // Wait for the Supabase session (cookie/in-memory) to resolve before deciding.
+    if (authLoading) return
 
-    console.log('🔐 Auth Check:', {
-      isAuthenticated: authStatus,
-      hasUser: !!userStr,
-      token: localStorage.getItem('token') ? 'EXISTS' : 'MISSING',
-      supabaseToken: localStorage.getItem('supabase_token') ? 'EXISTS' : 'MISSING'
-    })
-
-    if (authStatus !== 'true') {
-      // Set as guest user instead of redirecting
+    if (!authed) {
+      setIsAuthenticated(false)
       setIsGuest(true)
-      // Show login popup after a short delay
-      setTimeout(() => {
-        setShowLoginPopup(true)
-      }, 500)
-    } else {
-      setIsAuthenticated(true)
-      // Parse user to get email for debugging
-      if (userStr) {
-        try {
-          const user = JSON.parse(userStr)
-          console.log('👤 User:', { email: user.email, id: user.id })
-        } catch (e) { }
-      }
+      const t = setTimeout(() => setShowLoginPopup(true), 500)
+      return () => clearTimeout(t)
     }
 
-    // Load bookings - both from localStorage and database
+    // Authenticated (nav shows the same). Load the server-backed data.
+    setIsAuthenticated(true)
+    setIsGuest(false)
+    setShowLoginPopup(false)
+
     loadBookings()
+    loadRequests()
 
-    // Load user requests if authenticated
-    if (authStatus === 'true') {
-      loadRequests()
-    }
-
-    // Reload bookings when the window regains focus (user comes back from booking)
+    // Reload when the window regains focus (user comes back from booking).
     const handleFocus = () => {
       loadBookings()
-      if (authStatus === 'true') {
-        loadRequests()
-      }
+      loadRequests()
     }
     window.addEventListener('focus', handleFocus)
 
     return () => {
       window.removeEventListener('focus', handleFocus)
     }
-  }, []) // Run once on mount
+  }, [authed, authLoading])
 
   // Polling effect for real-time request updates
   useEffect(() => {
@@ -181,15 +163,8 @@ export default function TravelDashboard() {
     // First, try to load bookings from database
     try {
       console.log('🔍 Fetching bookings from database...')
-      // Get user ID from localStorage so backend can filter by user
-      let currentUserId = ''
-      try {
-        const storedUser = localStorage.getItem('user')
-        if (storedUser) {
-          const parsed = JSON.parse(storedUser)
-          currentUserId = parsed.id || parsed.uid || ''
-        }
-      } catch (e) { /* ignore parse errors */ }
+      // User id comes from the auth context (session), so the backend can filter.
+      const currentUserId = user?.id || user?.uid || ''
 
       const bookingsUrl = currentUserId
         ? getApiUrl(`flights/bookings?userId=${encodeURIComponent(currentUserId)}`)
@@ -199,7 +174,8 @@ export default function TravelDashboard() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        credentials: 'include'
       })
 
       if (response.ok) {
@@ -226,16 +202,18 @@ export default function TravelDashboard() {
 
     // Load paid bookings from database
     try {
-      const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token')
+      // Cookie session authenticates the request; the Bearer header is a fallback
+      // when the in-memory Supabase access token is available.
+      const token = session?.access_token || ''
 
-      if (token) {
+      if (authed) {
         console.log('🔍 Loading paid bookings from database...')
 
         // Method 1: Fetch user's inquiries and their quotes
         const inquiriesResponse = await fetch(getApiUrl('inquiries?endpoint=my'), {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${token}`,
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
             'Content-Type': 'application/json'
           },
           credentials: 'include'
@@ -433,24 +411,22 @@ export default function TravelDashboard() {
         user: localStorage.getItem('user') ? 'EXISTS' : 'MISSING'
       })
 
-      // Get authentication token
-      const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token')
+      // Cookie session authenticates the request; the in-memory Supabase access
+      // token (if present) is sent as a Bearer fallback.
+      const token = session?.access_token || ''
 
-      if (!token) {
-        console.log('❌ No authentication token found, cannot load requests')
-        console.log('💡 Please log in first')
+      if (!authed) {
+        console.log('❌ Not signed in, cannot load requests')
         setRequests([])
         setIsLoadingRequests(false)
         return
       }
 
-      console.log('✅ Token found, making API request...')
-
       // Use query parameter format for Vercel serverless functions
       const response = await fetch(getApiUrl('inquiries?endpoint=my'), {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
@@ -895,7 +871,7 @@ export default function TravelDashboard() {
                 try {
                   // If we have both quoteId and inquiryId, fetch full details
                   if (booking.quoteId && booking.inquiryId) {
-                    const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token')
+                    const token = session?.access_token || '' // cookie session also authenticates
 
                     // Fetch quote and inquiry data
                     const [quoteResponse, inquiryResponse] = await Promise.all([
@@ -974,8 +950,7 @@ export default function TravelDashboard() {
                       }
                       setCancellingBookingId(booking.id)
                       try {
-                        const userStr = localStorage.getItem('user')
-                        const userEmail = userStr ? JSON.parse(userStr).email : null
+                        const userEmail = user?.email || null
                         const isFlight = (booking.type || '').toLowerCase() === 'flight'
                         let result
                         if (isFlight) {

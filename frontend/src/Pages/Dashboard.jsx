@@ -1,19 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import withPageElements from './Common/PageWrapper';
 import LoadingSpinner from '../Components/LoadingSpinner';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 
 const Dashboard = () => {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [loading, setLoading] = useState(true);
+    // Auth from the Supabase context (cookie/session) — not localStorage.
+    const { isAuthenticated, loading } = useSupabaseAuth();
 
     useEffect(() => {
         document.title = 'Dashboard | Jetsetters';
-
-        // Check authentication from localStorage
-        const authStatus = localStorage.getItem('isAuthenticated') === 'true';
-        setIsAuthenticated(authStatus);
-        setLoading(false);
     }, []);
 
     // If user is authenticated, redirect to profile
