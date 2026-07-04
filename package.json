@@ -60,6 +60,7 @@
     "react-dom": "^18.2.0",
     "supertest": "^7.2.2",
     "tailwindcss": "^3.2.1",
+    "vercel": "^54.18.0",
     "vitest": "^4.0.18"
   },
   "dependencies": {
@@ -72,6 +73,7 @@
     "@sentry/node": "^10.60.0",
     "@sentry/react": "^10.60.0",
     "@supabase/supabase-js": "^2.80.0",
+    "@tanstack/react-query": "^5.101.2",
     "@tauri-apps/api": "^2.6.0",
     "amadeus": "^11.0.0",
     "axios": "^1.6.2",
