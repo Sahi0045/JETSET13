@@ -8,6 +8,7 @@ import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
 import currencyService from '../../../Services/CurrencyService';
 import pricingService from '../../../Services/PricingService';
+import { useHotelRates } from '../../../hooks/queries';
 import Price from '../../../Components/Price';
 import ArcPayService from '../../../Services/ArcPayService';
 import CouponInput from '../../../components/CouponInput';
@@ -78,12 +79,8 @@ const HotelBookingSummary = () => {
         : '/api';
 
     const subtotal = pricePerNight * nights;
-    const [rates, setRates] = useState({ taxPercent: 12, serviceFeePercent: 5, fixedFeePerNight: 0 });
-    useEffect(() => {
-        let active = true;
-        pricingService.getHotelRates().then((r) => { if (active) setRates(r); }).catch(() => {});
-        return () => { active = false; };
-    }, []);
+    // Hotel tax/fee rates via TanStack Query (admin price settings).
+    const { data: rates = { taxPercent: 12, serviceFeePercent: 5, fixedFeePerNight: 0 } } = useHotelRates();
     const taxes = Math.round(subtotal * (rates.taxPercent / 100));
     const serviceFee = Math.round(subtotal * (rates.serviceFeePercent / 100));
     const fixedFees = Math.round((rates.fixedFeePerNight || 0) * nights);

@@ -15,3 +15,13 @@ export function usePriceConfig(service = 'all', options = {}) {
     ...options,
   });
 }
+
+/** Hotel tax/service/fixed-fee rates derived from the admin price settings. */
+export function useHotelRates(options = {}) {
+  return useQuery({
+    queryKey: [...queryKeys.pricing.all, 'hotelRates'],
+    queryFn: () => PricingService.getHotelRates(),
+    staleTime: 1000 * 60 * 10,
+    ...options,
+  });
+}
