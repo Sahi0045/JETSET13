@@ -1982,7 +1982,20 @@ router.get('/bookings', async (req, res) => {
         cruiseDuration: booking.booking_details?.duration || '',
         basePrice: booking.booking_details?.base_price || 0,
         taxesAndFees: booking.booking_details?.taxes_and_fees || 0,
-        portCharges: booking.booking_details?.port_charges || 0
+        portCharges: booking.booking_details?.port_charges || 0,
+        // Hotel-specific fields (surfaced so My Trips can show name/dates and
+        // classify Upcoming/Past by check-in date on both web and app)
+        hotelName: booking.booking_details?.hotel_name || '',
+        hotelImage: booking.booking_details?.hotel_image || '',
+        location: booking.booking_details?.location || '',
+        hotelDestination: booking.booking_details?.location || '',
+        checkinDate: booking.booking_details?.check_in_date || '',
+        checkoutDate: booking.booking_details?.check_out_date || '',
+        roomType: booking.booking_details?.room_type || '',
+        guests: booking.booking_details?.guests || null,
+        hotelGuests: booking.booking_details?.guests || null,
+        nights: booking.booking_details?.nights || null,
+        pricePerNight: booking.booking_details?.price_per_night || null
       };
     });
 

@@ -655,6 +655,10 @@ export default function TravelDashboard() {
 
     const getBookingTitle = () => {
       if (booking.title) return booking.title
+      // Prefer the real name (hotel/cruise/airline) over a generic "X Booking"
+      if (booking.type === 'hotel' && booking.hotelName) return booking.hotelName
+      if (booking.type === 'cruise' && booking.cruiseName) return booking.cruiseName
+      if (booking.type === 'flight' && booking.airlineName) return `${booking.airlineName} Flight`
       return `${getTypeName(booking.type)} Booking`
     }
 
