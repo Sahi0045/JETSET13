@@ -359,11 +359,17 @@ export const SupabaseAuthProvider = ({ children }) => {
       const currentUserEmail = user?.email;
       const currentUserName = user?.user_metadata?.first_name || user?.user_metadata?.full_name?.split(' ')[0] || '';
 
-      const { error } = await supabase.auth.signOut();
+      // Best-effort local Supabase sign-out. With persistSession:false the SDK
+      // may report "Auth session missing" — that must NOT abort logout, or the
+      // cookie/session cleanup below would be skipped and the user stays signed in.
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (e) {
+        console.warn('Supabase signOut warning (ignored):', e?.message);
+      }
 
-      if (error) throw error;
-
-      // Clear the backend httpOnly cookie session too.
+      // Clear the backend httpOnly cookie session (the real credential). This
+      // MUST run so the refresh cookie can't re-hydrate the session on reload.
       lastSessionToken = null;
       try {
         await fetch(getApiUrl('auth/logout'), { method: 'POST', credentials: 'include' });
