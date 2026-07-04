@@ -64,6 +64,8 @@ export function buildCorsOptions() {
   const defaults = [
     'http://localhost:5173',
     'http://localhost:3000',
+    'http://localhost:8081',   // Expo web (Metro)
+    'http://localhost:19006',  // Expo web (classic)
     'https://www.jetsetterss.com',
     'https://jetsetterss.com',
   ];

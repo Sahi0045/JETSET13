@@ -87,10 +87,10 @@ app.use((req, res, next) => {
 const rawCorsOrigin = (process.env.CORS_ORIGIN || process.env.ALLOWED_ORIGIN || '').trim();
 
 const corsOptions = {
-  origin: rawCorsOrigin === '*' ? true : (rawCorsOrigin ? rawCorsOrigin.split(',').map(o => o.trim()).filter(Boolean) : ['https://www.jetsetterss.com', 'https://jetsetterss.com']),
+  origin: rawCorsOrigin === '*' ? true : (rawCorsOrigin ? rawCorsOrigin.split(',').map(o => o.trim()).filter(Boolean) : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:8081', 'http://localhost:19006', 'https://www.jetsetterss.com', 'https://jetsetterss.com']),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'x-csrf-token'],
   optionsSuccessStatus: 200
 };
 
