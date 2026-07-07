@@ -3,122 +3,61 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import BookingInfoForm from './BookingInfoForm';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
+import { useInquiryById, useQuotesByInquiry } from '../../hooks/queries';
 
 const InquiryDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [inquiry, setInquiry] = useState(null);
-  const [quotes, setQuotes] = useState([]);
+  const { session, isAuthenticated } = useSupabaseAuth();
+
+  // Fetch inquiry + quotes via TanStack Query (auth via cookie + Bearer fallback).
+  const { data: inquiryData, isLoading: inquiryLoading, error: inquiryError } = useInquiryById(id, { session }, { enabled: isAuthenticated && !!id });
+  const inquiry = inquiryData || null;
+  const inlineQuotes = inquiry?.quotes || [];
+
+  // Fetch quotes separately if not included in the inquiry response.
+  const { data: separateQuotes = [] } = useQuotesByInquiry(id, { session }, {
+    enabled: isAuthenticated && !!id && inlineQuotes.length === 0,
+  });
+  const quotes = inlineQuotes.length > 0 ? inlineQuotes : separateQuotes;
+
   const [bookingInfo, setBookingInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const loading = inquiryLoading;
+  const error = !isAuthenticated ? 'Authentication required. Please log in.' : (inquiryError?.message || null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [selectedQuoteForBooking, setSelectedQuoteForBooking] = useState(null);
 
+  // If inquiry is booked/paid, fetch booking info for the accepted/paid quote.
   useEffect(() => {
-    fetchInquiryDetails();
-    // Note: SDK loading removed - we use direct checkout URL redirect instead
-  }, [id]);
+    if (!inquiry || !quotes.length) return;
+    const inquiryStatus = inquiry.status;
+    if (inquiryStatus !== 'booked' && inquiryStatus !== 'paid') return;
+    const paidQuote = quotes.find(q => q.status === 'paid' || q.status === 'accepted');
+    if (!paidQuote) return;
 
-  const fetchInquiryDetails = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token');
-
-      if (!token) {
-        setError('Authentication required. Please log in.');
-        setLoading(false);
-        return;
-      }
-
-      const inquiryResponse = await fetch(`/api/inquiries?id=${id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
-
-      if (!inquiryResponse.ok) {
-        if (inquiryResponse.status === 404) {
-          setError('Inquiry not found');
-          setLoading(false);
-          return;
-        }
-        if (inquiryResponse.status === 403) {
-          setError('You do not have permission to view this inquiry');
-          setLoading(false);
-          return;
-        }
-        throw new Error(`Failed to fetch inquiry (${inquiryResponse.status})`);
-      }
-
-      const inquiryData = await inquiryResponse.json();
-
-      if (inquiryData.success) {
-        setInquiry(inquiryData.data);
-        const inquiryStatus = inquiryData.data.status;
-
-        // Quotes might be included in the inquiry response
-        let fetchedQuotes = [];
-        if (inquiryData.data.quotes && Array.isArray(inquiryData.data.quotes)) {
-          fetchedQuotes = inquiryData.data.quotes;
-          setQuotes(fetchedQuotes);
-        } else {
-          // Fetch quotes separately if not included
-          const quotesResponse = await fetch(`/api/quotes?inquiryId=${id}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            credentials: 'include'
-          });
-
-          if (quotesResponse.ok) {
-            const quotesData = await quotesResponse.json();
-            if (quotesData.success) {
-              fetchedQuotes = Array.isArray(quotesData.data) ? quotesData.data : [];
-              setQuotes(fetchedQuotes);
-            }
+    const token = session?.access_token || '';
+    (async () => {
+      try {
+        const bookingInfoResponse = await fetch(`/api/quotes?id=${paidQuote.id}&endpoint=booking-info`, {
+          headers: {
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
+        if (bookingInfoResponse.ok) {
+          const bookingData = await bookingInfoResponse.json();
+          if (bookingData.success && bookingData.data) {
+            setBookingInfo(bookingData.data);
           }
         }
-
-        // If inquiry is booked/paid, fetch booking info for the accepted/paid quote
-        if ((inquiryStatus === 'booked' || inquiryStatus === 'paid') && fetchedQuotes.length > 0) {
-          const paidQuote = fetchedQuotes.find(q => q.status === 'paid' || q.status === 'accepted');
-          if (paidQuote) {
-            try {
-              const bookingInfoResponse = await fetch(`/api/quotes?id=${paidQuote.id}&endpoint=booking-info`, {
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json'
-                },
-                credentials: 'include'
-              });
-              if (bookingInfoResponse.ok) {
-                const bookingData = await bookingInfoResponse.json();
-                if (bookingData.success && bookingData.data) {
-                  setBookingInfo(bookingData.data);
-                }
-              }
-            } catch (bookingErr) {
-              console.error('Error fetching booking info:', bookingErr);
-            }
-          }
-        }
-      } else {
-        setError(inquiryData.message || 'Failed to load inquiry');
+      } catch (bookingErr) {
+        console.error('Error fetching booking info:', bookingErr);
       }
-    } catch (err) {
-      console.error('Error fetching inquiry details:', err);
-      setError(err.message || 'An error occurred while loading the inquiry');
-    } finally {
-      setLoading(false);
-    }
-  };
+    })();
+  }, [inquiry, quotes, session]);
 
   const handlePayNow = async (quote) => {
     console.log('💳 handlePayNow called with quote:', quote);
@@ -149,7 +88,7 @@ const InquiryDetail = () => {
 
     // Check if booking info is required and completed
     try {
-      const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token');
+      const token = session?.access_token || '';
       const bookingInfoResponse = await fetch(`/api/quotes?id=${quote.id}&endpoint=booking-info`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -222,7 +161,7 @@ const InquiryDetail = () => {
     setPaymentLoading(true);
 
     try {
-      const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token');
+      const token = session?.access_token || '';
 
       if (!token) {
         alert('Please log in to proceed with payment.');
