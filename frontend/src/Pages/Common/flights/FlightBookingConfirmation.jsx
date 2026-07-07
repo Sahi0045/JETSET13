@@ -164,9 +164,7 @@ function FlightBookingConfirmation() {
         setIsLoggedIn(!!session);
       } catch (error) {
         console.error('Auth check error:', error);
-        // Fallback to localStorage check
-        const authStatus = localStorage.getItem('isAuthenticated');
-        setIsLoggedIn(authStatus === 'true');
+        setIsLoggedIn(false);
       }
     };
     checkAuth();

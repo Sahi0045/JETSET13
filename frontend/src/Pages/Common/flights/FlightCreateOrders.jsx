@@ -11,10 +11,12 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import { endpoints } from '@/config/api';
 import ArcPayService from '../../../Services/ArcPayService';
+import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 
 function FlightCreateOrders() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user: authUser } = useSupabaseAuth();
   const [loading, setLoading] = useState(true);
   const [processingOrder, setProcessingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -139,17 +141,8 @@ function FlightCreateOrders() {
 
       const fareBreakdown = orderData.calculatedFare || null;
 
-      // Get user ID from localStorage
-      let userId = null;
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        try {
-          const user = JSON.parse(userStr);
-          userId = user.id;
-        } catch (e) {
-          console.error('Error parsing user from localStorage:', e);
-        }
-      }
+      // Get user ID from auth context
+      const userId = authUser?.id || null;
 
       // Proceed with creating the flight order
       // Prioritize originalOffer (full Amadeus API data) over transformed flight data

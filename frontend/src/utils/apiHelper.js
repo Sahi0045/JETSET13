@@ -65,13 +65,7 @@ export const apiRequest = async (endpoint, options = {}, _retried = false) => {
     headers['Content-Type'] = 'application/json';
   }
 
-  // Legacy Bearer token fallback (transition/mobile). No-op once cookie-only.
-  const token = localStorage.getItem('token') ||
-                localStorage.getItem('adminToken') ||
-                localStorage.getItem('supabase_token');
-  if (token && !headers['Authorization']) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  // Auth is via httpOnly cookies (credentials: 'include'). No localStorage token.
 
   // CSRF double-submit: echo the readable jt_csrf cookie on state-changing requests.
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {

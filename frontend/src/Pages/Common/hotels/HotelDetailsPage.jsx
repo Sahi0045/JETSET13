@@ -218,7 +218,7 @@ const HotelDetailsPage = () => {
     // Navigate to booking
     const handleBookNow = () => {
         // Require login before proceeding to booking
-        const isLoggedIn = supabaseAuth || localStorage.getItem('isAuthenticated') === 'true';
+        const isLoggedIn = supabaseAuth;
 
         if (!isLoggedIn) {
             // Redirect to Supabase login, preserving return URL

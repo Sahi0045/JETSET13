@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import './DocumentCenter.css';
 
-const DocumentCenter = ({ 
+const DocumentCenter = ({
   apiEndpoint = '/api/documents',
   categories = ['all', 'templates', 'guides', 'videos', 'forms']
 }) => {
+  const { session } = useSupabaseAuth();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('all');
@@ -18,16 +20,16 @@ const DocumentCenter = ({
   const fetchDocuments = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      
-      const url = activeCategory === 'all' 
+      const token = session?.access_token || '';
+
+      const url = activeCategory === 'all'
         ? `${apiEndpoint}?action=list`
         : `${apiEndpoint}?action=list&category=${activeCategory}`;
-      
+
       const response = await fetch(url, {
         credentials: 'include',
         headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           'Content-Type': 'application/json'
         }
       });

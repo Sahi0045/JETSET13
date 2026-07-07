@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import './NotificationSettings.css';
 
-const NotificationSettings = ({ 
+const NotificationSettings = ({
   apiEndpoint = '/api/notifications/settings',
   onSave,
   onError
 }) => {
+  const { session } = useSupabaseAuth();
   const [settings, setSettings] = useState({
     emailNotifications: true,
     smsNotifications: false,
@@ -28,12 +30,12 @@ const NotificationSettings = ({
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('supabase_token') || localStorage.getItem('token');
-      
+      const token = session?.access_token || '';
+
       const response = await fetch(`${apiEndpoint}`, {
         credentials: 'include',
         headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           'Content-Type': 'application/json'
         }
       });
@@ -62,13 +64,13 @@ const NotificationSettings = ({
   const handleSave = async () => {
     try {
       setSaving(true);
-      const token = localStorage.getItem('supabase_token') || localStorage.getItem('token');
-      
+      const token = session?.access_token || '';
+
       const response = await fetch(apiEndpoint, {
         credentials: 'include',
         method: 'POST',
         headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ action: 'update', ...settings })

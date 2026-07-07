@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import './AIChatbot.css';
 
 const MAX_MESSAGE_LENGTH = 2000;
@@ -10,37 +11,18 @@ const AIChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userName, setUserName] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesContainerRef = useRef(null);
   const initializedRef = useRef(false);
 
-  // Check authentication status on mount and when chat opens
+  const { user, session, isAuthenticated } = useSupabaseAuth();
+
+  const userName = user?.user_metadata?.first_name || user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || '';
+
+  // Check authentication status — returns current state for callers
   const checkAuth = useCallback(() => {
-    // Check multiple sources for auth state
-    const token = localStorage.getItem('token') ||
-      localStorage.getItem('supabase_token') ||
-      localStorage.getItem('adminToken');
-    const authStatus = localStorage.getItem('isAuthenticated');
-    const userStr = localStorage.getItem('user');
-
-    const isLoggedIn = !!(token && (authStatus === 'true' || userStr));
-    setIsAuthenticated(isLoggedIn);
-
-    if (isLoggedIn && userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        setUserName(user.firstName || user.name || user.email?.split('@')[0] || '');
-      } catch {
-        setUserName('');
-      }
-    } else {
-      setUserName('');
-    }
-
-    return isLoggedIn;
-  }, []);
+    return isAuthenticated;
+  }, [isAuthenticated]);
 
   // Initialize welcome message
   useEffect(() => {
@@ -141,21 +123,16 @@ const AIChatbot = () => {
     setIsTyping(true);
 
     try {
-      // Get auth token if available — try all possible token sources
-      const token = localStorage.getItem('token') ||
-        localStorage.getItem('supabase_token') ||
-        localStorage.getItem('adminToken');
+      // Get auth token from Supabase session
+      const token = session?.access_token || '';
 
       // Get or initialize session ID
       const sessionId = localStorage.getItem('chatSessionId');
 
       const headers = {
         'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       };
-
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
 
       const response = await fetchWithRetry('/api/chat/message', {
         method: 'POST',

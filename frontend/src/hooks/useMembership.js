@@ -28,14 +28,8 @@ export default function useMembership() {
     let cancelled = false;
 
     const load = async () => {
-      // Resolve a user id from auth context, falling back to localStorage.
-      let userId = user?.id;
-      if (!userId) {
-        try {
-          const lsUser = JSON.parse(localStorage.getItem('user') || 'null');
-          userId = lsUser?.id || null;
-        } catch { /* ignore */ }
-      }
+      // Resolve a user id from auth context (cookie session).
+      const userId = user?.id || null;
 
       if (!userId) {
         if (!cancelled) setState({ loading: false, tier: null, endDate: null });

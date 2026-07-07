@@ -141,8 +141,8 @@ const RequestPage = () => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Get user data from Supabase auth context
-  const { user, isAuthenticated } = useSupabaseAuth();
+  // Get user data from Supabase auth context (cookie session, not localStorage)
+  const { user, session, isAuthenticated } = useSupabaseAuth();
 
   // Auto-fill user data when logged in
   useEffect(() => {
@@ -263,20 +263,13 @@ const RequestPage = () => {
 
       console.log('Submitting inquiry:', inquiryData);
 
-      // Get authentication token if user is logged in
-      const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || localStorage.getItem('supabase_token');
+      // Cookie session authenticates; Bearer fallback from in-memory session token
+      const token = session?.access_token || '';
       const headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       };
-
-      // Add authorization header if user is logged in
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-        console.log('User is authenticated, associating inquiry with user account');
-      } else {
-        console.log('User not authenticated, creating guest inquiry');
-      }
 
       // Submit to API
       const response = await fetch('/api/inquiries', {

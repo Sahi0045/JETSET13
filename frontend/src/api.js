@@ -27,10 +27,7 @@ const getCookie = (name) => {
 // Add a request interceptor: cookie auth + CSRF on mutations (+ legacy Bearer fallback).
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token'); // legacy/transition; no-op once cookie-only
-    if (token && !config.headers.Authorization) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // Auth is via httpOnly cookies (credentials: 'include'). No localStorage token.
     const method = (config.method || 'get').toUpperCase();
     if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
       const csrf = getCookie('jt_csrf');

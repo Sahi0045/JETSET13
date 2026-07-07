@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getApiUrl } from '../../utils/apiHelper';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
 export default function PaymentCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState('Processing payment...');
   const [error, setError] = useState(null);
+  const { user } = useSupabaseAuth();
 
   useEffect(() => {
     const verifyPayment = async () => {
@@ -211,17 +213,7 @@ export default function PaymentCallback() {
               setStatus('Saving cruise booking...');
               console.log('🚢 Saving cruise booking to database...', bookingData);
 
-              // Get user ID from localStorage
-              let userId = null;
-              const userStr = localStorage.getItem('user');
-              if (userStr) {
-                try {
-                  const user = JSON.parse(userStr);
-                  userId = user.id;
-                } catch (e) {
-                  console.error('Error parsing user from localStorage:', e);
-                }
-              }
+              const userId = user?.id || null;
 
               const saveResponse = await fetch(getApiUrl('cruises/bookings'), {
                 method: 'POST',
@@ -260,16 +252,7 @@ export default function PaymentCallback() {
               setStatus('Saving hotel booking...');
               console.log('🏨 Saving hotel booking to database...', bookingData);
 
-              // Get user ID from localStorage
-              let userId = null;
-              const userStr = localStorage.getItem('user');
-              if (userStr) {
-                try {
-                  userId = JSON.parse(userStr).id;
-                } catch (e) {
-                  console.error('Error parsing user from localStorage:', e);
-                }
-              }
+              const userId = user?.id || null;
 
               const saveResponse = await fetch(getApiUrl('hotels/bookings'), {
                 method: 'POST',

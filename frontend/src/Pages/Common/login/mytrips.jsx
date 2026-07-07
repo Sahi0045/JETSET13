@@ -402,14 +402,6 @@ export default function TravelDashboard() {
     try {
       console.log('🔍 Loading user inquiries...')
 
-      // Debug: Check all localStorage keys
-      console.log('📦 localStorage contents:', {
-        token: localStorage.getItem('token') ? 'EXISTS' : 'MISSING',
-        adminToken: localStorage.getItem('adminToken') ? 'EXISTS' : 'MISSING',
-        supabaseToken: localStorage.getItem('supabase_token') ? 'EXISTS' : 'MISSING',
-        isAuthenticated: localStorage.getItem('isAuthenticated'),
-        user: localStorage.getItem('user') ? 'EXISTS' : 'MISSING'
-      })
 
       // Cookie session authenticates the request; the in-memory Supabase access
       // token (if present) is sent as a Bearer fallback.

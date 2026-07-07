@@ -37,7 +37,7 @@ async function registerServiceWorker() {
 
 async function getAuthToken() {
   const { data } = await supabase.auth.getSession();
-  return data?.session?.access_token || localStorage.getItem('supabase_token') || localStorage.getItem('token');
+  return data?.session?.access_token || '';
 }
 
 /**

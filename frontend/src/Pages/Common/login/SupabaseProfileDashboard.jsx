@@ -96,16 +96,7 @@ function SupabaseProfileDashboard() {
 
             setSuccessMessage('Profile updated successfully!');
             setIsEditing(false);
-            
-            // Update localStorage
-            const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-            localStorage.setItem('user', JSON.stringify({
-                ...storedUser,
-                firstName: profileData.firstName,
-                lastName: profileData.lastName,
-                phone: profileData.phone
-            }));
-            
+
         } catch (error) {
             console.error('Profile update error:', error);
             setErrorMessage('An error occurred while updating your profile');

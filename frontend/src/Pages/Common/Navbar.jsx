@@ -22,16 +22,11 @@ const Navbar = ({ forceScrolled }) => {
     return location.pathname.startsWith(path);
   };
 
-  // Check authentication from Supabase context and localStorage
+  // Auth from Supabase context (cookie session — no localStorage)
   useEffect(() => {
-    const authStatus = localStorage.getItem('isAuthenticated') === 'true';
-    const userData = localStorage.getItem('user');
-
-    // Use Supabase auth state if available, otherwise fall back to localStorage
-    setIsAuthenticated(supabaseAuth || authStatus);
+    setIsAuthenticated(supabaseAuth);
 
     if (authUser) {
-      // Use Supabase user data
       setUser({
         id: authUser.id,
         email: authUser.email,
@@ -39,12 +34,6 @@ const Navbar = ({ forceScrolled }) => {
         lastName: authUser.user_metadata?.last_name || authUser.user_metadata?.full_name?.split(' ')[1] || '',
         photoURL: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture,
       });
-    } else if (userData) {
-      try {
-        setUser(JSON.parse(userData));
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-      }
     }
     setLoading(false);
   }, [authUser, supabaseAuth]);

@@ -5,14 +5,14 @@ import Navbar from './Navbar';
 import Footer from './Footer';
 import SubscriptionService from '../../Services/SubscriptionService';
 import { useSubscriptionStatus } from '../../hooks/queries';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
 const Membership = () => {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
-
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  const { user } = useSupabaseAuth();
   const { data: subData, refetch: refetchStatus } = useSubscriptionStatus(user?.id);
   const userStatus = subData?.data || null;
 

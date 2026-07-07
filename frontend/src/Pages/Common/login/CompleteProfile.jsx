@@ -210,20 +210,8 @@ export default function CompleteProfile() {
         console.log('Database update successful');
       }
 
-      // Save additional profile data to localStorage
-      localStorage.setItem('userData', JSON.stringify({
-        first_name: data.first_name,
-        last_name: data.last_name,
-        mobile_number: data.mobile_number,
-        date_of_birth: data.date_of_birth,
-        gender: data.gender,
-      }));
-
-      // Update user in localStorage
-      const localUser = JSON.parse(localStorage.getItem('user') || '{}');
-      localUser.firstName = data.first_name;
-      localUser.lastName = data.last_name;
-      localStorage.setItem('user', JSON.stringify(localUser));
+      // Profile data is now managed via Supabase user_metadata (cookie session).
+      // No localStorage writes needed.
 
       console.log('Profile completed successfully!');
       setSuccessMessage('Profile completed successfully!');

@@ -209,18 +209,10 @@ export default function ProfilePage() {
           console.error('Database fetch exception:', dbErr)
         }
 
-        const localStorageUser = localStorage.getItem('user')
-        let parsedLocalUser = {}
-        if (localStorageUser) {
-          try {
-            parsedLocalUser = JSON.parse(localStorageUser)
-          } catch (e) { }
-        }
-
         const mergedData = {
-          first_name: dbUserData.first_name || userMetadata.first_name || parsedLocalUser.firstName || parsedSavedData.first_name || userMetadata.full_name?.split(' ')[0] || '',
-          last_name: dbUserData.last_name || userMetadata.last_name || parsedLocalUser.lastName || parsedSavedData.last_name || userMetadata.full_name?.split(' ')[1] || '',
-          email: dbUserData.email || user.email || parsedLocalUser.email || '',
+          first_name: dbUserData.first_name || userMetadata.first_name || parsedSavedData.first_name || userMetadata.full_name?.split(' ')[0] || '',
+          last_name: dbUserData.last_name || userMetadata.last_name || parsedSavedData.last_name || userMetadata.full_name?.split(' ')[1] || '',
+          email: dbUserData.email || user.email || '',
           mobile_number: dbUserData.mobile_number || userMetadata.phone || user.phone || parsedSavedData.mobile_number || '',
           date_of_birth: dbUserData.date_of_birth || userMetadata.date_of_birth || parsedSavedData.date_of_birth || '',
           gender: dbUserData.gender || userMetadata.gender || parsedSavedData.gender || 'Male',

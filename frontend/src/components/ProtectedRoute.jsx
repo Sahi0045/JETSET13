@@ -1,28 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import LoadingSpinner from '../Components/LoadingSpinner';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 
 const ProtectedRoute = ({ children, requireAuth = true, requireAdmin = false }) => {
     const location = useLocation();
-    const [loading, setLoading] = useState(true);
-    const [user, setUser] = useState(null);
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-    useEffect(() => {
-        // Check authentication from localStorage
-        const authStatus = localStorage.getItem('isAuthenticated') === 'true';
-        const userData = localStorage.getItem('user');
-
-        setIsAuthenticated(authStatus);
-        if (userData) {
-            try {
-                setUser(JSON.parse(userData));
-            } catch (error) {
-                console.error('Error parsing user data:', error);
-            }
-        }
-        setLoading(false);
-    }, []);
+    const { user, isAuthenticated, loading } = useSupabaseAuth();
 
     // Admin/agent gate. The credential now lives in an httpOnly cookie (not
     // readable here); this is only a UX gate, real enforcement is server-side.

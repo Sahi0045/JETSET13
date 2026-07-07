@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 
 /**
  * CouponInput - A reusable coupon input component
@@ -14,8 +15,7 @@ const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove }) => 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [applied, setApplied] = useState(null);
-
-    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    const { user } = useSupabaseAuth();
 
     const getApiBase = () => {
         if (import.meta.env.PROD && import.meta.env.VITE_API_BASE_URL) {
