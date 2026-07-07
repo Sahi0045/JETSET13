@@ -10,69 +10,27 @@ import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
 import ArcPayService from '../../../Services/ArcPayService';
 import { getApiUrl } from '../../../utils/apiHelper';
+import { useFlightBooking } from '../../../hooks/queries';
 
 function ManageBooking() {
   const navigate = useNavigate();
   const location = useLocation();
   const { bookingId } = useParams();
 
-  const [bookingData, setBookingData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // If live data was passed from My Trips routing, use it; otherwise fetch via hook.
+  const passedData = (location.state?.bookingData?.source !== 'localStorage') ? location.state?.bookingData : null;
+  const { data: fetchedBooking, isLoading: queryLoading, error: queryError } = useFlightBooking(bookingId, {
+    enabled: !passedData && !!bookingId,
+  });
+  const bookingData = passedData || fetchedBooking || null;
+  const loading = !passedData && queryLoading;
+  const error = !passedData && queryError ? queryError.message : (!bookingId && !passedData ? 'No booking ID provided' : null);
+
   const [activeTab, setActiveTab] = useState('details');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('Change of plans');
   const [cancelResult, setCancelResult] = useState(null);
-
-  useEffect(() => {
-    // Completely skip localStorage and fetch directly from database
-    const loadLiveBooking = async () => {
-      setLoading(true);
-
-      if (location.state?.bookingData && location.state.bookingData.source !== 'localStorage') {
-        // If we received recent live data from My Trips routing
-        setBookingData(location.state.bookingData);
-        setLoading(false);
-        return;
-      }
-
-      if (!bookingId) {
-        setError('No booking ID provided');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        console.log(`📡 Fetching live database row for Booking Ref: ${bookingId}...`);
-        const response = await fetch(getApiUrl(`flights/bookings/${encodeURIComponent(bookingId)}`), {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success && result.data) {
-            console.log('✅ Live booking data received:', result.data);
-            setBookingData(result.data);
-          } else {
-            setError(result.error || 'Booking not found in database');
-          }
-        } else {
-          setError(`Server error ${response.status}: Failed to retrieve live booking`);
-        }
-      } catch (err) {
-        console.error('❌ Live fetch error:', err);
-        setError('Network error: Could not reach the server to fetch live booking status');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadLiveBooking();
-  }, [location.state, bookingId]);
 
   const handleCancelBooking = () => {
     setShowCancelModal(true);
