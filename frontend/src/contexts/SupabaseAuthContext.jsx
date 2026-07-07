@@ -58,10 +58,22 @@ export const SupabaseAuthProvider = ({ children }) => {
           try {
             const resp = await fetch(getApiUrl('auth/supabase-session'), { credentials: 'include' });
             if (resp.ok) {
-              const { access_token, refresh_token } = await resp.json();
-              if (access_token && refresh_token) {
-                const { data: setData } = await supabase.auth.setSession({ access_token, refresh_token });
-                session = setData?.session ?? null;
+              const payload = await resp.json();
+              if (payload.access_token && payload.refresh_token) {
+                // Build a synthetic session object WITHOUT calling setSession —
+                // setSession fires SIGNED_IN which makes Supabase send a login
+                // notification email on every page refresh.
+                const jwtPayload = JSON.parse(atob(payload.access_token.split('.')[1]));
+                session = {
+                  access_token: payload.access_token,
+                  refresh_token: payload.refresh_token,
+                  user: {
+                    id: jwtPayload.sub,
+                    email: jwtPayload.email,
+                    user_metadata: jwtPayload.user_metadata || {},
+                    role: jwtPayload.role,
+                  },
+                };
               }
             }
           } catch (e) {
@@ -79,37 +91,7 @@ export const SupabaseAuthProvider = ({ children }) => {
           // Establish the httpOnly cookie session on the backend (additive).
           if (session?.access_token) establishServerSession(session);
 
-          // Sync with localStorage
-          if (session?.user) {
-            const role = session.user.user_metadata?.role || 'user';
-            const serializedUser = {
-              id: session.user.id,
-              email: session.user.email,
-              firstName: session.user.user_metadata?.first_name || session.user.user_metadata?.full_name?.split(' ')[0] || '',
-              lastName: session.user.user_metadata?.last_name || session.user.user_metadata?.full_name?.split(' ')[1] || '',
-              phone: session.user.user_metadata?.phone || session.user.phone || '',
-              photoURL: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
-              role
-            };
-
-            localStorage.setItem('isAuthenticated', 'true');
-            localStorage.setItem('user', JSON.stringify(serializedUser));
-
-          } else {
-            // No Supabase session — only clear Supabase-specific auth
-            // Preserve adminToken/adminUser if admin logged in via custom login
-            const customAdminToken = localStorage.getItem('adminToken');
-            const customAdminUser = localStorage.getItem('adminUser');
-            const hasCustomAdminLogin = customAdminToken && customAdminUser;
-
-            if (!hasCustomAdminLogin) {
-              localStorage.removeItem('isAuthenticated');
-              localStorage.removeItem('user');
-              localStorage.removeItem('token');
-              localStorage.removeItem('adminToken');
-            }
-            localStorage.removeItem('supabase_token');
-          }
+          // No localStorage writes — auth state lives in context + httpOnly cookies.
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -132,40 +114,18 @@ export const SupabaseAuthProvider = ({ children }) => {
       // Establish the httpOnly cookie session on the backend (additive).
       if (session?.access_token) establishServerSession(session);
 
-      // Sync with localStorage
       if (session?.user) {
-        const role = session.user.user_metadata?.role || 'user';
-        const serializedUser = {
-          id: session.user.id,
-          email: session.user.email,
-          firstName: session.user.user_metadata?.first_name || session.user.user_metadata?.full_name?.split(' ')[0] || '',
-          lastName: session.user.user_metadata?.last_name || session.user.user_metadata?.full_name?.split(' ')[1] || '',
-          phone: session.user.user_metadata?.phone || session.user.phone || '',
-          photoURL: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
-          role
-        };
-
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('user', JSON.stringify(serializedUser));
-
-
-        // 📧 Send login notification only on a genuine new sign-in.
-        // supabase-js fires SIGNED_IN on page reloads, tab refocus, and session
-        // restoration too, so dedupe per user via a localStorage marker to avoid
-        // spamming the same notification repeatedly.
-        const alreadyNotified = localStorage.getItem('loginNotifiedUserId') === session.user.id;
+        // 📧 Send login notification only on a genuine new sign-in (not refresh).
+        // Use sessionStorage so it dedupes within a browser session but allows
+        // a fresh email after the tab is closed and reopened (real re-login).
+        const alreadyNotified = sessionStorage.getItem('loginNotifiedUserId') === session.user.id;
         if (event === 'SIGNED_IN' && !alreadyNotified) {
-          localStorage.setItem('loginNotifiedUserId', session.user.id);
+          sessionStorage.setItem('loginNotifiedUserId', session.user.id);
           try {
-            const loginTime = new Date().toLocaleString('en-US', {
-              dateStyle: 'medium',
-              timeStyle: 'short'
-            });
-
-            // Determine login method
+            const loginTime = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
             const provider = session.user.app_metadata?.provider || 'email';
             const isOAuth = provider !== 'email';
-
+            const firstName = session.user.user_metadata?.first_name || session.user.user_metadata?.full_name?.split(' ')[0] || '';
             await fetch('/api/email/send', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -173,7 +133,7 @@ export const SupabaseAuthProvider = ({ children }) => {
                 type: 'login_notification',
                 to: session.user.email,
                 data: {
-                  customerName: serializedUser.firstName || 'Valued Customer',
+                  customerName: firstName || 'Valued Customer',
                   email: session.user.email,
                   loginTime,
                   ipAddress: 'Your device',
@@ -181,28 +141,12 @@ export const SupabaseAuthProvider = ({ children }) => {
                 }
               })
             });
-            console.log(`📧 Login notification email sent for ${provider} user`);
           } catch (emailError) {
-            console.warn('Failed to send OAuth login email:', emailError);
-            // Don't fail login if email fails
+            console.warn('Login notification email failed:', emailError);
           }
         }
       } else {
-        // No Supabase session — only clear Supabase-specific auth
-        // Preserve adminToken/adminUser if admin logged in via custom login
-        const customAdminToken = localStorage.getItem('adminToken');
-        const customAdminUser = localStorage.getItem('adminUser');
-        const hasCustomAdminLogin = customAdminToken && customAdminUser;
-
-        if (!hasCustomAdminLogin) {
-          localStorage.removeItem('isAuthenticated');
-          localStorage.removeItem('user');
-          localStorage.removeItem('token');
-          localStorage.removeItem('adminToken');
-        }
-        localStorage.removeItem('supabase_token');
-        // Allow a fresh login notification after the user signs out / session ends.
-        localStorage.removeItem('loginNotifiedUserId');
+        sessionStorage.removeItem('loginNotifiedUserId');
       }
     });
 
@@ -258,19 +202,7 @@ export const SupabaseAuthProvider = ({ children }) => {
         // Establish the httpOnly cookie session on the backend (additive).
         establishServerSession(data.session);
 
-        // Sync with localStorage immediately
-        const role = data.session.user.user_metadata?.role || 'user';
-        const serializedUser = {
-          id: data.session.user.id,
-          email: data.session.user.email,
-          firstName: data.session.user.user_metadata?.first_name || data.session.user.user_metadata?.full_name?.split(' ')[0] || '',
-          lastName: data.session.user.user_metadata?.last_name || data.session.user.user_metadata?.full_name?.split(' ')[1] || '',
-          photoURL: data.session.user.user_metadata?.avatar_url || data.session.user.user_metadata?.picture,
-          role
-        };
-
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('user', JSON.stringify(serializedUser));
+        // Auth state is in context + httpOnly cookies — no localStorage.
 
 
         // 📧 Send login notification email
@@ -404,15 +336,9 @@ export const SupabaseAuthProvider = ({ children }) => {
         }
       }
 
-      // Clear localStorage
-      localStorage.removeItem('isAuthenticated');
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('supabase_token');
-
       setUser(null);
       setSession(null);
+      sessionStorage.removeItem('loginNotifiedUserId');
 
       return { error: null };
     } catch (error) {
