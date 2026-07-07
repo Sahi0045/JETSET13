@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { FaMapMarkerAlt, FaCalendarAlt, FaArrowLeft, FaShip, FaSearch, FaSpinner, FaExclamationTriangle, FaAnchor, FaStar, FaChevronRight } from 'react-icons/fa';
 import { loadCruiseLines } from './data/cruiselinesLoader';
@@ -8,6 +8,7 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import Price from '../../../Components/Price';
 import currencyService from '../../../Services/CurrencyService';
+import { useCruiseList } from '../../../hooks/queries';
 
 const CruiseCards = () => {
   const [searchParams] = useSearchParams();
@@ -16,13 +17,43 @@ const CruiseCards = () => {
   const countryParam = searchParams.get('country');
 
   const [title, setTitle] = useState("All Cruises");
-  const [filteredCruises, setFilteredCruises] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [usingFallback, setUsingFallback] = useState(false);
+  const [fallbackCruises, setFallbackCruises] = useState([]);
 
-  const applyFiltersAndTitle = (cruises) => {
-    let filtered = cruises;
+  // Fetch cruise list via TanStack Query (cached, instant back-nav).
+  const { data: apiCruises, isLoading: apiLoading, isError } = useCruiseList();
+
+  // Transform API response to the component's expected shape.
+  const transformedCruises = useMemo(() => {
+    if (!apiCruises || apiCruises.length === 0) return [];
+    return apiCruises.map((cruise, idx) => ({
+      id: cruise.id || `${cruise.cruise_line || 'cruise'}-${cruise.departure_date || ''}-${cruise.departure_port || ''}-${idx}`,
+      name: cruise.cruise_line || cruise.name,
+      image: cruise.image || '/images/default-cruise.jpg',
+      duration: cruise.duration ? `${cruise.duration} Days` : cruise.duration,
+      description: cruise.name || cruise.description,
+      destinations: cruise.destinations,
+      departurePorts: cruise.departure_port ? [cruise.departure_port] : (cruise.departurePorts || []),
+      price: cruise.price_per_person || cruise.price,
+      priceValue: cruise.price_per_person || cruise.priceValue,
+      departureDate: cruise.departure_date || cruise.departureDate,
+    }));
+  }, [apiCruises]);
+
+  // Fallback to local data if the API fails.
+  useEffect(() => {
+    if (isError && fallbackCruises.length === 0) {
+      setUsingFallback(true);
+      loadCruiseLines().then((fb) => setFallbackCruises(fb.cruiseLines));
+    }
+  }, [isError]);
+
+  const allCruises = usingFallback ? fallbackCruises : transformedCruises;
+  const error = isError ? 'Unable to fetch live cruise data. Using fallback data.' : null;
+
+  // Apply filters + title
+  const filteredCruises = useMemo(() => {
+    let filtered = allCruises;
     let nextTitle = "All Cruises";
 
     if (cruiseLineParam) {
@@ -36,7 +67,6 @@ const CruiseCards = () => {
       const selectedDestination = destinationsData.destinations.find(dest =>
         dest.name.toLowerCase() === destinationParam.toLowerCase()
       );
-
       if (selectedDestination) {
         filtered = filtered.filter(cruise =>
           selectedDestination.cruiseLines.includes(cruise.name)
@@ -56,65 +86,9 @@ const CruiseCards = () => {
 
     setTitle(nextTitle);
     return filtered;
-  };
+  }, [allCruises, cruiseLineParam, destinationParam, countryParam]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    let cancelled = false;
-
-    // Kick off the fallback load in parallel so the catch branch doesn't have
-    // to wait for the JSON parse after the API has already failed.
-    const fallbackPromise = loadCruiseLines();
-
-    const fetchCruiseData = async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch('/api/cruises', { signal: controller.signal });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch cruise data');
-        }
-
-        const apiResponse = await response.json();
-        if (cancelled) return;
-
-        const transformedCruises = apiResponse.data.map((cruise, idx) => ({
-          id: cruise.id || `${cruise.cruise_line || 'cruise'}-${cruise.departure_date || ''}-${cruise.departure_port || ''}-${idx}`,
-          name: cruise.cruise_line,
-          image: cruise.image || '/images/default-cruise.jpg',
-          duration: `${cruise.duration} Days`,
-          description: cruise.name,
-          destinations: cruise.destinations,
-          departurePorts: [cruise.departure_port],
-          price: cruise.price_per_person,
-          priceValue: cruise.price_per_person,
-          departureDate: cruise.departure_date
-        }));
-
-        setFilteredCruises(applyFiltersAndTitle(transformedCruises));
-        setUsingFallback(false);
-      } catch (apiError) {
-        if (cancelled || apiError.name === 'AbortError') return;
-        console.error('Error fetching cruise data:', apiError);
-        setError('Unable to fetch live cruise data. Using fallback data.');
-        setUsingFallback(true);
-
-        const fallback = await fallbackPromise;
-        if (cancelled) return;
-        setFilteredCruises(applyFiltersAndTitle(fallback.cruiseLines));
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    };
-
-    fetchCruiseData();
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [cruiseLineParam, destinationParam, countryParam]);
+  const isLoading = apiLoading && !usingFallback;
 
   if (isLoading) {
     return (

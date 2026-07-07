@@ -8,6 +8,7 @@ import currencyService from '../../../Services/CurrencyService';
 import Price from '../../../Components/Price';
 import ArcPayService from '../../../Services/ArcPayService';
 import CouponInput from '../../../components/CouponInput';
+import { usePackageById } from '../../../hooks/queries';
 
 const PackageBookingSummary = () => {
   const navigate = useNavigate();
