@@ -4,15 +4,17 @@ import { Check, Crown, Tag, Headphones, Armchair, Sparkles, ShieldCheck, Refresh
 import Navbar from './Navbar';
 import Footer from './Footer';
 import SubscriptionService from '../../Services/SubscriptionService';
+import { useSubscriptionStatus } from '../../hooks/queries';
 
 const Membership = () => {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
-  const [userStatus, setUserStatus] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
 
   const user = JSON.parse(localStorage.getItem('user') || 'null');
+  const { data: subData, refetch: refetchStatus } = useSubscriptionStatus(user?.id);
+  const userStatus = subData?.data || null;
 
   useEffect(() => {
     const query = new URLSearchParams(location.search);
@@ -54,23 +56,12 @@ const Membership = () => {
       }
 
       if (user && user.id) {
-        await fetchUserStatus();
+        await refetchStatus();
       }
     };
 
     run();
   }, [location.search]);
-
-  const fetchUserStatus = async () => {
-    const res = await SubscriptionService.getStatus(user.id);
-    if (res.success && res.data) {
-      setUserStatus(res.data);
-      if (res.data.subscription_tier) {
-        const updatedUser = { ...user, isPremium: true, subscriptionTier: res.data.subscription_tier };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-      }
-    }
-  };
 
   const handleSubscribe = async (planId, planName, price) => {
     if (!user) {
