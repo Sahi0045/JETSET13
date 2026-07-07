@@ -11,6 +11,7 @@ import ArcPayService from "../../../Services/ArcPayService";
 import { useLocationContext } from '../../../Context/LocationContext';
 import { allAirports } from './airports';
 import PricingService from '../../../Services/PricingService';
+import { usePriceConfig } from '../../../hooks/queries';
 import CouponInput from '../../../components/CouponInput';
 import FlightSeatMap from './FlightSeatMap';
 import FlightFareRules from './FlightFareRules';
@@ -52,7 +53,7 @@ function FlightBookingConfirmation() {
     setSelectedBags(bags);
     setBagExtraFee(totalFee);
   };
-  const [priceConfig, setPriceConfig] = useState(null);
+  const { data: priceConfig } = usePriceConfig('all');
   const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
   const [calculatedFare, setCalculatedFare] = useState({
     baseFare: 0,
@@ -384,20 +385,13 @@ function FlightBookingConfirmation() {
         const hasSearchState = !!routerLocation.state?.flightData;
         const targetId = bookingId || "TEST_BOOKING_123";
 
-        const configPromise = priceConfig
-          ? Promise.resolve(priceConfig)
-          : PricingService.getPriceConfig('all').catch((err) => {
-              console.warn('Could not fetch price config, using defaults', err);
-              return PricingService.getDefaultSettings('all');
-            });
-        const mockPromise = hasSearchState
-          ? Promise.resolve(null)
-          : fetchBookingFromMockData(targetId);
-
-        const [config, mockData] = await Promise.all([configPromise, mockPromise]);
+        // priceConfig comes from usePriceConfig('all') — already resolved by
+        // the time this effect runs (staleTime 10min, cached). Fallback to defaults.
+        const config = priceConfig || PricingService.getDefaultSettings('all');
+        const mockData = hasSearchState
+          ? null
+          : await fetchBookingFromMockData(targetId);
         if (cancelled) return;
-
-        if (!priceConfig) setPriceConfig(config);
 
         let bookingData;
         if (hasSearchState) {

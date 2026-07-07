@@ -8,7 +8,7 @@ import withPageElements from '../PageWrapper';
 import hotelService from '../../../Services/HotelService';
 import currencyService from '../../../Services/CurrencyService';
 import pricingService from '../../../Services/PricingService';
-import { useHotelRates } from '../../../hooks/queries';
+import { useHotelRates, useHotelById } from '../../../hooks/queries';
 import Price from '../../../Components/Price';
 import ArcPayService from '../../../Services/ArcPayService';
 import CouponInput from '../../../components/CouponInput';
@@ -47,31 +47,13 @@ const HotelBookingSummary = () => {
     const [errors, setErrors] = useState({});
     const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
 
-    // Fetch hotel details. Guard prevents a stale fetch from flashing the
-    // wrong hotel into the summary if the user changes hotelId mid-flight.
+    // Fetch hotel details via TanStack Query (cached, instant on back-nav).
+    const { data: hotelData, isLoading: hotelLoading } = useHotelById(hotelId, { checkInDate: checkIn, checkOutDate: checkOut, adults: guests });
     useEffect(() => {
-        let cancelled = false;
-        const fetchHotel = async () => {
-            if (!hotelId) {
-                setLoading(false);
-                return;
-            }
-
-            try {
-                const hotelData = await hotelService.getHotelById(hotelId);
-                if (cancelled) return;
-                setHotel(hotelData);
-            } catch (err) {
-                if (cancelled) return;
-                console.error('Error fetching hotel:', err);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-
-        fetchHotel();
-        return () => { cancelled = true; };
-    }, [hotelId]);
+        if (hotelData) setHotel(hotelData);
+        if (!hotelLoading && !hotelData) setLoading(false);
+        if (!hotelLoading && hotelData) setLoading(false);
+    }, [hotelData, hotelLoading]);
 
     // Calculate prices
     const API_BASE_URL = window.location.hostname.includes('jetsetterss.com') || window.location.hostname.includes('vercel.app')

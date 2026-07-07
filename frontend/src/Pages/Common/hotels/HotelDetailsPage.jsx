@@ -10,6 +10,7 @@ import currencyService from '../../../Services/CurrencyService';
 import pricingService from '../../../Services/PricingService';
 import Price from '../../../Components/Price';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
+import { useHotelRates } from '../../../hooks/queries';
 
 // Map a 0-5 rating to a MakeMyTrip-style word label
 const ratingWord = (r) => {
@@ -39,7 +40,7 @@ const HotelDetailsPage = () => {
     const [selectedRoom, setSelectedRoom] = useState(null);
     const [showQuoteModal, setShowQuoteModal] = useState(false);
     const [isLiked, setIsLiked] = useState(false);
-    const [rates, setRates] = useState({ taxPercent: 12, serviceFeePercent: 5, fixedFeePerNight: 0 });
+    const { data: rates = { taxPercent: 12, serviceFeePercent: 5, fixedFeePerNight: 0 } } = useHotelRates();
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -129,12 +130,6 @@ const HotelDetailsPage = () => {
         }
     };
 
-    // Load admin-configurable hotel tax & service-fee rates
-    useEffect(() => {
-        let active = true;
-        pricingService.getHotelRates().then((r) => { if (active) setRates(r); }).catch(() => {});
-        return () => { active = false; };
-    }, []);
 
     // Calculate nights
     const calculateNights = () => {

@@ -8,6 +8,7 @@ import hotelService from '../../../Services/HotelService';
 import currencyService from '../../../Services/CurrencyService';
 import pricingService from '../../../Services/PricingService';
 import Price from '../../../Components/Price';
+import { useHotelRates } from '../../../hooks/queries';
 
 // USD price-per-night buckets (hotel prices are USD base; Price renders in user currency)
 const PRICE_BUCKETS = [
@@ -59,14 +60,7 @@ const SearchHotels = () => {
     const [priceBuckets, setPriceBuckets] = useState([]); // selected bucket ids
     const [starFilter, setStarFilter] = useState([]);
     const [ratingFilter, setRatingFilter] = useState(0);
-    const [rates, setRates] = useState({ taxPercent: 12, serviceFeePercent: 5, fixedFeePerNight: 0 });
-
-    // Admin-configured tax/fee rates (for the "+ taxes & fees" line)
-    useEffect(() => {
-        let active = true;
-        pricingService.getHotelRates().then((r) => { if (active) setRates(r); }).catch(() => {});
-        return () => { active = false; };
-    }, []);
+    const { data: rates = { taxPercent: 12, serviceFeePercent: 5, fixedFeePerNight: 0 } } = useHotelRates();
 
     const perNightTaxes = (price) => {
         const p = parseFloat(price) || 0;
