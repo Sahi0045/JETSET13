@@ -60,24 +60,19 @@ export const SupabaseAuthProvider = ({ children }) => {
             if (resp.ok) {
               const payload = await resp.json();
               if (payload.access_token && payload.refresh_token) {
-                // Build a synthetic session object WITHOUT calling setSession —
-                // setSession fires SIGNED_IN which makes Supabase send a login
-                // notification email on every page refresh.
-                const jwtPayload = JSON.parse(atob(payload.access_token.split('.')[1]));
-                session = {
+                // Mark as rehydration so onAuthStateChange skips the login email.
+                sessionStorage.setItem('_rehydrating', '1');
+                const { data: setData } = await supabase.auth.setSession({
                   access_token: payload.access_token,
                   refresh_token: payload.refresh_token,
-                  user: {
-                    id: jwtPayload.sub,
-                    email: jwtPayload.email,
-                    user_metadata: jwtPayload.user_metadata || {},
-                    role: jwtPayload.role,
-                  },
-                };
+                });
+                sessionStorage.removeItem('_rehydrating');
+                session = setData?.session ?? null;
               }
             }
           } catch (e) {
             console.warn('Session re-hydration skipped:', e?.message);
+            sessionStorage.removeItem('_rehydrating');
           }
         }
 
@@ -119,7 +114,9 @@ export const SupabaseAuthProvider = ({ children }) => {
         // Use sessionStorage so it dedupes within a browser session but allows
         // a fresh email after the tab is closed and reopened (real re-login).
         const alreadyNotified = sessionStorage.getItem('loginNotifiedUserId') === session.user.id;
-        if (event === 'SIGNED_IN' && !alreadyNotified) {
+        // Skip email on rehydration (page refresh restoring an existing session)
+        const isRehydration = sessionStorage.getItem('_rehydrating') === '1';
+        if (event === 'SIGNED_IN' && !alreadyNotified && !isRehydration) {
           sessionStorage.setItem('loginNotifiedUserId', session.user.id);
           try {
             const loginTime = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
