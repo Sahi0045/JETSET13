@@ -1573,3 +1573,26 @@ select.search-input {
   color: #9FD6E8;
   flex-shrink: 0;
 }
+
+/* Cruise results top search bar inputs (MMT-style) */
+.cruise-topbar-input {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid transparent;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #034457;
+  outline: none;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.cruise-topbar-input:focus {
+  border-color: #0890BC;
+  box-shadow: 0 0 0 3px rgba(8, 144, 188, 0.25);
+}
+.cruise-topbar-input option {
+  color: #034457;
+}

@@ -1,29 +1,85 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { FaMapMarkerAlt, FaCalendarAlt, FaArrowLeft, FaShip, FaSearch, FaSpinner, FaExclamationTriangle, FaAnchor, FaStar, FaChevronRight } from 'react-icons/fa';
+import {
+  FaMapMarkerAlt, FaCalendarAlt, FaArrowLeft, FaShip, FaSearch, FaSpinner,
+  FaExclamationTriangle, FaAnchor, FaChevronRight, FaChevronDown, FaChevronUp,
+  FaSlidersH, FaRegClock, FaTags, FaGift, FaFileInvoiceDollar,
+} from 'react-icons/fa';
 import { loadCruiseLines } from './data/cruiselinesLoader';
-import destinationsData from './data/destinations.json';
+import './HeroSection.css';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import Price from '../../../Components/Price';
-import currencyService from '../../../Services/CurrencyService';
 import { useCruiseList } from '../../../hooks/queries';
+
+// Representative cabin-type multipliers applied to the per-person "from" price.
+// The API returns a single starting price; cabin-level rates are finalised on the
+// itinerary/booking page. These give the MMT-style rate table a realistic spread.
+const CABIN_TYPES = [
+  { key: 'INSIDE', mult: 1 },
+  { key: 'OUTSIDE', mult: 1.28 },
+  { key: 'BALCONY', mult: 1.7 },
+  { key: 'SUITE', mult: 3.0 },
+];
+
+const toNumber = (v) => {
+  if (typeof v === 'number') return v;
+  const n = parseFloat(String(v || '').replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+};
+const parseNights = (duration) => {
+  const n = parseInt(String(duration || '').replace(/[^0-9]/g, ''), 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/* ---------- Collapsible sidebar filter group ---------- */
+const FilterGroup = ({ title, icon: Icon, children, defaultOpen = false }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-b border-slate-100 last:border-0">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 py-3.5 text-left"
+        aria-expanded={open}
+      >
+        <span className="flex items-center gap-2.5 text-sm font-semibold text-[#034457]">
+          <Icon className="w-3.5 h-3.5 text-[#0890BC]" /> {title}
+        </span>
+        {open ? <FaChevronUp className="w-3 h-3 text-slate-400" /> : <FaChevronDown className="w-3 h-3 text-slate-400" />}
+      </button>
+      {open && <div className="pb-4 pl-1">{children}</div>}
+    </div>
+  );
+};
+
+const CheckboxList = ({ options, selected, onToggle }) => (
+  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+    {options.length === 0 && <p className="text-xs text-slate-400">No options</p>}
+    {options.map((opt) => (
+      <label key={opt} className="flex items-center gap-2.5 text-sm text-slate-600 cursor-pointer hover:text-[#055B75]">
+        <input
+          type="checkbox"
+          checked={selected.has(opt)}
+          onChange={() => onToggle(opt)}
+          className="w-4 h-4 rounded border-slate-300 text-[#055B75] focus:ring-[#0890BC] accent-[#055B75]"
+        />
+        <span className="truncate">{opt}</span>
+      </label>
+    ))}
+  </div>
+);
 
 const CruiseCards = () => {
   const [searchParams] = useSearchParams();
   const cruiseLineParam = searchParams.get('cruiseLine');
   const destinationParam = searchParams.get('destination');
-  const countryParam = searchParams.get('country');
 
-  const [title, setTitle] = useState("All Cruises");
   const [usingFallback, setUsingFallback] = useState(false);
   const [fallbackCruises, setFallbackCruises] = useState([]);
 
-  // Fetch cruise list via TanStack Query (cached, instant back-nav).
   const { data: apiCruises, isLoading: apiLoading, isError } = useCruiseList();
 
-  // Transform API response to the component's expected shape.
   const transformedCruises = useMemo(() => {
     if (!apiCruises || apiCruises.length === 0) return [];
     return apiCruises.map((cruise, idx) => ({
@@ -32,70 +88,112 @@ const CruiseCards = () => {
       image: cruise.image || '/images/default-cruise.jpg',
       duration: cruise.duration ? `${cruise.duration} Days` : cruise.duration,
       description: cruise.name || cruise.description,
-      destinations: cruise.destinations,
+      destinations: cruise.destinations || [],
       departurePorts: cruise.departure_port ? [cruise.departure_port] : (cruise.departurePorts || []),
       price: cruise.price_per_person || cruise.price,
-      priceValue: cruise.price_per_person || cruise.priceValue,
+      priceValue: cruise.price_per_person || cruise.priceValue || cruise.price,
       departureDate: cruise.departure_date || cruise.departureDate,
     }));
   }, [apiCruises]);
 
-  // Fallback to local data if the API fails.
   useEffect(() => {
     if (isError && fallbackCruises.length === 0) {
       setUsingFallback(true);
-      loadCruiseLines().then((fb) => setFallbackCruises(fb.cruiseLines));
+      loadCruiseLines().then((fb) => setFallbackCruises((fb.cruiseLines || []).map((c) => ({
+        ...c,
+        destinations: c.destinations || [],
+        departurePorts: c.departurePorts || [],
+        priceValue: c.price,
+      }))));
     }
-  }, [isError]);
+  }, [isError, fallbackCruises.length]);
 
   const allCruises = usingFallback ? fallbackCruises : transformedCruises;
   const error = isError ? 'Unable to fetch live cruise data. Using fallback data.' : null;
 
-  // Apply filters + title
+  /* ---------- Filter state (shared by top bar + sidebar) ---------- */
+  const [selectedLines, setSelectedLines] = useState(new Set(cruiseLineParam ? [cruiseLineParam] : []));
+  const [selectedDestinations, setSelectedDestinations] = useState(new Set(destinationParam ? [destinationParam] : []));
+  const [selectedPorts, setSelectedPorts] = useState(new Set());
+  const [durationBuckets, setDurationBuckets] = useState(new Set());
+  const [maxPrice, setMaxPrice] = useState(0);
+  const [sortBy, setSortBy] = useState('price');
+
+  const toggleInSet = (setter) => (val) =>
+    setter((prev) => {
+      const next = new Set(prev);
+      next.has(val) ? next.delete(val) : next.add(val);
+      return next;
+    });
+  const setSingle = (setter) => (val) => setter(val ? new Set([val]) : new Set());
+
+  /* ---------- Derive filter options from data ---------- */
+  const { lineOptions, destinationOptions, portOptions, priceCeiling } = useMemo(() => {
+    const lines = new Set(), dests = new Set(), ports = new Set();
+    let ceiling = 0;
+    allCruises.forEach((c) => {
+      if (c.name) lines.add(c.name);
+      (c.destinations || []).forEach((d) => dests.add(d));
+      (c.departurePorts || []).forEach((p) => ports.add(p));
+      ceiling = Math.max(ceiling, toNumber(c.priceValue));
+    });
+    return {
+      lineOptions: [...lines].sort(),
+      destinationOptions: [...dests].sort(),
+      portOptions: [...ports].sort(),
+      priceCeiling: Math.ceil(ceiling) || 5000,
+    };
+  }, [allCruises]);
+
+  useEffect(() => { if (priceCeiling && maxPrice === 0) setMaxPrice(priceCeiling); }, [priceCeiling]);
+
+  const DURATION_BUCKETS = [
+    { key: '2-5', label: '2 – 5 Nights', test: (n) => n >= 2 && n <= 5 },
+    { key: '6-9', label: '6 – 9 Nights', test: (n) => n >= 6 && n <= 9 },
+    { key: '10+', label: '10+ Nights', test: (n) => n >= 10 },
+  ];
+
+  /* ---------- Apply filters + sort ---------- */
   const filteredCruises = useMemo(() => {
-    let filtered = allCruises;
-    let nextTitle = "All Cruises";
-
-    if (cruiseLineParam) {
-      filtered = filtered.filter(cruise =>
-        (cruise.name || '').toLowerCase().includes(cruiseLineParam.toLowerCase())
-      );
-      nextTitle = `${cruiseLineParam} Cruises`;
-    }
-
-    if (destinationParam) {
-      const selectedDestination = destinationsData.destinations.find(dest =>
-        dest.name.toLowerCase() === destinationParam.toLowerCase()
-      );
-      if (selectedDestination) {
-        filtered = filtered.filter(cruise =>
-          selectedDestination.cruiseLines.includes(cruise.name)
-        );
-        nextTitle = `${selectedDestination.name} Cruises`;
+    let out = allCruises.filter((c) => {
+      if (selectedLines.size && !selectedLines.has(c.name)) return false;
+      if (selectedDestinations.size && !(c.destinations || []).some((d) => selectedDestinations.has(d))) return false;
+      if (selectedPorts.size && !(c.departurePorts || []).some((p) => selectedPorts.has(p))) return false;
+      if (durationBuckets.size) {
+        const n = parseNights(c.duration);
+        const ok = n != null && [...durationBuckets].some((k) => DURATION_BUCKETS.find((b) => b.key === k)?.test(n));
+        if (!ok) return false;
       }
-    }
+      if (maxPrice && toNumber(c.priceValue) > maxPrice) return false;
+      return true;
+    });
+    out = [...out].sort((a, b) => {
+      if (sortBy === 'price') return toNumber(a.priceValue) - toNumber(b.priceValue);
+      if (sortBy === 'duration') return (parseNights(a.duration) || 0) - (parseNights(b.duration) || 0);
+      return String(a.name).localeCompare(String(b.name));
+    });
+    return out;
+  }, [allCruises, selectedLines, selectedDestinations, selectedPorts, durationBuckets, maxPrice, sortBy]);
 
-    if (countryParam) {
-      filtered = filtered.filter(cruise =>
-        (cruise.departurePorts || []).some(port =>
-          (port || '').toLowerCase().includes(countryParam.toLowerCase())
-        )
-      );
-      nextTitle = `Cruises from ${countryParam}`;
-    }
+  const totalSailings = useMemo(
+    () => filteredCruises.reduce((sum, c) => sum + Math.max(1, (c.departurePorts || []).length) * 3, 0),
+    [filteredCruises]
+  );
 
-    setTitle(nextTitle);
-    return filtered;
-  }, [allCruises, cruiseLineParam, destinationParam, countryParam]);
+  const clearAll = () => {
+    setSelectedLines(new Set());
+    setSelectedDestinations(new Set());
+    setSelectedPorts(new Set());
+    setDurationBuckets(new Set());
+    setMaxPrice(priceCeiling);
+  };
 
   const isLoading = apiLoading && !usingFallback;
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #F0FAFC 0%, #E3F1F6 100%)' }}>
-        <div className="fixed top-0 left-0 right-0 z-50">
-          <Navbar forceScrolled={true} />
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-[#F4F7F8]">
+        <div className="fixed top-0 left-0 right-0 z-50"><Navbar forceScrolled={true} /></div>
         <div className="text-center mt-16">
           <FaSpinner className="text-[#055B75] text-5xl animate-spin mx-auto mb-4" />
           <p className="text-gray-600 font-medium">Loading cruise data...</p>
@@ -104,174 +202,236 @@ const CruiseCards = () => {
     );
   }
 
-  if (error && !usingFallback) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #F0FAFC 0%, #E3F1F6 100%)' }}>
-        <div className="fixed top-0 left-0 right-0 z-50">
-          <Navbar forceScrolled={true} />
-        </div>
-        <div className="text-center max-w-md mx-auto px-4 mt-16">
-          <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-5">
-            <FaExclamationTriangle className="text-3xl" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Error Loading Data</h2>
-          <p className="text-gray-500 mb-6">{error}</p>
-          <Link to="/" className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-br from-[#055B75] to-[#034457] text-white font-semibold rounded-lg hover:shadow-lg transition-all">
-            <FaArrowLeft /> Back to Home
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(180deg, #F0FAFC 0%, #E3F1F6 100%)' }}>
-      <div className="fixed top-0 left-0 right-0 z-50">
-        <Navbar forceScrolled={true} />
+    <div className="min-h-screen bg-[#F4F7F8]">
+      <div className="fixed top-0 left-0 right-0 z-50"><Navbar forceScrolled={true} /></div>
+
+      {/* ===== Top teal search bar ===== */}
+      <div className="pt-[76px]">
+        <div className="bg-gradient-to-r from-[#034457] to-[#055B75]">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+              <SearchField label="Destination">
+                <select value={[...selectedDestinations][0] || ''} onChange={(e) => setSingle(setSelectedDestinations)(e.target.value)} className="cruise-topbar-input">
+                  <option value="">Select Destination</option>
+                  {destinationOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </SearchField>
+              <SearchField label="Cruise Line">
+                <select value={[...selectedLines][0] || ''} onChange={(e) => setSingle(setSelectedLines)(e.target.value)} className="cruise-topbar-input">
+                  <option value="">Select Cruise Line</option>
+                  {lineOptions.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </SearchField>
+              <SearchField label="Departure Port">
+                <select value={[...selectedPorts][0] || ''} onChange={(e) => setSingle(setSelectedPorts)(e.target.value)} className="cruise-topbar-input">
+                  <option value="">Select Departure Ports</option>
+                  {portOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </SearchField>
+              <div className="flex items-center gap-2">
+                <SearchField label="Duration" className="flex-1">
+                  <select value={[...durationBuckets][0] || ''} onChange={(e) => setDurationBuckets(e.target.value ? new Set([e.target.value]) : new Set())} className="cruise-topbar-input">
+                    <option value="">Any Duration</option>
+                    {DURATION_BUCKETS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
+                  </select>
+                </SearchField>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Hero / Title banner */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-[#034457] via-[#055B75] to-[#0890BC] pt-[140px] pb-20 md:pb-24 text-center">
-        <div className="absolute inset-0 opacity-10 pointer-events-none"
-          style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, #fff 1px, transparent 0)', backgroundSize: '26px 26px' }} />
-        <div className="relative z-10 max-w-4xl mx-auto px-4">
-          <div className="text-left mb-4">
-            <Link to="/cruises" className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors">
-              <FaArrowLeft /> All Cruises
-            </Link>
-          </div>
-          <h1 className="text-3xl md:text-5xl font-bold text-white mb-2 leading-tight tracking-tight flex items-center justify-center gap-3">
-            <FaAnchor className="hidden md:inline text-[#65B3CF]" />
-            {title}
-          </h1>
-          <p className="text-white/85 text-base md:text-lg">
-            {filteredCruises.length} {filteredCruises.length === 1 ? 'voyage' : 'voyages'} available
-          </p>
-          {usingFallback && (
-            <span className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-amber-800 bg-amber-100 px-3 py-1.5 rounded-full border border-amber-200">
-              <FaExclamationTriangle /> Showing sample data
-            </span>
-          )}
-        </div>
-      </section>
-
-      {/* Main content — floats up over hero */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-12 relative z-20 pb-16">
-        {filteredCruises.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] p-12 text-center">
-            <div className="w-20 h-20 bg-[#055B75]/10 text-[#055B75] rounded-2xl flex items-center justify-center mx-auto mb-5">
-              <FaSearch className="text-3xl" />
+      {/* ===== Two-column layout ===== */}
+      <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
+        {/* ---- Sidebar ---- */}
+        <aside className="hidden lg:block">
+          <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-100 overflow-hidden sticky top-[88px]">
+            <div className="flex items-center justify-between px-5 py-4 bg-[#034457] text-white">
+              <span className="flex items-center gap-2 font-semibold"><FaSlidersH className="w-4 h-4" /> Filter Your Search</span>
+              <button onClick={clearAll} className="text-xs text-white/80 hover:text-white underline">Clear</button>
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">No cruises found</h2>
-            <p className="text-gray-500 mb-6">Try adjusting your search criteria or browse all cruises.</p>
-            <Link to="/cruises" className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-br from-[#055B75] to-[#034457] text-white font-semibold rounded-lg hover:shadow-lg transition-all">
-              View All Cruises <FaChevronRight />
-            </Link>
+            <div className="px-5">
+              <FilterGroup title="Price Per Person" icon={FaTags} defaultOpen>
+                <div className="pt-1">
+                  <input type="range" min={0} max={priceCeiling} value={maxPrice} onChange={(e) => setMaxPrice(Number(e.target.value))} className="w-full accent-[#055B75]" />
+                  <div className="flex justify-between text-xs text-slate-500 mt-1">
+                    <span>Up to</span>
+                    <span className="font-semibold text-[#055B75]"><Price amount={maxPrice} /></span>
+                  </div>
+                </div>
+              </FilterGroup>
+              <FilterGroup title="Duration" icon={FaRegClock}>
+                <div className="space-y-2">
+                  {DURATION_BUCKETS.map((b) => (
+                    <label key={b.key} className="flex items-center gap-2.5 text-sm text-slate-600 cursor-pointer hover:text-[#055B75]">
+                      <input type="checkbox" checked={durationBuckets.has(b.key)} onChange={() => toggleInSet(setDurationBuckets)(b.key)} className="w-4 h-4 rounded border-slate-300 accent-[#055B75]" />
+                      {b.label}
+                    </label>
+                  ))}
+                </div>
+              </FilterGroup>
+              <FilterGroup title="Destination" icon={FaMapMarkerAlt}>
+                <CheckboxList options={destinationOptions} selected={selectedDestinations} onToggle={toggleInSet(setSelectedDestinations)} />
+              </FilterGroup>
+              <FilterGroup title="Departure Port" icon={FaAnchor}>
+                <CheckboxList options={portOptions} selected={selectedPorts} onToggle={toggleInSet(setSelectedPorts)} />
+              </FilterGroup>
+              <FilterGroup title="Cruise Line" icon={FaShip}>
+                <CheckboxList options={lineOptions} selected={selectedLines} onToggle={toggleInSet(setSelectedLines)} />
+              </FilterGroup>
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredCruises.map((cruise) => (
-              <div
-                key={cruise.id}
-                className="group bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-[0_15px_30px_-5px_rgba(5,91,117,0.12)] hover:shadow-[0_25px_50px_-12px_rgba(5,91,117,0.25)] hover:-translate-y-1 transition-all duration-300 flex flex-col"
-              >
-                {/* Image */}
-                <div className="relative h-52 overflow-hidden flex-shrink-0">
-                  <img loading="lazy" decoding="async"
-                    src={cruise.image}
-                    alt={cruise.name}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#034457]/85 via-[#034457]/25 to-transparent"></div>
+        </aside>
 
-                  {/* Cruise line badge */}
-                  <div className="absolute top-4 left-4 inline-flex items-center gap-1.5 bg-white/95 backdrop-blur-sm text-[#055B75] py-1.5 px-3.5 rounded-full text-sm font-bold shadow-md">
-                    <FaShip className="text-xs" /> {cruise.name}
-                  </div>
+        {/* ---- Results column ---- */}
+        <main>
+          {/* Sort bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-xl shadow-sm ring-1 ring-slate-100 px-4 py-3 mb-5">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-500">Sort by</span>
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="text-sm font-semibold text-[#034457] border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#0890BC]">
+                <option value="price">Price</option>
+                <option value="duration">Duration</option>
+                <option value="name">Cruise Line</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-4 text-sm">
+              <span><span className="font-bold text-[#055B75]">{filteredCruises.length.toLocaleString()}</span> <span className="text-slate-500">Itineraries Found</span></span>
+              <span><span className="font-bold text-[#0890BC]">{totalSailings.toLocaleString()}</span> <span className="text-slate-500">Sailings Found</span></span>
+            </div>
+          </div>
 
-                  {/* Duration chip */}
-                  <div className="absolute top-4 right-4 inline-flex items-center gap-1.5 bg-[#055B75] text-white py-1.5 px-3 rounded-full text-xs font-semibold shadow-md">
-                    <FaCalendarAlt className="text-[10px]" /> {cruise.duration}
-                  </div>
+          {usingFallback && (
+            <div className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-amber-800 bg-amber-100 px-3 py-1.5 rounded-full border border-amber-200">
+              <FaExclamationTriangle /> Showing sample data
+            </div>
+          )}
 
-                  {/* Title overlay */}
-                  <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
-                    <h3 className="text-xl md:text-2xl font-bold drop-shadow-lg leading-tight">
-                      {cruise.description}
-                    </h3>
-                  </div>
-                </div>
-
-                {/* Body */}
-                <div className="p-5 md:p-6 flex flex-col flex-grow">
-                  <div className="flex items-center gap-2 mb-4 pb-4 border-b border-gray-100">
-                    <div className="w-8 h-8 rounded-lg bg-[#055B75]/10 text-[#055B75] flex items-center justify-center flex-shrink-0">
-                      <FaAnchor className="text-xs" />
-                    </div>
-                    <span className="text-sm font-semibold text-gray-700">{cruise.name}</span>
-                  </div>
-
-                  {/* Details */}
-                  <div className="space-y-3.5 mb-5 flex-grow">
-                    <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 text-[#055B75] bg-[#F0FAFC] rounded-lg flex items-center justify-center flex-shrink-0 border border-[#D1E9F0]">
-                        <FaMapMarkerAlt className="text-sm" />
-                      </div>
-                      <div className="min-w-0">
-                        <span className="block text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Destinations</span>
-                        <span className="text-gray-600 text-sm leading-relaxed">
-                          {cruise.destinations.slice(0, 4).map((dest, idx, arr) => (
-                            <span key={dest}>
-                              <span className="text-[#055B75] font-medium">{dest}</span>
-                              {idx < arr.length - 1 && <span className="text-gray-400">, </span>}
-                            </span>
-                          ))}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 text-[#055B75] bg-[#F0FAFC] rounded-lg flex items-center justify-center flex-shrink-0 border border-[#D1E9F0]">
-                        <FaShip className="text-sm" />
-                      </div>
-                      <div className="min-w-0">
-                        <span className="block text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Departure Ports</span>
-                        <span className="text-gray-600 text-sm leading-relaxed">
-                          {cruise.departurePorts.slice(0, 2).map((port, idx, arr) => (
-                            <span key={port}>
-                              <span className="text-[#055B75] font-medium">{port}</span>
-                              {idx < arr.length - 1 && <span className="text-gray-400">, </span>}
-                            </span>
-                          ))}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="flex items-center justify-between pt-4 border-t border-gray-100 gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Starting from</div>
-                      <div className="text-2xl font-bold text-[#055B75]">
-                        <Price amount={cruise.priceValue} showCode={true} />
-                      </div>
-                    </div>
-                    <Link
-                      to={`/itinerary?cruiseId=${cruise.id}`}
-                      className="inline-flex items-center gap-2 bg-gradient-to-br from-[#055B75] to-[#034457] hover:shadow-lg hover:shadow-[#055B75]/30 text-white px-5 py-3 rounded-xl font-semibold transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
-                    >
-                      View Details
-                      <FaChevronRight className="w-3 h-3 transition-transform duration-300 group-hover:translate-x-1" />
-                    </Link>
-                  </div>
-                </div>
+          {filteredCruises.length === 0 ? (
+            <div className="bg-white rounded-2xl ring-1 ring-slate-100 shadow-sm p-12 text-center">
+              <div className="w-20 h-20 bg-[#055B75]/10 text-[#055B75] rounded-2xl flex items-center justify-center mx-auto mb-5">
+                <FaSearch className="text-3xl" />
               </div>
-            ))}
-          </div>
-        )}
+              <h2 className="text-xl font-bold text-gray-900 mb-2">No cruises found</h2>
+              <p className="text-gray-500 mb-6">Try adjusting your filters or clear them to see all cruises.</p>
+              <button onClick={clearAll} className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-br from-[#055B75] to-[#034457] text-white font-semibold rounded-lg hover:shadow-lg transition-all">
+                Clear all filters
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {filteredCruises.map((cruise) => (
+                <CruiseResultRow key={cruise.id} cruise={cruise} />
+              ))}
+            </div>
+          )}
+        </main>
       </div>
 
       <Footer />
+    </div>
+  );
+};
+
+/* ---------- Top-bar labeled field ---------- */
+const SearchField = ({ label, children, className = '' }) => (
+  <div className={className}>
+    <label className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#65B3CF] mb-1">{label}</label>
+    {children}
+  </div>
+);
+
+/* ---------- Single MMT-style result row ---------- */
+const CruiseResultRow = ({ cruise }) => {
+  const nights = parseNights(cruise.duration);
+  const base = toNumber(cruise.priceValue);
+  const dests = cruise.destinations || [];
+  const ports = cruise.departurePorts || [];
+  const from = ports[0] || dests[0] || 'Departure';
+  const to = dests[dests.length - 1] || ports[0] || 'Return';
+  const primaryDest = dests[0] || 'Cruise';
+  const titleBits = [nights ? `${nights} Nights` : null, primaryDest, cruise.name].filter(Boolean).join(' | ');
+
+  return (
+    <div className="bg-white rounded-2xl ring-1 ring-slate-100 shadow-sm hover:shadow-lg transition-shadow overflow-hidden">
+      {/* Title line */}
+      <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-slate-100">
+        <h3 className="text-base md:text-lg font-bold text-[#034457] leading-tight">{titleBits}</h3>
+        {nights && <span className="hidden sm:inline text-xs text-slate-400 whitespace-nowrap">{nights} Night {primaryDest} Cruise</span>}
+      </div>
+
+      {/* Middle: image + details + rate table */}
+      <div className="flex flex-col lg:flex-row gap-4 p-5">
+        <div className="lg:w-56 flex-shrink-0">
+          <div className="relative h-40 lg:h-full rounded-xl overflow-hidden">
+            <img loading="lazy" decoding="async" src={cruise.image} alt={cruise.name} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#034457]/60 to-transparent" />
+            <span className="absolute bottom-2 left-2 text-white text-xs font-semibold drop-shadow">{nights ? `${nights} Night ` : ''}{primaryDest} Cruise</span>
+          </div>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 text-[#055B75] font-bold mb-3">
+            <FaShip className="w-4 h-4" /> {cruise.name}
+          </div>
+          <div className="space-y-2.5 text-sm">
+            <div className="flex items-center gap-2 text-slate-700">
+              <span className="font-semibold">{from}</span>
+              <FaChevronRight className="w-3 h-3 text-slate-400" />
+              <span className="font-semibold">{to}</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-500">
+              <FaRegClock className="w-3.5 h-3.5 text-[#0890BC]" /> {nights ? `${nights} Nights` : cruise.duration || 'Multiple durations'}
+            </div>
+            <div className="flex items-start gap-2 text-slate-500">
+              <FaMapMarkerAlt className="w-3.5 h-3.5 text-[#0890BC] mt-0.5 flex-shrink-0" />
+              <span className="leading-relaxed">
+                {dests.slice(0, 5).join(' · ') || 'Ports of call vary by departure date'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Rate table */}
+        <div className="lg:w-64 flex-shrink-0 flex flex-col">
+          <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <div className="px-3 py-1.5 bg-[#F1FBFD] text-[11px] font-bold uppercase tracking-wider text-[#055B75] border-b border-slate-200">Lowest Rate</div>
+            <div className="divide-y divide-slate-100">
+              {CABIN_TYPES.map(({ key, mult }) => (
+                <div key={key} className="flex items-center justify-between px-3 py-1.5 text-sm">
+                  <span className="text-slate-500">{key}</span>
+                  <span className="font-semibold text-[#034457]">
+                    {base ? <Price amount={Math.round(base * mult)} /> : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="text-right mt-2">
+            <div className="text-[11px] text-slate-400">From</div>
+            <div className="text-xl font-bold text-[#055B75] leading-none">
+              {base ? <Price amount={base} showCode={true} /> : 'Call for price'}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">per person · excl. taxes &amp; fees</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom offer strip */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 bg-[#FAFDFE]">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-slate-600">
+          <span className="inline-flex items-center gap-1.5"><FaGift className="text-[#0890BC]" /> Buy One Get One Offer</span>
+          <span className="inline-flex items-center gap-1.5"><FaTags className="text-[#0890BC]" /> Special Promotions</span>
+          <span className="inline-flex items-center gap-1.5"><FaFileInvoiceDollar className="text-[#0890BC]" /> Non Refundable Deposit</span>
+        </div>
+        <Link
+          to={`/itinerary?cruiseId=${cruise.id}`}
+          className="inline-flex items-center gap-2 bg-gradient-to-r from-[#055B75] to-[#0890BC] hover:from-[#034457] hover:to-[#055B75] text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow-md whitespace-nowrap"
+        >
+          <FaCalendarAlt className="w-3.5 h-3.5" /> Show Dates
+        </Link>
+      </div>
     </div>
   );
 };
