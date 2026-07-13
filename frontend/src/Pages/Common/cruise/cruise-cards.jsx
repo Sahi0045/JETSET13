@@ -192,11 +192,13 @@ const CruiseCards = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F4F7F8]">
-        <div className="fixed top-0 left-0 right-0 z-50"><Navbar forceScrolled={true} /></div>
-        <div className="text-center mt-16">
-          <FaSpinner className="text-[#055B75] text-5xl animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">Loading cruise data...</p>
+      <div className="min-h-screen bg-[#F4F7F8]">
+        <Navbar forceScrolled={true} />
+        <div className="flex items-center justify-center py-32">
+          <div className="text-center">
+            <FaSpinner className="text-[#055B75] text-5xl animate-spin mx-auto mb-4" />
+            <p className="text-gray-600 font-medium">Loading cruise data...</p>
+          </div>
         </div>
       </div>
     );
@@ -204,10 +206,10 @@ const CruiseCards = () => {
 
   return (
     <div className="min-h-screen bg-[#F4F7F8]">
-      <div className="fixed top-0 left-0 right-0 z-50"><Navbar forceScrolled={true} /></div>
+      <Navbar forceScrolled={true} />
 
       {/* ===== Top teal search bar ===== */}
-      <div className="pt-[76px]">
+      <div>
         <div className="bg-gradient-to-r from-[#034457] to-[#055B75]">
           <div className="max-w-7xl mx-auto px-4 py-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
@@ -246,7 +248,7 @@ const CruiseCards = () => {
       <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
         {/* ---- Sidebar ---- */}
         <aside className="hidden lg:block">
-          <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-100 overflow-hidden sticky top-[88px]">
+          <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-100 overflow-hidden sticky top-4">
             <div className="flex items-center justify-between px-5 py-4 bg-[#034457] text-white">
               <span className="flex items-center gap-2 font-semibold"><FaSlidersH className="w-4 h-4" /> Filter Your Search</span>
               <button onClick={clearAll} className="text-xs text-white/80 hover:text-white underline">Clear</button>
