@@ -340,14 +340,14 @@ const HeroSection = () => {
                       {filteredDestinations.map((destination, index) => (
                         <li
                           key={index}
-                          className="px-4 py-2 hover:bg-blue-50 cursor-pointer"
+                          className="px-4 py-2 hover:bg-[#F1FBFD] cursor-pointer"
                           onClick={() => {
                             setSearchQuery(destination);
                             setShowDestinationSuggestions(false);
                           }}
                         >
                           <div className="flex items-center">
-                            <MapPin className="h-4 w-4 text-blue-600 mr-2" />
+                            <MapPin className="h-4 w-4 text-[#055B75] mr-2" />
                             <span>{destination}</span>
                           </div>
                         </li>

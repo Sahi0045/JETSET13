@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import HeroSection from './HeroSection';
 import DestinationSection from './DestinationSection';
 import CruiseLineSection from './CruiseLineSection';
-import { FaShip, FaAnchor, FaStar, FaLifeRing, FaUsers, FaCheckCircle, FaTimes, FaQuoteRight, FaUser, FaEnvelope, FaCommentAlt, FaTripadvisor } from 'react-icons/fa';
+import { FaShip, FaAnchor, FaStar, FaLifeRing, FaUsers, FaCheckCircle, FaTimes, FaQuoteRight, FaUser, FaEnvelope, FaCommentAlt, FaTripadvisor, FaArrowRight } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
@@ -10,6 +10,8 @@ import { Mail, Phone, ExternalLink, Calendar, MessageSquare, Clock, ArrowLeft, U
 import withPageElements from '../PageWrapper';
 import WhyChooseUsSection from './WhyChooseUsSection';
 import ContactSection from './ContactSection';
+import CruiseFeatureBanner from './CruiseFeatureBanner';
+import CruiseFAQ from './CruiseFAQ';
 import supabase from '../../../lib/supabase';
 import { Sparkles } from 'lucide-react';
 import callbackService from '../../../Services/callbackService';
@@ -263,9 +265,9 @@ const TestimonialBanner = () => {
                     <label className="block text-gray-700 text-xs sm:text-sm font-semibold mb-2" htmlFor="name">
                       Your Name
                     </label>
-                    <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'name' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
+                    <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'name' ? 'ring-2 ring-[#0890BC]' : 'ring-1 ring-gray-200'}`}>
                       <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
-                        <FaUser className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${activeField === 'name' ? 'text-[#0066b2]' : 'text-gray-400'}`} />
+                        <FaUser className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${activeField === 'name' ? 'text-[#055B75]' : 'text-gray-400'}`} />
                       </div>
                       <input
                         type="text"
@@ -286,9 +288,9 @@ const TestimonialBanner = () => {
                     <label className="block text-gray-700 text-xs sm:text-sm font-semibold mb-2" htmlFor="email">
                       Email Address
                     </label>
-                    <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'email' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
+                    <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'email' ? 'ring-2 ring-[#0890BC]' : 'ring-1 ring-gray-200'}`}>
                       <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
-                        <FaEnvelope className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${activeField === 'email' ? 'text-[#0066b2]' : 'text-gray-400'}`} />
+                        <FaEnvelope className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${activeField === 'email' ? 'text-[#055B75]' : 'text-gray-400'}`} />
                       </div>
                       <input
                         type="email"
@@ -309,9 +311,9 @@ const TestimonialBanner = () => {
                     <label className="block text-gray-700 text-xs sm:text-sm font-semibold mb-2" htmlFor="message">
                       How can we help?
                     </label>
-                    <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'message' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
+                    <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'message' ? 'ring-2 ring-[#0890BC]' : 'ring-1 ring-gray-200'}`}>
                       <div className="absolute top-2.5 sm:top-3 left-0 pl-3 sm:pl-4 flex items-start pointer-events-none">
-                        <FaCommentAlt className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${activeField === 'message' ? 'text-[#0066b2]' : 'text-gray-400'}`} />
+                        <FaCommentAlt className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${activeField === 'message' ? 'text-[#055B75]' : 'text-gray-400'}`} />
                       </div>
                       <textarea
                         id="message"
@@ -384,8 +386,8 @@ const TestimonialBanner = () => {
 
             <div className="px-4 sm:px-6 pb-6 sm:pb-8 pt-6 sm:pt-8">
               {/* Featured Testimonial */}
-              <div className="mb-6 sm:mb-8 p-4 sm:p-6 bg-blue-50 rounded-xl relative animate-fadeIn">
-                <div className="absolute right-4 sm:right-6 top-4 sm:top-6 text-blue-200">
+              <div className="mb-6 sm:mb-8 p-4 sm:p-6 bg-[#F1FBFD] rounded-xl relative animate-fadeIn ring-1 ring-[#055B75]/10">
+                <div className="absolute right-4 sm:right-6 top-4 sm:top-6 text-[#65B3CF]/50">
                   <FaQuoteRight className="w-8 h-8 sm:w-10 sm:h-10" />
                 </div>
                 <div className="flex flex-col sm:flex-row items-start">
@@ -411,7 +413,7 @@ const TestimonialBanner = () => {
                   {testimonialItems.map((_, index) => (
                     <button
                       key={index}
-                      className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full transition-all duration-300 ${currentTestimonial === index ? 'bg-blue-500 w-4 sm:w-6' : 'bg-gray-300'}`}
+                      className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full transition-all duration-300 ${currentTestimonial === index ? 'bg-[#0890BC] w-4 sm:w-6' : 'bg-gray-300'}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         setCurrentTestimonial(index);
@@ -480,11 +482,11 @@ const TestimonialBanner = () => {
 
 const PromoSection = () => {
   return (
-    <div className="py-8 bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 md:px-0">
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+    <div className="py-10 md:py-16 bg-gradient-to-b from-white to-[#F1FBFD]">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="bg-white rounded-3xl shadow-[0_20px_60px_-20px_rgba(3,68,87,0.25)] ring-1 ring-[#055B75]/10 overflow-hidden">
           <div className="flex flex-col md:flex-row">
-            <div className="md:w-1/2 relative">
+            <div className="md:w-1/2 relative min-h-[260px]">
               <picture>
                 <source srcSet="/images/Rectangle 1434 (2).webp" type="image/webp" />
                 <img
@@ -495,26 +497,33 @@ const PromoSection = () => {
                   className="w-full h-full object-cover"
                 />
               </picture>
-              <div className="absolute top-4 left-4 bg-red-500 text-white px-4 py-2 rounded-full text-sm font-bold">
+              <div className="absolute inset-0 bg-gradient-to-t from-[#034457]/40 to-transparent md:bg-gradient-to-r"></div>
+              <div className="absolute top-5 left-5 bg-red-500 text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider shadow-lg">
                 Limited Time
               </div>
             </div>
 
-            <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
-              <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-4">Summer Cruise Special</h3>
-              <p className="text-gray-600 mb-6">Book your summer cruise now and get up to 30% off on select destinations. Plus, receive a complimentary beverage package for two.</p>
+            <div className="md:w-1/2 p-8 md:p-12 lg:p-14 flex flex-col justify-center">
+              <span className="inline-flex items-center gap-2 self-start mb-4 px-3 py-1 rounded-full bg-[#F1FBFD] text-[#055B75] text-xs font-bold uppercase tracking-[0.12em] ring-1 ring-[#055B75]/15">
+                <Sparkles className="w-3.5 h-3.5" /> Seasonal Offer
+              </span>
+              <h3 className="text-3xl md:text-4xl font-bold text-[#034457] mb-4 tracking-tight">Summer Cruise Special</h3>
+              <p className="text-slate-600 mb-7 leading-relaxed">Book your summer cruise now and get up to 30% off on select destinations. Plus, receive a complimentary beverage package for two.</p>
 
-              <ul className="mb-8">
+              <ul className="mb-9 space-y-3.5">
                 {['Up to 30% off select cruises', 'Free beverage package', 'Flexible cancellation policy', 'Kids sail free on select cruises'].map((item, index) => (
-                  <li key={index} className="flex items-center mb-3">
-                    <FaCheckCircle className="text-green-500 mr-3" />
-                    <span>{item}</span>
+                  <li key={index} className="flex items-center">
+                    <span className="w-6 h-6 rounded-full bg-[#F1FBFD] text-[#0890BC] flex items-center justify-center mr-3 flex-shrink-0 ring-1 ring-[#0890BC]/20">
+                      <FaCheckCircle className="w-3.5 h-3.5" />
+                    </span>
+                    <span className="text-slate-700">{item}</span>
                   </li>
                 ))}
               </ul>
 
-              <button className="bg-[#0066b2] hover:bg-[#005091] text-white font-bold py-3 px-8 rounded-md transition-colors self-start">
+              <button className="group self-start inline-flex items-center gap-2 bg-gradient-to-r from-[#055B75] to-[#0890BC] hover:from-[#034457] hover:to-[#055B75] text-white font-bold py-3.5 px-9 rounded-full transition-all duration-300 shadow-lg shadow-[#055B75]/25 hover:shadow-xl hover:-translate-y-0.5">
                 View Special Offers
+                <FaArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
               </button>
             </div>
           </div>
@@ -606,7 +615,7 @@ const CruiseBookingPopup = ({
           <div className="absolute top-3 sm:top-4 right-3 sm:right-4 text-gray-400 hover:text-gray-800 cursor-pointer transition-colors" onClick={() => setShowCruisePopup(false)}>
             <FaTimes className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div className={`transition-all duration-500 ${popupView === 'announcement' ? 'p-1.5 sm:p-2' : 'p-1 sm:p-1.5'} bg-blue-50 rounded-full border border-blue-100 text-blue-600 shadow-sm`}>
+          <div className={`transition-all duration-500 ${popupView === 'announcement' ? 'p-1.5 sm:p-2' : 'p-1 sm:p-1.5'} bg-[#F1FBFD] rounded-full border border-[#65B3CF]/30 text-[#055B75] shadow-sm`}>
             {popupView === 'success' ? (
               <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8" />
             ) : (
@@ -620,7 +629,7 @@ const CruiseBookingPopup = ({
           {popupView === 'announcement' && (
             <div className="text-center">
               <h2 className="text-xl sm:text-3xl font-extrabold text-[#0D1B2A] mb-1 sm:mb-2 tracking-tight leading-tight">
-                Cruise Bookings Are <br /><span className="text-[#0066b2]">Now Open!</span>
+                Cruise Bookings Are <br /><span className="text-[#055B75]">Now Open!</span>
               </h2>
 
               <div className="flex items-center justify-center gap-1.5 mb-3 sm:mb-4">
@@ -632,7 +641,7 @@ const CruiseBookingPopup = ({
                 Hi! We are excited to announce that bookings are open. <br />
                 Contact us directly to avail the best prices and get a <br />
                 <span className="inline-block mt-3 mb-1 group cursor-default">
-                  <span className="relative bg-[#0066FF] px-4 py-2 sm:px-7 sm:py-3 rounded-lg inline-flex items-center gap-3 ring-2 ring-yellow-300/80 shadow-[0_0_24px_rgba(255,221,51,0.8)] overflow-hidden transition-all group-hover:scale-105 group-hover:shadow-[0_0_30px_rgba(255,221,51,0.95)] border-x border-dashed border-white/20 animate-pulse">
+                  <span className="relative bg-[#0890BC] px-4 py-2 sm:px-7 sm:py-3 rounded-lg inline-flex items-center gap-3 ring-2 ring-yellow-300/80 shadow-[0_0_24px_rgba(255,221,51,0.8)] overflow-hidden transition-all group-hover:scale-105 group-hover:shadow-[0_0_30px_rgba(255,221,51,0.95)] border-x border-dashed border-white/20 animate-pulse">
                     {/* Corner cutouts matching white popup background */}
                     <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
                     <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-white rounded-full"></div>
@@ -650,14 +659,14 @@ const CruiseBookingPopup = ({
                 {/* Phone Number on Top */}
                 <a
                   href="tel:8775387380"
-                  className="group flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-gray-50 hover:bg-blue-600 transition-all duration-300 transform hover:-translate-y-0.5 border border-gray-100 no-underline"
+                  className="group flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-gray-50 hover:bg-[#055B75] transition-all duration-300 transform hover:-translate-y-0.5 border border-gray-100 no-underline"
                 >
                   <div className="flex items-center text-left">
                     <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-white flex items-center justify-center mr-3 sm:mr-4 group-hover:scale-105 transition-transform shadow-sm">
-                      <Phone className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                      <Phone className="w-5 h-5 sm:w-6 sm:h-6 text-[#055B75]" />
                     </div>
                     <div>
-                      <div className="text-[8px] sm:text-[10px] text-gray-400 group-hover:text-blue-100 font-bold uppercase tracking-[0.1em] mb-0.5">Direct Line</div>
+                      <div className="text-[8px] sm:text-[10px] text-gray-400 group-hover:text-[#65B3CF] font-bold uppercase tracking-[0.1em] mb-0.5">Direct Line</div>
                       <div className="text-sm sm:text-lg font-extrabold text-gray-900 group-hover:text-white leading-none whitespace-nowrap">(877) 538-7380</div>
                     </div>
                   </div>
@@ -684,14 +693,14 @@ const CruiseBookingPopup = ({
                 {/* Request Call Back last */}
                 <button
                   onClick={() => setPopupView('form')}
-                  className="group flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-[#0066FF] hover:bg-[#0052CC] transition-all duration-300 transform hover:-translate-y-0.5 shadow-lg shadow-blue-200"
+                  className="group flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-[#055B75] to-[#0890BC] hover:from-[#034457] hover:to-[#055B75] transition-all duration-300 transform hover:-translate-y-0.5 shadow-lg shadow-[#055B75]/25"
                 >
                   <div className="flex items-center text-left">
                     <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-white/20 flex items-center justify-center mr-3 sm:mr-4 group-hover:scale-105 transition-transform shadow-inner">
                       <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </div>
                     <div>
-                      <div className="text-[8px] sm:text-[10px] text-blue-100 font-bold uppercase tracking-[0.1em] mb-0.5">Fastest Response</div>
+                      <div className="text-[8px] sm:text-[10px] text-[#65B3CF] font-bold uppercase tracking-[0.1em] mb-0.5">Fastest Response</div>
                       <div className="text-sm sm:text-base font-bold text-white leading-none">REQUEST CALL BACK</div>
                     </div>
                   </div>
@@ -717,7 +726,7 @@ const CruiseBookingPopup = ({
                   <label className="text-sm font-bold text-gray-700 ml-1">Full Name*</label>
                   <div className="relative group">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <User className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                      <User className="w-5 h-5 text-gray-400 group-focus-within:text-[#055B75] transition-colors" />
                     </div>
                     <input
                       type="text"
@@ -726,7 +735,7 @@ const CruiseBookingPopup = ({
                       value={callbackForm.fullName}
                       onChange={handleFormChange}
                       placeholder="John Doe"
-                      className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400"
+                      className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-[#0890BC] transition-all placeholder:text-gray-400"
                     />
                   </div>
                 </div>
@@ -736,7 +745,7 @@ const CruiseBookingPopup = ({
                     <label className="text-sm font-bold text-gray-700 ml-1">Email Address*</label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Mail className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        <Mail className="w-5 h-5 text-gray-400 group-focus-within:text-[#055B75] transition-colors" />
                       </div>
                       <input
                         type="email"
@@ -745,7 +754,7 @@ const CruiseBookingPopup = ({
                         value={callbackForm.email}
                         onChange={handleFormChange}
                         placeholder="john@example.com"
-                        className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400"
+                        className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-[#0890BC] transition-all placeholder:text-gray-400"
                       />
                     </div>
                   </div>
@@ -753,7 +762,7 @@ const CruiseBookingPopup = ({
                     <label className="text-sm font-bold text-gray-700 ml-1">Phone Number*</label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Phone className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        <Phone className="w-5 h-5 text-gray-400 group-focus-within:text-[#055B75] transition-colors" />
                       </div>
                       <input
                         type="tel"
@@ -762,7 +771,7 @@ const CruiseBookingPopup = ({
                         value={callbackForm.phone}
                         onChange={handleFormChange}
                         placeholder="+1 (123) 456-7890"
-                        className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400"
+                        className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-[#0890BC] transition-all placeholder:text-gray-400"
                       />
                     </div>
                   </div>
@@ -772,7 +781,7 @@ const CruiseBookingPopup = ({
                   <label className="text-sm font-bold text-gray-700 ml-1">Preferred Call Time</label>
                   <div className="relative group">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Calendar className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                      <Calendar className="w-5 h-5 text-gray-400 group-focus-within:text-[#055B75] transition-colors" />
                     </div>
                     <input
                       type="text"
@@ -780,7 +789,7 @@ const CruiseBookingPopup = ({
                       value={callbackForm.callTime}
                       onChange={handleFormChange}
                       placeholder="e.g. Weekdays after 2 PM"
-                      className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400"
+                      className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-[#0890BC] transition-all placeholder:text-gray-400"
                     />
                   </div>
                 </div>
@@ -789,7 +798,7 @@ const CruiseBookingPopup = ({
                   <label className="text-sm font-bold text-gray-700 ml-1">Additional Information</label>
                   <div className="relative group">
                     <div className="absolute top-3 left-3 flex items-start pointer-events-none">
-                      <MessageSquare className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                      <MessageSquare className="w-5 h-5 text-gray-400 group-focus-within:text-[#055B75] transition-colors" />
                     </div>
                     <textarea
                       name="info"
@@ -797,7 +806,7 @@ const CruiseBookingPopup = ({
                       value={callbackForm.info}
                       onChange={handleFormChange}
                       placeholder="Any specific questions or requirements?"
-                      className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400 resize-none"
+                      className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-gray-900 focus:ring-2 focus:ring-[#0890BC] transition-all placeholder:text-gray-400 resize-none"
                     ></textarea>
                   </div>
                 </div>
@@ -805,7 +814,7 @@ const CruiseBookingPopup = ({
                 <button
                   type="submit"
                   disabled={formLoading}
-                  className="w-full bg-[#0066b2] hover:bg-[#005091] text-white font-bold py-4 rounded-xl transition-all duration-300 shadow-md flex items-center justify-center disabled:opacity-70"
+                  className="w-full bg-gradient-to-r from-[#055B75] to-[#0890BC] hover:from-[#034457] hover:to-[#055B75] text-white font-bold py-4 rounded-xl transition-all duration-300 shadow-md flex items-center justify-center disabled:opacity-70"
                 >
                   {formLoading ? (
                     <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -894,7 +903,7 @@ const HomePage = () => {
               <p className={`text-white ${isMobileView ? 'text-[10px]' : 'text-sm'} font-medium tracking-wide text-center leading-tight`}>
                 <span className="font-bold">Self-Service Portal Coming Soon!</span> For bookings, call <span className="text-yellow-300 font-bold">(877) 538-7380</span> or email <a href="mailto:support@jetsetterss.com" className="underline text-yellow-300 font-bold">support@jetsetterss.com</a>.
                 <span className="inline-flex items-center ml-2.5 align-middle group cursor-default">
-                  <span className="relative bg-[#0066FF] px-3.5 py-1.5 md:px-4 md:py-1.5 rounded-md inline-flex items-center gap-1.5 ring-2 ring-yellow-300/80 shadow-[0_0_18px_rgba(255,221,51,0.75)] overflow-hidden animate-pulse">
+                  <span className="relative bg-[#0890BC] px-3.5 py-1.5 md:px-4 md:py-1.5 rounded-md inline-flex items-center gap-1.5 ring-2 ring-yellow-300/80 shadow-[0_0_18px_rgba(255,221,51,0.75)] overflow-hidden animate-pulse">
                     {/* Corner cutouts matching banner background colors */}
                     <div className="absolute -top-1 -left-1 w-2 h-2 bg-[#055B75] rounded-full"></div>
                     <div className="absolute -top-1 -right-1 w-2 h-2 bg-gradient-to-r from-[#055B75] to-[#034457] rounded-full"></div>
@@ -911,19 +920,30 @@ const HomePage = () => {
         </div>
 
         {/* Main content */}
-        <main style={styles.main}>
+        <main style={styles.main} className="bg-[#F4F7F8]">
           {/* Hero Section - immediately below navbar */}
-          <section id="hero" style={{ ...styles.section, ...styles.firstSection }}>
+          <section id="hero" style={styles.firstSection}>
             <HeroSection />
           </section>
 
-          {/* Primary Content Sections */}
-          <section id="destinations" style={styles.section}>
+          {/* MMT-style "Cruise" feature banner */}
+          <section id="cruise-banner" className="pt-8 md:pt-10">
+            <CruiseFeatureBanner />
+          </section>
+
+          {/* Most-booked Cruise Destinations */}
+          <section id="destinations">
             <DestinationSection />
           </section>
 
-          <section id="cruise-lines" style={styles.section}>
+          {/* Our Featured Cruise Lines */}
+          <section id="cruise-lines">
             <CruiseLineSection />
+          </section>
+
+          {/* Cruise FAQs */}
+          <section id="cruise-faq">
+            <CruiseFAQ />
           </section>
 
           {/* Promotional and Partners */}
@@ -956,7 +976,7 @@ const HomePage = () => {
         {/* Mobile scroll to top button - only visible on small screens */}
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-6 right-6 bg-blue-600 text-white p-3 rounded-full shadow-lg z-50 hover:bg-blue-700 transition-colors md:hidden"
+          className="fixed bottom-6 right-6 bg-[#055B75] text-white p-3 rounded-full shadow-lg z-50 hover:bg-[#034457] transition-colors md:hidden"
           aria-label="Scroll to top"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

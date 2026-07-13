@@ -175,7 +175,7 @@
   height: 3rem;
   margin: 0 auto 1rem;
   border-radius: 9999px;
-  background: rgba(59, 130, 246, 0.2);
+  background: rgba(8, 144, 188, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -221,7 +221,7 @@
 }
 
 .search-input::-webkit-scrollbar-thumb {
-  background: #3B82F6;
+  background: #0890BC;
   border-radius: 9999px;
 }
 
@@ -387,18 +387,18 @@ select.search-input {
 }
 
 .date-picker-day:hover:not(.disabled):not(.empty) {
-  background-color: #dbeafe;
+  background-color: #F1FBFD;
 }
 
 .date-picker-day.active {
-  background-color: #3b82f6;
+  background-color: #0890BC;
   color: white;
 }
 
 .date-picker-day.today {
-  border: 2px solid #3b82f6;
-  background-color: #dbeafe;
-  color: #1e40af;
+  border: 2px solid #0890BC;
+  background-color: #F1FBFD;
+  color: #034457;
 }
 
 .date-picker-day.disabled {
@@ -971,13 +971,13 @@ select.search-input {
 }
 
 .filter-tag.active {
-  background-color: rgba(59, 130, 246, 0.15);
-  border-color: #3b82f6;
-  color: #1e40af;
+  background-color: rgba(8, 144, 188, 0.12);
+  border-color: #0890BC;
+  color: #034457;
 }
 
 .filter-tag.active .tag-dot {
-  background-color: #3b82f6;
+  background-color: #0890BC;
 }
 
 .tag-dot {
@@ -1423,18 +1423,18 @@ select.search-input {
 
 /* Add styling for active filter tags */
 .filter-tag.active {
-  background-color: rgba(59, 130, 246, 0.15);
-  border-color: #3b82f6;
-  color: #1e40af;
+  background-color: rgba(8, 144, 188, 0.12);
+  border-color: #0890BC;
+  color: #034457;
 }
 
 .filter-tag.active .tag-dot {
-  background-color: #3b82f6;
+  background-color: #0890BC;
 }
 
 /* Search state styling */
 .search-bar.searching .search-button {
-  background-color: #1e40af;
+  background-color: #034457;
   cursor: wait;
 }
 
@@ -1472,14 +1472,14 @@ select.search-input {
 }
 
 .cruise-line-item:hover {
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: rgba(8, 144, 188, 0.1);
   transform: translateY(-2px);
 }
 
 /* Style for cruise line info */
 .cruise-line-price {
   font-weight: 600;
-  color: #3b82f6;
+  color: #0890BC;
 }
 
 /* Make date selection more interactive */
@@ -1488,7 +1488,7 @@ select.search-input {
 }
 
 .date-option:hover {
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: rgba(8, 144, 188, 0.1);
   transform: scale(1.05);
 }
 
