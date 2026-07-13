@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import './login.css';
 import { authAPI } from '../../../api'; // Import the authAPI for making API calls
 import supabase from '../../../lib/supabase'; // Import Supabase client
-import { FaGoogle } from 'react-icons/fa';
+import { FaGoogle, FaApple } from 'react-icons/fa';
 
 export default function Login() {
     const navigate = useNavigate();
@@ -58,7 +58,7 @@ export default function Login() {
         try {
             setProcessing(true);
             setErrors({});
-            
+
             const { data, error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
@@ -71,13 +71,34 @@ export default function Login() {
             });
 
             if (error) throw error;
-            
-            // OAuth redirect will happen automatically
         } catch (error) {
             console.error('Google login error:', error);
             setProcessing(false);
-            setErrors({ 
-                login: error.message || 'Failed to sign in with Google. Please try again.' 
+            setErrors({
+                login: error.message || 'Failed to sign in with Google. Please try again.'
+            });
+        }
+    };
+
+    // Handle Apple Sign-In with Supabase
+    const handleAppleSignIn = async () => {
+        try {
+            setProcessing(true);
+            setErrors({});
+
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: 'apple',
+                options: {
+                    redirectTo: `${window.location.origin}/login`,
+                },
+            });
+
+            if (error) throw error;
+        } catch (error) {
+            console.error('Apple login error:', error);
+            setProcessing(false);
+            setErrors({
+                login: error.message || 'Failed to sign in with Apple. Please try again.'
             });
         }
     };
@@ -204,14 +225,23 @@ export default function Login() {
                             
                             <div className="login-divider">or continue with</div>
                             <div className="social-login">
-                                <button 
-                                    type="button" 
-                                    className="social-button" 
+                                <button
+                                    type="button"
+                                    className="social-button"
                                     onClick={handleGoogleSignIn}
                                     disabled={processing}
                                     title="Sign in with Google"
                                 >
                                     <FaGoogle size={24} color="#DB4437" />
+                                </button>
+                                <button
+                                    type="button"
+                                    className="social-button"
+                                    onClick={handleAppleSignIn}
+                                    disabled={processing}
+                                    title="Sign in with Apple"
+                                >
+                                    <FaApple size={24} color="#000000" />
                                 </button>
                             </div>
                             <div className="signup-link">

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import './login.css'; // Reuse the login CSS
 import { authAPI } from '../../../api'; // Import the authAPI for making API calls
 import supabase from '../../../lib/supabase'; // Import Supabase client
-import { FaGoogle } from 'react-icons/fa';
+import { FaGoogle, FaApple } from 'react-icons/fa';
 
 export default function Signup() {
     const navigate = useNavigate();
@@ -82,6 +82,22 @@ export default function Signup() {
             setErrors({ 
                 signup: error.message || 'Failed to sign up with Google. Please try again.' 
             });
+        }
+    };
+
+    const handleAppleSignIn = async () => {
+        try {
+            setProcessing(true);
+            setErrors({});
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: 'apple',
+                options: { redirectTo: `${window.location.origin}/signup` },
+            });
+            if (error) throw error;
+        } catch (error) {
+            console.error('Apple signup error:', error);
+            setProcessing(false);
+            setErrors({ signup: error.message || 'Failed to sign up with Apple. Please try again.' });
         }
     };
 
@@ -309,14 +325,23 @@ export default function Signup() {
                             
                             <div className="login-divider">or continue with</div>
                             <div className="social-login">
-                                <button 
-                                    type="button" 
-                                    className="social-button" 
+                                <button
+                                    type="button"
+                                    className="social-button"
                                     onClick={handleGoogleSignIn}
                                     disabled={processing}
                                     title="Sign up with Google"
                                 >
                                     <FaGoogle size={24} color="#DB4437" />
+                                </button>
+                                <button
+                                    type="button"
+                                    className="social-button"
+                                    onClick={handleAppleSignIn}
+                                    disabled={processing}
+                                    title="Sign up with Apple"
+                                >
+                                    <FaApple size={24} color="#000000" />
                                 </button>
                             </div>
                             
