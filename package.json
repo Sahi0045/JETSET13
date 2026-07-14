@@ -13,10 +13,8 @@
     "prod:vercel": "vercel deploy --prod",
     "prod:setup": "node -e \"const fs = require('fs'); if(!fs.existsSync('.env.production')) { fs.copyFileSync('.env', '.env.production'); console.log('Created .env.production'); }\" && npm run build",
     "vercel-build": "vite build && (node scripts/copy-public-assets.js || true)",
-    "render-build": "node render-setup.js",
     "postinstall": "npm install @vitejs/plugin-react vite --no-save || true",
     "supabase": "node scripts/start-app.js",
-    "supabase:check": "node -e \"const { exec } = require('child_process'); exec('node setup-supabase-tables.js', (error, stdout, stderr) => { console.log(stdout); if (error) { console.error('Error checking Supabase tables:', error); } });\"",
     "deploy": "npm run build && npm run start",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -26,17 +24,6 @@
     "test:integration": "vitest run --project integration",
     "test:backend:watch": "vitest --project backend",
     "test:unit": "vitest run --project backend --project frontend",
-    "test:inquiry-api": "node test-inquiry-api.js",
-    "test:hotel-api": "node test-hotel-api.js",
-    "test:direct-amadeus": "node test-direct-amadeus.js",
-    "test:production-api": "node test-production-api.js",
-    "test:local-hotel-api": "node test-local-hotel-api.js",
-    "test:arc-pay-flight": "node test-arc-pay-flight.js",
-    "test:supabase-auth": "node test-supabase-auth.js",
-    "test:chatbot": "node test-chatbot.js",
-    "test:supabase-config": "node test-supabase-config.js",
-    "test:supabase-integration": "node test-supabase-integration.js",
-    "test:supabase": "npm run test:supabase-config && npm run test:supabase-auth && npm run test:supabase-integration",
     "build:prod": "NODE_ENV=production vite build"
   },
   "devDependencies": {
@@ -115,7 +102,6 @@
   "name": "jetset13",
   "version": "1.0.0",
   "description": "A comprehensive, modern travel booking platform built with React, featuring luxury cruise experiences, flight bookings, hotel accommodations, and vacation packages.",
-  "main": "scripts/amadeus-proxy.js",
   "directories": {
     "test": "tests"
   },
