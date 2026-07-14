@@ -1,1020 +1,461 @@
-import React, { useEffect, useState } from 'react';
-import { useSearchParams, Link, useNavigate } from 'react-router-dom';
-import { FaShip, FaPhone, FaTimes, FaUser, FaEnvelope, FaCalendarAlt, FaCommentAlt, FaCheckCircle } from 'react-icons/fa';
-import Navbar from '../Navbar';
-import Footer from '../Footer';
-import withPageElements from '../PageWrapper';
-import callbackService from '../../../Services/callbackService';
-import { loadCruiseLines } from './data/cruiselinesLoader';
-import Price from '../../../Components/Price';
-import currencyService from '../../../Services/CurrencyService';
 
-const cruiseHighlights = [
-  { title: "Cruise Dining", img: "/images/dining.jpg" },
-  { title: "Cruise Party", img: "/images/party.jpg" },
-  { title: "Cruise Entertainment", img: "/images/entertainment.jpg" }
-];
 
-const reviewers = [
-  { id: 1, image: "/images/reviewer1.jpg", isActive: true },
-  { id: 2, image: "/images/reviewer2.jpg", isActive: false },
-  { id: 3, image: "/images/reviewer3.jpg", isActive: false },
-  { id: 4, image: "/images/reviewer4.jpg", isActive: false },
-  { id: 5, image: "/images/reviewer5.jpg", isActive: false }
-];
+const Field = ({ label, icon: Icon, active, children }) => (
+  <label className="block">
+    <span className="mb-1.5 block text-xs font-semibold text-slate-700">{label}</span>
+    <span className={`relative block rounded-xl bg-slate-50 ring-1 transition ${active ? 'ring-2 ring-[#0890BC]' : 'ring-slate-200'}`}>
+      <Icon className={`pointer-events-none absolute left-3 top-3 h-4 w-4 ${active ? 'text-[#055B75]' : 'text-slate-400'}`} />
+      {children}
+    </span>
+  </label>
+);
 
-const ItineraryCallbackPopup = ({ isCallbackModalOpen, setIsCallbackModalOpen, cruiseLine }) => {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    preferredDate: '',
-    message: ''
-  });
+const ItineraryCallbackPopup = ({ isOpen, onClose, cruiseLine }) => {
+  const [form, setForm] = useState({ name: '', email: '', phone: '', preferredTime: '', message: '' });
   const [activeField, setActiveField] = useState(null);
-  const [formSubmitting, setFormSubmitting] = useState(false);
-  const [formSubmitError, setFormSubmitError] = useState('');
-  const [formSubmitSuccess, setFormSubmitSuccess] = useState(false);
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState('');
+  const closeTimer = useRef(null);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const onKeyDown = (event) => event.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen, onClose]);
+
+  const update = (event) => {
+    const { name, value } = event.target;
+    setForm((previous) => ({ ...previous, [name]: value }));
   };
 
-  const handleFocus = (field) => {
-    setActiveField(field);
-  };
-
-  const handleBlur = () => {
-    setActiveField(null);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    // Validate form data
-    if (!formData.name || !formData.phone || !formData.email) {
-      setFormSubmitError('Please fill in all required fields');
+  const submit = async (event) => {
+    event.preventDefault();
+    if (![form.name, form.email, form.phone].every((value) => value.trim())) {
+      setError('Please complete all required fields.');
       return;
     }
-
-    setFormSubmitting(true);
-    setFormSubmitError('');
-
+    setStatus('submitting');
+    setError('');
     try {
-      // Call the callback service and wait for a response
-      const result = await callbackService.createCallbackRequest({
-        name: formData.name,
-        phone: formData.phone,
-        email: formData.email,
-        preferredTime: formData.preferredDate,
-        message: formData.message
+      await callbackService.createCallbackRequest({
+        name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim(),
+        preferredTime: form.preferredTime.trim(), message: form.message.trim(),
       });
-
-      console.log('Callback request successful:', result);
-
-      // Reset form
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        preferredDate: '',
-        message: ''
-      });
-
-      setFormSubmitting(false);
-      setFormSubmitSuccess(true);
-
-      setTimeout(() => {
-        setIsCallbackModalOpen(false);
-        setFormSubmitSuccess(false);
-      }, 3000);
-    } catch (error) {
-      console.error('Error submitting callback request:', error);
-      setFormSubmitting(false);
-      // Display a more user-friendly error message
-      setFormSubmitError(
-        'We encountered an issue saving your request. Please try again or contact us directly at support@jetsetterss.com'
-      );
+      setStatus('success');
+      setForm({ name: '', email: '', phone: '', preferredTime: '', message: '' });
+      closeTimer.current = setTimeout(() => { onClose(); setStatus('idle'); }, 3000);
+    } catch {
+      setStatus('idle');
+      setError('We could not save your request. Please try again or email support@jetsetterss.com.');
     }
   };
 
-  if (!isCallbackModalOpen) return null;
+  if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={() => setIsCallbackModalOpen(false)}
-    >
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-[#034457]/75 p-4 backdrop-blur-sm" onMouseDown={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-0 relative overflow-hidden animate-fadeIn"
-        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
-        style={{
-          animation: 'fadeIn 0.3s ease-out',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.2)',
-        }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="callback-title"
+        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white shadow-2xl"
+        onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="bg-gradient-to-r from-[#0066b2] to-[#1e88e5] pt-6 pb-10 px-5 text-white relative">
-          <button
-            className="absolute top-3 right-3 text-white hover:text-gray-200 transition-colors"
-            onClick={() => setIsCallbackModalOpen(false)}
-            aria-label="Close popup"
-          >
-            <FaTimes size={18} />
+        <header className="relative overflow-hidden bg-gradient-to-r from-[#034457] to-[#0890BC] px-6 py-6 text-white">
+          <button onClick={onClose} aria-label="Close callback form" className="absolute right-4 top-4 rounded-full p-2 text-white/80 transition hover:bg-white/10 hover:text-white">
+            <X className="h-5 w-5" />
           </button>
-
-          <div className="flex items-center mb-2">
-            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3">
-              <FaPhone className="text-[#0066b2]" size={16} />
-            </div>
-            <h2 className="text-xl font-bold">Request a Call Back</h2>
+          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20">
+            <Phone className="h-5 w-5" />
           </div>
+          <h2 id="callback-title" className="text-2xl font-bold">Request a call back</h2>
+          <p className="mt-1 text-sm text-white/80">A cruise expert will help you compare {cruiseLine || 'available cruise'} options.</p>
+        </header>
 
-          <p className="opacity-90 text-xs">
-            Our cruise expert will contact you to discuss {cruiseLine || 'Royal Caribbean'} options
-          </p>
-
-          <div className="absolute -bottom-5 left-0 right-0 h-10 bg-white rounded-t-[50%]"></div>
-        </div>
-
-        <div className="px-5 pb-5 pt-3">
-          {formSubmitSuccess ? (
-            <div className="text-center py-8 px-3 animate-fadeIn" style={{ animation: 'fadeIn 0.5s ease-out' }}>
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FaCheckCircle className="text-green-500" size={32} />
-              </div>
-              <h2 className="text-xl font-bold text-gray-800 mb-2">Thank You!</h2>
-              <p className="text-sm text-gray-600 mb-4">
-                Your call back request has been received. Our travel expert will contact you shortly.
-              </p>
-              <div className="w-12 h-1 bg-green-500 mx-auto"></div>
+        {status === 'success' ? (
+          <div className="px-6 py-14 text-center">
+            <CheckCircle2 className="mx-auto h-16 w-16 text-emerald-500" />
+            <h3 className="mt-4 text-2xl font-bold text-[#034457]">Request received</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Our cruise team will contact you shortly.</p>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="space-y-4 p-6">
+            <Field label="Full name *" icon={User} active={activeField === 'name'}>
+              <input name="name" value={form.name} onChange={update} onFocus={() => setActiveField('name')} onBlur={() => setActiveField(null)} className="w-full rounded-xl bg-transparent py-2.5 pl-10 pr-3 text-sm outline-none" placeholder="John Doe" required />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Email *" icon={Mail} active={activeField === 'email'}>
+                <input type="email" name="email" value={form.email} onChange={update} onFocus={() => setActiveField('email')} onBlur={() => setActiveField(null)} className="w-full rounded-xl bg-transparent py-2.5 pl-10 pr-3 text-sm outline-none" placeholder="john@example.com" required />
+              </Field>
+              <Field label="Phone *" icon={Phone} active={activeField === 'phone'}>
+                <input type="tel" name="phone" value={form.phone} onChange={update} onFocus={() => setActiveField('phone')} onBlur={() => setActiveField(null)} className="w-full rounded-xl bg-transparent py-2.5 pl-10 pr-3 text-sm outline-none" placeholder="+1 234 567 890" required />
+              </Field>
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-              <div className={`transition-all duration-200 ${activeField === 'name' ? 'transform -translate-y-1' : ''}`}>
-                <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="name">
-                  Full Name*
-                </label>
-                <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'name' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FaUser className={`transition-colors ${activeField === 'name' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
-                  </div>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    onFocus={() => handleFocus('name')}
-                    onBlur={handleBlur}
-                    required
-                    className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none"
-                    placeholder="John Doe"
-                  />
-                </div>
-              </div>
 
-              <div className={`transition-all duration-200 ${activeField === 'email' ? 'transform -translate-y-1' : ''}`}>
-                <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="email">
-                  Email Address*
-                </label>
-                <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'email' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FaEnvelope className={`transition-colors ${activeField === 'email' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
-                  </div>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    onFocus={() => handleFocus('email')}
-                    onBlur={handleBlur}
-                    required
-                    className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none"
-                    placeholder="john@example.com"
-                  />
-                </div>
-              </div>
-
-              <div className={`transition-all duration-200 ${activeField === 'phone' ? 'transform -translate-y-1' : ''}`}>
-                <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="phone">
-                  Phone Number*
-                </label>
-                <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'phone' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FaPhone className={`transition-colors ${activeField === 'phone' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
-                  </div>
-                  <input
-                    type="tel"
-                    id="phone"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    onFocus={() => handleFocus('phone')}
-                    onBlur={handleBlur}
-                    required
-                    className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none"
-                    placeholder="+1 (123) 456-7890"
-                  />
-                </div>
-              </div>
-
-              <div className={`transition-all duration-200 ${activeField === 'preferredDate' ? 'transform -translate-y-1' : ''}`}>
-                <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="preferredDate">
-                  Preferred Call Time
-                </label>
-                <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'preferredDate' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FaCalendarAlt className={`transition-colors ${activeField === 'preferredDate' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
-                  </div>
-                  <input
-                    type="text"
-                    id="preferredDate"
-                    name="preferredDate"
-                    value={formData.preferredDate}
-                    onChange={handleInputChange}
-                    onFocus={() => handleFocus('preferredDate')}
-                    onBlur={handleBlur}
-                    className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none"
-                    placeholder="E.g. Weekdays after 2 PM"
-                  />
-                </div>
-              </div>
-
-              <div className={`transition-all duration-200 ${activeField === 'message' ? 'transform -translate-y-1' : ''}`}>
-                <label className="block text-gray-700 text-xs font-semibold mb-1" htmlFor="message">
-                  Additional Information
-                </label>
-                <div className={`relative rounded-lg transition-all duration-300 ${activeField === 'message' ? 'ring-2 ring-[#0066b2]' : 'ring-1 ring-gray-200'}`}>
-                  <div className="absolute top-2.5 left-0 pl-3 flex items-start pointer-events-none">
-                    <FaCommentAlt className={`transition-colors ${activeField === 'message' ? 'text-[#0066b2]' : 'text-gray-400'}`} size={14} />
-                  </div>
-                  <textarea
-                    id="message"
-                    name="message"
-                    value={formData.message}
-                    onChange={handleInputChange}
-                    onFocus={() => handleFocus('message')}
-                    onBlur={handleBlur}
-                    rows="2"
-                    className="w-full bg-gray-50 pl-10 pr-3 py-2.5 text-sm border-none rounded-lg focus:outline-none resize-none"
-                    placeholder="Any specific questions or requirements?"
-                  ></textarea>
-                </div>
-              </div>
-
-              {formSubmitError && <p className="text-red-500 text-[10px] text-center">{formSubmitError}</p>}
-
-              <button
-                type="submit"
-                disabled={formSubmitting}
-                className="w-full bg-gradient-to-r from-[#0066b2] to-[#1e88e5] text-white font-bold py-3 px-4 rounded-xl hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 mt-4 text-sm disabled:opacity-70"
-              >
-                {formSubmitting ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : (
-                  <>
-                    <FaPhone size={14} /> Request Call Back
-                  </>
-                )}
-              </button>
-
-              <p className="text-[10px] text-center text-gray-500 mt-2">
-                By submitting this form, you agree to our <a href="#" className="text-[#0066b2]">Terms & Conditions</a> and <a href="#" className="text-[#0066b2]">Privacy Policy</a>
-              </p>
-            </form>
-          )}
-        </div>
+            <Field label="Preferred call time" icon={CalendarDays} active={activeField === 'preferredTime'}>
+              <input name="preferredTime" value={form.preferredTime} onChange={update} onFocus={() => setActiveField('preferredTime')} onBlur={() => setActiveField(null)} className="w-full rounded-xl bg-transparent py-2.5 pl-10 pr-3 text-sm outline-none" placeholder="Weekdays after 2 PM" />
+            </Field>
+            <Field label="How can we help?" icon={MessageSquare} active={activeField === 'message'}>
+              <textarea name="message" rows="3" value={form.message} onChange={update} onFocus={() => setActiveField('message')} onBlur={() => setActiveField(null)} className="w-full resize-none rounded-xl bg-transparent py-2.5 pl-10 pr-3 text-sm outline-none" placeholder="Tell us about your preferred dates or cabin" />
+            </Field>
+            {error && <p className="rounded-xl bg-red-50 p-3 text-xs text-red-700">{error}</p>}
+            <button type="submit" disabled={status === 'submitting'} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-4 py-3 font-bold text-white shadow-lg shadow-[#055B75]/20 transition hover:from-[#034457] hover:to-[#055B75] disabled:opacity-60">
+              {status === 'submitting' ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Phone className="h-4 w-4" />}
+              {status === 'submitting' ? 'Sending request…' : 'Request call back'}
+            </button>
+            <p className="text-center text-[11px] text-slate-500">
+              By submitting, you agree to our <Link to="/terms-conditions" className="text-[#055B75] underline">Terms</Link> and <Link to="/privacy-policy" className="text-[#055B75] underline">Privacy Policy</Link>.
+            </p>
+          </form>
+        )}
       </div>
-
-      <style global>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out forwards;
-        }
-      `}</style>
     </div>
   );
 };
 
-const CombinedStyles = () => (
-  <style global>{`
-    .itinerary-container {
-      max-width: 1200px;
-      margin: 2rem auto;
-      padding: 1rem;
-      background-color: transparent;
-    }
-
-    .cruise-header {
-      background: linear-gradient(to right, #ffffff, #f8faff);
-      border-radius: 12px;
-      padding: 2rem;
-      box-shadow: 0 8px 24px rgba(149, 157, 165, 0.1);
-      margin-bottom: 1.5rem;
-      position: relative;
-      border: 1px solid rgba(230, 235, 245, 0.8);
-    }
-
-    .header-top {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .destination-text {
-      font-size: 1.5rem;
-      font-weight: 800;
-      background: linear-gradient(135deg, #1e4799 0%, #1e88e5 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      letter-spacing: -0.02em;
-    }
-
-    .arrow-icon {
-      color: #1e88e5;
-      font-size: 1.5rem;
-      font-weight: bold;
-      opacity: 0.8;
-    }
-
-    .duration {
-      background: #e8f3ff;
-      color: #1e88e5;
-      font-size: 0.875rem;
-      font-weight: 600;
-      padding: 0.25rem 0.75rem;
-      border-radius: 20px;
-      margin-left: 0.75rem;
-    }
-
-    .booking-info {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      color: #4a5568;
-      font-size: 0.938rem;
-    }
-
-    .booking-info-item {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.5rem 0;
-      border-bottom: 1px dashed rgba(203, 213, 225, 0.5);
-    }
-
-    .booking-info-item:last-child {
-      border-bottom: none;
-    }
-
-    .price-section {
-      position: absolute;
-      top: 2rem;
-      right: 2rem;
-      text-align: right;
-    }
-
-    .select-room-btn {
-      background: linear-gradient(135deg, #1e4799 0%, #1e88e5 100%);
-      color: white;
-      padding: 0.875rem 2.5rem;
-      border-radius: 50px;
-      border: none;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 1rem;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 12px rgba(30, 71, 153, 0.2);
-    }
-
-    .select-room-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(30, 71, 153, 0.3);
-    }
-
-    .itinerary-section {
-      background: linear-gradient(to right, #ffffff, #f8faff);
-      border-radius: 12px;
-      padding: 2.5rem;
-      box-shadow: 0 8px 24px rgba(149, 157, 165, 0.1);
-      border: 1px solid rgba(230, 235, 245, 0.8);
-    }
-
-    .itinerary-title {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #1a202c;
-      margin-bottom: 0.5rem;
-    }
-
-    .itinerary-subtitle {
-      color: #718096;
-      font-size: 1rem;
-      margin-bottom: 2rem;
-    }
-
-    .day-box {
-      background: linear-gradient(135deg, #1e4799 0%, #1e88e5 100%);
-      color: white;
-      width: 64px;
-      height: 64px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      border-radius: 12px;
-      font-size: 0.875rem;
-      box-shadow: 0 4px 12px rgba(30, 71, 153, 0.2);
-    }
-
-    .day-box span:last-child {
-      font-size: 1.5rem;
-      font-weight: 700;
-      margin-top: 0.125rem;
-    }
-
-    .day-content {
-      flex: 1;
-      padding-left: 0.5rem;
-    }
-
-    .day-title {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: #1a202c;
-      margin-bottom: 0.375rem;
-    }
-
-    .day-subtitle {
-      color: #1e88e5;
-      font-size: 0.875rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      margin-bottom: 0.75rem;
-      letter-spacing: 0.05em;
-      background: #e8f3ff;
-      padding: 0.25rem 0.75rem;
-      border-radius: 20px;
-      display: inline-block;
-    }
-
-    .day-description {
-      color: #4a5568;
-      font-size: 0.938rem;
-      line-height: 1.6;
-    }
-
-    .view-more {
-      color: #1e88e5;
-      font-size: 0.938rem;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-top: 1.5rem;
-      background: #e8f3ff;
-      border: none;
-      cursor: pointer;
-      padding: 0.5rem 1rem;
-      border-radius: 20px;
-      transition: all 0.3s ease;
-    }
-
-    .view-more:hover {
-      background: #d1e9ff;
-      transform: translateX(4px);
-    }
-
-    .view-more svg {
-      width: 16px;
-      height: 16px;
-      margin-top: 2px;
-    }
-
-    @media (max-width: 768px) {
-      .cruise-header {
-        padding: 1.5rem;
-      }
-
-      .price-section {
-        position: static;
-        margin-top: 1.5rem;
-        text-align: left;
-      }
-
-      .select-room-btn {
-        width: 100%;
-      }
-
-      .header-top {
-        flex-wrap: wrap;
-      }
-
-      .destination-text {
-        font-size: 1.25rem;
-      }
-
-      .itinerary-section {
-        padding: 1.5rem;
-      }
-
-      .day-box {
-        width: 56px;
-        height: 56px;
-      }
-    }
-
-    .highlights-section {
-      background: linear-gradient(to right, #ffffff, #f8faff);
-      border-radius: 12px;
-      padding: 3rem;
-      box-shadow: 0 8px 24px rgba(149, 157, 165, 0.1);
-      margin-top: 1.5rem;
-      border: 1px solid rgba(230, 235, 245, 0.8);
-    }
-
-    .highlights-section h2 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #1a202c;
-      text-align: center;
-      margin-bottom: 2rem;
-    }
-
-    .highlights-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1.5rem;
-      margin-top: 1.5rem;
-    }
-
-    .highlight-card {
-      border-radius: 12px;
-      overflow: hidden;
-      height: 200px;
-      box-shadow: 0 8px 24px rgba(149, 157, 165, 0.1);
-      position: relative;
-    }
-
-    .highlight-card::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 50%;
-      background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);
-      pointer-events: none;
-    }
-
-    .highlight-card img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      transition: transform 0.3s ease;
-    }
-
-    .highlight-card:hover img {
-      transform: scale(1.05);
-    }
-
-    .reviews-section {
-      background: #D1EFFF;
-      border-radius: 12px;
-      padding: 3.5rem 2.5rem;
-      box-shadow: 0 8px 24px rgba(149, 157, 165, 0.1);
-      margin-top: 1.5rem;
-      text-align: center;
-      border: 1px solid rgba(230, 235, 245, 0.8);
-    }
-
-    .reviews-section h2 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #1a202c;
-      margin-bottom: 2rem;
-    }
-
-    .review-quote {
-      font-size: 4rem;
-      background: linear-gradient(135deg, #1e4799 0%, #1e88e5 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      line-height: 1;
-      margin-bottom: 1.5rem;
-      opacity: 0.8;
-    }
-
-    .review-text {
-      font-size: 1.125rem;
-      color: #4a5568;
-      line-height: 1.8;
-      max-width: 800px;
-      margin: 0 auto 2rem;
-    }
-
-    .reviewer-name {
-      font-size: 1.125rem;
-      font-weight: 700;
-      color: #1a202c;
-      margin-bottom: 0.25rem;
-    }
-
-    .reviewer-position {
-      font-size: 0.875rem;
-      color: #718096;
-      margin-bottom: 2rem;
-    }
-
-    .reviewer-images {
-      display: flex;
-      justify-content: center;
-      gap: 1rem;
-      margin-top: 2rem;
-    }
-
-    .reviewer-image {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      overflow: hidden;
-      border: 2px solid transparent;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 12px rgba(149, 157, 165, 0.1);
-    }
-
-    .reviewer-image.active {
-      border-color: #1e88e5;
-      transform: scale(1.1);
-      box-shadow: 0 6px 16px rgba(30, 71, 153, 0.2);
-    }
-
-    .reviewer-image img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    @media (max-width: 768px) {
-      .highlights-grid {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-      }
-
-      .highlight-card {
-        height: 180px;
-      }
-
-      .reviews-section {
-        padding: 2rem 1rem;
-      }
-
-      .review-text {
-        font-size: 1rem;
-        padding: 0 1rem;
-      }
-    }
-  `}</style>
+const SummaryItem = ({ icon: Icon, label, value }) => (
+  <div className="flex min-w-0 items-start gap-3">
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F1FBFD] text-[#055B75] ring-1 ring-[#65B3CF]/20">
+      <Icon className="h-4 w-4" />
+    </span>
+    <span className="min-w-0">
+      <span className="block text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">{label}</span>
+      <span className="mt-0.5 block truncate text-sm font-semibold text-[#034457]">{value}</span>
+    </span>
+  </div>
 );
+
+const InfoAccordion = ({ title, children, defaultOpen = false }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <div className="border-b border-slate-100 last:border-0">
+      <button onClick={() => setIsOpen((value) => !value)} className="flex w-full items-center justify-between gap-4 py-4 text-left font-semibold text-[#034457]" aria-expanded={isOpen}>
+        {title}<ChevronDown className={`h-4 w-4 text-[#055B75] transition ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {isOpen && <div className="pb-4 text-sm leading-6 text-slate-600">{children}</div>}
+    </div>
+  );
+};
 
 const Itinerary = () => {
   const [searchParams] = useSearchParams();
   const cruiseId = searchParams.get('cruiseId');
   const cruiseLine = searchParams.get('cruiseLine');
-  const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false);
-  const [cruiseData, setCruiseData] = useState(null);
+  const [isCallbackOpen, setIsCallbackOpen] = useState(false);
+  const [status, setStatus] = useState('loading');
+  const [error, setError] = useState('');
+  const [cruise, setCruise] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    // Find the selected cruise from the lazily-loaded cruise lines dataset
-    const findCruise = async () => {
-      const data = await loadCruiseLines();
-      if (cancelled) return;
-      const allCruises = data.cruiseLines;
-      let selectedCruise;
-
-      if (cruiseId) {
-        selectedCruise = allCruises.find(cruise => cruise.id === parseInt(cruiseId));
-      } else if (cruiseLine) {
-        selectedCruise = allCruises.find(cruise =>
-          cruise.name.toLowerCase() === cruiseLine.toLowerCase()
-        );
-      }
-
-      if (selectedCruise) {
-        setCruiseData({
-          name: selectedCruise.name,
-          route: {
-            departure: selectedCruise.departurePorts[0],
-            arrival: selectedCruise.destinations[0]
-          },
-          duration: selectedCruise.duration,
-          bookingInfo: {
-            embarkation: {
-              date: selectedCruise.departureDate,
-              time: selectedCruise.departureTime
-            },
-            disembarkation: {
-              date: selectedCruise.returnDate,
-              time: selectedCruise.returnTime
-            }
-          },
-          cruiseLine: selectedCruise.name,
-          price: {
-            amount: selectedCruise.price.replace(/[^0-9]/g, ''),
-            note: 'Excl. Tax Per Person in Double Occupancy'
-          },
-          days: selectedCruise.itinerary || [],
-          highlights: selectedCruise.highlights || [],
-          reviews: selectedCruise.reviews || {
-            text: "The tours in this website are great. The team is very professional and taking care of the customers.",
-            reviewer: {
-              name: "Happy Traveler",
-              position: "Verified Customer"
-            }
-          }
-        });
-      }
-    };
-
-    findCruise();
+    setStatus('loading');
+    setError('');
+    setCruise(null);
+    loadCruiseLines()
+      .then((data) => {
+        if (cancelled) return;
+        const cruises = data?.cruiseLines || [];
+        const selected = cruiseId
+          ? cruises.find((item) => String(item.id) === String(cruiseId))
+          : cruises.find((item) => item.name?.toLowerCase() === cruiseLine?.toLowerCase());
+        if (!selected) {
+          setStatus('not-found');
+          return;
+        }
+        setCruise(selected);
+        setStatus('ready');
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError('We could not load this cruise right now. Please try again.');
+          setStatus('error');
+        }
+      });
     return () => { cancelled = true; };
   }, [cruiseId, cruiseLine]);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  const display = useMemo(() => {
+    if (!cruise) return null;
+    const days = Array.isArray(cruise.itinerary) ? cruise.itinerary : [];
+    const destinations = Array.isArray(cruise.destinations) ? cruise.destinations : [];
+    const ports = Array.isArray(cruise.departurePorts) ? cruise.departurePorts : [];
+    const amenities = Array.isArray(cruise.amenities) ? cruise.amenities : [];
+    const price = Number(cruise.priceValue) || Number.parseFloat(String(cruise.price || '').replace(/[^0-9.]/g, '')) || 0;
+    return {
+      ...cruise,
+      days, destinations, ports, amenities, price,
+      departure: ports[0] || days[0]?.port || 'Departure port varies',
+      arrival: destinations[0] || days.at(-1)?.port || 'Itinerary varies',
+      nights: getDurationNights(cruise.duration),
+      reviewCount: typeof cruise.reviews === 'number' ? cruise.reviews : 0,
+      rating: Number(cruise.rating) || 4.8,
+    };
+  }, [cruise]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const bookingUrl = display
+    ? `/cruise-booking-summary?cruiseId=${encodeURIComponent(display.id)}&cruiseLine=${encodeURIComponent(display.name)}`
+    : '/cruises';
 
-    // Validate form data
-    if (!formData.name || !formData.phone || !formData.email) {
-      setFormSubmitError('Please fill in all required fields');
-      return;
-    }
-
-    setFormSubmitting(true);
-    setFormSubmitError('');
-
-    try {
-      // Call the callback service and wait for a response
-      const result = await callbackService.createCallbackRequest({
-        name: formData.name,
-        phone: formData.phone,
-        email: formData.email,
-        preferredTime: formData.preferredDate,
-        message: formData.message
-      });
-
-      console.log('Callback request successful:', result);
-
-      // Reset form
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        preferredDate: '',
-        message: ''
-      });
-
-      setFormSubmitting(false);
-      setFormSubmitSuccess(true);
-
-      setTimeout(() => {
-        setIsCallbackModalOpen(false);
-        setFormSubmitSuccess(false);
-      }, 3000);
-    } catch (error) {
-      console.error('Error submitting callback request:', error);
-      setFormSubmitting(false);
-      // Display a more user-friendly error message
-      setFormSubmitError(
-        'We encountered an issue saving your request. Please try again or contact us directly at support@jetsetterss.com'
-      );
-    }
-  };
-
-  const handleFocus = (field) => {
-    setActiveField(field);
-  };
-
-  const handleBlur = () => {
-    setActiveField(null);
-  };
-
-  return (
-    <>
-      <Navbar />
-      <ItineraryCallbackPopup 
-        isCallbackModalOpen={isCallbackModalOpen} 
-        setIsCallbackModalOpen={setIsCallbackModalOpen} 
-        cruiseLine={cruiseData?.name || cruiseLine}
-      />
-
-      {/* Hero Header Image */}
-      <div className="relative w-full">
-        <img loading="lazy" decoding="async"
-          src="https://images.unsplash.com/photo-1548574505-5e239809ee19?w=1920&q=80"
-          alt="Cruise Itinerary"
-          className="w-full h-[400px] object-cover object-center"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0a2540]/40 via-[#0a2540]/60 to-[#0a2540]/80 flex flex-col items-center justify-center px-4">
-          <h1 className="text-4xl md:text-6xl text-white font-bold text-center mb-4 drop-shadow-lg">
-            {cruiseData?.name || `${cruiseLine || 'Celebrity Cruises'}`}
-          </h1>
-          <p className="text-xl md:text-2xl text-white/90 text-center max-w-3xl mx-auto font-light drop-shadow-md">
-            {cruiseData?.description || 'Explore your upcoming cruise adventure day by day'}
-          </p>
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#F4F7F8]">
+        <Navbar forceScrolled />
+        <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
+          <LoaderCircle className="h-12 w-12 animate-spin text-[#055B75]" />
+          <p className="mt-4 font-medium text-slate-600">Loading cruise itinerary…</p>
         </div>
       </div>
+    );
+  }
 
-      <div className="itinerary-container">
-        <CombinedStyles />
-
-        {/* Navigation */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-          <Link
-            to="/cruises"
-            className="bg-[#0066b2] hover:bg-[#005091] text-white font-medium py-2 px-4 rounded-md transition-colors"
-          >
-            Back to Cruises
+  if (status === 'error' || status === 'not-found' || !display) {
+    return (
+      <div className="min-h-screen bg-[#F4F7F8]">
+        <Navbar forceScrolled />
+        <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center px-4 text-center">
+          <span className="flex h-20 w-20 items-center justify-center rounded-3xl bg-amber-50 text-amber-600">
+            <AlertTriangle className="h-9 w-9" />
+          </span>
+          <h1 className="mt-5 text-2xl font-bold text-[#034457]">{status === 'not-found' ? 'Cruise not found' : 'Unable to load cruise'}</h1>
+          <p className="mt-2 text-slate-600">{error || 'This cruise may no longer be available. Browse current itineraries to continue.'}</p>
+          <Link to="/cruises" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#055B75] px-6 py-3 font-semibold text-white">
+            <ArrowLeft className="h-4 w-4" /> Back to cruises
           </Link>
         </div>
+        <Footer />
+      </div>
+    );
+  }
 
-        {/* Cruise Header */}
-        <div className="cruise-header bg-white rounded-[20px] overflow-hidden shadow-lg relative p-6 md:p-10">
-          <div className="flex flex-col md:flex-row justify-between items-start gap-6">
-            <div className="w-full md:w-3/5">
-              <div className="flex items-center gap-2 mb-6">
-                <span className="text-2xl md:text-3xl font-bold text-[#0066b2]">
-                  {cruiseData?.route?.departure || 'Miami'}
-                </span>
-                <span className="text-2xl md:text-3xl font-bold text-gray-400">≫</span>
-                <span className="text-2xl md:text-3xl font-bold text-[#0066b2]">
-                  {cruiseData?.route?.arrival || 'Florida'}
-                </span>
-                <span className="bg-blue-50 text-[#0066b2] px-3 py-1 rounded-full text-sm font-semibold ml-2">
-                  {cruiseData?.duration || '2N/3D'}
-                </span>
+  return (
+    <div className="min-h-screen bg-[#F4F7F8] text-slate-800">
+      <Navbar forceScrolled />
+      <ItineraryCallbackPopup isOpen={isCallbackOpen} onClose={() => setIsCallbackOpen(false)} cruiseLine={display.name} />
+
+      {/* Cinematic cruise hero */}
+      <section className="relative min-h-[360px] overflow-hidden">
+        <img src={display.image || 'https://images.unsplash.com/photo-1548574505-5e239809ee19?q=80&w=1920&auto=format&fit=crop'} alt={display.name} className="absolute inset-0 h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#034457]/95 via-[#034457]/65 to-[#055B75]/20" />
+        <div className="relative mx-auto flex min-h-[360px] max-w-7xl flex-col justify-center px-4 py-12 sm:px-6 lg:px-8">
+          <Link to="/cruises" className="mb-8 inline-flex w-fit items-center gap-2 text-sm font-medium text-white/80 transition hover:text-white">
+            <ArrowLeft className="h-4 w-4" /> Back to cruise results
+          </Link>
+          <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-white/25 backdrop-blur">
+            <ShieldCheck className="h-4 w-4 text-[#9FD6E8]" /> Verified cruise partner
+          </div>
+          <h1 className="mt-4 max-w-3xl text-4xl font-extrabold tracking-tight text-white md:text-6xl">{display.name}</h1>
+          <p className="mt-3 max-w-2xl text-base leading-7 text-white/85 md:text-lg">{display.longDescription || display.description || 'A memorable voyage with world-class dining, entertainment and destinations.'}</p>
+          <div className="mt-5 flex items-center gap-2 text-sm text-white">
+            <span className="flex items-center gap-1 rounded-full bg-white/15 px-3 py-1.5 backdrop-blur"><Star className="h-4 w-4 fill-[#F5B301] text-[#F5B301]" /> {display.rating.toFixed(1)}</span>
+            <span className="text-white/70">{display.reviewCount.toLocaleString()} verified reviews</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Voyage summary card */}
+      <section className="relative z-10 mx-auto -mt-12 max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="rounded-3xl bg-white p-6 shadow-[0_24px_70px_-30px_rgba(3,68,87,0.45)] ring-1 ring-slate-100 md:p-8">
+          <div className="grid gap-6 xl:grid-cols-[1fr_auto] xl:items-center">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-2xl font-extrabold text-[#034457] md:text-3xl">{display.departure}</span>
+                <span className="text-2xl text-[#0890BC]">→</span>
+                <span className="text-2xl font-extrabold text-[#034457] md:text-3xl">{display.arrival}</span>
+                <span className="rounded-full bg-[#F1FBFD] px-3 py-1 text-sm font-bold text-[#055B75]">{display.duration || 'Multiple durations'}</span>
               </div>
-
-              <div className="space-y-6">
-                <div className="flex items-start">
-                  <div className="w-8 h-8 mr-4 mt-1 text-[#0066b2] bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
-                    <FaShip />
-                  </div>
-                  <div>
-                    <span className="block text-gray-800 font-semibold mb-1">Embarkation</span>
-                    <span className="text-gray-600">
-                      {cruiseData?.bookingInfo?.embarkation?.date || 'Jan 13th'},
-                      {cruiseData?.bookingInfo?.embarkation?.time || '4:30 PM'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-start">
-                  <div className="w-8 h-8 mr-4 mt-1 text-[#0066b2] bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
-                    <FaShip />
-                  </div>
-                  <div>
-                    <span className="block text-gray-800 font-semibold mb-1">Disembarkation</span>
-                    <span className="text-gray-600">
-                      {cruiseData?.bookingInfo?.disembarkation?.date || 'Jan 17th'},
-                      {cruiseData?.bookingInfo?.disembarkation?.time || '7:30 PM'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-start">
-                  <div className="w-8 h-8 mr-4 mt-1 text-[#0066b2] bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
-                    <FaShip />
-                  </div>
-                  <div>
-                    <span className="block text-gray-800 font-semibold mb-1">Cruise Line</span>
-                    <span className="text-gray-600">
-                      {cruiseData?.cruiseLine || cruiseLine || 'Royal Caribbean'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-start">
-                  <div className="w-8 h-8 mr-4 mt-1 text-[#0066b2] bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
-                    <FaShip />
-                  </div>
-                  <div>
-                    <span className="block text-gray-800 font-semibold mb-1">Visiting Ports</span>
-                    <span className="text-gray-600">
-                      {cruiseData?.days?.map(day => day.port).join(' | ') || 'Miami | Florida'}
-                    </span>
-                  </div>
-                </div>
+              <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                <SummaryItem icon={Ship} label="Cruise line" value={display.name} />
+                <SummaryItem icon={Anchor} label="Departure port" value={display.departure} />
+                <SummaryItem icon={CalendarDays} label="Sailing dates" value="Choose a sailing date" />
+                <SummaryItem icon={MapPin} label="Visiting ports" value={display.days.map((day) => day.port).filter(Boolean).join(' · ') || display.destinations.slice(0, 3).join(' · ')} />
               </div>
             </div>
-
-            <div className="w-full md:w-2/5 flex flex-col items-end justify-between">
-              <div className="text-right mb-6">
-                <div className="text-sm text-gray-500 mb-1">Starting from</div>
-                <div className="text-3xl font-bold text-[#0066b2] mb-1">
-                  <Price amount={cruiseData?.price?.amount || '200'} />
-                </div>
-                <div className="text-sm text-gray-500">
-                  {cruiseData?.price?.note || 'Excl. Tax Per Person in Double Occupancy'}
-                </div>
+            <div className="min-w-[270px] border-t border-slate-100 pt-5 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Starting from</p>
+              <div className="mt-1 text-4xl font-extrabold text-[#055B75]"><Price amount={display.price} showCode /></div>
+              <p className="mt-1 text-xs text-slate-500">per person · taxes and fees excluded</p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button onClick={() => setIsCallbackOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#055B75]/30 px-4 py-3 text-sm font-bold text-[#055B75] transition hover:bg-[#F1FBFD]">
+                  <Phone className="h-4 w-4" /> Call back
+                </button>
+                <Link to={bookingUrl} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-4 py-3 text-sm font-bold text-white shadow-lg shadow-[#055B75]/20 transition hover:from-[#034457] hover:to-[#055B75]">
+                  Book now
+                </Link>
               </div>
-
-              <button
-                className="w-full md:w-auto bg-[#0066b2] hover:bg-[#005091] text-white font-medium py-3 px-8 rounded-full transition-all duration-300 flex items-center justify-center gap-2 mb-3 md:mb-0 md:mr-3"
-                onClick={() => setIsCallbackModalOpen(true)}
-              >
-                <FaPhone size={16} /> Request Call Back
-              </button>
-              <Link
-                to={`/cruise-booking-summary?cruiseId=${cruiseId || ''}&cruiseLine=${encodeURIComponent(cruiseData?.name || cruiseLine || '')}&price=${encodeURIComponent(cruiseData?.price?.amount || '')}&duration=${encodeURIComponent(cruiseData?.duration || '')}&departure=${encodeURIComponent(cruiseData?.route?.departure || '')}&arrival=${encodeURIComponent(cruiseData?.route?.arrival || '')}&departureDate=${encodeURIComponent(cruiseData?.bookingInfo?.embarkation?.date || '')}&returnDate=${encodeURIComponent(cruiseData?.bookingInfo?.disembarkation?.date || '')}`}
-                className="w-full md:w-auto bg-[#00b894] hover:bg-[#00a885] text-white font-medium py-3 px-8 rounded-full transition-all duration-300 flex items-center justify-center gap-2"
-              >
-                <FaShip size={16} /> Book Now
-              </Link>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* Itinerary Section */}
-        <div className="itinerary-section">
-          <h2 className="itinerary-title">Itinerary</h2>
-          <p className="itinerary-subtitle">Day wise details of your package</p>
-
-          {cruiseData?.days?.map((day) => (
-            <div key={day.day} style={{ display: 'flex', gap: '1.25rem', marginBottom: '2rem' }}>
-              <div className="day-box">
-                <span>Day</span>
-                <span>{day.day}</span>
-              </div>
-              <div className="day-content">
-                <h3 className="day-title">{day.port}</h3>
-                <p className="day-subtitle">{day.subtitle || day.arrival}</p>
-                <p className="day-description">{day.description || day.activities?.join(', ')}</p>
-              </div>
-            </div>
+      {/* Sticky section navigation */}
+      <nav className="sticky top-0 z-30 mt-7 border-y border-slate-100 bg-white/95 shadow-sm backdrop-blur" aria-label="Cruise details">
+        <div className="mx-auto flex max-w-7xl gap-7 overflow-x-auto px-4 text-sm font-semibold text-slate-600 sm:px-6 lg:px-8 [&::-webkit-scrollbar]:hidden">
+          {['Overview', 'Itinerary', 'Highlights', 'Amenities', 'Important information'].map((label) => (
+            <a key={label} href={`#${label.toLowerCase().replace(/\s+/g, '-')}`} className="shrink-0 border-b-2 border-transparent py-4 transition hover:border-[#0890BC] hover:text-[#055B75]">{label}</a>
           ))}
-
-          <button className="view-more">
-            View Full Itinerary
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
         </div>
+      </nav>
 
-        {/* Cruise Highlights */}
-        <div className="highlights-section">
-          <h2 className="text-2xl font-bold text-center">Your Cruise Highlight</h2>
-          <div className="highlights-grid">
-            {cruiseData?.highlights?.map((highlight, index) => (
-              <div key={index} className="highlight-card">
-                <img loading="lazy" decoding="async" src={highlight.img} alt={highlight.title} />
+      <div id="overview" className="mx-auto grid max-w-7xl gap-7 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
+        <main className="min-w-0 space-y-8">
+          {/* Day-by-day timeline */}
+          <section id="itinerary" className="scroll-mt-24 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-100 md:p-8">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#0890BC]">Day by day</span>
+                <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-[#034457]">Your {display.nights ? `${display.nights}-night ` : ''}itinerary</h2>
+                <p className="mt-2 text-sm text-slate-500">Arrival and departure times are local and may change by sailing.</p>
               </div>
-            ))}
-          </div>
-        </div>
+              <span className="rounded-full bg-[#F1FBFD] px-4 py-2 text-sm font-semibold text-[#055B75]">{display.days.length} itinerary days</span>
+            </div>
 
-        {/* Customer Reviews */}
-        <div className="reviews-section">
-          <h2>Customer Reviews</h2>
-          <div className="review-quote">"</div>
-          <p className="review-text">
-            {cruiseData?.reviews?.text || "The tours in this website are great. The team is very professional and taking care of the customers."}
-          </p>
-          <div className="reviewer-name">
-            {cruiseData?.reviews?.reviewer?.name || 'Happy Traveler'}
-          </div>
-          <div className="reviewer-position">
-            {cruiseData?.reviews?.reviewer?.position || 'Verified Customer'}
-          </div>
+            <div className="relative mt-8 space-y-5 before:absolute before:bottom-8 before:left-[25px] before:top-8 before:w-px before:bg-[#65B3CF]/35">
+              {display.days.length ? display.days.map((day) => (
+                <article key={`${day.day}-${day.port}`} className="relative grid grid-cols-[52px_1fr] gap-4">
+                  <div className="z-10 flex h-[52px] w-[52px] flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-[#055B75] to-[#0890BC] text-white shadow-lg shadow-[#055B75]/15">
+                    <span className="text-[9px] font-bold uppercase tracking-wider">Day</span>
+                    <span className="text-lg font-extrabold leading-none">{day.day}</span>
+                  </div>
+                  <div className="rounded-2xl border border-slate-100 bg-[#FAFDFE] p-5 transition hover:border-[#65B3CF]/40 hover:shadow-md">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-xl font-bold text-[#034457]">{day.port || 'At sea'}</h3>
+                        <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+                          <span className="inline-flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5 text-[#0890BC]" /> Arrival: {day.arrival || 'At sea'}</span>
+                          <span className="inline-flex items-center gap-1.5"><Ship className="h-3.5 w-3.5 text-[#0890BC]" /> Departure: {day.departure || 'At sea'}</span>
+                        </div>
+                      </div>
+                      <MapPin className="h-5 w-5 text-[#65B3CF]" />
+                    </div>
+                    {day.activities?.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {day.activities.map((activity) => <span key={activity} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">{activity}</span>)}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              )) : (
+                <p className="rounded-2xl bg-[#F1FBFD] p-5 text-sm text-slate-600">The detailed port schedule will be confirmed when you choose a sailing date.</p>
+              )}
+            </div>
+          </section>
 
-          <div className="reviewer-images">
-            {cruiseData?.reviews?.reviewers?.map((reviewer) => (
-              <div
-                key={reviewer.id}
-                className={`reviewer-image ${reviewer.isActive ? 'active' : ''}`}
-              >
-                <img loading="lazy" decoding="async" src={reviewer.image} alt={`Reviewer ${reviewer.id}`} />
+          {/* Highlights */}
+          <section id="highlights" className="scroll-mt-24 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-100 md:p-8">
+            <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#0890BC]">Life on board</span>
+            <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-[#034457]">Cruise highlights</h2>
+            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              {FALLBACK_HIGHLIGHTS.map((highlight, index) => (
+                <article key={highlight.title} className={`group relative overflow-hidden rounded-2xl ${index === 0 ? 'sm:col-span-2 sm:row-span-2' : ''}`}>
+                  <img src={highlight.image} alt={highlight.title} loading="lazy" className={`w-full object-cover transition duration-500 group-hover:scale-105 ${index === 0 ? 'h-full min-h-[320px]' : 'h-[152px]'}`} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#034457]/80 via-transparent to-transparent" />
+                  <h3 className="absolute bottom-0 left-0 p-4 font-bold text-white">{highlight.title}</h3>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          {/* Amenities */}
+          <section id="amenities" className="scroll-mt-24 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-100 md:p-8">
+            <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#0890BC]">Included experiences</span>
+            <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-[#034457]">Onboard amenities</h2>
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {(display.amenities.length ? display.amenities : ['Dining', 'Entertainment', 'Pool & deck', 'Fitness center']).map((amenity, index) => {
+                const Icon = AMENITY_ICONS[index % AMENITY_ICONS.length];
+                return (
+                  <div key={amenity} className="flex items-center gap-3 rounded-2xl bg-[#FAFDFE] p-4 ring-1 ring-slate-100">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F1FBFD] text-[#055B75]"><Icon className="h-4 w-4" /></span>
+                    <span className="text-sm font-semibold text-[#034457]">{amenity}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Important information */}
+          <section id="important-information" className="scroll-mt-24 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-100 md:p-8">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#F1FBFD] text-[#055B75]"><Info className="h-5 w-5" /></span>
+              <div><h2 className="text-2xl font-extrabold text-[#034457]">Important information</h2><p className="text-sm text-slate-500">What to know before you sail</p></div>
+            </div>
+            <div className="mt-5">
+              <InfoAccordion title="Travel documents and visa requirements" defaultOpen>Every traveler should carry a valid passport and any visas required by the ports on the selected itinerary. Requirements vary by nationality and sailing.</InfoAccordion>
+              <InfoAccordion title="What is included in the fare?">Your cruise fare generally includes accommodation, main dining, entertainment and access to standard onboard facilities. Specialty dining, shore excursions and premium services may cost extra.</InfoAccordion>
+              <InfoAccordion title="Cancellation and change policy">Policies depend on the selected sailing date and fare type. Review the final conditions during booking or request a call back before payment.</InfoAccordion>
+            </div>
+          </section>
+
+          {/* Review */}
+          <section className="rounded-3xl bg-gradient-to-br from-[#034457] to-[#055B75] p-7 text-white shadow-lg md:p-9">
+            <div className="flex flex-wrap items-start justify-between gap-5">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#9FD6E8]">Traveler feedback</span>
+                <h2 className="mt-1 text-2xl font-extrabold">Why guests love this cruise</h2>
               </div>
-            ))}
+              <div className="flex gap-1">{Array.from({ length: 5 }).map((_, index) => <Star key={index} className="h-5 w-5 fill-[#F5B301] text-[#F5B301]" />)}</div>
+            </div>
+            <blockquote className="mt-6 max-w-3xl text-lg leading-8 text-white/90">“An excellent mix of destinations, onboard entertainment and helpful service. The itinerary was easy to follow and every port offered something memorable.”</blockquote>
+            <div className="mt-6 flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 ring-2 ring-white/30">
+                <User className="h-5 w-5 text-white" />
+              </span>
+              <div><p className="font-bold">Verified traveler</p><p className="text-xs text-white/65">Booked with Jetsetters</p></div>
+            </div>
+          </section>
+        </main>
+
+        {/* Sticky booking card */}
+        <aside className="lg:block">
+          <div className="sticky top-20 overflow-hidden rounded-3xl bg-white shadow-[0_20px_60px_-30px_rgba(3,68,87,0.4)] ring-1 ring-slate-100">
+            <div className="bg-gradient-to-r from-[#034457] to-[#055B75] p-5 text-white">
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#9FD6E8]">Reserve your voyage</p>
+              <h2 className="mt-1 text-xl font-bold">Choose your sailing</h2>
+            </div>
+            <div className="space-y-5 p-5">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">From</p>
+                <div className="mt-1 text-4xl font-extrabold text-[#055B75]"><Price amount={display.price} showCode /></div>
+                <p className="text-xs text-slate-500">per person · double occupancy</p>
+              </div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                Cabin type
+                <select className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold normal-case text-[#034457] outline-none focus:border-[#0890BC] focus:ring-2 focus:ring-[#0890BC]/20">
+                  <option>Inside cabin</option><option>Ocean view</option><option>Balcony</option><option>Suite</option>
+                </select>
+              </label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                Travelers
+                <select className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold normal-case text-[#034457] outline-none focus:border-[#0890BC] focus:ring-2 focus:ring-[#0890BC]/20">
+                  <option>2 adults</option><option>1 adult</option><option>2 adults, 1 child</option><option>2 adults, 2 children</option>
+                </select>
+              </label>
+              <Link to={bookingUrl} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#055B75] to-[#0890BC] px-5 py-3.5 font-bold text-white shadow-lg shadow-[#055B75]/20 transition hover:from-[#034457] hover:to-[#055B75]">
+                <Ship className="h-4 w-4" /> Continue to book
+              </Link>
+              <button onClick={() => setIsCallbackOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#055B75]/25 px-5 py-3 font-bold text-[#055B75] transition hover:bg-[#F1FBFD]">
+                <Phone className="h-4 w-4" /> Request call back
+              </button>
+
+              <div className="space-y-3 border-t border-slate-100 pt-4 text-xs text-slate-600">
+                <p className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Secure checkout with ARC Pay</p>
+                <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> Authorized cruise seller</p>
+                <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-[#0890BC]" /> Expert support before and after booking</p>
+              </div>
+              <p className="text-center text-[11px] leading-5 text-slate-400">Final availability, taxes and fare conditions are shown before payment.</p>
+            </div>
           </div>
-        </div>
+        </aside>
       </div>
 
-
       <Footer />
-    </>
+    </div>
   );
 };
 
