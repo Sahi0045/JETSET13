@@ -40,12 +40,56 @@ import restRoutes from './payment/rest.routes.js';
 
 const router = express.Router();
 
-
 // ============================================
 // ACTION-BASED ROUTE HANDLER
 // Handles requests with ?action= query parameter
 // This bridges the Vercel serverless function pattern with Express
 // ============================================
+
+// gateway-status has no dedicated handler module — keep it as an inline function
+// so it fits the same lookup-table shape as everything else.
+const handleGatewayStatus = (_req, res) => res.json({
+    success: true,
+    gatewayStatus: { status: 'OPERATING' },
+    status: 'OPERATING'
+});
+
+// action -> handler lookup. O(1) dispatch instead of a long switch, and a
+// single source of truth for the supported-actions list (no more duplicated,
+// drifting arrays in the error responses).
+const actionHandlers = {
+    'initiate-payment': handleInitiatePayment,
+    'payment-callback': handlePaymentCallback,
+    'get-payment-details': handleGetPaymentDetails,
+    'payment-verify': handleGetPaymentDetails, // mobile CruiseApiService.verifyPayment — same orderId lookup
+    'gateway-status': handleGatewayStatus,
+    'hosted-checkout': handleHostedCheckout,
+    'session-create': handleSessionCreate,
+    'cancel-booking': handleCancelBookingAction,
+    'get-pending-booking': handleGetPendingBooking,
+    'reconcile-booking-payment': handleReconcileBookingPayment,
+    'payment-refund': handlePaymentRefund,
+    'payment-void': handlePaymentVoid,
+    'payment-retrieve': handlePaymentRetrieve,
+    'create-payment-link': handleCreatePaymentLink,
+    'get-payment-link': handleGetPaymentLink,
+    'process-payment-link': handleProcessPaymentLink,
+    'list-payment-links': handleListPaymentLinks,
+    'complete-payment-link': handleCompletePaymentLink,
+    'agent-login': handleAgentLogin,
+    'create-agent': handleCreateAgent,
+    'list-agents': handleListAgents,
+    'update-agent': handleUpdateAgent,
+    'delete-agent': handleDeleteAgent,
+    'agent-invite': handleGetAgentInvite,            // public: validate a set-password token
+    'agent-accept-invite': handleAcceptAgentInvite,  // public: set password + activate
+    'resend-agent-invite': handleResendAgentInvite,  // super admin: re-send invite
+    'agent-stats': handleAgentStats,                 // agent: own scoped dashboard data
+    'admin-agent-detail': handleAdminAgentDetail,    // super admin: any agent's full work/stats
+    'record-payout': handleRecordPayout,             // super admin: record a commission payout
+};
+
+const SUPPORTED_ACTIONS = Object.keys(actionHandlers);
 
 // Main action router - handles ?action= query parameters
 router.all('/', async (req, res) => {
@@ -55,82 +99,23 @@ router.all('/', async (req, res) => {
         return res.status(400).json({
             success: false,
             error: 'Missing action parameter',
-            supportedActions: ['initiate-payment', 'payment-callback', 'get-payment-details', 'gateway-status']
+            supportedActions: SUPPORTED_ACTIONS
+        });
+    }
+
+    const handler = actionHandlers[action];
+    if (!handler) {
+        return res.status(400).json({
+            success: false,
+            error: `Unknown action: ${action}`,
+            supportedActions: SUPPORTED_ACTIONS
         });
     }
 
     console.log(`📥 Payment API Action: ${action}`, { method: req.method, query: req.query });
 
     try {
-        switch (action) {
-            case 'initiate-payment':
-                return handleInitiatePayment(req, res);
-            case 'payment-callback':
-                return handlePaymentCallback(req, res);
-            case 'get-payment-details':
-            case 'payment-verify': // mobile CruiseApiService.verifyPayment — same orderId lookup
-                return handleGetPaymentDetails(req, res);
-            case 'gateway-status':
-                return res.json({
-                    success: true,
-                    gatewayStatus: { status: 'OPERATING' },
-                    status: 'OPERATING'
-                });
-            case 'hosted-checkout':
-                return handleHostedCheckout(req, res);
-            case 'session-create':
-                return handleSessionCreate(req, res);
-            case 'cancel-booking':
-                return handleCancelBookingAction(req, res);
-            case 'get-pending-booking':
-                return handleGetPendingBooking(req, res);
-            case 'reconcile-booking-payment':
-                return handleReconcileBookingPayment(req, res);
-            case 'payment-refund':
-                return handlePaymentRefund(req, res);
-            case 'payment-void':
-                return handlePaymentVoid(req, res);
-            case 'payment-retrieve':
-                return handlePaymentRetrieve(req, res);
-            case 'create-payment-link':
-                return handleCreatePaymentLink(req, res);
-            case 'get-payment-link':
-                return handleGetPaymentLink(req, res);
-            case 'process-payment-link':
-                return handleProcessPaymentLink(req, res);
-            case 'list-payment-links':
-                return handleListPaymentLinks(req, res);
-            case 'agent-login':
-                return handleAgentLogin(req, res);
-            case 'create-agent':
-                return handleCreateAgent(req, res);
-            case 'list-agents':
-                return handleListAgents(req, res);
-            case 'update-agent':
-                return handleUpdateAgent(req, res);
-            case 'delete-agent':
-                return handleDeleteAgent(req, res);
-            case 'agent-invite':            // public: validate a set-password token
-                return handleGetAgentInvite(req, res);
-            case 'agent-accept-invite':     // public: set password + activate
-                return handleAcceptAgentInvite(req, res);
-            case 'resend-agent-invite':     // super admin: re-send invite
-                return handleResendAgentInvite(req, res);
-            case 'agent-stats':             // agent: own scoped dashboard data
-                return handleAgentStats(req, res);
-            case 'admin-agent-detail':      // super admin: any agent's full work/stats
-                return handleAdminAgentDetail(req, res);
-            case 'record-payout':           // super admin: record a commission payout
-                return handleRecordPayout(req, res);
-            case 'complete-payment-link':
-                return handleCompletePaymentLink(req, res);
-            default:
-                return res.status(400).json({
-                    success: false,
-                    error: `Unknown action: ${action}`,
-                    supportedActions: ['initiate-payment', 'payment-callback', 'get-payment-details', 'gateway-status', 'hosted-checkout', 'session-create', 'cancel-booking', 'payment-refund', 'payment-void', 'payment-retrieve']
-                });
-        }
+        return await handler(req, res);
     } catch (error) {
         console.error('❌ Action handler error:', error);
         return res.status(500).json({
