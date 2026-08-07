@@ -90,30 +90,11 @@ const callbackService = {
       console.error('Unexpected error in createCallbackRequest:', error);
       throw error;
     }
-  },
-  
-  /**
-   * Get all callback requests from Supabase
-   * @returns {Promise} - The response from Supabase
-   */
-  getAllCallbackRequests: async () => {
-    try {
-      const { data, error } = await supabase
-        .from('callback_requests')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('Error fetching callback requests:', error);
-        throw error;
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Unexpected error in getAllCallbackRequests:', error);
-      throw error;
-    }
   }
+  // Reading callback requests is intentionally not exposed here. The anon key
+  // only has INSERT on this table (RLS), because the rows contain customer
+  // names, emails and phone numbers. Admin listings must go through a backend
+  // endpoint that uses the service-role key.
 };
 
 export default callbackService;

@@ -91,30 +91,10 @@ const packageCallbackService = {
       console.error('Unexpected error in createPackageCallbackRequest:', error);
       throw error;
     }
-  },
-  
-  /**
-   * Get all package callback requests from Supabase
-   * @returns {Promise} - The response from Supabase
-   */
-  getAllPackageCallbackRequests: async () => {
-    try {
-      const { data, error } = await supabase
-        .from('packagescallback')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('Error fetching package callback requests:', error);
-        throw error;
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Unexpected error in getAllPackageCallbackRequests:', error);
-      throw error;
-    }
   }
+  // Reading callback requests is intentionally not exposed here — the anon key
+  // only has INSERT on this table (RLS). Admin listings must go through a
+  // backend endpoint using the service-role key.
 };
 
 export default packageCallbackService;

@@ -17,22 +17,15 @@ const supabase = createClient(supabaseUrl || '', supabaseKey || '', {
 });
 
 console.log('Supabase client initialized');
-// Test the connection (this is optional but helps in debugging)
-async function testConnection() {
-  try {
-    const { data, error } = await supabase.from('callback_requests').select('id').limit(1);
-    if (error) {
-      console.error('Supabase connection test failed:', error);
-    } else {
-      console.log('Supabase connection successful!', data);
-    }
-  } catch (e) {
-    console.error('Error testing Supabase connection:', e);
-  }
-}
 
-// Run the test
-testConnection();
+// NOTE: there is deliberately no startup "connection test" query here.
+// It used to run `select id from callback_requests limit 1` on module load for
+// every visitor. With RLS enabled (see
+// supabase/migrations/20260728120000_enable_rls_all_public_tables.sql) the anon
+// role has INSERT-only access to the lead-capture tables, so that probe would
+// fail on every page load and log a misleading error. Reads of those tables go
+// through the backend service-role key instead.
+
 export default supabase;
 
 
