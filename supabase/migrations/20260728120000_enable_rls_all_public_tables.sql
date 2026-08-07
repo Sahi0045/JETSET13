@@ -81,11 +81,14 @@ create policy "drafts_own_all" on public.application_drafts
   with check (user_id = auth.uid());
 
 -- --- public.user_preferences (Pages/Profile/NotificationSettings.jsx) -------
+-- NOTE: user_preferences.user_id is `text` (not uuid, unlike every other
+-- user_id column here), so auth.uid() must be cast or Postgres raises
+-- "operator does not exist: text = uuid".
 drop policy if exists "prefs_own_all" on public.user_preferences;
 create policy "prefs_own_all" on public.user_preferences
   for all to authenticated
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
+  using (user_id = auth.uid()::text)
+  with check (user_id = auth.uid()::text);
 
 -- --- Lead-capture forms: INSERT-only for anonymous visitors -----------------
 -- These are public forms submitted before/without login. Anon gets INSERT and
