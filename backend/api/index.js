@@ -33,6 +33,7 @@ import bulkUploadRoutes from "../routes/bulkUpload.routes.js";
 import featureFlagRoutes from "../routes/featureFlag.routes.js";
 import airportRoutes from "../routes/airport.routes.js";
 import pushRoutes from "../routes/push.routes.js";
+import gdprRoutes from "../routes/gdpr.routes.js";
 import chatRoutes from "./chat/index.js";
 
 // Shared stability modules (same behavior across all 3 entry points)
@@ -97,6 +98,7 @@ app.use("/api/feature-flags", featureFlagRoutes);
 app.use("/api/airports", airportRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/push", pushRoutes);
+app.use("/api/gdpr", gdprRoutes);
 
 // Also mount without /api prefix for rewrite compatibility
 app.use("/auth", authRoutes);
@@ -123,6 +125,7 @@ app.use("/bulk", bulkUploadRoutes);
 app.use("/feature-flags", featureFlagRoutes);
 app.use("/airports", airportRoutes);
 app.use("/chat", chatRoutes);
+app.use("/gdpr", gdprRoutes);
 
 // Direct send-email endpoint (must match server.js implementation)
 app.post("/api/send-email", async (req, res) => {

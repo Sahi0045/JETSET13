@@ -29,6 +29,7 @@ import chatRoutes from "./backend/api/chat/index.js";
 import couponRoutes from "./backend/routes/coupon.routes.js";
 import subscriptionRoutes from "./backend/routes/subscription.routes.js";
 import pushRoutes from "./backend/routes/push.routes.js";
+import gdprRoutes from "./backend/routes/gdpr.routes.js";
 import supabase from "./backend/config/supabase.js";
 // Shared stability modules (same behavior across all 3 entry points)
 import "./backend/bootstrap/httpDefaults.js"; // global axios timeout safety net
@@ -93,6 +94,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/push", pushRoutes);
+app.use("/api/gdpr", gdprRoutes);
 
 // Test endpoint
 app.get("/api/test", (req, res) => {

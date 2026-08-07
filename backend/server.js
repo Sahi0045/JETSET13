@@ -19,6 +19,7 @@ import subscriptionRoutes from './routes/subscription.routes.js';
 import couponRoutes from './routes/coupon.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import pushRoutes from './routes/push.routes.js';
+import gdprRoutes from './routes/gdpr.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import currencyRoutes from './routes/currency.routes.js';
 import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
@@ -172,11 +173,9 @@ app.use('/api/videos', videoRoutes);
 import visaRequirementsRoutes from './routes/visaRequirements.routes.js';
 app.use('/api/visa-requirements', visaRequirementsRoutes);
 
-// Simple GDPR routes (dynamic import to keep server.js clean)
-app.get('/api/gdpr/my-data-summary',   async (req, res) => { const { getDataSummary }         = await import('./controllers/gdpr.controller.js'); return getDataSummary(req, res); });
-app.get('/api/gdpr/export-data',       async (req, res) => { const { exportUserData }          = await import('./controllers/gdpr.controller.js'); return exportUserData(req, res); });
-app.delete('/api/gdpr/delete-account', async (req, res) => { const { requestAccountDeletion }  = await import('./controllers/gdpr.controller.js'); return requestAccountDeletion(req, res); });
-app.post('/api/gdpr/consent',          async (req, res) => { const { recordConsent }           = await import('./controllers/gdpr.controller.js'); return recordConsent(req, res); });
+// GDPR / data-rights routes. Previously declared inline here without `protect`,
+// which crashed on req.user and never existed in the other two entry points.
+app.use('/api/gdpr', gdprRoutes);
 
 
 // Direct send-email endpoint (must match api/index.js implementation)
