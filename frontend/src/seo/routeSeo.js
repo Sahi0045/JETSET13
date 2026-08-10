@@ -5,7 +5,7 @@ export const MAX_DESCRIPTION_LENGTH = 155;
 
 export const DEFAULT_ROUTE_SEO = {
   title: 'Luxury Travel, Simply Planned | Jetsetters',
-  description: 'Plan flights, hotels, cruises, vacation packages, and visa services with Jetsetters.',
+  description: 'Plan flights, hotels, cruises, vacation packages, and visa services with Jetsetters. Expert travel support for every journey.',
   shouldIndex: false,
 };
 
@@ -15,147 +15,147 @@ export const DEFAULT_ROUTE_SEO = {
 export const ROUTE_SEO = {
   '/': {
     title: 'Luxury Flights, Hotels & Cruises | Jetsetters',
-    description: 'Plan luxury flights, hotels, cruises, and vacation packages with expert support from Jetsetters.',
+    description: 'Plan luxury flights, hotels, cruises, and vacation packages with personalized expert support from the Jetsetters travel team.',
   },
   '/cruise': {
     title: 'Luxury Cruise Vacations | Jetsetters',
-    description: 'Discover memorable cruise vacations, trusted cruise lines, and expert help planning your voyage.',
+    description: 'Discover unforgettable cruise vacations with trusted cruise lines, curated itineraries, and expert planning support from Jetsetters.',
   },
   '/cruises': {
     title: 'Browse Cruise Deals | Jetsetters',
-    description: 'Compare cruise itineraries, destinations, and sailings to find the right vacation at the right price.',
+    description: 'Compare cruise itineraries, departure dates, and destinations to find the right sailing and the best value for your vacation.',
   },
   '/itinerary': {
     title: 'Cruise Itinerary Details | Jetsetters',
-    description: 'Review cruise itinerary details, onboard experiences, destinations, and booking information.',
+    description: 'Review full cruise itinerary details including ports of call, onboard experiences, excursion options, and booking information.',
   },
   '/flights': {
     title: 'Find Flight Deals | Jetsetters',
-    description: 'Search flights worldwide, compare airfare options, and book your next trip with confidence.',
+    description: 'Search flights worldwide, compare airfare prices and cabin classes, and book your next domestic or international trip with confidence.',
   },
   '/flight': {
     title: 'Search Flights | Jetsetters',
-    description: 'Search flight schedules and airfare options for your next journey with Jetsetters.',
+    description: 'Search real-time flight schedules and airfare options for any route. Compare prices and book your next journey through Jetsetters.',
   },
   '/flights/search': {
     title: 'Flight Search Results | Jetsetters',
-    description: 'Compare flight schedules, fares, and travel options for your selected route and dates.',
+    description: 'Compare flight schedules, fares, stopovers, and cabin options for your selected route and travel dates — all in one place.',
   },
   '/packages': {
     title: 'Vacation Packages & Getaways | Jetsetters',
-    description: 'Explore handpicked vacation packages and create an unforgettable trip with expert travel support.',
+    description: 'Explore handpicked vacation packages that combine flights, hotels, and activities into one seamless, expertly planned travel experience.',
   },
   '/packages/itinerary': {
     title: 'Vacation Package Itinerary | Jetsetters',
-    description: 'Review your vacation package itinerary, daily activities, accommodations, and inclusions.',
+    description: 'Review your full vacation package itinerary including daily activities, accommodation details, transportation, and what is included.',
   },
   '/hotels': {
     title: 'Hotels & Stays Worldwide | Jetsetters',
-    description: 'Find handpicked hotels worldwide, compare stays, and reserve accommodation for your next trip.',
+    description: 'Find handpicked hotels worldwide, compare accommodation styles and amenities, and reserve the perfect stay for your next trip.',
   },
   '/hotels/search': {
     title: 'Hotel Search Results | Jetsetters',
-    description: 'Compare hotels, room options, amenities, and prices for your selected destination and dates.',
+    description: 'Compare hotels, room types, star ratings, amenities, and prices for your chosen destination and travel dates — all in one view.',
   },
   '/hotels/details': {
     title: 'Hotel Details & Rooms | Jetsetters',
-    description: 'Explore hotel rooms, amenities, guest ratings, and pricing before you reserve your stay.',
+    description: 'Explore full hotel details including room options, photo galleries, guest ratings, available amenities, and current pricing before booking.',
   },
   '/visa': {
     title: 'Visa Services & Travel Documents | Jetsetters',
-    description: 'Get expert support with travel visas, document requirements, applications, and consultations.',
+    description: 'Get expert support with travel visas for any destination. We guide you through document requirements, applications, and consultations.',
   },
   '/visa/documents': {
     title: 'Travel Document Services | Jetsetters',
-    description: 'Get support with passports, travel documents, translations, and visa-ready paperwork.',
+    description: 'Get professional support with passports, travel documents, certified translations, and visa-ready paperwork for international travel.',
   },
   '/visa/apply': {
     title: 'Apply for a Travel Visa | Jetsetters',
-    description: 'Start your visa application online with step-by-step guidance from Jetsetters travel experts.',
+    description: 'Start your travel visa application online with step-by-step guidance and personalized support from Jetsetters document specialists.',
   },
   '/visa/booking': {
     title: 'Book a Visa Consultation | Jetsetters',
-    description: 'Schedule a consultation with a visa specialist for personalized travel document guidance.',
+    description: 'Schedule a one-on-one consultation with a Jetsetters visa specialist for personalized guidance on your travel document requirements.',
   },
   '/visa/refund-policy': {
     title: 'Visa Refund Policy | Jetsetters',
-    description: 'Read the Jetsetters visa service refund policy before submitting your application or payment.',
+    description: 'Read the full Jetsetters visa service refund policy so you understand your options before submitting your application or payment.',
   },
   '/visa/terms': {
     title: 'Visa Service Terms | Jetsetters',
-    description: 'Review the terms and conditions for Jetsetters visa and travel document services.',
+    description: 'Review the complete terms and conditions that govern Jetsetters visa preparation, travel document, and consultation services.',
   },
   '/visa/privacy': {
     title: 'Visa Privacy Policy | Jetsetters',
-    description: 'Learn how Jetsetters protects personal information collected through visa service requests.',
+    description: 'Learn exactly how Jetsetters collects, uses, and protects personal information submitted through visa and travel document services.',
   },
   '/resources': {
     title: 'Travel Resources & Guides | Jetsetters',
-    description: 'Explore practical travel guides, planning tools, and tips for a smoother journey.',
+    description: 'Explore practical travel guides, destination overviews, planning checklists, and tips to help you prepare for a smoother journey.',
   },
   '/destinations': {
     title: 'Travel Destinations Worldwide | Jetsetters',
-    description: 'Browse inspiring destinations, trip ideas, and handpicked experiences for your next getaway.',
+    description: 'Browse inspiring travel destinations across the globe, with trip ideas, seasonal highlights, and handpicked experiences for every traveler.',
   },
   '/travel-blog': {
     title: 'Travel Blog & Expert Tips | Jetsetters',
-    description: 'Read destination guides, travel tips, and inspiration from the Jetsetters travel team.',
+    description: 'Read destination spotlights, travel planning tips, packing guides, and insider inspiration from the Jetsetters team of travel experts.',
   },
   '/support': {
     title: 'Travel Support & Help | Jetsetters',
-    description: 'Find answers, booking help, and support resources for your Jetsetters travel plans.',
+    description: 'Find answers to your booking questions, get help managing your trip, and access support resources for all Jetsetters travel services.',
   },
   '/faqs': {
     title: 'Travel Booking FAQs | Jetsetters',
-    description: 'Find answers about flights, hotels, cruises, payments, visas, and travel bookings.',
+    description: 'Find answers to common questions about flights, hotels, cruises, vacation packages, visa services, payments, and travel bookings.',
   },
   '/company': {
     title: 'About Jetsetters Travel',
-    description: 'Learn about Jetsetters, our travel expertise, customer-first values, and global mission.',
+    description: 'Learn about Jetsetters — our story, travel expertise, customer-first values, team, and our mission to make every journey exceptional.',
   },
   '/contact': {
     title: 'Contact Jetsetters Travel',
-    description: 'Contact the Jetsetters travel team for booking help, travel questions, and expert support.',
+    description: 'Reach the Jetsetters travel team for booking help, trip planning questions, quote requests, and expert personalized support.',
   },
   '/careers': {
     title: 'Careers at Jetsetters',
-    description: 'Explore career opportunities and join the team building better travel experiences worldwide.',
+    description: 'Explore open positions and join the Jetsetters team building better, smarter travel experiences for customers around the world.',
   },
   '/privacy': {
     title: 'Privacy Policy | Jetsetters',
-    description: 'Read the Jetsetters privacy policy and learn how we collect, use, and protect your data.',
+    description: 'Read the Jetsetters privacy policy and learn exactly how we collect, use, store, and protect your personal data and travel information.',
   },
   '/privacy-policy': {
     title: 'Privacy Policy & Data Rights | Jetsetters',
-    description: 'Learn how Jetsetters handles personal data, privacy rights, and travel-service information.',
+    description: 'Learn how Jetsetters handles your personal data, your privacy rights, and how information you share is used across our travel services.',
   },
   '/cookies': {
     title: 'Cookie Policy | Jetsetters',
-    description: 'Learn how Jetsetters uses cookies and similar technologies to improve your website experience.',
+    description: 'Learn how Jetsetters uses cookies and similar tracking technologies to improve your browsing experience and personalize travel content.',
   },
   '/terms': {
     title: 'Terms of Service | Jetsetters',
-    description: 'Read the terms of service governing use of Jetsetters travel planning and booking services.',
+    description: 'Read the full terms of service governing your use of Jetsetters travel planning, booking, subscription, and visa services.',
   },
   '/terms-conditions': {
     title: 'Travel Terms & Conditions | Jetsetters',
-    description: 'Review Jetsetters terms for bookings, payments, travel services, changes, and refunds.',
+    description: 'Review Jetsetters complete booking terms covering payments, cancellations, travel service changes, refunds, and your responsibilities.',
   },
   '/request': {
     title: 'Request a Travel Quote | Jetsetters',
-    description: 'Tell us about your trip and request a tailored flight, hotel, cruise, or vacation quote.',
+    description: 'Tell us your travel plans and request a tailored quote for flights, hotels, cruises, vacation packages, or a full custom itinerary.',
   },
   '/membership': {
     title: 'Jetsetters Membership Benefits',
-    description: 'Explore Jetsetters membership benefits, travel perks, support, and exclusive offers.',
+    description: 'Explore Jetsetters membership plans and unlock exclusive travel perks, priority support, and member-only deals on every booking.',
   },
   '/pricing': {
     title: 'Jetsetters Membership Pricing',
-    description: 'Compare Jetsetters membership options, benefits, and travel-focused pricing plans.',
+    description: 'Compare Jetsetters membership tiers, understand what each plan includes, and choose the travel-focused pricing option that fits you.',
   },
   '/help': {
     title: 'Help Center | Jetsetters',
-    description: 'Browse Jetsetters help articles, travel videos, booking guides, and useful resources.',
+    description: 'Browse Jetsetters help articles, video walkthroughs, booking guides, and support resources to get the most out of your travel experience.',
   },
   '/booking-confirmation': {
     title: 'Booking Confirmation | Jetsetters',

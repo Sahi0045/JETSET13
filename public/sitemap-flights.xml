@@ -16,12 +16,5 @@
     <priority>0.8</priority>
   </url>
 
-  <!-- Popular Flight Routes -->
-  <url>
-    <loc>https://www.jetsetterss.com/flights/cheapest-flights</loc>
-    <lastmod>2026-04-14</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.7</priority>
-  </url>
 
 </urlset>

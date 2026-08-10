@@ -39,6 +39,10 @@ const RouteSeo = () => {
       <meta name="description" content={description} />
       <meta name="robots" content={robots} />
       <link rel="canonical" href={canonicalUrl} />
+      <meta property="og:url" content={canonicalUrl} />
+      <meta property="og:title" content={title} />
+      <meta property="og:description" content={description} />
+      <meta property="og:type" content="website" />
     </Helmet>
   );
 };
@@ -47,15 +51,20 @@ const RouteSeo = () => {
  * Use this in a page with data-driven search copy (for example a named hotel)
  * to override the route defaults once that page's data has loaded.
  */
-export const SeoOverride = ({ title, description, shouldIndex = false }) => {
+export const SeoOverride = ({ title, description, shouldIndex = true }) => {
   const { pathname } = useLocation();
+  const canonicalUrl = getCanonicalURL(pathname);
 
   return (
     <Helmet>
       <title>{truncateSeoText(title, MAX_TITLE_LENGTH)}</title>
       <meta name="description" content={truncateSeoText(description, MAX_DESCRIPTION_LENGTH)} />
       <meta name="robots" content={shouldIndex ? 'index, follow' : 'noindex, follow'} />
-      <link rel="canonical" href={getCanonicalURL(pathname)} />
+      <link rel="canonical" href={canonicalUrl} />
+      <meta property="og:url" content={canonicalUrl} />
+      <meta property="og:title" content={truncateSeoText(title, MAX_TITLE_LENGTH)} />
+      <meta property="og:description" content={truncateSeoText(description, MAX_DESCRIPTION_LENGTH)} />
+      <meta property="og:type" content="website" />
     </Helmet>
   );
 };

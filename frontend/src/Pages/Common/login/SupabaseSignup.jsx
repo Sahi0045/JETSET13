@@ -192,10 +192,10 @@ export default function SupabaseSignup() {
 
                 {/* Signup Form Section */}
                 <div className="login-content">
-                    <h2 className="login-title">
+                    <h1 className="login-title">
                         <FaUserPlus className="inline mr-2" />
                         Sign Up with Supabase
-                    </h2>
+                    </h1>
 
                     {authError && (
                         <div className="error-message mb-4">

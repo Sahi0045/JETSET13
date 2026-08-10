@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Current work in progress:** see the `CURRENT WORK IN PROGRESS` section at the top of
+> [`AGENTS.md`](./AGENTS.md) before doing anything. It tracks the live Google Play Android
+> release, the Play Console questionnaire answers, Supabase RLS/security status, credential
+> rotation still owed, and the open Amadeus DNS outage. Android-specific build notes live in
+> `/media/shubham/OS/for linux work/jetsetter android/jetsetter-mobile/AGENTS.md`.
+
 ## Project overview
 
 JETSET13 (Jetsetters) is a travel booking platform with React (Vite) frontend and Node.js/Express backend. Surfaces include flights, hotels, cruises, vacation packages, visas, and an admin/quote/inquiry workflow. ES modules (`"type": "module"`) throughout.

@@ -888,6 +888,9 @@ export default function HotelSearchResults() {
 
       {/* Results Grid */}
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">
+          {searchDestination ? `Hotels in ${searchDestination}` : 'Available Hotels'}
+        </h1>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {filteredHotels.map((hotel) => (
             <div key={hotel.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">

@@ -75,12 +75,7 @@ const AboutUs = () => {
     }
   ];
 
-  const partners = [
-    { name: "Amadeus", logo: "https://via.placeholder.com/150x60/055B75/FFFFFF?text=Amadeus" },
-    { name: "Sabre", logo: "https://via.placeholder.com/150x60/055B75/FFFFFF?text=Sabre" },
-    { name: "Travelport", logo: "https://via.placeholder.com/150x60/055B75/FFFFFF?text=Travelport" },
-    { name: "IATA", logo: "https://via.placeholder.com/150x60/055B75/FFFFFF?text=IATA" }
-  ];
+  const partners = ["Amadeus", "Sabre", "Travelport", "IATA"];
 
   return (
     <>
@@ -267,8 +262,8 @@ const AboutUs = () => {
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
               {partners.map((partner, index) => (
-                <div key={index} className="flex items-center justify-center p-6 bg-gray-50 rounded-xl border border-gray-200 hover:border-[#055B75] transition-all duration-300">
-                  <img src={partner.logo} alt={partner.name} className="max-w-full h-auto opacity-60 hover:opacity-100 transition-opacity" loading="lazy" decoding="async" />
+                <div key={index} className="flex items-center justify-center p-6 bg-[#055B75] rounded-xl border border-gray-200 hover:border-[#055B75] transition-all duration-300">
+                  <span style={{ color: '#fff', fontWeight: 700, fontSize: '16px', letterSpacing: '0.5px' }}>{partner}</span>
                 </div>
               ))}
             </div>

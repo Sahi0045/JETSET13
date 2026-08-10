@@ -2,6 +2,91 @@
 
 This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
+## CURRENT WORK IN PROGRESS (read this first)
+
+Focus is **Android only**. Do not start or continue iOS work. The mobile repo is a
+sibling directory outside this workspace — edit it with `execute_bash` and an explicit
+`cd`, workspace file tools cannot reach it:
+
+```
+/media/shubham/OS/for linux work/jetsetter android/jetsetter-mobile
+```
+
+### 1. Google Play release (in progress)
+
+- Package `com.jetsetterss.mobile`, Expo SDK 54, EAS production profile builds an **`.aab`** (Play requires it).
+- Build #1 (versionCode ~2) is already uploaded to **Internal testing**. Keep it there. Do **not** delete it and do **not** promote it to Production.
+- `eas.json` was switched from `appVersionSource: "local"` to `"remote"` because `autoIncrement` with `app.config.js` requires remote versioning. Confirm that is committed before building.
+- Always reuse the existing EAS keystore. Never generate a new one.
+- Next build (needed, because build #1 still ships the old permission set):
+  ```bash
+  cd "/media/shubham/OS/for linux work/jetsetter android/jetsetter-mobile"
+  eas build --platform android --profile production
+  ```
+- Every AAB upload needs a new versionCode. Upload to Testing → Internal testing, verify on device, only then promote to Production.
+- First upload was manual. `eas submit` needs a Play service-account JSON — never commit that file.
+
+### 2. Play Console questionnaires (in progress)
+
+Answers already given, keep them consistent:
+
+- Online content **Yes** (flight/hotel/cruise/package inventory is fetched at runtime).
+- Violence **No**, controlled substances **No**, age-restricted products **No**, precise location shared with other users **No**, digital goods **No** (real-world travel services), cash/gift-card/crypto/NFT rewards **No**, browser or search engine **No**, primarily news/education **No**.
+- Data safety — collected, **not shared**, not ephemeral:
+  - Name, Email, Phone, User IDs → required, app functionality / account management
+  - Address → optional, app functionality
+  - Other info (nationality, gender, DOB, passport, PAN) → optional, app functionality
+  - Purchase history → required, app functionality
+  - User payment info → required, app functionality (card/CVV go to hosted ARC Pay and are not stored by the app; transaction records are stored)
+  - Photos → optional, app functionality
+  - App interactions → optional, analytics
+  - Device or other IDs → optional, app functionality (FCM token stored in `user_devices` by `backend/services/push-notification.service.js`)
+  - Web browsing history → **not collected**
+- Privacy policy: `https://jetsetterss.com/privacy-policy`
+- Account deletion: `https://jetsetterss.com/profile/privacy`
+- GDPR deletion anonymises immediately and hard-deletes after ~30 days. Do not claim instant erasure of all history.
+
+### 3. Google Sign-In on the Play build (verify)
+
+Play App Signing re-signs the AAB, so the Play-installed app has a different certificate than preview APKs. Play app-signing SHA-1:
+
+```
+AA:C3:10:5B:06:A1:A8:27:22:E5:C6:1D:2C:7D:E2:40:3F:1A:84:BF
+```
+
+Added to Firebase by the user. No rebuild is needed for a fingerprint change — force-close the Play-installed app and retry after propagation. Keep the EAS/preview keystore SHA-1 registered too, for directly installed APKs. If it still fails, confirm the Firebase project matches the Google web client ID project and refresh `google-services.json`. Do not fake or patch around Google login.
+
+### 4. Android permission cleanup (built into next AAB only)
+
+`expo-location` removed from `package.json`; `android.blockedPermissions` added in `app.config.js` for `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `CAMERA`, `RECORD_AUDIO`, `SYSTEM_ALERT_WINDOW`, `BLUETOOTH_CONNECT`, `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`. Source uses none of those APIs, so do not declare location/audio collection in Data safety just because the old manifest listed the permissions.
+
+### 5. Security work (done, applied in production)
+
+- Supabase RLS enabled on every public base table; legacy user-ID reconciliation applied first (mismatches = 0). `user_preferences.user_id` is `text`, so policies use `auth.uid()::text`. A follow-up migration dropped pre-existing permissive policies on `users`, callback/lead tables, payment links, and agents. Public read on `flight_deals` is intentional.
+  - `supabase/migrations/20260624140000_reconcile_legacy_user_ids.sql`
+  - `supabase/migrations/20260728120000_enable_rls_all_public_tables.sql`
+  - `supabase/migrations/20260728130000_drop_permissive_rls_policies.sql`
+  - Backend uses the service-role key and bypasses RLS, so it is unaffected.
+- Mobile app no longer contains ARC Pay or Amadeus credentials; `arcPayService` only calls the backend (`gateway-status`, `hosted-checkout`).
+  **Still outstanding: rotate the ARC Pay and Amadeus credentials with the providers.** They were previously committed and shipped in an APK; a private repo does not undo that.
+- GDPR routes now exist in production (`backend/routes/gdpr.routes.js`, mounted in `server.js`, `backend/server.js`, `backend/api/index.js`), all behind `protect`. Unauthenticated calls return 401, not 404.
+
+### 6. Known open issues
+
+- **Amadeus DNS outage (external).** `test.api.amadeus.com` and `api.amadeus.com` have no DNS records from public resolvers or Amadeus authoritative DNS. Flight search fails with `getaddrinfo ENOTFOUND`. **Do not enable mock flights** and do not claim flight search is fixed — this needs Amadeus support.
+- Some older flight bookings have `user_id = null`, so they are missing from My Trips. The booking-save flow still needs to attach the logged-in user ID.
+- Car rental is **not** implemented in `amadeusService.js`; the Amadeus questionnaire text describes an intended integration.
+
+### 7. Working agreements
+
+- Brand palette: primary teal `#055B75`, dark teal `#034457`, accent `#0890BC`, sky `#65B3CF`, light bg `#F1FBFD`. Android icon background is navy `#182647` because the logo has an opaque navy plate. Never introduce generic blue/indigo (`#0066FF`, `#1e40af`, `#1976D2`, `#0EA5E9`).
+- Expo Go: `npx expo start -c --go`.
+- No scratch `.txt`/`.md` files for working notes; fix the issue in place.
+- Verify before claiming something is fixed. Proper fixes over patches.
+- Push to `main` only when explicitly asked.
+- Shared backend + Supabase DB between web and mobile is intentional.
+- Stitch MCP before UI redesigns: create a temporary `scripts/stitch-driver.mjs` (project ID `5019874695705983420`, GCP project `jets-1b5fa`) and delete it afterwards.
+
 ## Project overview
 
 JETSET13 (Jetsetters) is a travel booking platform with React (Vite) frontend and Node.js/Express backend. Surfaces include flights, hotels, cruises, vacation packages, visas, and an admin/quote/inquiry workflow. ES modules (`"type": "module"`) throughout.
