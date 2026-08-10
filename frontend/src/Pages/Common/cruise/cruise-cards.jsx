@@ -197,6 +197,7 @@ const CruiseCards = () => {
         <div className="flex items-center justify-center py-32">
           <div className="text-center">
             <FaSpinner className="text-[#055B75] text-5xl animate-spin mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-[#034457] mb-2">Loading Cruises</h1>
             <p className="text-gray-600 font-medium">Loading cruise data...</p>
           </div>
         </div>
@@ -288,6 +289,8 @@ const CruiseCards = () => {
 
         {/* ---- Results column ---- */}
         <main>
+          <h1 className="mb-5 text-2xl font-bold text-[#034457]">Find Your Perfect Cruise</h1>
+
           {/* Sort bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-xl shadow-sm ring-1 ring-slate-100 px-4 py-3 mb-5">
             <div className="flex items-center gap-2">

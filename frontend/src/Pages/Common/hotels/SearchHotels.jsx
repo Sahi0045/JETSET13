@@ -378,7 +378,7 @@ const SearchHotels = () => {
             {/* Header + sort tabs */}
             <div className="container mx-auto px-4 pt-6">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
-                    <h2 className="text-xl font-bold text-gray-900">
+                    <h1 className="text-xl font-bold text-gray-900">
                         {loading ? (
                             <span className="flex items-center gap-2">
                                 <div className="w-5 h-5 border-2 border-[#055B75] border-t-transparent rounded-full animate-spin"></div>
@@ -390,7 +390,7 @@ const SearchHotels = () => {
                                 {searchQuery && <span className="text-gray-500 font-normal"> in {searchQuery}</span>}
                             </span>
                         )}
-                    </h2>
+                    </h1>
                     <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar text-sm">
                         {sortTabs.map((tab) => (
                             <button

@@ -92,15 +92,12 @@ const WhyChooseUsSection = () => {
                 "Jetsetters Cruises made booking our family vacation incredibly easy. Their customer service team went above and beyond to help us find the perfect cruise, and their exclusive deals saved us hundreds!"
               </div>
               <div className="flex items-center">
-                <img loading="lazy" decoding="async"
-                  src="/images/testimonial-avatar.jpg"
-                  alt="Customer Testimonial"
-                  className="w-12 h-12 rounded-full object-cover mr-4"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = 'https://via.placeholder.com/48';
-                  }}
-                />
+                <div
+                  aria-hidden="true"
+                  className="w-12 h-12 rounded-full bg-[#055B75] text-white font-bold flex items-center justify-center mr-4"
+                >
+                  MT
+                </div>
                 <div>
                   <div className="font-bold text-gray-800">Michael Thompson</div>
                   <div className="text-sm text-gray-600">Family Cruise to the Bahamas</div>

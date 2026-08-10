@@ -4,6 +4,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import LoadingSpinner from './Components/LoadingSpinner';
 import { LocationProvider } from './Context/LocationContext';
+import RouteSeo from './seo/RouteSeo';
 
 // Fallback components
 // Fallback components
@@ -689,6 +690,7 @@ const App = () => {
   return (
     <React.Suspense fallback={<LoadingComponent />}>
       <LocationProvider>
+        <RouteSeo />
         <ScrollToTop />
         <Routes>
           <Route path="/" element={<Welcome />} />

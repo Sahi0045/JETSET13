@@ -13,23 +13,27 @@ const COLUMNS = [
       { label: 'Hotels', to: '/hotels' },
       { label: 'Visa Services', to: '/visa' },
       { label: 'Document Services', to: '/visa/documents' },
+      { label: 'Membership Pricing', to: '/pricing' },
     ],
   },
   {
     title: 'Resources',
     links: [
       { label: 'Destinations', to: '/destinations' },
-      { label: 'Travel Blog', to: '/blog' },
+      { label: 'Travel Blog', to: '/travel-blog' },
       { label: 'Support', to: '/support' },
-      { label: 'FAQs', to: '/faq' },
+      { label: 'Help Center', to: '/help' },
+      { label: 'FAQs', to: '/faqs' },
     ],
   },
   {
     title: 'Company',
     links: [
+      { label: 'About Jetsetters', to: '/company' },
       { label: 'Contact Us', to: '/contact' },
       { label: 'Privacy Policy', to: '/privacy-policy' },
       { label: 'Terms & Conditions', to: '/terms-conditions' },
+      { label: 'Cookie Policy', to: '/cookies' },
     ],
   },
 ];

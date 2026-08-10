@@ -56,13 +56,16 @@ const DestinationSection = () => {
               className="group relative flex-shrink-0 w-[260px] md:w-[300px] snap-start rounded-2xl overflow-hidden shadow-sm ring-1 ring-slate-100 bg-white hover:shadow-xl transition-all duration-300"
             >
               <div className="relative h-[300px] md:h-[340px] overflow-hidden">
-                <img
-                  loading="lazy"
-                  decoding="async"
-                  src={destination.image}
-                  alt={destination.name}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                />
+                <picture className="block h-full">
+                  <source srcSet={encodeURI(destination.image.replace(/\.png$/i, '.webp'))} type="image/webp" />
+                  <img
+                    loading="lazy"
+                    decoding="async"
+                    src={destination.image}
+                    alt={destination.name}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  />
+                </picture>
                 <div className="absolute inset-0 bg-gradient-to-t from-[#034457]/90 via-[#034457]/10 to-transparent"></div>
                 <div className="absolute top-3 right-3 flex items-center gap-1 bg-white/95 backdrop-blur px-2.5 py-1 rounded-full text-xs font-bold text-[#034457] shadow-sm">
                   <FaStar className="text-[#F5B301] w-3 h-3" />

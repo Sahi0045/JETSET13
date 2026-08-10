@@ -417,7 +417,7 @@ const ItineraryPackage = () => {
 
         {/* Itinerary Section - Mobile Optimized */}
         <div className="mb-8 md:mb-12">
-          <h1 className="text-2xl md:text-4xl font-bold mb-1 md:mb-2">Itinerary</h1>
+          <h2 className="text-2xl md:text-4xl font-bold mb-1 md:mb-2">Itinerary</h2>
           <p className="text-gray-600">Day wise details of your package</p>
           <hr className="my-4 md:my-6" />
 

@@ -383,14 +383,14 @@ export default function PaymentCallback() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <h2 className="text-2xl font-semibold text-gray-800 mb-2">Payment Verification Issue</h2>
+            <h1 className="text-2xl font-semibold text-gray-800 mb-2">Payment Verification Issue</h1>
             <p className="text-red-600 mb-4">{error}</p>
             <p className="text-sm text-gray-500">Redirecting you shortly...</p>
           </>
         ) : (
           <>
             <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-6"></div>
-            <h2 className="text-2xl font-semibold text-gray-800 mb-2">Verifying Payment...</h2>
+            <h1 className="text-2xl font-semibold text-gray-800 mb-2">Verifying Payment...</h1>
             <p className="text-gray-600">{status}</p>
             <p className="text-sm text-gray-500 mt-4">Please wait while we confirm your payment with ARC Pay Gateway.</p>
           </>

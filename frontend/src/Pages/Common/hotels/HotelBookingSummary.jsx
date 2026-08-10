@@ -204,6 +204,7 @@ const HotelBookingSummary = () => {
             <div className="min-h-screen bg-gray-50">
                 <Navbar forceScrolled={true} />
                 <div className="container mx-auto px-4 py-12">
+                    <h1 className="sr-only">Loading Hotel Booking</h1>
                     <div className="animate-pulse max-w-4xl mx-auto">
                         <div className="h-8 bg-gray-200 rounded w-1/2 mb-8"></div>
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -228,7 +229,7 @@ const HotelBookingSummary = () => {
                     <div className="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
                         <AlertCircle size={40} className="text-yellow-500" />
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Booking Information Missing</h2>
+                    <h1 className="text-2xl font-bold text-gray-800 mb-2">Booking Information Missing</h1>
                     <p className="text-gray-600 mb-6">Please select a hotel and room before proceeding to booking.</p>
                     <button
                         onClick={() => navigate('/hotels/search')}
@@ -247,6 +248,8 @@ const HotelBookingSummary = () => {
             <Navbar forceScrolled={true} />
 
             <div className="container mx-auto px-4 py-8">
+                <h1 className="sr-only">Complete Your Hotel Booking</h1>
+
                 {/* Back Button */}
                 <button
                     onClick={() => step === 1 ? navigate(-1) : setStep(step - 1)}

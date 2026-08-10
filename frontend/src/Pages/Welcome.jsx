@@ -4,10 +4,6 @@ import FlightLanding from './Common/flights/flightlanding';
 import withPageElements from './Common/PageWrapper';
 
 const Welcome = () => {
-    React.useEffect(() => {
-        document.title = 'Jetsetters | Luxury Travel. Effortlessly Planned.';
-    }, []);
-
     const handleImageError = () => {
         document
             .getElementById('screenshot-container')

@@ -20,10 +20,6 @@ const Error = () => {
     503: 'Sorry, we are doing some maintenance. Please check back soon.',
   }[status] || 'An error occurred.';
 
-  React.useEffect(() => {
-    document.title = `${title} | Jetsetters`;
-  }, [title]);
-
   return (
     <>
       <Navbar forceScrolled={true} />

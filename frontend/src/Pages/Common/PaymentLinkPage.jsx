@@ -93,7 +93,7 @@ const PaymentLinkPage = () => {
         <div style={styles.card}>
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
             <div style={{ fontSize: '40px', marginBottom: '16px' }}>⏳</div>
-            <h2 style={{ color: '#1e293b', margin: '0 0 8px' }}>Loading payment details...</h2>
+            <h1 style={{ color: '#1e293b', margin: '0 0 8px' }}>Loading payment details...</h1>
             <p style={{ color: '#64748b' }}>Please wait</p>
           </div>
         </div>
@@ -107,7 +107,7 @@ const PaymentLinkPage = () => {
         <div style={styles.card}>
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
-            <h2 style={{ color: '#dc2626', margin: '0 0 8px' }}>Payment Link Not Found</h2>
+            <h1 style={{ color: '#dc2626', margin: '0 0 8px' }}>Payment Link Not Found</h1>
             <p style={{ color: '#64748b' }}>{error}</p>
           </div>
         </div>
@@ -121,7 +121,7 @@ const PaymentLinkPage = () => {
         <div style={styles.card}>
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
-            <h2 style={{ color: '#065f46', margin: '0 0 8px' }}>Payment Complete</h2>
+            <h1 style={{ color: '#065f46', margin: '0 0 8px' }}>Payment Complete</h1>
             <p style={{ color: '#64748b' }}>This payment has already been processed. Thank you!</p>
           </div>
         </div>
@@ -135,7 +135,7 @@ const PaymentLinkPage = () => {
         <div style={styles.card}>
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏰</div>
-            <h2 style={{ color: '#92400e', margin: '0 0 8px' }}>Link Expired</h2>
+            <h1 style={{ color: '#92400e', margin: '0 0 8px' }}>Link Expired</h1>
             <p style={{ color: '#64748b' }}>This payment link has expired. Please contact your travel agent for a new link.</p>
           </div>
         </div>
@@ -149,7 +149,7 @@ const PaymentLinkPage = () => {
         <div style={styles.card}>
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚫</div>
-            <h2 style={{ color: '#6b7280', margin: '0 0 8px' }}>Link Cancelled</h2>
+            <h1 style={{ color: '#6b7280', margin: '0 0 8px' }}>Link Cancelled</h1>
             <p style={{ color: '#64748b' }}>This payment link has been cancelled.</p>
           </div>
         </div>
@@ -163,7 +163,7 @@ const PaymentLinkPage = () => {
     <div style={styles.pageContainer}>
       {/* Header */}
       <div style={styles.header}>
-        <img src="/logo.png" alt="Jetsetters" style={{ height: '36px' }} loading="lazy" decoding="async" onError={(e) => { e.target.style.display = 'none'; }} />
+        <img src="/images/logos/jetsetters_3d_logo_final.png" alt="Jetsetters" style={{ height: '36px' }} loading="lazy" decoding="async" />
         <span style={{ fontSize: '20px', fontWeight: 700, color: '#055B75' }}>Jetsetters</span>
       </div>
 
@@ -186,6 +186,7 @@ const PaymentLinkPage = () => {
           borderRadius: '16px 16px 0 0',
           textAlign: 'center'
         }}>
+          <h1 style={{ fontSize: '20px', margin: '0 0 12px', fontWeight: 700 }}>Secure Payment</h1>
           <div style={{ fontSize: '14px', opacity: 0.8, marginBottom: '4px' }}>Amount Due</div>
           <div style={{ fontSize: '42px', fontWeight: 800, letterSpacing: '-1px' }}>
             {getCurrencySymbol(linkData.currency)}{parseFloat(linkData.amount).toFixed(2)}

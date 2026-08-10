@@ -242,9 +242,9 @@ const ConsultationBooking = () => {
                 check_circle
               </span>
             </div>
-            <h1 className="text-3xl font-black text-slate-900 mb-2">
+            <h2 className="text-3xl font-black text-slate-900 mb-2">
               Booking Confirmed!
-            </h1>
+            </h2>
             <p className="text-slate-500 mb-8">
               Your consultation has been booked successfully. A confirmation has
               been sent to{" "}
