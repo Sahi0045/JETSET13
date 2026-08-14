@@ -28,6 +28,7 @@ export const ROUTE_SEO = {
   '/itinerary': {
     title: 'Cruise Itinerary Details | Jetsetters',
     description: 'Review full cruise itinerary details including ports of call, onboard experiences, excursion options, and booking information.',
+    shouldIndex: false,
   },
   '/flights': {
     title: 'Find Flight Deals | Jetsetters',
@@ -36,6 +37,7 @@ export const ROUTE_SEO = {
   '/flight': {
     title: 'Search Flights | Jetsetters',
     description: 'Search real-time flight schedules and airfare options for any route. Compare prices and book your next journey through Jetsetters.',
+    shouldIndex: false,
   },
   '/flights/search': {
     title: 'Flight Search Results | Jetsetters',
@@ -48,6 +50,7 @@ export const ROUTE_SEO = {
   '/packages/itinerary': {
     title: 'Vacation Package Itinerary | Jetsetters',
     description: 'Review your full vacation package itinerary including daily activities, accommodation details, transportation, and what is included.',
+    shouldIndex: false,
   },
   '/hotels': {
     title: 'Hotels & Stays Worldwide | Jetsetters',
@@ -60,6 +63,7 @@ export const ROUTE_SEO = {
   '/hotels/details': {
     title: 'Hotel Details & Rooms | Jetsetters',
     description: 'Explore full hotel details including room options, photo galleries, guest ratings, available amenities, and current pricing before booking.',
+    shouldIndex: false,
   },
   '/visa': {
     title: 'Visa Services & Travel Documents | Jetsetters',
@@ -121,10 +125,6 @@ export const ROUTE_SEO = {
     title: 'Careers at Jetsetters',
     description: 'Explore open positions and join the Jetsetters team building better, smarter travel experiences for customers around the world.',
   },
-  '/privacy': {
-    title: 'Privacy Policy | Jetsetters',
-    description: 'Read the Jetsetters privacy policy and learn exactly how we collect, use, store, and protect your personal data and travel information.',
-  },
   '/privacy-policy': {
     title: 'Privacy Policy & Data Rights | Jetsetters',
     description: 'Learn how Jetsetters handles your personal data, your privacy rights, and how information you share is used across our travel services.',
@@ -132,10 +132,6 @@ export const ROUTE_SEO = {
   '/cookies': {
     title: 'Cookie Policy | Jetsetters',
     description: 'Learn how Jetsetters uses cookies and similar tracking technologies to improve your browsing experience and personalize travel content.',
-  },
-  '/terms': {
-    title: 'Terms of Service | Jetsetters',
-    description: 'Read the full terms of service governing your use of Jetsetters travel planning, booking, subscription, and visa services.',
   },
   '/terms-conditions': {
     title: 'Travel Terms & Conditions | Jetsetters',
@@ -148,10 +144,6 @@ export const ROUTE_SEO = {
   '/membership': {
     title: 'Jetsetters Membership Benefits',
     description: 'Explore Jetsetters membership plans and unlock exclusive travel perks, priority support, and member-only deals on every booking.',
-  },
-  '/pricing': {
-    title: 'Jetsetters Membership Pricing',
-    description: 'Compare Jetsetters membership tiers, understand what each plan includes, and choose the travel-focused pricing option that fits you.',
   },
   '/help': {
     title: 'Help Center | Jetsetters',

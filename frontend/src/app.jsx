@@ -429,16 +429,6 @@ const PackageBookingSummary = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Package Booking..." /> }))
 );
 
-const Privacy = React.lazy(() =>
-  import('./Pages/Privacy')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Privacy Policy..." /> }))
-);
-
-const Terms = React.lazy(() =>
-  import('./Pages/Terms')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Terms..." /> }))
-);
-
 const Cookies = React.lazy(() =>
   import('./Pages/Cookies')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Cookie Policy..." /> }))
@@ -768,8 +758,8 @@ const App = () => {
           <Route path="/visa/admin/*" element={<VisaAdminPanel />} />
 
           {/* Footer Pages */}
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
+          <Route path="/terms" element={<Navigate to="/terms-conditions" replace />} />
           <Route path="/cookies" element={<Cookies />} />
           <Route path="/careers" element={<Careers />} />
 
@@ -793,7 +783,7 @@ const App = () => {
           <Route path="/payment/failed" element={<PaymentFailed />} />
           <Route path="/pay/:token" element={<PaymentLinkPage />} />
           <Route path="/membership" element={<Membership />} />
-          <Route path="/pricing" element={<Membership />} />
+          <Route path="/pricing" element={<Navigate to="/membership" replace />} />
 
           {/* Admin Routes */}
           <Route path="/admin/login" element={<AdminLogin />} />

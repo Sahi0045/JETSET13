@@ -342,8 +342,8 @@ export default function SupabaseLogin() {
 
                         <p className="jsl-legal">
                             By continuing, you agree to our{' '}
-                            <Link to="/privacy" className="jsl-link">Privacy Policy</Link> and{' '}
-                            <Link to="/terms" className="jsl-link">Terms of Service</Link>.
+                            <Link to="/privacy-policy" className="jsl-link">Privacy Policy</Link> and{' '}
+                            <Link to="/terms-conditions" className="jsl-link">Terms of Service</Link>.
                         </p>
                     </div>
                 </main>

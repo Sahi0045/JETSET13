@@ -13,12 +13,13 @@ const COLUMNS = [
       { label: 'Hotels', to: '/hotels' },
       { label: 'Visa Services', to: '/visa' },
       { label: 'Document Services', to: '/visa/documents' },
-      { label: 'Membership Pricing', to: '/pricing' },
+      { label: 'Membership Pricing', to: '/membership' },
     ],
   },
   {
     title: 'Resources',
     links: [
+      { label: 'Guides & Resources', to: '/resources' },
       { label: 'Destinations', to: '/destinations' },
       { label: 'Travel Blog', to: '/travel-blog' },
       { label: 'Support', to: '/support' },
@@ -31,9 +32,14 @@ const COLUMNS = [
     links: [
       { label: 'About Jetsetters', to: '/company' },
       { label: 'Contact Us', to: '/contact' },
+      { label: 'Careers', to: '/careers' },
+      { label: 'Request a Quote', to: '/request' },
       { label: 'Privacy Policy', to: '/privacy-policy' },
       { label: 'Terms & Conditions', to: '/terms-conditions' },
       { label: 'Cookie Policy', to: '/cookies' },
+      { label: 'Visa Refund Policy', to: '/visa/refund-policy' },
+      { label: 'Visa Service Terms', to: '/visa/terms' },
+      { label: 'Visa Privacy Policy', to: '/visa/privacy' },
     ],
   },
 ];

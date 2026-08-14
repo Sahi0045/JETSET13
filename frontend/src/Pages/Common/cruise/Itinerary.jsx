@@ -208,7 +208,7 @@ const Itinerary = () => {
         <Navbar forceScrolled />
         <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center px-4 text-center">
           <span className="flex h-20 w-20 items-center justify-center rounded-3xl bg-amber-50 text-amber-600"><AlertTriangle className="h-9 w-9" /></span>
-          <h2 className="mt-5 text-2xl font-bold text-[#034457]">{status === 'not-found' ? 'Cruise not found' : 'Unable to load cruise'}</h2>
+          <h1 className="mt-5 text-2xl font-bold text-[#034457]">{status === 'not-found' ? 'Cruise not found' : 'Unable to load cruise'}</h1>
           <p className="mt-2 text-slate-600">{error || 'This cruise may no longer be available.'}</p>
           <Link to="/cruises" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#055B75] px-6 py-3 font-semibold text-white"><ArrowLeft className="h-4 w-4" /> Back to cruises</Link>
         </div>

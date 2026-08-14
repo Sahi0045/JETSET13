@@ -278,7 +278,7 @@ const Destinations = () => {
                   </div>
 
                   <Link
-                    to={`/destination/${dest.id}`}
+                    to={`/packages/itinerary?destination=${encodeURIComponent(dest.name)}`}
                     className="block w-full bg-neutral-700 text-white text-center py-2.5 rounded-xl hover:bg-neutral-800 transition-colors font-medium text-sm"
                   >
                     View Details

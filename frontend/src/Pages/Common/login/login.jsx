@@ -249,7 +249,7 @@ export default function Login() {
                             </div>
                         </form>
                         <p className="login-footer">
-                            By proceeding, you agree to our <Link to="/privacy" className="text-link">Privacy Policy</Link> and <Link to="/terms" className="text-link">Terms of Service</Link>.
+                            By proceeding, you agree to our <Link to="/privacy-policy" className="text-link">Privacy Policy</Link> and <Link to="/terms-conditions" className="text-link">Terms of Service</Link>.
                         </p>
                       </div>
                     </div>

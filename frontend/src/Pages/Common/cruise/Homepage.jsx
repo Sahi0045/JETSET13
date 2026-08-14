@@ -132,22 +132,19 @@ const TestimonialBanner = () => {
       name: "Sarah Johnson",
       position: "Travels with Royal Caribbean",
       text: "The best cruise booking experience I've ever had! Their customer service team went above and beyond to help me find the perfect cruise for my family. The booking process was seamless and everything was organized perfectly.",
-      rating: 5,
-      image: "/images/reviewer1.jpg"
+      rating: 5
     },
     {
       name: "Michael Chen",
       position: "Frequent Cruiser",
       text: "I've booked multiple cruises through this website and have never been disappointed. The prices are competitive and the booking process is seamless. Their support team is always available to answer questions.",
-      rating: 5,
-      image: "/images/reviewer2.jpg"
+      rating: 5
     },
     {
       name: "Emily Rodriguez",
       position: "First-time Cruiser",
       text: "As someone new to cruising, I appreciated how easy it was to find information and compare options. They made the whole experience stress-free! I'll definitely be booking my next cruise here too.",
-      rating: 5,
-      image: "/images/reviewer3.jpg"
+      rating: 5
     }
   ];
 
@@ -391,11 +388,12 @@ const TestimonialBanner = () => {
                   <FaQuoteRight className="w-8 h-8 sm:w-10 sm:h-10" />
                 </div>
                 <div className="flex flex-col sm:flex-row items-start">
-                  <img loading="lazy" decoding="async"
-                    src={testimonialItems[currentTestimonial].image}
-                    alt={testimonialItems[currentTestimonial].name}
-                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full mb-3 sm:mb-0 sm:mr-4 object-cover border-4 border-white shadow-md"
-                  />
+                  <div
+                    aria-hidden="true"
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full mb-3 sm:mb-0 sm:mr-4 border-4 border-white shadow-md bg-gradient-to-br from-[#055B75] to-[#0890BC] flex items-center justify-center text-white text-lg sm:text-xl font-bold select-none flex-shrink-0"
+                  >
+                    {testimonialItems[currentTestimonial].name.split(' ').map(part => part[0]).join('')}
+                  </div>
                   <div className="flex-1">
                     <h4 className="text-lg sm:text-xl font-bold text-gray-800">{testimonialItems[currentTestimonial].name}</h4>
                     <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">{testimonialItems[currentTestimonial].position}</p>
@@ -451,7 +449,7 @@ const TestimonialBanner = () => {
               </div>
 
               <div className="mt-4 sm:mt-6 text-center">
-                <Link to="/reviews" className="text-[#055B75] font-bold hover:underline flex items-center justify-center text-sm sm:text-base">
+                <Link to="/" className="text-[#055B75] font-bold hover:underline flex items-center justify-center text-sm sm:text-base">
                   View All Customer Reviews
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 ml-1" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />

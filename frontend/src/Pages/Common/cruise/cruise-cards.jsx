@@ -85,7 +85,7 @@ const CruiseCards = () => {
     return apiCruises.map((cruise, idx) => ({
       id: cruise.id || `${cruise.cruise_line || 'cruise'}-${cruise.departure_date || ''}-${cruise.departure_port || ''}-${idx}`,
       name: cruise.cruise_line || cruise.name,
-      image: cruise.image || '/images/default-cruise.jpg',
+      image: cruise.image || '/images/cruises/caribbean-paradise.jpg',
       duration: cruise.duration ? `${cruise.duration} Days` : cruise.duration,
       description: cruise.name || cruise.description,
       destinations: cruise.destinations || [],

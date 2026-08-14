@@ -35,7 +35,7 @@
 .login-image-section {
   flex: 1;
   background: linear-gradient(135deg, #0284c7 0%, #0369a1 50%, #0c4a6e 100%);
-  background-image: image-set(url('/images/login/cruise-background.webp') type('image/webp'), url('/images/login/cruise-background.png') type('image/png'));
+  background-image: image-set(url('/images/login/cruise-background.webp') type('image/webp'), url('/images/login/cruise-background.jpg') type('image/jpeg'));
   background-size: cover;
   background-position: center;
   position: relative;

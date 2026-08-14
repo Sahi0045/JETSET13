@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 const ContactBanner = () => {
-  const bannerUrl = import.meta.env.VITE_CONTACT_BANNER_URL || '/images/jetsetters-banner.jpg';
+  const bannerUrl = import.meta.env.VITE_CONTACT_BANNER_URL || '/images/jetsetters-banner.webp';
   const bannerWebp = bannerUrl.replace(/\.(jpe?g|png)$/i, '.webp');
   const email = 'bookings@jetsetterss.com';
   const phone = '+1-408-899-9705';

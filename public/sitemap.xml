@@ -7,7 +7,7 @@
   <!-- Homepage -->
   <url>
     <loc>https://www.jetsetterss.com/</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
@@ -17,86 +17,58 @@
        (sitemap-flights.xml, sitemap-hotels.xml, sitemap-cruises.xml) only,
        to avoid the same URL appearing in two sitemaps. -->
   <url>
-    <loc>https://www.jetsetterss.com/flight</loc>
-    <lastmod>2026-04-14</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
-  <url>
     <loc>https://www.jetsetterss.com/packages</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
-  </url>
-
-  <url>
-    <loc>https://www.jetsetterss.com/packages/itinerary</loc>
-    <lastmod>2026-04-14</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-
-  <url>
-    <loc>https://www.jetsetterss.com/itinerary</loc>
-    <lastmod>2026-04-14</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-
-  <url>
-    <loc>https://www.jetsetterss.com/hotels/details</loc>
-    <lastmod>2026-04-14</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.7</priority>
   </url>
 
   <!-- Visa Services -->
   <url>
     <loc>https://www.jetsetterss.com/visa</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/visa/apply</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/visa/documents</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/visa/booking</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/visa/refund-policy</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/visa/terms</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/visa/privacy</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
@@ -104,21 +76,21 @@
   <!-- Content & Resources -->
   <url>
     <loc>https://www.jetsetterss.com/destinations</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/travel-blog</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/resources</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -126,21 +98,21 @@
   <!-- Help & Support -->
   <url>
     <loc>https://www.jetsetterss.com/help</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/support</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/faqs</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -148,21 +120,21 @@
   <!-- Company -->
   <url>
     <loc>https://www.jetsetterss.com/company</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/contact</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/careers</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
@@ -170,14 +142,7 @@
   <!-- Membership & Pricing -->
   <url>
     <loc>https://www.jetsetterss.com/membership</loc>
-    <lastmod>2026-04-14</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-
-  <url>
-    <loc>https://www.jetsetterss.com/pricing</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -185,43 +150,29 @@
   <!-- Quote & Request -->
   <url>
     <loc>https://www.jetsetterss.com/request</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
 
   <!-- Legal -->
   <url>
-    <loc>https://www.jetsetterss.com/privacy</loc>
-    <lastmod>2026-04-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.4</priority>
-  </url>
-
-  <url>
     <loc>https://www.jetsetterss.com/privacy-policy</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/cookies</loc>
-    <lastmod>2026-04-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.4</priority>
-  </url>
-
-  <url>
-    <loc>https://www.jetsetterss.com/terms</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
 
   <url>
     <loc>https://www.jetsetterss.com/terms-conditions</loc>
-    <lastmod>2026-04-14</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>

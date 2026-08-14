@@ -287,7 +287,7 @@ const HotelDetailsPage = () => {
                     <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
                         <X size={40} className="text-red-500" />
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Hotel Not Found</h2>
+                    <h1 className="text-2xl font-bold text-gray-800 mb-2">Hotel Not Found</h1>
                     <p className="text-gray-600 mb-6">{error || 'The hotel you are looking for could not be found.'}</p>
                     <button
                         onClick={() => navigate('/hotels/search')}

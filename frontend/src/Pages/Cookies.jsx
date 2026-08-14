@@ -1,5 +1,4 @@
 import React from 'react';
-import { Helmet } from 'react-helmet-async';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
 import withPageElements from './Common/PageWrapper';
@@ -7,11 +6,6 @@ import withPageElements from './Common/PageWrapper';
 const Cookies = () => {
   return (
     <>
-      <Helmet>
-        <title>Cookie Policy - Jetsetters</title>
-        <meta name="description" content="Learn about how Jetsetters uses cookies and similar technologies on our website." />
-      </Helmet>
-
       <Navbar forceScrolled={true} />
 
       <div className="container mx-auto px-4 py-12 max-w-5xl">

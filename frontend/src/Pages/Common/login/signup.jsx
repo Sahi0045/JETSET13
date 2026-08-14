@@ -310,7 +310,7 @@ export default function Signup() {
                                         checked={data.agreeToTerms}
                                         onChange={handleChange}
                                     />
-                                    I agree to the <Link to="/terms" className="text-link">Terms of Service</Link> and <Link to="/privacy" className="text-link">Privacy Policy</Link>
+                                    I agree to the <Link to="/terms-conditions" className="text-link">Terms of Service</Link> and <Link to="/privacy-policy" className="text-link">Privacy Policy</Link>
                                 </label>
                             </div>
                             {errors.agreeToTerms && <div className="error-message">{errors.agreeToTerms}</div>}
@@ -350,7 +350,7 @@ export default function Signup() {
                             </div>
                         </form>
                         <p className="login-footer">
-                            By proceeding, you agree to our <Link to="/privacy" className="text-link">Privacy Policy</Link> and <Link to="/terms" className="text-link">Terms of Service</Link>.
+                            By proceeding, you agree to our <Link to="/privacy-policy" className="text-link">Privacy Policy</Link> and <Link to="/terms-conditions" className="text-link">Terms of Service</Link>.
                         </p>
                       </div>
                     </div>

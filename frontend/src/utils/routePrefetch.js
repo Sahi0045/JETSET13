@@ -58,9 +58,9 @@ const importers = {
   '/destinations': () => import('../Pages/Destinations'),
   '/travel-blog': () => import('../Pages/TravelBlog'),
   '/careers': () => import('../Pages/Careers'),
-  '/privacy': () => import('../Pages/Privacy'),
   '/privacy-policy': () => import('../Pages/PrivacyPolicy'),
-  '/terms': () => import('../Pages/Terms'),
+  '/privacy-policy': () => import('../Pages/PrivacyPolicy'),
+  '/terms-conditions': () => import('../Pages/TermsConditions'),
   '/terms-conditions': () => import('../Pages/TermsConditions'),
   '/cookies': () => import('../Pages/Cookies'),
 

@@ -197,10 +197,10 @@ const TravelBlog = () => {
 
                     <div className="flex items-center gap-3">
                       <Link
-                        to={`/blog/${featuredPost.id}`}
+                        to="/resources"
                         className="bg-neutral-700 text-white px-6 py-3 rounded-xl hover:bg-neutral-800 transition-colors font-medium"
                       >
-                        Read Article
+                        Explore Travel Guides
                       </Link>
                       <button className="p-3 text-neutral-400 hover:text-primary-500 transition-colors">
                         <FaHeart />
@@ -249,7 +249,7 @@ const TravelBlog = () => {
 
                     {/* Action Button */}
                     <Link
-                      to={`/blog/${post.id}`}
+                      to="/resources"
                       className="inline-flex items-center text-sm font-medium text-neutral-700 hover:text-primary-500 transition-colors"
                     >
                       Read more

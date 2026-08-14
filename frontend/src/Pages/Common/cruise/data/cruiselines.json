@@ -3,7 +3,7 @@
     {
       "id": 1,
       "name": "Royal Caribbean",
-      "logo": "/cruise/logos/royal-caribbean.png",
+      "logo": "/images/logos/royal_caribbean.webp",
       "image": "https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&q=80",
       "price": "From $69",
       "priceValue": 69,
@@ -116,7 +116,7 @@
     {
       "id": 2,
       "name": "Norwegian Cruise Line",
-      "logo": "/cruise/logos/norwegian.png",
+      "logo": "/images/logos/norwegian.webp",
       "image": "https://images.unsplash.com/photo-1599640842225-85d111c60e6b?w=800&q=80",
       "price": "From $70",
       "priceValue": 70,
@@ -229,7 +229,7 @@
     {
       "id": 3,
       "name": "Celebrity Cruises",
-      "logo": "/cruise/logos/celebrity.png",
+      "logo": "/images/cruise-icon.svg",
       "image": "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=800&q=80",
       "price": "From $71",
       "priceValue": 71,
@@ -292,7 +292,7 @@
     {
       "id": 4,
       "name": "Disney Cruise Line",
-      "logo": "/cruise/logos/disney.png",
+      "logo": "/images/logos/disney_cruise.webp",
       "image": "https://images.unsplash.com/photo-1580541631950-7282082b53ce?w=800&q=80",
       "price": "From $72",
       "priceValue": 72,
@@ -355,7 +355,7 @@
     {
       "id": 5,
       "name": "Princess Cruises",
-      "logo": "/cruise/logos/princess.png",
+      "logo": "/images/logos/princess.png",
       "image": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&q=80",
       "price": "From $73",
       "priceValue": 73,
@@ -418,7 +418,7 @@
     {
       "id": 6,
       "name": "MSC Cruises",
-      "logo": "/cruise/logos/msc.png",
+      "logo": "/images/logos/msc.png",
       "image": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80",
       "price": "From $74",
       "priceValue": 74,
@@ -481,7 +481,7 @@
     {
       "id": 7,
       "name": "Carnival Cruise Line",
-      "logo": "/cruise/logos/carnival.png",
+      "logo": "/images/logos/carnival.webp",
       "image": "https://images.unsplash.com/photo-1540541338287-41700207dee6?w=800&q=80",
       "price": "From $75",
       "priceValue": 75,
@@ -544,7 +544,7 @@
     {
       "id": 8,
       "name": "Holland America Line",
-      "logo": "/cruise/logos/holland-america.png",
+      "logo": "/images/cruise-icon.svg",
       "image": "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&q=80",
       "price": "From $76",
       "priceValue": 76,
@@ -607,7 +607,7 @@
     {
       "id": 9,
       "name": "Azamara Club Cruises",
-      "logo": "/cruise/logos/azamara.png",
+      "logo": "/images/cruise-icon.svg",
       "image": "https://images.unsplash.com/photo-1520483601560-389dff434fdf?w=800&q=80",
       "price": "From $77",
       "priceValue": 77,
@@ -669,7 +669,7 @@
     {
       "id": 10,
       "name": "Viking Cruises",
-      "logo": "/cruise/logos/viking.png",
+      "logo": "/images/cruise-icon.svg",
       "image": "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=800&q=80",
       "price": "From $78",
       "priceValue": 78,
@@ -732,7 +732,7 @@
     {
       "id": 11,
       "name": "Silversea Cruises",
-      "logo": "/cruise/logos/silversea.png",
+      "logo": "/images/cruise-icon.svg",
       "image": "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800&q=80",
       "price": "From $79",
       "priceValue": 79,
@@ -795,7 +795,7 @@
     {
       "id": 12,
       "name": "Oceania Cruises",
-      "logo": "/cruise/logos/oceania.png",
+      "logo": "/images/cruise-icon.svg",
       "image": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800&q=80",
       "price": "From $69",
       "priceValue": 69,

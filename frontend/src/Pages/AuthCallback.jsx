@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 
 const AuthCallback = () => {
@@ -180,7 +180,7 @@ const AuthCallback = () => {
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">Authentication Error</h3>
             <p className="text-sm text-gray-500 mb-4">{error}</p>
-            <p className="text-xs text-gray-400">Redirecting to login...</p>
+            <p className="text-xs text-gray-400">Redirecting to login... <Link to="/supabase-login" className="text-[#055B75] underline">Go to login now</Link></p>
           </div>
         </div>
       </div>
@@ -198,6 +198,7 @@ const AuthCallback = () => {
             {processing ? 'Completing sign in...' : 'Signed in successfully!'}
           </h3>
           <p className="text-sm text-gray-500">Please wait while we redirect you.</p>
+          <p className="mt-4 text-xs text-gray-400"><Link to="/" className="text-[#055B75] underline">Return to homepage</Link></p>
         </div>
       </div>
     </div>
