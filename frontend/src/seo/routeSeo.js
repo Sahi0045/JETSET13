@@ -20,6 +20,54 @@ export const ROUTE_SEO = {
   '/cruise': {
     title: 'Luxury Cruise Vacations | Jetsetters',
     description: 'Discover unforgettable cruise vacations with trusted cruise lines, curated itineraries, and expert planning support from Jetsetters.',
+    schema: [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: [
+          {
+            '@type': 'Question',
+            name: 'What documents are required to board the cruise?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Guests must present a valid passport or government-issued photo ID, their cruise ticket, and any visas required for the ports on their itinerary. We recommend carrying both physical and digital copies.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'What time do I need to check-in and board the cruise?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'For offline check-in, arrive 3–4 hours before departure. Boarding typically closes 1–2 hours before sailing. Refer to your cruise ticket for the exact timings for your ship and port.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'How much luggage is allowed on the cruise?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Most cruise lines have a generous luggage allowance, but weight and size limits vary by line. Check your booking confirmation for the specific policy, and label every bag with your name and cabin number.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'Can I cancel or reschedule my cruise booking?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Cancellation and rescheduling policies depend on the cruise line and fare type. Many bookings offer flexible cancellation up to a cut-off date. Contact our cruise experts for help with changes to your reservation.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'Are meals and activities included in the price?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Most cruises include main dining, entertainment, and a range of onboard activities. Specialty restaurants, premium beverages, shore excursions, and spa services are usually charged separately.',
+            },
+          },
+        ],
+      },
+    ],
   },
   '/cruises': {
     title: 'Browse Cruise Deals | Jetsetters',
@@ -112,6 +160,86 @@ export const ROUTE_SEO = {
   '/faqs': {
     title: 'Travel Booking FAQs | Jetsetters',
     description: 'Find answers to common questions about flights, hotels, cruises, vacation packages, visa services, payments, and travel bookings.',
+    schema: [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: [
+          {
+            '@type': 'Question',
+            name: 'What is Jetsetters and how does it work?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Jetsetters is a comprehensive travel platform that helps you plan, book, and manage your travel experiences. We offer flights, hotels, cruises, and vacation packages. Simply search for your desired destination, compare options, and book directly through our secure platform. Our team of travel experts is also available to provide personalized assistance and recommendations.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'How far in advance should I book my travel?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'For flights, it\'s generally recommended to book 2–8 weeks in advance for domestic travel and 3–6 months for international trips. Hotels can be booked closer to your travel date, but booking 1–3 months ahead often provides better rates. Cruises should be booked 6–12 months in advance for the best selection and prices. However, last-minute deals are sometimes available.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'What should I do if I need to change or cancel my booking?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'You can modify or cancel most bookings through your account dashboard. For changes, check the specific terms of your booking as some may have change fees. Cancellations are subject to the cancellation policy of your booking. If you need assistance, our customer support team is available 24/7.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'Do you offer travel insurance?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Yes, we offer comprehensive travel insurance options covering trip cancellation, medical emergencies, lost luggage, and more. We recommend purchasing insurance when you book your trip to ensure maximum coverage. Contact our team for detailed information about available plans.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'What documents do I need for international flights?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'For international flights you typically need a valid passport (with at least 6 months validity beyond your return date), a visa if required by your destination, and any health-related documents such as vaccination certificates. Always check the specific entry requirements for your destination country.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'What payment methods do you accept?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'We accept all major credit cards (Visa, MasterCard, American Express, Discover), debit cards, and digital wallets. All payments are processed securely. We believe in transparent pricing — all fees are clearly displayed during the booking process with no hidden charges.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'Can I select my seat on flights?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Yes, seat selection is available for most flights. You can choose your seat during the booking process or later through your account dashboard. Some airlines offer free seat selection while others charge a fee for preferred or early seat selection.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'What\'s included in my cruise package?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Cruise packages typically include your cabin, most meals in the main dining areas, basic entertainment, and access to most onboard facilities. Some cruise lines include alcoholic beverages, specialty dining, and gratuities. Additional services like spa treatments and premium dining usually cost extra.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'How do I get a copy of my booking confirmation?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Your booking confirmation is automatically sent to your email when you complete a booking. You can also access it anytime through your account dashboard. If you need a copy, simply log into your account or contact our support team.',
+            },
+          },
+        ],
+      },
+    ],
   },
   '/company': {
     title: 'About Jetsetters Travel',

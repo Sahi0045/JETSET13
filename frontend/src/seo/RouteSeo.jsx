@@ -11,6 +11,50 @@ import {
   truncateSeoText,
 } from './routeSeo';
 
+const SITE_URL = 'https://www.jetsetterss.com';
+
+const SITE_WIDE_SCHEMA = [
+  {
+    '@context': 'https://schema.org',
+    '@type': ['TravelAgency', 'Organization'],
+    '@id': `${SITE_URL}/#organization`,
+    name: 'Jetsetters',
+    url: SITE_URL,
+    logo: {
+      '@type': 'ImageObject',
+      url: `${SITE_URL}/images/logos/jetsetters_3d_logo_final.png`,
+    },
+    description: 'Jetsetters is a luxury travel platform offering flights, hotels, cruises, vacation packages, and visa services with personalized expert support.',
+    contactPoint: {
+      '@type': 'ContactPoint',
+      contactType: 'customer service',
+      url: `${SITE_URL}/contact`,
+      areaServed: 'Worldwide',
+      availableLanguage: 'English',
+    },
+    sameAs: [
+      'https://www.facebook.com/jetsetterss',
+      'https://www.instagram.com/jetsetterss',
+    ],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': `${SITE_URL}/#website`,
+    url: SITE_URL,
+    name: 'Jetsetters',
+    publisher: { '@id': `${SITE_URL}/#organization` },
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: `${SITE_URL}/flights/search?q={search_term_string}`,
+      },
+      'query-input': 'required name=search_term_string',
+    },
+  },
+];
+
 const getRouteSeo = (pathname) => {
   const exactMatch = ROUTE_SEO[pathname];
   if (exactMatch) return exactMatch;
@@ -33,6 +77,10 @@ const RouteSeo = () => {
   const canonicalUrl = getCanonicalURL(pathname);
   const robots = seo.shouldIndex === false ? 'noindex, follow' : 'index, follow';
 
+  const schemas = seo.schema
+    ? [...SITE_WIDE_SCHEMA, ...seo.schema]
+    : SITE_WIDE_SCHEMA;
+
   return (
     <Helmet>
       <title>{title}</title>
@@ -43,6 +91,7 @@ const RouteSeo = () => {
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       <meta property="og:type" content="website" />
+      <script type="application/ld+json">{JSON.stringify(schemas)}</script>
     </Helmet>
   );
 };
