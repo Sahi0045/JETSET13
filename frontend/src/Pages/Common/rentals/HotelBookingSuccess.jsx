@@ -18,7 +18,7 @@ export default function HotelBookingSuccess() {
 
   useEffect(() => {
     if (!bookingReference) {
-      navigate('/rental');
+      navigate('/hotels');
       return;
     }
 
@@ -164,7 +164,7 @@ Booking Date: ${new Date(bookingDetails.bookingDate).toLocaleDateString()}
             <h2 className="text-2xl font-bold text-gray-800 mb-2">Booking Not Found</h2>
             <p className="text-gray-600 mb-6">{error || 'We couldn\'t find your booking details.'}</p>
             <button
-              onClick={() => navigate('/rental')}
+              onClick={() => navigate('/hotels')}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md transition-colors"
             >
               Back to Hotels
@@ -340,7 +340,7 @@ Booking Date: ${new Date(bookingDetails.bookingDate).toLocaleDateString()}
           {/* Return Button */}
           <div className="text-center mt-8">
             <button
-              onClick={() => navigate('/rental')}
+              onClick={() => navigate('/hotels')}
               className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Book Another Hotel
