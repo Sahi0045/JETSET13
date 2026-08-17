@@ -180,7 +180,7 @@ const Destinations = () => {
       id: 12,
       name: 'Marseille, France',
       category: 'cultural',
-      image: 'https://images.unsplash.com/photo-1605113286275-ec1d80d048bb',
+      image: 'https://images.unsplash.com/photo-1720610892502-f15aeef291f5',
       description: 'Historic port city with stunning coastline.',
       rating: 4.6,
       reviews: 670,

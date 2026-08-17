@@ -510,7 +510,7 @@ export const ROUTE_SEO = {
               '@type': 'TouristDestination',
               name: 'Marseille, France',
               description: 'Historic port city with stunning coastline.',
-              image: 'https://images.unsplash.com/photo-1605113286275-ec1d80d048bb',
+              image: 'https://images.unsplash.com/photo-1720610892502-f15aeef291f5',
               touristType: ['Cultural Tourism', 'Coastal'],
               includesAttraction: [
                 { '@type': 'TouristAttraction', name: 'Old Port' },
