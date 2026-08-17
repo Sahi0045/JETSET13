@@ -31,20 +31,28 @@
       "destination": "/api/index.js"
     },
     {
+      "source": "/(cruise|cruises|flights|packages|hotels|visa|resources|destinations|travel-blog|support|faqs|company|contact|careers|privacy-policy|cookies|terms-conditions|request|membership|help)",
+      "destination": "/$1/index.html"
+    },
+    {
+      "source": "/visa/(documents|apply|booking|refund-policy|terms|privacy)",
+      "destination": "/visa/$1/index.html"
+    },
+    {
       "source": "/(dashboard|login|signup|profiledashboard|complete-profile|help|supabase-login|supabase-signup|supabase-profile|supabase-auth-debug|supabase-auth-status|auth/callback|my-trips|manage-booking|forgot-password|reset-password|booking-confirmation|cruise|cruises|itinerary|cruise-booking-summary|cruise-booking-success|flight|flights|flight-payment|flight-create-orders|flight-booking-success|packages|hotels|hotel-booking-success|membership|request|quote-detail|payment/callback|payment/success|payment/failed|admin|agent|visa/agent|visa/admin|cookies|careers|resources|destinations|travel-blog|support|faqs|company|contact|privacy-policy|terms-conditions)",
-      "destination": "/index.html"
+      "destination": "/spa-shell.html"
     },
     {
       "source": "/(profile/privacy|profile/notifications|flights/search|flights/booking-confirmation|hotels/search|hotels/details|hotels/booking-summary|packages/itinerary|packages/booking-summary|visa|visa/documents|visa/apply|visa/success|visa/track|visa/status|visa/booking|visa/refund-policy|visa/terms|visa/privacy|visa/agent/set-password)",
-      "destination": "/index.html"
+      "destination": "/spa-shell.html"
     },
     {
       "source": "/(manage-booking|flights/booking|visa/consultation|inquiry|pay)/([^/]+)",
-      "destination": "/index.html"
+      "destination": "/spa-shell.html"
     },
     {
       "source": "/(admin|agent|visa/agent|visa/admin)/(.*)",
-      "destination": "/index.html"
+      "destination": "/spa-shell.html"
     }
   ],
   "headers": [

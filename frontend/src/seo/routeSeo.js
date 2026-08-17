@@ -1,7 +1,8 @@
-import { DESTINATION_IMAGES } from '../data/destinationImages';
+import { DESTINATION_IMAGES } from '../data/destinationImages.js';
 
 const SITE_NAME = 'Jetsetters';
-const SITE_URL = 'https://www.jetsetterss.com';
+export const SITE_URL = 'https://www.jetsetterss.com';
+export const DEFAULT_OG_IMAGE = `${SITE_URL}/images/logos/jetsetters_3d_logo_final.png`;
 
 export const MAX_TITLE_LENGTH = 60;
 export const MAX_DESCRIPTION_LENGTH = 155;
@@ -25,6 +26,40 @@ export const DEFAULT_ROUTE_SEO = {
   description: 'Plan flights, hotels, cruises, vacation packages, and visa services with Jetsetters. Expert travel support for every journey.',
   shouldIndex: false,
 };
+
+export const SITE_WIDE_SCHEMA = [
+  {
+    '@context': 'https://schema.org',
+    '@type': ['TravelAgency', 'Organization'],
+    '@id': `${SITE_URL}/#organization`,
+    name: 'Jetsetters',
+    url: SITE_URL,
+    logo: {
+      '@type': 'ImageObject',
+      url: DEFAULT_OG_IMAGE,
+    },
+    description: 'Jetsetters is a luxury travel platform offering flights, hotels, cruises, vacation packages, and visa services with personalized expert support.',
+    contactPoint: {
+      '@type': 'ContactPoint',
+      contactType: 'customer service',
+      url: `${SITE_URL}/contact`,
+      areaServed: 'Worldwide',
+      availableLanguage: 'English',
+    },
+    sameAs: [
+      'https://www.facebook.com/jetsetterss',
+      'https://www.instagram.com/jetsetterss',
+    ],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': `${SITE_URL}/#website`,
+    url: SITE_URL,
+    name: 'Jetsetters',
+    publisher: { '@id': `${SITE_URL}/#organization` },
+  },
+];
 
 // These pages are intentionally written as individual pieces of search copy instead
 // of deriving text from the URL. It keeps each page's search snippet accurate and
@@ -835,6 +870,12 @@ export const ROUTE_SEO_PATTERNS = [
     shouldIndex: false,
   },
 ];
+
+export const INDEXABLE_ROUTE_SEO = Object.freeze(
+  Object.entries(ROUTE_SEO)
+    .filter(([, seo]) => seo.shouldIndex !== false)
+    .map(([pathname, seo]) => Object.freeze({ pathname, seo })),
+);
 
 export const truncateSeoText = (value, maxLength) => {
   const text = String(value || '').replace(/\s+/g, ' ').trim();

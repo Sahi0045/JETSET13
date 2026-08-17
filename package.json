@@ -8,11 +8,11 @@
     "client": "vite",
     "dev": "node scripts/start-dev.js",
     "dev:legacy": "concurrently \"npm run server\" \"npm run client\" \"npm run supabase:check\"",
-    "build": "vite build && (node scripts/copy-public-assets.js || true)",
+    "build": "vite build && node scripts/copy-public-assets.js && node scripts/generate-route-seo-pages.js",
     "prod": "node scripts/start-prod.js",
     "prod:vercel": "vercel deploy --prod",
     "prod:setup": "node -e \"const fs = require('fs'); if(!fs.existsSync('.env.production')) { fs.copyFileSync('.env', '.env.production'); console.log('Created .env.production'); }\" && npm run build",
-    "vercel-build": "vite build && (node scripts/copy-public-assets.js || true)",
+    "vercel-build": "npm run build",
     "postinstall": "npm install @vitejs/plugin-react vite --no-save || true",
     "supabase": "node scripts/start-app.js",
     "deploy": "npm run build && npm run start",
@@ -24,7 +24,7 @@
     "test:integration": "vitest run --project integration",
     "test:backend:watch": "vitest --project backend",
     "test:unit": "vitest run --project backend --project frontend",
-    "build:prod": "NODE_ENV=production vite build"
+    "build:prod": "NODE_ENV=production npm run build"
   },
   "devDependencies": {
     "@headlessui/react": "^2.0.0",

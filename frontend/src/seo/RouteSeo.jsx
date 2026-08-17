@@ -3,50 +3,15 @@ import { Helmet } from 'react-helmet-async';
 import { matchPath, useLocation } from 'react-router-dom';
 import { getCanonicalURL } from '../utils/seoUtils';
 import {
+  DEFAULT_OG_IMAGE,
   DEFAULT_ROUTE_SEO,
   MAX_DESCRIPTION_LENGTH,
   MAX_TITLE_LENGTH,
   ROUTE_SEO,
   ROUTE_SEO_PATTERNS,
+  SITE_WIDE_SCHEMA,
   truncateSeoText,
 } from './routeSeo';
-
-const SITE_URL = 'https://www.jetsetterss.com';
-const DEFAULT_OG_IMAGE = `${SITE_URL}/images/logos/jetsetters_3d_logo_final.png`;
-
-const SITE_WIDE_SCHEMA = [
-  {
-    '@context': 'https://schema.org',
-    '@type': ['TravelAgency', 'Organization'],
-    '@id': `${SITE_URL}/#organization`,
-    name: 'Jetsetters',
-    url: SITE_URL,
-    logo: {
-      '@type': 'ImageObject',
-      url: `${SITE_URL}/images/logos/jetsetters_3d_logo_final.png`,
-    },
-    description: 'Jetsetters is a luxury travel platform offering flights, hotels, cruises, vacation packages, and visa services with personalized expert support.',
-    contactPoint: {
-      '@type': 'ContactPoint',
-      contactType: 'customer service',
-      url: `${SITE_URL}/contact`,
-      areaServed: 'Worldwide',
-      availableLanguage: 'English',
-    },
-    sameAs: [
-      'https://www.facebook.com/jetsetterss',
-      'https://www.instagram.com/jetsetterss',
-    ],
-  },
-  {
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    '@id': `${SITE_URL}/#website`,
-    url: SITE_URL,
-    name: 'Jetsetters',
-    publisher: { '@id': `${SITE_URL}/#organization` },
-  },
-];
 
 const getRouteSeo = (pathname) => {
   const exactMatch = ROUTE_SEO[pathname];

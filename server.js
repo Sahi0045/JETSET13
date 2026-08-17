@@ -46,6 +46,7 @@ import {
 import { errorHandler } from "./backend/middleware/errorHandler.js";
 import { readinessHandler } from "./backend/middleware/health.js";
 import { getLegacyRedirect, isSpaRoute } from "./shared/spaRoutes.js";
+import { INDEXABLE_ROUTE_SEO } from "./frontend/src/seo/routeSeo.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -267,11 +268,19 @@ app.use((req, res, next) => {
 
 // Serve static files from dist (works in both dev and production)
 const distPath = path.join(__dirname, "dist");
+const prerenderedDocumentPaths = new Map(
+  INDEXABLE_ROUTE_SEO.map(({ pathname }) => [
+    pathname,
+    pathname === "/" ? "index.html" : path.join(pathname.slice(1), "index.html"),
+  ]),
+);
 app.use(
   express.static(distPath, {
     // Cache settings for static assets
     maxAge: process.env.NODE_ENV === "production" ? "1y" : "0",
     etag: false,
+    index: false,
+    redirect: false,
   }),
 );
 
@@ -281,8 +290,10 @@ app.get("*", (req, res) => {
   const legacyDestination = getLegacyRedirect(req.path);
   if (legacyDestination) return res.redirect(301, legacyDestination);
 
-  const documentPath = isSpaRoute(req.path) ? "index.html" : "404.html";
-  const status = documentPath === "index.html" ? 200 : 404;
+  const pathname = req.path.length > 1 ? req.path.replace(/\/+$/, "") : req.path;
+  const documentPath = prerenderedDocumentPaths.get(pathname)
+    || (isSpaRoute(pathname) ? "spa-shell.html" : "404.html");
+  const status = documentPath === "404.html" ? 404 : 200;
 
   res.status(status).sendFile(path.join(distPath, documentPath), (err) => {
     if (err) {
