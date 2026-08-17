@@ -15,6 +15,7 @@ import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
 import Breadcrumb from '../components/Breadcrumb';
 import Price from '../Components/Price';
+import { DESTINATION_IMAGES } from '../data/destinationImages';
 
 const Destinations = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -46,7 +47,7 @@ const Destinations = () => {
       id: 2,
       name: 'Los Angeles, USA',
       category: 'city',
-      image: 'https://images.unsplash.com/photo-1502920514313-52581002a659',
+      image: DESTINATION_IMAGES.losAngeles,
       description: 'Hollywood glamour, beaches, and endless entertainment.',
       rating: 4.7,
       reviews: 1820,
@@ -59,7 +60,7 @@ const Destinations = () => {
       id: 3,
       name: 'Miami, USA',
       category: 'beach',
-      image: 'https://images.unsplash.com/photo-1505731132164-cca903a55486',
+      image: DESTINATION_IMAGES.miami,
       description: 'Tropical beaches, nightlife, and Latin culture.',
       rating: 4.8,
       reviews: 1432,
@@ -154,7 +155,7 @@ const Destinations = () => {
       id: 10,
       name: 'Paris, France',
       category: 'city',
-      image: 'https://images.unsplash.com/photo-1502602898536-47ad22581b52',
+      image: DESTINATION_IMAGES.paris,
       description: 'The City of Light with art, romance, and cuisine.',
       rating: 4.9,
       reviews: 2156,
@@ -167,7 +168,7 @@ const Destinations = () => {
       id: 11,
       name: 'Nice, France',
       category: 'beach',
-      image: 'https://images.unsplash.com/photo-1505739772255-7f1fd0f2c0be',
+      image: DESTINATION_IMAGES.nice,
       description: 'French Riviera beauty with Mediterranean charm.',
       rating: 4.8,
       reviews: 890,

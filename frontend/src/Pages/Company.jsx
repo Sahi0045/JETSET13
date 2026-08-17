@@ -99,7 +99,7 @@ const Company = () => {
     {
       name: "Sarah Mitchell",
       position: "Chief Executive Officer",
-      image: "https://images.unsplash.com/photo-1494790108755-2616b612b786?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+      image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=1200&q=80",
       bio: "Sarah has over 20 years of experience in the travel industry and has been instrumental in Jetsetters's growth from startup to industry leader.",
       linkedin: "#"
     },

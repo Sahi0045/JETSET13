@@ -63,7 +63,7 @@ const AboutUs = () => {
     {
       name: "Jessica Williams",
       role: "CMO",
-      image: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=400&h=400&fit=crop&crop=face",
+      image: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop&crop=face",
       focusAreas: ["Marketing", "Growth", "Brand"],
       responsibilities: ["Leading marketing campaigns", "Driving user growth", "Brand management", "Digital marketing strategy"]
     },

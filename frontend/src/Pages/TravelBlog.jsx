@@ -5,6 +5,7 @@ import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
 import Breadcrumb from '../components/Breadcrumb';
 import { SeoOverride } from '../seo/RouteSeo';
+import { DESTINATION_IMAGES } from '../data/destinationImages';
 
 const TravelBlog = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -42,7 +43,7 @@ const TravelBlog = () => {
       author: "Pierre Dubois",
       publishDate: "2024-01-12",
       readTime: "12 min read",
-      image: "https://images.unsplash.com/photo-1502602898536-47ad22581b52?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
+      image: DESTINATION_IMAGES.paris,
       tags: ['Paris', 'Food', 'France', 'Cuisine'],
       featured: false,
       likes: 289,

@@ -1,3 +1,5 @@
+import { DESTINATION_IMAGES } from '../data/destinationImages';
+
 const SITE_NAME = 'Jetsetters';
 const SITE_URL = 'https://www.jetsetterss.com';
 
@@ -300,7 +302,7 @@ export const ROUTE_SEO = {
               '@type': 'TouristDestination',
               name: 'Los Angeles, USA',
               description: 'Hollywood glamour, beaches, and endless entertainment.',
-              image: 'https://images.unsplash.com/photo-1502920514313-52581002a659',
+              image: DESTINATION_IMAGES.losAngeles,
               touristType: ['City Break', 'Entertainment'],
               includesAttraction: [
                 { '@type': 'TouristAttraction', name: 'Hollywood' },
@@ -318,7 +320,7 @@ export const ROUTE_SEO = {
               '@type': 'TouristDestination',
               name: 'Miami, USA',
               description: 'Tropical beaches, nightlife, and Latin culture.',
-              image: 'https://images.unsplash.com/photo-1505731132164-cca903a55486',
+              image: DESTINATION_IMAGES.miami,
               touristType: ['Beach Getaway', 'Nightlife'],
               includesAttraction: [
                 { '@type': 'TouristAttraction', name: 'South Beach' },
@@ -438,7 +440,7 @@ export const ROUTE_SEO = {
               '@type': 'TouristDestination',
               name: 'Paris, France',
               description: 'The City of Light with art, romance, and cuisine.',
-              image: 'https://images.unsplash.com/photo-1502602898536-47ad22581b52',
+              image: DESTINATION_IMAGES.paris,
               touristType: ['City Break', 'Romantic'],
               includesAttraction: [
                 { '@type': 'TouristAttraction', name: 'Eiffel Tower' },
@@ -456,7 +458,7 @@ export const ROUTE_SEO = {
               '@type': 'TouristDestination',
               name: 'Nice, France',
               description: 'French Riviera beauty with Mediterranean charm.',
-              image: 'https://images.unsplash.com/photo-1505739772255-7f1fd0f2c0be',
+              image: DESTINATION_IMAGES.nice,
               touristType: ['Beach Getaway', 'Luxury'],
               includesAttraction: [
                 { '@type': 'TouristAttraction', name: 'Promenade des Anglais' },

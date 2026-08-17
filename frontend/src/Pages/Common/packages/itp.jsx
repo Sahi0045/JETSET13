@@ -607,15 +607,15 @@ const ItineraryPackage = () => {
             {[
               { 
                 name: 'Mughal Garden', 
-                image: 'https://images.unsplash.com/photo-1566837497312-7be4a47d0c95?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1740&q=80'
+                image: 'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1740&q=80'
               },
               { 
                 name: 'Gulmarg', 
-                image: 'https://images.unsplash.com/photo-1566837497312-7be4a47d0c95?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1740&q=80'
+                image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1740&q=80'
               },
               { 
                 name: 'Srinagar', 
-                image: 'https://images.unsplash.com/photo-1593096725460-eb3300e8019b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1740&q=80'
+                image: 'https://images.unsplash.com/photo-1593181629936-11c609b8db9b?auto=format&fit=crop&w=1740&q=80'
               },
               { 
                 name: 'Pehelgam', 
