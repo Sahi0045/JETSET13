@@ -89,6 +89,7 @@ const WILDCARD_SPA_ROUTE_PREFIXES = [
 const LEGACY_REDIRECTS = new Map([
   ['/rental', '/hotels'],
   ['/rental/booking', '/hotels'],
+  ['/rentals', '/hotels'],
   ['/hotel-details', '/hotels'],
   ['/hotel-search', '/hotels/search'],
   ['/hotel-search-results', '/hotels/search'],

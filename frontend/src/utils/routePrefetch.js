@@ -28,8 +28,6 @@ const importers = {
   '/packages/itinerary': () => import('../Pages/Common/packages/itp'),
   '/packages/booking': () => import('../Pages/Common/packages/PackageBookingSummary'),
 
-  '/rentals': () => import('../Pages/Common/rentals/LandingPage.jsx'),
-
   '/visa': () => import('../Pages/Common/visa/VisaLanding'),
   '/visa/apply': () => import('../Pages/Common/visa/VisaApplication'),
   '/visa/services': () => import('../Pages/Common/visa/DocumentServices'),
@@ -59,8 +57,6 @@ const importers = {
   '/travel-blog': () => import('../Pages/TravelBlog'),
   '/careers': () => import('../Pages/Careers'),
   '/privacy-policy': () => import('../Pages/PrivacyPolicy'),
-  '/privacy-policy': () => import('../Pages/PrivacyPolicy'),
-  '/terms-conditions': () => import('../Pages/TermsConditions'),
   '/terms-conditions': () => import('../Pages/TermsConditions'),
   '/cookies': () => import('../Pages/Cookies'),
 

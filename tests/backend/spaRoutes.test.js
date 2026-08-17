@@ -46,6 +46,7 @@ describe('SPA route contract', () => {
   it.each([
     ['/blog', '/travel-blog'],
     ['/hotel-search', '/hotels/search'],
+    ['/rentals', '/hotels'],
     ['/pricing', '/membership'],
     ['/destinations/paris', '/cruises'],
   ])('maps legacy route %s to %s', (pathname, destination) => {

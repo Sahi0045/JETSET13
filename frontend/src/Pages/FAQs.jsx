@@ -329,7 +329,7 @@ const FAQs = () => {
               <span className="text-gray-300">|</span>
               <Link to="/visa" className="text-primary-500 hover:text-primary-600 font-medium">Visa Services</Link>
               <span className="text-gray-300">|</span>
-              <Link to="/rentals" className="text-primary-500 hover:text-primary-600 font-medium">Car Rentals</Link>
+              <Link to="/hotels" className="text-primary-500 hover:text-primary-600 font-medium">Hotels & Stays</Link>
             </div>
           </section>
         </div>

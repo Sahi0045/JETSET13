@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FaMapMarkedAlt, FaPlane, FaHotel, FaShip, FaCar, FaPassport, FaGlobe, FaCalendarAlt, FaCreditCard, FaShieldAlt } from 'react-icons/fa';
+import { FaMapMarkedAlt, FaPlane, FaHotel, FaShip, FaPassport, FaGlobe, FaCalendarAlt, FaCreditCard, FaShieldAlt } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
 import Breadcrumb from '../components/Breadcrumb';
@@ -68,10 +68,10 @@ const Resources = () => {
       link: "/cruise"
     },
     {
-      title: "Car Rental Guide",
-      description: "Smart tips for renting cars and navigating foreign roads.",
-      icon: <FaCar className="text-3xl text-orange-600" />,
-      link: "/rentals"
+      title: "Accommodation Guide",
+      description: "Smart tips for choosing stays that suit your plans and budget.",
+      icon: <FaHotel className="text-3xl text-orange-600" />,
+      link: "/hotels"
     }
   ];
 

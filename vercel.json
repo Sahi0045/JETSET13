@@ -10,6 +10,7 @@
   "redirects": [
     { "source": "/rental", "destination": "/hotels", "permanent": true },
     { "source": "/rental/booking", "destination": "/hotels", "permanent": true },
+    { "source": "/rentals", "destination": "/hotels", "permanent": true },
     { "source": "/hotel-details", "destination": "/hotels", "permanent": true },
     { "source": "/hotel-search", "destination": "/hotels/search", "permanent": true },
     { "source": "/hotel-search-results", "destination": "/hotels/search", "permanent": true },

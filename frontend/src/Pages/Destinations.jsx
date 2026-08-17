@@ -9,7 +9,6 @@ import {
   FaGlobe,
   FaShip,
   FaHotel,
-  FaCar
 } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
@@ -312,9 +311,9 @@ const Destinations = () => {
               <FaGlobe className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
               <span className="text-sm font-medium text-neutral-700">Vacation Packages</span>
             </Link>
-            <Link to="/rentals" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
-              <FaCar className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
-              <span className="text-sm font-medium text-neutral-700">Car Rentals</span>
+            <Link to="/hotels" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
+              <FaHotel className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
+              <span className="text-sm font-medium text-neutral-700">Hotel Stays</span>
             </Link>
             <Link to="/travel-blog" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
               <FaCalendarAlt className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
