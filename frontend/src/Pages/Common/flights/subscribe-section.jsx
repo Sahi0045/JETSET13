@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Mail, Check, AlertCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { subscriptionAirplane } from "./data.js"
 import supabase from '../../../lib/supabase';
 
@@ -260,7 +261,7 @@ export default function SubscribeSection() {
                       </div>
                       <div className="ml-2 text-xs">
                         <label htmlFor="consent" className="font-medium text-gray-600">
-                          I agree to receive emails. View <a href="#" className="text-[#055B75] hover:underline">Terms</a> & <a href="#" className="text-[#055B75] hover:underline">Privacy</a>.
+                          I agree to receive emails. View <Link to="/terms-conditions" className="text-[#055B75] hover:underline">Terms</Link> & <Link to="/privacy-policy" className="text-[#055B75] hover:underline">Privacy</Link>.
                         </label>
                       </div>
                     </div>

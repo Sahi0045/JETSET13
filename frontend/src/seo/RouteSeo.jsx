@@ -12,6 +12,7 @@ import {
 } from './routeSeo';
 
 const SITE_URL = 'https://www.jetsetterss.com';
+const DEFAULT_OG_IMAGE = `${SITE_URL}/images/logos/jetsetters_3d_logo_final.png`;
 
 const SITE_WIDE_SCHEMA = [
   {
@@ -44,14 +45,6 @@ const SITE_WIDE_SCHEMA = [
     url: SITE_URL,
     name: 'Jetsetters',
     publisher: { '@id': `${SITE_URL}/#organization` },
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: {
-        '@type': 'EntryPoint',
-        urlTemplate: `${SITE_URL}/flights/search?q={search_term_string}`,
-      },
-      'query-input': 'required name=search_term_string',
-    },
   },
 ];
 
@@ -87,10 +80,19 @@ const RouteSeo = () => {
       <meta name="description" content={description} />
       <meta name="robots" content={robots} />
       <link rel="canonical" href={canonicalUrl} />
+      <link rel="alternate" hrefLang="en" href={canonicalUrl} />
+      <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
       <meta property="og:url" content={canonicalUrl} />
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       <meta property="og:type" content="website" />
+      <meta property="og:image" content={seo.ogImage || DEFAULT_OG_IMAGE} />
+      <meta property="og:site_name" content="Jetsetters" />
+      <meta property="og:locale" content="en_US" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={title} />
+      <meta name="twitter:description" content={description} />
+      <meta name="twitter:image" content={seo.ogImage || DEFAULT_OG_IMAGE} />
       <script type="application/ld+json">{JSON.stringify(schemas)}</script>
     </Helmet>
   );
@@ -100,20 +102,32 @@ const RouteSeo = () => {
  * Use this in a page with data-driven search copy (for example a named hotel)
  * to override the route defaults once that page's data has loaded.
  */
-export const SeoOverride = ({ title, description, shouldIndex = true }) => {
+export const SeoOverride = ({ title, description, shouldIndex = true, ogImage, schema }) => {
   const { pathname } = useLocation();
   const canonicalUrl = getCanonicalURL(pathname);
+  const truncatedTitle = truncateSeoText(title, MAX_TITLE_LENGTH);
+  const truncatedDesc = truncateSeoText(description, MAX_DESCRIPTION_LENGTH);
+  const image = ogImage || DEFAULT_OG_IMAGE;
 
   return (
     <Helmet>
-      <title>{truncateSeoText(title, MAX_TITLE_LENGTH)}</title>
-      <meta name="description" content={truncateSeoText(description, MAX_DESCRIPTION_LENGTH)} />
+      <title>{truncatedTitle}</title>
+      <meta name="description" content={truncatedDesc} />
       <meta name="robots" content={shouldIndex ? 'index, follow' : 'noindex, follow'} />
       <link rel="canonical" href={canonicalUrl} />
+      <link rel="alternate" hrefLang="en" href={canonicalUrl} />
+      <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
       <meta property="og:url" content={canonicalUrl} />
-      <meta property="og:title" content={truncateSeoText(title, MAX_TITLE_LENGTH)} />
-      <meta property="og:description" content={truncateSeoText(description, MAX_DESCRIPTION_LENGTH)} />
+      <meta property="og:title" content={truncatedTitle} />
+      <meta property="og:description" content={truncatedDesc} />
       <meta property="og:type" content="website" />
+      <meta property="og:image" content={image} />
+      <meta property="og:site_name" content="Jetsetters" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={truncatedTitle} />
+      <meta name="twitter:description" content={truncatedDesc} />
+      <meta name="twitter:image" content={image} />
+      {schema && <script type="application/ld+json">{JSON.stringify(schema)}</script>}
     </Helmet>
   );
 };

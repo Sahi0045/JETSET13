@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaHeart, FaShieldAlt, FaUsers, FaGlobe, FaLightbulb, FaRocket, FaPlane, FaArrowRight, FaLinkedin, FaTwitter, FaInstagram, FaFacebook } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
+import Breadcrumb from '../components/Breadcrumb';
 
 const AboutUs = () => {
   const stats = [
@@ -80,7 +81,8 @@ const AboutUs = () => {
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-white pt-[71px]">
+      <main className="min-h-screen bg-white pt-[71px]">
+        <Breadcrumb items={[{ name: 'About Us', path: '/about' }]} />
         {/* Hero Section - Clean and Simple */}
         <section className="relative bg-gradient-to-br from-gray-50 to-white py-20 md:py-32">
           <div className="container mx-auto px-4">
@@ -324,24 +326,24 @@ const AboutUs = () => {
               <div className="border-t border-white/20 pt-8">
                 <p className="text-sm mb-4 opacity-80">Follow Us</p>
                 <div className="flex gap-4 justify-center">
-                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300">
+                  <span className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
                     <FaLinkedin className="text-xl" />
-                  </a>
-                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300">
+                  </span>
+                  <span className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
                     <FaTwitter className="text-xl" />
-                  </a>
-                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300">
+                  </span>
+                  <span className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
                     <FaInstagram className="text-xl" />
-                  </a>
-                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all duration-300">
+                  </span>
+                  <span className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
                     <FaFacebook className="text-xl" />
-                  </a>
+                  </span>
                 </div>
               </div>
             </div>
           </div>
         </section>
-      </div>
+      </main>
       <Footer />
     </>
   );

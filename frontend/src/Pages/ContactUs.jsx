@@ -7,6 +7,7 @@ import {
 } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
+import Breadcrumb from '../components/Breadcrumb';
 
 const ContactUs = () => {
   const [formData, setFormData] = useState({
@@ -49,6 +50,7 @@ const ContactUs = () => {
     <>
       <Navbar />
       <div className="min-h-screen bg-[#F1FBFD] pt-[71px]">
+        <Breadcrumb items={[{ name: 'Contact Us', path: '/contact' }]} />
         {/* Hero */}
         <section className="relative overflow-hidden bg-gradient-to-br from-[#034457] via-[#055B75] to-[#0890BC] py-24 md:py-32 text-center px-4">
           <div className="absolute inset-0 opacity-10 pointer-events-none"
@@ -90,9 +92,9 @@ const ContactUs = () => {
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-[#055B75] mb-4">Connect With Us</p>
                 <div className="flex gap-3">
                   {[FaLinkedin, FaTwitter, FaInstagram, FaFacebook].map((Icon, i) => (
-                    <a key={i} href="#" className="w-10 h-10 rounded-full bg-[#F0FAFC] text-[#055B75] flex items-center justify-center shadow-sm hover:bg-[#055B75] hover:text-white transition-all duration-300">
+                    <span key={i} className="w-10 h-10 rounded-full bg-[#F0FAFC] text-[#055B75] flex items-center justify-center shadow-sm">
                       <Icon className="text-lg" />
-                    </a>
+                    </span>
                   ))}
                 </div>
               </div>

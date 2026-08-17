@@ -1,7 +1,22 @@
 const SITE_NAME = 'Jetsetters';
+const SITE_URL = 'https://www.jetsetterss.com';
 
 export const MAX_TITLE_LENGTH = 60;
 export const MAX_DESCRIPTION_LENGTH = 155;
+
+const breadcrumb = (...items) => ({
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
+    ...items.map((it, i) => ({
+      '@type': 'ListItem',
+      position: i + 2,
+      name: it.name,
+      ...(it.url ? { item: `${SITE_URL}${it.url}` } : {}),
+    })),
+  ],
+});
 
 export const DEFAULT_ROUTE_SEO = {
   title: 'Luxury Travel, Simply Planned | Jetsetters',
@@ -21,6 +36,25 @@ export const ROUTE_SEO = {
     title: 'Luxury Cruise Vacations | Jetsetters',
     description: 'Discover unforgettable cruise vacations with trusted cruise lines, curated itineraries, and expert planning support from Jetsetters.',
     schema: [
+      breadcrumb({ name: 'Cruises' }),
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: 'Cruise Vacations',
+        description: 'Unforgettable cruise vacations with trusted cruise lines, curated itineraries, and expert planning support.',
+        brand: { '@type': 'Brand', name: 'Jetsetters' },
+        url: `${SITE_URL}/cruise`,
+        image: `${SITE_URL}/images/logos/jetsetters_3d_logo_final.png`,
+        offers: {
+          '@type': 'AggregateOffer',
+          priceCurrency: 'USD',
+          lowPrice: '299',
+          highPrice: '4999',
+          offerCount: '30',
+          url: `${SITE_URL}/cruise`,
+        },
+        aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.8, reviewCount: 1850 },
+      },
       {
         '@context': 'https://schema.org',
         '@type': 'FAQPage',
@@ -72,6 +106,7 @@ export const ROUTE_SEO = {
   '/cruises': {
     title: 'Browse Cruise Deals | Jetsetters',
     description: 'Compare cruise itineraries, departure dates, and destinations to find the right sailing and the best value for your vacation.',
+    schema: [breadcrumb({ name: 'Cruises', url: '/cruise' }, { name: 'Browse Deals' })],
   },
   '/itinerary': {
     title: 'Cruise Itinerary Details | Jetsetters',
@@ -81,6 +116,7 @@ export const ROUTE_SEO = {
   '/flights': {
     title: 'Find Flight Deals | Jetsetters',
     description: 'Search flights worldwide, compare airfare prices and cabin classes, and book your next domestic or international trip with confidence.',
+    schema: [breadcrumb({ name: 'Flights' })],
   },
   '/flight': {
     title: 'Search Flights | Jetsetters',
@@ -90,10 +126,33 @@ export const ROUTE_SEO = {
   '/flights/search': {
     title: 'Flight Search Results | Jetsetters',
     description: 'Compare flight schedules, fares, stopovers, and cabin options for your selected route and travel dates — all in one place.',
+    shouldIndex: false,
+    schema: [breadcrumb({ name: 'Flights', url: '/flights' }, { name: 'Search Results' })],
   },
   '/packages': {
     title: 'Vacation Packages & Getaways | Jetsetters',
     description: 'Explore handpicked vacation packages that combine flights, hotels, and activities into one seamless, expertly planned travel experience.',
+    schema: [
+      breadcrumb({ name: 'Vacation Packages' }),
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: 'Vacation Packages',
+        description: 'Handpicked vacation packages combining flights, hotels, and curated activities into one expertly planned travel experience.',
+        brand: { '@type': 'Brand', name: 'Jetsetters' },
+        url: `${SITE_URL}/packages`,
+        image: `${SITE_URL}/images/logos/jetsetters_3d_logo_final.png`,
+        offers: {
+          '@type': 'AggregateOffer',
+          priceCurrency: 'USD',
+          lowPrice: '399',
+          highPrice: '2999',
+          offerCount: '50',
+          url: `${SITE_URL}/packages`,
+        },
+        aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.8, reviewCount: 1240 },
+      },
+    ],
   },
   '/packages/itinerary': {
     title: 'Vacation Package Itinerary | Jetsetters',
@@ -103,10 +162,13 @@ export const ROUTE_SEO = {
   '/hotels': {
     title: 'Hotels & Stays Worldwide | Jetsetters',
     description: 'Find handpicked hotels worldwide, compare accommodation styles and amenities, and reserve the perfect stay for your next trip.',
+    schema: [breadcrumb({ name: 'Hotels' })],
   },
   '/hotels/search': {
     title: 'Hotel Search Results | Jetsetters',
     description: 'Compare hotels, room types, star ratings, amenities, and prices for your chosen destination and travel dates — all in one view.',
+    shouldIndex: false,
+    schema: [breadcrumb({ name: 'Hotels', url: '/hotels' }, { name: 'Search Results' })],
   },
   '/hotels/details': {
     title: 'Hotel Details & Rooms | Jetsetters',
@@ -116,51 +178,403 @@ export const ROUTE_SEO = {
   '/visa': {
     title: 'Visa Services & Travel Documents | Jetsetters',
     description: 'Get expert support with travel visas for any destination. We guide you through document requirements, applications, and consultations.',
+    schema: [
+      breadcrumb({ name: 'Visa Services' }),
+      {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: [
+          {
+            '@type': 'Question',
+            name: 'What documents do I need to apply for a travel visa?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Requirements vary by destination, but most visa applications require a valid passport with at least 6 months validity, completed application form, passport-size photos, proof of accommodation, travel itinerary, financial statements, and a cover letter. Jetsetters guides you through the exact requirements for your destination.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'How long does visa processing take?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Processing times depend on the destination country and visa type. Standard processing typically takes 5–15 business days, while expedited options may be available for 2–5 business days at additional cost. We recommend applying at least 4–6 weeks before your planned travel date.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'Can I book a visa consultation with Jetsetters?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Yes, you can schedule a one-on-one video consultation with a Jetsetters visa specialist. Our experts provide personalized guidance on document requirements, application procedures, and common pitfalls to avoid for your specific destination and travel purpose.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'What is the Jetsetters visa refund policy?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Our visa service fees cover application preparation and review. If your visa is denied, refund eligibility depends on the service tier selected. Consular and government fees are non-refundable in all cases. Review our full refund policy page for complete details before submitting your application.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'Do you offer document translation and attestation services?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Yes, Jetsetters offers certified document translation, notarization, and attestation services for visa applications. This includes translating birth certificates, financial documents, employment letters, and other supporting paperwork into the required language for your destination country.',
+            },
+          },
+        ],
+      },
+    ],
   },
   '/visa/documents': {
     title: 'Travel Document Services | Jetsetters',
     description: 'Get professional support with passports, travel documents, certified translations, and visa-ready paperwork for international travel.',
+    schema: [breadcrumb({ name: 'Visa Services', url: '/visa' }, { name: 'Document Services' })],
   },
   '/visa/apply': {
     title: 'Apply for a Travel Visa | Jetsetters',
     description: 'Start your travel visa application online with step-by-step guidance and personalized support from Jetsetters document specialists.',
+    schema: [breadcrumb({ name: 'Visa Services', url: '/visa' }, { name: 'Apply' })],
   },
   '/visa/booking': {
     title: 'Book a Visa Consultation | Jetsetters',
     description: 'Schedule a one-on-one consultation with a Jetsetters visa specialist for personalized guidance on your travel document requirements.',
+    schema: [breadcrumb({ name: 'Visa Services', url: '/visa' }, { name: 'Book Consultation' })],
   },
   '/visa/refund-policy': {
     title: 'Visa Refund Policy | Jetsetters',
     description: 'Read the full Jetsetters visa service refund policy so you understand your options before submitting your application or payment.',
+    schema: [breadcrumb({ name: 'Visa Services', url: '/visa' }, { name: 'Refund Policy' })],
   },
   '/visa/terms': {
     title: 'Visa Service Terms | Jetsetters',
     description: 'Review the complete terms and conditions that govern Jetsetters visa preparation, travel document, and consultation services.',
+    schema: [breadcrumb({ name: 'Visa Services', url: '/visa' }, { name: 'Terms' })],
   },
   '/visa/privacy': {
     title: 'Visa Privacy Policy | Jetsetters',
     description: 'Learn exactly how Jetsetters collects, uses, and protects personal information submitted through visa and travel document services.',
+    schema: [breadcrumb({ name: 'Visa Services', url: '/visa' }, { name: 'Privacy Policy' })],
   },
   '/resources': {
     title: 'Travel Resources & Guides | Jetsetters',
     description: 'Explore practical travel guides, destination overviews, planning checklists, and tips to help you prepare for a smoother journey.',
+    schema: [breadcrumb({ name: 'Resources' })],
   },
   '/destinations': {
     title: 'Travel Destinations Worldwide | Jetsetters',
     description: 'Browse inspiring travel destinations across the globe, with trip ideas, seasonal highlights, and handpicked experiences for every traveler.',
+    schema: [
+      breadcrumb({ name: 'Destinations' }),
+      {
+        '@context': 'https://schema.org',
+        '@type': 'ItemList',
+        name: 'Popular Travel Destinations',
+        description: 'Curated travel destinations across North America, India, and France.',
+        numberOfItems: 13,
+        itemListElement: [
+          {
+            '@type': 'ListItem',
+            position: 1,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'New York City, USA',
+              description: 'The city that never sleeps, offering iconic landmarks and vibrant culture.',
+              image: 'https://images.unsplash.com/photo-1534447677768-be436bb09401',
+              touristType: ['City Break', 'Cultural Tourism'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'Broadway' },
+                { '@type': 'TouristAttraction', name: 'Statue of Liberty' },
+                { '@type': 'TouristAttraction', name: 'Central Park' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.9, reviewCount: 2543 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '999', url: `${SITE_URL}/packages/itinerary?destination=New+York+City%2C+USA` },
+            },
+          },
+          {
+            '@type': 'ListItem',
+            position: 2,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'Los Angeles, USA',
+              description: 'Hollywood glamour, beaches, and endless entertainment.',
+              image: 'https://images.unsplash.com/photo-1502920514313-52581002a659',
+              touristType: ['City Break', 'Entertainment'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'Hollywood' },
+                { '@type': 'TouristAttraction', name: 'Santa Monica' },
+                { '@type': 'TouristAttraction', name: 'Beverly Hills' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.7, reviewCount: 1820 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '1099', url: `${SITE_URL}/packages/itinerary?destination=Los+Angeles%2C+USA` },
+            },
+          },
+          {
+            '@type': 'ListItem',
+            position: 3,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'Miami, USA',
+              description: 'Tropical beaches, nightlife, and Latin culture.',
+              image: 'https://images.unsplash.com/photo-1505731132164-cca903a55486',
+              touristType: ['Beach Getaway', 'Nightlife'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'South Beach' },
+                { '@type': 'TouristAttraction', name: 'Nightlife District' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.8, reviewCount: 1432 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '899', url: `${SITE_URL}/packages/itinerary?destination=Miami%2C+USA` },
+            },
+          },
+          {
+            '@type': 'ListItem',
+            position: 4,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'Toronto, Canada',
+              description: 'Cosmopolitan city with iconic skyline and cultural diversity.',
+              image: 'https://images.unsplash.com/photo-1507992781348-310259076fe0',
+              touristType: ['City Break', 'Cultural Tourism'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'CN Tower' },
+                { '@type': 'TouristAttraction', name: 'Niagara Falls' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.7, reviewCount: 1103 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '1049', url: `${SITE_URL}/packages/itinerary?destination=Toronto%2C+Canada` },
+            },
+          },
+          {
+            '@type': 'ListItem',
+            position: 5,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'Vancouver, Canada',
+              description: 'Mountains, ocean, and outdoor adventures.',
+              image: 'https://images.unsplash.com/photo-1506045412240-22980140a405',
+              touristType: ['Adventure', 'Nature'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'Stanley Park' },
+                { '@type': 'TouristAttraction', name: 'Whistler' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.8, reviewCount: 980 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '1199', url: `${SITE_URL}/packages/itinerary?destination=Vancouver%2C+Canada` },
+            },
+          },
+          {
+            '@type': 'ListItem',
+            position: 6,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'Mumbai, India',
+              description: 'The financial capital of India with vibrant nightlife.',
+              image: 'https://images.unsplash.com/photo-1595658658481-d53d3f999875',
+              touristType: ['City Break', 'Cultural Tourism'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'Marine Drive' },
+                { '@type': 'TouristAttraction', name: 'Gateway of India' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.6, reviewCount: 1650 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '499', url: `${SITE_URL}/packages/itinerary?destination=Mumbai%2C+India` },
+            },
+          },
+          {
+            '@type': 'ListItem',
+            position: 7,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'Delhi, India',
+              description: 'Historic capital rich in culture and heritage.',
+              image: 'https://images.unsplash.com/photo-1587474260584-136574528ed5',
+              touristType: ['Cultural Tourism', 'Historical'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'Red Fort' },
+                { '@type': 'TouristAttraction', name: 'Qutub Minar' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.5, reviewCount: 1490 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '449', url: `${SITE_URL}/packages/itinerary?destination=Delhi%2C+India` },
+            },
+          },
+          {
+            '@type': 'ListItem',
+            position: 8,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'Goa, India',
+              description: "India's most popular beach destination.",
+              image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e',
+              touristType: ['Beach Getaway', 'Water Sports'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'Beaches' },
+                { '@type': 'TouristAttraction', name: 'Water Sports' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.8, reviewCount: 2310 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '399', url: `${SITE_URL}/packages/itinerary?destination=Goa%2C+India` },
+            },
+          },
+          {
+            '@type': 'ListItem',
+            position: 9,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'Jaipur, India',
+              description: 'The Pink City with royal palaces and forts.',
+              image: 'https://images.unsplash.com/photo-1548013146-72479768bada',
+              touristType: ['Cultural Tourism', 'Historical'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'Amber Fort' },
+                { '@type': 'TouristAttraction', name: 'Hawa Mahal' },
+                { '@type': 'TouristAttraction', name: 'City Palace' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.7, reviewCount: 1215 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '499', url: `${SITE_URL}/packages/itinerary?destination=Jaipur%2C+India` },
+            },
+          },
+          {
+            '@type': 'ListItem',
+            position: 10,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'Paris, France',
+              description: 'The City of Light with art, romance, and cuisine.',
+              image: 'https://images.unsplash.com/photo-1502602898536-47ad22581b52',
+              touristType: ['City Break', 'Romantic'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'Eiffel Tower' },
+                { '@type': 'TouristAttraction', name: 'Louvre Museum' },
+                { '@type': 'TouristAttraction', name: 'Seine Cruise' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.9, reviewCount: 2156 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '1299', url: `${SITE_URL}/packages/itinerary?destination=Paris%2C+France` },
+            },
+          },
+          {
+            '@type': 'ListItem',
+            position: 11,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'Nice, France',
+              description: 'French Riviera beauty with Mediterranean charm.',
+              image: 'https://images.unsplash.com/photo-1505739772255-7f1fd0f2c0be',
+              touristType: ['Beach Getaway', 'Luxury'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'Promenade des Anglais' },
+                { '@type': 'TouristAttraction', name: 'Old Town' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.8, reviewCount: 890 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '1199', url: `${SITE_URL}/packages/itinerary?destination=Nice%2C+France` },
+            },
+          },
+          {
+            '@type': 'ListItem',
+            position: 12,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'Marseille, France',
+              description: 'Historic port city with stunning coastline.',
+              image: 'https://images.unsplash.com/photo-1605113286275-ec1d80d048bb',
+              touristType: ['Cultural Tourism', 'Coastal'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'Old Port' },
+                { '@type': 'TouristAttraction', name: 'Calanques' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.6, reviewCount: 670 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '1049', url: `${SITE_URL}/packages/itinerary?destination=Marseille%2C+France` },
+            },
+          },
+          {
+            '@type': 'ListItem',
+            position: 13,
+            item: {
+              '@type': 'TouristDestination',
+              name: 'Lyon, France',
+              description: 'Gastronomic capital of France.',
+              image: 'https://images.unsplash.com/photo-1599134842279-fe807d23316e',
+              touristType: ['Cultural Tourism', 'Gastronomy'],
+              includesAttraction: [
+                { '@type': 'TouristAttraction', name: 'Old Town' },
+                { '@type': 'TouristAttraction', name: 'Gastronomy Scene' },
+              ],
+              aggregateRating: { '@type': 'AggregateRating', ratingValue: 4.7, reviewCount: 540 },
+              offers: { '@type': 'Offer', priceCurrency: 'USD', price: '1099', url: `${SITE_URL}/packages/itinerary?destination=Lyon%2C+France` },
+            },
+          },
+        ],
+      },
+    ],
   },
   '/travel-blog': {
     title: 'Travel Blog & Expert Tips | Jetsetters',
     description: 'Read destination spotlights, travel planning tips, packing guides, and insider inspiration from the Jetsetters team of travel experts.',
+    schema: [breadcrumb({ name: 'Travel Blog' })],
   },
   '/support': {
     title: 'Travel Support & Help | Jetsetters',
     description: 'Find answers to your booking questions, get help managing your trip, and access support resources for all Jetsetters travel services.',
+    schema: [
+      breadcrumb({ name: 'Support' }),
+      {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: [
+          {
+            '@type': 'Question',
+            name: 'How do I change or cancel my booking?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'You can modify or cancel your booking through your account dashboard or by contacting our support team. Changes and cancellations are subject to the specific terms of your booking, and some may have associated fees depending on the fare type and timing.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'What documents do I need for international travel?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'For international travel you typically need a valid passport with at least 6 months validity beyond your return date, a visa if required by your destination, and any health-related documents such as vaccination certificates. Always check the specific entry requirements for your destination country before traveling.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'How do I check my flight status?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'You can check your flight status in real time using the flight tracker on our website or by reviewing your booking confirmation email for the latest updates. Our support team is also available 24/7 for urgent flight status inquiries.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: "What's included in my cruise package?",
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Most cruise packages include your cabin accommodation, meals in the main dining areas, basic entertainment, and access to most onboard facilities. Specialty restaurants, premium beverages, shore excursions, and spa services are usually charged separately. Check your booking details for the specific inclusions.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'How do I reset my password?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: "Use the 'Forgot Password' link on the login page to receive a password reset email. Follow the instructions in the email to set a new password. If you don't receive the email, check your spam folder or contact our support team for assistance.",
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'What payment methods do you accept?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'We accept all major credit cards (Visa, MasterCard, American Express, Discover), debit cards, and digital wallets. All payments are processed securely with no hidden charges. Prices are displayed transparently during the booking process.',
+            },
+          },
+        ],
+      },
+    ],
   },
   '/faqs': {
     title: 'Travel Booking FAQs | Jetsetters',
     description: 'Find answers to common questions about flights, hotels, cruises, vacation packages, visa services, payments, and travel bookings.',
     schema: [
+      breadcrumb({ name: 'FAQs' }),
       {
         '@context': 'https://schema.org',
         '@type': 'FAQPage',
@@ -244,38 +658,47 @@ export const ROUTE_SEO = {
   '/company': {
     title: 'About Jetsetters Travel',
     description: 'Learn about Jetsetters — our story, travel expertise, customer-first values, team, and our mission to make every journey exceptional.',
+    schema: [breadcrumb({ name: 'Company' })],
   },
   '/contact': {
     title: 'Contact Jetsetters Travel',
     description: 'Reach the Jetsetters travel team for booking help, trip planning questions, quote requests, and expert personalized support.',
+    schema: [breadcrumb({ name: 'Contact' })],
   },
   '/careers': {
     title: 'Careers at Jetsetters',
     description: 'Explore open positions and join the Jetsetters team building better, smarter travel experiences for customers around the world.',
+    schema: [breadcrumb({ name: 'Careers' })],
   },
   '/privacy-policy': {
     title: 'Privacy Policy & Data Rights | Jetsetters',
     description: 'Learn how Jetsetters handles your personal data, your privacy rights, and how information you share is used across our travel services.',
+    schema: [breadcrumb({ name: 'Privacy Policy' })],
   },
   '/cookies': {
     title: 'Cookie Policy | Jetsetters',
     description: 'Learn how Jetsetters uses cookies and similar tracking technologies to improve your browsing experience and personalize travel content.',
+    schema: [breadcrumb({ name: 'Cookie Policy' })],
   },
   '/terms-conditions': {
     title: 'Travel Terms & Conditions | Jetsetters',
     description: 'Review Jetsetters complete booking terms covering payments, cancellations, travel service changes, refunds, and your responsibilities.',
+    schema: [breadcrumb({ name: 'Terms & Conditions' })],
   },
   '/request': {
     title: 'Request a Travel Quote | Jetsetters',
     description: 'Tell us your travel plans and request a tailored quote for flights, hotels, cruises, vacation packages, or a full custom itinerary.',
+    schema: [breadcrumb({ name: 'Request a Quote' })],
   },
   '/membership': {
     title: 'Jetsetters Membership Benefits',
     description: 'Explore Jetsetters membership plans and unlock exclusive travel perks, priority support, and member-only deals on every booking.',
+    schema: [breadcrumb({ name: 'Membership' })],
   },
   '/help': {
     title: 'Help Center | Jetsetters',
     description: 'Browse Jetsetters help articles, video walkthroughs, booking guides, and support resources to get the most out of your travel experience.',
+    schema: [breadcrumb({ name: 'Help Center' })],
   },
   '/booking-confirmation': {
     title: 'Booking Confirmation | Jetsetters',

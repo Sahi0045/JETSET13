@@ -824,7 +824,7 @@ const CruiseBookingPopup = ({
                 </button>
 
                 <p className="text-[10px] text-center text-gray-400 mt-2 px-8 leading-tight">
-                  By submitting this form, you agree to our <a href="#" className="underline">Terms & Conditions</a> and <a href="#" className="underline">Privacy Policy</a>
+                  By submitting this form, you agree to our <Link to="/terms-conditions" className="underline">Terms & Conditions</Link> and <Link to="/privacy-policy" className="underline">Privacy Policy</Link>
                 </p>
               </form>
             </div>

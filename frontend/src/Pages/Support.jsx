@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaHeadset, FaPhone, FaEnvelope, FaWhatsapp, FaClock, FaMapMarkerAlt, FaSearch, FaQuestionCircle, FaTicketAlt, FaBook, FaUserTie, FaGlobe } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
+import Breadcrumb from '../components/Breadcrumb';
 
 const Support = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,7 +31,7 @@ const Support = () => {
       category: 'booking',
       description: "Learn how to modify or cancel your existing reservations.",
       solution: "You can modify or cancel your booking through your account dashboard or by contacting our support team.",
-      link: "#"
+      link: "/contact"
     },
     {
       id: 2,
@@ -38,7 +39,7 @@ const Support = () => {
       category: 'flights',
       description: "Essential travel documents and requirements for international flights.",
       solution: "Typically you'll need a valid passport, visa (if required), and any COVID-19 related documents.",
-      link: "#"
+      link: "/visa"
     },
     {
       id: 3,
@@ -46,7 +47,7 @@ const Support = () => {
       category: 'flights',
       description: "Real-time flight tracking and status updates.",
       solution: "Use our flight tracker or check your booking confirmation for the latest updates.",
-      link: "#"
+      link: "/flights"
     },
     {
       id: 4,
@@ -54,7 +55,7 @@ const Support = () => {
       category: 'cruises',
       description: "Understanding what's covered in your cruise booking.",
       solution: "Check your booking details for included amenities, meals, and activities.",
-      link: "#"
+      link: "/cruise"
     },
     {
       id: 5,
@@ -62,7 +63,7 @@ const Support = () => {
       category: 'technical',
       description: "Password recovery and account access help.",
       solution: "Use the 'Forgot Password' link on the login page or contact support.",
-      link: "#"
+      link: "/faqs"
     },
     {
       id: 6,
@@ -70,7 +71,7 @@ const Support = () => {
       category: 'payments',
       description: "Accepted payment options and security information.",
       solution: "We accept major credit cards, debit cards, and digital wallets.",
-      link: "#"
+      link: "/faqs"
     }
   ];
 
@@ -111,16 +112,17 @@ const Support = () => {
   return (
     <>
       <Navbar forceScrolled={true} />
-      <div className="min-h-screen bg-white">
+      <main className="min-h-screen bg-white">
+        <Breadcrumb items={[{ name: 'Support', path: '/support' }]} />
         {/* Hero Section */}
-        <div className="border-b border-gray-200 bg-white py-16">
+        <section className="border-b border-gray-200 bg-white py-16">
           <div className="container mx-auto px-4 max-w-7xl">
             <h1 className="text-5xl md:text-6xl font-semibold text-neutral-700 mb-4">Customer Support</h1>
             <p className="text-lg text-neutral-600 max-w-2xl">
               We're here to help you every step of the way.
             </p>
           </div>
-        </div>
+        </section>
 
         <div className="container mx-auto px-4 max-w-7xl py-12">
           {/* Quick Contact Section */}
@@ -280,7 +282,7 @@ const Support = () => {
             <p className="text-lg text-neutral-600 mb-8 max-w-2xl mx-auto">
               Our dedicated support team is committed to ensuring you have the best travel experience.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center mb-8">
               <Link
                 to="/contact"
                 className="bg-neutral-700 text-white px-8 py-3.5 rounded-xl font-medium hover:bg-neutral-800 transition-colors"
@@ -294,9 +296,20 @@ const Support = () => {
                 View FAQs
               </Link>
             </div>
+            <div className="flex flex-wrap gap-3 justify-center text-sm">
+              <Link to="/resources" className="text-primary-500 hover:text-primary-600 font-medium">Travel Resources</Link>
+              <span className="text-gray-300">|</span>
+              <Link to="/flights" className="text-primary-500 hover:text-primary-600 font-medium">Book Flights</Link>
+              <span className="text-gray-300">|</span>
+              <Link to="/hotels" className="text-primary-500 hover:text-primary-600 font-medium">Find Hotels</Link>
+              <span className="text-gray-300">|</span>
+              <Link to="/cruise" className="text-primary-500 hover:text-primary-600 font-medium">Explore Cruises</Link>
+              <span className="text-gray-300">|</span>
+              <Link to="/visa" className="text-primary-500 hover:text-primary-600 font-medium">Visa Services</Link>
+            </div>
           </section>
         </div>
-      </div>
+      </main>
       <Footer />
     </>
   );

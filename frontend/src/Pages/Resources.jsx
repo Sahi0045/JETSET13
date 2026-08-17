@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaMapMarkedAlt, FaPlane, FaHotel, FaShip, FaCar, FaPassport, FaGlobe, FaCalendarAlt, FaCreditCard, FaShieldAlt } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
+import Breadcrumb from '../components/Breadcrumb';
 
 const Resources = () => {
   const travelGuides = [
@@ -10,19 +11,19 @@ const Resources = () => {
       title: "First-Time Traveler's Guide",
       description: "Essential tips and advice for new travelers embarking on their first adventure.",
       icon: <FaPassport className="text-3xl text-blue-600" />,
-      link: "#"
+      link: "/destinations"
     },
     {
       title: "Budget Travel Tips",
       description: "Smart strategies to make your dream vacation affordable without compromising quality.",
       icon: <FaCreditCard className="text-3xl text-green-600" />,
-      link: "#"
+      link: "/packages"
     },
     {
       title: "Travel Safety Guide",
       description: "Important safety tips and precautions for traveling to different destinations.",
       icon: <FaShieldAlt className="text-3xl text-red-600" />,
-      link: "#"
+      link: "/visa"
     }
   ];
 
@@ -31,19 +32,19 @@ const Resources = () => {
       title: "Currency Converter",
       description: "Real-time exchange rates and currency conversion for global destinations.",
       icon: <FaGlobe className="text-3xl text-purple-600" />,
-      link: "#"
+      link: "/destinations"
     },
     {
       title: "Travel Checklist",
       description: "Comprehensive packing lists and travel preparation checklists.",
       icon: <FaCalendarAlt className="text-3xl text-orange-600" />,
-      link: "#"
+      link: "/travel-blog"
     },
     {
       title: "Visa Requirements",
       description: "Up-to-date visa information for countries around the world.",
       icon: <FaPassport className="text-3xl text-indigo-600" />,
-      link: "#"
+      link: "/visa"
     }
   ];
 
@@ -52,34 +53,35 @@ const Resources = () => {
       title: "Flight Booking Guide",
       description: "Tips for finding the best flight deals and booking strategies.",
       icon: <FaPlane className="text-3xl text-blue-600" />,
-      link: "#"
+      link: "/flights"
     },
     {
       title: "Hotel Selection Tips",
       description: "How to choose the perfect accommodation for your travel style.",
       icon: <FaHotel className="text-3xl text-green-600" />,
-      link: "#"
+      link: "/hotels"
     },
     {
       title: "Cruise Planning",
       description: "Everything you need to know about planning the perfect cruise vacation.",
       icon: <FaShip className="text-3xl text-teal-600" />,
-      link: "#"
+      link: "/cruise"
     },
     {
       title: "Car Rental Guide",
       description: "Smart tips for renting cars and navigating foreign roads.",
       icon: <FaCar className="text-3xl text-orange-600" />,
-      link: "#"
+      link: "/rentals"
     }
   ];
 
   return (
     <>
       <Navbar forceScrolled={true} />
-      <div className="min-h-screen bg-gray-50">
+      <main className="min-h-screen bg-gray-50">
+        <Breadcrumb items={[{ name: 'Resources', path: '/resources' }]} />
         {/* Hero Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
+        <section className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
           <div className="container mx-auto px-4 text-center">
             <h1 className="text-5xl font-bold mb-6">Travel Resources</h1>
             <p className="text-xl max-w-3xl mx-auto">
@@ -87,7 +89,7 @@ const Resources = () => {
               Discover expert tips, essential tools, and insider knowledge to make every journey extraordinary.
             </p>
           </div>
-        </div>
+        </section>
 
         <div className="container mx-auto px-4 py-16">
           {/* Travel Guides Section */}
@@ -194,7 +196,7 @@ const Resources = () => {
                 Book Your Flight
               </Link>
               <Link 
-                to="/cruises"
+                to="/cruise"
                 className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors"
               >
                 Explore Cruises
@@ -202,7 +204,7 @@ const Resources = () => {
             </div>
           </section>
         </div>
-      </div>
+      </main>
       <Footer />
     </>
   );

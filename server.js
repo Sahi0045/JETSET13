@@ -45,6 +45,7 @@ import {
 } from "./backend/middleware/security.js";
 import { errorHandler } from "./backend/middleware/errorHandler.js";
 import { readinessHandler } from "./backend/middleware/health.js";
+import { getLegacyRedirect, isSpaRoute } from "./shared/spaRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -274,20 +275,19 @@ app.use(
   }),
 );
 
-// Serve index.html for SPA routing (catch-all)
+// Serve the SPA shell only for real client routes. Unknown document requests must
+// retain a 404 status so crawlers do not treat the SPA error view as a valid page.
 app.get("*", (req, res) => {
-  // Don't serve index.html for API requests
-  if (req.path.startsWith("/api/")) {
-    return res.status(404).json({
-      success: false,
-      message: `API route ${req.method} ${req.path} not found`,
-    });
-  }
+  const legacyDestination = getLegacyRedirect(req.path);
+  if (legacyDestination) return res.redirect(301, legacyDestination);
 
-  res.sendFile(path.join(distPath, "index.html"), (err) => {
+  const documentPath = isSpaRoute(req.path) ? "index.html" : "404.html";
+  const status = documentPath === "index.html" ? 200 : 404;
+
+  res.status(status).sendFile(path.join(distPath, documentPath), (err) => {
     if (err) {
-      console.error("Error serving index.html:", err);
-      res.status(500).send("Internal Server Error");
+      console.error(`Error serving ${documentPath}:`, err);
+      if (!res.headersSent) res.status(500).send("Internal Server Error");
     }
   });
 });

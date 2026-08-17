@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { FaCalendarAlt, FaUser, FaClock, FaTags, FaSearch, FaFilter, FaHeart, FaShare, FaBookmark } from 'react-icons/fa';
+import { FaCalendarAlt, FaUser, FaClock, FaTags, FaSearch, FaFilter, FaHeart, FaShare, FaBookmark, FaPlane, FaHotel, FaShip, FaSuitcase, FaMapMarkerAlt } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
+import Breadcrumb from '../components/Breadcrumb';
+import { SeoOverride } from '../seo/RouteSeo';
 
 const TravelBlog = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -114,19 +116,66 @@ const TravelBlog = () => {
 
   const featuredPost = blogPosts.find(post => post.featured);
 
+  const SITE_URL = 'https://www.jetsetterss.com';
+
+  const blogSchema = useMemo(() => {
+    const postSchemas = blogPosts.map(post => ({
+      '@type': 'BlogPosting',
+      headline: post.title,
+      description: post.excerpt,
+      image: post.image,
+      datePublished: post.publishDate,
+      author: { '@type': 'Person', name: post.author },
+      publisher: { '@id': `${SITE_URL}/#organization` },
+      url: `${SITE_URL}/travel-blog`,
+      keywords: post.tags.join(', '),
+      wordCount: parseInt(post.readTime) * 250,
+      interactionStatistic: [
+        { '@type': 'InteractionCounter', interactionType: 'https://schema.org/LikeAction', userInteractionCount: post.likes },
+        { '@type': 'InteractionCounter', interactionType: 'https://schema.org/ReadAction', userInteractionCount: post.views },
+      ],
+    }));
+
+    return [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Blog',
+        name: 'Jetsetters Travel Blog',
+        description: 'Destination spotlights, travel planning tips, packing guides, and insider inspiration from travel experts.',
+        url: `${SITE_URL}/travel-blog`,
+        publisher: { '@id': `${SITE_URL}/#organization` },
+        blogPost: postSchemas,
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: 'Travel Blog & Expert Tips',
+        description: 'Read destination spotlights, travel planning tips, packing guides, and insider inspiration from the Jetsetters team of travel experts.',
+        url: `${SITE_URL}/travel-blog`,
+        mainEntity: { '@type': 'ItemList', itemListElement: postSchemas.map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: p.url, name: p.headline })) },
+      },
+    ];
+  }, []);
+
   return (
     <>
+      <SeoOverride
+        title="Travel Blog & Expert Tips | Jetsetters"
+        description="Read destination spotlights, travel planning tips, packing guides, and insider inspiration from the Jetsetters team of travel experts."
+        schema={blogSchema}
+      />
       <Navbar forceScrolled={true} />
-      <div className="min-h-screen bg-white">
+      <main className="min-h-screen bg-white">
+        <Breadcrumb items={[{ name: 'Travel Blog', path: '/travel-blog' }]} />
         {/* Hero Section - Clean Airbnb Style */}
-        <div className="border-b border-gray-200 bg-white py-16">
+        <section className="border-b border-gray-200 bg-white py-16">
           <div className="container mx-auto px-4 max-w-7xl">
             <h1 className="text-5xl md:text-6xl font-semibold text-neutral-700 mb-4">Travel Blog</h1>
             <p className="text-lg text-neutral-600 max-w-2xl">
               Inspiring stories, expert tips, and insider knowledge to help you plan your next adventure.
             </p>
           </div>
-        </div>
+        </section>
 
         <div className="container mx-auto px-4 max-w-7xl py-12">
           {/* Search and Filter Section */}
@@ -263,6 +312,33 @@ const TravelBlog = () => {
             </div>
           </section>
 
+          {/* Explore More */}
+          <section className="mb-16">
+            <h2 className="text-2xl font-semibold text-neutral-700 mb-6">Plan Your Next Adventure</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <Link to="/flights" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
+                <FaPlane className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
+                <span className="text-sm font-medium text-neutral-700">Search Flights</span>
+              </Link>
+              <Link to="/hotels" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
+                <FaHotel className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
+                <span className="text-sm font-medium text-neutral-700">Find Hotels</span>
+              </Link>
+              <Link to="/cruise" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
+                <FaShip className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
+                <span className="text-sm font-medium text-neutral-700">Cruise Deals</span>
+              </Link>
+              <Link to="/packages" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
+                <FaSuitcase className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
+                <span className="text-sm font-medium text-neutral-700">Vacation Packages</span>
+              </Link>
+              <Link to="/destinations" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
+                <FaMapMarkerAlt className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
+                <span className="text-sm font-medium text-neutral-700">Destinations</span>
+              </Link>
+            </div>
+          </section>
+
           {/* Newsletter Signup */}
           <section className="bg-gray-50 border border-gray-200 rounded-2xl p-12 text-center">
             <h2 className="text-3xl font-semibold text-neutral-700 mb-3">Stay Inspired</h2>
@@ -281,7 +357,7 @@ const TravelBlog = () => {
             </div>
           </section>
         </div>
-      </div>
+      </main>
       <Footer />
     </>
   );

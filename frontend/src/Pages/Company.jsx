@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaGlobe, FaHeart, FaShieldAlt, FaUsers, FaRocket, FaAward, FaHandshake, FaLightbulb, FaChartLine, FaStar } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
+import Breadcrumb from '../components/Breadcrumb';
 
 const Company = () => {
   const companyStats = [
@@ -128,9 +129,10 @@ const Company = () => {
   return (
     <>
       <Navbar forceScrolled={true} />
-      <div className="min-h-screen bg-gray-50">
+      <main className="min-h-screen bg-gray-50">
+        <Breadcrumb items={[{ name: 'Company', path: '/company' }]} />
         {/* Hero Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
+        <section className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
           <div className="container mx-auto px-4 text-center">
             <h1 className="text-5xl font-bold mb-6">About Jetsetters</h1>
             <p className="text-xl max-w-3xl mx-auto">
@@ -138,7 +140,7 @@ const Company = () => {
               and making the world more accessible, one journey at a time.
             </p>
           </div>
-        </div>
+        </section>
 
         <div className="container mx-auto px-4 py-16">
           {/* Company Stats */}
@@ -285,13 +287,7 @@ const Company = () => {
                   <div className="p-6 text-center">
                     <h3 className="text-xl font-bold text-gray-900 mb-2">{leader.name}</h3>
                     <p className="text-blue-600 font-medium mb-3">{leader.position}</p>
-                    <p className="text-gray-600 text-sm mb-4">{leader.bio}</p>
-                    <a 
-                      href={leader.linkedin}
-                      className="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                    >
-                      Connect on LinkedIn
-                    </a>
+                    <p className="text-gray-600 text-sm">{leader.bio}</p>
                   </div>
                 </div>
               ))}
@@ -305,13 +301,13 @@ const Company = () => {
               Whether you're looking to travel with us or join our team, we'd love to hear from you.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link 
+              <Link
                 to="/careers"
                 className="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
               >
                 View Careers
               </Link>
-              <Link 
+              <Link
                 to="/contact"
                 className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors"
               >
@@ -319,8 +315,39 @@ const Company = () => {
               </Link>
             </div>
           </section>
+
+          {/* Explore Our Services */}
+          <section className="mt-16">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Explore Our Services</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <Link to="/flights" className="bg-white rounded-xl shadow-md p-5 text-center hover:shadow-lg transition-shadow group">
+                <FaGlobe className="text-2xl text-gray-400 group-hover:text-blue-600 transition-colors mx-auto mb-2" />
+                <span className="text-sm font-medium text-gray-700">Flights</span>
+              </Link>
+              <Link to="/hotels" className="bg-white rounded-xl shadow-md p-5 text-center hover:shadow-lg transition-shadow group">
+                <FaGlobe className="text-2xl text-gray-400 group-hover:text-blue-600 transition-colors mx-auto mb-2" />
+                <span className="text-sm font-medium text-gray-700">Hotels</span>
+              </Link>
+              <Link to="/cruise" className="bg-white rounded-xl shadow-md p-5 text-center hover:shadow-lg transition-shadow group">
+                <FaGlobe className="text-2xl text-gray-400 group-hover:text-blue-600 transition-colors mx-auto mb-2" />
+                <span className="text-sm font-medium text-gray-700">Cruises</span>
+              </Link>
+              <Link to="/packages" className="bg-white rounded-xl shadow-md p-5 text-center hover:shadow-lg transition-shadow group">
+                <FaGlobe className="text-2xl text-gray-400 group-hover:text-blue-600 transition-colors mx-auto mb-2" />
+                <span className="text-sm font-medium text-gray-700">Packages</span>
+              </Link>
+              <Link to="/visa" className="bg-white rounded-xl shadow-md p-5 text-center hover:shadow-lg transition-shadow group">
+                <FaGlobe className="text-2xl text-gray-400 group-hover:text-blue-600 transition-colors mx-auto mb-2" />
+                <span className="text-sm font-medium text-gray-700">Visa Services</span>
+              </Link>
+              <Link to="/destinations" className="bg-white rounded-xl shadow-md p-5 text-center hover:shadow-lg transition-shadow group">
+                <FaGlobe className="text-2xl text-gray-400 group-hover:text-blue-600 transition-colors mx-auto mb-2" />
+                <span className="text-sm font-medium text-gray-700">Destinations</span>
+              </Link>
+            </div>
+          </section>
         </div>
-      </div>
+      </main>
       <Footer />
     </>
   );

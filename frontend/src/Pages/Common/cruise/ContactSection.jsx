@@ -99,18 +99,18 @@ const ContactSection = () => {
               <div className="mt-12">
                 <h4 className="text-lg font-semibold mb-4">Connect With Us</h4>
                 <div className="flex space-x-4">
-                  <a href="#" className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center hover:bg-blue-800 transition-colors">
+                  <span className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center hover:bg-blue-800 transition-colors cursor-pointer" role="img" aria-label="Facebook">
                     <FaFacebookF />
-                  </a>
-                  <a href="#" className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center hover:bg-blue-800 transition-colors">
+                  </span>
+                  <span className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center hover:bg-blue-800 transition-colors cursor-pointer" role="img" aria-label="Twitter">
                     <FaTwitter />
-                  </a>
-                  <a href="#" className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center hover:bg-blue-800 transition-colors">
+                  </span>
+                  <span className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center hover:bg-blue-800 transition-colors cursor-pointer" role="img" aria-label="Instagram">
                     <FaInstagram />
-                  </a>
-                  <a href="#" className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center hover:bg-blue-800 transition-colors">
+                  </span>
+                  <span className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center hover:bg-blue-800 transition-colors cursor-pointer" role="img" aria-label="LinkedIn">
                     <FaLinkedinIn />
-                  </a>
+                  </span>
                 </div>
               </div>
               

@@ -31,16 +31,8 @@ Disallow: /flight-create-orders
 Disallow: /hotel-payment
 Disallow: /cruise-booking-summary
 
-# Allow booking confirmation pages (good for SEO)
-Allow: /booking-confirmation
-Allow: /flight-booking-success
-Allow: /hotel-booking-success
-Allow: /cruise-booking-success
-
-# Allow search result pages
-Allow: /flights/search
-Allow: /hotels/search
-Allow: /cruises/search
+# Search results and booking confirmations use route-level noindex metadata.
+# Keep them crawlable so search engines can discover and honor that directive.
 
 # Crawl-delay for polite crawling
 Crawl-delay: 1
@@ -51,17 +43,7 @@ Sitemap: https://www.jetsetterss.com/sitemap-flights.xml
 Sitemap: https://www.jetsetterss.com/sitemap-hotels.xml
 Sitemap: https://www.jetsetterss.com/sitemap-cruises.xml
 
-# Specific rules for Google
-User-agent: Googlebot
-Allow: /
-Disallow: /admin/
-Disallow: /api/
-
-# Specific rules for Bing
-User-agent: Bingbot
-Allow: /
-Disallow: /admin/
-Disallow: /api/
+# Googlebot and Bingbot inherit the complete User-agent: * privacy policy above.
 
 # Block bad bots
 User-agent: AhrefsBot

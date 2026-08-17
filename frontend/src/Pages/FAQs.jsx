@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaSearch, FaChevronDown, FaChevronUp, FaQuestionCircle, FaPlane, FaHotel, FaShip, FaCreditCard, FaPassport, FaGlobe } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
+import Breadcrumb from '../components/Breadcrumb';
 
 const FAQs = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -188,16 +189,17 @@ const FAQs = () => {
   return (
     <>
       <Navbar forceScrolled={true} />
-      <div className="min-h-screen bg-white">
+      <main className="min-h-screen bg-white">
+        <Breadcrumb items={[{ name: 'FAQs', path: '/faqs' }]} />
         {/* Hero Section */}
-        <div className="border-b border-gray-200 bg-white py-16">
+        <section className="border-b border-gray-200 bg-white py-16">
           <div className="container mx-auto px-4 max-w-7xl">
             <h1 className="text-5xl md:text-6xl font-semibold text-neutral-700 mb-4">Frequently Asked Questions</h1>
             <p className="text-lg text-neutral-600 max-w-2xl">
               Find answers to common questions about travel, bookings, and our services.
             </p>
           </div>
-        </div>
+        </section>
 
         <div className="container mx-auto px-4 max-w-7xl py-12">
           {/* Search Section */}
@@ -316,9 +318,22 @@ const FAQs = () => {
                 <p className="text-neutral-600 text-sm">Stories, tips, and travel inspiration</p>
               </Link>
             </div>
+            <div className="flex flex-wrap gap-3 mt-6 text-sm">
+              <Link to="/flights" className="text-primary-500 hover:text-primary-600 font-medium">Book Flights</Link>
+              <span className="text-gray-300">|</span>
+              <Link to="/hotels" className="text-primary-500 hover:text-primary-600 font-medium">Find Hotels</Link>
+              <span className="text-gray-300">|</span>
+              <Link to="/cruise" className="text-primary-500 hover:text-primary-600 font-medium">Cruise Deals</Link>
+              <span className="text-gray-300">|</span>
+              <Link to="/packages" className="text-primary-500 hover:text-primary-600 font-medium">Vacation Packages</Link>
+              <span className="text-gray-300">|</span>
+              <Link to="/visa" className="text-primary-500 hover:text-primary-600 font-medium">Visa Services</Link>
+              <span className="text-gray-300">|</span>
+              <Link to="/rentals" className="text-primary-500 hover:text-primary-600 font-medium">Car Rentals</Link>
+            </div>
           </section>
         </div>
-      </div>
+      </main>
       <Footer />
     </>
   );

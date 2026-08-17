@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import {
   Star, MapPin, Check, ChevronLeft, Heart, Share, Calendar,
   Users, X, ChevronRight, ChevronDown, ThumbsUp, MessageCircle,
@@ -1589,7 +1589,7 @@ export default function HotelDetails() {
                 </div>
 
                 <p className="text-xs text-gray-500 mt-4 text-center relative z-10">
-                  By submitting this form, you agree to our <a href="#" className="text-blue-600 hover:underline">Terms of Service</a> and <a href="#" className="text-blue-600 hover:underline">Privacy Policy</a>.
+                  By submitting this form, you agree to our <Link to="/terms-conditions" className="text-blue-600 hover:underline">Terms of Service</Link> and <Link to="/privacy-policy" className="text-blue-600 hover:underline">Privacy Policy</Link>.
                 </p>
               </>
             ) : (

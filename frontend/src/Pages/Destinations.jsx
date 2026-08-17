@@ -13,6 +13,7 @@ import {
 } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';
+import Breadcrumb from '../components/Breadcrumb';
 import Price from '../Components/Price';
 
 const Destinations = () => {
@@ -213,6 +214,7 @@ const Destinations = () => {
       <Navbar forceScrolled />
 
       <main className="min-h-screen bg-white">
+        <Breadcrumb items={[{ name: 'Destinations', path: '/destinations' }]} />
         {/* HERO */}
         <section className="border-b border-gray-200 bg-white py-16">
           <div className="container mx-auto px-4 max-w-7xl">
@@ -286,6 +288,37 @@ const Destinations = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* Plan Your Trip */}
+        <section className="container mx-auto px-4 max-w-7xl pb-16">
+          <h2 className="text-2xl font-semibold text-neutral-700 mb-6">Plan Your Trip</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <Link to="/flights" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
+              <FaPlane className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
+              <span className="text-sm font-medium text-neutral-700">Search Flights</span>
+            </Link>
+            <Link to="/hotels" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
+              <FaHotel className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
+              <span className="text-sm font-medium text-neutral-700">Find Hotels</span>
+            </Link>
+            <Link to="/cruise" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
+              <FaShip className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
+              <span className="text-sm font-medium text-neutral-700">Cruise Deals</span>
+            </Link>
+            <Link to="/packages" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
+              <FaGlobe className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
+              <span className="text-sm font-medium text-neutral-700">Vacation Packages</span>
+            </Link>
+            <Link to="/rentals" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
+              <FaCar className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
+              <span className="text-sm font-medium text-neutral-700">Car Rentals</span>
+            </Link>
+            <Link to="/travel-blog" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:shadow-md transition-all text-center group">
+              <FaCalendarAlt className="text-2xl text-neutral-400 group-hover:text-primary-500 transition-colors" />
+              <span className="text-sm font-medium text-neutral-700">Travel Blog</span>
+            </Link>
           </div>
         </section>
       </main>

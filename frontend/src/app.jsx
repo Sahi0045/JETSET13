@@ -807,8 +807,7 @@ const App = () => {
           <Route path="/destinations/:destination" element={<Navigate to="/cruises" />} />
           <Route path="/secure-booking" element={<Navigate to="/privacy-policy" />} />
 
-          <Route path="/404" element={<Error />} />
-          <Route path="*" element={<Navigate to="/404" />} />
+          <Route path="*" element={<Error />} />
         </Routes>
       </LocationProvider>
     </React.Suspense>
