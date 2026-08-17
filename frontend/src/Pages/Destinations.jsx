@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  FaMapMarkerAlt,
   FaStar,
   FaPlane,
   FaCalendarAlt,
@@ -9,6 +8,7 @@ import {
   FaGlobe,
   FaShip,
   FaHotel,
+  FaCar,
 } from 'react-icons/fa';
 import Navbar from './Common/Navbar';
 import Footer from './Common/Footer';

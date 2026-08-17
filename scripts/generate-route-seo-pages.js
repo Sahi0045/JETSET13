@@ -15,7 +15,24 @@ import {
 } from '../frontend/src/seo/routeSeo.js';
 
 export const ROUTE_SEO_MARKER = '<!-- route-seo-head -->';
+export const ROUTE_SEO_BODY_MARKER = '<!-- route-seo-body -->';
 const DEFAULT_DIST_DIRECTORY = resolve('dist');
+
+const CRAWL_NAVIGATION = Object.freeze([
+  { pathname: '/', label: 'Home' },
+  { pathname: '/flights', label: 'Flights' },
+  { pathname: '/hotels', label: 'Hotels' },
+  { pathname: '/cruise', label: 'Cruises' },
+  { pathname: '/packages', label: 'Vacation Packages' },
+  { pathname: '/visa', label: 'Visa Services' },
+  { pathname: '/destinations', label: 'Destinations' },
+  { pathname: '/resources', label: 'Travel Resources' },
+  { pathname: '/travel-blog', label: 'Travel Blog' },
+  { pathname: '/help', label: 'Help Center' },
+  { pathname: '/support', label: 'Support' },
+  { pathname: '/contact', label: 'Contact' },
+  { pathname: '/faqs', label: 'FAQs' },
+]);
 
 const escapeHtmlAttribute = (value) => String(value)
   .replace(/&/g, '&amp;')
@@ -100,6 +117,30 @@ export const injectRouteSeoHead = (template, head) => {
   return template.replace(ROUTE_SEO_MARKER, head);
 };
 
+export const renderRouteSeoBody = (pathname) => {
+  const links = CRAWL_NAVIGATION.filter((link) => link.pathname !== pathname)
+    .map(({ pathname: href, label }) => (
+      `      <li><a href="${escapeHtmlAttribute(href)}">${escapeHtmlAttribute(label)}</a></li>`
+    ))
+    .join('\n');
+
+  return `  <nav data-route-seo-navigation="true" aria-label="Explore Jetsetters">
+    <p>Explore Jetsetters</p>
+    <ul>
+${links}
+    </ul>
+  </nav>`;
+};
+
+export const injectRouteSeoBody = (template, body) => {
+  const markerCount = template.split(ROUTE_SEO_BODY_MARKER).length - 1;
+  if (markerCount !== 1) {
+    throw new Error(`Expected exactly one ${ROUTE_SEO_BODY_MARKER} marker, found ${markerCount}.`);
+  }
+
+  return template.replace(ROUTE_SEO_BODY_MARKER, body);
+};
+
 export const generateRouteSeoPages = async ({ distDirectory = DEFAULT_DIST_DIRECTORY } = {}) => {
   validateIndexableRoutes();
 
@@ -113,7 +154,11 @@ export const generateRouteSeoPages = async ({ distDirectory = DEFAULT_DIST_DIREC
       await rm(dirname(outputPath), { recursive: true, force: true });
     }
     await mkdir(dirname(outputPath), { recursive: true });
-    await writeFile(outputPath, injectRouteSeoHead(template, renderRouteSeoHead(pathname, seo)), 'utf8');
+    const document = injectRouteSeoHead(
+      injectRouteSeoBody(template, renderRouteSeoBody(pathname)),
+      renderRouteSeoHead(pathname, seo),
+    );
+    await writeFile(outputPath, document, 'utf8');
     generatedPaths.push(outputPath);
   }
 

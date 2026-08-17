@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Video, Download, Play, Search, ExternalLink, Clock, Eye } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { FileText, Video, Download, Play, Search, Eye } from 'lucide-react';
+import Navbar from './Navbar';
+import Footer from './Footer';
+import Breadcrumb from '../../components/Breadcrumb';
 
 const API_BASE = '/api';
 
@@ -28,6 +32,17 @@ const defaultDocuments = [
   { id: '6', name: 'Travel Checklist', description: 'Essential items for your trip', category: 'general', fileType: 'PDF', downloads: 3456 }
 ];
 
+const helpLinks = [
+  { label: 'Frequently Asked Questions', to: '/faqs' },
+  { label: 'Travel Support', to: '/support' },
+  { label: 'Contact Our Team', to: '/contact' },
+  { label: 'Visa Documents', to: '/visa/documents' },
+  { label: 'Search Flights', to: '/flights' },
+  { label: 'Find Hotels', to: '/hotels' },
+  { label: 'Explore Cruises', to: '/cruise' },
+  { label: 'Visa Refund Policy', to: '/visa/refund-policy' },
+];
+
 export default function HelpCenter() {
   const [activeTab, setActiveTab] = useState('documents');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -35,27 +50,23 @@ export default function HelpCenter() {
   const [documents, setDocuments] = useState(defaultDocuments);
   const [videos, setVideos] = useState(defaultVideos);
   const [playingVideo, setPlayingVideo] = useState(null);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadContent();
+    void loadContent();
   }, [selectedCategory]);
 
   const loadContent = async () => {
-    setLoading(true);
     try {
       const docRes = await fetch(`${API_BASE}/documents?category=${selectedCategory}`);
       const vidRes = await fetch(`${API_BASE}/videos?category=${selectedCategory}`);
-      
+
       const docData = await docRes.json();
       const vidData = await vidRes.json();
-      
+
       if (docData.success && docData.data?.length) setDocuments(docData.data);
       if (vidData.success && vidData.data?.length) setVideos(vidData.data);
     } catch (err) {
       console.log('Using default content');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -78,13 +89,31 @@ export default function HelpCenter() {
   };
 
   return (
-    <div style={{ padding: '24px', color: '#f1f5f9', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: '700', margin: '0 0 8px' }}>Help Center</h1>
-        <p style={{ color: '#94a3b8', fontSize: '16px' }}>Find guides, templates, and video tutorials</p>
-      </div>
+    <div style={{ minHeight: '100vh', background: '#0f172a', color: '#f1f5f9' }}>
+      <Navbar forceScrolled />
+      <Breadcrumb items={[{ name: 'Help Center', path: '/help' }]} />
+      <main style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '32px', fontWeight: '700', margin: '0 0 8px' }}>Help Center</h1>
+          <p style={{ color: '#94a3b8', fontSize: '16px' }}>Find guides, templates, and video tutorials</p>
+        </div>
 
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', justifyContent: 'center' }}>
+        <nav aria-label="Help Center topics" style={{ marginBottom: '32px' }}>
+          <h2 style={{ fontSize: '18px', margin: '0 0 12px' }}>Explore travel help</h2>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            {helpLinks.map(({ label, to }) => (
+              <Link
+                key={to}
+                to={to}
+                style={{ background: '#055B75', borderRadius: '999px', color: 'white', fontSize: '14px', padding: '9px 14px', textDecoration: 'none' }}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+        </nav>
+
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', justifyContent: 'center' }}>
         <button onClick={() => setActiveTab('documents')} style={{ padding: '12px 24px', background: activeTab === 'documents' ? '#3b82f6' : '#1e293b', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <FileText size={18} /> Documents
         </button>
@@ -154,7 +183,7 @@ export default function HelpCenter() {
         </div>
       )}
 
-      {playingVideo && (
+        {playingVideo && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setPlayingVideo(null)}>
           <div style={{ background: '#1e293b', padding: '24px', borderRadius: '12px', maxWidth: '800px', width: '90%' }} onClick={(e) => e.stopPropagation()}>
             <h2 style={{ margin: '0 0 16px' }}>{playingVideo.title}</h2>
@@ -165,7 +194,9 @@ export default function HelpCenter() {
             <button onClick={() => setPlayingVideo(null)} style={{ marginTop: '16px', padding: '10px 20px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Close</button>
           </div>
         </div>
-      )}
+        )}
+      </main>
+      <Footer />
     </div>
   );
 }

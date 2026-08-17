@@ -4,14 +4,32 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { INDEXABLE_ROUTE_SEO, SITE_URL } from '../../frontend/src/seo/routeSeo.js';
 import {
+  ROUTE_SEO_BODY_MARKER,
   ROUTE_SEO_MARKER,
   generateRouteSeoPages,
+  injectRouteSeoBody,
   injectRouteSeoHead,
+  renderRouteSeoBody,
   renderRouteSeoHead,
 } from '../../scripts/generate-route-seo-pages.js';
 
 const temporaryDirectories = [];
-const template = `<!doctype html><html><head>${ROUTE_SEO_MARKER}</head><body><div id="app"></div></body></html>`;
+const template = `<!doctype html><html><head>${ROUTE_SEO_MARKER}</head><body><div id="app">${ROUTE_SEO_BODY_MARKER}</div></body></html>`;
+const crawlNavigationPaths = [
+  '/',
+  '/flights',
+  '/hotels',
+  '/cruise',
+  '/packages',
+  '/visa',
+  '/destinations',
+  '/resources',
+  '/travel-blog',
+  '/help',
+  '/support',
+  '/contact',
+  '/faqs',
+];
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => import('node:fs/promises').then(({ rm }) => rm(directory, { recursive: true, force: true }))));
@@ -25,7 +43,7 @@ const createDistDirectory = async () => {
 };
 
 describe('route SEO page generator', () => {
-  it('generates every exact indexable route with one managed route head', async () => {
+  it('generates every exact indexable route with one managed route head and crawl navigation', async () => {
     const distDirectory = await createDistDirectory();
     const { generatedPaths, spaShellPath } = await generateRouteSeoPages({ distDirectory });
 
@@ -38,15 +56,43 @@ describe('route SEO page generator', () => {
     expect(cruisePage).toContain('name="robots" content="index, follow"');
     expect(cruisePage.match(/property="og:title"/g)).toHaveLength(1);
     expect(cruisePage.match(/type="application\/ld\+json"/g)).toHaveLength(1);
+    expect(cruisePage).toContain('data-route-seo-navigation="true"');
+    expect(cruisePage).toContain('href="/hotels"');
+    expect(cruisePage).not.toContain('href="/cruise"');
+
+    const destinationsPage = await readFile(join(distDirectory, 'destinations', 'index.html'), 'utf8');
+    expect(destinationsPage).toContain('href="/help"');
+    expect(destinationsPage).toContain('href="/contact"');
+    expect(destinationsPage).not.toContain('href="/destinations"');
+
+    const helpPage = await readFile(join(distDirectory, 'help', 'index.html'), 'utf8');
+    expect(helpPage).toContain('href="/hotels"');
+    expect(helpPage).toContain('href="/support"');
+    expect(helpPage).not.toContain('href="/help"');
+
+    for (const { pathname } of INDEXABLE_ROUTE_SEO) {
+      const outputPath = pathname === '/'
+        ? join(distDirectory, 'index.html')
+        : join(distDirectory, pathname.slice(1), 'index.html');
+      const page = await readFile(outputPath, 'utf8');
+      const expectedPaths = crawlNavigationPaths.filter((href) => href !== pathname);
+
+      expect(page.match(/<a href="\//g)).toHaveLength(expectedPaths.length);
+      expect(page).not.toContain(ROUTE_SEO_BODY_MARKER);
+      expectedPaths.forEach((href) => expect(page).toContain(`href="${href}"`));
+    }
 
     const spaShell = await readFile(spaShellPath, 'utf8');
     expect(spaShell).toContain('name="robots" content="noindex, follow"');
     expect(spaShell).toContain('<title data-rh="true">Luxury Travel, Simply Planned | Jetsetters</title>');
+    expect(spaShell).not.toContain('data-route-seo-navigation="true"');
   });
 
   it('fails when the template does not contain exactly one injection marker', () => {
     expect(() => injectRouteSeoHead('<html></html>', 'head')).toThrow('Expected exactly one');
     expect(() => injectRouteSeoHead(`${ROUTE_SEO_MARKER}${ROUTE_SEO_MARKER}`, 'head')).toThrow('Expected exactly one');
+    expect(() => injectRouteSeoBody('<html></html>', 'body')).toThrow('Expected exactly one');
+    expect(() => injectRouteSeoBody(`${ROUTE_SEO_BODY_MARKER}${ROUTE_SEO_BODY_MARKER}`, 'body')).toThrow('Expected exactly one');
   });
 
   it('escapes route metadata and JSON-LD safely', () => {
@@ -59,6 +105,14 @@ describe('route SEO page generator', () => {
     expect(head).toContain('A &lt;title&gt; &amp; &quot;quote&quot;');
     expect(head).toContain('\\u003c/script\\u003e');
     expect(head).not.toContain('</script><script>alert(1)</script>');
+  });
+
+  it('renders escaped crawl-navigation links and omits the current route', () => {
+    const body = renderRouteSeoBody('/help');
+
+    expect(body).toContain('aria-label="Explore Jetsetters"');
+    expect(body).toContain('href="/hotels"');
+    expect(body).not.toContain('href="/help"');
   });
 
   it('keeps Vercel public-document rewrites aligned with indexable routes', async () => {
