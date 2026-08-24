@@ -117,14 +117,47 @@ export const injectRouteSeoHead = (template, head) => {
   return template.replace(ROUTE_SEO_MARKER, head);
 };
 
-export const renderRouteSeoBody = (pathname) => {
+/**
+ * Render the route's own copy, when the route declares any.
+ *
+ * This lives inside `<div id="app">`, so React replaces it the moment it
+ * mounts — visitors never see it, and it is not a second copy of the page.
+ * It exists for crawlers that do not execute JavaScript, which previously got
+ * an identical ~150-character nav-only body on every route and treated the
+ * result as near-duplicate contentless HTML.
+ *
+ * Keep this copy faithful to what the route actually renders. Prerendered text
+ * that promises something the mounted page does not show is cloaking.
+ */
+const renderRouteSeoContent = (seo) => {
+  const content = seo?.content;
+  if (!content) return '';
+
+  const sections = (content.sections || [])
+    .map(({ heading, body }) => (
+      `    <section>
+      <h2>${escapeHtmlAttribute(heading)}</h2>
+      <p>${escapeHtmlAttribute(body)}</p>
+    </section>`
+    ))
+    .join('\n');
+
+  return `  <main data-route-seo-content="true">
+    <h1>${escapeHtmlAttribute(content.heading)}</h1>
+    <p>${escapeHtmlAttribute(content.intro)}</p>
+${sections}
+  </main>
+`;
+};
+
+export const renderRouteSeoBody = (pathname, seo) => {
   const links = CRAWL_NAVIGATION.filter((link) => link.pathname !== pathname)
     .map(({ pathname: href, label }) => (
       `      <li><a href="${escapeHtmlAttribute(href)}">${escapeHtmlAttribute(label)}</a></li>`
     ))
     .join('\n');
 
-  return `  <nav data-route-seo-navigation="true" aria-label="Explore Jetsetters">
+  return `${renderRouteSeoContent(seo)}  <nav data-route-seo-navigation="true" aria-label="Explore Jetsetters">
     <p>Explore Jetsetters</p>
     <ul>
 ${links}
@@ -155,7 +188,7 @@ export const generateRouteSeoPages = async ({ distDirectory = DEFAULT_DIST_DIREC
     }
     await mkdir(dirname(outputPath), { recursive: true });
     const document = injectRouteSeoHead(
-      injectRouteSeoBody(template, renderRouteSeoBody(pathname)),
+      injectRouteSeoBody(template, renderRouteSeoBody(pathname, seo)),
       renderRouteSeoHead(pathname, seo),
     );
     await writeFile(outputPath, document, 'utf8');
