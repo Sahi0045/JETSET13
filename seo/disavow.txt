@@ -466,9 +466,9 @@ domain:wecelebrities.com
 domain:wonvision.com
 domain:ycm.info
 
-# --- Section 3: NOT disavowed - needs your decision ---
-# jetsetters.global is one character away from your own brand. It may be a
-# property you own, a partner, or a typosquat. Disavowing your own domain
-# would be self-inflicted, so it is left commented out deliberately.
-# Uncomment the line below ONLY if you confirm it is unrelated to you.
+# --- Section 3: OURS - never disavow ---
+# jetsetters.global is CONFIRMED owned by us (verified with the site owner
+# 2026-08-25). It is a Namecheap URL forward to jetsetterss.com, which is why
+# Ahrefs reports it as a referring domain. Disavowing it would be disavowing
+# ourselves. Do not uncomment this under any circumstances.
 # domain:jetsetters.global
