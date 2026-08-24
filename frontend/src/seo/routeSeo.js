@@ -144,6 +144,23 @@ export const ROUTE_SEO = {
     title: 'Browse Cruise Deals | Jetsetters',
     description: 'Compare cruise itineraries, departure dates, and destinations to find the right sailing and the best value for your vacation.',
     schema: [breadcrumb({ name: 'Cruises', url: '/cruise' }, { name: 'Browse Deals' })],
+    // Mirrors cruise-cards.jsx, whose own <h1> is "Find Your Perfect Cruise".
+    // Sailings load from the API, so without this the crawled document showed
+    // nothing but a loading state.
+    content: {
+      heading: 'Find Your Perfect Cruise',
+      intro: 'Compare cruise itineraries, departure dates and destinations to find the right sailing and the best value for your vacation.',
+      sections: [
+        {
+          heading: 'Filter by departure port',
+          body: 'Narrow the list to sailings leaving from the ports you can reach easily, then compare itineraries side by side across cruise lines and trip lengths.',
+        },
+        {
+          heading: 'Compare before you commit',
+          body: 'Each sailing lists its route, duration and departure date so you can weigh cabin options and value before moving to booking.',
+        },
+      ],
+    },
   },
   '/itinerary': {
     title: 'Cruise Itinerary Details | Jetsetters',
@@ -200,6 +217,23 @@ export const ROUTE_SEO = {
     title: 'Hotels & Stays Worldwide | Jetsetters',
     description: 'Find handpicked hotels worldwide, compare accommodation styles and amenities, and reserve the perfect stay for your next trip.',
     schema: [breadcrumb({ name: 'Hotels' })],
+    // Mirrors what HotelsLanding renders once React mounts. Search Console had
+    // this route as "Crawled - currently not indexed"; the prerendered document
+    // previously carried no page-specific copy at all.
+    content: {
+      heading: 'Hotels & Stays Worldwide',
+      intro: 'Discover our handpicked collection of the world\'s most stunning luxury hotels and resorts, from city landmarks to beachfront retreats.',
+      sections: [
+        {
+          heading: 'Search by your dates',
+          body: 'Enter your destination with check-in and check-out dates to see available stays, compare room types and amenities, and hold the rate that suits your trip.',
+        },
+        {
+          heading: 'Why book hotels with Jetsetters',
+          body: 'Every property is reviewed by our travel team before it reaches the collection. You get direct human support alongside the booking, so changes and special requests are handled by people rather than a form.',
+        },
+      ],
+    },
   },
   '/hotels/search': {
     title: 'Hotel Search Results | Jetsetters',

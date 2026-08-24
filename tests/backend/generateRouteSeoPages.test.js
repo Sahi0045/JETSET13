@@ -115,6 +115,50 @@ describe('route SEO page generator', () => {
     expect(body).not.toContain('href="/help"');
   });
 
+  it('renders route content with a single h1 when the route declares any', () => {
+    const seo = {
+      content: {
+        heading: 'Hotels & Stays',
+        intro: 'Intro copy.',
+        sections: [{ heading: 'Search "fast"', body: 'Section copy.' }],
+      },
+    };
+    const body = renderRouteSeoBody('/hotels', seo);
+
+    expect(body.match(/<h1>/g)).toHaveLength(1);
+    expect(body).toContain('<h1>Hotels &amp; Stays</h1>');
+    expect(body).toContain('<p>Intro copy.</p>');
+    expect(body).toContain('<h2>Search &quot;fast&quot;</h2>');
+    // The crawl navigation must still follow the content.
+    expect(body.indexOf('data-route-seo-content')).toBeLessThan(body.indexOf('data-route-seo-navigation'));
+  });
+
+  it('omits the content block entirely for routes that declare none', () => {
+    const body = renderRouteSeoBody('/hotels', { title: 'x' });
+
+    expect(body).not.toContain('data-route-seo-content');
+    expect(body).not.toContain('<h1>');
+    expect(body).toContain('data-route-seo-navigation');
+  });
+
+  // Regression guard for the Search Console finding: /hotels and /cruises were
+  // "Crawled - currently not indexed" while every prerendered body was the same
+  // ~150-character nav. Content-bearing routes must stay distinguishable.
+  it('gives content-bearing routes materially different bodies', () => {
+    const bodyFor = (pathname) => {
+      const { seo } = INDEXABLE_ROUTE_SEO.find((route) => route.pathname === pathname);
+      return renderRouteSeoBody(pathname, seo);
+    };
+    const hotels = bodyFor('/hotels');
+    const cruises = bodyFor('/cruises');
+
+    for (const body of [hotels, cruises]) {
+      expect(body).toContain('data-route-seo-content');
+      expect(body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().length).toBeGreaterThan(400);
+    }
+    expect(hotels).not.toBe(cruises);
+  });
+
   it('keeps Vercel public-document rewrites aligned with indexable routes', async () => {
     const config = JSON.parse(await readFile('vercel.json', 'utf8'));
     const [, topLevelDocuments, visaDocuments, ...spaFallbacks] = config.rewrites;
