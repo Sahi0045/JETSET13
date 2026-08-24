@@ -7,10 +7,12 @@ import {
   ROUTE_SEO_BODY_MARKER,
   ROUTE_SEO_MARKER,
   generateRouteSeoPages,
+  generateSitemaps,
   injectRouteSeoBody,
   injectRouteSeoHead,
   renderRouteSeoBody,
   renderRouteSeoHead,
+  renderSitemap,
 } from '../../scripts/generate-route-seo-pages.js';
 
 const temporaryDirectories = [];
@@ -157,6 +159,74 @@ describe('route SEO page generator', () => {
       expect(body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().length).toBeGreaterThan(400);
     }
     expect(hotels).not.toBe(cruises);
+  });
+
+  // The sitemaps used to be hand-written files in public/. They drifted, and
+  // Search Console reported "No referring sitemaps detected" for every page.
+  // These guards keep generation tied to INDEXABLE_ROUTE_SEO.
+  describe('sitemaps', () => {
+    const readSitemaps = async () => {
+      const directory = await createDistDirectory();
+      await generateSitemaps({ distDirectory: directory });
+      const entries = {};
+      for (const file of ['sitemap.xml', 'sitemap-flights.xml', 'sitemap-hotels.xml', 'sitemap-cruises.xml']) {
+        const xml = await readFile(join(directory, file), 'utf8');
+        entries[file] = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, loc]) => loc);
+      }
+      return entries;
+    };
+
+    it('lists every indexable route in sitemap.xml', async () => {
+      const { 'sitemap.xml': locs } = await readSitemaps();
+      const expected = INDEXABLE_ROUTE_SEO.map(({ pathname }) => `${SITE_URL}${pathname}`);
+
+      expect(new Set(locs)).toEqual(new Set(expected));
+      expect(locs).toHaveLength(expected.length);
+    });
+
+    it('covers every indexable route across the sitemap set', async () => {
+      const entries = await readSitemaps();
+      const covered = new Set(Object.values(entries).flat());
+      const expected = INDEXABLE_ROUTE_SEO.map(({ pathname }) => `${SITE_URL}${pathname}`);
+
+      for (const url of expected) {
+        expect(covered.has(url), `${url} is in no sitemap`).toBe(true);
+      }
+      // Nothing may be advertised that is not an indexable route.
+      for (const url of covered) {
+        expect(expected, `${url} is in a sitemap but is not indexable`).toContain(url);
+      }
+    });
+
+    it('puts the money pages in their vertical sitemaps', async () => {
+      const entries = await readSitemaps();
+
+      expect(entries['sitemap-hotels.xml']).toContain(`${SITE_URL}/hotels`);
+      expect(entries['sitemap-flights.xml']).toContain(`${SITE_URL}/flights`);
+      expect(entries['sitemap-cruises.xml']).toContain(`${SITE_URL}/cruises`);
+      expect(entries['sitemap-cruises.xml']).toContain(`${SITE_URL}/cruise`);
+    });
+
+    it('emits valid XML with escaped locs and no faked metadata', () => {
+      const xml = renderSitemap(['/hotels']);
+
+      expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+      expect(xml).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+      expect(xml).toContain(`<loc>${SITE_URL}/hotels</loc>`);
+      // Google ignores these two and distrusts an always-current lastmod.
+      expect(xml).not.toContain('<changefreq>');
+      expect(xml).not.toContain('<priority>');
+      expect(xml).not.toContain('<lastmod>');
+    });
+
+    it('keeps robots.txt declaring exactly the generated sitemaps', async () => {
+      const robots = await readFile('public/robots.txt', 'utf8');
+      const declared = [...robots.matchAll(/^Sitemap:\s*(\S+)\s*$/gim)].map(([, url]) => url);
+      const generated = ['sitemap.xml', 'sitemap-flights.xml', 'sitemap-hotels.xml', 'sitemap-cruises.xml']
+        .map((file) => `${SITE_URL}/${file}`);
+
+      expect(new Set(declared)).toEqual(new Set(generated));
+    });
   });
 
   it('keeps Vercel public-document rewrites aligned with indexable routes', async () => {
