@@ -1,0 +1,98 @@
+/* Jetsetters design tokens — Coastal theme.
+ *
+ * Mirrors theme.extend in tailwind.config.js as CSS custom properties so the
+ * palette, type, and elevation scales are readable outside a Tailwind build.
+ * Fonts match the <link> in index.html (Lato primary, Inter secondary). */
+
+@import url("https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400;1,700&family=Inter:wght@300;400;500;600;700;800&display=swap");
+
+:root {
+  /* Typography — one brand typeface (Lato) with Inter as the only fallback.
+     --font-serif is intentionally the brand sans, not an actual serif. */
+  --font-sans: 'Lato', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Lato', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Lato', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-primary: 'Lato', 'Inter', sans-serif;
+  --font-secondary: 'Lato', 'Inter', sans-serif;
+
+  /* Editorial canvas + ink */
+  --color-ivory: #FBF9F4;
+  --color-sand: #F3EEE4;
+  --color-ink: #0C2A33;
+  --color-brand-teal: #055B75;
+  --color-brand-sky: #65B3CF;
+
+  /* Primary — Coastal. 500 is the brand Deep Teal, 400 the Sky Blue action colour. */
+  --color-primary-50: #f0f9ff;
+  --color-primary-100: #B9D0DC;
+  --color-primary-200: #9bcbe3;
+  --color-primary-300: #7abde1;
+  --color-primary-400: #65B3CF;
+  --color-primary-500: #055B75;
+  --color-primary-600: #044a60;
+  --color-primary-700: #033a4c;
+  --color-primary-800: #022b39;
+  --color-primary-900: #011c26;
+  --color-primary-950: #000f15;
+
+  /* Secondary — Olive Taupe */
+  --color-secondary-50: #f7f7f6;
+  --color-secondary-100: #eef0ef;
+  --color-secondary-200: #dde0de;
+  --color-secondary-300: #c5c8c5;
+  --color-secondary-400: #a7aaa5;
+  --color-secondary-500: #7F8073;
+  --color-secondary-600: #64655a;
+  --color-secondary-700: #4e4f45;
+  --color-secondary-800: #3a3b33;
+  --color-secondary-900: #282923;
+
+  /* Neutral — 700 is the Soft Charcoal body text colour */
+  --color-neutral-50: #f9fafb;
+  --color-neutral-100: #f3f4f6;
+  --color-neutral-200: #e5e7eb;
+  --color-neutral-300: #d1d5db;
+  --color-neutral-400: #9ca3af;
+  --color-neutral-500: #6b7280;
+  --color-neutral-600: #4b5563;
+  --color-neutral-700: #626363;
+  --color-neutral-800: #1f2937;
+  --color-neutral-900: #111827;
+
+  /* Accent */
+  --color-accent-50: #fef3c7;
+  --color-accent-100: #fde68a;
+  --color-accent-200: #fcd34d;
+  --color-accent-300: #fbbf24;
+  --color-accent-400: #f59e0b;
+  --color-accent-500: #d97706;
+  --color-accent-600: #b45309;
+  --color-accent-700: #92400e;
+  --color-accent-800: #78350f;
+  --color-accent-900: #451a03;
+
+  /* Status */
+  --color-success-500: #10b981;
+  --color-success-600: #059669;
+  --color-success-700: #047857;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+  --color-error-500: #ef4444;
+  --color-error-600: #dc2626;
+  --color-error-700: #b91c1c;
+
+  /* Elevation — all shadows are tinted with the brand teal, never neutral black. */
+  --shadow-soft: 0 2px 15px -3px rgba(5, 91, 117, 0.05), 0 10px 20px -2px rgba(5, 91, 117, 0.02);
+  --shadow-medium: 0 4px 25px -5px rgba(5, 91, 117, 0.08), 0 10px 10px -5px rgba(5, 91, 117, 0.03);
+  --shadow-large: 0 10px 40px -10px rgba(5, 91, 117, 0.12), 0 20px 25px -5px rgba(5, 91, 117, 0.08);
+  --shadow-glow: 0 0 20px rgba(101, 179, 207, 0.4);
+  --shadow-glow-lg: 0 0 30px rgba(101, 179, 207, 0.5);
+
+  /* Radii + spacing additions beyond the Tailwind defaults */
+  --radius-4xl: 2rem;
+  --radius-5xl: 2.5rem;
+  --spacing-18: 4.5rem;
+  --spacing-88: 22rem;
+  --spacing-128: 32rem;
+}
