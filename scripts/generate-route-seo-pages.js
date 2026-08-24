@@ -34,6 +34,26 @@ const CRAWL_NAVIGATION = Object.freeze([
   { pathname: '/faqs', label: 'FAQs' },
 ]);
 
+/**
+ * Sitemap files, generated from INDEXABLE_ROUTE_SEO at build time.
+ *
+ * These were previously hand-maintained static files in public/, which drifted:
+ * they had never been regenerated as routes changed, and Search Console showed
+ * "No referring sitemaps detected" for every page because nothing kept them
+ * honest. Deriving them from the same source as the prerendered pages means a
+ * new indexable route cannot be silently missing from discovery.
+ *
+ * All four URLs are already submitted to Search Console, so all four keep being
+ * emitted. sitemap.xml is the complete set; the others are genuine subsets, and
+ * a URL appearing in more than one sitemap is valid.
+ */
+const SITEMAP_FILES = Object.freeze([
+  { file: 'sitemap.xml', includes: () => true },
+  { file: 'sitemap-flights.xml', includes: (p) => p === '/flights' || p.startsWith('/flights/') },
+  { file: 'sitemap-hotels.xml', includes: (p) => p === '/hotels' || p.startsWith('/hotels/') },
+  { file: 'sitemap-cruises.xml', includes: (p) => p === '/cruise' || p === '/cruises' || p.startsWith('/cruise/') || p.startsWith('/cruises/') },
+]);
+
 const escapeHtmlAttribute = (value) => String(value)
   .replace(/&/g, '&amp;')
   .replace(/"/g, '&quot;')
@@ -174,6 +194,46 @@ export const injectRouteSeoBody = (template, body) => {
   return template.replace(ROUTE_SEO_BODY_MARKER, body);
 };
 
+/**
+ * Render one sitemap document.
+ *
+ * `<loc>` only, deliberately. Google ignores `<changefreq>` and `<priority>`
+ * outright, and it distrusts `<lastmod>` when it is not genuinely accurate —
+ * stamping every URL with the build date would be exactly that. The old static
+ * files carried all three; none of them were true.
+ */
+export const renderSitemap = (pathnames) => {
+  const urls = pathnames
+    .map((pathname) => `  <url>\n    <loc>${escapeHtmlAttribute(getCanonicalUrl(pathname))}</loc>\n  </url>`)
+    .join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>
+`;
+};
+
+export const generateSitemaps = async ({ distDirectory = DEFAULT_DIST_DIRECTORY } = {}) => {
+  const pathnames = INDEXABLE_ROUTE_SEO.map(({ pathname }) => pathname);
+  const written = [];
+
+  for (const { file, includes } of SITEMAP_FILES) {
+    const matched = pathnames.filter(includes);
+    if (matched.length === 0) {
+      throw new Error(`Sitemap ${file} matched no indexable routes.`);
+    }
+    const outputPath = resolve(distDirectory, file);
+    await writeFile(outputPath, renderSitemap(matched), 'utf8');
+    written.push({ file, count: matched.length });
+  }
+
+  console.log(
+    `Generated ${written.length} sitemap(s): ${written.map(({ file, count }) => `${file} (${count})`).join(', ')}.`,
+  );
+  return written;
+};
+
 export const generateRouteSeoPages = async ({ distDirectory = DEFAULT_DIST_DIRECTORY } = {}) => {
   validateIndexableRoutes();
 
@@ -201,6 +261,8 @@ export const generateRouteSeoPages = async ({ distDirectory = DEFAULT_DIST_DIREC
     injectRouteSeoHead(template, renderRouteSeoHead('/', DEFAULT_ROUTE_SEO, { shouldIndex: false })),
     'utf8',
   );
+
+  await generateSitemaps({ distDirectory });
 
   console.log(`Generated route SEO heads for ${generatedPaths.length} indexable routes.`);
   return { generatedPaths, spaShellPath };
