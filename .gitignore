@@ -72,3 +72,17 @@ Thumbs.db
 
 # Kiro local MCP config (may contain machine-specific / sensitive settings)
 .kiro/settings/mcp.json
+
+# design-sync (claude.ai/design)
+# Staged converter, generated bundle, and machine-local verification state.
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+# The repo-wide `build/` rule above also matches .design-sync/build/, which holds
+# committed sync inputs (the entry barrel, the CSS build script, tokens).
+# Re-include the directory, then re-ignore only what that script generates.
+!.design-sync/build/
+.design-sync/build/app.compiled.css
+.design-sync/build/tailwind.out.css

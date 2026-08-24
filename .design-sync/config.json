@@ -1,0 +1,52 @@
+{
+  "projectId": "c379cf5b-b98f-431b-aaff-3e07acc4f4ff",
+  "shape": "package",
+  "pkg": "jetset13",
+  "globalName": "JetsettersDS",
+  "srcDir": "frontend/src",
+  "buildCmd": "bash .design-sync/build/build-css.sh",
+  "cssEntry": ".design-sync/build/app.compiled.css",
+  "componentSrcMap": {
+    "Button": "frontend/src/Components/UI/Button.jsx",
+    "Card": "frontend/src/Components/UI/Card.jsx",
+    "Input": "frontend/src/Components/UI/Input.jsx",
+    "LoadingSpinner": "frontend/src/Components/LoadingSpinner.jsx",
+    "ScrollFlightProgress": "frontend/src/Components/ScrollFlightProgress.jsx",
+    "Breadcrumbs": "frontend/src/Components/Breadcrumbs.jsx",
+    "ServiceTabs": "frontend/src/Components/ServiceTabs.jsx",
+    "ContactBanner": "frontend/src/components/ContactBanner.jsx",
+    "FullPageBanner": "frontend/src/components/FullPageBanner.jsx",
+    "Price": "frontend/src/Components/Price.jsx",
+    "CurrencySelector": "frontend/src/Components/CurrencySelector.jsx",
+    "PrefetchLink": null
+  },
+  "dtsPropsFor": {
+    "Button": "  /** Visual style. `primary` is the Sky Blue call to action; `danger`/`success` are status actions. */\n  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';\n  size?: 'sm' | 'md' | 'lg';\n  /** Shows an inline spinner and blocks interaction. Implies disabled. */\n  loading?: boolean;\n  disabled?: boolean;\n  /** Stretches the button to the full width of its container. */\n  fullWidth?: boolean;\n  leftIcon?: React.ReactNode;\n  rightIcon?: React.ReactNode;\n  type?: 'button' | 'submit' | 'reset';\n  onClick?: React.MouseEventHandler<HTMLButtonElement>;\n  className?: string;\n  children?: React.ReactNode;",
+    "Card": "  /** `glass` applies the frosted `.glass-card` treatment used over imagery. */\n  variant?: 'default' | 'elevated' | 'outlined' | 'glass';\n  padding?: 'none' | 'sm' | 'md' | 'lg' | 'xl';\n  /** Adds the lift-on-hover transition. */\n  hover?: boolean;\n  /** Adds cursor + press affordances for a clickable card. */\n  interactive?: boolean;\n  className?: string;\n  children?: React.ReactNode;",
+    "Input": "  label?: string;\n  /** Native input type, e.g. 'text' | 'email' | 'password' | 'number'. */\n  type?: string;\n  size?: 'sm' | 'md' | 'lg';\n  variant?: 'default' | 'filled' | 'outlined';\n  /** Applies the error border. Pair with errorMessage to show help text. */\n  error?: boolean;\n  errorMessage?: string;\n  placeholder?: string;\n  leftIcon?: React.ReactNode;\n  rightIcon?: React.ReactNode;\n  disabled?: boolean;\n  /** Renders a red asterisk beside the label. */\n  required?: boolean;\n  value?: string | number;\n  defaultValue?: string | number;\n  onChange?: React.ChangeEventHandler<HTMLInputElement>;\n  className?: string;",
+    "LoadingSpinner": "  /** Status text shown under the spinner; also used as the aria-label. */\n  text?: string;\n  /** Renders as a fixed full-viewport overlay instead of an inline block. */\n  fullScreen?: boolean;\n  className?: string;",
+    "ServiceTabs": "  /** Which service tab reads as current. */\n  active?: 'cruise' | 'flight' | 'packages' | 'hotels';\n  className?: string;",
+    "Price": "  /**\n   * Amount in USD, converted and formatted into the viewer's selected currency.\n   * May also be an object carrying its own currency, which is converted from there.\n   */\n  amount: number | string | { amount: number; currency: string };\n  /**\n   * Appends the ISO currency code after the amount.\n   * NOTE: the code is rendered with a hardcoded white text colour, so it is\n   * only visible on a dark surface. On a light background it renders invisibly.\n   */\n  showCode?: boolean;\n  className?: string;",
+    "CurrencySelector": "  /** This component takes no props. */",
+    "Breadcrumbs": "  /** No props \u2014 the trail is derived from the current route via useLocation(). */",
+    "ScrollFlightProgress": "  /** No props \u2014 progress is derived from window scroll position. */",
+    "ContactBanner": "  /** This component takes no props. */",
+    "FullPageBanner": "  /** This component takes no props. */"
+  },
+  "overrides": {
+    "ScrollFlightProgress": {
+      "cardMode": "single",
+      "viewport": "1280x620",
+      "primaryStory": "AtPageTop"
+    },
+    "FullPageBanner": {
+      "cardMode": "single",
+      "viewport": "1024x520",
+      "primaryStory": "Splash"
+    },
+    "ServiceTabs": {
+      "cardMode": "column"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}
