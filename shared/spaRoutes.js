@@ -93,6 +93,8 @@ const LEGACY_REDIRECTS = new Map([
   ['/hotel-details', '/hotels'],
   ['/hotel-search', '/hotels/search'],
   ['/hotel-search-results', '/hotels/search'],
+  ['/about', '/company'],
+  ['/about-us', '/company'],
   ['/privacy', '/privacy-policy'],
   ['/terms', '/terms-conditions'],
   ['/pricing', '/membership'],

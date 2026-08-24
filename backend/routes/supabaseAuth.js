@@ -6,6 +6,27 @@ dotenv.config();
 
 const router = express.Router();
 
+const DEFAULT_POST_LOGIN_PATH = '/my-trips';
+
+/**
+ * Constrain an OAuth `redirect_to` to a same-origin relative path.
+ *
+ * Rejects anything that could leave this origin: absolute URLs, protocol-
+ * relative `//host` paths, backslash variants browsers normalise to `//`, and
+ * control characters. Falls back to the post-login default.
+ *
+ * @param {unknown} target raw redirect_to value from the query string
+ * @returns {string} a safe path beginning with a single '/'
+ */
+export const safeRedirectPath = (target) => {
+  if (typeof target !== 'string' || target === '') return DEFAULT_POST_LOGIN_PATH;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001F\u007F]/.test(target)) return DEFAULT_POST_LOGIN_PATH;
+  const normalized = target.replace(/\\/g, '/');
+  if (!normalized.startsWith('/') || normalized.startsWith('//')) return DEFAULT_POST_LOGIN_PATH;
+  return normalized;
+};
+
 // Initialize Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -46,9 +67,11 @@ router.get('/auth/callback', async (req, res) => {
         //   maxAge: data.session.expires_in * 1000
         // });
 
-        // Redirect to the intended page
-        const redirectTo = req.query.redirect_to || '/my-trips';
-        return res.redirect(redirectTo);
+        // Redirect to the intended page. redirect_to is attacker-controllable,
+        // so only same-origin relative paths are honoured — anything absolute
+        // (`https://evil.com`) or protocol-relative (`//evil.com`) would let
+        // this callback bounce users off-site under our own domain.
+        return res.redirect(safeRedirectPath(req.query.redirect_to));
       }
     }
 

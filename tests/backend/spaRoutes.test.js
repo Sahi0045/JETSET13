@@ -49,6 +49,10 @@ describe('SPA route contract', () => {
     ['/rentals', '/hotels'],
     ['/pricing', '/membership'],
     ['/destinations/paris', '/cruises'],
+    // Search Console reported /about as a soft 404 from 26 Oct 2024: the About
+    // page lives at /company, and /about was never mapped or routed.
+    ['/about', '/company'],
+    ['/about-us', '/company'],
   ])('maps legacy route %s to %s', (pathname, destination) => {
     expect(getLegacyRedirect(pathname)).toBe(destination);
     expect(isSpaRoute(pathname)).toBe(false);

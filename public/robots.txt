@@ -45,13 +45,15 @@ Sitemap: https://www.jetsetterss.com/sitemap-cruises.xml
 
 # Googlebot and Bingbot inherit the complete User-agent: * privacy policy above.
 
-# Block bad bots
-User-agent: AhrefsBot
-Disallow: /
+# SEO audit crawlers are allowed on purpose.
+#
+# Blocking them does NOT reduce spam backlinks: Ahrefs and Semrush discover
+# links by crawling the *linking* sites, never this one. All blocking achieved
+# was preventing our own Site Audit runs from seeing jetsetterss.com.
+# Confirmed 24 Aug 2026 — Search Console reports 0 external links and no manual
+# action, so there was never a link problem to hide from.
 
-User-agent: SemrushBot
-Disallow: /
-
+# Block low-value crawlers we don't use (crawl budget only).
 User-agent: DotBot
 Disallow: /
 
