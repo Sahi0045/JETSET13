@@ -14,6 +14,8 @@
     { "source": "/hotel-details", "destination": "/hotels", "permanent": true },
     { "source": "/hotel-search", "destination": "/hotels/search", "permanent": true },
     { "source": "/hotel-search-results", "destination": "/hotels/search", "permanent": true },
+    { "source": "/about", "destination": "/company", "permanent": true },
+    { "source": "/about-us", "destination": "/company", "permanent": true },
     { "source": "/privacy", "destination": "/privacy-policy", "permanent": true },
     { "source": "/terms", "destination": "/terms-conditions", "permanent": true },
     { "source": "/pricing", "destination": "/membership", "permanent": true },
