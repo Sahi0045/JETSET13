@@ -657,7 +657,7 @@ function ManageBooking() {
             <h4 className="font-semibold text-[#034457] mb-2">Need Help?</h4>
             <p className="text-[#034457] text-sm mb-3">Our customer support team is here to assist you with any questions about your booking.</p>
             <div className="flex flex-wrap gap-4">
-              <a href="tel:(877) 538-7380" className="flex items-center text-[#055B75] hover:text-[#034457]">
+              <a href="tel:+18775387380" className="flex items-center text-[#055B75] hover:text-[#034457]">
                 <Phone className="w-4 h-4 mr-1" />
                 (877) 538-7380
               </a>

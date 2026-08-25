@@ -369,8 +369,8 @@ const TermsConditions = () => {
                             </div>
                             <div>
                               <div className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Phone</div>
-                              <a href="tel:+18885813028" className="text-lg font-semibold text-gray-900 hover:text-[#055B75]">
-                                (+1) 888-581-3028
+                              <a href="tel:+18775387380" className="text-lg font-semibold text-gray-900 hover:text-[#055B75]">
+                                (877) 538-7380
                               </a>
                             </div>
                           </div>
