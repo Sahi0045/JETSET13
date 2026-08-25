@@ -163,7 +163,7 @@ const Cookies = () => {
                     </p>
                     <p>
                       <strong>Email:</strong> privacy@jet-setters.us<br />
-                      <strong>Phone:</strong> (+1) 888-581-3028<br />
+                      <strong>Phone:</strong> (877) 538-7380<br />
                       <strong>Address:</strong> 513 W Bonaventure Ave Tracy, CA 95391
                     </p>
                   </section>

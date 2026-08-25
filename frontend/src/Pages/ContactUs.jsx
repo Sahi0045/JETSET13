@@ -32,14 +32,14 @@ const ContactUs = () => {
   };
 
   const contactInfo = [
-    { icon: <FaPhone />, label: 'Phone Support', value: '+1 (888) 581-3028', note: 'Mon – Fri, 9am – 6pm EST', link: 'tel:+18885813028' },
+    { icon: <FaPhone />, label: 'Phone Support', value: '(877) 538-7380', note: 'Mon – Fri, 9am – 6pm EST', link: 'tel:+18775387380' },
     { icon: <FaEnvelope />, label: 'Email Inquiries', value: 'privacy@jetsetterss.com', note: 'Average response: 4 hours', link: 'mailto:privacy@jetsetterss.com' },
     { icon: <FaMapMarkerAlt />, label: 'Headquarters', value: '513 W Bonaventure Ave', note: 'Tracy, CA 95391, USA', link: null },
   ];
 
   const faqs = [
     { q: 'What are your customer support hours?', a: 'Our customer support team is available 24/7 to assist you with any travel-related queries or emergencies.' },
-    { q: 'How can I modify or cancel my booking?', a: 'Modify or cancel via the My Trips dashboard, or call us at +1 (888) 581-3028 / email support@jetsetterss.com.' },
+    { q: 'How can I modify or cancel my booking?', a: 'Modify or cancel via the My Trips dashboard, or call us at (877) 538-7380 / email support@jetsetterss.com.' },
     { q: 'Do you offer group booking discounts?', a: 'Yes — special rates for groups of 10 or more, with a dedicated coordinator. Contact us for a custom quote.' },
     { q: 'What payment methods do you accept?', a: 'All major credit/debit cards, PayPal, and bank transfers for your convenience.' },
   ];

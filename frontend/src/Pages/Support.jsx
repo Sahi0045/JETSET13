@@ -80,7 +80,7 @@ const Support = () => {
       title: "24/7 Customer Support",
       description: "Round-the-clock assistance for urgent travel issues",
       icon: <FaHeadset className="text-4xl text-blue-600" />,
-      contact: "((877) 538-7380)",
+      contact: "(877) 538-7380",
       availability: "Available 24/7",
       response: "Immediate response"
     },
@@ -96,7 +96,7 @@ const Support = () => {
       title: "WhatsApp Support",
       description: "Quick help via WhatsApp messaging",
       icon: <FaWhatsapp className="text-4xl text-green-500" />,
-      contact: "((877) 538-7380)",
+      contact: "(877) 538-7380",
       availability: "Mon-Sun, 8AM-10PM EST",
       response: "Within 30 minutes"
     }
@@ -156,7 +156,7 @@ const Support = () => {
 
                   {method.title === "WhatsApp Support" ? (
                     <a
-                      href={`https://wa.me/18005378381`}
+                      href={`https://wa.me/18775387380`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="block w-full bg-primary-500 text-white py-3 px-6 rounded-xl hover:bg-primary-600 transition-colors font-medium text-center"

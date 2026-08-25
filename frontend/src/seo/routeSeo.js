@@ -42,6 +42,7 @@ export const SITE_WIDE_SCHEMA = [
     contactPoint: {
       '@type': 'ContactPoint',
       contactType: 'customer service',
+      telephone: '+1-877-538-7380',
       url: `${SITE_URL}/contact`,
       areaServed: 'Worldwide',
       availableLanguage: 'English',

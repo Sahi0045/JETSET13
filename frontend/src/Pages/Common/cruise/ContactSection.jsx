@@ -71,7 +71,7 @@ const ContactSection = () => {
                   </div>
                   <div>
                     <p className="opacity-80 text-sm mb-1">Call Us</p>
-                    <p className="font-medium">+1 (800) 123-4567</p>
+                    <p className="font-medium">(877) 538-7380</p>
                   </div>
                 </div>
                 

@@ -651,8 +651,8 @@ const PrivacyPolicy = () => {
                           <FaPhone className="text-[#055B75] text-xl mt-1" />
                           <div>
                             <div className="text-sm text-gray-600 mb-1">Phone</div>
-                            <a href="tel:+18885813028" className="text-lg font-semibold text-gray-900 hover:text-[#055B75]">
-                              (+1) 888-581-3028
+                            <a href="tel:+18775387380" className="text-lg font-semibold text-gray-900 hover:text-[#055B75]">
+                              (877) 538-7380
                             </a>
                           </div>
                         </div>
