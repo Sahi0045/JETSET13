@@ -69,6 +69,25 @@ export const ROUTE_SEO = {
   '/': {
     title: 'Luxury Flights, Hotels & Cruises | Jetsetters',
     description: 'Plan luxury flights, hotels, cruises, and vacation packages with personalized expert support from the Jetsetters travel team.',
+    // Mirrors flightlanding.jsx, the component the home route renders. The hero
+    // and both sections below it are static copy in that file, but they only
+    // exist once a ~350 kB route chunk has downloaded and React has rendered —
+    // so a crawler that gives up early used to index the loading state instead
+    // of the page. This is the same copy, in the initial HTML payload.
+    content: {
+      heading: 'Find Your Perfect Flight Today',
+      intro: 'Handpicked fares, real human concierges, and a best-price promise — book with confidence and travel with peace of mind.',
+      sections: [
+        {
+          heading: 'Explore popular destinations',
+          body: 'A carefully selected collection loved by travellers worldwide — perfect places for your next adventure.',
+        },
+        {
+          heading: "Our lowest fares to the world's most-loved places",
+          body: 'Take advantage of our special deals and promotions to get the best value for your travel budget — the most affordable flights, without compromising on quality, with a price match guarantee, no hidden fees, and 24/7 customer support.',
+        },
+      ],
+    },
   },
   '/cruise': {
     title: 'Luxury Cruise Vacations | Jetsetters',

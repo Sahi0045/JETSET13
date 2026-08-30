@@ -8,6 +8,37 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * Fail the build rather than ship React's development runtime.
+ *
+ * Vite derives `isProduction` from NODE_ENV, and it will take
+ * `NODE_ENV=development` from a `.env`/`.env.local` file (via
+ * `VITE_USER_NODE_ENV`) or from the CI environment. When that happens
+ * `@vitejs/plugin-react` emits the dev JSX transform — `jsxDEV` calls carrying
+ * a `fileName`/`lineNumber` debug object per element — and resolves React's
+ * unminified development build, which is both far larger and materially slower
+ * to render. That is exactly what production was serving, silently, because a
+ * dev build still succeeds and still looks correct.
+ *
+ * `npm run build` pins `NODE_ENV=production` for this reason. Setting it inside
+ * this config would not work: Vite snapshots NODE_ENV before it loads the
+ * config file, so the `.env` value wins. Hence an assertion rather than a fix
+ * in place. An explicit `vite build --mode development` is still allowed.
+ */
+const assertProductionRuntime = () => ({
+    name: 'jetsetters:assert-production-runtime',
+    apply: 'build',
+    configResolved(config) {
+        if (config.mode === 'development' || config.isProduction) return;
+
+        throw new Error(
+            `Refusing to build: NODE_ENV is "${process.env.NODE_ENV ?? 'unset'}", so this build would ship ` +
+            "React's development runtime to production. Build with `npm run build` (it pins " +
+            'NODE_ENV=production), and check for NODE_ENV=development in .env files or the CI environment.'
+        );
+    },
+});
+
 export default defineConfig(({ mode }) => {
     // Default to secure=false if VITE_SECURE is not set
     const isSecure = process.env.VITE_SECURE === 'true';
@@ -30,7 +61,8 @@ export default defineConfig(({ mode }) => {
 
     return {
         plugins: [
-            react()
+            react(),
+            assertProductionRuntime()
         ],
         root: '.',
         base: '/',

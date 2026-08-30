@@ -6,9 +6,34 @@ import LoadingSpinner from './Components/LoadingSpinner';
 import { LocationProvider } from './Context/LocationContext';
 import RouteSeo from './seo/RouteSeo';
 
+// The static boot shell in index.html paints the home hero before any script
+// runs. It stays on screen until the first lazy route chunk has actually
+// rendered, so a first-time visitor never watches a spinner stand in for
+// content that simply has not downloaded yet.
+let isBootShellVisible = typeof document !== 'undefined'
+  && document.getElementById('boot-shell') !== null;
+
+const dismissBootShell = () => {
+  if (!isBootShellVisible) return;
+  isBootShellVisible = false;
+  document.getElementById('boot-shell')?.remove();
+};
+
+// Rendered inside the Suspense boundary below, so this effect runs on the
+// commit that un-suspends it — the exact moment the shell has real content to
+// hand over to. Idempotent, because StrictMode double-invokes effects in dev.
+const BootShellHandoff = () => {
+  React.useEffect(dismissBootShell, []);
+  return null;
+};
+
 // Fallback components
-// Fallback components
-const LoadingComponent = () => <LoadingSpinner fullScreen={true} text="Preparing your journey..." />;
+// On first load the boot shell is already on screen, so drawing a second
+// full-screen loader over it would only add a flash. Later in-app navigations
+// have no shell and still get the spinner.
+const LoadingComponent = () => (
+  isBootShellVisible ? null : <LoadingSpinner fullScreen={true} text="Preparing your journey..." />
+);
 
 const DashboardFallback = () => <LoadingSpinner fullScreen={true} text="Loading Dashboard..." />;
 
@@ -680,6 +705,7 @@ const App = () => {
   return (
     <React.Suspense fallback={<LoadingComponent />}>
       <LocationProvider>
+        <BootShellHandoff />
         <RouteSeo />
         <ScrollToTop />
         <Routes>
