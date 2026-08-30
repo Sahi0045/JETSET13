@@ -260,26 +260,19 @@ export const protect = async (req, res, next) => {
           } catch (rsErr) {
             console.error('RS256 verification error:', rsErr.message);
 
-            // Development fallback: If it's a Firebase token with valid structure but cert verification failed,
-            // allow it through (cert rotation or network issues). Remove this in production!
-            if (process.env.NODE_ENV !== 'production') {
-              try {
-                const header = jwt.decode(token, { complete: true })?.header || {};
-                const payload = jwt.decode(token, { complete: false });
-
-                if (header.alg === 'RS256' && payload?.iss?.includes('securetoken.google.com') && payload?.email) {
-                  console.warn('⚠️ DEVELOPMENT MODE: Allowing Firebase token through without cert verification');
-                  console.warn('⚠️ Token has valid structure but cert verification failed:', rsErr.message);
-                  decoded = payload; // Use decoded payload as-is
-                } else {
-                  throw rsErr;
-                }
-              } catch (fallbackErr) {
-                throw rsErr;
-              }
-            } else {
-              throw rsErr;
-            }
+            // A token whose signature we could not verify is not a token.
+            //
+            // A NODE_ENV-gated fallback used to live here: when cert
+            // verification failed it decoded the payload with `jwt.decode` —
+            // which checks no signature at all — and trusted the result for
+            // anything shaped like a Firebase token. It was gated on
+            // `NODE_ENV !== 'production'`, and production was deployed with
+            // NODE_ENV=development, so it was reachable in production.
+            //
+            // Do not reinstate it. A cert rotation or a network blip is an
+            // availability problem; it is never a reason to skip a signature
+            // check.
+            throw rsErr;
           }
         }
       }
