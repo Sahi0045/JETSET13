@@ -142,25 +142,9 @@ const Error = React.lazy(() =>
 //   import('./Pages/Common/packages/planding')
 //     .catch(() => ({ default: PackagesFallback }))
 // );
-// const Rentals = React.lazy(() => 
-//   import('./Pages/Common/rentals/LandingPage.jsx')
-//     .catch(() => ({ default: RentalsFallback }))
-// );
 
-// const HotelDetails = React.lazy(() => 
-//   import('./Pages/Common/rentals/HotelDetails.jsx')
-//     .catch(() => ({ default: HotelDetailsFallback }))
-// );
 
-// const HotelSearch = React.lazy(() => 
-//   import('./Pages/Common/rentals/HotelSearch.jsx')
-//     .catch(() => ({ default: HotelDetailsFallback }))
-// );
 
-// const HotelSearchResults = React.lazy(() => 
-//   import('./Pages/Common/rentals/HotelSearchResults.jsx')
-//     .catch(() => ({ default: HotelDetailsFallback }))
-// );
 
 // // Import FlightLanding component
 // const FlightLanding = React.lazy(() => 
@@ -322,10 +306,6 @@ const ManageBooking = React.lazy(() =>
 );
 
 // // Add Booking component import
-// const Booking = React.lazy(() => 
-//   import('./Pages/Common/rentals/Booking')
-//     .catch(() => ({ default: () => <div>Loading Booking...</div> }))
-// );
 
 // Add BookingConfirmation component import
 const BookingConfirmation = React.lazy(() =>
@@ -397,31 +377,6 @@ const FlightBookingSuccess = React.lazy(() =>
 const Packages = React.lazy(() =>
   import('./Pages/Common/packages/planding')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Packages..." /> }))
-);
-
-const Rentals = React.lazy(() =>
-  import('./Pages/Common/rentals/LandingPage.jsx')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Rentals..." /> }))
-);
-
-const HotelDetails = React.lazy(() =>
-  import('./Pages/Common/rentals/HotelDetails.jsx')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Hotel Details..." /> }))
-);
-
-const HotelSearch = React.lazy(() =>
-  import('./Pages/Common/rentals/HotelSearch.jsx')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Searching Hotels..." /> }))
-);
-
-const HotelSearchResults = React.lazy(() =>
-  import('./Pages/Common/rentals/HotelSearchResults.jsx')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Results..." /> }))
-);
-
-const Booking = React.lazy(() =>
-  import('./Pages/Common/rentals/Booking')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Booking..." /> }))
 );
 
 const Hotels = React.lazy(() =>

@@ -108,7 +108,7 @@ function FlightCreateOrders() {
   }, [location.state, navigate]);
 
   // Function to call the Flight Create Orders API
-  // API: POST /v1/booking/flight-orders (https://api.amadeus.com/v1/booking/flight-orders)
+  // API: POST /api/flights/order (our backend, which books on Amadeus Enterprise SOAP)
   const processFlightOrder = async (orderData) => {
     setProcessingOrder(true);
     setError(null);

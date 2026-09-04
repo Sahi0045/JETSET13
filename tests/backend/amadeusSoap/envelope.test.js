@@ -34,6 +34,43 @@ describe('session header', () => {
     expect(xml).not.toContain('SessionId');
   });
 
+  // The bug that stopped every booking dead at the second call: the envelope
+  // sent the UsernameToken on every request, and a continuation rejects it with
+  // "12|Presentation|soap message header incorrect" - a message that names
+  // neither the header nor the reason. It also made every Security_SignOut fail,
+  // so sessions leaked against the WSAP quota on every stateful flow.
+  it('drops the security headers once a session is established', () => {
+    const xml = build({
+      status: 'InSeries', sessionId: 'ABC123', sequenceNumber: '2', securityToken: 'TOK',
+    });
+
+    expect(xml).not.toContain('wsse:UsernameToken');
+    expect(xml).not.toContain('AMA_SecurityHostedUser');
+    // The SecurityToken in the session header IS the credential now.
+    expect(xml).toContain('<awsse:SecurityToken>TOK</awsse:SecurityToken>');
+  });
+
+  it('drops them for sign-out too, which carries the same session', () => {
+    const xml = build({
+      status: 'End', sessionId: 'ABC123', sequenceNumber: '9', securityToken: 'TOK',
+    });
+
+    expect(xml).toContain('TransactionStatusCode="End"');
+    expect(xml).not.toContain('wsse:UsernameToken');
+  });
+
+  it('still authenticates the call that opens the session', () => {
+    const xml = build({ status: 'Start' });
+    expect(xml).toContain('wsse:UsernameToken');
+    expect(xml).toContain('AMA_SecurityHostedUser');
+  });
+
+  it('still authenticates a stateless call', () => {
+    const xml = build(null);
+    expect(xml).toContain('wsse:UsernameToken');
+    expect(xml).toContain('AMA_SecurityHostedUser');
+  });
+
   it('echoes the session triple in schema order when continuing', () => {
     const xml = build({
       status: 'InSeries', sessionId: 'ABC123', sequenceNumber: '2', securityToken: 'TOK',

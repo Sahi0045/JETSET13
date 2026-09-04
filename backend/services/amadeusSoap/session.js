@@ -129,7 +129,13 @@ const signOutQuietly = async (session, config = getWsConfig()) => {
       bypassSemaphore: true,
     });
   } catch (cause) {
-    log.warn({ sessionId: session.sessionId, reason: cause?.message }, 'Security_SignOut failed; session will expire server-side');
+    // `message` is the customer-facing string and says nothing useful in a log.
+    // A leaked session counts against the WSAP quota until it expires, so the
+    // raw Amadeus text is the only thing here worth having.
+    log.warn({
+      sessionId: session.sessionId,
+      reason: cause?.technicalError ?? cause?.message,
+    }, 'Security_SignOut failed; session will expire server-side');
   }
 };
 

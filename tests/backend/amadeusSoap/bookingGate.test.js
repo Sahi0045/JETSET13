@@ -123,3 +123,69 @@ describe('no fabricated bookings', () => {
     }
   });
 });
+
+describe('accepting the offer the mobile app actually sends', () => {
+  // Mobile posts the flattened UI card and keeps the bookable offer on
+  // `originalOffer`. Reading only the top level made every mobile booking fail
+  // the shape check - which is how they ended up in the fabricated-PNR branch.
+  it('recovers the bookable offer from originalOffer', async () => {
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
+    vi.resetModules();
+    const app = await makeApp();
+
+    const res = await request(app).post('/api/flights/order').send({
+      ...orderBody,
+      flightOffer: {
+        ...uiShapedOffer,
+        originalOffer: {
+          id: '1',
+          source: 'GDS',
+          price: { total: '291.00', currency: 'USD' },
+          itineraries: [{ segments: [{ id: '1' }] }],
+          travelerPricings: [{ travelerId: '1', travelerType: 'ADULT' }],
+          // No _ama, so the chain still refuses - but for the right reason,
+          // and only after the offer was recognised as bookable at all.
+        },
+      },
+    });
+
+    expect(res.body.code).not.toBe('OFFER_NOT_BOOKABLE');
+  });
+
+  it('refuses a card with no bookable offer anywhere on it', async () => {
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
+    vi.resetModules();
+    const app = await makeApp();
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('OFFER_NOT_BOOKABLE');
+    // Refused before anything reaches the GDS.
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+});
+
+describe('no simulated bookings on retrieval', () => {
+  // GET /order/:id used to answer any failure with a hard-coded DEL-JAI
+  // booking for $29.60 and a randomly generated PNR: someone looking up their
+  // own reservation was shown an itinerary that does not exist.
+  it('fails honestly instead of inventing an itinerary', async () => {
+    axios.post.mockRejectedValue(new Error('amadeus down'));
+    const app = await makeApp();
+
+    const res = await request(app).get('/api/flights/order/ABC123');
+    const body = JSON.stringify(res.body);
+
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.body.success).toBe(false);
+    expect(body).not.toMatch(/29\.60|JAI|simulated/i);
+  });
+
+  it('has no simulated order left in the route module', async () => {
+    const source = (await import('node:fs')).readFileSync(
+      new URL('../../../backend/routes/flight.routes.js', import.meta.url), 'utf8',
+    );
+    expect(source).not.toContain('simulatedOrderDetails');
+  });
+});

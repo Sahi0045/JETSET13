@@ -59,9 +59,15 @@ const renderSession = (session) => {
  * @param {Date}   [args.now]    injectable for deterministic tests
  */
 export const buildEnvelope = ({ action, bodyXml, config, session = null, now = new Date() }) => {
-  const nonce = buildNonce();
-  const created = buildCreated(now);
-  const digest = buildPasswordDigest(config.password, nonce, created);
+  // A continuation authenticates with the SecurityToken Amadeus issued in the
+  // Session header, and that is the ONLY credential it will accept: sending the
+  // UsernameToken again - or the hosted-user header - is rejected outright with
+  // "12|Presentation|soap message header incorrect", which names neither header
+  // nor reason. Every stateful call after the first, sign-out included, must
+  // therefore carry the session and nothing else.
+  const isContinuation = Boolean(session?.sessionId);
+
+  const security = isContinuation ? '' : renderSecurity(config, now);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soap:Envelope xmlns:soap="${NS.soap}" xmlns:add="${NS.add}" xmlns:awsse="${NS.awsse}" xmlns:amasec="${NS.amasec}" xmlns:awsl="${NS.awsl}" xmlns:wsse="${NS.wsse}" xmlns:wsu="${NS.wsu}">
@@ -70,7 +76,20 @@ export const buildEnvelope = ({ action, bodyXml, config, session = null, now = n
     <add:Action>${esc(action)}</add:Action>
     <add:To>${esc(config.endpoint)}</add:To>
     <awsl:TransactionFlowLink/>
-${renderSession(session)}    <wsse:Security>
+${renderSession(session)}${security}  </soap:Header>
+  <soap:Body>
+${bodyXml}
+  </soap:Body>
+</soap:Envelope>`;
+};
+
+/** WS-Security UsernameToken plus the hosted-user header, for an authenticating call. */
+const renderSecurity = (config, now) => {
+  const nonce = buildNonce();
+  const created = buildCreated(now);
+  const digest = buildPasswordDigest(config.password, nonce, created);
+
+  return `    <wsse:Security>
       <wsse:UsernameToken>
         <wsse:Username>${esc(config.username)}</wsse:Username>
         <wsse:Nonce EncodingType="${BASE64_ENCODING}">${nonce.toString('base64')}</wsse:Nonce>
@@ -81,11 +100,7 @@ ${renderSession(session)}    <wsse:Security>
     <amasec:AMA_SecurityHostedUser>
       <amasec:UserID POS_Type="1" PseudoCityCode="${esc(config.officeId)}" AgentDutyCode="${esc(config.dutyCode)}" RequestorType="${esc(config.requestorType)}"/>
     </amasec:AMA_SecurityHostedUser>
-  </soap:Header>
-  <soap:Body>
-${bodyXml}
-  </soap:Body>
-</soap:Envelope>`;
+`;
 };
 
 export { NS };
