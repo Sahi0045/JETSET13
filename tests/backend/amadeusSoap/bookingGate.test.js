@@ -272,3 +272,121 @@ describe('post-payment rejections reverse the charge', () => {
     expect(res.body.error).not.toMatch(/itineraries=/);
   });
 });
+
+/**
+ * Two POSTs for one payment.
+ *
+ * The existing-PNR check cannot catch a race: between two concurrent requests
+ * neither has a PNR yet, so both pass it and both run the chain, selling two
+ * sets of seats against a single charge. A double-clicked confirm button or a
+ * client retry mid-chain is enough.
+ *
+ * The claim itself is a compare-and-set in the database - verified against a
+ * real Postgres, where two simultaneous callers produce exactly one winner.
+ * What is asserted here is the route's half: that a live claim is refused, and
+ * refused WITHOUT reversing the payment, because the request holding it may be
+ * about to succeed.
+ */
+// Shaped well enough to get PAST the offer gate, so the claim is what the test
+// actually exercises. The UI-shaped offer above is rejected earlier.
+const bookableOffer = {
+  type: 'flight-offer',
+  id: '1',
+  source: 'GDS',
+  itineraries: [{
+    duration: 'PT7H45M',
+    segments: [{
+      id: '1',
+      departure: { iataCode: 'JFK', at: '2026-11-15T19:25:00' },
+      arrival: { iataCode: 'LHR', at: '2026-11-16T06:10:00' },
+      carrierCode: 'FI', number: '614', aircraft: { code: '7M9' }, numberOfStops: 0,
+    }],
+  }],
+  price: { currency: 'USD', total: '291.00', base: '110.00' },
+  travelerPricings: [{
+    travelerId: '1', fareOption: 'STANDARD', travelerType: 'ADULT',
+    price: { currency: 'USD', total: '291.00', base: '110.00' },
+    fareDetailsBySegment: [{ segmentId: '1', cabin: 'ECONOMY', fareBasis: 'XJ1QUSLT', class: 'X' }],
+  }],
+  _ama: { wsap: '1ASIWTEST', searchedAt: new Date().toISOString(), segments: [] },
+};
+
+describe('concurrent booking attempts', () => {
+  const inProgressRow = (startedAt) => ({
+    booking_reference: 'FLTTEST1',
+    status: 'pending',
+    booking_details: { gds_chain: { state: 'in_progress', startedAt, attempt: 1 } },
+  });
+
+  beforeEach(() => {
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
+    vi.resetModules();
+  });
+
+  it('refuses a second attempt while the first is still running', async () => {
+    const supabase = (await import('../../../backend/config/supabase.js')).default;
+    supabase.from.mockImplementation(() => {
+      const chain = {};
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+        chain[m] = vi.fn(() => chain);
+      }
+      chain.single = vi.fn().mockResolvedValue({ data: inProgressRow(new Date().toISOString()), error: null });
+      chain.maybeSingle = chain.single;
+      return chain;
+    });
+
+    const app = await makeApp();
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('BOOKING_IN_PROGRESS');
+    // Nothing was sold.
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  // Reversing here would cancel the payment behind a booking that the other
+  // request is seconds from confirming.
+  it('does not reverse the payment of the request that holds the claim', async () => {
+    const supabase = (await import('../../../backend/config/supabase.js')).default;
+    supabase.from.mockImplementation(() => {
+      const chain = {};
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+        chain[m] = vi.fn(() => chain);
+      }
+      chain.single = vi.fn().mockResolvedValue({ data: inProgressRow(new Date().toISOString()), error: null });
+      chain.maybeSingle = chain.single;
+      return chain;
+    });
+
+    const app = await makeApp();
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.body.refundAction).toBeUndefined();
+    expect(res.body.bookingFailed).toBeUndefined();
+  });
+
+  // A process killed mid-chain leaves a claim behind. If that blocked forever,
+  // the customer could never complete a booking they had already paid for.
+  it('lets a later attempt take over an abandoned claim', async () => {
+    const supabase = (await import('../../../backend/config/supabase.js')).default;
+    const stale = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    supabase.from.mockImplementation(() => {
+      const chain = {};
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+        chain[m] = vi.fn(() => chain);
+      }
+      chain.single = vi.fn().mockResolvedValue({ data: inProgressRow(stale), error: null });
+      chain.maybeSingle = chain.single;
+      // The compare-and-set wins: this row is the one that was read.
+      chain.select = vi.fn(() => Object.assign(chain, {
+        then: (resolve) => resolve({ data: [{ booking_reference: 'FLTTEST1' }], error: null }),
+      }));
+      return chain;
+    });
+
+    const app = await makeApp();
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.body.code).not.toBe('BOOKING_IN_PROGRESS');
+  });
+});
