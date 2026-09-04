@@ -231,7 +231,18 @@ describe('route SEO page generator', () => {
 
   it('keeps Vercel public-document rewrites aligned with indexable routes', async () => {
     const config = JSON.parse(await readFile('vercel.json', 'utf8'));
-    const [, topLevelDocuments, visaDocuments, ...spaFallbacks] = config.rewrites;
+
+    // Located by what each rule does, not by where it sits. This used to
+    // destructure by index, so adding an unrelated rewrite - routing
+    // /api/flights to the Frankfurt host, say - broke a test about SEO
+    // documents, which tells you nothing about what actually went wrong.
+    const topLevelDocuments = config.rewrites.find((r) => r.destination === '/$1/index.html');
+    const visaDocuments = config.rewrites.find((r) => r.destination === '/visa/$1/index.html');
+    const spaFallbacks = config.rewrites.filter((r) => r.destination === '/spa-shell.html');
+
+    expect(topLevelDocuments, 'no top-level document rewrite in vercel.json').toBeDefined();
+    expect(visaDocuments, 'no visa document rewrite in vercel.json').toBeDefined();
+
     const topLevelPaths = topLevelDocuments.source.match(/\((.*)\)/)[1]
       .split('|')
       .map((pathname) => `/${pathname}`);
@@ -244,6 +255,5 @@ describe('route SEO page generator', () => {
 
     expect(new Set([...topLevelPaths, ...visaPaths])).toEqual(new Set(expectedPaths));
     expect(spaFallbacks).toHaveLength(4);
-    expect(spaFallbacks.every(({ destination }) => destination === '/spa-shell.html')).toBe(true);
   });
 });
