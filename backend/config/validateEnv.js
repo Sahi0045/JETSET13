@@ -20,7 +20,11 @@ const REQUIRED = [
 
 // Missing these only disables a feature — warn, don't crash.
 const OPTIONAL = [
-  { keys: ['AMADEUS_API_KEY', 'REACT_APP_AMADEUS_API_KEY'], label: 'Amadeus (flights/hotels)' },
+  // Flights run on Amadeus Enterprise Web Services (SOAP). Missing config degrades
+  // flights to a clean 503 via the AMADEUS_WS_ENABLED kill switch - never a crash.
+  { keys: ['AMADEUS_WS_ENDPOINT'], label: 'Amadeus Web Services (flights)' },
+  // Hotels still use the Self-Service REST keys (host currently has no DNS).
+  { keys: ['AMADEUS_API_KEY', 'REACT_APP_AMADEUS_API_KEY'], label: 'Amadeus REST (hotels)' },
   { keys: ['ARC_PAY_MERCHANT_ID'], label: 'ARC Pay (payments)' },
   { keys: ['RESEND_API_KEY'], label: 'Resend (email)' },
   { keys: ['REDIS_URL'], label: 'Redis (caching)' },

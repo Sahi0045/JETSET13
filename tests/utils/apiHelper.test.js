@@ -30,20 +30,17 @@ describe('apiHelper', () => {
   });
 
   describe('apiRequest', () => {
-    it('adds auth token from localStorage if available', async () => {
-      localStorage.setItem('token', 'test-token-123');
+    // Auth moved to httpOnly cookies; a token in localStorage must NOT be
+    // promoted to an Authorization header, or the cutover is undone silently.
+    it('sends cookies and ignores any token left in localStorage', async () => {
+      localStorage.setItem('token', 'stale-token-123');
       globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => ({}) });
 
       await apiRequest('test-endpoint');
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer test-token-123'
-          })
-        })
-      );
+      const [, init] = fetch.mock.calls[0];
+      expect(init.credentials).toBe('include');
+      expect(init.headers).not.toHaveProperty('Authorization');
     });
 
     it('works without auth token', async () => {
