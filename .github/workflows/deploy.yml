@@ -77,14 +77,20 @@ jobs:
       # docker-compose.yml and the Caddyfile used to be copied by hand, once.
       # Any later edit in the repo silently never reached the host, and nothing
       # detected the drift. Ship them with the release instead.
-      - name: Ship the compose file and Caddyfile
+      # Staged into the deploy user's own directory, then moved into place by
+      # the deploy step. The originals in /opt/jetsetters were put there by
+      # root (`sudo mv`, per deploy/README.md), so `deploy` cannot open them
+      # for writing - scp fails with "Cannot open: Permission denied". It CAN
+      # replace them, because /opt/jetsetters itself is deploy-owned and
+      # unlinking a file needs write permission on the directory, not the file.
+      - name: Stage the compose file and Caddyfile
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "deploy/docker-compose.yml,deploy/Caddyfile"
-          target: /opt/jetsetters
+          target: /home/${{ secrets.VPS_USER }}/config-staging
           strip_components: 1
           overwrite: true
 
@@ -98,6 +104,15 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/jetsetters
+
+            # Replace rather than overwrite - see the staging step above.
+            for f in docker-compose.yml Caddyfile; do
+              staged="$HOME/config-staging/$f"
+              if [ -f "$staged" ] && ! cmp -s "$staged" "$f"; then
+                echo "updating $f"
+                rm -f "$f" && mv "$staged" "$f"
+              fi
+            done
 
             IMAGE="${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha }}"
             echo "APP_IMAGE=$IMAGE" > .image
