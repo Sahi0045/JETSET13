@@ -498,9 +498,7 @@ async function saveBookingToDatabase(bookingData) {
   }
 }
 
-// Helper function to generate mock PNR for demo/test bookings
 
-// Helper function to get Amadeus credentials
 
 // Common city name to IATA code mapping for resolving non-IATA inputs
 const CITY_TO_IATA = {
@@ -707,10 +705,6 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
     }
   }).filter(Boolean);
 };
-
-// Build raw Amadeus-shaped flight offers for LOCAL TESTING only (e.g. when the Amadeus key
-// is rate-limited). Returned through transformAmadeusFlightData so the shape — including
-// `originalOffer` used by the booking step — matches a real search result exactly.
 
 // Flight search endpoint
 router.post('/search', validate({ body: flightSearchSchema }), async (req, res) => {
@@ -1720,7 +1714,8 @@ router.delete('/order/:orderId', async (req, res) => {
   }
 });
 
-// Get flight order details (with fallback simulation due to API limitations)
+// Get flight order details. Answers from the GDS or fails honestly - there is
+// no simulated fallback, which is the whole point of this handler.
 router.get('/order/:orderId', async (req, res) => {
   const { orderId } = req.params;
 
@@ -2039,7 +2034,6 @@ router.get('/analytics/busiest', async (req, res) => {
   }
 });
 
-// In-memory cache for calendar prices (origin-dest-date -> { price, timestamp })
 
 // Cheapest Flight Dates
 router.get('/cheapest-dates', async (req, res) => {

@@ -15,12 +15,19 @@ api.jetsetterss.com {
 	reverse_proxy app:5004 {
 		# Deliberately NOT setting X-Forwarded-For here.
 		#
-		# Caddy already APPENDS the immediate peer to X-Forwarded-For. Setting it
-		# explicitly REPLACES the header instead, discarding the client address
-		# Vercel's edge put there - so every request would arrive looking like it
-		# came from Vercel, and a 300/min per-IP limiter would throttle the whole
-		# site as one visitor. The chain is browser -> Vercel -> Caddy -> app, so
-		# the app needs TRUST_PROXY_HOPS=2 to read the client from it.
+		# Caddy REPLACES X-Forwarded-For with its immediate peer unless that peer
+		# is listed in `trusted_proxies` - it will not take an untrusted upstream's
+		# word for who the client is. Setting the header explicitly here would not
+		# recover the visitor's address either; it would just make the intent
+		# look deliberate.
+		#
+		# So `req.ip` in the app is a Vercel edge address, whatever TRUST_PROXY_HOPS
+		# is set to. That is understood and compensated for rather than fixed:
+		# trusting the incoming header would mean `trusted_proxies 0.0.0.0/0`,
+		# since Vercel publishes no stable egress ranges for rewrites - and this
+		# host is publicly reachable, so anyone could then forge the header
+		# outright. See "Why the rate limit is higher here than on Vercel" in
+		# deploy/README.md for what carries the load instead.
 
 		# The booking chain is ten sequential GDS calls; a slow PDT response can
 		# push a single request past a default 30 s. Generous here, because the

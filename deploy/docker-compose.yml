@@ -55,6 +55,12 @@ services:
       # limits - so it is a named volume, and it is what the backups cover.
       - caddy_data:/data
       - caddy_config:/config
+      # The Caddyfile writes its access log to /var/log/caddy inside the
+      # container. Without this mount that log was unreachable from the host,
+      # died on every `docker compose up -d`, and the host logrotate installed
+      # by bootstrap.sh rotated an empty directory - while deploy/README.md
+      # told operators to tail it.
+      - /var/log/caddy:/var/log/caddy
     depends_on:
       - app
     logging:

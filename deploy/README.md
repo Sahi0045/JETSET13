@@ -5,9 +5,11 @@ reasons. Amadeus allow-lists a **fixed egress IP**, which serverless cannot
 offer; and a booking is ten sequential GDS calls, which does not reliably fit
 inside an edge function's timeout.
 
-Vercel keeps serving the site and rewrites `/api/*` here, so **no client release
-is needed** — both the web app and the mobile app already point at
-`www.jetsetterss.com/api`.
+Vercel keeps serving the site and rewrites **`/api/flights/*` and
+`/api/airports/*`** here — only the Amadeus surfaces. Everything else
+(auth, payments, admin, cruises, hotels, visas) still runs on Vercel's
+serverless function. So **no client release is needed**: both the web app and
+the mobile app already point at `www.jetsetterss.com/api`.
 
 | | |
 |---|---|
@@ -49,7 +51,9 @@ design. Root-only ownership fails the deploy with
 `open /opt/jetsetters/.env: permission denied`, which looks like a Docker
 problem and is not.
 
-Then copy the two config files across from a checkout:
+Then copy the two config files across from a checkout. After this first time
+CI ships them with every deploy, so edit them in the repo rather than on the
+box — a hand-edit here is overwritten on the next release:
 
 ```bash
 scp -i ~/Downloads/jetset.pem deploy/docker-compose.yml deploy/Caddyfile \
@@ -77,10 +81,13 @@ curl -fsS https://api.jetsetterss.com/api/health
 ### 5. Route Vercel's `/api/*` here
 
 In `vercel.json`, **before** the existing `/api/(.*) → /api/index.js` rule
-(first match wins):
+(first match wins). Route only the Amadeus surfaces — a blanket `/api/(.*)`
+would move auth, payments and email off Vercel too, onto a box whose entry
+point does not mount all of them:
 
 ```json
-{ "source": "/api/(.*)", "destination": "https://api.jetsetterss.com/api/$1" }
+{ "source": "/api/flights/(.*)",  "destination": "https://api.jetsetterss.com/api/flights/$1" },
+{ "source": "/api/airports/(.*)", "destination": "https://api.jetsetterss.com/api/airports/$1" }
 ```
 
 ### 6. Wire up CI deploys
@@ -121,6 +128,16 @@ APP_IMAGE=ghcr.io/sahi0045/jetsetters-api:<short-sha> docker compose up -d
 
 Every build is tagged with its short SHA, so this is a pull rather than a
 rebuild.
+
+`APP_IMAGE` is read from the environment of the command you run, and
+`docker-compose.yml` falls back to `:latest` without it. CI retags the local
+`:latest` to whatever it deployed, so the two agree — but after a **manual**
+rollback they do not, and the next bare `docker compose up -d` will roll
+forward again. Either keep using the pinned command, or retag it yourself:
+
+```bash
+docker tag ghcr.io/sahi0045/jetsetters-api:<short-sha> ghcr.io/sahi0045/jetsetters-api:latest
+```
 
 **Logs:**
 
