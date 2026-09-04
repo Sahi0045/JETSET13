@@ -147,6 +147,35 @@ of keeping all of it in the environment.
 
 ---
 
+## Why the rate limit is higher here than on Vercel
+
+`RATE_LIMIT_MAX=2000` on this host, against the 300 default everywhere else.
+That is deliberate, not drift.
+
+Caddy replaces `X-Forwarded-For` with its immediate peer unless that peer is in
+`trusted_proxies` - it will not take an untrusted upstream's word for who the
+client is. The peer here is Vercel's edge, so `req.ip` resolves to an edge
+address shared by many visitors rather than to one person.
+
+Trusting the incoming header instead would make it worse, not better. Vercel
+does not publish stable egress ranges for rewrites (dedicated egress is a
+Secure Compute feature), so `trusted_proxies` would need `0.0.0.0/0` - and this
+host is publicly reachable, so anyone could then send
+`X-Forwarded-For: <anything>` straight to it, forge log entries, and rotate
+fake addresses to bypass the limiter completely. A coarse limit is weaker than
+a per-visitor one; a forgeable limit is no limit.
+
+So per-IP limiting is not the real protection for these endpoints, and it was
+never meant to be:
+
+  - Redis caches searches, so repeats never reach Amadeus
+  - the WSAP semaphore bounds concurrency to Amadeus regardless of inbound load
+  - AMADEUS_WS_ENABLED turns flights off entirely without a deploy
+
+The limiter's job here is catching a runaway client, which 2000/min still does.
+If Vercel ever offers stable egress IPs on this plan, set `trusted_proxies` to
+them and drop this back to 300.
+
 ## What to back up
 
 Only two things on this box are not reproducible from the repo:
