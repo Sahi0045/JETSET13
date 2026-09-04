@@ -2,9 +2,16 @@
  * Counting semaphore bounding concurrent Amadeus conversations.
  *
  * A WSAP has a fixed ceiling on simultaneous sessions and sockets; exceeding it
- * produces intermittent failures under load that look like unrelated bugs. The
- * permit is held for a whole session, not per call, because the session is what
- * Amadeus counts.
+ * produces intermittent failures under load that look like unrelated bugs.
+ *
+ * For a stateful sequence the permit is taken by `withSession` and held until
+ * after sign-out, because the SESSION is what Amadeus counts - not the calls.
+ * Bounding calls instead lets any number of chains sit holding open sessions
+ * between their steps, which is the overrun this is here to prevent. Calls made
+ * inside a session therefore pass `bypassSemaphore`.
+ *
+ * A stateless call takes its own permit in `postEnvelope`: there, one call is
+ * one conversation.
  *
  * Waiting is bounded: an unbounded queue converts a slow Amadeus into a pile of
  * timed-out requests holding sockets. Past the bound the caller gets a 503 and
@@ -62,3 +69,18 @@ export class Semaphore {
     return { active: this.active, waiting: this.waiters.length, limit: this.limit };
   }
 }
+
+/**
+ * The process-wide semaphore, built on first use.
+ *
+ * A singleton because the ceiling belongs to the WSAP, not to any one request -
+ * a per-request semaphore would bound nothing.
+ */
+let instance = null;
+export const getSemaphore = (config) => {
+  if (!instance) instance = new Semaphore(config.maxConcurrency, config.queueTimeoutMs);
+  return instance;
+};
+
+/** Tests only: drop the singleton so a fresh limit takes effect. */
+export const _resetSemaphore = () => { instance = null; };

@@ -4,6 +4,10 @@ import User from '../models/user.model.js';
 import axios from 'axios';
 import crypto from 'crypto';
 import supabase from '../config/supabase.js';
+// Auth calls MUST NOT run on the shared client - see supabaseAuthClient.js.
+// `refreshSession` saves the session onto whatever client it is called on, and
+// from then on every query that client makes runs as that user under RLS.
+import supabaseAuth from '../config/supabaseAuthClient.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
 import { JWT_SECRET, JWT_EXPIRE } from '../config/jwt.js';
 import { isSuperAdmin } from '../middleware/auth.middleware.js';
@@ -564,7 +568,7 @@ export const refreshSession = async (req, res) => {
     const refresh_token = req.cookies?.jt_refresh;
     if (!refresh_token) return res.status(401).json({ success: false, message: 'No refresh token' });
 
-    const { data, error } = await supabase.auth.refreshSession({ refresh_token });
+    const { data, error } = await supabaseAuth.auth.refreshSession({ refresh_token });
     if (error || !data?.session) return res.status(401).json({ success: false, message: 'Refresh failed' });
 
     const csrfToken = setSessionCookies(res, data.session.access_token, data.session.refresh_token);
@@ -586,7 +590,7 @@ export const getSupabaseSession = async (req, res) => {
     const refresh_token = req.cookies?.jt_refresh;
     if (!refresh_token) return res.status(401).json({ success: false, message: 'No session' });
 
-    const { data, error } = await supabase.auth.refreshSession({ refresh_token });
+    const { data, error } = await supabaseAuth.auth.refreshSession({ refresh_token });
     if (error || !data?.session) return res.status(401).json({ success: false, message: 'Session expired' });
 
     setSessionCookies(res, data.session.access_token, data.session.refresh_token);

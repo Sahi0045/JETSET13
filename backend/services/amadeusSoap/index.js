@@ -35,8 +35,20 @@ const signatureOf = (p) => createHash('sha1')
 
 const reportIfAlerting = (error) => {
   if (error instanceof AmadeusSoapError && error.alert) {
-    reportError(error, { service: 'amadeus-ws', operation: error.operation, amadeusCode: error.amadeusCode });
+    reportError(error, {
+      service: 'amadeus-ws',
+      // Which WSAP produced it. Without this a PDT fault and a production fault
+      // are indistinguishable in triage, and after cutover both exist at once.
+      wsap: safeWsap(),
+      operation: error.operation,
+      amadeusCode: error.amadeusCode,
+    });
   }
+};
+
+/** The configured WSAP, or null - reading config must never break reporting. */
+const safeWsap = () => {
+  try { return getWsConfig().wsap ?? null; } catch { return null; }
 };
 
 const soapReply = (result) => {

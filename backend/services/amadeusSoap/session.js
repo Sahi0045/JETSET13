@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import logger from '../logger.js';
 import { OPERATIONS, STATELESS_OPERATIONS } from './codes.js';
 import { getWsConfig } from './config.js';
+import { getSemaphore } from './semaphore.js';
 import { postEnvelope } from './transport.js';
 
 const log = logger.child({ svc: 'amadeus-ws' });
@@ -86,7 +87,12 @@ export const withSession = async (fn, options = {}) => {
         }
         : { status: 'Start' };
 
-      const result = await postEnvelope({ operation, bodyXml, session: outgoing, config, ...callOptions });
+      // The permit is already held for the whole session (below), so each call
+      // inside it must not try to take a second one - with a low limit that is
+      // an immediate self-deadlock.
+      const result = await postEnvelope({
+        operation, bodyXml, session: outgoing, config, bypassSemaphore: true, ...callOptions,
+      });
       if (result.session?.sessionId) session = result.session;
       return result;
     },
@@ -99,13 +105,30 @@ export const withSession = async (fn, options = {}) => {
     throw new Error('withSession() must not be nested; pass the existing ctx down instead');
   }
 
+  // One permit for the WHOLE session, not one per call.
+  //
+  // Amadeus counts simultaneous SESSIONS against the WSAP ceiling, not
+  // simultaneous HTTP requests. Taking the permit inside postEnvelope - which
+  // is what happened before - bounded only the calls in flight: any number of
+  // booking chains could sit holding open sessions between their calls, as long
+  // as no more than `limit` were mid-request. That is precisely the overrun
+  // this semaphore exists to prevent, and the module comment already claimed
+  // this behaviour without implementing it.
+  //
+  // Held until AFTER sign-out, because the session is not returned to Amadeus
+  // until then.
+  await getSemaphore(config).acquire();
   try {
     return await activeSession.run(true, () => fn(ctx));
   } finally {
-    if (session?.sessionId) {
-      // Own try/catch and own short timeout: a hung sign-out must never become
-      // the caller's error, and must never mask the real one.
-      await signOutQuietly(session, config);
+    try {
+      if (session?.sessionId) {
+        // Own try/catch and own short timeout: a hung sign-out must never become
+        // the caller's error, and must never mask the real one.
+        await signOutQuietly(session, config);
+      }
+    } finally {
+      getSemaphore(config).release();
     }
   }
 };

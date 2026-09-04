@@ -1316,8 +1316,11 @@ router.post('/order', async (req, res) => {
         reportError(providerError, {
           service: 'amadeus-ws',
           flow: 'booking',
+          wsap: providerStatus().wsap ?? null,
           step: providerError.step,
-          pnr: providerError.pnr
+          pnr: providerError.pnr,
+          ticketed: providerError.ticketed,
+          bookingReference: req.body.bookingReference
         });
         return res.status(202).json({
           success: true,
@@ -1593,21 +1596,44 @@ router.delete('/order/:orderId', async (req, res) => {
         });
       }
 
+      // A `needsReview` answer is a DECISION, not a malfunction: the airline
+      // still holds the booking, so the orchestrator withheld the refund on
+      // purpose. Falling through to the fallback below would overwrite that
+      // with `status: 'cancelled'` and tell the customer it worked - burying
+      // the flag and leaving them believing they have no flight when they do.
+      if (cancelResult?.needsReview) {
+        console.error('⛔ Cancel needs review; not overriding with the fallback', { orderId });
+        return res.status(502).json({
+          success: false,
+          error: cancelResult.error
+            || 'We could not cancel your reservation with the airline. '
+              + 'Our team has been alerted - please call (877) 538-7380 if it is urgent.',
+          bookingReference: cancelResult.bookingReference,
+          needsReview: true,
+          mode: 'ORCHESTRATED_CANCELLATION'
+        });
+      }
+
       console.warn('⚠️ Orchestrated cancel returned error:', cancelResult?.error);
     } catch (invokeError) {
       console.warn('⚠️ Orchestrated cancel failed:', invokeError.message);
     }
 
-    // Fallback: mock-aware Amadeus cancel + DB status (no refund) if the orchestrator is unreachable
+    // Fallback: only for when the orchestrator was unreachable. It issues no
+    // refund, so it must not claim a cancellation it cannot substantiate.
     let amadeusCancelled = false;
+    let bookingRef = orderId;
     if (supabase) {
       try {
         const { data: bk } = await supabase
           .from('bookings')
-          .select('booking_details')
+          .select('booking_reference, booking_details')
           .or(`booking_reference.eq.${orderId},booking_details->>order_id.eq.${orderId},booking_details->>amadeus_order_id.eq.${orderId}`)
           .limit(1)
           .maybeSingle();
+        // `orderId` may be a record locator rather than our own reference, so
+        // keep the row's real reference for the needs_review patch below.
+        bookingRef = bk?.booking_reference || bookingRef;
         const amaId = bk?.booking_details?.amadeus_order_id || bk?.booking_details?.order_id || orderId;
         try {
           const r = await FlightProvider.cancelFlightOrder(amaId);
@@ -1619,6 +1645,27 @@ router.delete('/order/:orderId', async (req, res) => {
         console.warn('⚠️ Booking lookup for cancellation failed:', lookupErr.message);
       }
 
+      // Marking the row cancelled while the airline still holds the seats is
+      // the worst outcome available here: the customer is told they are
+      // cancelled, stops expecting a flight, and no refund was issued either.
+      // Only record a cancellation the GDS actually confirmed.
+      if (!amadeusCancelled) {
+        await patchBookingDetails(bookingRef, {
+          needs_review: {
+            reason: 'fallback cancel could not reach the GDS; booking may still be live',
+            at: new Date().toISOString()
+          }
+        });
+        return res.status(502).json({
+          success: false,
+          error: 'We could not confirm the cancellation with the airline. '
+            + 'Our team has been alerted - please call (877) 538-7380 to complete it.',
+          amadeusCancelled: false,
+          needsReview: true,
+          mode: 'FALLBACK_CANCELLATION'
+        });
+      }
+
       const { error } = await supabase
         .from('bookings')
         .update({ status: 'cancelled' })
@@ -1627,7 +1674,7 @@ router.delete('/order/:orderId', async (req, res) => {
       if (!error) {
         return res.json({
           success: true,
-          message: `Order ${orderId} has been cancelled${amadeusCancelled ? '' : ' (refund pending manual processing)'}`,
+          message: `Order ${orderId} has been cancelled (refund pending manual processing)`,
           amadeusCancelled,
           mode: 'FALLBACK_CANCELLATION'
         });
