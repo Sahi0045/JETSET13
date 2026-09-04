@@ -1,5 +1,5 @@
 import express from 'express';
-import AmadeusService from '../services/amadeusService.js';
+import FlightProvider from '../services/flightProvider.js';
 
 const router = express.Router();
 
@@ -27,7 +27,7 @@ router.get('/search', async (req, res) => {
 
         console.log(`✈️ Airport search (GET): "${keyword}" (${type})`);
 
-        const result = await AmadeusService.searchLocations(keyword, type, options);
+        const result = await FlightProvider.searchLocations(keyword, type, options);
 
         if (result.success) {
             return res.json({
@@ -76,7 +76,7 @@ router.post('/search', async (req, res) => {
 
         console.log(`✈️ Airport search request: "${keyword}" (${type})`);
 
-        const result = await AmadeusService.searchLocations(keyword, type, options);
+        const result = await FlightProvider.searchLocations(keyword, type, options);
 
         if (result.success) {
             return res.json({

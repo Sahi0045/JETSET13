@@ -1,5 +1,6 @@
 import express from 'express';
-import AmadeusService from '../services/amadeusService.js';
+import FlightProvider, { providerStatus } from '../services/flightProvider.js';
+import { resolveToIata } from '../services/airportsIndex.js';
 import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
 import { get as cacheGet, set as cacheSet, withCache, CacheKeys, TTL } from '../services/cache.service.js';
@@ -349,34 +350,17 @@ const CITY_TO_IATA = {
  * If it's already 3 uppercase letters, return as-is.
  * Otherwise try the static map, then fall back to Amadeus location search.
  */
-const resolveToIATACode = async (location) => {
+const resolveToIATACode = (location) => {
   if (!location) return location;
-
-  // Already an IATA code (3 uppercase letters)
   if (/^[A-Z]{3}$/.test(location)) return location;
 
-  // Try static map (case-insensitive)
-  const lower = location.toLowerCase().trim();
-  if (CITY_TO_IATA[lower]) {
-    console.log(`📍 Resolved "${location}" -> ${CITY_TO_IATA[lower]} (static map)`);
-    return CITY_TO_IATA[lower];
-  }
+  // Curated overrides first, then the bundled dataset. The WSAP has no
+  // location-search operation, so there is no network fallback - an
+  // unresolvable place is returned as-is and Amadeus reports it clearly.
+  const lower = String(location).toLowerCase().trim();
+  if (CITY_TO_IATA[lower]) return CITY_TO_IATA[lower];
 
-  // Try Amadeus location search API as fallback
-  try {
-    const result = await AmadeusService.searchLocations(location, 'CITY,AIRPORT', { limit: 1 });
-    if (result.success && result.data?.length > 0) {
-      const code = result.data[0].code;
-      console.log(`📍 Resolved "${location}" -> ${code} (Amadeus API)`);
-      return code;
-    }
-  } catch (err) {
-    console.warn(`⚠️ Could not resolve "${location}" via Amadeus API:`, err.message);
-  }
-
-  // Return as-is if nothing matched (will likely fail at Amadeus, but gives a clear error)
-  console.warn(`⚠️ Could not resolve "${location}" to IATA code, passing as-is`);
-  return location;
+  return resolveToIata(location) ?? location;
 };
 
 // Transform Amadeus API response to frontend format
@@ -613,39 +597,9 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
 
     const { from, to, departDate, returnDate, tripType, travelers } = req.body;
 
-    // LOCAL TESTING: serve mock flights without calling Amadeus (e.g. when the API key is
-    // rate-limited). Opt-in via ENABLE_MOCK_FLIGHTS=true — never set this in production.
-    if (process.env.ENABLE_MOCK_FLIGHTS === 'true') {
-      const mockParams = { from, to, departDate, returnDate, adults: parseInt(req.body.adults || travelers) || 1 };
-      const mockFlights = transformAmadeusFlightData(buildMockFlightOffers(mockParams));
-      console.log(`🧪 ENABLE_MOCK_FLIGHTS=true → returning ${mockFlights.length} mock flights (Amadeus skipped)`);
-      return res.json({
-        success: true,
-        data: mockFlights,
-        meta: { searchParams: mockParams, resultCount: mockFlights.length, source: 'mock' }
-      });
-    }
-
-    // Check if Amadeus credentials are available
-    const { apiKey, apiSecret } = getAmadeusCredentials();
-    console.log('Checking Amadeus credentials:', {
-      key: apiKey ? 'Available' : 'Missing',
-      secret: apiSecret ? 'Available' : 'Missing'
-    });
-
-    if (!apiKey || !apiSecret) {
-      console.error('❌ Missing Amadeus API credentials');
-      return res.status(500).json({
-        success: false,
-        error: 'Amadeus API credentials not configured. Please contact support.'
-      });
-    }
-
-    console.log('✅ Amadeus credentials found, proceeding with real API call');
-
     // Resolve city names to IATA codes (handles cases like "New York" -> "JFK")
-    const resolvedFrom = await resolveToIATACode(from);
-    const resolvedTo = await resolveToIATACode(to);
+    const resolvedFrom = resolveToIATACode(from);
+    const resolvedTo = resolveToIATACode(to);
     console.log(`📍 Resolved locations: from="${from}" -> "${resolvedFrom}", to="${to}" -> "${resolvedTo}"`);
 
     // Prepare search parameters
@@ -679,7 +633,7 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
       if (amadeusResponse) {
         console.log('✅ Flight search served from cache');
       } else {
-        amadeusResponse = await AmadeusService.searchFlights(searchParams);
+        amadeusResponse = await FlightProvider.searchFlights(searchParams);
         // Only cache successful, non-empty results — never cache failures/empties
         if (amadeusResponse?.success && amadeusResponse.data?.length) {
           await cacheSet(flightCacheKey, amadeusResponse, TTL.FLIGHT_SEARCH);
@@ -715,7 +669,7 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
           searchParams: searchParams,
           resultCount: transformedFlights.length,
           totalResults: amadeusResponse.data.length,
-          source: 'amadeus-production-api'
+          source: 'amadeus-gds'
         }
       });
 
@@ -753,7 +707,7 @@ router.post('/price', async (req, res) => {
       });
     }
 
-    const pricingResponse = await AmadeusService.priceFlightOffer(flightOffer);
+    const pricingResponse = await FlightProvider.priceFlightOffer(flightOffer);
 
     if (!pricingResponse.success) {
       throw new Error(pricingResponse.error);
@@ -786,7 +740,7 @@ router.post('/upsell', async (req, res) => {
       });
     }
 
-    const upsellResponse = await AmadeusService.getBrandedFareUpsell(flightOffer);
+    const upsellResponse = await FlightProvider.getBrandedFareUpsell(flightOffer);
 
     // Reuse the standard transform so fare options share the card data shape
     const options = transformAmadeusFlightData(
@@ -833,7 +787,7 @@ router.post('/date-prices', async (req, res) => {
       const limited = dates.slice(0, 35).filter((d) => d && d >= today);
 
       const probe = async (date) => {
-        const r = await AmadeusService.searchFlights({
+        const r = await FlightProvider.searchFlights({
           from: resolvedFrom,
           to: resolvedTo,
           departDate: date,
@@ -886,7 +840,7 @@ router.post('/fare-rules', async (req, res) => {
       return res.status(400).json({ success: false, error: 'flightOffer is required' });
     }
 
-    const priced = await AmadeusService.priceFlightOffer(flightOffer, {
+    const priced = await FlightProvider.priceFlightOffer(flightOffer, {
       include: ['detailed-fare-rules', 'bags']
     });
 
@@ -980,17 +934,17 @@ router.post('/seatmaps', async (req, res) => {
     }
 
     // First attempt with the offer as received
-    let result = await AmadeusService.getSeatMaps(flightOffer);
+    let result = await FlightProvider.getSeatMaps(flightOffer);
 
     // Amadeus offers expire fast — by the time the user reaches the booking page the
     // stored offer is often stale and the seat map comes back empty. Re-price the offer
     // (which returns a freshly validated copy) and retry once.
     if (!result?.data || result.data.length === 0) {
       try {
-        const priced = await AmadeusService.priceFlightOffer(flightOffer);
+        const priced = await FlightProvider.priceFlightOffer(flightOffer);
         const refreshed = priced?.data?.flightOffers?.[0];
         if (refreshed) {
-          const retry = await AmadeusService.getSeatMaps(refreshed);
+          const retry = await FlightProvider.getSeatMaps(refreshed);
           if (retry?.data && retry.data.length > 0) result = retry;
         }
       } catch (repriceErr) {
@@ -1273,7 +1227,7 @@ router.post('/order', async (req, res) => {
     let pricedOffer = offers[0];
     try {
       console.log('💰 Pricing flight offer before booking...');
-      const pricingResult = await AmadeusService.priceFlightOffer(offers[0]);
+      const pricingResult = await FlightProvider.priceFlightOffer(offers[0]);
       if (pricingResult.success && pricingResult.data?.flightOffers?.[0]) {
         pricedOffer = pricingResult.data.flightOffers[0];
         console.log('✅ Flight offer priced successfully, using priced version');
@@ -1314,14 +1268,14 @@ router.post('/order', async (req, res) => {
     // Wrap Amadeus service call in try-catch to handle errors gracefully
     let orderResponse;
     try {
-      orderResponse = await AmadeusService.createFlightOrder(flightOrderData);
+      orderResponse = await FlightProvider.createFlightOrder(flightOrderData);
       console.log('✅ Amadeus service call completed:', {
         success: orderResponse?.success,
         mode: orderResponse?.mode,
         hasPnr: !!orderResponse?.pnr
       });
     } catch (amadeusServiceError) {
-      console.error('❌ AmadeusService.createFlightOrder threw an error:', amadeusServiceError);
+      console.error('❌ FlightProvider.createFlightOrder threw an error:', amadeusServiceError);
 
       // PRODUCTION: never fabricate a booking after a real charge — reverse the payment instead.
       if (process.env.NODE_ENV === 'production') {
@@ -1669,7 +1623,7 @@ router.delete('/order/:orderId', async (req, res) => {
           .maybeSingle();
         const amaId = bk?.booking_details?.amadeus_order_id || bk?.booking_details?.order_id || orderId;
         try {
-          const r = await AmadeusService.cancelFlightOrder(amaId);
+          const r = await FlightProvider.cancelFlightOrder(amaId);
           amadeusCancelled = !!r?.success;
         } catch (e) {
           console.warn('⚠️ Fallback Amadeus cancel failed:', e.error || e.message);
@@ -1714,7 +1668,7 @@ router.get('/order/:orderId', async (req, res) => {
 
     // Try real Amadeus API first
     try {
-      const orderDetails = await AmadeusService.getFlightOrderDetails(orderId);
+      const orderDetails = await FlightProvider.getFlightOrderDetails(orderId);
 
       if (orderDetails.success) {
         return res.json({
@@ -1789,27 +1743,16 @@ router.get('/order/:orderId', async (req, res) => {
 });
 
 // Health check endpoint
-router.get('/health', async (req, res) => {
-  try {
-    const { apiKey, apiSecret } = getAmadeusCredentials();
-
-    res.json({
-      success: true,
-      service: 'Flight API',
-      status: 'operational',
-      credentials: {
-        configured: !!(apiKey && apiSecret),
-        keySource: apiKey ? 'Available' : 'Missing',
-        secretSource: apiSecret ? 'Available' : 'Missing'
-      },
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
+router.get('/health', (req, res) => {
+  // Reports configuration presence and the bundled dataset version. Never
+  // reports credential values, and deliberately does not call Amadeus: a health
+  // check that opened a session would burn WSAP quota on every probe.
+  res.json({
+    success: true,
+    status: 'ok',
+    ...providerStatus(),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Get a single booking by bookingReference (For Manage Booking page)
@@ -2028,7 +1971,7 @@ router.get('/analytics/booked', async (req, res) => {
     }
 
     console.log(`📊 Analytics: Most booked from ${origin}`);
-    const result = await AmadeusService.getMostBookedDestinations(origin, period);
+    const result = await FlightProvider.getMostBookedDestinations(origin, period);
 
     res.json({
       success: result.success,
@@ -2051,7 +1994,7 @@ router.get('/analytics/traveled', async (req, res) => {
     }
 
     console.log(`📊 Analytics: Most traveled from ${origin}`);
-    const result = await AmadeusService.getMostTraveledDestinations(origin, period);
+    const result = await FlightProvider.getMostTraveledDestinations(origin, period);
 
     res.json({
       success: result.success,
@@ -2074,7 +2017,7 @@ router.get('/analytics/busiest', async (req, res) => {
     }
 
     console.log(`📈 Analytics: Busiest period for ${origin}`);
-    const result = await AmadeusService.getBusiestTravelPeriod(origin, year, direction || 'DEPARTING');
+    const result = await FlightProvider.getBusiestTravelPeriod(origin, year, direction || 'DEPARTING');
 
     res.json({
       success: result.success,
@@ -2103,7 +2046,7 @@ router.get('/cheapest-dates', async (req, res) => {
     console.log(`💰 Cheapest dates: ${origin} → ${destination}`);
     const cacheKey = CacheKeys.flightBrowse('cheapest-dates', [origin, destination, departureDate, viewBy || 'DATE', oneWay, nonStop, duration]);
     const result = await withCache(cacheKey, TTL.FLIGHT_BROWSE, async () => {
-      const r = await AmadeusService.getCheapestFlightDates(origin, destination, {
+      const r = await FlightProvider.getCheapestFlightDates(origin, destination, {
         departureDate,
         oneWay: oneWay === 'true',
         duration: duration ? parseInt(duration) : undefined,
@@ -2159,7 +2102,7 @@ router.post('/calendar-prices', async (req, res) => {
       try {
         const resolvedFrom = await resolveToIATACode(origin);
         const resolvedTo = await resolveToIATACode(destination);
-        const result = await AmadeusService.searchFlights({
+        const result = await FlightProvider.searchFlights({
           from: resolvedFrom,
           to: resolvedTo,
           departDate: date,
@@ -2207,7 +2150,7 @@ router.get('/status', async (req, res) => {
     }
 
     console.log(`✈️ Flight status: ${carrier}${flightNumber} on ${date}`);
-    const result = await AmadeusService.getFlightStatus(carrier, flightNumber, date);
+    const result = await FlightProvider.getFlightStatus(carrier, flightNumber, date);
 
     res.json({
       success: result.success,
@@ -2230,7 +2173,7 @@ router.post('/availabilities', async (req, res) => {
     }
 
     console.log(`🎫 Availabilities: ${origin} → ${destination}`);
-    const result = await AmadeusService.getFlightAvailabilities({ origin, destination, departureDate });
+    const result = await FlightProvider.getFlightAvailabilities({ origin, destination, departureDate });
 
     res.json({
       success: result.success,
@@ -2256,7 +2199,7 @@ router.get('/airports/search', async (req, res) => {
     }
 
     console.log(`🔍 Airport search: "${keyword}"`);
-    const result = await AmadeusService.searchLocations(
+    const result = await FlightProvider.searchLocations(
       keyword,
       subType || 'CITY,AIRPORT',
       { countryCode, limit: parseInt(limit) || 10 }
@@ -2286,7 +2229,7 @@ router.get('/inspiration', async (req, res) => {
     console.log(`💡 Inspiration search from ${origin}`);
     const cacheKey = CacheKeys.flightBrowse('inspiration', [origin, departureDate, oneWay, duration, nonStop, maxPrice, viewBy || 'DATE', destination]);
     const result = await withCache(cacheKey, TTL.FLIGHT_BROWSE, async () => {
-      const r = await AmadeusService.getFlightInspirations(origin, {
+      const r = await FlightProvider.getFlightInspirations(origin, {
         departureDate,
         oneWay: oneWay === 'true',
         duration: duration ? parseInt(duration) : undefined,
@@ -2325,7 +2268,7 @@ router.get('/price-analysis', async (req, res) => {
     console.log(`📊 Price analysis: ${origin} → ${destination} on ${departureDate}`);
     const cacheKey = CacheKeys.flightBrowse('price-analysis', [origin, destination, departureDate, currencyCode || 'USD', oneWay]);
     const result = await withCache(cacheKey, TTL.FLIGHT_BROWSE, async () => {
-      const r = await AmadeusService.getFlightPriceAnalysis(origin, destination, departureDate, {
+      const r = await FlightProvider.getFlightPriceAnalysis(origin, destination, departureDate, {
         currencyCode: currencyCode || 'USD',
         oneWay: oneWay === 'true'
       });

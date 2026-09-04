@@ -96,6 +96,23 @@ process.env.JWT_EXPIRE  = '1h';
 process.env.FRONTEND_URL = 'http://localhost:5173';
 process.env.NODE_ENV = 'test';
 
+// ─── Config required at import time ───────────────────────────
+// Several modules validate configuration at module scope and throw when it is
+// absent - arcpay.config.js and backend/config/supabase.js both do, by design,
+// so a misconfigured deploy fails at boot rather than mid-payment. That makes
+// them a hard import-time dependency of anything downstream: flight.routes.js
+// imports the payment handlers for the refund-on-fulfilment-failure path, so it
+// cannot even be loaded without these. A developer .env supplies them locally,
+// which is why their absence only ever surfaced in CI.
+//
+// These are placeholders. Every outbound call is mocked; nothing here reaches a
+// real gateway, and no value is a credential.
+process.env.SUPABASE_URL ??= 'https://test.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY ??= 'test-service-role-key';
+process.env.ARC_PAY_MERCHANT_ID ??= 'TESTMERCHANT';
+process.env.ARC_PAY_API_PASSWORD ??= 'test-api-password';
+process.env.ARC_PAY_BASE_URL ??= 'https://api.test.arcpay.invalid/api/rest/version/77';
+
 // ─── Reset between tests ──────────────────────────────────────
 beforeEach(() => {
   vi.clearAllMocks();
