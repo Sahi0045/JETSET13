@@ -38,7 +38,7 @@ const readSession = (header) => {
  * shape and timing, which is what makes fault rates measurable without putting
  * passport numbers in a log sink.
  */
-export const postEnvelope = async ({ operation, bodyXml, session = null, config = getWsConfig(), timeoutMs }) => {
+export const postEnvelope = async ({ operation, bodyXml, session = null, config = getWsConfig(), timeoutMs, bypassSemaphore = false }) => {
   const envelope = buildEnvelope({ action: operation.action, bodyXml, config, session });
   const started = Date.now();
 
@@ -48,13 +48,19 @@ export const postEnvelope = async ({ operation, bodyXml, session = null, config 
 
   let response;
   try {
-    response = await getSemaphore(config).run(() => axios.post(config.endpoint, envelope, {
+    // Sign-out releases a session rather than consuming one, so it must not
+    // queue behind customer traffic. Every stateless call on this WSAP comes
+    // back with a session to close, so charging sign-outs against the same
+    // budget halves effective throughput.
+    const send = () => axios.post(config.endpoint, envelope, {
       headers: { 'Content-Type': 'text/xml; charset=utf-8', SOAPAction: operation.action },
       timeout: timeoutMs ?? config.timeoutMs,
       validateStatus: () => true,
       responseType: 'text',
       transitional: { silentJSONParsing: false },
-    }));
+    });
+
+    response = bypassSemaphore ? await send() : await getSemaphore(config).run(send);
   } catch (cause) {
     const durationMs = Date.now() - started;
     log.warn({ op: operation.name, ok: false, durationMs, reason: cause?.code || 'transport' }, 'flight.ws.call');

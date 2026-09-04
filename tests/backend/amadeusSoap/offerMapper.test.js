@@ -26,6 +26,31 @@ describe('price', () => {
     expect(Number(offer.price.total) - Number(offer.price.base)).toBeCloseTo(181, 2);
   });
 
+  // The offer total is what the client charges through ARC Pay, so it must
+  // cover every passenger. recPriceInfo carries the all-passenger amount while
+  // paxFareDetail carries the per-passenger one; reading the latter quoted a
+  // 2+1 family 98.00 instead of 286.70. A single adult makes the two identical,
+  // which is why nothing caught it until a family was priced.
+  it('quotes the all-passenger total, not one passenger', () => {
+    const { offers } = load('mptbs-family-del-bom');
+    const offer = offers[0];
+    const sumOfPassengers = offer.travelerPricings.reduce((n, t) => n + Number(t.price.total), 0);
+
+    expect(offer.travelerPricings).toHaveLength(3);
+    expect(Number(offer.price.total)).toBeCloseTo(sumOfPassengers, 2);
+    // The per-adult fare alone must not be mistaken for the offer total.
+    expect(Number(offer.price.total)).toBeGreaterThan(Number(offer.travelerPricings[0].price.total));
+  });
+
+  it.each(['mptbs-oneway-jfk-lhr', 'mptbs-family-del-bom', 'mptbs-roundtrip'])(
+    '%s: offer total reconciles with the sum of passenger fares', (fixture) => {
+      for (const offer of load(fixture).offers) {
+        const sum = offer.travelerPricings.reduce((n, t) => n + Number(t.price.total), 0);
+        expect(Number(offer.price.total)).toBeCloseTo(sum, 2);
+      }
+    },
+  );
+
   it('reports the office currency and never a null total', () => {
     const { offers, currency } = load('mptbs-roundtrip');
     expect(currency).toBe('USD');
