@@ -989,9 +989,16 @@ router.post('/order', async (req, res) => {
         hasTravelersList: travelersList.length > 0,
         receivedKeys: Object.keys(req.body)
       });
-      return res.status(400).json({
-        success: false,
-        error: 'Flight offers are required'
+      // Payment already happened - hosted checkout runs before this route - so
+      // a 400 here is a charge with nothing behind it. Reverse it.
+      return await refundOnFulfillmentFailure(res, {
+        orderId: req.body.orderId,
+        bookingReference: req.body.bookingReference,
+        amount: req.body.totalAmount || req.body.amount,
+        currency: req.body.currency || 'USD',
+        errorMsg: `no flight offers in request; keys=${Object.keys(req.body).join(',')}`,
+        status: 400,
+        code: 'OFFER_MISSING',
       });
     }
 
@@ -1017,10 +1024,20 @@ router.post('/order', async (req, res) => {
         hasSource: !!firstOffer?.source,
         hasTravelerPricings: !!firstOffer?.travelerPricings,
       });
-      return res.status(400).json({
-        success: false,
-        error: 'This fare can no longer be booked - please search again',
-        code: 'OFFER_NOT_BOOKABLE'
+      // Same reasoning as above: the customer has paid by the time this route
+      // runs, so refusing the offer without reversing the charge leaves them
+      // out of pocket with no booking. This was the surviving twin of the
+      // booking-disabled gate - one gate was fixed, these two were not.
+      return await refundOnFulfillmentFailure(res, {
+        orderId: req.body.orderId,
+        bookingReference: req.body.bookingReference,
+        amount: req.body.totalAmount || req.body.amount,
+        currency: firstOffer?.price?.currency || req.body.currency || 'USD',
+        errorMsg: `unbookable offer shape: itineraries=${Array.isArray(firstOffer?.itineraries)} `
+          + `source=${!!firstOffer?.source} travelerPricings=${!!firstOffer?.travelerPricings}`,
+        status: 400,
+        code: 'OFFER_NOT_BOOKABLE',
+        customerMessage: 'This fare can no longer be booked, so your payment has been reversed. Please search again.',
       });
     }
 
@@ -1213,12 +1230,26 @@ router.post('/order', async (req, res) => {
       // reverse the payment and tell them honestly. This runs in every
       // environment; the previous non-production branch created a mock booking,
       // which is exactly the outcome the production guard exists to prevent.
+      // Record what actually failed, not what the customer was shown.
+      // `providerError.message` is the mapped, deliberately vague customer text
+      // ("Flight service temporarily unavailable"), and storing that as the
+      // failure reason leaves a refunded booking with nothing to diagnose from -
+      // no operation, no Amadeus code, no step. The customer-facing wording is
+      // built separately inside refundOnFulfillmentFailure, so this only
+      // enriches the log, the stored `fulfillment_failed`, and `technicalError`.
+      const failureDetail = [
+        providerError?.step && `step=${providerError.step}`,
+        providerError?.operation && `op=${providerError.operation}`,
+        providerError?.amadeusCode && `amadeusCode=${providerError.amadeusCode}`,
+        providerError?.technicalError || providerError?.message || 'Flight booking failed',
+      ].filter(Boolean).join(' | ');
+
       return await refundOnFulfillmentFailure(res, {
         orderId: req.body.orderId,
         bookingReference: req.body.bookingReference,
         amount: totalAmount || amount,
         currency: firstOffer?.price?.currency || 'USD',
-        errorMsg: providerError?.message || 'Flight booking failed'
+        errorMsg: failureDetail
       });
     }
 

@@ -216,3 +216,59 @@ describe('no simulated bookings on retrieval', () => {
     expect(source).not.toContain('simulatedOrderDetails');
   });
 });
+
+/**
+ * Every rejection on POST /order happens after the money has moved.
+ *
+ * The booking-disabled gate was fixed once and its two siblings were left
+ * behind: a request with no offers, and an offer that fails the shape check,
+ * both answered 400 and kept the charge. Same route, same position after
+ * checkout, same outcome for the customer.
+ */
+describe('post-payment rejections reverse the charge', () => {
+  beforeEach(() => {
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
+    vi.resetModules();
+  });
+
+  it('refunds when the offer cannot be sold', async () => {
+    const app = await makeApp();
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('OFFER_NOT_BOOKABLE');
+    expect(res.body.bookingFailed).toBe(true);
+    expect(res.body).toHaveProperty('refundAction');
+  });
+
+  it('tells the customer the charge was reversed, not just that it failed', async () => {
+    const app = await makeApp();
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+    expect(res.body.error).toMatch(/reversed/i);
+  });
+
+  it('refunds when the request carries no offers at all', async () => {
+    const app = await makeApp();
+
+    const { flightOffer, ...withoutOffer } = orderBody;
+    const res = await request(app).post('/api/flights/order').send(withoutOffer);
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('OFFER_MISSING');
+    expect(res.body).toHaveProperty('refundAction');
+  });
+
+  // The stored reason is what a human has to work from when a customer calls
+  // about a refunded booking. `providerError.message` is the deliberately vague
+  // customer wording, and storing it leaves no operation, code or step.
+  it('keeps the technical detail out of the customer message but in the record', async () => {
+    const app = await makeApp();
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.body.technicalError).toMatch(/itineraries=|source=|travelerPricings=/);
+    expect(res.body.error).not.toMatch(/itineraries=/);
+  });
+});
