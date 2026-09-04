@@ -1,0 +1,116 @@
+name: Deploy API
+
+# Only after CI has passed on main. A deploy that races the test suite is a
+# deploy that can ship a red build.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+  # Manual runs for rollbacks and for the first deploy, before any CI run exists
+  # to trigger from.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit SHA or ref to deploy (defaults to main)"
+        required: false
+        default: main
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ${{ github.repository_owner }}/jetsetters-api
+
+jobs:
+  build-and-deploy:
+    # workflow_run fires on failure too; only ship green builds.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out the commit being deployed
+        uses: actions/checkout@v4
+        with:
+          # For workflow_run, deploy the exact commit CI validated - not
+          # whatever main points at by the time this runs.
+          ref: ${{ github.event.inputs.ref || github.event.workflow_run.head_sha || 'main' }}
+
+      - name: Resolve the image tag
+        id: meta
+        run: |
+          SHA="$(git rev-parse --short HEAD)"
+          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "sha=$SHA"   >> "$GITHUB_OUTPUT"
+          echo "owner=$OWNER" >> "$GITHUB_OUTPUT"
+          echo "image=${{ env.REGISTRY }}/$OWNER/jetsetters-api" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # Tag with the SHA as well as latest, so a rollback is
+          # `docker compose up -d` against a specific tag rather than a rebuild.
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to the host
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd /opt/jetsetters
+
+            echo "APP_IMAGE=${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha }}" > .image
+            export APP_IMAGE="${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha }}"
+
+            docker compose pull app
+            docker compose up -d
+
+            # Wait for the app to report healthy rather than assuming it did.
+            # A deploy that "succeeds" while the container crash-loops is worse
+            # than one that fails loudly.
+            for i in $(seq 1 30); do
+              state="$(docker inspect --format '{{.State.Health.Status}}' jetsetters-app-1 2>/dev/null || echo starting)"
+              [ "$state" = "healthy" ] && echo "healthy after $((i*5))s" && exit 0
+              sleep 5
+            done
+
+            echo "app did not become healthy; recent logs:" >&2
+            docker compose logs --tail 50 app >&2
+            exit 1
+
+      - name: Verify the public endpoint
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS --max-time 10 https://api.jetsetterss.com/api/health; then
+              echo; echo "public endpoint healthy"; exit 0
+            fi
+            sleep 6
+          done
+          echo "public endpoint did not respond" >&2
+          exit 1

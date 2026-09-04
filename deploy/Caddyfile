@@ -1,0 +1,48 @@
+# api.jetsetterss.com
+#
+# Caddy obtains and renews the Let's Encrypt certificate itself, so there is no
+# certbot and no renewal cron. It needs port 80 reachable for the ACME HTTP
+# challenge - that is why 80 stays open even though nothing is served on it.
+
+{
+	# Where Let's Encrypt sends expiry warnings if renewal ever stops working.
+	email support@jetsetterss.com
+}
+
+api.jetsetterss.com {
+	encode zstd gzip
+
+	reverse_proxy app:5004 {
+		# Express sits behind two proxies in production: Vercel's edge rewrites
+		# /api/* here, and Caddy forwards to the app. Without these the app sees
+		# Caddy's container IP as the client, and the rate limiter throttles the
+		# entire site as if it were one visitor. server.js must also set
+		# `trust proxy` for req.ip to resolve correctly.
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+
+		# The booking chain is ten sequential GDS calls; a slow PDT response can
+		# push a single request past a default 30 s. Generous here, because the
+		# alternative is cutting off a request that is mid-booking.
+		transport http {
+			read_timeout 120s
+			write_timeout 120s
+		}
+	}
+
+	# The app already sets its own security headers; these are the transport-level
+	# ones Caddy is better placed to add.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+		format json
+	}
+}

@@ -1,0 +1,92 @@
+# Production stack for api.jetsetterss.com
+#
+#   caddy  -> terminates TLS, proxies to app
+#   app    -> the Express server (server.js), no published port
+#   redis  -> cache only; nothing here is a source of truth
+#
+# Lives at /opt/jetsetters/docker-compose.yml on the instance.
+#   docker compose pull && docker compose up -d
+
+name: jetsetters
+
+services:
+  app:
+    image: ${APP_IMAGE:-ghcr.io/sahi0045/jetsetters-api:latest}
+    restart: unless-stopped
+    # No `ports:` on purpose. The app is reachable only through caddy, so the
+    # Express server is never exposed to the internet directly and cannot be
+    # hit on :5004 bypassing TLS.
+    expose:
+      - "5004"
+    env_file:
+      - /opt/jetsetters/.env
+    environment:
+      NODE_ENV: production
+      PORT: "5004"
+      # redis runs in this network, not on the host.
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5004/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      # HTTP/3. Harmless if unused; the Lightsail firewall governs reachability.
+      - "443:443/udp"
+    volumes:
+      - /opt/jetsetters/Caddyfile:/etc/caddy/Caddyfile:ro
+      # caddy_data holds the Let's Encrypt account key and issued certificates.
+      # Losing it means re-issuing on next start, which counts against rate
+      # limits - so it is a named volume, and it is what the backups cover.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Cache only: no persistence, and a hard memory ceiling so a runaway key
+    # space evicts instead of taking the box down with the app on it.
+    command: >
+      redis-server
+      --save ""
+      --appendonly no
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:
