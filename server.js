@@ -91,7 +91,12 @@ app.use(pinoHttp({
   },
   serializers: {
     // Only what identifies the request. No headers beyond these, no body.
-    req: (req) => ({ id: req.id, method: req.method, url: req.url, ip: req.remoteAddress }),
+    //
+    // req.ip, not req.remoteAddress: the latter is the raw socket peer, which
+    // behind Caddy is always the proxy's container address. req.ip is Express's
+    // trust-proxy-aware value and resolves to the actual visitor - which is the
+    // whole point of logging an address at all.
+    req: (req) => ({ id: req.id, method: req.method, url: req.url, ip: req.ip ?? req.remoteAddress }),
     res: (res) => ({ statusCode: res.statusCode }),
   },
 }));
