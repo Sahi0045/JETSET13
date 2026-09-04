@@ -1,6 +1,7 @@
 import axios from 'axios';
 import fetch from 'node-fetch';
 import AmadeusService from '../../services/amadeusService.js';
+import FlightProvider from '../../services/flightProvider.js';
 import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig } from './arcpay.config.js';
 
 
@@ -81,33 +82,81 @@ export async function handleCancelBookingAction(req, res) {
             cancellationFee: 0
         };
 
-        // 2. Cancel the flight reservation via Amadeus (only for flight bookings).
-        // Use the REAL Amadeus order id first; the service is mock-aware so test PNRs
-        // are handled gracefully and the recorded flag stays accurate.
-        const orderId = booking.booking_details?.amadeus_order_id ||
+        // 2. Cancel the reservation at the supplier, before any money moves.
+        //
+        // A flight booking is cancelled by RECORD LOCATOR, and the PNR is the
+        // only identifier the GDS knows: order_id and booking_reference are ours,
+        // and passing one of those cancels nothing.
+        const type = booking.travel_type;
+        const pnr = booking.booking_details?.pnr || booking.booking_details?.amadeus_order_id || null;
+        const orderId = pnr ||
             booking.booking_details?.order_id ||
             booking.booking_reference;
 
-        // Cancel the underlying reservation at the supplier, routed by booking type.
-        // Mock-aware: with no real order id the service no-ops cleanly. Failure here is
-        // logged but does NOT block the ARC refund below (better to refund than to strand).
+        // Whether the supplier still holds something that has to be released
+        // before the customer can be refunded. A flight with a real PNR does; a
+        // cruise or package never did, and a booking that never reached the GDS
+        // has nothing to release.
+        const hasLiveFlightReservation = (type === 'flight' || type == null) && Boolean(pnr);
+        let supplierError = null;
+
         if (orderId) {
-            const type = booking.travel_type;
             try {
                 let amaResult = null;
                 if (type === 'flight' || type == null) {
-                    amaResult = await AmadeusService.cancelFlightOrder(orderId);
+                    // FlightProvider, not AmadeusService: the REST service points at
+                    // a host that has had no DNS since August, so every flight
+                    // cancellation threw here, was swallowed, and the refund below
+                    // ran against a reservation that was still live.
+                    if (pnr) amaResult = await FlightProvider.cancelFlightOrder(pnr);
                 } else if (type === 'hotel') {
+                    // Hotels are still on the old REST service and out of scope for
+                    // this migration; this call cannot currently succeed.
                     amaResult = await AmadeusService.cancelHotelBooking(orderId);
                 }
-                // (cruise/package have no Amadeus self-service cancel — ARC refund still runs)
+                // (cruise/package have no supplier-side cancel)
                 if (amaResult) {
                     cancellationResult.amadeusCancelled = !!amaResult.success;
-                    console.log(`🧳 Supplier cancellation (${type || 'flight'}): ${cancellationResult.amadeusCancelled ? 'success' : 'no-op'} (${amaResult.mode || 'LIVE'})`);
+                    console.log(`🧳 Supplier cancellation (${type || 'flight'}): ${cancellationResult.amadeusCancelled ? 'success' : 'no-op'}`);
                 }
-            } catch (supplierError) {
-                console.warn(`⚠️ Supplier (${type || 'flight'}) cancellation error:`, supplierError.error || supplierError.message);
+            } catch (error) {
+                supplierError = error;
+                console.warn(`⚠️ Supplier (${type || 'flight'}) cancellation error:`, error.error || error.message);
             }
+        }
+
+        // A refund without a released seat is money out AND a flight the customer
+        // can still board. The old comment here read "better to refund than to
+        // strand", which was true while no booking was real; now that the GDS
+        // holds actual reservations it is a straight loss. So: if the airline
+        // still has the booking, stop and put it in front of a human rather than
+        // paying out against a live ticket.
+        if (hasLiveFlightReservation && !cancellationResult.amadeusCancelled) {
+            console.error('❌ Refusing to refund: the airline still holds this booking', {
+                bookingReference: booking.booking_reference,
+                pnr,
+                reason: supplierError?.technicalError || supplierError?.error || supplierError?.message || 'cancel returned no success'
+            });
+
+            await supabase.from('bookings').update({
+                booking_details: {
+                    ...booking.booking_details,
+                    needs_review: {
+                        reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
+                        pnr,
+                        detail: supplierError?.technicalError || supplierError?.message || null,
+                        at: new Date().toISOString()
+                    }
+                }
+            }).eq('id', booking.id);
+
+            return res.status(502).json({
+                success: false,
+                error: 'We could not cancel your reservation with the airline. '
+                    + 'Our team has been alerted and will complete it - please call (877) 538-7380 if it is urgent.',
+                bookingReference: booking.booking_reference,
+                needsReview: true
+            });
         }
 
         // 3. Process cancellation fee and refund/void via ARC Pay
