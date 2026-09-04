@@ -41,12 +41,24 @@ export async function handleCancelBookingAction(req, res) {
         if (byRef) {
             booking = byRef;
         } else {
-            const { data: byOrder } = await supabase
-                .from('bookings')
-                .select('*')
-                .filter('booking_details->>order_id', 'eq', bookingReference)
-                .single();
-            if (byOrder) booking = byOrder;
+            // Fall back through the other identifiers a caller might legitimately
+            // hold. DELETE /flights/order/:orderId is documented as taking the
+            // Amadeus order id, which in this integration IS the record locator -
+            // so a cancel by PNR is a normal request, not a malformed one.
+            //
+            // Without the pnr/amadeus_order_id lookups this returned "Booking not
+            // found", and the route quietly fell through to a fallback that
+            // cancels at the GDS but never issues the ARC refund. The customer
+            // would lose the seat and keep paying for it.
+            for (const field of ['order_id', 'pnr', 'amadeus_order_id']) {
+                const { data: found } = await supabase
+                    .from('bookings')
+                    .select('*')
+                    .filter(`booking_details->>${field}`, 'eq', bookingReference)
+                    .limit(1)
+                    .maybeSingle();
+                if (found) { booking = found; break; }
+            }
         }
 
         if (!booking) {
