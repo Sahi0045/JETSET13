@@ -117,7 +117,10 @@ export async function handleCancelBookingAction(req, res) {
                 // database update and a refund, which is what follows.
                 if (amaResult) {
                     cancellationResult.amadeusCancelled = !!amaResult.success;
-                    console.log(`🧳 Supplier cancellation (${type || 'flight'}): ${cancellationResult.amadeusCancelled ? 'success' : 'no-op'}`);
+                    cancellationResult.ticketsVoided = !!amaResult.voided;
+                    cancellationResult.requiresAirlineRefund = amaResult.requiresAirlineRefund || [];
+                    console.log(`🧳 Supplier cancellation (${type || 'flight'}): ${cancellationResult.amadeusCancelled ? 'success' : 'no-op'}`
+                        + (amaResult.voided ? ', tickets voided' : ''));
                 }
             } catch (error) {
                 supplierError = error;
@@ -384,8 +387,22 @@ export async function handleCancelBookingAction(req, res) {
                         paymentAction: cancellationResult.paymentAction,
                         refundAmount: cancellationResult.refundAmount,
                         cancellationFee: cancellationResult.cancellationFee || 0,
-                        netRefund: (cancellationResult.refundAmount || 0)
-                    }
+                        netRefund: (cancellationResult.refundAmount || 0),
+                        ticketsVoided: cancellationResult.ticketsVoided || false
+                    },
+                    // A ticket past its same-day void window still holds value,
+                    // and that value is with the airline. The customer has been
+                    // refunded either way, so this is ours to reclaim under the
+                    // fare rules - it does not settle itself by cancelling.
+                    ...(cancellationResult.requiresAirlineRefund?.length
+                        ? {
+                            needs_review: {
+                                reason: 'tickets could not be voided; airline refund must be claimed',
+                                tickets: cancellationResult.requiresAirlineRefund,
+                                at: new Date().toISOString()
+                            }
+                        }
+                        : {})
                 }
             })
             .eq('id', booking.id);

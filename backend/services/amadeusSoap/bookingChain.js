@@ -11,6 +11,7 @@ import {
   buildIssueTicketBody,
   buildPricePnrBody,
   buildQueuePlaceBody,
+  buildVoidTicketBody,
   readCreateTstReply,
   readIssueTicketReply,
   readPricePnrReply,
@@ -382,6 +383,7 @@ export const runBookingChain = async (p) => {
  */
 export const cancelBooking = async (recordLocator) => {
   const config = getWsConfig();
+  const today = new Date().toISOString().slice(0, 10);
 
   return withSession(async (ctx) => {
     const retrieved = await callStep(ctx, {
@@ -393,6 +395,39 @@ export const cancelBooking = async (recordLocator) => {
 
     const tickets = readTickets(retrieved);
 
+    // A ticket issued today can be voided, which returns the fare in full and
+    // leaves nothing to reconcile. After the day of issue it cannot: the money
+    // has settled, and the ticket has to be refunded through the airline under
+    // its own fare rules. Cancelling the itinerary without voiding a same-day
+    // ticket throws away that window for no reason.
+    const voidable = tickets.filter((t) => t.issuedOn === today && t.number && t.validatingCarrier);
+    const unvoidable = tickets.filter((t) => !voidable.includes(t));
+    let voided = false;
+
+    if (voidable.length > 0) {
+      try {
+        await callStep(ctx, {
+          step: 'voidTicket',
+          operation: 'Ticket_CancelDocument',
+          bodyXml: buildVoidTicketBody({
+            documentNumbers: voidable.map((t) => t.number.replace('-', '')),
+            validatingCarrier: voidable[0].validatingCarrier,
+          }),
+          pnr: recordLocator,
+          committed: true,
+          ticketed: true,
+        });
+        voided = true;
+        log.info({ pnr: recordLocator, tickets: voidable.length }, 'tickets voided');
+      } catch (cause) {
+        // Do not cancel the itinerary on top of a failed void: that would strip
+        // the segments while leaving a live ticket against them, which is worse
+        // than leaving the booking intact for someone to deal with.
+        log.error({ pnr: recordLocator, reason: cause?.technicalError ?? cause?.message }, 'void failed; itinerary left intact');
+        throw cause;
+      }
+    }
+
     await callStep(ctx, {
       step: 'cancel',
       operation: 'PNR_Cancel',
@@ -402,8 +437,20 @@ export const cancelBooking = async (recordLocator) => {
       ticketed: tickets.length > 0,
     });
 
-    log.info({ pnr: recordLocator, hadTickets: tickets.length }, 'flight.booking.cancelled');
-    return { cancelled: true, hadTickets: tickets.length > 0, tickets };
+    log.info({
+      pnr: recordLocator, hadTickets: tickets.length, voided, unvoidable: unvoidable.length,
+    }, 'flight.booking.cancelled');
+
+    return {
+      cancelled: true,
+      hadTickets: tickets.length > 0,
+      tickets,
+      voided,
+      // Tickets that outlived their void window still hold value and need an
+      // airline refund; the caller has to know they exist rather than assume
+      // cancelling settled everything.
+      requiresAirlineRefund: unvoidable.filter((t) => t.number).map((t) => t.number),
+    };
   }, { config });
 };
 

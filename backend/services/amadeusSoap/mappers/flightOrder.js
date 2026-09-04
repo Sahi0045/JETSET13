@@ -49,6 +49,18 @@ export const readTravelers = (reply) => arr(reply?.travellerInfo).map((info, ind
  * A ticket number is the evidence that the customer actually has a ticket, so
  * a booking that has one must never be cancelled to "clean up" a failed chain.
  */
+const MONTHS = Object.freeze({
+  JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
+  JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11,
+});
+
+/** '04SEP26' -> '2026-09-04'. Amadeus has no dates before 2000. */
+const fromDDMMMYY = (value) => {
+  const m = /^(\d{2})([A-Z]{3})(\d{2})$/.exec(String(value ?? '').toUpperCase());
+  if (!m || MONTHS[m[2]] === undefined) return null;
+  return `20${m[3]}-${String(MONTHS[m[2]] + 1).padStart(2, '0')}-${m[1]}`;
+};
+
 export const readTickets = (reply) => {
   const tickets = [];
 
@@ -61,12 +73,27 @@ export const readTickets = (reply) => {
     const match = freetext.match(/(\d{3})-?(\d{10})/);
     if (!match) continue;
 
+    // FA PAX 057-2412345678/ETAI/USD221.70/04SEP26/SCK1S2400/...
+    //                        ^^ ^^         ^^^^^^^
+    //                        |  carrier    issue date
+    //                        electronic ticket marker
+    //
+    // The plating carrier is mandatory to void a ticket, and the issue date
+    // decides whether voiding is even possible - after the day of issue the
+    // ticket has to be refunded through the airline instead.
+    const carrier = freetext.match(/\/ET([A-Z0-9]{2})\b/)?.[1] ?? null;
+    const issuedOn = fromDDMMMYY(freetext.match(/\b(\d{2}[A-Z]{3}\d{2})\b/)?.[1]);
+
     tickets.push({
       number: `${match[1]}-${match[2]}`,
       travelerId: arr(at(element, 'referenceForDataElement.reference'))
         .filter((r) => txt(r.qualifier) === 'PT')
         .map((r) => txt(r.number))[0] ?? null,
-      issuedAt: new Date().toISOString(),
+      validatingCarrier: carrier,
+      // The date Amadeus says it was issued, not the time we happened to read
+      // it: `new Date()` here made every ticket look issued today, which is
+      // exactly the question the void decision turns on.
+      issuedOn,
     });
   }
 
