@@ -39,6 +39,11 @@ async function invokeOrchestratedCancel(bookingReference, reason) {
 // Reverses the ARC payment (VOID/REFUND), marks the booking row as cancelled/refunded with
 // the failure recorded, and returns an honest error — never fabricates a confirmed booking.
 // Responds via `res`; returns the Express response.
+// `orderId` is what ARC Pay knows the payment by. Callers pass
+// `req.body.orderId || req.body.bookingReference` because the two are the same
+// value by convention in both clients, and `reverseArcPaymentForOrder` gives up
+// immediately on a falsy one - so a client that omitted `orderId` produced a
+// charge with no booking and no automatic reversal.
 async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, code }) {
   console.warn('🚑 Ticket not booked after payment — reversing charge. order:', orderId, '| reason:', errorMsg);
   const reversal = await reverseArcPaymentForOrder(orderId, {
@@ -168,10 +173,25 @@ async function persistCommittedPnr({ bookingReference, pnr, tstRefs, priced }) {
  */
 async function flagForReview({ bookingReference, pnr, reason, ticketed }) {
   console.error('⚠️ Booking needs review', { bookingReference, pnr, reason, ticketed });
-  return patchBookingDetails(bookingReference, {
+
+  const patched = await patchBookingDetails(bookingReference, {
     pnr: pnr || undefined,
     needs_review: { reason, ticketed: Boolean(ticketed), at: new Date().toISOString() }
   });
+
+  // The airline holds a real booking, so the row has to say so. Only the happy
+  // path ever wrote status 'confirmed', which left a genuine - possibly
+  // ticketed - PNR sitting at 'pending' in Manage Booking and the admin views,
+  // where it reads as an incomplete booking a human might "clean up".
+  if (supabase && pnr) {
+    const { error } = await supabase
+      .from('bookings')
+      .update({ status: 'confirmed', updated_at: new Date().toISOString() })
+      .eq('booking_reference', bookingReference);
+    if (error) console.error('⚠️ Could not mark the reviewed booking confirmed:', error.message);
+  }
+
+  return patched;
 }
 
 /**
@@ -885,6 +905,11 @@ router.post('/date-prices', async (req, res) => {
       from, to, adults, children, infants, travelClass, dates,
     }));
 
+    // null means nothing could be priced, so nothing was cached. The strip
+    // shows no prices rather than a wrong or stale empty answer.
+    if (!payload) {
+      return res.json({ success: false, dateWisePrices: {}, lowestPrice: null, error: 'No prices available' });
+    }
     res.json(payload);
   } catch (error) {
     console.error('Date prices error:', error?.message);
@@ -1038,7 +1063,7 @@ router.post('/order', async (req, res) => {
     if (!providerStatus().bookingEnabled) {
       console.warn('Booking attempted while AMADEUS_WS_BOOKING_ENABLED is false');
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId,
+        orderId: req.body.orderId || req.body.bookingReference,
         bookingReference: req.body.bookingReference,
         amount: req.body.totalAmount || req.body.amount,
         currency: req.body.flightOffer?.price?.currency
@@ -1082,7 +1107,7 @@ router.post('/order', async (req, res) => {
       // Payment already happened - hosted checkout runs before this route - so
       // a 400 here is a charge with nothing behind it. Reverse it.
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId,
+        orderId: req.body.orderId || req.body.bookingReference,
         bookingReference: req.body.bookingReference,
         amount: req.body.totalAmount || req.body.amount,
         currency: req.body.currency || 'USD',
@@ -1119,7 +1144,7 @@ router.post('/order', async (req, res) => {
       // out of pocket with no booking. This was the surviving twin of the
       // booking-disabled gate - one gate was fixed, these two were not.
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId,
+        orderId: req.body.orderId || req.body.bookingReference,
         bookingReference: req.body.bookingReference,
         amount: req.body.totalAmount || req.body.amount,
         currency: firstOffer?.price?.currency || req.body.currency || 'USD',
@@ -1359,7 +1384,7 @@ router.post('/order', async (req, res) => {
       ].filter(Boolean).join(' | ');
 
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId,
+        orderId: req.body.orderId || req.body.bookingReference,
         bookingReference: req.body.bookingReference,
         amount: totalAmount || amount,
         currency: firstOffer?.price?.currency || 'USD',
@@ -1372,7 +1397,7 @@ router.post('/order', async (req, res) => {
       console.error('❌ Flight order creation failed:', errorMsg);
       {
         return await refundOnFulfillmentFailure(res, {
-          orderId: req.body.orderId,
+          orderId: req.body.orderId || req.body.bookingReference,
           bookingReference: req.body.bookingReference,
           amount: totalAmount || amount,
           currency: firstOffer?.price?.currency || 'USD',
@@ -1388,7 +1413,7 @@ router.post('/order', async (req, res) => {
     if (process.env.NODE_ENV === 'production' && typeof orderResponse.mode === 'string' && orderResponse.mode.toUpperCase().includes('MOCK')) {
       console.error('❌ Amadeus returned a MOCK booking in production (no real ticket):', orderResponse.mode);
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId,
+        orderId: req.body.orderId || req.body.bookingReference,
         bookingReference: req.body.bookingReference,
         amount: totalAmount || amount,
         currency: firstOffer?.price?.currency || 'USD',
@@ -2070,6 +2095,7 @@ router.post('/calendar-prices', async (req, res) => {
       from: origin, to: destination, adults: 1, dates,
     }));
 
+    if (!payload) return res.json({ success: false, prices: {}, error: 'No prices available' });
     res.json({ success: payload.success, prices: payload.prices, currency: payload.currency });
   } catch (error) {
     console.error('Calendar prices error:', error?.message);

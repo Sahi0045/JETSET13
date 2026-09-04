@@ -390,3 +390,72 @@ describe('concurrent booking attempts', () => {
     expect(res.body.code).not.toBe('BOOKING_IN_PROGRESS');
   });
 });
+
+/**
+ * One payment, one booking.
+ *
+ * A double-clicked confirm, a refreshed callback page and a client retry all
+ * arrive with the same bookingReference. If the second one runs the chain it
+ * sells a second set of seats against a single charge. The plan named this as a
+ * required route test and it did not exist — the concurrency tests cover the
+ * claim, which is a different guard for a different case.
+ */
+describe('a booking that already has a PNR', () => {
+  const bookedRow = {
+    booking_reference: 'FLTTEST1',
+    status: 'confirmed',
+    booking_details: { pnr: 'CHOY42', amadeus_order_id: 'CHOY42' },
+  };
+
+  const withStoredBooking = async () => {
+    const supabase = (await import('../../../backend/config/supabase.js')).default;
+    supabase.from.mockImplementation(() => {
+      const chain = {};
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+        chain[m] = vi.fn(() => chain);
+      }
+      chain.single = vi.fn().mockResolvedValue({ data: bookedRow, error: null });
+      chain.maybeSingle = chain.single;
+      return chain;
+    });
+    return makeApp();
+  };
+
+  beforeEach(() => {
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
+    vi.resetModules();
+  });
+
+  it('returns the stored order without touching the GDS', async () => {
+    const app = await withStoredBooking();
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.mode).toBe('ALREADY_BOOKED');
+    expect(res.body.pnr).toBe('CHOY42');
+    // The whole point: zero Air_Sell, so no second set of seats.
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('answers with the same locator at both the top level and inside data', async () => {
+    const app = await withStoredBooking();
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    // Both clients read one or the other; they must not disagree.
+    expect(res.body.data.pnr).toBe('CHOY42');
+    expect(res.body.data.id).toBe('CHOY42');
+    expect(res.body.orderId).toBe('CHOY42');
+  });
+
+  it('never reports a second booking as newly created', async () => {
+    const app = await withStoredBooking();
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.body.mode).not.toBe('LIVE_GDS_BOOKING');
+    expect(JSON.stringify(res.body)).not.toMatch(/mock/i);
+  });
+});

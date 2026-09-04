@@ -142,6 +142,62 @@ describe('calendar endpoints', () => {
     expect(axios.post.mock.calls.length).toBeLessThanOrEqual(10);
   });
 
+  // Taking the first ten dates blanked days 11-31 of the month, because the
+  // fare calendar posts the whole month and only the prefix came back priced.
+  it('spreads the capped sample across the whole month, not just the start', async () => {
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+
+    const dates = Array.from({ length: 30 }, (_, i) => `2099-11-${String(i + 1).padStart(2, '0')}`);
+    const res = await request(app).post('/api/flights/calendar-prices')
+      .send({ origin: 'JFK', destination: 'LHR', dates });
+
+    const priced = Object.keys(res.body.prices).sort();
+    expect(priced.length).toBeGreaterThan(0);
+    // First and last day of the range are both represented, and the sample
+    // reaches past the first third of the month.
+    expect(priced[0]).toBe('2099-11-01');
+    expect(priced[priced.length - 1]).toBe('2099-11-30');
+    expect(priced.some((d) => d > '2099-11-20')).toBe(true);
+  });
+
+  // Dates in the past cannot be priced; spending a capped slot on one costs a
+  // live GDS call and returns nothing.
+  it('does not spend cap slots on dates that have already passed', async () => {
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+
+    await request(app).post('/api/flights/calendar-prices').send({
+      origin: 'JFK',
+      destination: 'LHR',
+      dates: ['2020-01-01', '2020-01-02', '2020-01-03', '2099-11-01'],
+    });
+
+    expect(axios.post.mock.calls.length).toBe(1);
+  });
+
+  // withCache stores any non-null value, so returning {success:false} from the
+  // provider pinned one transient WSAP failure in Redis for six hours and every
+  // visitor got an empty strip until it expired.
+  it('does not cache an empty result when nothing could be priced', async () => {
+    const { withCache } = await import('../../../backend/services/cache.service.js');
+    axios.post.mockRejectedValue(new Error('amadeus unreachable'));
+    const app = await makeApp();
+
+    const res = await request(app).post('/api/flights/calendar-prices')
+      .send({ origin: 'JFK', destination: 'LHR', dates: ['2099-11-01'] });
+
+    expect(res.body.success).toBe(false);
+    expect(res.body.prices).toEqual({});
+
+    // Each date is priced under Promise.allSettled, so a total outage looks
+    // like "no prices" rather than an error. The producer must hand back null
+    // so withCache stores nothing - otherwise one blip pins an empty strip in
+    // Redis for six hours.
+    const producer = withCache.mock.calls.at(-1)?.[2];
+    await expect(producer()).resolves.toBeNull();
+  });
+
   it('rejects a request with no dates before calling Amadeus', async () => {
     const app = await makeApp();
     const res = await request(app).post('/api/flights/date-prices').send({ from: 'JFK', to: 'LHR' });
