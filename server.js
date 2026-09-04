@@ -92,11 +92,20 @@ app.use(pinoHttp({
   serializers: {
     // Only what identifies the request. No headers beyond these, no body.
     //
-    // req.ip, not req.remoteAddress: the latter is the raw socket peer, which
-    // behind Caddy is always the proxy's container address. req.ip is Express's
-    // trust-proxy-aware value and resolves to the actual visitor - which is the
-    // whole point of logging an address at all.
-    req: (req) => ({ id: req.id, method: req.method, url: req.url, ip: req.ip ?? req.remoteAddress }),
+    // req.raw.ip, not req.ip and not req.remoteAddress.
+    //
+    // pino-http hands serializers a WRAPPED request, not the Express one, so
+    // `req.ip` is undefined here and the fallback silently yields
+    // `req.remoteAddress` - the raw socket peer, which behind Caddy is always
+    // the proxy's container address. Every entry then logs the same useless
+    // value. The Express request, with its trust-proxy-aware `ip`, is at
+    // `req.raw`.
+    req: (req) => ({
+      id: req.id,
+      method: req.method,
+      url: req.url,
+      ip: req.raw?.ip ?? req.ip ?? req.remoteAddress,
+    }),
     res: (res) => ({ statusCode: res.statusCode }),
   },
 }));
