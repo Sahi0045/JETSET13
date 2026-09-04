@@ -88,7 +88,11 @@ export const ERROR_CATALOGUE = Object.freeze([
   { match: /(session|conversation).*(limit|exceed|maximum)|too many/i, code: 503, error: 'Too many concurrent requests, please retry', retryAfter: 2 },
   { match: /unable to (confirm|sell)|segment.*(closed|waitlist)|class.*not.*available/i, code: 409, error: 'That flight is no longer available at this price' },
   { match: /price.*(changed|differ)|fare.*(changed|no longer)/i, code: 409, error: 'The fare changed while booking - please search again' },
-  { match: /(pnr|record locator|booking).*not found/i, code: 404, error: 'Booking not found' },
+  // Amadeus says "NO MATCH FOR RECORD LOCATOR" (code 1931) rather than anything
+  // containing "not found", so the obvious wording alone never matches and an
+  // unknown PNR came back as a 502 "temporarily unavailable" - which reads as
+  // our fault and invites a retry that can never succeed.
+  { match: /\b1931\b|no match for record locator|(pnr|record locator|booking).*not found/i, code: 404, error: 'Booking not found' },
 ]);
 
 export const DEFAULT_ERROR = Object.freeze({ code: 502, error: 'Flight service temporarily unavailable' });

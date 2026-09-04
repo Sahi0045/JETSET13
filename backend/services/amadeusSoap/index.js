@@ -8,6 +8,7 @@ import { mapMasterPricerReply } from './mappers/offer.js';
 import { buildMasterPricerBody } from './operations/masterPricer.js';
 import { buildInformativePricingBody } from './operations/informativePricing.js';
 import { applyPricingToOffer } from './mappers/pricing.js';
+import { cancelBooking, retrieveBooking, runBookingChain } from './bookingChain.js';
 import { unwrapEnvelope } from './parseXml.js';
 import { callStateless } from './session.js';
 
@@ -328,6 +329,106 @@ const searchLocations = (keyword, subType = 'CITY,AIRPORT', options = {}) => {
 };
 
 /**
+ * Create a flight order - the booking chain.
+ *
+ * Takes the REST-shaped order payload the route already builds, so nothing in
+ * the request contract changes. `options` carries what the GDS chain needs and
+ * REST never had: the reference the payment was captured under, the fare the
+ * customer was quoted, and a callback that persists the PNR the moment it
+ * exists rather than at the end of the chain.
+ *
+ * @throws {BookingChainError} carrying `committed`, which decides whether the
+ *   caller may refund: before the PNR is committed a refund is the honest
+ *   outcome, after it a refund would leave the customer holding a booking they
+ *   are no longer paying for.
+ */
+const createFlightOrder = async (orderData, options = {}) => {
+  const payload = orderData?.data ?? orderData ?? {};
+  const offer = payload.flightOffers?.[0];
+
+  // The chain re-checks this, but failing here keeps a malformed request from
+  // reaching a mutating call at all.
+  if (!offer) {
+    throw new AmadeusSoapError({ error: 'A flight offer is required to book', code: 400, operation: 'createFlightOrder' });
+  }
+
+  const travelers = (payload.travelers ?? []).map((traveler) => ({
+    id: traveler.id,
+    firstName: traveler.name?.firstName ?? traveler.firstName,
+    lastName: traveler.name?.lastName ?? traveler.lastName,
+    gender: traveler.gender,
+    dateOfBirth: traveler.dateOfBirth,
+  }));
+
+  const contactSource = payload.contacts?.[0] ?? payload.travelers?.[0]?.contact ?? {};
+  const phone = contactSource.phones?.[0];
+  const contact = {
+    email: contactSource.emailAddress ?? contactSource.email,
+    phone: phone ? `${phone.countryCallingCode ?? ''}${phone.number ?? ''}`.trim() : undefined,
+  };
+
+  const result = await runBookingChain({
+    offer,
+    travelers,
+    contact,
+    bookingReference: options.bookingReference,
+    // The FARE the customer was quoted - not what they were charged, which
+    // includes an admin service fee Amadeus knows nothing about.
+    expectedTotal: options.expectedTotal ?? Number(offer.price?.total) ?? undefined,
+    onCommitted: options.onCommitted,
+  });
+
+  return {
+    success: true,
+    data: result.order,
+    pnr: result.pnr,
+    orderId: result.pnr,
+    // Read by the route's tripwire, which refunds anything containing "MOCK".
+    // These two values are the only modes this provider can ever return.
+    mode: result.ticketed ? 'LIVE_GDS_BOOKING' : 'LIVE_GDS_BOOKING_UNTICKETED',
+    ticketed: result.ticketed,
+    tickets: result.tickets,
+    gds: {
+      wsap: getWsConfig().wsap,
+      officeId: getWsConfig().officeId,
+      sessionId: result.sessionId,
+      ticketed: result.ticketed,
+      queued: result.queued,
+      tst_refs: result.tstRefs,
+      last_ticketing_date: result.lastTicketingDate,
+      priced_total: result.priced.total,
+      priced_currency: result.priced.currency,
+    },
+    message: result.ticketed
+      ? 'Flight booked and ticketed'
+      : 'Flight booked; ticket issuance is pending',
+  };
+};
+
+/** Read a booking back by record locator. */
+const getFlightOrderDetails = async (recordLocator) => {
+  const order = await retrieveBooking(recordLocator);
+  return { success: true, data: order, pnr: order.id };
+};
+
+/**
+ * Cancel a booking.
+ *
+ * Signature kept as-is: operations.handlers.js:99 calls this positionally as
+ * part of the shared cancel orchestrator, which also handles the ARC refund.
+ */
+const cancelFlightOrder = async (recordLocator) => {
+  const result = await cancelBooking(recordLocator);
+  return {
+    success: true,
+    hadTickets: result.hadTickets,
+    message: result.hadTickets
+      ? 'Booking cancelled; ticket refund follows the airline fare rules'
+      : 'Booking cancelled',
+  };
+};
+
+/**
  * Operations this WSAP is not entitled to.
  *
  * Returning a soft-fail rather than throwing matches what the routes already do
@@ -347,16 +448,6 @@ const getMostBookedDestinations = async () => ({ ...notEntitled('Travel analytic
 const getMostTraveledDestinations = getMostBookedDestinations;
 const getBusiestTravelPeriod = getMostBookedDestinations;
 
-/** Phase 2+ - declared here so the facade is complete and the routes can bind. */
-const notYetImplemented = (name) => async () => {
-  throw new AmadeusSoapError({
-    error: 'This feature is being migrated and is temporarily unavailable',
-    code: 503,
-    technicalError: `${name} is not implemented on the SOAP provider yet`,
-    operation: name,
-  });
-};
-
 export default {
   searchFlights,
   searchLocations,
@@ -375,10 +466,9 @@ export default {
   getCalendarPrices,
   getCheapestFlightDates,
 
-  // Phase 3: the booking chain. Phase 4: cancel/retrieve/status.
-  createFlightOrder: notYetImplemented('Air_SellFromRecommendation'),
-  getFlightOrderDetails: notYetImplemented('PNR_Retrieve'),
-  cancelFlightOrder: notYetImplemented('PNR_Cancel'),
+  createFlightOrder,
+  getFlightOrderDetails,
+  cancelFlightOrder,
   getFlightStatus: async () => ({ success: false, data: [], reason: 'not_available' }),
 };
 

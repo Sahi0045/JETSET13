@@ -3,8 +3,9 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Current work in progress:** see the `CURRENT WORK IN PROGRESS` section at the top of
-> [`AGENTS.md`](./AGENTS.md) before doing anything. It tracks the live Google Play Android
-> release, the Play Console questionnaire answers, Supabase RLS/security status, credential
+> [`AGENTS.md`](./AGENTS.md) before doing anything. It tracks the in-progress Google Play Android
+> release (build #1 is in Internal testing only - nothing is published to Production,
+> so there are no installed users), the Play Console questionnaire answers, Supabase RLS/security status, credential
 > rotation still owed, and the open Amadeus DNS outage. Android-specific build notes live in
 > `/media/shubham/OS/for linux work/jetsetter android/jetsetter-mobile/AGENTS.md`.
 

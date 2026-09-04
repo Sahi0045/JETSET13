@@ -8,6 +8,7 @@ import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { protect, admin } from '../middleware/auth.middleware.js';
 import { handleCancelBookingAction, reverseArcPaymentForOrder } from './payment/operations.handlers.js';
+import { reportError } from '../services/monitoring.js';
 
 // Only the fields the handler genuinely requires; passthrough keeps the rest.
 const flightSearchSchema = z
@@ -113,6 +114,92 @@ if (supabase) {
 }
 
 // Helper function to build the booking row object for insert
+/**
+ * Merge a patch into a booking's `booking_details` without losing what is there.
+ *
+ * The row already exists by this point - ARC Pay's hosted checkout upserts it
+ * on `booking_reference` before the customer is sent to pay - and it holds the
+ * payment session data. A whole-column write would drop that, so this reads,
+ * merges and writes back.
+ */
+async function patchBookingDetails(bookingReference, patch) {
+  if (!supabase || !bookingReference) return null;
+
+  const { data: existing } = await supabase
+    .from('bookings')
+    .select('booking_details')
+    .eq('booking_reference', bookingReference)
+    .single();
+
+  const { data, error } = await supabase
+    .from('bookings')
+    .update({ booking_details: { ...(existing?.booking_details || {}), ...patch } })
+    .eq('booking_reference', bookingReference)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('❌ Failed to patch booking_details:', error.message);
+    return null;
+  }
+  return data;
+}
+
+/**
+ * Record the record locator the moment the GDS returns it.
+ *
+ * This runs inside the booking chain, between the commit and the ticketing
+ * steps, and it is the difference between a booking that can be found later and
+ * one that exists only in the airline's system. Everything after it - queueing,
+ * issuing, reading ticket numbers - can fail without losing the PNR.
+ */
+async function persistCommittedPnr({ bookingReference, pnr, tstRefs, priced }) {
+  console.log('💾 Recording committed PNR', { bookingReference, pnr });
+  return patchBookingDetails(bookingReference, {
+    pnr,
+    amadeus_order_id: pnr,
+    gds: {
+      tst_refs: tstRefs || [],
+      priced_total: priced?.total ?? null,
+      priced_currency: priced?.currency ?? null,
+      committed_at: new Date().toISOString()
+    },
+    gds_chain: { state: 'committed', committedAt: new Date().toISOString() }
+  });
+}
+
+/**
+ * Mark a booking as needing a human.
+ *
+ * Used when the chain created a real PNR and then failed: the money and the
+ * booking are both real but out of step, and no automatic action is safe.
+ */
+async function flagForReview({ bookingReference, pnr, reason, ticketed }) {
+  console.error('⚠️ Booking needs review', { bookingReference, pnr, reason, ticketed });
+  return patchBookingDetails(bookingReference, {
+    pnr: pnr || undefined,
+    needs_review: { reason, ticketed: Boolean(ticketed), at: new Date().toISOString() }
+  });
+}
+
+/**
+ * Has this payment already been booked?
+ *
+ * `booking_reference` is the ARC Pay order id, so a retried POST /order - a
+ * double-click, a client retry, a page refresh - carries the same one. Without
+ * this check the second request sells a second set of seats against a single
+ * payment.
+ */
+async function findExistingBooking(bookingReference) {
+  if (!supabase || !bookingReference) return null;
+  const { data } = await supabase
+    .from('bookings')
+    .select('booking_reference, status, booking_details')
+    .eq('booking_reference', bookingReference)
+    .single();
+  return data || null;
+}
+
 function buildBookingRow(bookingData, userId) {
   return {
     user_id: userId || null,
@@ -162,6 +249,10 @@ function buildBookingRow(bookingData, userId) {
       price_grand_total: bookingData.priceGrandTotal || null,
       price_fees: bookingData.priceFees || [],
       flight_offer: bookingData.flightOffer,
+      // Everything the GDS chain established: office, session, TST references,
+      // whether it ticketed and what it priced at.
+      gds: bookingData.gds || null,
+      tickets: bookingData.tickets || [],
       // Fare breakdown for itemized display & refund support
       fare_breakdown: bookingData.fareBreakdown || null,
       // Store the original userId in booking_details so we can identify the user
@@ -887,22 +978,63 @@ router.post('/order', async (req, res) => {
 
     console.log('✅ Valid request - offers:', offers.length, 'travelers:', travelersList.length);
 
-    // Check if the flight offer is in valid Amadeus format
-    // Our transformed UI format has: segments, airline.code, departure.time
-    // Amadeus format needs: itineraries, source, validatingAirlineCodes, travelerPricings
-    const firstOffer = offers[0];
-    const isValidAmadeusOffer = firstOffer &&
-      firstOffer.itineraries &&
-      Array.isArray(firstOffer.itineraries) &&
-      firstOffer.source &&
-      firstOffer.travelerPricings;
+    // The mobile app posts the flattened UI card and keeps the bookable offer on
+    // `originalOffer`; the web app posts the offer itself. Recovering it here is
+    // what makes the two clients bookable through one path - before this, every
+    // mobile booking failed the shape check below.
+    const firstOffer = offers[0]?.originalOffer ?? offers[0];
 
-    console.log('📋 Offer validation:', {
-      hasItineraries: !!firstOffer?.itineraries,
-      hasSource: !!firstOffer?.source,
-      hasTravelerPricings: !!firstOffer?.travelerPricings,
-      isValidAmadeusOffer
-    });
+    // A card without itineraries/source/travelerPricings cannot be sold: it is a
+    // display object, not an offer. Refuse it rather than sending a request the
+    // GDS will reject halfway through.
+    const isValidAmadeusOffer = Boolean(
+      firstOffer?.itineraries && Array.isArray(firstOffer.itineraries)
+      && firstOffer.source && firstOffer.travelerPricings
+    );
+
+    if (!isValidAmadeusOffer) {
+      console.error('❌ Unbookable offer shape', {
+        hasItineraries: Array.isArray(firstOffer?.itineraries),
+        hasSource: !!firstOffer?.source,
+        hasTravelerPricings: !!firstOffer?.travelerPricings,
+      });
+      return res.status(400).json({
+        success: false,
+        error: 'This fare can no longer be booked - please search again',
+        code: 'OFFER_NOT_BOOKABLE'
+      });
+    }
+
+    // One payment, one booking. A double-clicked confirm button, a client
+    // retry or a refreshed callback page all arrive with the same
+    // bookingReference; without this the second one sells a second set of
+    // seats against a single charge.
+    const existing = await findExistingBooking(req.body.bookingReference);
+    if (existing?.booking_details?.pnr) {
+      console.log('↩️ Already booked, returning the stored order', existing.booking_details.pnr);
+      return res.json({
+        success: true,
+        data: {
+          id: existing.booking_details.pnr,
+          pnr: existing.booking_details.pnr,
+          status: 'CONFIRMED',
+          bookingReference: existing.booking_reference
+        },
+        pnr: existing.booking_details.pnr,
+        orderId: existing.booking_details.pnr,
+        bookingReference: existing.booking_reference,
+        mode: 'ALREADY_BOOKED',
+        savedToDatabase: true,
+        message: 'This booking already exists'
+      });
+    }
+    if (existing?.status === 'cancelled') {
+      return res.status(409).json({
+        success: false,
+        error: 'This booking was cancelled and cannot be completed',
+        code: 'BOOKING_CANCELLED'
+      });
+    }
 
 
     // Prepare flight order data for Amadeus (only if we have valid Amadeus format)
@@ -947,10 +1079,10 @@ router.post('/order', async (req, res) => {
     });
 
     // Price the flight offer before creating order (validates offer is still valid)
-    let pricedOffer = offers[0];
+    let pricedOffer = firstOffer;
     try {
       console.log('💰 Pricing flight offer before booking...');
-      const pricingResult = await FlightProvider.priceFlightOffer(offers[0]);
+      const pricingResult = await FlightProvider.priceFlightOffer(firstOffer);
       if (pricingResult.success && pricingResult.data?.flightOffers?.[0]) {
         pricedOffer = pricingResult.data.flightOffers[0];
         console.log('✅ Flight offer priced successfully, using priced version');
@@ -986,19 +1118,76 @@ router.post('/order', async (req, res) => {
       }
     };
 
-    console.log('📤 Sending to Amadeus:', JSON.stringify(flightOrderData, null, 2));
+    // Never log flightOrderData: it carries names, dates of birth and passport
+    // numbers. Only the shape of the request is useful in a log.
+    console.log('📤 Booking', {
+      passengers: amadeusTravelers.length,
+      segments: pricedOffer?.itineraries?.reduce((n, i) => n + (i.segments?.length || 0), 0) ?? 0,
+      bookingReference: req.body.bookingReference || null
+    });
 
     // Wrap Amadeus service call in try-catch to handle errors gracefully
     let orderResponse;
     try {
-      orderResponse = await FlightProvider.createFlightOrder(flightOrderData);
+      orderResponse = await FlightProvider.createFlightOrder(flightOrderData, {
+        bookingReference: req.body.bookingReference,
+        // The fare the customer was quoted. The chain compares the GDS price
+        // against this - not against what they were charged, which includes the
+        // admin-configured service fee Amadeus knows nothing about.
+        expectedTotal: Number(pricedOffer?.price?.total) || undefined,
+        // Called the instant a record locator exists, before queueing or
+        // ticketing is attempted. Persisting here is what makes a booking
+        // recoverable if the rest of the chain, or this process, dies.
+        onCommitted: async ({ pnr, tstRefs, priced }) => {
+          await persistCommittedPnr({
+            bookingReference: req.body.bookingReference,
+            pnr,
+            tstRefs,
+            priced
+          });
+        }
+      });
       console.log('✅ Amadeus service call completed:', {
         success: orderResponse?.success,
         mode: orderResponse?.mode,
         hasPnr: !!orderResponse?.pnr
       });
     } catch (providerError) {
-      console.error('❌ FlightProvider.createFlightOrder threw:', providerError?.message);
+      console.error('❌ FlightProvider.createFlightOrder threw:', {
+        step: providerError?.step,
+        committed: providerError?.committed,
+        code: providerError?.code,
+        reason: providerError?.technicalError ?? providerError?.message
+      });
+
+      // A committed PNR means the airline holds a real booking. Refunding it
+      // would leave the customer with a flight they are no longer paying for -
+      // and if it was ticketed, with a ticket the airline will still honour.
+      // These need a human, not an automatic reversal.
+      if (providerError?.committed) {
+        await flagForReview({
+          bookingReference: req.body.bookingReference,
+          pnr: providerError.pnr,
+          reason: `chain failed after commit at ${providerError.step}`,
+          ticketed: providerError.ticketed
+        });
+        reportError(providerError, {
+          service: 'amadeus-ws',
+          flow: 'booking',
+          step: providerError.step,
+          pnr: providerError.pnr
+        });
+        return res.status(202).json({
+          success: true,
+          data: { id: providerError.pnr, pnr: providerError.pnr, status: 'PENDING_CONFIRMATION' },
+          pnr: providerError.pnr,
+          orderId: providerError.pnr,
+          bookingReference: req.body.bookingReference,
+          needsReview: true,
+          message: 'Your booking is confirmed and our team is finalising the ticket. '
+            + 'You will receive your confirmation shortly.'
+        });
+      }
 
       // The customer has already been charged - hosted checkout runs before this
       // route. Never fabricate a booking to paper over a supplier failure:
@@ -1074,7 +1263,11 @@ router.post('/order', async (req, res) => {
       orderId: req.body.orderId || orderIdValue,
       amadeusOrderId: orderIdValue, // the real Amadeus order id (for cancellation)
       transactionId: req.body.transactionId || `TXN-${Date.now()}`,
-      totalAmount: firstOffer?.price?.total || '0',
+      // What the customer was actually charged, which is the fare plus the
+      // admin-configured service fee. Refunds read `total_amount`
+      // (operations.handlers.js:270), so writing the fare alone here refunds
+      // less than was taken. The fare itself is kept in price_grand_total.
+      totalAmount: totalAmount || amount || firstOffer?.price?.total || '0',
       currency: firstOffer?.price?.currency || 'USD',
       origin: firstSegment.departure?.iataCode || '',
       destination: lastSegment.arrival?.iataCode || '',
@@ -1118,6 +1311,10 @@ router.post('/order', async (req, res) => {
         gender: t.gender
       })),
       flightOffer: firstOffer,
+      // What the GDS actually did, for reconciliation and for the ticket
+      // numbers ManageBooking currently fabricates.
+      gds: orderResponse.gds || null,
+      tickets: orderResponse.tickets || [],
       userId: req.body.userId || null
     });
 
@@ -1186,18 +1383,20 @@ router.post('/order', async (req, res) => {
       orderId: orderIdValue,
       bookingReference: orderIdValue,
       mode: orderResponse.mode,
+      ticketed: orderResponse.ticketed ?? false,
+      tickets: orderResponse.tickets || [],
       savedToDatabase: !!dbBooking,
       message: orderResponse.message || 'Flight order created successfully'
     });
 
   } catch (error) {
-    console.error('❌ Flight order creation error:', error);
-    console.error('❌ Error details:', {
+    // The request body carries names, dates of birth and passport numbers, so
+    // it is never logged. The booking reference is enough to find the request.
+    console.error('❌ Flight order creation error:', {
       message: error.message,
-      stack: error.stack,
-      name: error.name
+      name: error.name,
+      bookingReference: req.body?.bookingReference || null
     });
-    console.error('❌ Request body that caused error:', JSON.stringify(req.body, null, 2));
 
     res.status(500).json({
       success: false,
@@ -1290,81 +1489,31 @@ router.delete('/order/:orderId', async (req, res) => {
 
 // Get flight order details (with fallback simulation due to API limitations)
 router.get('/order/:orderId', async (req, res) => {
+  const { orderId } = req.params;
+
   try {
-    const { orderId } = req.params;
-
-    // Try real Amadeus API first
-    try {
-      const orderDetails = await FlightProvider.getFlightOrderDetails(orderId);
-
-      if (orderDetails.success) {
-        return res.json({
-          success: true,
-          data: orderDetails.data,
-          pnr: orderDetails.pnr || orderDetails.data.associatedRecords?.[0]?.reference,
-          orderId: orderId,
-          mode: orderDetails.mode,
-          message: 'Flight order details retrieved successfully'
-        });
-      }
-    } catch (amadeusError) {
-      console.log('⚠️ Amadeus API unavailable, using simulation:', amadeusError.message);
-    }
-
-    // Fallback simulation for demonstration
-    const simulatedOrderDetails = {
-      id: orderId,
-      status: "CONFIRMED",
-      creationDate: "2025-06-19T19:05:00.000Z",
-      bookingReference: `BOOK-${Date.now()}`,
-
-      // PNR is found in associatedRecords
-      associatedRecords: [{
-        reference: "PNR" + Math.random().toString(36).substr(2, 6).toUpperCase(),
-        creationDate: "2025-06-19T19:05:00.000Z",
-        originSystemCode: "GDS",
-        flightNumber: "AI-9731"
-      }],
-
-      flightOffers: [{
-        id: "1",
-        price: { total: "29.60", currency: "USD" },
-        itineraries: [{
-          segments: [{
-            departure: { iataCode: "DEL", at: "2025-06-29T11:10:00" },
-            arrival: { iataCode: "JAI", at: "2025-06-29T12:15:00" },
-            carrierCode: "AI",
-            number: "9731"
-          }]
-        }]
-      }],
-
-      travelers: [{
-        id: "1",
-        name: { firstName: "John", lastName: "Doe" },
-        dateOfBirth: "1990-01-01"
-      }],
-
-      totalPrice: { amount: "29.60", currency: "USD" },
-      bookingStatus: "CONFIRMED",
-      paymentStatus: "COMPLETED"
-    };
-
-    const pnr = simulatedOrderDetails.associatedRecords?.[0]?.reference;
-
-    res.json({
+    const orderDetails = await FlightProvider.getFlightOrderDetails(orderId);
+    return res.json({
       success: true,
-      data: simulatedOrderDetails,
-      pnr: pnr,
-      message: 'Order details retrieved (simulated)',
-      note: 'Simulated response due to API limitations'
+      data: orderDetails.data,
+      pnr: orderDetails.pnr || orderDetails.data?.associatedRecords?.[0]?.reference,
+      orderId,
+      message: 'Flight order details retrieved successfully'
     });
-
   } catch (error) {
-    console.error('❌ Error fetching flight order details:', error);
-    res.status(500).json({
+    // This used to fall back to a hard-coded DEL-JAI booking for $29.60 with a
+    // randomly generated PNR. Someone looking up their own reservation would
+    // have been shown an itinerary that does not exist, for a flight they never
+    // booked. An honest failure is the only acceptable answer here.
+    console.error('❌ Error fetching flight order details:', {
+      orderId,
+      code: error?.code,
+      reason: error?.technicalError ?? error?.message
+    });
+    return res.status(error?.code === 404 ? 404 : 502).json({
       success: false,
-      error: error.message || 'Failed to fetch flight order details'
+      error: error?.error || 'We could not retrieve this booking right now',
+      orderId
     });
   }
 });

@@ -1,0 +1,103 @@
+import { arr, at, atTxt, txt } from '../parseXml.js';
+
+/**
+ * PNR_Reply -> the REST `flight-order` shape.
+ *
+ * Both clients read the order response nested AND at the top level
+ * (FlightCreateOrders.jsx:195-206, mobile FlightBookingScreen:55-72), and
+ * ManageBooking renders from the persisted copy, so this shape is a contract
+ * rather than an internal detail.
+ */
+
+/** The record locator. Its presence is what distinguishes a real booking from a failed one. */
+export const readRecordLocator = (reply) => atTxt(reply, 'pnrHeader.reservationInfo.reservation.controlNumber')
+  || atTxt(reply, 'pnrHeader.reservationInfo.reservation.companyId')
+  || '';
+
+/** Creation date, when the reply carries one (DDMMYY). */
+const readCreationDate = (reply) => atTxt(reply, 'pnrHeader.reservationInfo.reservation.date') || '';
+
+/**
+ * Passengers as the clients expect them: {id, name:{firstName, lastName}}.
+ *
+ * The title was appended to the first name when the PNR was built, so it comes
+ * back as "JOHN MR". Stripping it here keeps the confirmation page showing the
+ * name the customer typed rather than the GDS spelling of it.
+ */
+export const readTravelers = (reply) => arr(reply?.travellerInfo).map((info, index) => {
+  const surname = atTxt(info, 'passengerData.travellerInformation.traveller.surname');
+  const given = atTxt(info, 'passengerData.travellerInformation.passenger.firstName');
+  const reference = atTxt(info, 'elementManagementPassenger.reference.number') || String(index + 1);
+
+  return {
+    id: reference,
+    name: {
+      firstName: given.replace(/\s+(MR|MRS|MS|MISS|MSTR|DR)$/i, '').trim() || given,
+      lastName: surname,
+    },
+  };
+}).filter((t) => t.name.lastName);
+
+/**
+ * Ticket numbers.
+ *
+ * They live in FA elements as free text, in the shape
+ * `FA PAX 057-2412345678/ETAI/USD221.70/...`. Amadeus has no structured field
+ * for them in this reply, so the number is matched by its own format: a
+ * three-digit airline accounting code and a ten-digit serial.
+ *
+ * A ticket number is the evidence that the customer actually has a ticket, so
+ * a booking that has one must never be cancelled to "clean up" a failed chain.
+ */
+export const readTickets = (reply) => {
+  const tickets = [];
+
+  for (const element of arr(at(reply, 'dataElementsMaster.dataElementsIndiv'))) {
+    if (atTxt(element, 'elementManagementData.segmentName') !== 'FA') continue;
+
+    const freetext = arr(at(element, 'otherDataFreetext'))
+      .map((entry) => txt(entry.longFreetext))
+      .join(' ');
+    const match = freetext.match(/(\d{3})-?(\d{10})/);
+    if (!match) continue;
+
+    tickets.push({
+      number: `${match[1]}-${match[2]}`,
+      travelerId: arr(at(element, 'referenceForDataElement.reference'))
+        .filter((r) => txt(r.qualifier) === 'PT')
+        .map((r) => txt(r.number))[0] ?? null,
+      issuedAt: new Date().toISOString(),
+    });
+  }
+
+  return tickets;
+};
+
+/** True once at least one ticket exists - the point past which cancelling is wrong. */
+export const isTicketed = (reply) => readTickets(reply).length > 0;
+
+/**
+ * Assemble the order response.
+ *
+ * `flightOffers` is passed through from what was actually priced rather than
+ * rebuilt from the PNR: the offer already carries the itinerary in the shape
+ * the clients render, and reconstructing it from the reply would be a second,
+ * subtly different representation of the same journey.
+ */
+export const buildFlightOrder = (reply, { flightOffers = [], bookingReference } = {}) => {
+  const pnr = readRecordLocator(reply);
+  const tickets = readTickets(reply);
+
+  return {
+    type: 'flight-order',
+    id: pnr,
+    queuingOfficeId: atTxt(reply, 'pnrHeader.reservationInfo.reservation.companyId') || undefined,
+    associatedRecords: pnr
+      ? [{ reference: pnr, creationDate: readCreationDate(reply), originSystemCode: 'GDS' }]
+      : [],
+    flightOffers,
+    travelers: readTravelers(reply),
+    tickets,
+    bookingReference,
+  };
+};
