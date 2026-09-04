@@ -33,8 +33,27 @@ export {
 // Load environment variables
 dotenv.config();
 
-// Initialize Resend with API key from environment variable
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Resend is constructed lazily. Its SDK throws when the key is absent, and at
+// module scope that turned a missing RESEND_API_KEY into an import-time crash
+// for every module that imports this one (inquiry.controller among them).
+// validateEnv treats RESEND_API_KEY as optional - "missing only disables a
+// feature" - and sms.service.js already guards Twilio the same way, so a
+// missing key must disable email, not take the process down.
+let resendClient = null;
+
+const getResend = () => {
+  if (!resendClient) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      throw new Error('RESEND_API_KEY is not configured - email sending is disabled');
+    }
+    resendClient = new Resend(apiKey);
+  }
+  return resendClient;
+};
+
+/** True when email can actually be sent; lets callers skip work up front. */
+export const isEmailConfigured = () => Boolean(process.env.RESEND_API_KEY);
 
 /**
  * Generic email sending function
@@ -66,7 +85,7 @@ export const sendEmail = async ({ to, subject, template, data, html, text }) => 
       text = html.replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
     }
 
-    const response = await resend.emails.send({
+    const response = await getResend().emails.send({
       from: 'JetSetters <noreply@jetsetterss.com>',
       to: [to],
       subject,
@@ -223,7 +242,7 @@ const emailService = {
       // 1) Send confirmation email to the customer (if they provided an email)
       if (customerEmail) {
         try {
-          const customerResponse = await resend.emails.send({
+          const customerResponse = await getResend().emails.send({
             from: 'Jetsetters <noreply@jetsetterss.com>',
             to: [customerEmail],
             subject,
@@ -239,7 +258,7 @@ const emailService = {
 
       // 2) Send admin notification email
       try {
-        const adminResponse = await resend.emails.send({
+        const adminResponse = await getResend().emails.send({
           from: 'Jetsetters <noreply@jetsetterss.com>',
           to: [adminEmail],
           subject: adminSubject,
@@ -292,7 +311,7 @@ export const sendSubscriberWelcomeEmail = async (email, source = 'website') => {
 
   try {
     // Send directly to subscriber using verified domain
-    const response = await resend.emails.send({
+    const response = await getResend().emails.send({
       from: 'JetSetters <noreply@jetsetterss.com>',
       to: [email],
       subject: '🎉 Welcome to JetSetters Newsletter!',
@@ -320,7 +339,7 @@ export const sendAdminSubscriptionNotification = async (email, source = 'website
   try {
     const adminEmail = process.env.COMPANY_EMAIL || 'jetsetters721@gmail.com';
 
-    const response = await resend.emails.send({
+    const response = await getResend().emails.send({
       from: 'JetSetters <noreply@jetsetterss.com>',
       to: [adminEmail],
       subject: `📬 New Subscriber: ${email}`,
@@ -371,7 +390,7 @@ export const sendContactConfirmationEmail = async (name, email, message) => {
   const html = renderBrandedEmail({ preheader: "We've received your message", headerLabel: 'Message Received', emoji: '\u2709\uFE0F', heading: "We've received your message!", subheading: `Thanks for reaching out, ${name}`, contentHtml: `${paragraph('Our team will get back to you within 24\u201348 hours.')}${highlightBox(`<strong>Your message:</strong><br>${message}`, {})}` });
 
   try {
-    const response = await resend.emails.send({
+    const response = await getResend().emails.send({
       from: 'JetSetters <noreply@jetsetterss.com>',
       to: [email],
       subject: '✉️ We\'ve Received Your Message - JetSetters',
@@ -400,7 +419,7 @@ export const sendContactAdminNotification = async (name, email, message) => {
   try {
     const adminEmail = process.env.COMPANY_EMAIL || 'jetsetters721@gmail.com';
 
-    const response = await resend.emails.send({
+    const response = await getResend().emails.send({
       from: 'JetSetters <noreply@jetsetterss.com>',
       to: [adminEmail],
       subject: `📩 New Contact: ${name} - ${email}`,
@@ -484,7 +503,7 @@ export const sendBookingConfirmationEmail = async (bookingData) => {
       bookingDetails
     });
 
-    const response = await resend.emails.send({
+    const response = await getResend().emails.send({
       from: 'Jetsetters <noreply@jetsetterss.com>',
       to: [customerEmail],
       subject: `✅ Booking Confirmed - ${bookingReference} | Jetsetters`,
@@ -515,7 +534,7 @@ export const sendBookingNotificationEmails = async (bookingData) => {
     // Send notification to admin
     const adminHtml = renderBrandedEmail({ preheader: `New booking ${bookingData.bookingReference}`, headerLabel: 'New Booking', emoji: '\uD83C\uDF89', heading: 'New booking received', subheading: bookingData.bookingReference, contentHtml: `${detailCard('Booking', [['Customer', `${bookingData.customerName} (${bookingData.customerEmail})`],['Reference', bookingData.bookingReference],['Type', bookingData.bookingType],['Amount', `${bookingData.currency || 'USD'} ${bookingData.paymentAmount}`],['Travel Date', bookingData.travelDate || 'TBD']])}` });
 
-    const adminResult = await resend.emails.send({
+    const adminResult = await getResend().emails.send({
       from: 'Jetsetters <noreply@jetsetterss.com>',
       to: [adminEmail],
       subject: `🎉 New Booking: ${bookingData.bookingReference} - ${bookingData.customerName}`,
@@ -563,7 +582,7 @@ export const sendCancellationNotificationEmails = async (cancellationData) => {
       currency
     });
 
-    const customerResult = await resend.emails.send({
+    const customerResult = await getResend().emails.send({
       from: 'Jetsetters <noreply@jetsetterss.com>',
       to: [customerEmail],
       subject: `⚠️ Booking Cancelled - ${bookingReference} | Jetsetters`,
@@ -574,7 +593,7 @@ export const sendCancellationNotificationEmails = async (cancellationData) => {
     // Send notification to admin
     const adminHtml = renderBrandedEmail({ preheader: `Cancellation ${bookingReference}`, headerLabel: 'Booking Cancelled', emoji: '\u26A0\uFE0F', heading: 'Booking cancellation', subheading: bookingReference, contentHtml: `${detailCard('Cancellation', [['Customer', `${customerName} (${customerEmail})`],['Reference', bookingReference],['Type', bookingType],['Refund Amount', `${currency || 'USD'} ${refundAmount || 0}`],['Cancellation Fee', `${currency || 'USD'} ${cancellationFee || 0}`]])}` });
 
-    const adminResult = await resend.emails.send({
+    const adminResult = await getResend().emails.send({
       from: 'Jetsetters <noreply@jetsetterss.com>',
       to: [adminEmail],
       subject: `⚠️ Cancellation: ${bookingReference} - ${customerName}`,
