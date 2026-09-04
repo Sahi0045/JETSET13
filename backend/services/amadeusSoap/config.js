@@ -39,7 +39,7 @@ let cached = null;
  * @returns {Readonly<object>} frozen config
  * @throws {Error} listing every missing required variable
  */
-export const readWsConfig = (env = process.env) => {
+const readWsConfig = (env = process.env) => {
   const missing = Object.keys(REQUIRED).filter((name) => !env[name] || String(env[name]).trim() === '');
   if (missing.length > 0) {
     throw new Error(
@@ -74,13 +74,11 @@ export const readWsConfig = (env = process.env) => {
   });
 };
 
-/** Memoised for the process; `reset` exists so tests can re-read a changed env. */
+/** Memoised for the process. Tests get a fresh read via vi.resetModules(). */
 export const getWsConfig = (env = process.env) => {
   if (!cached) cached = readWsConfig(env);
   return cached;
 };
-
-export const resetWsConfig = () => { cached = null; };
 
 /** True when flights should use the SOAP provider at all. */
 export const isWsEnabled = (env = process.env) => isTrue(env.AMADEUS_WS_ENABLED, true);

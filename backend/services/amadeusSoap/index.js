@@ -6,7 +6,7 @@ import { getWsConfig } from './config.js';
 import { AmadeusSoapError, inspectReply } from './errors.js';
 import { mapMasterPricerReply } from './mappers/offer.js';
 import { buildMasterPricerBody } from './operations/masterPricer.js';
-import { at, unwrapEnvelope } from './parseXml.js';
+import { unwrapEnvelope } from './parseXml.js';
 import { callStateless } from './session.js';
 
 const log = logger.child({ svc: 'amadeus-ws' });
@@ -186,4 +186,4 @@ export default {
   getFlightStatus: async () => ({ success: false, data: [], reason: 'not_available' }),
 };
 
-export { searchFlights, searchLocations, signatureOf };
+export { searchFlights, searchLocations };

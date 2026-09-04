@@ -15,9 +15,6 @@ const getSemaphore = (config) => {
   return semaphore;
 };
 
-/** Test seam: drop the shared semaphore so a new limit takes effect. */
-export const resetTransport = () => { semaphore = null; };
-
 /** Read the Session header Amadeus echoes back, if any. */
 const readSession = (header) => {
   const node = at(header, 'Session');

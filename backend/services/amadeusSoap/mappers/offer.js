@@ -180,7 +180,7 @@ const readBaggage = (reply, itemNumber) => {
  * tables instead. Only the carriers and aircraft actually present in this reply
  * are included, keeping the payload the same size the REST dictionaries were.
  */
-export const buildDictionaries = (reply, offers = []) => {
+const buildDictionaries = (reply, offers = []) => {
   const carriers = {};
   const aircraft = {};
 
@@ -203,7 +203,7 @@ export const buildDictionaries = (reply, offers = []) => {
  * Map one recommendation to a REST-shaped flight offer.
  * @param {object} ctx { reply, flightIndexes, currency, config, searchSignature }
  */
-export const mapRecommendation = (recommendation, ctx) => {
+const mapRecommendation = (recommendation, ctx) => {
   const { reply, flightIndexes, currency, config, searchSignature } = ctx;
   const itemNumber = atTxt(recommendation, 'itemNumber.itemNumberId.number');
   const legs = resolveLegs(recommendation, flightIndexes);
@@ -357,5 +357,3 @@ export const mapMasterPricerReply = (reply, ctx) => {
 
   return { offers, dictionaries: buildDictionaries(reply, offers), currency };
 };
-
-export { fromDDMMYY };
