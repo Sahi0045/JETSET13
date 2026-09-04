@@ -387,13 +387,13 @@ function FlightBookingConfirmation() {
         const hasSearchState = !!routerLocation.state?.flightData;
         const targetId = bookingId || "TEST_BOOKING_123";
 
-        // priceConfig comes from usePriceConfig('all'). On a cold load it is
-        // still undefined when this effect first runs, so the defaults below
-        // ($25 + 5%) were being used to compute a fee the customer is actually
-        // charged - against a configured $1 + 0%, that is roughly 2,600 rupees
-        // too much per booking. `priceConfig` is now a dependency of this
-        // effect, so the fare is recomputed the moment the real settings land.
-        const config = priceConfig || PricingService.getDefaultSettings('all');
+        // Wait for the real pricing configuration rather than quoting from
+        // hardcoded defaults. Those defaults are $25 + 5% against a configured
+        // $1 + 0%, and this figure is what gets charged - so quoting before the
+        // settings land bills a fee nobody set. `priceConfig` is a dependency
+        // of this effect, so it re-runs once the settings arrive.
+        if (!priceConfig) return;
+        const config = priceConfig;
         const mockData = hasSearchState
           ? null
           : await fetchBookingFromMockData(targetId);

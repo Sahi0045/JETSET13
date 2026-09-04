@@ -23,11 +23,18 @@ router.get('/price-settings', async (req, res) => {
   try {
     console.log('📊 Fetching price settings');
 
+    // Never substitute defaults for a price. DEFAULT_SETTINGS carries
+    // flight_taxes_fees 25 + 5% against a configured 1 + 0% - roughly 25x - and
+    // the client charges whatever this returns. Answering a failed read with a
+    // different price, and calling it success, is how a customer gets billed a
+    // fee nobody set. Fail loudly instead: the client can retry or refuse to
+    // quote, which is recoverable. A silent wrong price is not.
     if (!supabase) {
-      console.log('⚠️ Supabase not configured, returning defaults');
-      return res.json({
-        success: true,
-        data: DEFAULT_SETTINGS
+      console.error('❌ Price settings unavailable: Supabase not configured');
+      return res.status(503).json({
+        success: false,
+        error: 'Pricing configuration is temporarily unavailable',
+        code: 'PRICE_CONFIG_UNAVAILABLE'
       });
     }
 
@@ -45,12 +52,13 @@ router.get('/price-settings', async (req, res) => {
       });
     }
 
-    // If no settings found, return defaults
+    // Same reasoning: a missing row is not a licence to invent a fee.
     if (!settings) {
-      console.log('ℹ️ No price settings found, returning defaults');
-      return res.json({
-        success: true,
-        data: DEFAULT_SETTINGS
+      console.error('❌ No price_settings row found');
+      return res.status(503).json({
+        success: false,
+        error: 'Pricing configuration is temporarily unavailable',
+        code: 'PRICE_CONFIG_UNAVAILABLE'
       });
     }
 

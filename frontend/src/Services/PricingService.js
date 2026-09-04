@@ -28,12 +28,16 @@ class PricingService {
         this.cacheExpiry[cacheKey] = now + this.DEFAULT_CACHE_TIME;
         return result.data;
       } else {
-        console.warn('Failed to fetch price config, using defaults');
-        return this.getDefaultSettings(service);
+        // Do NOT fall back to getDefaultSettings here. Those defaults are 25x
+        // the configured flight fee, the caller charges whatever this returns,
+        // and a cached bad answer keeps charging it for the rest of the cache
+        // window. Throwing lets the caller retry or decline to quote; it can
+        // never quietly bill a fee nobody configured.
+        throw new Error(result.error || 'Price configuration unavailable');
       }
     } catch (error) {
-      console.warn('Error fetching price config, using defaults:', error);
-      return this.getDefaultSettings(service);
+      console.error('Price config unavailable:', error?.message || error);
+      throw error;
     }
   }
 
