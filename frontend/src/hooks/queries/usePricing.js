@@ -5,7 +5,11 @@ import PricingService from '../../Services/PricingService';
 /**
  * Admin-configured price settings (taxes/fees) via PricingService.
  * `service` is 'all' | 'flights' | 'cruises' | 'hotels' | 'general'.
- * PricingService already caches + falls back to defaults, so this never throws.
+ *
+ * This CAN reject: PricingService no longer substitutes its hardcoded defaults
+ * for a failed read, because the caller charges whatever it returns and the
+ * defaults are ~25x the configured flight fee. Callers must handle `error`
+ * rather than quoting from `data` being undefined.
  */
 export function usePriceConfig(service = 'all', options = {}) {
   return useQuery({

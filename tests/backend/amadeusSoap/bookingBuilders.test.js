@@ -271,6 +271,40 @@ describe('Fare_PricePNRWithBookingClass', () => {
     };
     expect(readPricePnrReply(reply).total).toBe(76);
   });
+
+  // This is the deadline after which the airline cancels an unticketed
+  // booking. It gets stored on the booking and shown to the customer, and it
+  // used to be written as bare D/M/YYYY - "11/9/2026" reads as 11 September or
+  // 9 November depending on where you are, a two-month error on a deadline.
+  // Search already emits this field as ISO; both producers must agree.
+  it('returns the ticketing deadline as an unambiguous ISO date', () => {
+    const reply = {
+      fareList: {
+        fareReference: { uniqueReference: '1' },
+        lastTktDate: { dateTime: { year: '2026', month: '9', day: '11' } },
+        fareDataInformation: {
+          fareDataSupInformation: [
+            { fareDataQualifier: '712', fareAmount: '76.00', fareCurrency: 'USD' },
+          ],
+        },
+      },
+    };
+    expect(readPricePnrReply(reply).fares[0].lastTicketingDate).toBe('2026-09-11');
+  });
+
+  it('returns empty rather than a half-built date when Amadeus omits it', () => {
+    const reply = {
+      fareList: {
+        fareReference: { uniqueReference: '1' },
+        fareDataInformation: {
+          fareDataSupInformation: [
+            { fareDataQualifier: '712', fareAmount: '76.00', fareCurrency: 'USD' },
+          ],
+        },
+      },
+    };
+    expect(readPricePnrReply(reply).fares[0].lastTicketingDate).toBe('');
+  });
 });
 
 describe('Ticket_CreateTSTFromPricing', () => {

@@ -1,7 +1,7 @@
 import express from 'express';
 import FlightProvider, { providerStatus } from '../services/flightProvider.js';
 import { resolveToIata } from '../services/airportsIndex.js';
-import { createClient } from '@supabase/supabase-js';
+import supabase from '../config/supabase.js';
 import fetch from 'node-fetch';
 import { get as cacheGet, set as cacheSet, withCache, CacheKeys, TTL } from '../services/cache.service.js';
 import { validate } from '../middleware/validate.js';
@@ -39,7 +39,7 @@ async function invokeOrchestratedCancel(bookingReference, reason) {
 // Reverses the ARC payment (VOID/REFUND), marks the booking row as cancelled/refunded with
 // the failure recorded, and returns an honest error — never fabricates a confirmed booking.
 // Responds via `res`; returns the Express response.
-async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg }) {
+async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, code }) {
   console.warn('🚑 Ticket not booked after payment — reversing charge. order:', orderId, '| reason:', errorMsg);
   const reversal = await reverseArcPaymentForOrder(orderId, {
     amount,
@@ -79,39 +79,31 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
     ? 'We could not confirm your flight booking, so your payment has been reversed. The amount will be returned to your original payment method.'
     : 'We could not confirm your flight booking. Your payment could not be auto-reversed and our team will process your refund shortly.';
 
-  return res.status(502).json({
+  // `customerMessage`/`status` let a caller keep its own wording and status -
+  // the booking-disabled gate says "call us" and answers 503 - without needing
+  // a second, divergent refund path.
+  const shown = customerMessage || userMessage;
+
+  return res.status(status).json({
     success: false,
     bookingFailed: true,
     refunded: reversal.reversed,
     refundAction: reversal.action,                 // VOID | REFUND | ALREADY_REVERSED | NONE | FAILED
     refundAmount: reversal.amount ?? amount ?? null,
-    error: userMessage,                            // FlightCreateOrders surfaces `.error` first
-    message: userMessage,
+    error: shown,                                  // FlightCreateOrders surfaces `.error` first
+    message: shown,
+    ...(code ? { code } : {}),
     technicalError: errorMsg
   });
 }
 
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-const supabase = supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
-
-// Log Supabase configuration status on module load
-if (supabase) {
-  console.log('✅ Supabase client initialized successfully');
-  console.log('   URL:', supabaseUrl);
-  console.log('   Key source:', supabaseKey ? (process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SUPABASE_SERVICE_ROLE_KEY' :
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'NEXT_PUBLIC_SUPABASE_ANON_KEY' :
-      'SUPABASE_ANON_KEY') : 'None');
-} else {
-  console.error('❌ CRITICAL: Supabase client NOT initialized! Database saves will fail!');
-  console.error('   Available env vars:');
-  console.error('   - SUPABASE_URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
-  console.error('   - NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'NOT SET');
-  console.error('   - SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SET' : 'NOT SET');
-  console.error('   - NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
-  console.error('   - SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
-}
+// The shared client, not a second one built here.
+//
+// This module used to call createClient itself off the same env vars. That made
+// it the only route with its own connection, and - because the shared module is
+// what tests mock - made every database path in this file unmockable: a route
+// test would build a real client against whatever credentials happened to be in
+// the environment. Importing the shared client fixes both.
 
 // Helper function to build the booking row object for insert
 /**
@@ -198,6 +190,110 @@ async function findExistingBooking(bookingReference) {
     .eq('booking_reference', bookingReference)
     .single();
   return data || null;
+}
+
+/**
+ * How long a chain may hold its claim before another request may take over.
+ *
+ * Long enough to cover a slow chain - ten sequential GDS calls, ~8s observed on
+ * PDT, with room for a bad day - and short enough that a process killed
+ * mid-chain does not lock the reference out forever.
+ */
+const CHAIN_CLAIM_TTL_MS = 120_000;
+
+/**
+ * Take exclusive ownership of the booking chain for this reference.
+ *
+ * Checking for an existing PNR is not enough on its own: between two concurrent
+ * POSTs neither has a PNR yet, so both pass that check and both sell seats
+ * against a single payment. A double-clicked confirm button or a client retry
+ * while the first request is still in the chain is all it takes.
+ *
+ * The claim is one conditional UPDATE, so the database decides the winner - a
+ * read-then-write here would just move the race rather than close it. The
+ * filter matches only when no claim exists, when the last one finished, or when
+ * it is older than the TTL (a crashed request must not lock the reference out).
+ *
+ * Fails OPEN: if the claim cannot be evaluated the booking proceeds. Refusing a
+ * paid booking because a bookkeeping write failed is the worse outcome of the
+ * two, and every other guard is still in place.
+ */
+async function claimBookingChain(bookingReference) {
+  if (!supabase || !bookingReference) return { claimed: true };
+
+  const { data: existing } = await supabase
+    .from('bookings')
+    .select('booking_details')
+    .eq('booking_reference', bookingReference)
+    .single();
+
+  // No row means hosted checkout never created one; there is nothing to race
+  // over and nothing to claim.
+  if (!existing) return { claimed: true };
+
+  const details = existing.booking_details || {};
+  const chain = details.gds_chain || null;
+  const priorStamp = chain?.startedAt ?? null;
+
+  // A claim only blocks while it is live. One left behind by a killed process
+  // must expire, or the reference is locked out forever.
+  const heldLive = chain?.state === 'in_progress'
+    && priorStamp
+    && Date.now() - Date.parse(priorStamp) < CHAIN_CLAIM_TTL_MS;
+  if (heldLive) {
+    console.warn('⏳ Chain already in progress for', bookingReference, 'since', priorStamp);
+    return { claimed: false };
+  }
+
+  const startedAt = new Date().toISOString();
+  const attempt = Number(chain?.attempt || 0) + 1;
+
+  // Compare-and-set on the exact stamp that was just read. Two racing requests
+  // read the same prior value and both write conditioned on it; the first
+  // update changes it, so the second matches no rows and loses. The check above
+  // decides IF the claim is available, this decides WHO gets it - and only the
+  // database can decide that.
+  //
+  // A three-clause `.or()` on the same json path was tried first and is wrong:
+  // PostgREST rejects arrow paths inside `or` on an UPDATE with "column
+  // bookings.booking_details does not exist", and since this fails open the
+  // guard would have been silently absent.
+  let update = supabase
+    .from('bookings')
+    .update({
+      booking_details: { ...details, gds_chain: { state: 'in_progress', startedAt, attempt } },
+      updated_at: startedAt,
+    })
+    .eq('booking_reference', bookingReference);
+
+  update = priorStamp === null
+    ? update.is('booking_details->gds_chain->>startedAt', null)
+    : update.eq('booking_details->gds_chain->>startedAt', priorStamp);
+
+  const { data, error } = await update.select('booking_reference');
+
+  if (error) {
+    // Fails OPEN. Refusing a paid booking because a bookkeeping write failed is
+    // the worse of the two outcomes, and every other guard is still in place.
+    console.error('⚠️ Could not take the chain claim, proceeding:', error.message);
+    return { claimed: true };
+  }
+  if (!data?.length) {
+    console.warn('⏳ Lost the chain claim race for', bookingReference);
+    return { claimed: false };
+  }
+  return { claimed: true, attempt };
+}
+
+/** Release the claim so a later attempt is not blocked by a dead one. */
+async function releaseBookingChain(bookingReference, failedStep) {
+  return patchBookingDetails(bookingReference, {
+    gds_chain: {
+      state: 'failed',
+      failedStep: failedStep || null,
+      finishedAt: new Date().toISOString(),
+    },
+  });
 }
 
 function buildBookingRow(bookingData, userId) {
@@ -931,14 +1027,27 @@ router.post('/seatmaps', async (req, res) => {
 router.post('/order', async (req, res) => {
   try {
     // Booking is staged behind its own flag while the SOAP chain is built, so
-    // search can ship first. Refuse before touching a payment or the GDS -
-    // and never fall through to a fabricated booking.
+    // search can ship first, and it never falls through to a fabricated booking.
+    //
+    // But this gate does NOT run before the money moves. ARC Pay's hosted
+    // checkout completes first and the browser returns here, so by now the
+    // customer has already paid. Refusing without reversing that leaves them
+    // charged, with no booking and no refund - the exact outcome the flag is
+    // meant to avoid. So refund on the way out, the same as any other
+    // fulfilment failure.
     if (!providerStatus().bookingEnabled) {
       console.warn('Booking attempted while AMADEUS_WS_BOOKING_ENABLED is false');
-      return res.status(503).json({
-        success: false,
-        error: 'Online booking is temporarily unavailable. Please call (877) 538-7380 to complete your reservation.',
-        code: 'BOOKING_DISABLED'
+      return await refundOnFulfillmentFailure(res, {
+        orderId: req.body.orderId,
+        bookingReference: req.body.bookingReference,
+        amount: req.body.totalAmount || req.body.amount,
+        currency: req.body.flightOffer?.price?.currency
+          || req.body.flightOffers?.[0]?.price?.currency
+          || 'USD',
+        errorMsg: 'booking refused: AMADEUS_WS_BOOKING_ENABLED is false',
+        status: 503,
+        code: 'BOOKING_DISABLED',
+        customerMessage: 'Online booking is temporarily unavailable. Please call (877) 538-7380 to complete your reservation.',
       });
     }
 
@@ -970,9 +1079,16 @@ router.post('/order', async (req, res) => {
         hasTravelersList: travelersList.length > 0,
         receivedKeys: Object.keys(req.body)
       });
-      return res.status(400).json({
-        success: false,
-        error: 'Flight offers are required'
+      // Payment already happened - hosted checkout runs before this route - so
+      // a 400 here is a charge with nothing behind it. Reverse it.
+      return await refundOnFulfillmentFailure(res, {
+        orderId: req.body.orderId,
+        bookingReference: req.body.bookingReference,
+        amount: req.body.totalAmount || req.body.amount,
+        currency: req.body.currency || 'USD',
+        errorMsg: `no flight offers in request; keys=${Object.keys(req.body).join(',')}`,
+        status: 400,
+        code: 'OFFER_MISSING',
       });
     }
 
@@ -998,10 +1114,20 @@ router.post('/order', async (req, res) => {
         hasSource: !!firstOffer?.source,
         hasTravelerPricings: !!firstOffer?.travelerPricings,
       });
-      return res.status(400).json({
-        success: false,
-        error: 'This fare can no longer be booked - please search again',
-        code: 'OFFER_NOT_BOOKABLE'
+      // Same reasoning as above: the customer has paid by the time this route
+      // runs, so refusing the offer without reversing the charge leaves them
+      // out of pocket with no booking. This was the surviving twin of the
+      // booking-disabled gate - one gate was fixed, these two were not.
+      return await refundOnFulfillmentFailure(res, {
+        orderId: req.body.orderId,
+        bookingReference: req.body.bookingReference,
+        amount: req.body.totalAmount || req.body.amount,
+        currency: firstOffer?.price?.currency || req.body.currency || 'USD',
+        errorMsg: `unbookable offer shape: itineraries=${Array.isArray(firstOffer?.itineraries)} `
+          + `source=${!!firstOffer?.source} travelerPricings=${!!firstOffer?.travelerPricings}`,
+        status: 400,
+        code: 'OFFER_NOT_BOOKABLE',
+        customerMessage: 'This fare can no longer be booked, so your payment has been reversed. Please search again.',
       });
     }
 
@@ -1033,6 +1159,22 @@ router.post('/order', async (req, res) => {
         success: false,
         error: 'This booking was cancelled and cannot be completed',
         code: 'BOOKING_CANCELLED'
+      });
+    }
+
+    // The PNR check above cannot catch two requests racing: neither has a PNR
+    // yet, so both pass it and both sell seats against one payment. Claim the
+    // reference before touching the GDS.
+    //
+    // Deliberately NOT refunded. The request holding the claim may be seconds
+    // from a confirmed booking, and reversing its payment from here would
+    // cancel a booking that is about to succeed. The customer is told to wait.
+    const claim = await claimBookingChain(req.body.bookingReference);
+    if (!claim.claimed) {
+      return res.status(409).json({
+        success: false,
+        error: 'This booking is already being confirmed. Please wait a moment before trying again.',
+        code: 'BOOKING_IN_PROGRESS'
       });
     }
 
@@ -1194,12 +1336,31 @@ router.post('/order', async (req, res) => {
       // reverse the payment and tell them honestly. This runs in every
       // environment; the previous non-production branch created a mock booking,
       // which is exactly the outcome the production guard exists to prevent.
+      // Record what actually failed, not what the customer was shown.
+      // `providerError.message` is the mapped, deliberately vague customer text
+      // ("Flight service temporarily unavailable"), and storing that as the
+      // failure reason leaves a refunded booking with nothing to diagnose from -
+      // no operation, no Amadeus code, no step. The customer-facing wording is
+      // built separately inside refundOnFulfillmentFailure, so this only
+      // enriches the log, the stored `fulfillment_failed`, and `technicalError`.
+      // Let a later attempt run. Without this the claim sits at in_progress
+      // until the TTL expires, and a customer retrying immediately is told to
+      // wait for a chain that already failed.
+      await releaseBookingChain(req.body.bookingReference, providerError?.step);
+
+      const failureDetail = [
+        providerError?.step && `step=${providerError.step}`,
+        providerError?.operation && `op=${providerError.operation}`,
+        providerError?.amadeusCode && `amadeusCode=${providerError.amadeusCode}`,
+        providerError?.technicalError || providerError?.message || 'Flight booking failed',
+      ].filter(Boolean).join(' | ');
+
       return await refundOnFulfillmentFailure(res, {
         orderId: req.body.orderId,
         bookingReference: req.body.bookingReference,
         amount: totalAmount || amount,
         currency: firstOffer?.price?.currency || 'USD',
-        errorMsg: providerError?.message || 'Flight booking failed'
+        errorMsg: failureDetail
       });
     }
 

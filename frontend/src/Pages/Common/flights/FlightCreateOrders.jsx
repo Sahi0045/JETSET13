@@ -13,6 +13,18 @@ import { endpoints } from '@/config/api';
 import ArcPayService from '../../../Services/ArcPayService';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 
+/**
+ * Failures where the reference the user is holding can never be completed: the
+ * charge was refunded, refused, or the offer is no longer sellable. The only
+ * way forward is a new search, so the failure screen must not offer to return
+ * to a payment that cannot be used.
+ */
+const TERMINAL_ERROR_CODES = new Set([
+  'BOOKING_CANCELLED',    // row already cancelled and refunded
+  'BOOKING_DISABLED',     // booking switched off; the charge was reversed
+  'OFFER_NOT_BOOKABLE',   // offer expired or failed the shape gate
+]);
+
 function FlightCreateOrders() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -21,6 +33,10 @@ function FlightCreateOrders() {
   const [processingOrder, setProcessingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [error, setError] = useState(null);
+  // The backend's error `code`, kept so the failure screen can tell a retryable
+  // problem from a terminal one. Sending someone back to a payment they already
+  // made - and that was already refunded - can only fail again.
+  const [errorCode, setErrorCode] = useState(null);
   const [bookingReference, setBookingReference] = useState('');
   const [pnr, setPnr] = useState('');
   const [pageLoaded, setPageLoaded] = useState(false);
@@ -112,6 +128,7 @@ function FlightCreateOrders() {
   const processFlightOrder = async (orderData) => {
     setProcessingOrder(true);
     setError(null);
+    setErrorCode(null);
 
     try {
       // First verify the payment with ARC Pay
@@ -309,6 +326,8 @@ function FlightCreateOrders() {
       // Extract more detailed error message with priority order
       let errorMessage = 'Failed to process order';
 
+      setErrorCode(error.response?.data?.code || null);
+
       if (error.response?.data) {
         // Backend returned structured error
         if (error.response.data.error) {
@@ -494,12 +513,25 @@ function FlightCreateOrders() {
                       {error || "An unexpected error occurred. Please try again."}
                     </div>
                     <div className="pt-2">
-                      <button
-                        onClick={() => navigate("/flight-payment")}
-                        className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-                      >
-                        Return to Payment
-                      </button>
+                      {TERMINAL_ERROR_CODES.has(errorCode) ? (
+                        // The payment behind this reference is gone - refunded,
+                        // refused, or spent on a booking that was cancelled.
+                        // Returning to it just hits the same guard again, so
+                        // send them somewhere that can actually work.
+                        <button
+                          onClick={() => navigate("/flights")}
+                          className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                        >
+                          Start a new search
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => navigate("/flight-payment")}
+                          className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                        >
+                          Return to Payment
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}

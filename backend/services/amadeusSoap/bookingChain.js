@@ -51,6 +51,12 @@ export class BookingChainError extends Error {
     this.error = error ?? cause?.error ?? 'We could not complete your booking';
     this.code = code;
     this.technicalError = technicalError ?? cause?.technicalError ?? cause?.message ?? null;
+    // Carried up from the underlying AmadeusSoapError so the route can record
+    // which call failed and what Amadeus said about it. Without these a
+    // refunded booking leaves only the customer-facing wording behind, which
+    // names neither the operation nor the code.
+    this.operation = cause?.operation ?? null;
+    this.amadeusCode = cause?.amadeusCode ?? null;
     this.cause = cause;
   }
 }

@@ -27,6 +27,13 @@ const mockSupabaseChain = () => {
     order:   vi.fn().mockReturnThis(),
     limit:   vi.fn().mockReturnThis(),
     range:   vi.fn().mockReturnThis(),
+    // Used by the booking-chain claim's compare-and-set. Missing methods make a
+    // mocked chain throw mid-route, which reads as a route bug rather than a
+    // gap in the mock, so mirror the real builder.
+    is:      vi.fn().mockReturnThis(),
+    neq:     vi.fn().mockReturnThis(),
+    or:      vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
     single:  vi.fn().mockResolvedValue({ data: null, error: null }),
     // Final resolution — tests override this per-case
     then:    undefined,
