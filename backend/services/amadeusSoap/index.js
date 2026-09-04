@@ -7,6 +7,7 @@ import { AmadeusSoapError, inspectReply } from './errors.js';
 import { mapMasterPricerReply } from './mappers/offer.js';
 import { buildMasterPricerBody } from './operations/masterPricer.js';
 import { buildInformativePricingBody } from './operations/informativePricing.js';
+import { buildFlightInfoBody, readFlightInfoError, readFlightInfoReply } from './operations/flightInfo.js';
 import { applyPricingToOffer } from './mappers/pricing.js';
 import { cancelBooking, retrieveBooking, runBookingChain } from './bookingChain.js';
 import { unwrapEnvelope } from './parseXml.js';
@@ -422,9 +423,16 @@ const cancelFlightOrder = async (recordLocator) => {
   return {
     success: true,
     hadTickets: result.hadTickets,
-    message: result.hadTickets
-      ? 'Booking cancelled; ticket refund follows the airline fare rules'
-      : 'Booking cancelled',
+    voided: result.voided,
+    // Ticket numbers that outlived their same-day void window. The customer is
+    // still refunded, but that value sits with the airline and has to be
+    // reclaimed under its fare rules - it is not settled by cancelling.
+    requiresAirlineRefund: result.requiresAirlineRefund ?? [],
+    message: result.voided
+      ? 'Booking cancelled and tickets voided'
+      : (result.hadTickets
+        ? 'Booking cancelled; ticket refund follows the airline fare rules'
+        : 'Booking cancelled'),
   };
 };
 
@@ -438,6 +446,36 @@ const cancelFlightOrder = async (recordLocator) => {
  * become real implementations without touching the routes.
  */
 const notEntitled = (what) => ({ success: false, data: [], reason: 'not_available', error: `${what} is not available on this account` });
+
+/**
+ * Schedule for one flight on one date.
+ *
+ * Advisory: the date strip and status widget show nothing rather than erroring
+ * if this fails, which is the disposition the route already expects.
+ */
+const getFlightStatus = async (carrier, flightNumber, date) => {
+  try {
+    const result = await callStateless(
+      'Air_FlightInfo',
+      buildFlightInfoBody({ carrier, flightNumber, date }),
+    );
+    const { reply } = soapReply(result);
+
+    // "Not scheduled that day" arrives as a responseError, not a fault. An
+    // empty answer is the correct one - the flight does not exist on that date.
+    const failure = readFlightInfoError(reply);
+    if (failure) {
+      log.info({ carrier, flightNumber, date, code: failure.code }, 'no schedule for this flight');
+      return { success: true, data: [], meta: { count: 0, reason: failure.text || 'not scheduled' } };
+    }
+
+    const legs = readFlightInfoReply(reply);
+    return { success: true, data: legs, meta: { count: legs.length } };
+  } catch (error) {
+    log.warn({ carrier, flightNumber, date, err: error.technicalError ?? error.message }, 'flight status lookup failed');
+    return { success: false, data: [], error: 'Flight status is unavailable' };
+  }
+};
 
 const getSeatMaps = async () => notEntitled('Seat map');
 const getBrandedFareUpsell = async () => notEntitled('Branded fare upsell');
@@ -469,7 +507,7 @@ export default {
   createFlightOrder,
   getFlightOrderDetails,
   cancelFlightOrder,
-  getFlightStatus: async () => ({ success: false, data: [], reason: 'not_available' }),
+  getFlightStatus,
 };
 
 export { searchFlights, searchLocations, priceFlightOffer };
