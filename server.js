@@ -115,9 +115,10 @@ app.get("/api/health", (req, res) => {
     timestamp: new Date(),
     env: process.env.NODE_ENV,
     apiKeys: {
-      amadeus:
-        !!process.env.AMADEUS_API_KEY ||
-        !!process.env.REACT_APP_AMADEUS_API_KEY,
+      // Flights run on Amadeus Enterprise Web Services. The old Self-Service
+      // REST keys were reported here long after that API stopped resolving, so
+      // this said "healthy" while flights were down.
+      amadeusWs: !!process.env.AMADEUS_WS_ENDPOINT && !!process.env.AMADEUS_WS_USERNAME,
     },
   });
 });

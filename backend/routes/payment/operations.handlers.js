@@ -1,6 +1,5 @@
 import axios from 'axios';
 import fetch from 'node-fetch';
-import AmadeusService from '../../services/amadeusService.js';
 import FlightProvider from '../../services/flightProvider.js';
 import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig } from './arcpay.config.js';
 
@@ -104,17 +103,18 @@ export async function handleCancelBookingAction(req, res) {
             try {
                 let amaResult = null;
                 if (type === 'flight' || type == null) {
-                    // FlightProvider, not AmadeusService: the REST service points at
-                    // a host that has had no DNS since August, so every flight
-                    // cancellation threw here, was swallowed, and the refund below
-                    // ran against a reservation that was still live.
+                    // Cancel by record locator through the live provider. This
+                    // used to call the Self-Service REST client, whose host has
+                    // had no DNS since August: every flight cancellation threw
+                    // here, was swallowed, and the refund below ran against a
+                    // reservation that was still live.
                     if (pnr) amaResult = await FlightProvider.cancelFlightOrder(pnr);
-                } else if (type === 'hotel') {
-                    // Hotels are still on the old REST service and out of scope for
-                    // this migration; this call cannot currently succeed.
-                    amaResult = await AmadeusService.cancelHotelBooking(orderId);
                 }
-                // (cruise/package have no supplier-side cancel)
+                // Hotels, cruises and packages have no supplier-side cancel: there
+                // is no hotel supplier behind this API at all (the Enterprise WSAP
+                // is AIR-only), so a hotel booking here was taken through another
+                // channel and exists only in our database. Cancelling it is a
+                // database update and a refund, which is what follows.
                 if (amaResult) {
                     cancellationResult.amadeusCancelled = !!amaResult.success;
                     console.log(`🧳 Supplier cancellation (${type || 'flight'}): ${cancellationResult.amadeusCancelled ? 'success' : 'no-op'}`);
