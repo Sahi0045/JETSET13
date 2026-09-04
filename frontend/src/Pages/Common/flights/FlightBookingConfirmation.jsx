@@ -768,7 +768,10 @@ function FlightBookingConfirmation() {
       console.log('📞 Creating ARC Pay checkout session...');
       const checkoutResponse = await ArcPayService.createHostedCheckout({
         amount: amount,
-        currency: calculatedFare.currency || 'USD',
+        // calculatedFare.currency is seeded from the visitor's location
+        // (userCurrency || 'EUR' at init), so it is a display currency, not a
+        // charge currency. The merchant settles only in USD.
+        currency: 'USD',
         orderId: orderId,
         bookingType: 'flight',
         customerEmail: passengerData?.[0]?.email || 'customer@jetsetgo.com',

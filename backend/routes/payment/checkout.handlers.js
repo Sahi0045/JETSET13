@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { supabase, ARC_PAY_CONFIG } from './arcpay.config.js';
+import { supabase, ARC_PAY_CONFIG, ARC_SETTLEMENT_CURRENCY } from './arcpay.config.js';
 
 
 // Initiate Payment - Create ARC Pay Hosted Checkout session
@@ -175,12 +175,13 @@ export async function handleHostedCheckout(req, res) {
     }
 
     try {
+        // Never log the body: it carries the customer's name, email, phone and
+        // the traveller details behind bookingData.
         console.log('🚀 handleHostedCheckout called for direct booking');
-        console.log('Request body:', JSON.stringify(req.body, null, 2));
 
         const {
             amount,
-            currency = 'USD',
+            currency: requestedCurrency = ARC_SETTLEMENT_CURRENCY,
             orderId,
             bookingType = 'flight',
             customerEmail,
@@ -199,6 +200,18 @@ export async function handleHostedCheckout(req, res) {
                 success: false,
                 error: 'Missing required fields: amount and orderId are required'
             });
+        }
+
+        // The charge currency is never the caller's. Clients send their display
+        // currency here - the web flight payment falls back to
+        // currencyService.getCurrency(), which is whatever the visitor is
+        // browsing in - and this merchant answers anything but USD with a 501,
+        // so the session is never created and the customer simply cannot pay.
+        // Amounts are computed in USD throughout, so USD is also the correct
+        // label for the number being sent.
+        const currency = ARC_SETTLEMENT_CURRENCY;
+        if (requestedCurrency && requestedCurrency !== currency) {
+            console.warn(`⚠️ Charging in ${currency}; caller asked for ${requestedCurrency}, which this merchant cannot settle`);
         }
 
         console.log('💳 Creating ARC Pay hosted checkout session...');
@@ -631,7 +644,15 @@ export async function handlePaymentCallback(req, res) {
                 { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } }
             );
             transaction = orderResponse.data;
-            console.log('📋 Order data:', JSON.stringify(transaction, null, 2));
+            // The order object carries the cardholder's name and billing
+            // address alongside the masked card, so only the decision-relevant
+            // fields are logged.
+            console.log('📋 Order retrieved:', {
+                orderId: transaction?.id,
+                status: transaction?.status,
+                result: transaction?.result,
+                transactions: transaction?.transaction?.length ?? 0,
+            });
         } catch (orderError) {
             console.error('Failed to get order status:', orderError.message);
         }
