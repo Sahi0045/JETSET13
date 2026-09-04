@@ -115,14 +115,14 @@ router.get('/nearby', async (req, res) => {
             });
         }
 
-        // This would need a corresponding method in AmadeusService
-        // For now we'll return a placeholder or implement if needed
-
-        // Placeholder response
+        // Not implemented. The bundled airports dataset carries a geoCode for
+        // every entry (backend/services/airportsIndex.js), so this could be a
+        // real radius search without any supplier call - nothing consumes it
+        // yet, so it stays an honest empty answer rather than a guess.
         return res.json({
             success: true,
             data: [],
-            message: 'Nearby airport search not yet implemented in AmadeusService'
+            message: 'Nearby airport search is not available'
         });
 
     } catch (error) {

@@ -166,3 +166,85 @@ describe('stateful sequences', () => {
     await expect(withSession(async () => 'done')).resolves.toBe('done');
   });
 });
+
+/**
+ * The permit bounds SESSIONS, not calls.
+ *
+ * Amadeus counts simultaneous sessions against the WSAP ceiling. Taking the
+ * permit per HTTP request bounded only the calls in flight, so any number of
+ * booking chains could sit holding open sessions between their steps - exactly
+ * the overrun the semaphore exists to prevent. The module comment claimed the
+ * session-scoped behaviour long before the code did it.
+ */
+describe('semaphore scope', () => {
+  let semaphore;
+
+  beforeEach(async () => {
+    const { getSemaphore, _resetSemaphore } = await import('../../../backend/services/amadeusSoap/semaphore.js');
+    const { getWsConfig } = await import('../../../backend/services/amadeusSoap/config.js');
+    _resetSemaphore();
+    semaphore = getSemaphore(getWsConfig());
+  });
+
+  it('holds one permit for the whole session, not one per call', async () => {
+    const seen = [];
+    axios.post.mockImplementation(async () => {
+      // Sampled while a call is in flight: still exactly one permit, however
+      // many calls the session makes.
+      seen.push(semaphore.active);
+      return ok(envelope(withSessionXml('SESS1', '1')));
+    });
+
+    await withSession(async (ctx) => {
+      await ctx.call('Air_SellFromRecommendation', '<x/>');
+      await ctx.call('PNR_AddMultiElements', '<x/>');
+      await ctx.call('Fare_PricePNRWithBookingClass', '<x/>');
+    });
+
+    expect(seen.length).toBeGreaterThanOrEqual(3);
+    expect([...new Set(seen)]).toEqual([1]);
+  });
+
+  it('releases the permit after sign-out, not before', async () => {
+    let activeDuringSignOut = null;
+    axios.post.mockImplementation(async (_url, body) => {
+      if (String(body).includes('Security_SignOut')) activeDuringSignOut = semaphore.active;
+      return ok(envelope(withSessionXml('SESS1', '1')));
+    });
+
+    await withSession(async (ctx) => { await ctx.call('Air_SellFromRecommendation', '<x/>'); });
+
+    // The session is not returned to Amadeus until sign-out completes.
+    expect(activeDuringSignOut).toBe(1);
+    expect(semaphore.active).toBe(0);
+  });
+
+  it('releases the permit when the body throws', async () => {
+    axios.post.mockResolvedValue(ok(envelope(withSessionXml('SESS1', '1'))));
+
+    await expect(withSession(async (ctx) => {
+      await ctx.call('Air_SellFromRecommendation', '<x/>');
+      throw new Error('chain blew up');
+    })).rejects.toThrow('chain blew up');
+
+    // A leaked permit takes the WSAP slot pool down one slot at a time.
+    expect(semaphore.active).toBe(0);
+  });
+});
+
+describe('stateful sequences are never retried', () => {
+  // Air_Sell holds seats and the ER commit creates a PNR. Replaying either
+  // sells inventory twice against one payment, and the caller cannot tell,
+  // because the first attempt looked like a failure.
+  it('refuses a body marked as a retry wrapper', async () => {
+    const retrying = async () => {};
+    retrying.__isRetryWrapper = true;
+
+    await expect(withSession(retrying)).rejects.toThrow(/retry helper/i);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('refuses something that is not a function at all', async () => {
+    await expect(withSession(null)).rejects.toThrow(/retry helper|not/i);
+  });
+});

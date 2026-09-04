@@ -74,6 +74,20 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # docker-compose.yml and the Caddyfile used to be copied by hand, once.
+      # Any later edit in the repo silently never reached the host, and nothing
+      # detected the drift. Ship them with the release instead.
+      - name: Ship the compose file and Caddyfile
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "deploy/docker-compose.yml,deploy/Caddyfile"
+          target: /opt/jetsetters
+          strip_components: 1
+          overwrite: true
+
       - name: Deploy to the host
         uses: appleboy/ssh-action@v1
         with:
@@ -85,11 +99,23 @@ jobs:
             set -euo pipefail
             cd /opt/jetsetters
 
-            echo "APP_IMAGE=${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha }}" > .image
-            export APP_IMAGE="${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha }}"
+            IMAGE="${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha }}"
+            echo "APP_IMAGE=$IMAGE" > .image
+            export APP_IMAGE="$IMAGE"
 
             docker compose pull app
             docker compose up -d
+
+            # Point the local :latest tag at what was just deployed.
+            #
+            # APP_IMAGE is exported for this SSH session only, and
+            # docker-compose.yml falls back to :latest without it - so a later
+            # bare `docker compose up -d` (a reboot, a manual restart, the
+            # kill-switch flow) used whatever :latest happened to be locally,
+            # silently rolling forward off a pinned rollback. Retagging keeps
+            # the two in step. `.env` cannot hold the pin instead: it is
+            # root:deploy 640 and CI logs in as deploy.
+            docker tag "$IMAGE" "${IMAGE%:*}:latest"
 
             # Wait for the app to report healthy rather than assuming it did.
             # A deploy that "succeeds" while the container crash-loops is worse

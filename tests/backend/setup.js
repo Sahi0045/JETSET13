@@ -64,6 +64,22 @@ vi.mock('../../backend/config/supabase.js', () => ({
   default: supabaseMock,
 }));
 
+// The auth-only client. Mocked for the same reason as the shared one: it
+// throws at import when its credentials are absent, and CI has no
+// SUPABASE_ANON_KEY. Its `auth` is deliberately separate from supabaseMock's -
+// a test that asserts nothing calls auth on the SHARED client would pass
+// trivially if both pointed at the same object.
+vi.mock('../../backend/config/supabaseAuthClient.js', () => ({
+  default: {
+    auth: {
+      refreshSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+      setSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      signOut: vi.fn(),
+    },
+  },
+}));
+
 // ─── Axios mock (Google token verify, Amadeus) ───────────────
 vi.mock('axios', () => ({
   default: {
@@ -134,6 +150,7 @@ process.env.NODE_ENV = 'test';
 // real gateway, and no value is a credential.
 process.env.SUPABASE_URL ??= 'https://test.supabase.co';
 process.env.SUPABASE_SERVICE_ROLE_KEY ??= 'test-service-role-key';
+process.env.SUPABASE_ANON_KEY ??= 'test-anon-key';
 process.env.ARC_PAY_MERCHANT_ID ??= 'TESTMERCHANT';
 process.env.ARC_PAY_API_PASSWORD ??= 'test-api-password';
 process.env.ARC_PAY_BASE_URL ??= 'https://api.test.arcpay.invalid/api/rest/version/77';

@@ -5,15 +5,9 @@ import { buildEnvelope } from './envelope.js';
 import { faultToError, transportError } from './errors.js';
 import { at, parseSoap, txt, unwrapEnvelope } from './parseXml.js';
 import { redactEnvelope } from './xml.js';
-import { Semaphore } from './semaphore.js';
+import { getSemaphore } from './semaphore.js';
 
 const log = logger.child({ svc: 'amadeus-ws' });
-
-let semaphore = null;
-const getSemaphore = (config) => {
-  if (!semaphore) semaphore = new Semaphore(config.maxConcurrency, config.queueTimeoutMs);
-  return semaphore;
-};
 
 /** Read the Session header Amadeus echoes back, if any. */
 const readSession = (header) => {

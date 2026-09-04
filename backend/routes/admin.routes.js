@@ -54,7 +54,13 @@ router.get('/price-settings', async (req, res) => {
 
     // Same reasoning: a missing row is not a licence to invent a fee.
     if (!settings) {
-      console.error('❌ No price_settings row found');
+      // Log what the driver actually said. `.single()` answers PGRST116 for
+      // both "no rows" and "more than one row", and the branch above swallows
+      // that code - so without this an empty table and a duplicated row look
+      // identical, and so does a client that has stopped returning rows.
+      console.error('❌ No price_settings row found', {
+        pgError: error ? { code: error.code, message: error.message, details: error.details } : null,
+      });
       return res.status(503).json({
         success: false,
         error: 'Pricing configuration is temporarily unavailable',

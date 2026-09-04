@@ -39,6 +39,11 @@ async function invokeOrchestratedCancel(bookingReference, reason) {
 // Reverses the ARC payment (VOID/REFUND), marks the booking row as cancelled/refunded with
 // the failure recorded, and returns an honest error — never fabricates a confirmed booking.
 // Responds via `res`; returns the Express response.
+// `orderId` is what ARC Pay knows the payment by. Callers pass
+// `req.body.orderId || req.body.bookingReference` because the two are the same
+// value by convention in both clients, and `reverseArcPaymentForOrder` gives up
+// immediately on a falsy one - so a client that omitted `orderId` produced a
+// charge with no booking and no automatic reversal.
 async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, code }) {
   console.warn('🚑 Ticket not booked after payment — reversing charge. order:', orderId, '| reason:', errorMsg);
   const reversal = await reverseArcPaymentForOrder(orderId, {
@@ -168,10 +173,25 @@ async function persistCommittedPnr({ bookingReference, pnr, tstRefs, priced }) {
  */
 async function flagForReview({ bookingReference, pnr, reason, ticketed }) {
   console.error('⚠️ Booking needs review', { bookingReference, pnr, reason, ticketed });
-  return patchBookingDetails(bookingReference, {
+
+  const patched = await patchBookingDetails(bookingReference, {
     pnr: pnr || undefined,
     needs_review: { reason, ticketed: Boolean(ticketed), at: new Date().toISOString() }
   });
+
+  // The airline holds a real booking, so the row has to say so. Only the happy
+  // path ever wrote status 'confirmed', which left a genuine - possibly
+  // ticketed - PNR sitting at 'pending' in Manage Booking and the admin views,
+  // where it reads as an incomplete booking a human might "clean up".
+  if (supabase && pnr) {
+    const { error } = await supabase
+      .from('bookings')
+      .update({ status: 'confirmed', updated_at: new Date().toISOString() })
+      .eq('booking_reference', bookingReference);
+    if (error) console.error('⚠️ Could not mark the reviewed booking confirmed:', error.message);
+  }
+
+  return patched;
 }
 
 /**
@@ -478,9 +498,7 @@ async function saveBookingToDatabase(bookingData) {
   }
 }
 
-// Helper function to generate mock PNR for demo/test bookings
 
-// Helper function to get Amadeus credentials
 
 // Common city name to IATA code mapping for resolving non-IATA inputs
 const CITY_TO_IATA = {
@@ -688,10 +706,6 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
   }).filter(Boolean);
 };
 
-// Build raw Amadeus-shaped flight offers for LOCAL TESTING only (e.g. when the Amadeus key
-// is rate-limited). Returned through transformAmadeusFlightData so the shape — including
-// `originalOffer` used by the booking step — matches a real search result exactly.
-
 // Flight search endpoint
 router.post('/search', validate({ body: flightSearchSchema }), async (req, res) => {
   try {
@@ -885,6 +899,11 @@ router.post('/date-prices', async (req, res) => {
       from, to, adults, children, infants, travelClass, dates,
     }));
 
+    // null means nothing could be priced, so nothing was cached. The strip
+    // shows no prices rather than a wrong or stale empty answer.
+    if (!payload) {
+      return res.json({ success: false, dateWisePrices: {}, lowestPrice: null, error: 'No prices available' });
+    }
     res.json(payload);
   } catch (error) {
     console.error('Date prices error:', error?.message);
@@ -1038,7 +1057,7 @@ router.post('/order', async (req, res) => {
     if (!providerStatus().bookingEnabled) {
       console.warn('Booking attempted while AMADEUS_WS_BOOKING_ENABLED is false');
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId,
+        orderId: req.body.orderId || req.body.bookingReference,
         bookingReference: req.body.bookingReference,
         amount: req.body.totalAmount || req.body.amount,
         currency: req.body.flightOffer?.price?.currency
@@ -1082,7 +1101,7 @@ router.post('/order', async (req, res) => {
       // Payment already happened - hosted checkout runs before this route - so
       // a 400 here is a charge with nothing behind it. Reverse it.
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId,
+        orderId: req.body.orderId || req.body.bookingReference,
         bookingReference: req.body.bookingReference,
         amount: req.body.totalAmount || req.body.amount,
         currency: req.body.currency || 'USD',
@@ -1119,7 +1138,7 @@ router.post('/order', async (req, res) => {
       // out of pocket with no booking. This was the surviving twin of the
       // booking-disabled gate - one gate was fixed, these two were not.
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId,
+        orderId: req.body.orderId || req.body.bookingReference,
         bookingReference: req.body.bookingReference,
         amount: req.body.totalAmount || req.body.amount,
         currency: firstOffer?.price?.currency || req.body.currency || 'USD',
@@ -1316,8 +1335,11 @@ router.post('/order', async (req, res) => {
         reportError(providerError, {
           service: 'amadeus-ws',
           flow: 'booking',
+          wsap: providerStatus().wsap ?? null,
           step: providerError.step,
-          pnr: providerError.pnr
+          pnr: providerError.pnr,
+          ticketed: providerError.ticketed,
+          bookingReference: req.body.bookingReference
         });
         return res.status(202).json({
           success: true,
@@ -1356,7 +1378,7 @@ router.post('/order', async (req, res) => {
       ].filter(Boolean).join(' | ');
 
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId,
+        orderId: req.body.orderId || req.body.bookingReference,
         bookingReference: req.body.bookingReference,
         amount: totalAmount || amount,
         currency: firstOffer?.price?.currency || 'USD',
@@ -1369,7 +1391,7 @@ router.post('/order', async (req, res) => {
       console.error('❌ Flight order creation failed:', errorMsg);
       {
         return await refundOnFulfillmentFailure(res, {
-          orderId: req.body.orderId,
+          orderId: req.body.orderId || req.body.bookingReference,
           bookingReference: req.body.bookingReference,
           amount: totalAmount || amount,
           currency: firstOffer?.price?.currency || 'USD',
@@ -1385,7 +1407,7 @@ router.post('/order', async (req, res) => {
     if (process.env.NODE_ENV === 'production' && typeof orderResponse.mode === 'string' && orderResponse.mode.toUpperCase().includes('MOCK')) {
       console.error('❌ Amadeus returned a MOCK booking in production (no real ticket):', orderResponse.mode);
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId,
+        orderId: req.body.orderId || req.body.bookingReference,
         bookingReference: req.body.bookingReference,
         amount: totalAmount || amount,
         currency: firstOffer?.price?.currency || 'USD',
@@ -1593,21 +1615,44 @@ router.delete('/order/:orderId', async (req, res) => {
         });
       }
 
+      // A `needsReview` answer is a DECISION, not a malfunction: the airline
+      // still holds the booking, so the orchestrator withheld the refund on
+      // purpose. Falling through to the fallback below would overwrite that
+      // with `status: 'cancelled'` and tell the customer it worked - burying
+      // the flag and leaving them believing they have no flight when they do.
+      if (cancelResult?.needsReview) {
+        console.error('⛔ Cancel needs review; not overriding with the fallback', { orderId });
+        return res.status(502).json({
+          success: false,
+          error: cancelResult.error
+            || 'We could not cancel your reservation with the airline. '
+              + 'Our team has been alerted - please call (877) 538-7380 if it is urgent.',
+          bookingReference: cancelResult.bookingReference,
+          needsReview: true,
+          mode: 'ORCHESTRATED_CANCELLATION'
+        });
+      }
+
       console.warn('⚠️ Orchestrated cancel returned error:', cancelResult?.error);
     } catch (invokeError) {
       console.warn('⚠️ Orchestrated cancel failed:', invokeError.message);
     }
 
-    // Fallback: mock-aware Amadeus cancel + DB status (no refund) if the orchestrator is unreachable
+    // Fallback: only for when the orchestrator was unreachable. It issues no
+    // refund, so it must not claim a cancellation it cannot substantiate.
     let amadeusCancelled = false;
+    let bookingRef = orderId;
     if (supabase) {
       try {
         const { data: bk } = await supabase
           .from('bookings')
-          .select('booking_details')
+          .select('booking_reference, booking_details')
           .or(`booking_reference.eq.${orderId},booking_details->>order_id.eq.${orderId},booking_details->>amadeus_order_id.eq.${orderId}`)
           .limit(1)
           .maybeSingle();
+        // `orderId` may be a record locator rather than our own reference, so
+        // keep the row's real reference for the needs_review patch below.
+        bookingRef = bk?.booking_reference || bookingRef;
         const amaId = bk?.booking_details?.amadeus_order_id || bk?.booking_details?.order_id || orderId;
         try {
           const r = await FlightProvider.cancelFlightOrder(amaId);
@@ -1619,6 +1664,27 @@ router.delete('/order/:orderId', async (req, res) => {
         console.warn('⚠️ Booking lookup for cancellation failed:', lookupErr.message);
       }
 
+      // Marking the row cancelled while the airline still holds the seats is
+      // the worst outcome available here: the customer is told they are
+      // cancelled, stops expecting a flight, and no refund was issued either.
+      // Only record a cancellation the GDS actually confirmed.
+      if (!amadeusCancelled) {
+        await patchBookingDetails(bookingRef, {
+          needs_review: {
+            reason: 'fallback cancel could not reach the GDS; booking may still be live',
+            at: new Date().toISOString()
+          }
+        });
+        return res.status(502).json({
+          success: false,
+          error: 'We could not confirm the cancellation with the airline. '
+            + 'Our team has been alerted - please call (877) 538-7380 to complete it.',
+          amadeusCancelled: false,
+          needsReview: true,
+          mode: 'FALLBACK_CANCELLATION'
+        });
+      }
+
       const { error } = await supabase
         .from('bookings')
         .update({ status: 'cancelled' })
@@ -1627,7 +1693,7 @@ router.delete('/order/:orderId', async (req, res) => {
       if (!error) {
         return res.json({
           success: true,
-          message: `Order ${orderId} has been cancelled${amadeusCancelled ? '' : ' (refund pending manual processing)'}`,
+          message: `Order ${orderId} has been cancelled (refund pending manual processing)`,
           amadeusCancelled,
           mode: 'FALLBACK_CANCELLATION'
         });
@@ -1648,7 +1714,8 @@ router.delete('/order/:orderId', async (req, res) => {
   }
 });
 
-// Get flight order details (with fallback simulation due to API limitations)
+// Get flight order details. Answers from the GDS or fails honestly - there is
+// no simulated fallback, which is the whole point of this handler.
 router.get('/order/:orderId', async (req, res) => {
   const { orderId } = req.params;
 
@@ -1967,7 +2034,6 @@ router.get('/analytics/busiest', async (req, res) => {
   }
 });
 
-// In-memory cache for calendar prices (origin-dest-date -> { price, timestamp })
 
 // Cheapest Flight Dates
 router.get('/cheapest-dates', async (req, res) => {
@@ -2023,6 +2089,7 @@ router.post('/calendar-prices', async (req, res) => {
       from: origin, to: destination, adults: 1, dates,
     }));
 
+    if (!payload) return res.json({ success: false, prices: {}, error: 'No prices available' });
     res.json({ success: payload.success, prices: payload.prices, currency: payload.currency });
   } catch (error) {
     console.error('Calendar prices error:', error?.message);

@@ -12,9 +12,18 @@ api/utils/
 
 # Development files
 node_modules
-.env.local
-.env.development
-.env.test
+
+# Every env file, including plain `.env`.
+#
+# Only `.env.local` / `.development` / `.test` were listed, so a
+# `vercel deploy` run from a working directory uploaded the real `.env` into
+# the build context - which on this project holds the Supabase service-role
+# key, the ARC Pay API password and the Amadeus WS password. Vite also lets a
+# `.env` value fill in any VITE_* var Vercel does not define, so local values
+# could reach the client bundle.
+.env
+.env.*
+!.env.example
 
 # Build files (will be generated)
 dist/

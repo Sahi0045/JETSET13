@@ -73,7 +73,7 @@ Added to Firebase by the user. No rebuild is needed for a fingerprint change —
 
 ### 6. Known open issues
 
-- **Amadeus DNS outage (external).** `test.api.amadeus.com` and `api.amadeus.com` have no DNS records from public resolvers or Amadeus authoritative DNS. Flight search fails with `getaddrinfo ENOTFOUND`. **Do not enable mock flights** and do not claim flight search is fixed — this needs Amadeus support.
+- ~~**Amadeus DNS outage (external).**~~ **Resolved by migration, Sep 2026.** The dead Self-Service REST host is gone from the codebase entirely. Flights now run on **Amadeus Enterprise Web Services (SOAP)** via `backend/services/amadeusSoap/`, against WSAP `1ASIWJETJEC` on the **PDT test** node, served from the Frankfurt host (`api.jetsetterss.com`). Search is live; **booking is off in production** (`AMADEUS_WS_BOOKING_ENABLED=false`) until Amadeus certification, and `AMADEUS_WS_AUTO_TICKET=false` because PDT has no ticketing stock. Mock flights remain deliberately disabled and every mock branch has been deleted.
 - Some older flight bookings have `user_id = null`, so they are missing from My Trips. The booking-save flow still needs to attach the logged-in user ID.
 - Car rental is **not** implemented in `amadeusService.js`; the Amadeus questionnaire text describes an intended integration.
 
@@ -208,5 +208,5 @@ Active effort: publishing the Android app (`jetsetter-mobile`, package `com.jets
 4. Upload new AAB to Internal testing (manual upload — `play-service-account.json` for `eas submit` was never actually set up; low priority, can stay manual).
 5. Complete remaining Play Console checklist: store listing copy (short/full description, feature graphic 1024×500, ≥2 screenshots), content rating questionnaire, app access (reviewer test credentials), target audience (recommended: 18+).
 6. Promote to Production only after step 3/4 (do NOT promote versionCode 2 — it has the permission/Data-safety mismatch).
-7. Known non-blocking issue: `test.api.amadeus.com` / `api.amadeus.com` have no DNS record globally as of Aug 2026 (confirmed via Google/Cloudflare/Quad9 DoH and Amadeus's own Akamai nameservers) — flight search returns 500 `getaddrinfo ENOTFOUND`. Not an app bug; needs an Amadeus support ticket. Mock flights deliberately NOT enabled (user's explicit instruction).
+7. ~~Amadeus DNS outage.~~ Resolved Sep 2026 by the move to Enterprise SOAP — see "Known open issues" above. The mobile app needs no change: it already calls `www.jetsetterss.com/api`, and the flight endpoints are rewritten to the Frankfurt host at the edge. Booking stays disabled in production until certification, so a mobile build made now will get live search and a clean 503 (with an automatic refund) on booking.
 8. Two untracked stray files sitting in the web repo root, safe to delete whenever: `jet.png`, `assets/loose_assets/jet.png`.

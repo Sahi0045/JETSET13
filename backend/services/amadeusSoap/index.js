@@ -35,8 +35,20 @@ const signatureOf = (p) => createHash('sha1')
 
 const reportIfAlerting = (error) => {
   if (error instanceof AmadeusSoapError && error.alert) {
-    reportError(error, { service: 'amadeus-ws', operation: error.operation, amadeusCode: error.amadeusCode });
+    reportError(error, {
+      service: 'amadeus-ws',
+      // Which WSAP produced it. Without this a PDT fault and a production fault
+      // are indistinguishable in triage, and after cutover both exist at once.
+      wsap: safeWsap(),
+      operation: error.operation,
+      amadeusCode: error.amadeusCode,
+    });
   }
+};
+
+/** The configured WSAP, or null - reading config must never break reporting. */
+const safeWsap = () => {
+  try { return getWsConfig().wsap ?? null; } catch { return null; }
 };
 
 const soapReply = (result) => {
@@ -234,8 +246,31 @@ const buildFareRulesIncluded = (text = []) => {
  */
 const MAX_CALENDAR_DATES = 10;
 
+/**
+ * Choose which dates to price when the caller asks for more than the cap.
+ *
+ * Taking the first N silently blanked the rest of the month: the fare calendar
+ * posts all 31 days, so days 11-31 came back with no price at all while the
+ * first ten looked fine. Spreading the sample evenly across the requested range
+ * gives every part of the month a price, and the UI can interpolate between
+ * them - which is what the other calendar component already does client-side.
+ *
+ * Past dates are dropped first: they cannot be priced, and spending cap slots
+ * on them costs a live GDS call each.
+ */
+const sampleDates = (dates, cap = MAX_CALENDAR_DATES) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const usable = [...new Set(dates)].filter((d) => d && d >= today).sort();
+  if (usable.length <= cap) return usable;
+
+  const step = (usable.length - 1) / (cap - 1);
+  const picked = new Set();
+  for (let i = 0; i < cap; i += 1) picked.add(usable[Math.round(i * step)]);
+  return [...picked];
+};
+
 const priceDates = async (params, dates) => {
-  const wanted = [...new Set(dates)].filter(Boolean).slice(0, MAX_CALENDAR_DATES);
+  const wanted = sampleDates(dates);
   const prices = {};
 
   const results = await Promise.allSettled(wanted.map(async (date) => {
@@ -255,7 +290,7 @@ const priceDates = async (params, dates) => {
     }
   }
 
-  return { prices, requested: wanted.length, capped: dates.length > MAX_CALENDAR_DATES };
+  return { prices, requested: wanted.length, capped: wanted.length < [...new Set(dates)].filter(Boolean).length };
 };
 
 /** Backs /flights/date-prices and /flights/calendar-prices. */
@@ -265,8 +300,17 @@ const getCalendarPrices = async ({ dates = [], ...params }) => {
   }
 
   try {
-    const { prices, capped } = await priceDates(params, dates);
+    const { prices, capped, requested } = await priceDates(params, dates);
     const values = Object.values(prices);
+
+    // Nothing priced is not a result worth keeping. Each date is priced under
+    // Promise.allSettled, so a total WSAP outage looks like "every date came
+    // back empty" rather than an error - and `withCache` stores any non-null
+    // value, which pinned the empty strip in Redis for TTL.FLIGHT_CALENDAR
+    // (6 hours) and served it to every visitor until it expired. Returning
+    // null tells withCache there is nothing to store.
+    if (values.length === 0 && requested > 0) return null;
+
     return {
       success: true,
       prices,
@@ -276,8 +320,14 @@ const getCalendarPrices = async ({ dates = [], ...params }) => {
       capped,
     };
   } catch (error) {
+    // Rethrow rather than returning a falsy-but-truthy object. The routes wrap
+    // this in `withCache`, which caches any non-null value - so returning
+    // `{success:false}` here pinned one transient WSAP failure into the cache
+    // for TTL.FLIGHT_CALENDAR (6 hours) and every visitor got the empty strip
+    // until it expired. Throwing lets the route answer honestly and leaves the
+    // cache empty for the next attempt.
     log.warn({ err: error.message }, 'calendar pricing failed');
-    return { success: false, prices: {}, dateWisePrices: {}, error: error.error ?? error.message };
+    throw error;
   }
 };
 

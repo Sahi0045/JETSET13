@@ -84,7 +84,11 @@ fi
 log "Application directory"
 # ─────────────────────────────────────────────────────────────────────────────
 install -d -m 0755 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$APP_DIR"
-install -d -m 0755 root:root /var/log/caddy 2>/dev/null || mkdir -p /var/log/caddy
+# -o/-g, not a bare "root:root" argument: `install -d` treats extra arguments as
+# further directories to create, so the original line silently made a directory
+# literally named `root:root` in the invoker's home on every run - and exited 0,
+# so the `|| mkdir` fallback never fired and nothing ever flagged it.
+install -d -m 0755 -o root -g root /var/log/caddy
 
 # The env file holds every credential this deployment has.
 #
@@ -196,7 +200,9 @@ cat <<SUMMARY
     egress IPv4 $(curl -4 -s --max-time 8 https://ifconfig.me || echo 'unavailable')
 
     Still to do:
-      1. Put the real environment into $APP_DIR/.env  (chmod 600)
+      1. Put the real environment into $APP_DIR/.env
+         (leave it root:$DEPLOY_USER 640 - see the note above; 600 breaks the
+          deploy with "permission denied" because compose reads it as $DEPLOY_USER)
       2. Copy docker-compose.yml and Caddyfile into $APP_DIR
       3. Point api.jetsetterss.com at this host's static IP
       4. cd $APP_DIR && docker compose up -d
