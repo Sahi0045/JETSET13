@@ -292,33 +292,8 @@ async function saveBookingToDatabase(bookingData) {
 }
 
 // Helper function to generate mock PNR for demo/test bookings
-function generateMockPNR() {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const numbers = '0123456789';
-  let pnr = '';
-  for (let i = 0; i < 3; i++) {
-    pnr += letters.charAt(Math.floor(Math.random() * letters.length));
-  }
-  for (let i = 0; i < 3; i++) {
-    pnr += numbers.charAt(Math.floor(Math.random() * numbers.length));
-  }
-  return pnr;
-}
 
 // Helper function to get Amadeus credentials
-const getAmadeusCredentials = () => {
-  const apiKey = process.env.AMADEUS_API_KEY || process.env.REACT_APP_AMADEUS_API_KEY;
-  const apiSecret = process.env.AMADEUS_API_SECRET || process.env.REACT_APP_AMADEUS_API_SECRET;
-
-  const keySource = process.env.AMADEUS_API_KEY ? 'AMADEUS_API_KEY' :
-    (process.env.REACT_APP_AMADEUS_API_KEY ? 'REACT_APP_AMADEUS_API_KEY' : 'None');
-  const secretSource = process.env.AMADEUS_API_SECRET ? 'AMADEUS_API_SECRET' :
-    (process.env.REACT_APP_AMADEUS_API_SECRET ? 'REACT_APP_AMADEUS_API_SECRET' : 'None');
-
-  console.log('Amadeus credentials source:', { keySource, secretSource });
-
-  return { apiKey, apiSecret };
-};
 
 // Common city name to IATA code mapping for resolving non-IATA inputs
 const CITY_TO_IATA = {
@@ -529,66 +504,6 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
 // Build raw Amadeus-shaped flight offers for LOCAL TESTING only (e.g. when the Amadeus key
 // is rate-limited). Returned through transformAmadeusFlightData so the shape — including
 // `originalOffer` used by the booking step — matches a real search result exactly.
-// Gated behind ENABLE_MOCK_FLIGHTS=true; never enable in production.
-function buildMockFlightOffers(searchParams) {
-  const from = String(searchParams.from || 'DEL').toUpperCase().slice(0, 3);
-  const to = String(searchParams.to || 'BOM').toUpperCase().slice(0, 3);
-  const date = String(searchParams.departDate || new Date().toISOString().split('T')[0]).split('T')[0];
-
-  const mk = (id, carrier, num, depTime, arrTime, total, base, durH, durM, aircraft) => ({
-    type: 'flight-offer',
-    id: String(id),
-    source: 'GDS',
-    instantTicketingRequired: false,
-    nonHomogeneous: false,
-    oneWay: false,
-    lastTicketingDate: date,
-    numberOfBookableSeats: 9,
-    itineraries: [{
-      duration: `PT${durH}H${durM}M`,
-      segments: [{
-        departure: { iataCode: from, terminal: '3', at: `${date}T${depTime}:00` },
-        arrival: { iataCode: to, terminal: '2', at: `${date}T${arrTime}:00` },
-        carrierCode: carrier,
-        number: num,
-        aircraft: { code: aircraft },
-        operating: { carrierCode: carrier },
-        duration: `PT${durH}H${durM}M`,
-        id: '1',
-        numberOfStops: 0,
-        blacklistedInEU: false
-      }]
-    }],
-    price: {
-      currency: 'USD',
-      total: total.toFixed(2),
-      base: base.toFixed(2),
-      fees: [{ amount: '0.00', type: 'SUPPLIER' }, { amount: '0.00', type: 'TICKETING' }],
-      grandTotal: total.toFixed(2)
-    },
-    pricingOptions: { fareType: ['PUBLISHED'], includedCheckedBagsOnly: true },
-    validatingAirlineCodes: [carrier],
-    travelerPricings: [{
-      travelerId: '1',
-      fareOption: 'STANDARD',
-      travelerType: 'ADULT',
-      price: { currency: 'USD', total: total.toFixed(2), base: base.toFixed(2) },
-      fareDetailsBySegment: [{
-        segmentId: '1',
-        cabin: 'ECONOMY',
-        fareBasis: 'ZZ1YXII',
-        brandedFare: 'ECOVALUE',
-        class: 'Z',
-        includedCheckedBags: { quantity: 1 }
-      }]
-    }]
-  });
-
-  return [
-    mk(1, 'AI', '131', '10:30', '12:45', 120, 90, 2, 15, '32N'),
-    mk(2, '6E', '209', '18:05', '20:30', 99, 75, 2, 25, '320')
-  ];
-}
 
 // Flight search endpoint
 router.post('/search', validate({ body: flightSearchSchema }), async (req, res) => {
@@ -962,6 +877,18 @@ router.post('/seatmaps', async (req, res) => {
 // Flight order creation endpoint
 router.post('/order', async (req, res) => {
   try {
+    // Booking is staged behind its own flag while the SOAP chain is built, so
+    // search can ship first. Refuse before touching a payment or the GDS -
+    // and never fall through to a fabricated booking.
+    if (!providerStatus().bookingEnabled) {
+      console.warn('Booking attempted while AMADEUS_WS_BOOKING_ENABLED is false');
+      return res.status(503).json({
+        success: false,
+        error: 'Online booking is temporarily unavailable. Please call (877) 538-7380 to complete your reservation.',
+        code: 'BOOKING_DISABLED'
+      });
+    }
+
     console.log('📋 Flight order creation request received');
     console.log('Request body keys:', Object.keys(req.body));
 
@@ -1015,172 +942,6 @@ router.post('/order', async (req, res) => {
       isValidAmadeusOffer
     });
 
-    // If not a valid Amadeus offer, generate mock booking
-    if (!isValidAmadeusOffer) {
-      console.log('🧪 Flight offer is in UI format (not Amadeus format), generating mock booking...');
-
-      try {
-        const mockPNR = generateMockPNR();
-        const orderId = req.body.orderId || `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-        const bookingReference = req.body.bookingReference || `BOOK-${Date.now().toString(36).toUpperCase()}`;
-
-        // Extract price - prioritize from destructured request body, then from flight offer
-        const finalAmount = totalAmount || amount || firstOffer?.price?.total || firstOffer?.price?.amount || firstOffer?.totalPrice?.amount || '0';
-        const currency = firstOffer?.price?.currency || firstOffer?.totalPrice?.currency || 'USD';
-
-        console.log('💰 Amount for booking:', {
-          fromTotalAmount: totalAmount,
-          fromAmount: amount,
-          fromFlightOfferPriceTotal: firstOffer?.price?.total,
-          fromFlightOfferPriceAmount: firstOffer?.price?.amount,
-          finalAmount: finalAmount
-        });
-
-        // Extract flight details for database
-        const firstSegment = firstOffer?.segments?.[0] || firstOffer?.itineraries?.[0]?.segments?.[0] || {};
-        const lastSegment = firstOffer?.segments?.[firstOffer?.segments?.length - 1] || firstSegment;
-
-        console.log(`✅ Mock booking created: PNR=${mockPNR}, OrderID=${orderId}`);
-
-        // Save booking to database with all Amadeus fields
-        const dbBooking = await saveBookingToDatabase({
-          userId: userId || null,
-          bookingReference: bookingReference,
-          pnr: mockPNR,
-          orderId: orderId,
-          amadeusOrderId: orderId,
-          transactionId: transactionId || `TXN-${Date.now()}`,
-          totalAmount: finalAmount,
-          currency: firstOffer?.price?.currency || 'USD',
-          origin: firstSegment.departure?.airport || firstOffer?.origin || firstOffer?.departure?.airport || '',
-          destination: lastSegment.arrival?.airport || firstOffer?.destination || firstOffer?.arrival?.airport || '',
-          departureDate: firstSegment.departure?.date || firstOffer?.departureDate || '',
-          departureTime: firstSegment.departure?.time || firstOffer?.departureTime || '',
-          arrivalTime: lastSegment.arrival?.time || firstOffer?.arrivalTime || '',
-          arrivalDate: lastSegment.arrival?.date || firstOffer?.arrivalDate || '',
-          airline: firstSegment.airline?.code || firstOffer?.airline?.code || firstOffer?.airlineCode || '',
-          airlineName: firstSegment.airline?.name || firstOffer?.airline?.name || firstOffer?.airline || '',
-          flightNumber: firstOffer?.flightNumber || '',
-          duration: firstOffer?.duration || '',
-          cabinClass: firstOffer?.cabinClass || firstOffer?.travelClass || firstOffer?.cabin || 'ECONOMY',
-          departureTerminal: firstSegment.departure?.terminal || firstOffer?.departure?.terminal || '',
-          arrivalTerminal: lastSegment.arrival?.terminal || firstOffer?.arrival?.terminal || '',
-          aircraft: firstOffer?.aircraft || '',
-          stops: firstOffer?.stops ?? 0,
-          stopDetails: firstOffer?.stopDetails || [],
-          brandedFare: firstOffer?.brandedFare || null,
-          brandedFareLabel: firstOffer?.brandedFareLabel || null,
-          operatingCarrier: firstOffer?.operatingCarrier || null,
-          operatingAirlineName: firstOffer?.operatingAirlineName || null,
-          lastTicketingDate: firstOffer?.lastTicketingDate || null,
-          numberOfBookableSeats: firstOffer?.numberOfBookableSeats || null,
-          refundable: firstOffer?.refundable || false,
-          baggageDetails: firstOffer?.baggageDetails || null,
-          baggage: firstOffer?.baggage || null,
-          originCity: firstOffer?.departure?.cityName || '',
-          destinationCity: firstOffer?.arrival?.cityName || '',
-          priceBase: firstOffer?.price?.base || null,
-          priceGrandTotal: firstOffer?.price?.grandTotal || firstOffer?.price?.total || null,
-          priceFees: firstOffer?.price?.fees || [],
-          fareBreakdown: fareBreakdown || null,
-          passengerDetails: passengerDetails || travelersList.map((t, i) => ({
-            id: `${i + 1}`,
-            firstName: t.firstName || 'Guest',
-            lastName: t.lastName || 'User',
-            dateOfBirth: t.dateOfBirth,
-            gender: t.gender,
-            title: t.title || '',
-            mobile: t.mobile || '',
-            email: t.email || '',
-            seatNumber: t.seatNumber || '',
-            meal: t.meal || '',
-            baggage: t.baggage || '',
-            requiresWheelchair: t.requiresWheelchair || false
-          })),
-          flightOffer: firstOffer,
-          userId: req.body.userId || null
-        });
-
-        console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
-
-        // --- Send Booking Confirmation Email ---
-        if (dbBooking) {
-          try {
-            const { sendBookingNotificationEmails } = await import('../services/emailService.js');
-            console.log('📧 Sending booking confirmation email (Mock)...');
-
-            const firstTraveler = travelersList && travelersList.length > 0 ? travelersList[0] : null;
-            let customerFirstName = firstTraveler?.firstName || 'Valued';
-            let customerLastName = firstTraveler?.lastName || 'Customer';
-            const customerName = `${customerFirstName} ${customerLastName}`.trim();
-
-            // Find a valid email address (avoid empty strings)
-            let finalEmail = contactInfo?.email || req.body.customerEmail || '';
-            if (!finalEmail && firstTraveler?.email) finalEmail = firstTraveler.email;
-            if (!finalEmail) finalEmail = 'guest@jetsetterss.com';
-
-            const bookingEmailData = {
-              customerEmail: finalEmail,
-              customerName: customerName,
-              bookingReference: dbBooking.booking_reference,
-              bookingType: 'flight',
-              paymentAmount: finalAmount,
-              currency: currency,
-              travelDate: dbBooking.booking_details?.departure_date_full || firstSegment?.departure?.date || '',
-              passengers: travelersList.length || 1,
-              bookingDetails: {
-                origin: dbBooking.booking_details?.origin_city || firstSegment?.departure?.airport,
-                destination: dbBooking.booking_details?.destination_city || lastSegment?.arrival?.airport,
-                airline: dbBooking.booking_details?.airline_name || firstSegment?.airline?.name
-              }
-            };
-
-            const emailResult = await sendBookingNotificationEmails(bookingEmailData);
-            if (emailResult.success) {
-              console.log('✅ Booking confirmation email sent successfully (Mock)');
-            } else {
-              console.warn('⚠️ Booking confirmation email sent with issues:', emailResult.error);
-            }
-          } catch (emailError) {
-            console.error('❌ Failed to send booking confirmation email:', emailError.message);
-          }
-        }
-        // ---------------------------------------
-
-        return res.json({
-          success: true,
-          data: {
-            id: orderId,
-            orderId: orderId,
-            pnr: mockPNR,
-            status: 'CONFIRMED',
-            bookingReference: bookingReference,
-            flightOffers: offers,
-            travelers: travelersList.map((t, i) => ({
-              id: `${i + 1}`,
-              name: { firstName: t.firstName || 'Guest', lastName: t.lastName || 'User' }
-            })),
-            totalPrice: { amount: totalAmount, currency: currency },
-            createdAt: new Date().toISOString(),
-            databaseId: dbBooking?.id || null
-          },
-          pnr: mockPNR,
-          orderId: orderId,
-          bookingReference: bookingReference,
-          mode: 'MOCK_DEMO_BOOKING',
-          savedToDatabase: !!dbBooking,
-          message: 'Demo booking created successfully with mock PNR (real Amadeus booking requires original offer data)'
-        });
-      } catch (mockError) {
-        console.error('❌ Error creating mock booking:', mockError);
-        console.error('❌ Mock booking error details:', {
-          message: mockError.message,
-          stack: mockError.stack,
-          firstOffer: firstOffer
-        });
-        throw new Error(`Failed to create mock booking: ${mockError.message}`);
-      }
-    }
 
     // Prepare flight order data for Amadeus (only if we have valid Amadeus format)
     // The travelers from frontend are already in correct format: { id, firstName, lastName, dateOfBirth, gender }
@@ -1274,123 +1035,27 @@ router.post('/order', async (req, res) => {
         mode: orderResponse?.mode,
         hasPnr: !!orderResponse?.pnr
       });
-    } catch (amadeusServiceError) {
-      console.error('❌ FlightProvider.createFlightOrder threw an error:', amadeusServiceError);
+    } catch (providerError) {
+      console.error('❌ FlightProvider.createFlightOrder threw:', providerError?.message);
 
-      // PRODUCTION: never fabricate a booking after a real charge — reverse the payment instead.
-      if (process.env.NODE_ENV === 'production') {
-        return await refundOnFulfillmentFailure(res, {
-          orderId: req.body.orderId,
-          bookingReference: req.body.bookingReference,
-          amount: totalAmount || amount,
-          currency: firstOffer?.price?.currency || 'USD',
-          errorMsg: amadeusServiceError?.message || 'Amadeus booking failed'
-        });
-      }
-
-      // Non-production only: create a mock booking as ultimate fallback (keeps dev/test flowing)
-      const mockPNR = generateMockPNR();
-      const orderId = req.body.orderId || `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const bookingReference = req.body.bookingReference || `BOOK-${Date.now().toString(36).toUpperCase()}`;
-
-      console.log('🆘 Creating emergency fallback booking with mock PNR');
-
-      const dbBooking = await saveBookingToDatabase({
-        userId: userId || null,
-        bookingReference: bookingReference,
-        pnr: mockPNR,
-        orderId: orderId,
-        amadeusOrderId: orderId,
-        transactionId: req.body.transactionId || `TXN-${Date.now()}`,
-        totalAmount: totalAmount || amount || '0',
-        origin: firstOffer?.itineraries?.[0]?.segments?.[0]?.departure?.iataCode || '',
-        destination: firstOffer?.itineraries?.[0]?.segments?.[firstOffer.itineraries[0].segments.length - 1]?.arrival?.iataCode || '',
-        departureDate: firstOffer?.itineraries?.[0]?.segments?.[0]?.departure?.at?.split('T')[0] || '',
-        departureTime: '',
-        arrivalTime: '',
-        airline: firstOffer?.itineraries?.[0]?.segments?.[0]?.carrierCode || '',
-        airlineName: firstOffer?.validatingAirlineCodes?.[0] || '',
-        flightNumber: '',
-        duration: firstOffer?.itineraries?.[0]?.duration || '',
-        cabinClass: 'ECONOMY',
-        travelers: amadeusTravelers.map((t) => ({
-          id: t.id,
-          firstName: t.name.firstName,
-          lastName: t.name.lastName,
-          dateOfBirth: t.dateOfBirth,
-          gender: t.gender
-        })),
-        flightOffer: firstOffer,
-        userId: req.body.userId || null
-      });
-
-      // --- Send Booking Confirmation Email ---
-      if (dbBooking) {
-        try {
-          const { sendBookingNotificationEmails } = await import('../services/emailService.js');
-          console.log('📧 Sending booking confirmation email (Fallback)...');
-
-          const mainTraveler = (amadeusTravelers && amadeusTravelers.length > 0) ? amadeusTravelers[0] : null;
-          let customerFirstName = mainTraveler?.name?.firstName || 'Valued';
-          let customerLastName = mainTraveler?.name?.lastName || 'Customer';
-          const customerName = `${customerFirstName} ${customerLastName}`.trim();
-
-          // Find a valid email address (avoid empty strings)
-          let finalEmail = contactInfo?.email || req.body.customerEmail || '';
-          if (!finalEmail && mainTraveler?.contact?.emailAddress) finalEmail = mainTraveler.contact.emailAddress;
-          if (!finalEmail) finalEmail = 'guest@jetsetterss.com';
-
-          const bookingEmailData = {
-            customerEmail: finalEmail,
-            customerName: customerName,
-            bookingReference: dbBooking.booking_reference,
-            bookingType: 'flight',
-            paymentAmount: totalAmount || amount || '0',
-            currency: 'USD',
-            travelDate: dbBooking.booking_details?.departure_date_full || firstOffer?.itineraries?.[0]?.segments?.[0]?.departure?.at?.split('T')[0] || '',
-            passengers: amadeusTravelers.length || 1,
-            bookingDetails: {
-              origin: dbBooking.booking_details?.origin_city || firstOffer?.itineraries?.[0]?.segments?.[0]?.departure?.iataCode,
-              destination: dbBooking.booking_details?.destination_city || firstOffer?.itineraries?.[0]?.segments?.[firstOffer.itineraries[0].segments.length - 1]?.arrival?.iataCode,
-              airline: dbBooking.booking_details?.airline_name || firstOffer?.validatingAirlineCodes?.[0]
-            }
-          };
-
-          const emailResult = await sendBookingNotificationEmails(bookingEmailData);
-          if (emailResult.success) {
-            console.log('✅ Booking confirmation email sent successfully (Fallback)');
-          } else {
-            console.warn('⚠️ Booking confirmation email sent with issues:', emailResult.error);
-          }
-        } catch (emailError) {
-          console.error('❌ Failed to send booking confirmation email:', emailError.message);
-        }
-      }
-      // ---------------------------------------
-
-      return res.json({
-        success: true,
-        data: {
-          id: orderId,
-          orderId: orderId,
-          pnr: mockPNR,
-          status: 'CONFIRMED',
-          bookingReference: bookingReference,
-          travelers: amadeusTravelers
-        },
-        pnr: mockPNR,
-        orderId: orderId,
-        bookingReference: bookingReference,
-        mode: 'EMERGENCY_FALLBACK',
-        savedToDatabase: !!dbBooking,
-        message: 'Booking created with emergency fallback (service error)'
+      // The customer has already been charged - hosted checkout runs before this
+      // route. Never fabricate a booking to paper over a supplier failure:
+      // reverse the payment and tell them honestly. This runs in every
+      // environment; the previous non-production branch created a mock booking,
+      // which is exactly the outcome the production guard exists to prevent.
+      return await refundOnFulfillmentFailure(res, {
+        orderId: req.body.orderId,
+        bookingReference: req.body.bookingReference,
+        amount: totalAmount || amount,
+        currency: firstOffer?.price?.currency || 'USD',
+        errorMsg: providerError?.message || 'Flight booking failed'
       });
     }
 
     if (!orderResponse || !orderResponse.success) {
       const errorMsg = orderResponse?.error || 'Amadeus service returned unsuccessful response';
-      console.error('❌ Amadeus order creation failed:', errorMsg);
-      if (process.env.NODE_ENV === 'production') {
+      console.error('❌ Flight order creation failed:', errorMsg);
+      {
         return await refundOnFulfillmentFailure(res, {
           orderId: req.body.orderId,
           bookingReference: req.body.bookingReference,
@@ -1677,7 +1342,7 @@ router.get('/order/:orderId', async (req, res) => {
           pnr: orderDetails.pnr || orderDetails.data.associatedRecords?.[0]?.reference,
           orderId: orderId,
           mode: orderDetails.mode,
-          message: orderDetails.mode === 'MOCK_STORAGE' ? 'Mock order retrieved successfully' : 'Flight order details retrieved successfully'
+          message: 'Flight order details retrieved successfully'
         });
       }
     } catch (amadeusError) {

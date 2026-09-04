@@ -1,9 +1,19 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import logger from '../logger.js';
 import { OPERATIONS, STATELESS_OPERATIONS } from './codes.js';
 import { getWsConfig } from './config.js';
 import { postEnvelope } from './transport.js';
 
 const log = logger.child({ svc: 'amadeus-ws' });
+
+/**
+ * Tracks whether the current async context is already inside a session.
+ *
+ * A module-level flag cannot express this: two concurrent requests would see
+ * each other's state and one would be refused for no reason. AsyncLocalStorage
+ * scopes it to the call chain, which is exactly the boundary that matters.
+ */
+const activeSession = new AsyncLocalStorage();
 
 /**
  * Session discipline for Amadeus Web Services.
@@ -51,7 +61,6 @@ export const callStateless = async (operationName, bodyXml, options = {}) => {
 export const withSession = async (fn, options = {}) => {
   const config = options.config ?? getWsConfig();
   let session = null;
-  let depth = 0;
 
   const ctx = {
     get sessionId() { return session?.sessionId ?? null; },
@@ -59,7 +68,6 @@ export const withSession = async (fn, options = {}) => {
     async call(operationName, bodyXml, callOptions = {}) {
       const operation = OPERATIONS[operationName];
       if (!operation) throw new Error(`Unknown operation: ${operationName}`);
-      if (depth > 0) throw new Error('withSession() must not be nested');
 
       const outgoing = session
         ? {
@@ -78,8 +86,15 @@ export const withSession = async (fn, options = {}) => {
     },
   };
 
+  // Nesting would open a second session while the first is still held, and the
+  // semaphore permit is held for the whole session - with a low concurrency
+  // limit that deadlocks.
+  if (activeSession.getStore()) {
+    throw new Error('withSession() must not be nested; pass the existing ctx down instead');
+  }
+
   try {
-    return await fn(ctx);
+    return await activeSession.run(true, () => fn(ctx));
   } finally {
     if (session?.sessionId) {
       // Own try/catch and own short timeout: a hung sign-out must never become

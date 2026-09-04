@@ -52,8 +52,6 @@ const getResend = () => {
   return resendClient;
 };
 
-/** True when email can actually be sent; lets callers skip work up front. */
-export const isEmailConfigured = () => Boolean(process.env.RESEND_API_KEY);
 
 /**
  * Generic email sending function

@@ -23,7 +23,7 @@ export const fromDDMMYY = (ddmmyy) => {
 };
 
 /** 'HHMM' -> 'HH:MM'. */
-export const fromHHMM = (hhmm) => {
+const fromHHMM = (hhmm) => {
   const s = String(hhmm ?? '').trim().padStart(4, '0');
   if (!/^\d{4}$/.test(s)) return null;
   return `${s.slice(0, 2)}:${s.slice(2, 4)}`;

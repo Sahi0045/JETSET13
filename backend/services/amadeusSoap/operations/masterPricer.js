@@ -131,25 +131,3 @@ export const buildMasterPricerBody = (p) => {
 
   return `    <Fare_MasterPricerTravelBoardSearch xmlns="${OPERATIONS.Fare_MasterPricerTravelBoardSearch.namespace}">${body}</Fare_MasterPricerTravelBoardSearch>`;
 };
-
-/**
- * Fare_MasterPricerCalendar - the same message plus a date range, so one call
- * replaces the N searches the calendar endpoints used to fan out.
- * `dayInterval` has a WSAP-enforced ceiling; callers chunk around it.
- */
-export const buildCalendarBody = (p) => {
-  const { dayInterval = 3, ...rest } = p;
-  const base = buildMasterPricerBody({ ...rest, max: rest.max ?? 200 });
-
-  return base
-    .replace(
-      `<${'Fare_MasterPricerTravelBoardSearch'} xmlns="${OPERATIONS.Fare_MasterPricerTravelBoardSearch.namespace}"`,
-      `<Fare_MasterPricerCalendar xmlns="${OPERATIONS.Fare_MasterPricerCalendar.namespace}"`,
-    )
-    .replace('</Fare_MasterPricerTravelBoardSearch>', '</Fare_MasterPricerCalendar>')
-    // rangeOfDate follows firstDateTimeDetail inside timeDetails.
-    .replace(
-      /(<timeDetails><firstDateTimeDetail>.*?<\/firstDateTimeDetail>)/g,
-      `$1${wrap('rangeOfDate', [el('rangeQualifier', 'C'), el('dayInterval', String(dayInterval))])}`,
-    );
-};
