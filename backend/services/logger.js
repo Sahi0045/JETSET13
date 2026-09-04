@@ -32,6 +32,34 @@ const baseOptions = {
       '*.cvv',
       'apiPassword',
       '*.apiPassword',
+
+      // Amadeus SOAP. The envelope carries the WS-Security digest, and a
+      // booking envelope carries every passenger's name, date of birth and
+      // passport number in plain text.
+      'wsse',
+      '*.wsse',
+      'envelope',
+      '*.envelope',
+      'securityToken',
+      '*.securityToken',
+
+      // Traveller PII. A flight order is the most sensitive payload this
+      // service handles: names, dates of birth, passport numbers and contact
+      // details, for several people at once.
+      'passengerData',
+      '*.passengerData',
+      'travelers',
+      '*.travelers',
+      'travellerInfo',
+      '*.travellerInfo',
+      'documents',
+      '*.documents',
+      'passportNumber',
+      '*.passportNumber',
+      'dateOfBirth',
+      '*.dateOfBirth',
+      'emailAddress',
+      '*.emailAddress',
     ],
     censor: '***',
   },
