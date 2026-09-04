@@ -43,6 +43,16 @@ export const buildPricePnrBody = ({ currency = 'USD', validatingCarrier } = {}) 
   return `    <Fare_PricePNRWithBookingClass xmlns="${ns}">${pricingOptions({ currency, validatingCarrier })}</Fare_PricePNRWithBookingClass>`;
 };
 
+/** `lastTktDate` as YYYY-MM-DD, or '' when Amadeus did not send one. */
+const isoTktDate = (fare) => {
+  const year = atTxt(fare, 'lastTktDate.dateTime.year');
+  if (!year) return '';
+  const month = atTxt(fare, 'lastTktDate.dateTime.month');
+  const day = atTxt(fare, 'lastTktDate.dateTime.day');
+  if (!month || !day) return '';
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
+
 /**
  * Read the priced fares back.
  *
@@ -66,9 +76,13 @@ export const readPricePnrReply = (reply) => {
       paxRefs: arr(at(fare, 'paxSegReference.refDetails'))
         .filter((d) => txt(d.refQualifier) === 'PA')
         .map((d) => txt(d.refNumber)),
-      lastTicketingDate: atTxt(fare, 'lastTktDate.dateTime.year')
-        ? `${atTxt(fare, 'lastTktDate.dateTime.day')}/${atTxt(fare, 'lastTktDate.dateTime.month')}/${atTxt(fare, 'lastTktDate.dateTime.year')}`
-        : '',
+      // ISO, not D/M/YYYY. This is the date after which the airline cancels an
+      // unticketed booking, it is stored on the booking and shown to the
+      // customer, and "11/9/2026" is 11 September to half the world and 9
+      // November to the other half - a two-month error on a deadline. Search
+      // already emits `lastTicketingDate` as YYYY-MM-DD, so this also stops the
+      // same field arriving in two formats depending on which call produced it.
+      lastTicketingDate: isoTktDate(fare),
       amounts,
     };
   });
