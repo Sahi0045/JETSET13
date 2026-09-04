@@ -183,7 +183,11 @@ function FlightPayment() {
 
         const checkoutResponse = await ArcPayService.createHostedCheckout({
           amount: amount,
-          currency: paymentData?.calculatedFare?.currency || currencyService.getCurrency(),
+          // Always USD: this is the charge currency, not the display one. The
+          // merchant settles only in USD and answers anything else with a 501,
+          // so falling back to the visitor's browsing currency stopped them
+          // paying at all.
+          currency: 'USD',
           orderId: orderId,
           bookingType: 'flight',
           customerEmail: paymentData?.passengerData?.[0]?.email || 'customer@jetsetgo.com',
@@ -383,7 +387,8 @@ function FlightPayment() {
 
       const checkoutResponse = await ArcPayService.createHostedCheckout({
         amount: payableAmount,
-        currency: paymentData?.calculatedFare?.currency || currencyService.getCurrency(),
+        // Always USD - see above; the merchant cannot settle anything else.
+        currency: 'USD',
         orderId: orderId,
         bookingType: 'flight',
         customerEmail: paymentData?.passengerData?.[0]?.email || 'customer@jetsetgo.com',

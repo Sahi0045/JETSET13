@@ -41,6 +41,23 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 // ARC Pay configuration — all values come from the environment.
 // API_URL and CHECK_GATEWAY_URL are derived from BASE_URL/MERCHANT_ID so there are no
 // hardcoded hosts or merchant ids; an explicit env override still takes precedence.
+/**
+ * The only currency this merchant can settle in.
+ *
+ * Probing INITIATE_CHECKOUT against the live gateway returns, for every
+ * non-USD code tried (INR/EUR/GBP/AED/CAD):
+ *
+ *   HTTP 501 - "Currency (INR) is not supported by merchant.
+ *               Only the following currencies are supported: [USD]"
+ *
+ * So a non-USD currency does not charge the wrong amount - it stops the
+ * checkout session being created at all, and the customer cannot pay. Currency
+ * on the site is display-only: prices are converted USD->local for reading,
+ * and the charge is always USD. Enabling more is an ARC-side merchant
+ * configuration, not a code change; when that happens this becomes a list.
+ */
+export const ARC_SETTLEMENT_CURRENCY = 'USD';
+
 export const ARC_PAY_CONFIG = {
     MERCHANT_ID,
     API_USERNAME: process.env.ARC_PAY_API_USERNAME || MERCHANT_ID,
