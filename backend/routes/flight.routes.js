@@ -39,7 +39,7 @@ async function invokeOrchestratedCancel(bookingReference, reason) {
 // Reverses the ARC payment (VOID/REFUND), marks the booking row as cancelled/refunded with
 // the failure recorded, and returns an honest error — never fabricates a confirmed booking.
 // Responds via `res`; returns the Express response.
-async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg }) {
+async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, code }) {
   console.warn('🚑 Ticket not booked after payment — reversing charge. order:', orderId, '| reason:', errorMsg);
   const reversal = await reverseArcPaymentForOrder(orderId, {
     amount,
@@ -79,14 +79,20 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
     ? 'We could not confirm your flight booking, so your payment has been reversed. The amount will be returned to your original payment method.'
     : 'We could not confirm your flight booking. Your payment could not be auto-reversed and our team will process your refund shortly.';
 
-  return res.status(502).json({
+  // `customerMessage`/`status` let a caller keep its own wording and status -
+  // the booking-disabled gate says "call us" and answers 503 - without needing
+  // a second, divergent refund path.
+  const shown = customerMessage || userMessage;
+
+  return res.status(status).json({
     success: false,
     bookingFailed: true,
     refunded: reversal.reversed,
     refundAction: reversal.action,                 // VOID | REFUND | ALREADY_REVERSED | NONE | FAILED
     refundAmount: reversal.amount ?? amount ?? null,
-    error: userMessage,                            // FlightCreateOrders surfaces `.error` first
-    message: userMessage,
+    error: shown,                                  // FlightCreateOrders surfaces `.error` first
+    message: shown,
+    ...(code ? { code } : {}),
     technicalError: errorMsg
   });
 }
@@ -931,14 +937,27 @@ router.post('/seatmaps', async (req, res) => {
 router.post('/order', async (req, res) => {
   try {
     // Booking is staged behind its own flag while the SOAP chain is built, so
-    // search can ship first. Refuse before touching a payment or the GDS -
-    // and never fall through to a fabricated booking.
+    // search can ship first, and it never falls through to a fabricated booking.
+    //
+    // But this gate does NOT run before the money moves. ARC Pay's hosted
+    // checkout completes first and the browser returns here, so by now the
+    // customer has already paid. Refusing without reversing that leaves them
+    // charged, with no booking and no refund - the exact outcome the flag is
+    // meant to avoid. So refund on the way out, the same as any other
+    // fulfilment failure.
     if (!providerStatus().bookingEnabled) {
       console.warn('Booking attempted while AMADEUS_WS_BOOKING_ENABLED is false');
-      return res.status(503).json({
-        success: false,
-        error: 'Online booking is temporarily unavailable. Please call (877) 538-7380 to complete your reservation.',
-        code: 'BOOKING_DISABLED'
+      return await refundOnFulfillmentFailure(res, {
+        orderId: req.body.orderId,
+        bookingReference: req.body.bookingReference,
+        amount: req.body.totalAmount || req.body.amount,
+        currency: req.body.flightOffer?.price?.currency
+          || req.body.flightOffers?.[0]?.price?.currency
+          || 'USD',
+        errorMsg: 'booking refused: AMADEUS_WS_BOOKING_ENABLED is false',
+        status: 503,
+        code: 'BOOKING_DISABLED',
+        customerMessage: 'Online booking is temporarily unavailable. Please call (877) 538-7380 to complete your reservation.',
       });
     }
 

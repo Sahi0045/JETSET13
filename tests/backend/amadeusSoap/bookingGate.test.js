@@ -76,6 +76,33 @@ describe('booking gate', () => {
     expect(res.body.error).toMatch(/538-7380/);
   });
 
+  // The gate does NOT run before the money moves: ARC Pay's hosted checkout
+  // completes first and the browser returns here. Refusing without reversing
+  // leaves the customer charged, with no booking and no refund - which is the
+  // outcome the flag exists to prevent. Seen live during a UI walkthrough.
+  it('reverses the payment instead of keeping it', async () => {
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'false');
+    vi.resetModules();
+    const app = await makeApp();
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('BOOKING_DISABLED');
+    // The refund path ran, whatever the gateway said about it.
+    expect(res.body).toHaveProperty('refundAction');
+    expect(res.body.bookingFailed).toBe(true);
+  });
+
+  it('still tells the customer how to complete the booking', async () => {
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'false');
+    vi.resetModules();
+    const app = await makeApp();
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+    expect(res.body.error).toMatch(/538-7380/);
+  });
+
   it('never returns a PNR or a mock mode while disabled', async () => {
     vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'false');
     vi.resetModules();

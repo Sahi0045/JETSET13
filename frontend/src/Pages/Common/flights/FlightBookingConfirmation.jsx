@@ -257,7 +257,11 @@ function FlightBookingConfirmation() {
         airline: flightData.airline.name,
         airlineCode: flightData.airline.code,
         airlineLogo: flightData.airline.logo,
-        flightNumber: `${flightData.airline.code} ${flightData.id}`,
+        // flightData.id is the OFFER id ("1"), not the flight number - this
+        // rendered "AI 1" on the page the customer confirms, while the search
+        // results correctly showed AI-9486.
+        flightNumber: flightData.flightNumber
+          || `${flightData.airline.code} ${flightData.airline.flightNumber ?? ''}`.trim(),
         departureCode: flightData.departure.airport,
         arrivalCode: flightData.arrival.airport,
         departureCity: flightData.departure.cityName || flightData.departure.airport,
@@ -383,8 +387,12 @@ function FlightBookingConfirmation() {
         const hasSearchState = !!routerLocation.state?.flightData;
         const targetId = bookingId || "TEST_BOOKING_123";
 
-        // priceConfig comes from usePriceConfig('all') — already resolved by
-        // the time this effect runs (staleTime 10min, cached). Fallback to defaults.
+        // priceConfig comes from usePriceConfig('all'). On a cold load it is
+        // still undefined when this effect first runs, so the defaults below
+        // ($25 + 5%) were being used to compute a fee the customer is actually
+        // charged - against a configured $1 + 0%, that is roughly 2,600 rupees
+        // too much per booking. `priceConfig` is now a dependency of this
+        // effect, so the fare is recomputed the moment the real settings land.
         const config = priceConfig || PricingService.getDefaultSettings('all');
         const mockData = hasSearchState
           ? null
@@ -421,7 +429,7 @@ function FlightBookingConfirmation() {
 
     getBookingDetails();
     return () => { cancelled = true; };
-  }, [routerLocation.state, bookingId]);
+  }, [routerLocation.state, bookingId, priceConfig]);
 
   // Add an effect to update fare when passengers, addons, VIP, or extras change
   useEffect(() => {
