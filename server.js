@@ -55,7 +55,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // Behind a proxy (Vercel/Render) — trust first hop for correct client IPs / rate limiting
-app.set("trust proxy", 1);
+// How many proxies sit in front of this process, left-to-right in
+// X-Forwarded-For. On Vercel it is 1 (the edge). On the Frankfurt host it is 2
+// (Vercel's edge, then Caddy). Getting this wrong makes req.ip resolve to a
+// proxy rather than the visitor, and the per-IP rate limiter then throttles
+// every user as if they were one.
+app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS || 1));
 
 // Fail fast on missing required config; warn on degraded features. Then init monitoring.
 validateEnv();
