@@ -81,11 +81,29 @@ vi.mock('../../backend/services/cache.service.js', () => ({
   invalidatePattern: vi.fn().mockResolvedValue(undefined),
   set: vi.fn().mockResolvedValue(undefined),
   get: vi.fn().mockResolvedValue(null),
-  TTL: { FLIGHT_SEARCH: 300, HOTEL_SEARCH: 300, VISA_REQUIREMENTS: 3600 },
+  healthCheck: vi.fn().mockResolvedValue({ status: 'disabled' }),
+  // Mirrors the real module's surface. It previously stopped at three TTLs and
+  // three key builders, so any route reaching for CacheKeys.flightBrowse threw
+  // a TypeError, hit its own catch and soft-failed - the test still passed, for
+  // entirely the wrong reason. Keep this in step with cache.service.js.
+  TTL: {
+    FLIGHT_SEARCH: 300,
+    HOTEL_SEARCH: 300,
+    VISA_REQUIREMENTS: 3600,
+    ANALYTICS_DASH: 900,
+    USER_PROFILE: 600,
+    GEO_LOCATION: 86400,
+    FLIGHT_BROWSE: 43200,
+    FLIGHT_CALENDAR: 21600,
+  },
   CacheKeys: {
     flightSearch: (f, t, d, p) => `flights:${f}:${t}:${d}:${p}`,
     hotelSearch:  (c, ci, co, g) => `hotels:${c}:${ci}:${co}:${g}`,
     visaRequirements: (n, d) => `visa:req:${n}:${d}`,
+    analyticsData: (period) => `analytics:dashboard:${period}`,
+    userProfile: (id) => `user:profile:${id}`,
+    geoLocation: (ip) => `geo:${ip}`,
+    flightBrowse: (kind, parts = []) => `flights:browse:${kind}:${parts.join(':')}`,
   },
 }));
 

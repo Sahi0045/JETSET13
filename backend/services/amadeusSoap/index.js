@@ -287,7 +287,7 @@ const getCalendarPrices = async ({ dates = [], ...params }) => {
  * window rather than pretending to cover a month.
  */
 const getCheapestFlightDates = async (origin, destination, options = {}) => {
-  const { departureDate, oneWay = true } = options;
+  const { departureDate } = options;
   if (!departureDate) return { success: false, data: [], error: 'departureDate is required' };
 
   const anchor = new Date(`${departureDate}T00:00:00Z`);
@@ -306,9 +306,10 @@ const getCheapestFlightDates = async (origin, destination, options = {}) => {
   return {
     success: true,
     data: Object.entries(result.prices)
+      // No returnDate: this samples departure dates only. A round-trip
+      // calendar needs Fare_MasterPricerCalendar, which this WSAP bars (1006).
       .map(([date, price]) => ({
         departureDate: date,
-        returnDate: oneWay ? undefined : undefined,
         price: { total: price.toFixed(2), currency },
       }))
       .sort((a, b) => Number(a.price.total) - Number(b.price.total)),
