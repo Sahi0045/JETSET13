@@ -7,6 +7,9 @@ dotenv.config({ path: "./backend/.env" });
 // After loading env vars, import the rest of dependencies
 import express from "express";
 import cookieParser from "cookie-parser";
+import pinoHttp from "pino-http";
+import logger from "./backend/services/logger.js";
+import { randomUUID } from "node:crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
@@ -67,6 +70,31 @@ validateEnv();
 initMonitoring();
 
 const PORT = process.env.PORT || 5004;
+
+// Structured request logging.
+//
+// Mounted before the routes so every request is recorded, including ones that
+// never reach a handler. Bodies are never logged - a flight order body carries
+// names, dates of birth and passport numbers - and the logger's redaction
+// covers headers. Health checks are skipped: uptime probes every few seconds
+// would otherwise be most of the log volume and tell you nothing.
+app.use(pinoHttp({
+  logger,
+  genReqId: (req) => req.headers['x-request-id'] || randomUUID(),
+  autoLogging: {
+    ignore: (req) => req.url.startsWith('/api/health'),
+  },
+  customLogLevel: (req, res, err) => {
+    if (err || res.statusCode >= 500) return 'error';
+    if (res.statusCode >= 400) return 'warn';
+    return 'info';
+  },
+  serializers: {
+    // Only what identifies the request. No headers beyond these, no body.
+    req: (req) => ({ id: req.id, method: req.method, url: req.url, ip: req.remoteAddress }),
+    res: (res) => ({ statusCode: res.statusCode }),
+  },
+}));
 
 // Security headers + response compression (before routes)
 app.use(securityHeaders);
