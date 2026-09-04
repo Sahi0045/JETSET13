@@ -14,6 +14,7 @@ import authRoutes from "./backend/routes/auth.routes.js";
 import userRoutes from "./backend/routes/user.routes.js";
 import emailRoutes from "./backend/routes/email.routes.js";
 import flightRoutes from "./backend/routes/flight.routes.js";
+import airportRoutes from "./backend/routes/airport.routes.js";
 import hotelRoutes from "./backend/routes/hotel.routes.js";
 import paymentRoutes from "./backend/routes/payment.routes.js";
 import inquiryRoutes from "./backend/routes/inquiry.routes.js";
@@ -81,6 +82,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/hotels", hotelRoutes);
 app.use("/api/flights", flightRoutes);
+// Airport autocomplete. Was mounted only in the dev and Vercel entries, so it
+// 404'd under `npm start` - the class of bug AGENTS.md:195 records for /api/gdpr.
+app.use("/api/airports", airportRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/inquiries", inquiryRoutes);
