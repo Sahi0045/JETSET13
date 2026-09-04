@@ -53,7 +53,7 @@ function FlightBookingConfirmation() {
     setSelectedBags(bags);
     setBagExtraFee(totalFee);
   };
-  const { data: priceConfig } = usePriceConfig('all');
+  const { data: priceConfig, error: priceConfigError } = usePriceConfig('all');
   const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
   const [calculatedFare, setCalculatedFare] = useState({
     baseFare: 0,
@@ -380,19 +380,34 @@ function FlightBookingConfirmation() {
   // booking fallback are independent — we kick them off in parallel.
   useEffect(() => {
     let cancelled = false;
+
+    // Nothing on this page can be quoted before the real pricing configuration
+    // arrives. The hardcoded defaults are $25 + 5% against a configured $1 + 0%,
+    // and this figure is what gets charged - quoting from them bills a fee
+    // nobody set.
+    //
+    // The gate lives OUTSIDE the try below on purpose: returning from inside it
+    // ran the `finally`, which cleared `loading` on the very first render and
+    // left the page showing an empty shell - Rs 0 fare, "undefined Stop",
+    // no flight number - for as long as the config took to load, or forever if
+    // it failed. Stay in the loading state while it is pending, and say so
+    // plainly when it cannot be loaded at all.
+    if (priceConfigError) {
+      setError("We couldn't load current pricing, so we can't show your fare. Please refresh, or call (877) 538-7380 and we'll complete the booking for you.");
+      setLoading(false);
+      return;
+    }
+    if (!priceConfig) {
+      setLoading(true);
+      return;
+    }
+
     setLoading(true);
 
     const getBookingDetails = async () => {
       try {
         const hasSearchState = !!routerLocation.state?.flightData;
         const targetId = bookingId || "TEST_BOOKING_123";
-
-        // Wait for the real pricing configuration rather than quoting from
-        // hardcoded defaults. Those defaults are $25 + 5% against a configured
-        // $1 + 0%, and this figure is what gets charged - so quoting before the
-        // settings land bills a fee nobody set. `priceConfig` is a dependency
-        // of this effect, so it re-runs once the settings arrive.
-        if (!priceConfig) return;
         const config = priceConfig;
         const mockData = hasSearchState
           ? null
@@ -429,7 +444,7 @@ function FlightBookingConfirmation() {
 
     getBookingDetails();
     return () => { cancelled = true; };
-  }, [routerLocation.state, bookingId, priceConfig]);
+  }, [routerLocation.state, bookingId, priceConfig, priceConfigError]);
 
   // Add an effect to update fare when passengers, addons, VIP, or extras change
   useEffect(() => {
@@ -861,6 +876,43 @@ function FlightBookingConfirmation() {
           <div className="flex flex-col items-center">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#055B75] mb-4"></div>
             <p className="text-[#626363]">Loading your booking details...</p>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Without a booking there is nothing to review, and the page below would
+  // render its placeholders as if there were: "Jetsetters Airlines", "undefined
+  // Stop", a Rs 0 total and a live Proceed to Payment button. Say what went
+  // wrong and offer a way out instead.
+  if (error || !bookingDetails) {
+    return (
+      <div className="booking-confirmation-page">
+        <Navbar forceScrolled={true} />
+        <div className="booking-confirmation-container flex justify-center items-center min-h-[60vh] pt-24">
+          <div className="max-w-md text-center">
+            <h2 className="text-xl font-semibold text-[#0d3d56] mb-2">We can't show this booking</h2>
+            <p className="text-[#626363] mb-6">
+              {error || "No flight data available. Please return to the search page and try again."}
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="px-5 py-2 rounded-md border border-[#055B75] text-[#055B75]"
+              >
+                Try again
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/flights')}
+                className="px-5 py-2 rounded-md bg-[#055B75] text-white"
+              >
+                Back to search
+              </button>
+            </div>
           </div>
         </div>
         <Footer />
