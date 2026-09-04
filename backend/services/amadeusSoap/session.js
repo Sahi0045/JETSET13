@@ -43,11 +43,17 @@ export const callStateless = async (operationName, bodyXml, options = {}) => {
 
   const result = await postEnvelope({ operation, bodyXml, session: null, ...options });
 
-  // If a session comes back despite no Session header, close it rather than
-  // leak it - and say so, because it would mean this WSAP is stateful-only.
-  if (result.session?.sessionId) {
-    log.warn({ op: operationName, sessionId: result.session.sessionId },
-      'stateless call returned a session; signing out to avoid a leak');
+  // This WSAP allocates a session even for a call sent without a Session
+  // header, but closes it in the same exchange: the reply comes back with
+  // TransactionStatusCode="End". Nothing is leaking, and signing out an
+  // already-closed session just fails with "soap message header incorrect" -
+  // a wasted round-trip on every search.
+  //
+  // Only a session Amadeus left open needs closing, which should not happen
+  // here; if it does, that is worth knowing about.
+  if (result.session?.sessionId && result.session.status !== 'End') {
+    log.warn({ op: operationName, sessionId: result.session.sessionId, status: result.session.status },
+      'stateless call left a session open; signing out');
     signOutQuietly(result.session, options.config).catch(() => {});
   }
 
@@ -75,7 +81,7 @@ export const withSession = async (fn, options = {}) => {
           sessionId: session.sessionId,
           // Amadeus may skip numbers; always echo the reply's value + 1 rather
           // than counting locally.
-          sequenceNumber: String(Number.parseInt(session.sequenceNumber, 10) + 1),
+          sequenceNumber: String((Number.parseInt(session.sequenceNumber, 10) || 0) + 1),
           securityToken: session.securityToken,
         }
         : { status: 'Start' };
@@ -112,11 +118,15 @@ const signOutQuietly = async (session, config = getWsConfig()) => {
       session: {
         status: 'End',
         sessionId: session.sessionId,
-        sequenceNumber: String(Number.parseInt(session.sequenceNumber, 10) + 1),
+        // A session opened by a stateless call comes back without a
+        // SequenceNumber; parseInt(undefined) + 1 is NaN, and Amadeus rejects
+        // the header outright rather than saying which field is wrong.
+        sequenceNumber: String((Number.parseInt(session.sequenceNumber, 10) || 0) + 1),
         securityToken: session.securityToken,
       },
       config,
       timeoutMs: 5000,
+      bypassSemaphore: true,
     });
   } catch (cause) {
     log.warn({ sessionId: session.sessionId, reason: cause?.message }, 'Security_SignOut failed; session will expire server-side');

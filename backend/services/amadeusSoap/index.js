@@ -6,6 +6,8 @@ import { getWsConfig } from './config.js';
 import { AmadeusSoapError, inspectReply } from './errors.js';
 import { mapMasterPricerReply } from './mappers/offer.js';
 import { buildMasterPricerBody } from './operations/masterPricer.js';
+import { buildInformativePricingBody } from './operations/informativePricing.js';
+import { applyPricingToOffer } from './mappers/pricing.js';
 import { unwrapEnvelope } from './parseXml.js';
 import { callStateless } from './session.js';
 
@@ -119,6 +121,201 @@ const searchFlights = async (params) => {
   };
 };
 
+/**
+ * Re-price an offer.
+ *
+ * The search price is a quote; this is the fare Amadeus will charge, and the
+ * two diverge once availability moves. Booking must re-price before ticketing,
+ * and /flights/price exists so the UI can show the customer the real number
+ * before they pay.
+ *
+ * Returns the REST flight-offers-pricing envelope the route passes straight
+ * through, plus the `included` block /fare-rules reshapes.
+ */
+const priceFlightOffer = async (flightOffer) => {
+  const config = getWsConfig();
+  const offer = flightOffer?.originalOffer ?? flightOffer;
+  const ama = offer?._ama;
+
+  if (!ama?.segments?.length) {
+    throw new AmadeusSoapError({
+      error: 'This flight can no longer be priced - please search again',
+      code: 409,
+      technicalError: 'offer is missing _ama; it did not come from this provider',
+      operation: 'Fare_InformativePricingWithoutPNR',
+    });
+  }
+
+  const result = await callStateless('Fare_InformativePricingWithoutPNR', buildInformativePricingBody({
+    paxRefs: ama.paxRefs,
+    segments: ama.segments,
+    currency: config.currency,
+    validatingCarrier: offer.validatingAirlineCodes?.[0],
+  }));
+
+  const { reply } = soapReply(result);
+  const status = inspectReply(reply, 'Fare_InformativePricingWithoutPNR');
+  if (status.error) {
+    reportIfAlerting(status.error);
+    throw status.error;
+  }
+
+  const { offer: pricedOffer, text } = applyPricingToOffer(reply, offer);
+
+  return {
+    success: true,
+    data: {
+      type: 'flight-offers-pricing',
+      flightOffers: [pricedOffer],
+      bookingRequirements: {},
+    },
+    // Shaped exactly as the REST API's `included` block, so the /fare-rules
+    // route reshapes and scrapes it unchanged.
+    included: {
+      bags: buildBagsIncluded(pricedOffer),
+      'detailed-fare-rules': buildFareRulesIncluded(text),
+    },
+    dictionaries: {},
+  };
+};
+
+/** Checked-bag allowance per segment, in the REST `included.bags` shape. */
+const buildBagsIncluded = (offer) => {
+  const bags = {};
+  const details = offer.travelerPricings?.[0]?.fareDetailsBySegment ?? [];
+  details.forEach((detail, index) => {
+    const included = detail.includedCheckedBags;
+    if (!included) return;
+    bags[String(index + 1)] = {
+      quantity: included.quantity ?? included.weight ?? 0,
+      name: included.weight === undefined
+        ? 'CHECKED_BAG'
+        : `CHECKED_BAG ${included.weight}${included.weightUnit ?? 'KG'}`,
+      price: null,
+      segmentIds: [detail.segmentId],
+    };
+  });
+  return bags;
+};
+
+/**
+ * Fare-rule free text in the REST `included['detailed-fare-rules']` shape.
+ *
+ * Amadeus returns rules as free text, so the route's existing penalty scraper
+ * still applies - only the transport changed. Rule text richer than this needs
+ * Fare_CheckRules, which requires a TST inside an active PNR session and so
+ * arrives with the booking chain.
+ */
+const buildFareRulesIncluded = (text = []) => {
+  const descriptions = text
+    .filter((entry) => entry.text)
+    .map((entry) => ({
+      descriptionType: /REFUND|PENALT|CANCEL|CHANGE/i.test(entry.text) ? 'PENALTIES' : 'INFORMATION',
+      text: entry.text,
+    }));
+
+  return descriptions.length === 0 ? {} : { 1: { fareNotes: { descriptions } } };
+};
+
+/**
+ * Cheapest fare per date, for the date strip and the fare calendar.
+ *
+ * Fare_MasterPricerCalendar - the operation designed for this - is in the WSAP
+ * and in the agreed scope but returns "OPTION NOT PERMITTED" (code 1006) on
+ * this office, so a flexible-date search is not available to us. Until Amadeus
+ * enables it, each date is priced with an ordinary search.
+ *
+ * That is the fan-out the old REST code did, with two differences that make it
+ * safe: the date count is capped, and results are cached, so a customer paging
+ * a calendar cannot turn one page view into thirty GDS calls. The transport's
+ * semaphore bounds concurrency on top of that.
+ */
+const MAX_CALENDAR_DATES = 10;
+
+const priceDates = async (params, dates) => {
+  const wanted = [...new Set(dates)].filter(Boolean).slice(0, MAX_CALENDAR_DATES);
+  const prices = {};
+
+  const results = await Promise.allSettled(wanted.map(async (date) => {
+    const result = await searchFlights({ ...params, departDate: date, returnDate: undefined, max: 5 });
+    const cheapest = result.data.reduce(
+      (min, offer) => Math.min(min, Number(offer.price?.total) || Infinity),
+      Infinity,
+    );
+    return { date, price: Number.isFinite(cheapest) ? cheapest : null };
+  }));
+
+  for (const outcome of results) {
+    // A single unpriceable date must not fail the whole strip; the UI simply
+    // shows no price for it.
+    if (outcome.status === 'fulfilled' && outcome.value.price !== null) {
+      prices[outcome.value.date] = outcome.value.price;
+    }
+  }
+
+  return { prices, requested: wanted.length, capped: dates.length > MAX_CALENDAR_DATES };
+};
+
+/** Backs /flights/date-prices and /flights/calendar-prices. */
+const getCalendarPrices = async ({ dates = [], ...params }) => {
+  if (!Array.isArray(dates) || dates.length === 0) {
+    return { success: false, prices: {}, error: 'dates are required' };
+  }
+
+  try {
+    const { prices, capped } = await priceDates(params, dates);
+    const values = Object.values(prices);
+    return {
+      success: true,
+      prices,
+      dateWisePrices: prices,
+      lowestPrice: values.length > 0 ? Math.min(...values) : null,
+      currency: getWsConfig().currency,
+      capped,
+    };
+  } catch (error) {
+    log.warn({ err: error.message }, 'calendar pricing failed');
+    return { success: false, prices: {}, dateWisePrices: {}, error: error.error ?? error.message };
+  }
+};
+
+/**
+ * Cheapest departure dates around a date.
+ *
+ * The REST equivalent scanned a whole range server-side. Without
+ * Fare_MasterPricerCalendar that is not possible here, so this samples a small
+ * window rather than pretending to cover a month.
+ */
+const getCheapestFlightDates = async (origin, destination, options = {}) => {
+  const { departureDate, oneWay = true } = options;
+  if (!departureDate) return { success: false, data: [], error: 'departureDate is required' };
+
+  const anchor = new Date(`${departureDate}T00:00:00Z`);
+  const dates = [-2, -1, 0, 1, 2, 3, 4].map((offset) => {
+    const d = new Date(anchor);
+    d.setUTCDate(d.getUTCDate() + offset);
+    return d.toISOString().slice(0, 10);
+  }).filter((d) => d >= new Date().toISOString().slice(0, 10));
+
+  const result = await getCalendarPrices({
+    from: origin, to: destination, adults: 1, dates,
+  });
+  if (!result.success) return { success: false, data: [], error: result.error };
+
+  const currency = result.currency;
+  return {
+    success: true,
+    data: Object.entries(result.prices)
+      .map(([date, price]) => ({
+        departureDate: date,
+        returnDate: oneWay ? undefined : undefined,
+        price: { total: price.toFixed(2), currency },
+      }))
+      .sort((a, b) => Number(a.price.total) - Number(b.price.total)),
+    meta: { count: Object.keys(result.prices).length, sampled: dates.length },
+  };
+};
+
 /** Airport/city autocomplete. Never throws - the route soft-fails on error. */
 const searchLocations = (keyword, subType = 'CITY,AIRPORT', options = {}) => {
   try {
@@ -173,11 +370,9 @@ export default {
   getMostTraveledDestinations,
   getBusiestTravelPeriod,
 
-  // Phase 2: pricing, fare rules, calendar.
-  priceFlightOffer: notYetImplemented('Fare_InformativePricingWithoutPNR'),
-  getFareRules: notYetImplemented('Fare_CheckRules'),
-  getCheapestFlightDates: async () => ({ success: false, data: [], reason: 'not_available' }),
-  getCalendarPrices: async () => ({ success: false, prices: {}, reason: 'not_available' }),
+  priceFlightOffer,
+  getCalendarPrices,
+  getCheapestFlightDates,
 
   // Phase 3: the booking chain. Phase 4: cancel/retrieve/status.
   createFlightOrder: notYetImplemented('Air_SellFromRecommendation'),
@@ -186,4 +381,4 @@ export default {
   getFlightStatus: async () => ({ success: false, data: [], reason: 'not_available' }),
 };
 
-export { searchFlights, searchLocations };
+export { searchFlights, searchLocations, priceFlightOffer };

@@ -684,66 +684,26 @@ router.post('/upsell', async (req, res) => {
 router.post('/date-prices', async (req, res) => {
   try {
     const { from, to, dates, adults, children, infants, travelClass } = req.body;
-
     if (!from || !to || !Array.isArray(dates) || dates.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'from, to and a non-empty dates array are required'
-      });
+      return res.status(400).json({ success: false, error: 'from, to and dates[] are required' });
     }
 
-    const cacheKey = CacheKeys.flightBrowse('date-prices', [from, to, (dates || []).join(','), adults, children, infants, travelClass]);
-    const payload = await withCache(cacheKey, TTL.FLIGHT_CALENDAR, async () => {
-      const resolvedFrom = await resolveToIATACode(from);
-      const resolvedTo = await resolveToIATACode(to);
+    const cacheKey = CacheKeys.flightBrowse('date-prices', [
+      resolveToIATACode(from), resolveToIATACode(to),
+      `${adults || 1}-${children || 0}-${infants || 0}-${travelClass || 'any'}`,
+      dates.slice().sort().join(','),
+    ]);
 
-      // Cap dates (a month view sends ~31) and skip past dates
-      const today = new Date().toISOString().split('T')[0];
-      const limited = dates.slice(0, 35).filter((d) => d && d >= today);
+    const payload = await withCache(cacheKey, TTL.FLIGHT_CALENDAR, () => FlightProvider.getCalendarPrices({
+      from, to, adults, children, infants, travelClass, dates,
+    }));
 
-      const probe = async (date) => {
-        const r = await FlightProvider.searchFlights({
-          from: resolvedFrom,
-          to: resolvedTo,
-          departDate: date,
-          adults: parseInt(adults) || 1,
-          children: parseInt(children) || 0,
-          infants: parseInt(infants) || 0,
-          travelClass: travelClass || undefined,
-          max: 1, // Amadeus returns cheapest first
-          currency: 'USD'
-        });
-        const offers = r.data || [];
-        if (!offers.length) return { date, price: null };
-        const min = Math.min(...offers.map(o => parseFloat(o.price?.total || o.price?.grandTotal || Infinity)));
-        return { date, price: Number.isFinite(min) ? min : null };
-      };
-
-      // Throttle: process in batches to stay within Amadeus rate limits
-      const dateWisePrices = {};
-      const BATCH = 6;
-      for (let i = 0; i < limited.length; i += BATCH) {
-        const batch = limited.slice(i, i + BATCH);
-        const settled = await Promise.allSettled(batch.map(probe));
-        settled.forEach((r) => {
-          if (r.status === 'fulfilled' && r.value && r.value.price != null) {
-            dateWisePrices[r.value.date] = r.value.price;
-          }
-        });
-      }
-
-      const priceVals = Object.values(dateWisePrices);
-      const lowestPrice = priceVals.length ? Math.min(...priceVals) : null;
-      // Only cache when we actually got prices — never cache an empty result.
-      return priceVals.length ? { dateWisePrices, lowestPrice } : null;
-    });
-
-    const out = payload || { dateWisePrices: {}, lowestPrice: null };
-    res.json({ success: true, dateWisePrices: out.dateWisePrices, lowestPrice: out.lowestPrice, currency: 'USD' });
-
+    res.json(payload);
   } catch (error) {
-    console.error('❌ Date-prices error:', error);
-    res.status(200).json({ success: false, dateWisePrices: {}, lowestPrice: null });
+    console.error('Date prices error:', error?.message);
+    // Advisory endpoint: the date strip simply shows no prices rather than
+    // failing the page around it.
+    res.json({ success: false, dateWisePrices: {}, lowestPrice: null, error: error?.error || error?.message });
   }
 });
 
@@ -823,7 +783,9 @@ router.post('/fare-rules', async (req, res) => {
 
       cancellation = {
         hasData: charges.length > 0 || cutoffMatch != null,
-        currency: (cancelCharge || changeCharge)?.currency || 'INR',
+        // Fall back to the fare's own currency, not a fixed one: offers are
+        // priced in the office currency and ARC Pay charges in it.
+        currency: (cancelCharge || changeCharge)?.currency || flightOffer.price?.currency || 'USD',
         cutoffHours,
         changeFee: changeCharge?.amount ?? null,
         cancelFee: cancelCharge?.amount ?? null,
@@ -1696,8 +1658,6 @@ router.get('/analytics/busiest', async (req, res) => {
 });
 
 // In-memory cache for calendar prices (origin-dest-date -> { price, timestamp })
-const calendarPriceCache = new Map();
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // Cheapest Flight Dates
 router.get('/cheapest-dates', async (req, res) => {
@@ -1739,69 +1699,24 @@ router.get('/cheapest-dates', async (req, res) => {
 router.post('/calendar-prices', async (req, res) => {
   try {
     const { origin, destination, dates } = req.body;
-
-    if (!origin || !destination || !dates || !Array.isArray(dates)) {
-      return res.status(400).json({ success: false, error: 'origin, destination, and dates[] are required' });
+    if (!origin || !destination || !Array.isArray(dates) || dates.length === 0) {
+      return res.status(400).json({ success: false, error: 'origin, destination and dates[] are required' });
     }
 
-    console.log(`📅 Calendar prices: ${origin} → ${destination} for ${dates.length} dates`);
+    // Redis-backed, replacing an in-process Map that was per-instance and lost
+    // on every restart - and on Vercel, on every cold start.
+    const cacheKey = CacheKeys.flightBrowse('calendar-prices', [
+      resolveToIATACode(origin), resolveToIATACode(destination), dates.slice().sort().join(','),
+    ]);
 
-    const prices = {};
-    const uncachedDates = [];
+    const payload = await withCache(cacheKey, TTL.FLIGHT_CALENDAR, () => FlightProvider.getCalendarPrices({
+      from: origin, to: destination, adults: 1, dates,
+    }));
 
-    // Check cache first
-    for (const date of dates) {
-      const cacheKey = `${origin}-${destination}-${date}`;
-      const cached = calendarPriceCache.get(cacheKey);
-      if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
-        prices[date] = cached.price;
-      } else {
-        uncachedDates.push(date);
-      }
-    }
-
-    console.log(`📅 Cache: ${dates.length - uncachedDates.length} hits, ${uncachedDates.length} misses`);
-
-    // Fetch uncached dates sequentially with delay
-    for (const date of uncachedDates) {
-      try {
-        const resolvedFrom = await resolveToIATACode(origin);
-        const resolvedTo = await resolveToIATACode(destination);
-        const result = await FlightProvider.searchFlights({
-          from: resolvedFrom,
-          to: resolvedTo,
-          departDate: date,
-          travelers: 1,
-          max: 1
-        });
-
-        if (result.success && result.data && result.data.length > 0) {
-          const cheapest = result.data.reduce((min, f) => {
-            const p = parseFloat(f.price?.grandTotal || f.price?.total || 0);
-            return p > 0 && p < min ? p : min;
-          }, Infinity);
-          if (cheapest < Infinity) {
-            prices[date] = cheapest;
-            calendarPriceCache.set(`${origin}-${destination}-${date}`, {
-              price: cheapest,
-              timestamp: Date.now()
-            });
-          }
-        }
-
-        // Delay between Amadeus calls to avoid rate limits
-        if (uncachedDates.indexOf(date) < uncachedDates.length - 1) {
-          await new Promise(r => setTimeout(r, 500));
-        }
-      } catch (err) {
-        console.warn(`📅 Failed to fetch price for ${date}:`, err.message);
-      }
-    }
-
-    res.json({ success: true, prices });
+    res.json({ success: payload.success, prices: payload.prices, currency: payload.currency });
   } catch (error) {
-    console.error('❌ Calendar prices error:', error);
-    res.json({ success: false, prices: {}, error: error.message });
+    console.error('Calendar prices error:', error?.message);
+    res.json({ success: false, prices: {}, error: error?.error || error?.message });
   }
 });
 
