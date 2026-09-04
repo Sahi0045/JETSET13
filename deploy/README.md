@@ -37,12 +37,17 @@ access to the box is worse than a marginally less hardened one.
 ### 2. Put the configuration in place
 
 ```bash
-sudo install -m 600 -o root -g root /dev/null /opt/jetsetters/.env
+sudo install -m 640 -o root -g deploy /dev/null /opt/jetsetters/.env
 sudo nano /opt/jetsetters/.env          # see .env.example in the repo root
 ```
 
-`.env` never lives in the image, the repo, or CI. `chmod 600`, root-owned, one
-copy, on this box only.
+`.env` never lives in the image, the repo, or CI. One copy, on this box only.
+
+`root:deploy 640` rather than `root:root 600`: `docker compose` reads `env_file`
+as the invoking user, CI invokes it as `deploy`, and `deploy` has no sudo by
+design. Root-only ownership fails the deploy with
+`open /opt/jetsetters/.env: permission denied`, which looks like a Docker
+problem and is not.
 
 Then copy the two config files across from a checkout:
 

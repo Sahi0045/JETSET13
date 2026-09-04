@@ -86,13 +86,19 @@ log "Application directory"
 install -d -m 0755 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$APP_DIR"
 install -d -m 0755 root:root /var/log/caddy 2>/dev/null || mkdir -p /var/log/caddy
 
-# The env file holds every credential this deployment has. 600 and root-owned:
-# readable by the compose invocation, by nothing else on the box.
+# The env file holds every credential this deployment has.
+#
+# root:deploy 640, not root:root 600. The deploy user runs `docker compose`
+# and compose reads env_file itself, as that user - and deploy has no sudo, by
+# design. Locking this to root alone makes the documented deploy flow fail with
+# "open /opt/jetsetters/.env: permission denied", which reads like a Docker
+# problem and is not. 640 keeps it unreadable to every other account on the box.
 if [[ ! -f "$APP_DIR/.env" ]]; then
-  install -m 0600 -o root -g root /dev/null "$APP_DIR/.env"
+  install -m 0640 -o root -g "$DEPLOY_USER" /dev/null "$APP_DIR/.env"
   warn "$APP_DIR/.env is empty - the app will not start until it is filled in"
 fi
-chmod 600 "$APP_DIR/.env"
+chown root:"$DEPLOY_USER" "$APP_DIR/.env"
+chmod 640 "$APP_DIR/.env"
 
 # ─────────────────────────────────────────────────────────────────────────────
 log "Firewall"
