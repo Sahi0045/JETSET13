@@ -212,14 +212,18 @@ const mapRecommendation = (recommendation, ctx) => {
   const paxProducts = arr(recommendation.paxFareProduct);
   const first = paxProducts[0] ?? {};
 
-  // monetaryDetail[0] is the total and [1] is the TAX, not the base fare -
-  // confirmed against paxFareDetail.totalFareAmount / totalTaxAmount. Reading
-  // [1] as the base would understate every fare shown to a customer.
-  const total = num(at(first, 'paxFareDetail.totalFareAmount'))
-    ?? num(arr(at(recommendation, 'recPriceInfo.monetaryDetail'))[0]?.amount);
-  const tax = num(at(first, 'paxFareDetail.totalTaxAmount'))
-    ?? num(arr(at(recommendation, 'recPriceInfo.monetaryDetail'))[1]?.amount)
-    ?? 0;
+  // recPriceInfo carries the ALL-PASSENGER amounts; paxFareDetail carries the
+  // PER-PASSENGER ones. The REST contract puts the all-passenger figure in
+  // price.total, and the client charges exactly that, so reading paxFareDetail
+  // here under-charges a family by the passenger count - a 2+1 booking quoted
+  // 98.00 instead of 286.70. Single-adult searches make the two identical,
+  // which is what hid it.
+  //
+  // monetaryDetail[0] is the total and [1] the TAX, not the base fare -
+  // confirmed against totalFareAmount / totalTaxAmount on each pax group.
+  const recAmounts = arr(at(recommendation, 'recPriceInfo.monetaryDetail'));
+  const total = num(recAmounts[0]?.amount) ?? num(at(first, 'paxFareDetail.totalFareAmount'));
+  const tax = num(recAmounts[1]?.amount) ?? num(at(first, 'paxFareDetail.totalTaxAmount')) ?? 0;
   const base = total === null ? null : Number((total - tax).toFixed(2));
 
   const validatingCarrier = arr(at(first, 'paxFareDetail.codeShareDetails'))
@@ -279,6 +283,7 @@ const mapRecommendation = (recommendation, ctx) => {
   const travelerPricings = paxProducts.flatMap((product) => {
     const ptc = atTxt(product, 'paxReference.ptc') || 'ADT';
     const type = { ADT: 'ADULT', CHD: 'CHILD', INF: 'HELD_INFANT' }[ptc] ?? 'ADULT';
+    // Per-passenger, from this group's own paxFareDetail - not the offer total.
     const paxTotal = num(at(product, 'paxFareDetail.totalFareAmount')) ?? total;
     const paxTax = num(at(product, 'paxFareDetail.totalTaxAmount')) ?? 0;
     const productFares = readFareDetails(product);
