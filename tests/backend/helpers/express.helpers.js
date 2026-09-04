@@ -28,6 +28,7 @@ export function createResponse() {
   const res = {
     statusCode: 200,
     body:       null,
+    cookies:    {},
     _headers:   {},
 
     status(code) {
@@ -56,6 +57,19 @@ export function createResponse() {
 
     redirect(url) {
       this._redirectUrl = url;
+      return this;
+    },
+
+    // Auth sets httpOnly session cookies (jt_access / jt_refresh / jt_csrf).
+    // Without these the controller throws and the handler's catch turns a
+    // successful login into a 500, which is not the behaviour under test.
+    cookie(name, value, options = {}) {
+      this.cookies[name] = { value, options };
+      return this;
+    },
+
+    clearCookie(name, options = {}) {
+      this.cookies[name] = { value: '', options, cleared: true };
       return this;
     },
   };

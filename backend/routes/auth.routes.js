@@ -1,8 +1,7 @@
 import express from 'express';
-import { register, login, getMe, updateMe, deleteMe, searchFlights, googleLogin, forgotPassword, resetPassword, listAdmins, makeAdmin, removeAdmin, listAuditLogs, changePassword, createSession, refreshSession, logoutSession, getSupabaseSession } from '../controllers/auth.controller.js';
+import { register, login, getMe, updateMe, deleteMe, googleLogin, forgotPassword, resetPassword, listAdmins, makeAdmin, removeAdmin, listAuditLogs, changePassword, createSession, refreshSession, logoutSession, getSupabaseSession } from '../controllers/auth.controller.js';
 import { protect, admin, superAdmin } from '../middleware/auth.middleware.js';
 
-// const { searchFlights } = require('../controllers/flights.controller');
 const router = express.Router();
 
 // Test route
@@ -21,7 +20,6 @@ router.get('/supabase-session', getSupabaseSession);
 router.post('/logout', logoutSession);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
-router.post('/search', searchFlights);
 router.get('/me', protect, getMe);
 router.put('/me', protect, updateMe);
 router.delete('/me', protect, deleteMe);
