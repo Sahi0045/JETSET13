@@ -231,3 +231,20 @@ describe('semaphore scope', () => {
     expect(semaphore.active).toBe(0);
   });
 });
+
+describe('stateful sequences are never retried', () => {
+  // Air_Sell holds seats and the ER commit creates a PNR. Replaying either
+  // sells inventory twice against one payment, and the caller cannot tell,
+  // because the first attempt looked like a failure.
+  it('refuses a body marked as a retry wrapper', async () => {
+    const retrying = async () => {};
+    retrying.__isRetryWrapper = true;
+
+    await expect(withSession(retrying)).rejects.toThrow(/retry helper/i);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('refuses something that is not a function at all', async () => {
+    await expect(withSession(null)).rejects.toThrow(/retry helper|not/i);
+  });
+});

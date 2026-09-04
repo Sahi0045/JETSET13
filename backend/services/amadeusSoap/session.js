@@ -105,6 +105,16 @@ export const withSession = async (fn, options = {}) => {
     throw new Error('withSession() must not be nested; pass the existing ctx down instead');
   }
 
+  // A retried stateful sequence is a second booking. Air_Sell holds seats and
+  // the ER commit creates a PNR, so replaying either sells inventory twice
+  // against one payment - and the caller cannot tell, because the first attempt
+  // looked like a failure. The plan called for this as a hard assertion rather
+  // than a comment precisely because nothing else stops someone wrapping
+  // ctx.call in a retry helper later.
+  if (typeof fn !== 'function' || fn.__isRetryWrapper) {
+    throw new Error('withSession() must not wrap a retry helper: a retried sell or commit is a duplicate booking');
+  }
+
   // One permit for the WHOLE session, not one per call.
   //
   // Amadeus counts simultaneous SESSIONS against the WSAP ceiling, not
