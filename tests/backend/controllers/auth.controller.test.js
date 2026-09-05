@@ -2,7 +2,7 @@
  * tests/backend/controllers/auth.controller.test.js
  *
  * Unit tests for backend/controllers/auth.controller.js
- * Covers:  register · login · getMe · forgotPassword · resetPassword · googleLogin
+ * Covers:  register · login · getMe · forgotPassword · googleLogin
  *
  * All Supabase + axios calls are intercepted by tests/backend/setup.js mocks.
  */
@@ -207,6 +207,13 @@ describe('AuthController.getMe', () => {
 
 // ─────────────────────────────────────────────────────────────
 describe('AuthController.forgotPassword', () => {
+  beforeEach(() => {
+    supabaseMock.auth.admin.generateLink.mockResolvedValue({
+      data: { properties: { action_link: 'https://project.supabase.co/auth/v1/verify?token=t&type=recovery', hashed_token: 'abc123' } },
+      error: null,
+    });
+  });
+
   it('returns 400 when email is missing', async () => {
     const req = createRequest({ body: {} });
     const res = createResponse();
@@ -217,7 +224,10 @@ describe('AuthController.forgotPassword', () => {
   });
 
   it('returns 200 even when user does not exist (security: no enumeration)', async () => {
-    User.findByEmail = vi.fn().mockResolvedValue(null);
+    supabaseMock.auth.admin.generateLink.mockResolvedValue({
+      data: null,
+      error: { status: 404, message: 'User with this email not found' },
+    });
 
     const req = createRequest({ body: { email: 'ghost@example.com' } });
     const res = createResponse();
@@ -228,15 +238,12 @@ describe('AuthController.forgotPassword', () => {
     expect(res.body.success).toBe(true);
   });
 
-  it('inserts reset token and returns 200 when user exists', async () => {
-    User.findByEmail = vi.fn().mockResolvedValue(MOCK_USER);
-
-    // Mock supabase .from('password_resets').insert(...)
-    const chain = {
-      insert:  vi.fn().mockResolvedValue({ data: [{}], error: null }),
-    };
-    supabaseMock.from.mockReturnValue(chain);
-
+  it('generates a Supabase recovery link when the user exists', async () => {
+    // The previous version of this test asserted an insert into
+    // `password_resets` and passed, because the mock made a table that does
+    // not exist in the database behave as though it did. What is worth
+    // asserting is that recovery is minted by the auth system that owns the
+    // password the login form checks.
     const req = createRequest({ body: { email: 'jane@example.com' } });
     const res = createResponse();
 
@@ -244,68 +251,31 @@ describe('AuthController.forgotPassword', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
+    expect(supabaseMock.auth.admin.generateLink).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'recovery', email: 'jane@example.com' }),
+    );
+  });
+
+  it('does not consult the app users table', async () => {
+    // `public.users` is not where the login password lives, so a lookup there
+    // decides nothing and would only reintroduce the old bug.
+    User.findByEmail = vi.fn();
+
+    const req = createRequest({ body: { email: 'jane@example.com' } });
+    await AuthController.forgotPassword(req, createResponse());
+
+    expect(User.findByEmail).not.toHaveBeenCalled();
   });
 });
 
-// ─────────────────────────────────────────────────────────────
+// `AuthController.resetPassword` is deliberately gone: it verified a token
+// from `public.password_resets` (a table that does not exist) and then wrote a
+// bcrypt hash to `public.users.password`, which `signInWithPassword` never
+// reads. The password is now set on the reset page itself, against the
+// Supabase recovery session the link establishes.
 describe('AuthController.resetPassword', () => {
-  it('returns 400 when fields are missing', async () => {
-    const req = createRequest({ body: { email: 'jane@example.com' } });
-    const res = createResponse();
-
-    await AuthController.resetPassword(req, res);
-
-    expect(res.statusCode).toBe(400);
-  });
-
-  it('returns 400 when token is invalid or expired', async () => {
-    // Simulate no matching reset entry
-    const chain = {
-      select: vi.fn().mockReturnThis(),
-      eq:     vi.fn().mockReturnThis(),
-      gt:     vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } }),
-    };
-    supabaseMock.from.mockReturnValue(chain);
-
-    const req = createRequest({
-      body: { email: 'jane@example.com', token: 'bad-token', newPassword: 'NewP@ss1' },
-    });
-    const res = createResponse();
-
-    await AuthController.resetPassword(req, res);
-
-    expect(res.statusCode).toBe(400);
-    expect(res.body.message).toMatch(/invalid|expired/i);
-  });
-
-  it('updates password and deletes token on success', async () => {
-    // Mock: valid reset entry found
-    const resetChain = {
-      select: vi.fn().mockReturnThis(),
-      eq:     vi.fn().mockReturnThis(),
-      gt:     vi.fn().mockReturnThis(),
-      delete: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data:  { email: 'jane@example.com', token: 'valid-token' },
-        error: null,
-      }),
-    };
-    supabaseMock.from.mockReturnValue(resetChain);
-
-    User.findByEmail = vi.fn().mockResolvedValue(MOCK_USER);
-    User.update      = vi.fn().mockResolvedValue({ ...MOCK_USER, password: 'newHash' });
-
-    const req = createRequest({
-      body: { email: 'jane@example.com', token: 'valid-token', newPassword: 'NewP@ss1!' },
-    });
-    const res = createResponse();
-
-    await AuthController.resetPassword(req, res);
-
-    expect(res.statusCode).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(User.update).toHaveBeenCalledWith(MOCK_USER.id, expect.objectContaining({ password: 'NewP@ss1!' }));
+  it('is no longer exported', () => {
+    expect(AuthController.resetPassword).toBeUndefined();
   });
 });
 

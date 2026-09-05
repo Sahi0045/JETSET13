@@ -619,91 +619,96 @@ export const logoutSession = async (req, res) => {
 // @desc    Forgot Password - Send reset link
 // @route   POST /api/auth/forgot-password
 // @access  Public
+//
+// Recovery goes through Supabase Auth, not through a token of our own.
+//
+// This used to mint a random token, store it in `public.password_resets` and,
+// on redemption, write a bcrypt hash to `public.users.password`. None of that
+// worked. The table does not exist in the database, so the insert failed and
+// the route answered 500 without sending anything; and had it existed, the
+// login form authenticates with `supabase.auth.signInWithPassword`, which
+// reads `auth.users` — a different store entirely. The reset would have
+// reported success and changed nothing the customer could sign in with.
+//
+// `admin.generateLink` mints the recovery token in the auth system that owns
+// the password, so what changes is what the login form checks. We send it
+// ourselves to keep the branded template rather than Supabase's default.
+//
+// What goes in the email is our own reset page carrying `token_hash`, NOT the
+// `action_link` Supabase returns. That link is a single-use GET, and anything
+// that fetches it redeems it. Gmail scans links in incoming mail, so it burned
+// the first customer's token twelve seconds after the message was sent, and
+// their click came back `error_code=otp_expired` — `recovery_sent_at`
+// 12:38:46, `last_sign_in_at` 12:38:58, on a link nobody had clicked.
+//
+// Our page is inert HTML. A scanner that fetches it consumes nothing, because
+// the token is only redeemed by `verifyOtp` from the page's JavaScript, which
+// a scanner does not run. `redirectTo` is still supplied so that any link
+// already in flight, and Supabase's own templates, still land somewhere real.
 export const forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = String(req.body?.email || '').trim().toLowerCase();
 
     if (!email) {
       return res.status(400).json({ message: 'Email is required' });
     }
 
-    const user = await User.findByEmail(email);
-    if (!user) {
-      // For security reasons, don't reveal if user exists
-      return res.status(200).json({ success: true, message: 'If an account exists with this email, a reset link has been sent.' });
-    }
+    // Identical for every outcome below, so the endpoint cannot be used to
+    // enumerate accounts.
+    const genericResponse = {
+      success: true,
+      message: 'If an account exists with this email, a reset link has been sent.',
+    };
 
-    // Generate token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const expiry = new Date(Date.now() + 3600000); // 1 hour from now
+    const redirectTo = `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/reset-password`;
 
-    // Save token to database
-    const { error: dbError } = await supabase
-      .from('password_resets')
-      .insert([{
-        email,
-        token: resetToken,
-        expires_at: expiry
-      }]);
+    const { data, error } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email,
+      options: { redirectTo },
+    });
 
-    if (dbError) {
-      console.error('Error saving reset token:', dbError);
+    if (error) {
+      // 404 is "no such user" and must look exactly like success. Anything
+      // else is our failure, and telling someone to watch for an email that
+      // will never arrive is worse than an honest error.
+      if (error.status === 404 || /not found/i.test(error.message || '')) {
+        return res.status(200).json(genericResponse);
+      }
+      console.error('Forgot password: could not generate recovery link:', error.message);
       return res.status(500).json({ message: 'Error processing request' });
     }
 
-    // Send email
-    const resetLink = `${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
-    
-    await sendPasswordResetEmail(email, resetLink);
+    const tokenHash = data?.properties?.hashed_token;
+    if (!tokenHash) {
+      // Without it there is nothing for the reset page to redeem, and an email
+      // carrying a dead link is worse than an honest error.
+      console.error('Forgot password: Supabase returned no hashed_token');
+      return res.status(500).json({ message: 'Error processing request' });
+    }
 
-    res.status(200).json({ success: true, message: 'Reset link sent successfully' });
+    // No email address in the query string: the token already identifies the
+    // account, and a query string is the part of a URL that reliably ends up
+    // in server logs and referrer headers.
+    const resetLink = `${redirectTo}?token_hash=${encodeURIComponent(tokenHash)}`;
+
+    try {
+      await sendPasswordResetEmail(email, resetLink);
+    } catch (mailError) {
+      // Resend being unavailable is not evidence about whether the account
+      // exists, so the answer must not change shape here.
+      console.error('Forgot password: reset email failed to send:', mailError.message);
+    }
+
+    return res.status(200).json(genericResponse);
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// @desc    Reset Password
-// @route   POST /api/auth/reset-password
-// @access  Public
-export const resetPassword = async (req, res) => {
-  try {
-    const { email, token, newPassword } = req.body;
-
-    if (!email || !token || !newPassword) {
-      return res.status(400).json({ message: 'All fields are required' });
-    }
-
-    // Verify token
-    const { data: resetEntry, error: queryError } = await supabase
-      .from('password_resets')
-      .select('*')
-      .eq('email', email)
-      .eq('token', token)
-      .gt('expires_at', new Date().toISOString())
-      .single();
-
-    if (queryError || !resetEntry) {
-      return res.status(400).json({ message: 'Invalid or expired reset token' });
-    }
-
-    // Update user password
-    const user = await User.findByEmail(email);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    await User.update(user.id, { password: newPassword });
-
-    // Delete used token
-    await supabase
-      .from('password_resets')
-      .delete()
-      .eq('email', email);
-
-    res.status(200).json({ success: true, message: 'Password reset successfully' });
-  } catch (error) {
-    console.error('Reset password error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
+// Password reset is completed on the reset page itself, against the recovery
+// session Supabase establishes from the link, via `supabase.auth.updateUser`.
+// There is deliberately no `POST /api/auth/reset-password`: the handler that
+// used to live here verified a token from a table that does not exist and then
+// wrote to a password column the login form never reads.

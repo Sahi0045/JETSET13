@@ -113,7 +113,7 @@ const ForgotPassword = () => {
             </form>
           ) : (
             <Link
-              to="/admin/login"
+              to="/login"
               className="w-full py-4 bg-white/[0.05] hover:bg-white/[0.1] text-white rounded-2xl font-black text-sm uppercase tracking-[0.15em] border border-white/[0.1] transition-all flex items-center justify-center gap-3 no-underline"
             >
               Return to Login
@@ -121,7 +121,7 @@ const ForgotPassword = () => {
           )}
 
           <div className="mt-8 text-center">
-            <Link to="/admin/login" className="text-xs font-bold text-slate-500 hover:text-white no-underline transition-colors uppercase tracking-widest flex items-center justify-center gap-2">
+            <Link to="/login" className="text-xs font-bold text-slate-500 hover:text-white no-underline transition-colors uppercase tracking-widest flex items-center justify-center gap-2">
               <span className="material-symbols-outlined text-sm">arrow_back</span>
               Back to Login
             </Link>
