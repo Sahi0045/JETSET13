@@ -26,6 +26,7 @@ import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
 import { startWorkflowEngine } from './jobs/workflowEngine.js';
 import { startDataRetentionJob } from './jobs/dataRetention.job.js';
 import { initializeDefaultTemplates } from './services/templateResponse.service.js';
+import { generateCallbackTemplate, generateAdminCallbackNotificationTemplate } from './services/email/templates.js';
 // Shared stability modules (same behavior across all 3 entry points)
 import './bootstrap/httpDefaults.js'; // global axios timeout safety net
 import { validateEnv } from './config/validateEnv.js';
@@ -203,57 +204,9 @@ app.post('/api/send-email', async (req, res) => {
     const preferredTime = details.preferredTime || 'Not specified';
     const message = details.message || '';
 
-    const customerHtml = `
-      <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #0066b2, #1e88e5); padding: 28px 24px; text-align: center; border-radius: 12px 12px 0 0;">
-          <h1 style="color: white; margin: 0; font-size: 22px;">🛳️ Your Callback Request Is Confirmed!</h1>
-          <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 14px;">Jetsetters Travel Experts</p>
-        </div>
-        <div style="padding: 24px; background-color: #f9f9f9;">
-          <p style="font-size: 16px; color: #333;">Hi <strong>${name}</strong>,</p>
-          <p style="font-size: 15px; color: #555; line-height: 1.6;">Thank you for reaching out! We've received your <strong>${type}</strong> callback request and our travel specialist will contact you soon.</p>
-          <div style="background: white; padding: 18px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #0066b2;">
-            <h3 style="margin: 0 0 14px; font-size: 14px; text-transform: uppercase; color: #0066b2;">Your Request Summary</h3>
-            <p style="margin: 6px 0; font-size: 14px;"><strong>Name:</strong> ${name}</p>
-            <p style="margin: 6px 0; font-size: 14px;"><strong>Phone:</strong> ${phone}</p>
-            ${email ? `<p style="margin: 6px 0; font-size: 14px;"><strong>Email:</strong> ${email}</p>` : ''}
-            <p style="margin: 6px 0; font-size: 14px;"><strong>Preferred Call Time:</strong> ${preferredTime}</p>
-            ${message ? `<p style="margin: 6px 0; font-size: 14px;"><strong>Message:</strong> ${message}</p>` : ''}
-          </div>
-          <p style="font-size: 14px; color: #666;">Questions? Reach us at <strong>support@jetsetterss.com</strong> or <strong>(877) 538-7380</strong>.</p>
-          <p style="font-size: 15px; color: #333;">Best regards,<br>The Jetsetters Team 🌍</p>
-        </div>
-        <div style="padding: 16px; text-align: center; font-size: 12px; color: #999; background: #f1f1f1; border-radius: 0 0 12px 12px;">
-          <p style="margin: 0;">© 2026 Jetsetters. All rights reserved.</p>
-        </div>
-      </div>
-    `;
-
-    const adminHtml = `
-      <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #dc2626, #b91c1c); padding: 24px; text-align: center; border-radius: 12px 12px 0 0;">
-          <h1 style="color: white; margin: 0; font-size: 20px;">🔔 New Callback Request</h1>
-          <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">${type.toUpperCase()} Inquiry</p>
-        </div>
-        <div style="padding: 16px 24px; background: #fffbeb; border-left: 4px solid #eab308;">
-          <p style="margin: 0; font-size: 14px; font-weight: 600; color: #713f12;">⚡ Action Required: Please call the customer within 24 hours</p>
-        </div>
-        <div style="padding: 24px; background: #f9f9f9;">
-          <div style="background: #e0f2fe; padding: 18px; border-radius: 10px;">
-            <h3 style="margin: 0 0 14px; font-size: 13px; color: #0369a1; text-transform: uppercase;">Customer Details</h3>
-            <p style="margin: 6px 0; font-size: 14px;"><strong>Name:</strong> ${name}</p>
-            <p style="margin: 6px 0; font-size: 14px;"><strong>Email:</strong> ${email || 'Not provided'}</p>
-            <p style="margin: 6px 0; font-size: 14px;"><strong>Phone:</strong> ${phone}</p>
-            <p style="margin: 6px 0; font-size: 14px;"><strong>Preferred Call Time:</strong> ${preferredTime}</p>
-            ${message ? `<p style="margin: 6px 0; font-size: 14px;"><strong>Message:</strong> ${message}</p>` : ''}
-            <p style="margin: 6px 0; font-size: 14px;"><strong>Submitted:</strong> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</p>
-          </div>
-        </div>
-        <div style="padding: 14px; text-align: center; font-size: 12px; color: #999; background: #f1f1f1; border-radius: 0 0 12px 12px;">
-          <p style="margin: 0;">Jetsetters Admin Notification</p>
-        </div>
-      </div>
-    `;
+    const callbackData = { name, email, phone, preferredTime, message };
+    const customerHtml = generateCallbackTemplate(callbackData, type);
+    const adminHtml = generateAdminCallbackNotificationTemplate(callbackData, type);
 
     const results = [];
 
