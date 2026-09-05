@@ -13,6 +13,14 @@ import {
   generateBookingConfirmationTemplate,
   generateCancellationTemplate,
   generateVisaApplicationTemplate,
+  generateAdminBookingNotificationTemplate,
+  generateAdminCancellationTemplate,
+  generatePasswordResetTemplate,
+  generateAgentInviteTemplate,
+  generateNewsletterWelcomeTemplate,
+  generateAdminNewsletterTemplate,
+  generateContactReceivedTemplate,
+  generateAdminContactTemplate,
 } from './email/templates.js';
 
 // Re-export template generators for backward compatibility
@@ -28,6 +36,14 @@ export {
   generateBookingConfirmationTemplate,
   generateCancellationTemplate,
   generateVisaApplicationTemplate,
+  generateAdminBookingNotificationTemplate,
+  generateAdminCancellationTemplate,
+  generatePasswordResetTemplate,
+  generateAgentInviteTemplate,
+  generateNewsletterWelcomeTemplate,
+  generateAdminNewsletterTemplate,
+  generateContactReceivedTemplate,
+  generateAdminContactTemplate,
 } from './email/templates.js';
 
 // Load environment variables
@@ -108,18 +124,7 @@ export const sendEmail = async ({ to, subject, template, data, html, text }) => 
 export const sendPasswordResetEmail = async (email, resetLink) => {
   try {
     const subject = 'Reset your password – Jetsetters';
-    const html = renderBrandedEmail({
-      preheader: 'Reset your Jetsetters password',
-      headerLabel: 'Account Security',
-      emoji: '🔒',
-      heading: 'Reset your password',
-      subheading: 'Let\'s get you back into your account',
-      contentHtml: `
-        ${paragraph('We received a request to reset the password for your Jetsetters account. Click the button below to choose a new one.')}
-        ${paragraph('<span style="font-size:13px; color:#64748B;">This link expires in 1 hour. If you didn\'t request this, you can safely ignore this email.</span>')}
-      `,
-      cta: { text: 'Reset Password', url: resetLink },
-    });
+    const html = generatePasswordResetTemplate({ resetLink });
 
     return await sendEmail({
       to: email,
@@ -141,19 +146,7 @@ export const sendPasswordResetEmail = async (email, resetLink) => {
 export const sendAgentInviteEmail = async (email, name, inviteLink) => {
   try {
     const subject = 'You\'ve been invited as a Jetsetters Visa Agent';
-    const html = renderBrandedEmail({
-      preheader: 'Set your password to access the Jetsetters visa panel',
-      headerLabel: 'Visa Team Invitation',
-      emoji: '🛂',
-      heading: `Welcome${name ? ', ' + name : ''}!`,
-      subheading: 'You\'ve been added as a visa processing agent',
-      contentHtml: `
-        ${paragraph('A Jetsetters super admin has invited you to the visa team. You\'ll review and process the visa applications assigned to you.')}
-        ${paragraph('Click below to set your password and sign in. You\'ll log in with this email address.')}
-        ${paragraph('<span style="font-size:13px; color:#64748B;">This invitation link expires in 48 hours. If you weren\'t expecting this, you can ignore this email.</span>')}
-      `,
-      cta: { text: 'Set Your Password', url: inviteLink },
-    });
+    const html = generateAgentInviteTemplate({ name, inviteLink, role: 'visa' });
 
     return await sendEmail({ to: email, subject, html });
   } catch (error) {
@@ -171,19 +164,7 @@ export const sendAgentInviteEmail = async (email, name, inviteLink) => {
 export const sendTravelAgentInviteEmail = async (email, name, inviteLink) => {
   try {
     const subject = 'You\'ve been invited as a Jetsetters Travel Agent';
-    const html = renderBrandedEmail({
-      preheader: 'Set your password to access the Jetsetters agent portal',
-      headerLabel: 'Travel Agent Invitation',
-      emoji: '✈️',
-      heading: `Welcome${name ? ', ' + name : ''}!`,
-      subheading: 'You\'ve been added as a travel sales agent',
-      contentHtml: `
-        ${paragraph('A Jetsetters super admin has invited you to the travel sales team. You\'ll create bookings & payment links for customers across flights, hotels, cruises and packages, and earn commission on your sales.')}
-        ${paragraph('Click below to set your password and sign in. You\'ll log in with this email address.')}
-        ${paragraph('<span style="font-size:13px; color:#64748B;">This invitation link expires in 48 hours. If you weren\'t expecting this, you can ignore this email.</span>')}
-      `,
-      cta: { text: 'Set Your Password', url: inviteLink },
-    });
+    const html = generateAgentInviteTemplate({ name, inviteLink, role: 'travel' });
     return await sendEmail({ to: email, subject, html });
   } catch (error) {
     console.error('Error in sendTravelAgentInviteEmail:', error);
@@ -305,7 +286,7 @@ function stripHtml(html) {
 
 
 export const sendSubscriberWelcomeEmail = async (email, source = 'website') => {
-  const html = renderBrandedEmail({ preheader: 'Welcome to the Jetsetters newsletter', headerLabel: 'Welcome Aboard', emoji: '\u2708\uFE0F', heading: 'Welcome to Jetsetters!', subheading: "You're now part of our travel community", contentHtml: `${paragraph('Thanks for subscribing! Get ready for exclusive deals and travel inspiration.')}${detailCard("What you'll receive", [['Exclusive deals','Up to 50% off flights, hotels & packages'],['Travel inspiration','Curated destination guides & tips'],['Early access','First to know about flash sales'],['Member perks','Subscriber-only offers']])}${paragraph(`<span style="font-size:13px;color:#64748B;">You subscribed from our ${source} page. If this wasn't you, ignore this email.</span>`)}`, cta: { text: 'Start Exploring', url: process.env.FRONTEND_URL || 'https://www.jetsetterss.com' } });
+  const html = generateNewsletterWelcomeTemplate({ source });
 
   try {
     // Send directly to subscriber using verified domain
@@ -332,7 +313,7 @@ export const sendSubscriberWelcomeEmail = async (email, source = 'website') => {
  * @returns {Promise} - Email send response
  */
 export const sendAdminSubscriptionNotification = async (email, source = 'website') => {
-  const html = renderBrandedEmail({ preheader: 'New newsletter subscriber', headerLabel: 'New Subscriber', emoji: '\uD83D\uDCEC', heading: 'New newsletter subscriber', contentHtml: `${detailCard('Subscriber', [['Email', email],['Source', `${source} page`],['Time', new Date().toLocaleString()]])}` });
+  const html = generateAdminNewsletterTemplate({ email, source });
 
   try {
     const adminEmail = process.env.COMPANY_EMAIL || 'jetsetters721@gmail.com';
@@ -385,7 +366,7 @@ export const sendSubscriptionEmails = async (email, source = 'website') => {
  * @returns {Promise} - Email send response
  */
 export const sendContactConfirmationEmail = async (name, email, message) => {
-  const html = renderBrandedEmail({ preheader: "We've received your message", headerLabel: 'Message Received', emoji: '\u2709\uFE0F', heading: "We've received your message!", subheading: `Thanks for reaching out, ${name}`, contentHtml: `${paragraph('Our team will get back to you within 24\u201348 hours.')}${highlightBox(`<strong>Your message:</strong><br>${message}`, {})}` });
+  const html = generateContactReceivedTemplate({ name, message });
 
   try {
     const response = await getResend().emails.send({
@@ -412,7 +393,7 @@ export const sendContactConfirmationEmail = async (name, email, message) => {
  * @returns {Promise} - Email send response
  */
 export const sendContactAdminNotification = async (name, email, message) => {
-  const html = renderBrandedEmail({ preheader: 'New contact form submission', headerLabel: 'New Contact', emoji: '\uD83D\uDCE9', heading: 'New contact form submission', contentHtml: `${detailCard('From', [['Name', name],['Email', email],['Time', new Date().toLocaleString()]])}${highlightBox(`<strong>Message:</strong><br>${message}`, {})}` });
+  const html = generateAdminContactTemplate({ name, email, message });
 
   try {
     const adminEmail = process.env.COMPANY_EMAIL || 'jetsetters721@gmail.com';
@@ -530,7 +511,7 @@ export const sendBookingNotificationEmails = async (bookingData) => {
     const customerResult = await sendBookingConfirmationEmail(bookingData);
 
     // Send notification to admin
-    const adminHtml = renderBrandedEmail({ preheader: `New booking ${bookingData.bookingReference}`, headerLabel: 'New Booking', emoji: '\uD83C\uDF89', heading: 'New booking received', subheading: bookingData.bookingReference, contentHtml: `${detailCard('Booking', [['Customer', `${bookingData.customerName} (${bookingData.customerEmail})`],['Reference', bookingData.bookingReference],['Type', bookingData.bookingType],['Amount', `${bookingData.currency || 'USD'} ${bookingData.paymentAmount}`],['Travel Date', bookingData.travelDate || 'TBD']])}` });
+    const adminHtml = generateAdminBookingNotificationTemplate(bookingData);
 
     const adminResult = await getResend().emails.send({
       from: 'Jetsetters <noreply@jetsetterss.com>',
@@ -589,7 +570,7 @@ export const sendCancellationNotificationEmails = async (cancellationData) => {
     });
 
     // Send notification to admin
-    const adminHtml = renderBrandedEmail({ preheader: `Cancellation ${bookingReference}`, headerLabel: 'Booking Cancelled', emoji: '\u26A0\uFE0F', heading: 'Booking cancellation', subheading: bookingReference, contentHtml: `${detailCard('Cancellation', [['Customer', `${customerName} (${customerEmail})`],['Reference', bookingReference],['Type', bookingType],['Refund Amount', `${currency || 'USD'} ${refundAmount || 0}`],['Cancellation Fee', `${currency || 'USD'} ${cancellationFee || 0}`]])}` });
+    const adminHtml = generateAdminCancellationTemplate(cancellationData);
 
     const adminResult = await getResend().emails.send({
       from: 'Jetsetters <noreply@jetsetterss.com>',
