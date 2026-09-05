@@ -3,9 +3,10 @@ import { useRegisterRefresh } from './shell/RefreshContext';
 import { getApiUrl } from '../../utils/apiHelper';
 import { downloadCSV } from '../../utils/csv';
 import './AdminPanel.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const getToken = () =>
-  localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+  getStoredToken();
 
 const money = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
@@ -22,7 +23,7 @@ const CustomersList = () => {
       const params = new URLSearchParams();
       if (query) params.append('search', query);
       const res = await fetch(getApiUrl(`flights/admin-customers?${params.toString()}`), {
-        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        headers: adminHeaders(),
         credentials: 'include',
       });
       const data = await res.json();

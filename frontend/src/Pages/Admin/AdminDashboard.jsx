@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 import { getApiUrl } from '../../utils/apiHelper';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState({
@@ -45,19 +46,10 @@ const AdminDashboard = () => {
       setLoading(true);
 
       // Get token from localStorage
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      const token = getStoredToken();
 
-      if (!token) {
-        console.error('No authentication token found');
-        setRecentInquiries([]);
-        setLoading(false);
-        return;
-      }
 
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
+      const headers = adminHeaders();
 
       // Agent-specific data fetch
       if (userRole === 'agent') {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getApiUrl } from '../../utils/apiHelper';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
+import { getStoredToken } from '../../utils/adminAuth';
 
 const PriceSettings = () => {
   const [settings, setSettings] = useState({
@@ -30,7 +31,7 @@ const PriceSettings = () => {
   useRegisterRefresh(useCallback(() => fetchPriceSettings(), []), []);
 
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+    const token = getStoredToken();
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'

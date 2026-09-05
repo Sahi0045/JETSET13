@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './AdminPanel.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const PaymentLinkCreate = () => {
   // Works under both the admin panel (/admin) and the agent portal (/agent).
@@ -67,19 +68,12 @@ const PaymentLinkCreate = () => {
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      if (!token) {
-        setError('Authentication required. Please log in again.');
-        return;
-      }
+      const token = getStoredToken();
 
       const response = await fetch('/api/payments?action=create-payment-link', {
         credentials: 'include',
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: adminHeaders(),
         body: JSON.stringify(formData)
       });
 

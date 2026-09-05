@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const FeatureFlags = () => {
   const [flags, setFlags] = useState([]);
@@ -69,18 +70,11 @@ const FeatureFlags = () => {
       setLoading(true);
 
       // Get token from localStorage
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      const token = getStoredToken();
 
-      if (!token) {
-        console.error('No authentication token found');
-        return;
-      }
 
       const response = await fetch('/api/feature-flags', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include'
       });
 
@@ -143,20 +137,12 @@ const FeatureFlags = () => {
       const newEnabledState = !flag.enabled;
 
       // Get token from localStorage
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      const token = getStoredToken();
 
-      if (!token) {
-        console.error('No authentication token found');
-        setUpdateError('Authentication required. Please log in again.');
-        return;
-      }
 
       const response = await fetch(`/api/feature-flags/${flagKey}`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           enabled: newEnabledState

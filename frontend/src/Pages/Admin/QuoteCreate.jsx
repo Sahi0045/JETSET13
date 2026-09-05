@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import './AdminPanel.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const QuoteCreate = () => {
   const { inquiryId } = useParams();
@@ -38,20 +39,11 @@ const QuoteCreate = () => {
       setLoading(true);
 
       // Get token from localStorage
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      const token = getStoredToken();
 
-      if (!token) {
-        console.error('No authentication token found');
-        alert('Authentication required. Please log in again.');
-        navigate('/admin/login');
-        return;
-      }
 
       const response = await fetch(`/api/inquiries?id=${inquiryId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include'
       });
 
@@ -229,19 +221,12 @@ const QuoteCreate = () => {
 
     try {
       // Get token from localStorage
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      const token = getStoredToken();
 
-      if (!token) {
-        alert('Authentication required. Please log in again.');
-        return;
-      }
 
       const response = await fetch('/api/quotes', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: adminHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           ...quoteData,
@@ -293,20 +278,13 @@ const QuoteCreate = () => {
 
     try {
       // Get token from localStorage
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      const token = getStoredToken();
 
-      if (!token) {
-        alert('Authentication required. Please log in again.');
-        return;
-      }
 
       // Create quote
       const createResponse = await fetch('/api/quotes', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: adminHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           ...quoteData,
@@ -344,10 +322,7 @@ const QuoteCreate = () => {
       // Send quote (using query parameter format for Vercel)
       const sendResponse = await fetch(`/api/quotes?id=${createResult.data.id}&action=send`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: adminHeaders(),
         credentials: 'include'
       });
 
