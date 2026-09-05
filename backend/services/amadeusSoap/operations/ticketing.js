@@ -138,44 +138,43 @@ export const readCreateTstReply = (reply) => arr(reply?.tstList)
  *     -> fopGroup[1..127]{fopReference, ..., mopDescription[]}
  */
 /**
- * Form of payment.
+ * Form of payment — the FP element that says how the ticket was paid.
  *
- * This message is schema-valid and the WSAP still refuses it on the PDT office
- * with `2228 CHECK DATA FIELDS`. That is worth recording, because the shape is
- * not the problem and changing it will not help.
+ * Two things here were wrong for a long time, and both produced the same
+ * opaque `2228 CHECK DATA FIELDS`, which is why they were hard to see.
  *
- * Checked against FOP_CreateFormOfPayment_19_2_1A.xsd and probed live:
+ * `fopReference` is an OUTPUT field. The request sends it empty; the reply
+ * fills it in with the identifier of the FOP that was created — Amadeus's own
+ * example returns `qualifier FPT, number 28`. We were sending
+ * `qualifier FP, number 1`, an identifier for something that did not exist
+ * yet, and the WSAP rejected the whole message for it. That single element is
+ * what made every other experiment look futile: no change to the payment
+ * codes, associations or payment module could ever get past it.
  *
- *   fopGroup       fopReference is the only mandatory child. Everything else -
- *                  passengerAssociation, pnrElementAssociation,
- *                  pricingTicketingDetails, feeTypeInfo, fpProcessingOptions,
- *                  mopDescription - is optional.
- *   fopDetails     every child is optional, fopCode included.
- *   paymentModule  optional; only if it is sent does paymentData become
- *                  available, and only then is merchantInformation/companyCode
- *                  mandatory.
+ * And the code for an agency-collected sale is `CASH`, not `CA`. We are the
+ * merchant of record — the card is charged at ARC Pay before the GDS is
+ * involved — so from the airline's side this is an agency collection that
+ * settles through ARC. `CA` is rejected; `CASH` is accepted.
  *
- * So there is no missing mandatory field to add. Probing confirmed it: all of
- * CA CC MS INV CCVI NONREF CHECK AGT CASH BT return the same 2228, adding
- * passenger or PNR-element associations changes nothing, and a body carrying
- * only the mandatory fopReference is refused identically.
+ * `pnrElementAssociation` ties the payment to the TSTs it pays for, which is
+ * what Amadeus's "form of payment associated to a TST" example does. Without
+ * it the FP element is not linked to anything, and a PNR with several TSTs
+ * cannot say which payment covers which fare.
  *
- * That leaves office configuration rather than message content, and the most
- * likely cause is the one already known: this office has no ticketing stock,
- * which is why AMADEUS_WS_AUTO_TICKET is off. A form of payment is a ticketing
- * artefact. Confirm with Amadeus before changing anything here - a speculative
- * edit would only make the message wrong as well as refused.
+ * @param {object} p
+ * @param {string} [p.fopCode]   AMADEUS_WS_FOP_CODE, default CASH
+ * @param {string[]} [p.tstRefs] TST references from Ticket_CreateTSTFromPricing
  */
-export const buildFopBody = ({ fopCode = 'CA' } = {}) => {
+export const buildFopBody = ({ fopCode = 'CASH', tstRefs = [] } = {}) => {
   const body = wrap('fopGroup', [
-    // fopReference is ElementManagementSegmentType: a single `reference` child
-    // holding qualifier + number, not the referenceType/uniqueReference pair
-    // used elsewhere in this WSAP. Mandatory - omitting it is "Missing
-    // mandatory item", and any other shape is "Unknown item".
-    wrap('fopReference', wrap('reference', [
-      el('qualifier', 'FP'),
-      el('number', '1'),
-    ])),
+    // Deliberately empty: this is where the reply returns the new FOP's id.
+    '<fopReference></fopReference>',
+
+    each(tstRefs, (ref) => wrap('pnrElementAssociation', wrap('referenceDetails', [
+      el('type', 'TST'),
+      el('value', String(ref)),
+    ]))),
+
     wrap('mopDescription', [
       wrap('fopSequenceNumber', wrap('sequenceDetails', el('number', '1'))),
       // fopDetails accepts only fopCode, fopMapTable, fopBillingCode and

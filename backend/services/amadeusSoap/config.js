@@ -65,7 +65,10 @@ const readWsConfig = (env = process.env) => {
     // No FOP free-text setting: fopDetails accepts only fopCode, fopMapTable,
     // fopBillingCode and fopStatus, so there is nowhere to put the ARC
     // transaction id. It lives in booking_details.transaction_id instead.
-    fopCode: (env.AMADEUS_WS_FOP_CODE || 'CA').trim(),
+    // CASH, not CA: we are the merchant of record - the card is charged at
+    // ARC Pay before the GDS is involved - so from the airline's side this is
+    // an agency collection settling through ARC. The WSAP rejects CA.
+    fopCode: (env.AMADEUS_WS_FOP_CODE || 'CASH').trim(),
 
     maxConcurrency: asInt(env.AMADEUS_WS_MAX_CONCURRENCY, 4),
     queueTimeoutMs: asInt(env.AMADEUS_WS_QUEUE_TIMEOUT_MS, 8000),

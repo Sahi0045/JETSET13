@@ -319,18 +319,52 @@ describe('Ticket_CreateTSTFromPricing', () => {
 });
 
 describe('FOP_CreateFormOfPayment', () => {
-  // fopReference is ElementManagementSegmentType: one `reference` child holding
-  // qualifier + number. It is mandatory, and the referenceType/uniqueReference
-  // pair used elsewhere in this WSAP is rejected here as an unknown item.
-  it('wraps the FP tattoo in a reference element', () => {
-    const xml = buildFopBody({ fopCode: 'CA' });
-    expect(xml).toContain('<fopReference><reference><qualifier>FP</qualifier><number>1</number></reference></fopReference>');
+  /**
+   * `fopReference` is an OUTPUT field, and sending it populated is what made
+   * every form of payment fail with `2228 CHECK DATA FIELDS` for months.
+   *
+   * The request sends it empty; the reply fills it in with the identifier of
+   * the FOP that was created. Confirmed twice over — Amadeus's own worked
+   * example sends `<fopReference></fopReference>` and gets back
+   * `qualifier FPT, number 28`, and our own live call now gets back
+   * `qualifier FPT, number 13`.
+   *
+   * The previous version of this test asserted the populated form and passed,
+   * which is how the bug survived: the builder was tested against what we
+   * believed rather than against what the WSAP accepts.
+   */
+  it('sends fopReference empty, because the reply is what fills it in', () => {
+    const xml = buildFopBody({ fopCode: 'CASH' });
+
+    expect(xml).toContain('<fopReference></fopReference>');
+    expect(xml).not.toContain('<qualifier>FP</qualifier>');
+  });
+
+  it('defaults to CASH, the code for an agency-collected sale', () => {
+    // We are the merchant of record - the card is charged at ARC Pay before
+    // the GDS is involved - so the airline sees an agency collection settling
+    // through ARC. `CA` is refused by the WSAP; `CASH` is accepted.
+    expect(buildFopBody()).toContain('<fopCode>CASH</fopCode>');
+  });
+
+  it('associates the payment with the TSTs it pays for', () => {
+    // Per Amadeus's "form of payment associated to a TST" example. Without
+    // this the FP element is linked to nothing, and a PNR carrying several
+    // TSTs cannot say which payment covers which fare.
+    const xml = buildFopBody({ fopCode: 'CASH', tstRefs: ['1', '2'] });
+
+    expect(xml).toContain('<pnrElementAssociation><referenceDetails><type>TST</type><value>1</value></referenceDetails></pnrElementAssociation>');
+    expect(xml).toContain('<value>2</value>');
+  });
+
+  it('omits the association when there is no TST to point at', () => {
+    expect(buildFopBody({ fopCode: 'CASH' })).not.toContain('pnrElementAssociation');
   });
 
   // fopDetails accepts only fopCode, fopMapTable, fopBillingCode and fopStatus.
   it('carries no free text, because the schema has nowhere to put it', () => {
-    const xml = buildFopBody({ fopCode: 'CA' });
-    expect(xml).toContain('<fopCode>CA</fopCode>');
+    const xml = buildFopBody({ fopCode: 'CASH' });
+    expect(xml).toContain('<fopCode>CASH</fopCode>');
     expect(xml).not.toContain('fopFreeflow');
   });
 });
