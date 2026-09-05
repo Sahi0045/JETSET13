@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef} from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
     FaGoogle, FaApple, FaEye, FaEyeSlash, FaSpinner,
@@ -7,6 +7,7 @@ import {
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import supabase from '../../../lib/supabase';
 import './loginV2.css';
+import { renderGoogleButton, exchangeGoogleCredential } from '../../../utils/googleIdentity';
 
 const LOGO_WEBP = '/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.webp';
 const LOGO_PNG = '/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removebg-preview.png';
@@ -31,6 +32,38 @@ export default function SupabaseLogin() {
             navigate('/my-trips');
         }
     }, [user, authLoading, navigate]);
+
+    // Google's own rendered button.
+    //
+    // signInWithOAuth redirects to <project>.supabase.co, so Google names THAT
+    // host on the consent screen ("to continue to qqmagqwumjipdqvxbiqu...").
+    // An ID token obtained in-page and exchanged via signInWithIdToken skips
+    // the redirect entirely, so there is no third-party domain to display.
+    //
+    // It must be Google's own button rather than ours: One Tap is suppressed
+    // wherever third-party cookies are restricted, but a real click on their
+    // element still works. When their script cannot load at all - Brave blocks
+    // it outright - we fall back to our button and the redirect below.
+    const googleButtonRef = useRef(null);
+    const [googleButtonReady, setGoogleButtonReady] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        // Google renders at a fixed pixel width, so it has to be told the size
+        // of its grid cell or it overflows the row. The container itself is
+        // hidden until the button exists (and so measures 0), so measure the
+        // row instead: two equal columns with a 0.75rem gap.
+        const row = googleButtonRef.current?.parentElement;
+        const cellWidth = row ? Math.max(180, Math.floor((row.clientWidth - 12) / 2)) : 240;
+
+        renderGoogleButton(googleButtonRef.current, async ({ credential, nonce }) => {
+            const { error } = await exchangeGoogleCredential(supabase, { credential, nonce });
+            if (error) setErrors({ login: error.message || 'Google sign-in failed. Please try again.' });
+        }, { width: cellWidth }).then((ok) => { if (!cancelled) setGoogleButtonReady(ok); });
+
+        return () => { cancelled = true; };
+    }, []);
 
     // Handle Google Sign-In
     const handleGoogleSignIn = async () => {
@@ -314,23 +347,30 @@ export default function SupabaseLogin() {
                             <div className="jsl-divider"><span>or continue with</span></div>
 
                             <div className="jsl-social">
-                                <button
-                                    type="button"
-                                    className="jsl-social-btn"
-                                    onClick={handleGoogleSignIn}
-                                    disabled={isBusy}
-                                >
-                                    <FaGoogle color="#DB4437" />
-                                    <span>Google</span>
-                                </button>
+                                <div
+                                    ref={googleButtonRef}
+                                    className="jsl-google-gis"
+                                    style={{ display: googleButtonReady ? 'flex' : 'none' }}
+                                />
+                                {!googleButtonReady && (
+                                    <button
+                                        type="button"
+                                        className="jsl-social-btn"
+                                        onClick={handleGoogleSignIn}
+                                        disabled={isBusy}
+                                    >
+                                        <FaGoogle color="#DB4437" />
+                                        <span>Google</span>
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     className="jsl-social-btn"
                                     onClick={handleAppleSignIn}
                                     disabled={isBusy}
                                 >
-                                    <FaApple color="#000000" />
-                                    <span>Apple</span>
+                                    <FaApple color="#000000" size={18} />
+                                    <span>Sign in with Apple</span>
                                 </button>
                             </div>
 
