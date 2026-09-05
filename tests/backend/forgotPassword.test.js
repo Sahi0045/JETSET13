@@ -31,7 +31,8 @@ import { supabaseMock } from './setup.js';
  * touch `password_resets`, and never disclose whether an account exists.
  */
 
-const RECOVERY_LINK = 'https://qqmagqwumjipdqvxbiqu.supabase.co/auth/v1/verify?token=abc&type=recovery&redirect_to=https%3A%2F%2Fwww.jetsetterss.com%2Freset-password';
+const VERIFY_URL = 'https://qqmagqwumjipdqvxbiqu.supabase.co/auth/v1/verify?token=abc&type=recovery&redirect_to=https%3A%2F%2Fwww.jetsetterss.com%2Freset-password';
+const HASHED_TOKEN = 'pkce_9f3adc0be1e4c5a7b2d8';
 
 const makeApp = async () => {
   const routes = (await import('../../backend/routes/auth.routes.js')).default;
@@ -46,7 +47,7 @@ const post = async (body) => request(await makeApp()).post('/api/auth/forgot-pas
 beforeEach(() => {
   vi.clearAllMocks();
   supabaseMock.auth.admin.generateLink.mockResolvedValue({
-    data: { properties: { action_link: RECOVERY_LINK } },
+    data: { properties: { action_link: VERIFY_URL, hashed_token: HASHED_TOKEN } },
     error: null,
   });
 });
@@ -74,12 +75,59 @@ describe('POST /api/auth/forgot-password', () => {
     // page never sees the recovery token.
     expect(args.options.redirectTo).toMatch(/\/reset-password$/);
 
-    // And the link that goes in the email is the one Supabase minted, not a
-    // token of our own invention.
-    expect(emailService.sendPasswordResetEmail).toHaveBeenCalledWith(
-      'traveller@example.com',
-      RECOVERY_LINK,
-    );
+    // The link in the email must be OUR page carrying the token, never
+    // Supabase's verify URL - see the prefetch test below.
+    const [, link] = emailService.sendPasswordResetEmail.mock.calls[0];
+    expect(link).toContain('/reset-password');
+    expect(link).toContain(`token_hash=${HASHED_TOKEN}`);
+  });
+
+  it('never emails the Supabase verify URL directly', async () => {
+    // This is the bug that made the fix look broken in production. Supabase's
+    // verify URL is a single-use GET: fetching it consumes the token. Gmail
+    // scans links in incoming mail, so it burned the token 12 seconds after
+    // the email was sent, and the customer's click got
+    // `error_code=otp_expired`. Evidence: `recovery_sent_at` 12:38:46,
+    // `last_sign_in_at` 12:38:58, on a link nobody had clicked.
+    //
+    // Our own page is inert HTML - a scanner fetching it consumes nothing,
+    // because the token is only redeemed by `verifyOtp` from the page's
+    // JavaScript, which a scanner does not run.
+    const emailService = await import('../../backend/services/emailService.js');
+
+    await post({ email: 'traveller@example.com' });
+
+    const [, link] = emailService.sendPasswordResetEmail.mock.calls[0];
+    expect(link).not.toContain('/auth/v1/verify');
+    expect(link).not.toContain('supabase.co');
+    expect(link.startsWith('http')).toBe(true);
+  });
+
+  it('does not put the email address in the link', async () => {
+    // It adds nothing - the token identifies the account - and a query string
+    // is the one part of a URL that reliably ends up in logs and referrers.
+    const emailService = await import('../../backend/services/emailService.js');
+
+    await post({ email: 'traveller@example.com' });
+
+    const [, link] = emailService.sendPasswordResetEmail.mock.calls[0];
+    expect(link).not.toContain('traveller%40example.com');
+    expect(link).not.toContain('traveller@example.com');
+  });
+
+  it('fails loudly if Supabase returns no hashed_token', async () => {
+    // Without it there is nothing for the reset page to redeem, and an email
+    // carrying a dead link is worse than an error.
+    supabaseMock.auth.admin.generateLink.mockResolvedValue({
+      data: { properties: { action_link: VERIFY_URL } },
+      error: null,
+    });
+    const emailService = await import('../../backend/services/emailService.js');
+
+    const res = await post({ email: 'traveller@example.com' });
+
+    expect(res.status).toBe(500);
+    expect(emailService.sendPasswordResetEmail).not.toHaveBeenCalled();
   });
 
   it('never writes to password_resets', async () => {

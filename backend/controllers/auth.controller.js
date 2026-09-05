@@ -630,10 +630,21 @@ export const logoutSession = async (req, res) => {
 // reads `auth.users` — a different store entirely. The reset would have
 // reported success and changed nothing the customer could sign in with.
 //
-// `admin.generateLink` mints the same recovery link Supabase's own mail would
-// carry, so the password that changes is the one the login form checks. We
-// send it ourselves to keep the branded template rather than Supabase's
-// default, and `redirectTo` is what puts the recovery token on our reset page.
+// `admin.generateLink` mints the recovery token in the auth system that owns
+// the password, so what changes is what the login form checks. We send it
+// ourselves to keep the branded template rather than Supabase's default.
+//
+// What goes in the email is our own reset page carrying `token_hash`, NOT the
+// `action_link` Supabase returns. That link is a single-use GET, and anything
+// that fetches it redeems it. Gmail scans links in incoming mail, so it burned
+// the first customer's token twelve seconds after the message was sent, and
+// their click came back `error_code=otp_expired` — `recovery_sent_at`
+// 12:38:46, `last_sign_in_at` 12:38:58, on a link nobody had clicked.
+//
+// Our page is inert HTML. A scanner that fetches it consumes nothing, because
+// the token is only redeemed by `verifyOtp` from the page's JavaScript, which
+// a scanner does not run. `redirectTo` is still supplied so that any link
+// already in flight, and Supabase's own templates, still land somewhere real.
 export const forgotPassword = async (req, res) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
@@ -668,11 +679,18 @@ export const forgotPassword = async (req, res) => {
       return res.status(500).json({ message: 'Error processing request' });
     }
 
-    const resetLink = data?.properties?.action_link;
-    if (!resetLink) {
-      console.error('Forgot password: Supabase returned no action_link');
+    const tokenHash = data?.properties?.hashed_token;
+    if (!tokenHash) {
+      // Without it there is nothing for the reset page to redeem, and an email
+      // carrying a dead link is worse than an honest error.
+      console.error('Forgot password: Supabase returned no hashed_token');
       return res.status(500).json({ message: 'Error processing request' });
     }
+
+    // No email address in the query string: the token already identifies the
+    // account, and a query string is the part of a URL that reliably ends up
+    // in server logs and referrer headers.
+    const resetLink = `${redirectTo}?token_hash=${encodeURIComponent(tokenHash)}`;
 
     try {
       await sendPasswordResetEmail(email, resetLink);

@@ -12,13 +12,21 @@ import supabase from "../../../lib/supabase";
  * `auth.users` — so even the success path changed a password nobody could sign
  * in with.
  *
- * The link now comes from Supabase's own recovery flow. Clicking it lands here
- * with the recovery tokens in the URL fragment; the client is configured with
- * `detectSessionInUrl`, so it exchanges them for a short-lived session, and
- * `updateUser` sets the password in the store that actually authenticates.
+ * Recovery now runs through Supabase Auth, and the email links here with a
+ * `token_hash` that this page redeems with `verifyOtp`.
  *
- * That exchange is asynchronous and races the first render, which is why this
- * waits for a session rather than reading the URL synchronously.
+ * The token deliberately does NOT travel as Supabase's own `action_link`. That
+ * URL is a single-use GET, so anything that fetches it redeems it — and Gmail
+ * scans links in incoming mail. It burned the first customer's token twelve
+ * seconds after the email was sent, and their click came back
+ * `error_code=otp_expired` on a link nobody had opened. This page is inert
+ * HTML: a scanner that fetches it consumes nothing, because the token is only
+ * redeemed by the `verifyOtp` call below, which a scanner does not run.
+ *
+ * The fragment path is kept as well, for links already in flight and for
+ * Supabase's own templates. Both are asynchronous and race the first render,
+ * which is why this waits on a session rather than reading the URL
+ * synchronously.
  */
 const ResetPassword = () => {
   const navigate = useNavigate();
@@ -63,6 +71,33 @@ const ResetPassword = () => {
         setLinkState("ready");
       }
     });
+
+    // The normal path: our own email links here with the token, and this is
+    // the moment it is redeemed - in a real browser, on a real page load.
+    const tokenHash = new URLSearchParams(window.location.search).get("token_hash");
+    if (tokenHash) {
+      supabase.auth
+        .verifyOtp({ token_hash: tokenHash, type: "recovery" })
+        .then(({ error: verifyError }) => {
+          if (cancelled) return;
+          if (verifyError) {
+            fail(
+              /expired|invalid/i.test(verifyError.message || "")
+                ? "This reset link has expired or has already been used. Links are valid for one hour and work once — please request a new one."
+                : verifyError.message || "This reset link is not valid. Please request a new one.",
+            );
+            return;
+          }
+          // Drop the token from the address bar so it is not left in history,
+          // and so a reload does not try to redeem a spent token.
+          window.history.replaceState({}, "", window.location.pathname);
+          setLinkState("ready");
+        });
+      return () => {
+        cancelled = true;
+        sub?.subscription?.unsubscribe();
+      };
+    }
 
     supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return;

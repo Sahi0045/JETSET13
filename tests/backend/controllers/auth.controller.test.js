@@ -209,7 +209,7 @@ describe('AuthController.getMe', () => {
 describe('AuthController.forgotPassword', () => {
   beforeEach(() => {
     supabaseMock.auth.admin.generateLink.mockResolvedValue({
-      data: { properties: { action_link: 'https://project.supabase.co/auth/v1/verify?token=t&type=recovery' } },
+      data: { properties: { action_link: 'https://project.supabase.co/auth/v1/verify?token=t&type=recovery', hashed_token: 'abc123' } },
       error: null,
     });
   });
