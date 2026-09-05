@@ -334,27 +334,51 @@
   gap: 0.75rem;
 }
 
+/* Deliberately mirrors Google's rendered button, because that one cannot be
+   restyled: same height, 1px #dadce0 border, 4px radius, Roboto 14px/500 and
+   Google's #3c4043 text colour. Matching ours to theirs is the only way the
+   pair can look like one design. */
 .jsl-social-btn {
   height: 46px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.55rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #34505b;
+  gap: 0.6rem;
+  font-family: Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.25px;
+  color: #3c4043;
   background: #fff;
-  border: 1.5px solid #dde9ef;
-  border-radius: 12px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
   cursor: pointer;
   transition: border-color 0.18s ease, background 0.18s ease, transform 0.12s ease;
 }
+/* Google's hover is a faint grey wash with no movement; ours matched. */
 .jsl-social-btn:hover:not(:disabled) {
-  border-color: #65B3CF;
-  background: #f4fbfd;
-  transform: translateY(-1px);
+  border-color: #d2e3fc;
+  background: #f8faff;
 }
 .jsl-social-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Google renders its own button and we cannot restyle its internals, so match
+   the row to it instead: same cell, same height, centred.
+   Deliberately no overflow:hidden or border-radius here. Clipping a container
+   round a button Google draws with squarer corners eats its antialiased edges,
+   which reads as the corners fading out. Let it draw its own shape; the Apple
+   button is matched to it below instead. */
+.jsl-google-gis {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 46px;
+}
+
+.jsl-google-gis > div,
+.jsl-google-gis iframe {
+  margin: 0 !important;
+}
 
 .jsl-signup {
   text-align: center;
