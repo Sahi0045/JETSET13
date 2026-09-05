@@ -137,6 +137,35 @@ export const readCreateTstReply = (reply) => arr(reply?.tstList)
  *   transactionContext? -> bestEffort[] -> reservationControlInformation?
  *     -> fopGroup[1..127]{fopReference, ..., mopDescription[]}
  */
+/**
+ * Form of payment.
+ *
+ * This message is schema-valid and the WSAP still refuses it on the PDT office
+ * with `2228 CHECK DATA FIELDS`. That is worth recording, because the shape is
+ * not the problem and changing it will not help.
+ *
+ * Checked against FOP_CreateFormOfPayment_19_2_1A.xsd and probed live:
+ *
+ *   fopGroup       fopReference is the only mandatory child. Everything else -
+ *                  passengerAssociation, pnrElementAssociation,
+ *                  pricingTicketingDetails, feeTypeInfo, fpProcessingOptions,
+ *                  mopDescription - is optional.
+ *   fopDetails     every child is optional, fopCode included.
+ *   paymentModule  optional; only if it is sent does paymentData become
+ *                  available, and only then is merchantInformation/companyCode
+ *                  mandatory.
+ *
+ * So there is no missing mandatory field to add. Probing confirmed it: all of
+ * CA CC MS INV CCVI NONREF CHECK AGT CASH BT return the same 2228, adding
+ * passenger or PNR-element associations changes nothing, and a body carrying
+ * only the mandatory fopReference is refused identically.
+ *
+ * That leaves office configuration rather than message content, and the most
+ * likely cause is the one already known: this office has no ticketing stock,
+ * which is why AMADEUS_WS_AUTO_TICKET is off. A form of payment is a ticketing
+ * artefact. Confirm with Amadeus before changing anything here - a speculative
+ * edit would only make the message wrong as well as refused.
+ */
 export const buildFopBody = ({ fopCode = 'CA' } = {}) => {
   const body = wrap('fopGroup', [
     // fopReference is ElementManagementSegmentType: a single `reference` child
