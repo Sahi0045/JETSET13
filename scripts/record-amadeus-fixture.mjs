@@ -68,64 +68,13 @@ const { OPERATIONS } = await import('../backend/services/amadeusSoap/codes.js');
 const { callStateless } = await import('../backend/services/amadeusSoap/session.js');
 const { buildCalendarBody } = await import('../backend/services/amadeusSoap/operations/masterPricer.js');
 const { buildCheckRulesBody } = await import('../backend/services/amadeusSoap/operations/fareRules.js');
+const { createRedactor } = await import('./lib/redact-evidence.mjs');
 
 /* ── Redaction ──────────────────────────────────────────────────────────── */
 
-/** SessionId -> stable pseudonym, so the same session reads the same across files. */
-const sessionAliases = new Map();
-const aliasFor = (id) => {
-  if (!sessionAliases.has(id)) sessionAliases.set(id, `SESSION-${sessionAliases.size + 1}`);
-  return sessionAliases.get(id);
-};
-
-const blank = (xml, tag, value = '[REDACTED]') =>
-  xml.replace(
-    new RegExp(`(<(?:\\w+:)?${tag}(?:\\s[^>]*)?>)[\\s\\S]*?(</(?:\\w+:)?${tag}>)`, 'gi'),
-    `$1${value}$2`,
-  );
-
-/** Replace an element's text while keeping the element itself intact. */
-const substitute = (xml, tag, value) => blank(xml, tag, value);
-
-const redact = (xml) => {
-  let out = String(xml ?? '');
-
-  // Credentials. These are the only things blanked outright.
-  out = blank(out, 'Password');
-  out = blank(out, 'Nonce');
-  out = blank(out, 'SecurityToken');
-
-  // Session identifiers are evidence, not secrets, once pseudonymised: a
-  // reviewer needs to see the same id echoed from Start through to End.
-  out = out.replace(
-    /(<(?:\w+:)?SessionId>)([\s\S]*?)(<\/(?:\w+:)?SessionId>)/gi,
-    (_m, open, id, close) => `${open}${aliasFor(id.trim())}${close}`,
-  );
-
-  // Traveller data: structure kept, values replaced. A reviewer is checking
-  // that the name element is built correctly, not who flew.
-  out = substitute(out, 'surname', 'TESTSURNAME');
-  out = substitute(out, 'firstName', 'TESTGIVEN MR');
-  out = substitute(out, 'dateOfBirth', '01011990');
-  out = substitute(out, 'documentNumber', 'X0000000');
-  out = substitute(out, 'birthDate', '01011990');
-
-  // Contact details travel as free text, in the same elements as the RF and RM
-  // entries we want to keep. So mask inside free text only, and by pattern
-  // rather than by element — a blanket digit rule applied to the whole
-  // envelope would eat fare amounts and ticket dates, which are the evidence.
-  out = out.replace(
-    /(<(?:\w+:)?(?:freeText|longFreetext|freeTextData)(?:\s[^>]*)?>)([\s\S]*?)(<\/(?:\w+:)?(?:freeText|longFreetext|freeTextData)>)/gi,
-    (_m, open, text, close) => {
-      const masked = text
-        .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, 'traveller@example.com')
-        .replace(/\+?\d[\d\s-]{6,}\d/g, '5555550100');
-      return `${open}${masked}${close}`;
-    },
-  );
-
-  return out;
-};
+// Extracted and unit-tested: these files leave the company, so a miss is a
+// disclosure. See tests/backend/redactEvidence.test.js.
+const { redact } = createRedactor();
 
 /**
  * Whether the WSAP accepted the call.
