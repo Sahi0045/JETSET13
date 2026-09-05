@@ -65,9 +65,19 @@ const readWsConfig = (env = process.env) => {
     // No FOP free-text setting: fopDetails accepts only fopCode, fopMapTable,
     // fopBillingCode and fopStatus, so there is nowhere to put the ARC
     // transaction id. It lives in booking_details.transaction_id instead.
-    // CASH, not CA: we are the merchant of record - the card is charged at
-    // ARC Pay before the GDS is involved - so from the airline's side this is
-    // an agency collection settling through ARC. The WSAP rejects CA.
+    // CASH, not CA. We are the merchant of record - the card is charged at
+    // ARC Pay before the GDS is involved - so the airline sees an agency
+    // collection settling through ARC.
+    //
+    // The literal code is OFFICE-DEPENDENT, which is why this is an env var
+    // and why every code we guessed was refused. Per the FOP technical
+    // reference, `fopCode` is a "format key that identifies the FOP within a
+    // FOP table", and that table belongs to the office: the same concept
+    // resolves to `FP CA` in an Air France office, `FP CASH` in an Iberia one,
+    // and `FP S` in a United one. Office SCK1S2400 uses CASH.
+    //
+    // So this must be re-confirmed against the PRODUCTION office at cutover.
+    // A value that is correct on PDT is not evidence it is correct on PROD.
     fopCode: (env.AMADEUS_WS_FOP_CODE || 'CASH').trim(),
 
     maxConcurrency: asInt(env.AMADEUS_WS_MAX_CONCURRENCY, 4),
