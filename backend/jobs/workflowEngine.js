@@ -8,6 +8,7 @@
 
 import supabase from '../config/supabase.js';
 import { sendEmail } from '../services/emailService.js';
+import { generateSlaAlertTemplate } from '../services/email/templates.js';
 
 // ─── Config ───────────────────────────────────────────────────
 const SLA_HOURS      = { visa: 72, flight: 24, hotel: 24, package: 48 };
@@ -106,15 +107,15 @@ async function checkSLABreaches() {
         const adminEmail = process.env.ADMIN_EMAIL || 'jetsetters721@gmail.com';
         await sendEmail({
           to:      adminEmail,
-          subject: `🚨 SLA Breach — ${inq.customer_name} (${inq.inquiry_type})`,
-          html: `
-            <h2>SLA Breach Alert</h2>
-            <p>Inquiry <strong>${inq.id.slice(0, 8)}</strong> for <strong>${inq.customer_name}</strong> has exceeded its SLA of ${sla} hours.</p>
-            <p><strong>Time elapsed:</strong> ${elapsed.toFixed(1)} hours</p>
-            <p><strong>Type:</strong> ${inq.inquiry_type}</p>
-            <p><strong>Status:</strong> ${inq.status}</p>
-            <p>Please review and action this inquiry immediately.</p>
-          `,
+          subject: `SLA breach - ${inq.customer_name} (${inq.inquiry_type})`,
+          html: generateSlaAlertTemplate({
+            kind: 'breach',
+            customerName: inq.customer_name,
+            inquiryType: inq.inquiry_type,
+            status: inq.status,
+            sla,
+            inquiryId: inq.id,
+          }),
         });
 
         await logAudit('sla_breach_detected', inq.id, { elapsed_hours: elapsed.toFixed(1), sla_hours: sla });
@@ -150,13 +151,14 @@ async function checkEscalations() {
       const adminEmail = process.env.ADMIN_EMAIL || 'jetsetters721@gmail.com';
       await sendEmail({
         to:      adminEmail,
-        subject: `⚠️ Escalation — ${inq.customer_name} (48h no action)`,
-        html: `
-          <h2>Inquiry Escalation</h2>
-          <p>Inquiry <strong>${inq.id.slice(0, 8)}</strong> for <strong>${inq.customer_name}</strong> has been in-progress for over 48 hours without update.</p>
-          <p><strong>Type:</strong> ${inq.inquiry_type}</p>
-          <p>This inquiry has been automatically escalated to urgent priority.</p>
-        `,
+        subject: `Escalation - ${inq.customer_name} (48h no action)`,
+        html: generateSlaAlertTemplate({
+          kind: 'escalation',
+          customerName: inq.customer_name,
+          inquiryType: inq.inquiry_type,
+          status: inq.status,
+          inquiryId: inq.id,
+        }),
       });
 
       await logAudit('escalated', inq.id, { reason: '48h_no_action' });

@@ -208,3 +208,210 @@ export function generateVisaApplicationTemplate(data) {
     cta: application_ref ? { text: 'Track Your Application', url: `https://www.jetsetterss.com/visa/track?ref=${application_ref}` } : null,
   });
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Account and quote notifications.
+ *
+ * These four were the only emails still hand-writing their own HTML, inline in
+ * email.routes.js: a different header, a different palette, gradient banners
+ * and emoji headings that matched nothing else we send. A customer who books a
+ * flight and then signs in received two emails that did not look like the same
+ * company. Moved onto the shared layout so every message is one design.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Someone signed in. A security notice, so it stays plain and factual. */
+export function generateLoginNotificationTemplate(data) {
+  const { customerName = 'there', email, loginTime, deviceInfo } = data;
+  const firstName = String(customerName).split(' ')[0] || 'there';
+
+  return renderBrandedEmail({
+    preheader: `New sign-in to your Jetsetters account · ${loginTime}`,
+    headerLabel: 'Account security',
+    heading: `New sign-in, ${firstName}`,
+    subheading: 'We noticed a new sign-in to your account',
+    contentHtml: `
+      ${paragraph('Here are the details, so you can check it was you:')}
+      ${detailCard('Sign-in details', [
+        ['Account', email],
+        ['Time', loginTime],
+        ['Device', deviceInfo],
+      ].filter(([, v]) => v))}
+      ${highlightBox(
+        'If this was you, there is nothing to do.',
+        { bg: '#f0fdf4', border: '#22c55e', color: '#166534' },
+      )}
+      ${paragraph(`If it was not, change your password now and contact us at <strong>${BRAND.supportEmail}</strong> or <strong>${BRAND.supportPhone}</strong>.`)}
+    `,
+    cta: { text: 'Review account activity', url: `${BRAND.site}/profiledashboard` },
+  });
+}
+
+/** Someone signed out. Deliberately quieter than the sign-in notice. */
+export function generateLogoutNotificationTemplate(data) {
+  const { customerName = 'there', email, logoutTime } = data;
+  const firstName = String(customerName).split(' ')[0] || 'there';
+
+  return renderBrandedEmail({
+    preheader: 'You have been signed out of your Jetsetters account',
+    headerLabel: 'Account',
+    heading: `Signed out, ${firstName}`,
+    subheading: 'Your session has ended',
+    contentHtml: `
+      ${detailCard('Session', [['Account', email], ['Signed out', logoutTime]].filter(([, v]) => v))}
+      ${paragraph('Your trips and saved details are exactly where you left them.')}
+    `,
+    cta: { text: 'Sign back in', url: `${BRAND.site}/login` },
+  });
+}
+
+/** A quote is about to expire. The date is the point of the email. */
+export function generateQuoteReminderTemplate(data) {
+  const { customerName = 'there', quoteNumber, expiresAt, totalAmount, currency = 'USD', quoteUrl } = data;
+  const firstName = String(customerName).split(' ')[0] || 'there';
+  const expiry = expiresAt ? new Date(expiresAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) : null;
+
+  return renderBrandedEmail({
+    preheader: `Quote ${quoteNumber} expires ${expiry || 'soon'}`,
+    headerLabel: 'Quote expiring',
+    heading: `Your quote expires soon, ${firstName}`,
+    subheading: quoteNumber ? `Quote ${quoteNumber}` : '',
+    contentHtml: `
+      ${paragraph('Prices and availability are held only until the date below. After that the quote has to be rebuilt at whatever fares are live then.')}
+      ${detailCard('Your quote', [
+        ['Quote', quoteNumber],
+        ['Total', totalAmount ? `${currency} ${totalAmount}` : null],
+        ['Expires', expiry],
+      ].filter(([, v]) => v))}
+      ${expiry ? highlightBox(`This quote expires on <strong>${expiry}</strong>.`, { bg: '#fffbeb', border: '#f59e0b', color: '#92400e' }) : ''}
+      ${paragraph(`Questions before you decide? Call <strong>${BRAND.supportPhone}</strong> and we will walk through it with you.`)}
+    `,
+    cta: quoteUrl ? { text: 'View your quote', url: quoteUrl } : null,
+  });
+}
+
+/** An inquiry changed status. */
+export function generateInquiryStatusTemplate(data) {
+  const { customerName = 'there', inquiryId, inquiryType, status, createdAt, hasQuotes, viewUrl } = data;
+  const firstName = String(customerName).split(' ')[0] || 'there';
+  const reference = inquiryId ? String(inquiryId).slice(-8).toUpperCase() : null;
+
+  return renderBrandedEmail({
+    preheader: `Your ${inquiryType || 'travel'} inquiry is now ${status || 'updated'}`,
+    headerLabel: 'Inquiry update',
+    heading: `Update on your inquiry, ${firstName}`,
+    subheading: status ? `Status: ${status}` : '',
+    contentHtml: `
+      ${detailCard('Your inquiry', [
+        ['Reference', reference],
+        ['Type', inquiryType],
+        ['Status', status],
+        ['Raised', createdAt ? new Date(createdAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) : null],
+      ].filter(([, v]) => v))}
+      ${hasQuotes
+        ? highlightBox('A quote is ready for you to review.', { bg: '#f0fdf4', border: '#22c55e', color: '#166534' })
+        : paragraph('We will email you again as soon as there is more to share.')}
+    `,
+    cta: viewUrl ? { text: 'View full details', url: viewUrl } : null,
+  });
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Quote lifecycle, payment links, and internal alerts.
+ *
+ * The last of the hand-written HTML: two quote-expiry mails from the expiry
+ * job, the payment-link mail, and the two SLA alerts the workflow engine
+ * sends. Same reasoning as above - a customer should not be able to tell which
+ * part of the system emailed them.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** A quote is expiring in `days`. */
+export function generateQuoteExpiringTemplate({ customerName, title, quoteId, totalAmount, currency = 'USD', days }) {
+  const firstName = String(customerName || 'there').split(' ')[0];
+  return renderBrandedEmail({
+    preheader: `Your quote expires in ${days} day${days === 1 ? '' : 's'}`,
+    headerLabel: 'Quote expiring',
+    heading: `${days} day${days === 1 ? '' : 's'} left on your quote, ${firstName}`,
+    subheading: title || '',
+    contentHtml: `
+      ${paragraph('We are holding these prices until the quote expires. After that the fares have to be re-checked, and they may not be the same.')}
+      ${detailCard('Your quote', [
+        ['Quote', title],
+        ['Reference', quoteId ? String(quoteId).slice(-8).toUpperCase() : null],
+        ['Total', totalAmount ? `${currency} ${totalAmount}` : null],
+      ].filter(([, v]) => v))}
+      ${highlightBox(
+        `Expires in <strong>${days} day${days === 1 ? '' : 's'}</strong>.`,
+        { bg: '#fffbeb', border: '#f59e0b', color: '#92400e' },
+      )}
+    `,
+    cta: { text: 'Review your quote', url: `${BRAND.site}/my-trips` },
+  });
+}
+
+/** A quote has expired. Honest, with a clear way back. */
+export function generateQuoteExpiredTemplate({ customerName, title, quoteId }) {
+  const firstName = String(customerName || 'there').split(' ')[0];
+  return renderBrandedEmail({
+    preheader: 'Your travel quote has expired',
+    headerLabel: 'Quote expired',
+    heading: `Your quote has expired, ${firstName}`,
+    subheading: title || '',
+    contentHtml: `
+      ${paragraph('The prices we were holding are no longer guaranteed. That does not mean the trip is off - we can rebuild the quote at current fares, and it often lands close.')}
+      ${detailCard('Expired quote', [
+        ['Quote', title],
+        ['Reference', quoteId ? String(quoteId).slice(-8).toUpperCase() : null],
+      ].filter(([, v]) => v))}
+      ${paragraph(`Reply to this email or call <strong>${BRAND.supportPhone}</strong> and we will put a fresh one together.`)}
+    `,
+    cta: { text: 'Request a new quote', url: `${BRAND.site}/request` },
+  });
+}
+
+/** A payment link. The button is the entire point, so nothing competes with it. */
+export function generatePaymentLinkTemplate({ customerName, description, amount, currency = 'USD', paymentUrl, expiresAt }) {
+  const firstName = String(customerName || 'there').split(' ')[0];
+  return renderBrandedEmail({
+    preheader: `Your secure payment link${amount ? ` · ${currency} ${amount}` : ''}`,
+    headerLabel: 'Payment',
+    heading: `Your payment link, ${firstName}`,
+    subheading: description || '',
+    contentHtml: `
+      ${paragraph('Use the button below to pay securely. The page is hosted by our payment provider - we never see or store your card details.')}
+      ${detailCard('Payment', [
+        ['For', description],
+        ['Amount', amount ? `${currency} ${amount}` : null],
+        ['Link valid until', expiresAt ? new Date(expiresAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) : null],
+      ].filter(([, v]) => v))}
+      ${paragraph(`If you did not expect this, do not pay it - call us on <strong>${BRAND.supportPhone}</strong> first.`)}
+    `,
+    cta: paymentUrl ? { text: 'Pay securely', url: paymentUrl } : null,
+  });
+}
+
+/**
+ * Internal SLA alert. Same shell so the brand is consistent, but the content
+ * is deliberately terse - somebody is meant to act on it, not enjoy it.
+ */
+export function generateSlaAlertTemplate({ kind = 'breach', customerName, inquiryType, status, sla, inquiryId }) {
+  const isEscalation = kind === 'escalation';
+  return renderBrandedEmail({
+    preheader: isEscalation
+      ? `Escalation: ${customerName} has had no action for 48h`
+      : `SLA breach: ${customerName} (${inquiryType})`,
+    headerLabel: isEscalation ? 'Escalation' : 'SLA breach',
+    heading: isEscalation ? 'No action for 48 hours' : 'SLA breached',
+    subheading: `${customerName || 'Unknown customer'} · ${inquiryType || 'inquiry'}`,
+    contentHtml: `
+      ${detailCard('Inquiry', [
+        ['Customer', customerName],
+        ['Type', inquiryType],
+        ['Status', status],
+        ['SLA', sla ? `${sla} hours` : null],
+        ['Reference', inquiryId ? String(inquiryId).slice(-8).toUpperCase() : null],
+      ].filter(([, v]) => v))}
+      ${highlightBox('This inquiry needs an owner now.', { bg: '#fef2f2', border: '#ef4444', color: '#991b1b' })}
+    `,
+    cta: { text: 'Open the admin panel', url: `${BRAND.site}/admin/inquiries` },
+  });
+}

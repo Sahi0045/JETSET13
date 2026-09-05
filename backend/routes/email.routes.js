@@ -1,5 +1,12 @@
 import express from 'express';
 import emailService, { sendSubscriptionEmails, sendContactNotificationEmails } from '../services/emailService.js';
+import { get as cacheGet, set as cacheSet } from '../services/cache.service.js';
+import {
+  generateInquiryStatusTemplate,
+  generateLoginNotificationTemplate,
+  generateLogoutNotificationTemplate,
+  generateQuoteReminderTemplate,
+} from '../services/email/templates.js';
 
 const router = express.Router();
 
@@ -216,35 +223,8 @@ router.post('/send', async (req, res) => {
         // Send quote reminder email
         result = await emailService.sendEmail({
           to,
-          subject: `⏰ Reminder: Your Travel Quote is Expiring Soon - ${data.quoteNumber}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <div style="background: linear-gradient(135deg, #055B75 0%, #0066b2 100%); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
-                <h1 style="color: white; margin: 0;">Quote Reminder</h1>
-              </div>
-              <div style="padding: 30px; background: #f8fafc; border-radius: 0 0 12px 12px;">
-                <p style="font-size: 16px; color: #333;">Hi ${data.customerName},</p>
-                <p style="font-size: 16px; color: #333;">Your travel quote <strong>#${data.quoteNumber}</strong> is expiring soon!</p>
-                <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 0; font-size: 18px; font-weight: bold; color: #856404;">
-                    ⚠️ Expires: ${new Date(data.expiresAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 5px 0;"><strong>Quote Total:</strong> $${data.totalAmount} ${data.currency}</p>
-                  <p style="margin: 5px 0;"><strong>Inquiry Type:</strong> ${data.inquiryType}</p>
-                </div>
-                <div style="text-align: center; margin: 30px 0;">
-                  <a href="${data.quoteUrl}" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
-                    💳 Complete Payment Now
-                  </a>
-                </div>
-                <p style="color: #666; font-size: 14px; text-align: center;">
-                  Don't miss out on this offer! Complete your booking before it expires.
-                </p>
-              </div>
-            </div>
-          `
+          subject: `Reminder: your travel quote ${data.quoteNumber} expires soon`,
+          html: generateQuoteReminderTemplate(data),
         });
         break;
 
@@ -261,122 +241,49 @@ router.post('/send', async (req, res) => {
 
         result = await emailService.sendEmail({
           to,
-          subject: `📋 Inquiry Status Update - ${data.status.charAt(0).toUpperCase() + data.status.slice(1)}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <div style="background: linear-gradient(135deg, #055B75 0%, #0066b2 100%); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
-                <h1 style="color: white; margin: 0;">Inquiry Status Update</h1>
-              </div>
-              <div style="padding: 30px; background: #f8fafc; border-radius: 0 0 12px 12px;">
-                <p style="font-size: 16px; color: #333;">Hi ${data.customerName},</p>
-                <p style="font-size: 16px; color: #333;">Here's the latest update on your ${data.inquiryType} inquiry:</p>
-                <div style="background: #e0f2fe; border-left: 4px solid #0066b2; padding: 20px; margin: 20px 0;">
-                  <p style="margin: 0; font-size: 18px; font-weight: bold; color: #055B75;">
-                    Status: ${data.status.charAt(0).toUpperCase() + data.status.slice(1)}
-                  </p>
-                  <p style="margin: 10px 0 0; color: #333;">
-                    ${statusMessages[data.status] || 'Your inquiry is being processed.'}
-                  </p>
-                </div>
-                <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 5px 0;"><strong>Inquiry ID:</strong> ${data.inquiryId.slice(-8).toUpperCase()}</p>
-                  <p style="margin: 5px 0;"><strong>Type:</strong> ${data.inquiryType}</p>
-                  <p style="margin: 5px 0;"><strong>Created:</strong> ${new Date(data.createdAt).toLocaleDateString()}</p>
-                  ${data.hasQuotes ? '<p style="margin: 5px 0; color: #22c55e;"><strong>✓ Quote Available</strong></p>' : ''}
-                </div>
-                <div style="text-align: center; margin: 30px 0;">
-                  <a href="${data.viewUrl}" style="background: linear-gradient(135deg, #055B75 0%, #0066b2 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
-                    View Full Details
-                  </a>
-                </div>
-              </div>
-            </div>
-          `
+          subject: `Update on your ${data.inquiryType || 'travel'} inquiry`,
+          html: generateInquiryStatusTemplate(data),
         });
         break;
 
-      case 'login_notification':
-        // Send login notification email
+      case 'login_notification': {
+        // Do not email the same person for the same session over and over.
+        //
+        // The client used to be the only guard, with two sessionStorage flags:
+        // one to dedupe and one to mark "this SIGNED_IN is a page refresh, not
+        // a real login". Both leak. sessionStorage is per-tab, so a second tab
+        // is a fresh notification; and the rehydration flag was cleared right
+        // after `setSession()` resolved, while the SIGNED_IN event it triggers
+        // arrives later - so on a normal page load the flag was usually already
+        // gone by the time the handler read it. The result was a security email
+        // on essentially every visit, which trains people to ignore the one
+        // that matters.
+        //
+        // The dedupe belongs here, where it cannot be defeated by a new tab,
+        // cleared storage, or a second device. Keyed on the recipient with a
+        // 12-hour window: a genuine second login within that window is not
+        // worth an email, and anything outside it is.
+        const dedupeKey = `login-email:${String(to).toLowerCase()}`;
+        if (await cacheGet(dedupeKey)) {
+          console.log('↩️ Login notification suppressed (already sent recently):', to);
+          return res.json({ success: true, skipped: true, reason: 'already notified recently' });
+        }
+        await cacheSet(dedupeKey, { at: new Date().toISOString() }, 12 * 60 * 60);
+
         result = await emailService.sendEmail({
           to,
-          subject: `🔐 New Login to Your Jetsetters Account`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <div style="background: linear-gradient(135deg, #055B75 0%, #0066b2 100%); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
-                <h1 style="color: white; margin: 0;">🔐 Security Alert</h1>
-                <p style="color: #B9D0DC; margin: 10px 0 0;">New Login Detected</p>
-              </div>
-              <div style="padding: 30px; background: #f8fafc; border-radius: 0 0 12px 12px;">
-                <p style="font-size: 16px; color: #333;">Hi ${data.customerName},</p>
-                <p style="font-size: 16px; color: #333;">A new login to your Jetsetters account was detected.</p>
-                <div style="background: #e0f2fe; border-left: 4px solid #0066b2; padding: 20px; margin: 20px 0;">
-                  <p style="margin: 5px 0;"><strong>📧 Email:</strong> ${data.email}</p>
-                  <p style="margin: 5px 0;"><strong>🕐 Time:</strong> ${data.loginTime}</p>
-                  <p style="margin: 5px 0;"><strong>📱 Device:</strong> ${data.deviceInfo}</p>
-                </div>
-                <div style="background: #dcfce7; border: 1px solid #22c55e; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 0; color: #166534;">
-                    ✅ If this was you, no action is needed.
-                  </p>
-                </div>
-                <div style="background: #fef2f2; border: 1px solid #ef4444; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 0; color: #991b1b;">
-                    ⚠️ If this wasn't you, please reset your password immediately.
-                  </p>
-                </div>
-                <div style="text-align: center; margin: 30px 0;">
-                  <a href="${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}/my-trips" style="background: linear-gradient(135deg, #055B75 0%, #0066b2 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
-                    Go to My Account
-                  </a>
-                </div>
-                <p style="color: #666; font-size: 12px; text-align: center; margin-top: 30px;">
-                  This is an automated security notification from Jetsetters Travel.
-                </p>
-              </div>
-            </div>
-          `
+          subject: `New sign-in to your Jetsetters account`,
+          html: generateLoginNotificationTemplate(data),
         });
         break;
+      }
 
       case 'logout_notification':
         // Send logout notification email
         result = await emailService.sendEmail({
           to,
-          subject: `👋 You've Logged Out of Jetsetters`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <div style="background: linear-gradient(135deg, #055B75 0%, #0066b2 100%); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
-                <h1 style="color: white; margin: 0;">👋 Signed Out</h1>
-                <p style="color: #B9D0DC; margin: 10px 0 0;">Session Ended Successfully</p>
-              </div>
-              <div style="padding: 30px; background: #f8fafc; border-radius: 0 0 12px 12px;">
-                <p style="font-size: 16px; color: #333;">Hi ${data.customerName},</p>
-                <p style="font-size: 16px; color: #333;">You have successfully logged out of your Jetsetters account.</p>
-                <div style="background: #f0fdf4; border-left: 4px solid #22c55e; padding: 20px; margin: 20px 0;">
-                  <p style="margin: 5px 0;"><strong>📧 Account:</strong> ${data.email}</p>
-                  <p style="margin: 5px 0;"><strong>🕐 Time:</strong> ${data.logoutTime}</p>
-                  <p style="margin: 5px 0;"><strong>📱 Device:</strong> ${data.deviceInfo}</p>
-                </div>
-                <div style="background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 0; color: #333;">
-                    🔒 Your session has been securely terminated.
-                  </p>
-                </div>
-                <p style="font-size: 14px; color: #666; text-align: center;">
-                  We hope to see you again soon! <br/>
-                  Ready to plan your next adventure?
-                </p>
-                <div style="text-align: center; margin: 30px 0;">
-                  <a href="${process.env.FRONTEND_URL || 'https://www.jetsetterss.com'}" style="background: linear-gradient(135deg, #055B75 0%, #0066b2 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
-                    Explore Travel Deals
-                  </a>
-                </div>
-                <p style="color: #666; font-size: 12px; text-align: center; margin-top: 30px;">
-                  This is an automated notification from Jetsetters Travel.
-                </p>
-              </div>
-            </div>
-          `
+          subject: `You have been signed out of Jetsetters`,
+          html: generateLogoutNotificationTemplate(data),
         });
         break;
 

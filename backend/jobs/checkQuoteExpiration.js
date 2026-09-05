@@ -1,5 +1,6 @@
 import supabase from '../config/supabase.js';
 import { sendEmail } from '../services/emailService.js';
+import { generateQuoteExpiredTemplate, generateQuoteExpiringTemplate } from '../services/email/templates.js';
 
 /**
  * Check for expiring and expired quotes
@@ -40,16 +41,15 @@ export const checkQuoteExpiration = async () => {
 
           await sendEmail({
             to: quote.inquiries.customer_email,
-            subject: `⚠️ Your Travel Quote Expires in ${daysUntilExpiry} Days`,
-            html: `
-              <h2>Quote Expiring Soon!</h2>
-              <p>Dear ${quote.inquiries.customer_name},</p>
-              <p>This is a friendly reminder that your travel quote <strong>${quote.title}</strong> will expire in <strong>${daysUntilExpiry} day(s)</strong>.</p>
-              <p><strong>Quote Amount:</strong> ${quote.currency} ${quote.total_amount}</p>
-              <p><strong>Expires on:</strong> ${new Date(quote.expires_at).toLocaleDateString()}</p>
-              <p>To secure this rate, please accept the quote before it expires.</p>
-              <p>Best regards,<br>The Jetsetterss Team</p>
-            `
+            subject: `Your travel quote expires in ${daysUntilExpiry} day${daysUntilExpiry === 1 ? '' : 's'}`,
+            html: generateQuoteExpiringTemplate({
+              customerName: quote.inquiries.customer_name,
+              title: quote.title,
+              quoteId: quote.id,
+              totalAmount: quote.total_amount,
+              currency: quote.currency,
+              days: daysUntilExpiry,
+            }),
           });
 
           console.log(`✅ Sent expiration warning to ${quote.inquiries.customer_email}`);
@@ -94,16 +94,12 @@ export const checkQuoteExpiration = async () => {
           try {
             await sendEmail({
               to: quote.inquiries.customer_email,
-              subject: '❌ Your Travel Quote Has Expired',
-              html: `
-                <h2>Quote Expired</h2>
-                <p>Dear ${quote.inquiries.customer_name},</p>
-                <p>Unfortunately, your travel quote <strong>${quote.title}</strong> has expired.</p>
-                <p><strong>Quote Amount:</strong> ${quote.currency} ${quote.total_amount}</p>
-                <p><strong>Expired on:</strong> ${new Date(quote.expires_at).toLocaleDateString()}</p>
-                <p>If you're still interested in this travel plan, please contact us and we'll be happy to provide you with a new quote.</p>
-                <p>Best regards,<br>The Jetsetterss Team</p>
-              `
+              subject: 'Your travel quote has expired',
+              html: generateQuoteExpiredTemplate({
+                customerName: quote.inquiries.customer_name,
+                title: quote.title,
+                quoteId: quote.id,
+              }),
             });
 
             console.log(`✅ Sent expiration notice to ${quote.inquiries.customer_email}`);

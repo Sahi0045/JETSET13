@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig } from './arcpay.config.js';
 import { getCallerInfo, generateLinkToken } from './payment.helpers.js';
+import { generatePaymentLinkTemplate } from '../../services/email/templates.js';
 
 
 /**
@@ -103,29 +104,14 @@ export async function handleCreatePaymentLink(req, res) {
                 const { sendEmail } = await import('../../services/emailService.js');
                 await sendEmail({
                     to: customerEmail,
-                    subject: `Payment Link - ${description || bookingType} | Jetsetters`,
-                    html: `
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                            <div style="background: #055B75; color: white; padding: 20px; text-align: center;">
-                                <h2>💳 Payment Request</h2>
-                            </div>
-                            <div style="padding: 20px; background: #f9f9f9;">
-                                <p>Dear ${customerName},</p>
-                                <p>You have a pending payment for your travel booking:</p>
-                                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                                    <p><strong>Amount:</strong> ${currency} ${parseFloat(amount).toFixed(2)}</p>
-                                    <p><strong>Type:</strong> ${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)}</p>
-                                    ${description ? `<p><strong>Description:</strong> ${description}</p>` : ''}
-                                </div>
-                                <div style="text-align: center; margin: 20px 0;">
-                                    <a href="${paymentUrl}" style="background: #055B75; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold;">
-                                        Pay Now →
-                                    </a>
-                                </div>
-                                <p style="font-size: 12px; color: #888;">This link expires on ${expiresAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.</p>
-                            </div>
-                        </div>
-                    `
+                    subject: `Your payment link${description ? ` - ${description}` : ''} | Jetsetters`,
+                    html: generatePaymentLinkTemplate({
+                        customerName,
+                        description: description || bookingType,
+                        amount: parseFloat(amount).toFixed(2),
+                        currency,
+                        paymentUrl,
+                    }),
                 });
                 console.log('📧 Payment link email sent to:', customerEmail);
             } catch (emailErr) {
