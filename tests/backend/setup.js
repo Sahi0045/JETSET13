@@ -89,12 +89,26 @@ vi.mock('axios', () => ({
 }));
 
 // ─── Email service mock (prevent real sends in tests) ────────
-vi.mock('../../backend/services/emailService.js', () => ({
+// `sendEmail` and the default export matter as much as the named senders:
+// email.routes.js imports the module default and calls `emailService.sendEmail`,
+// so omitting them made every route email throw inside the route's own
+// try/catch - the test still passed, for the wrong reason, having sent nothing.
+const sendEmailMock = vi.fn().mockResolvedValue({ id: 'email-mock-id' });
+const emailServiceMock = {
+  sendEmail: sendEmailMock,
   sendPasswordResetEmail: vi.fn().mockResolvedValue({ id: 'email-mock-id' }),
   sendBookingConfirmationEmail: vi.fn().mockResolvedValue({ id: 'email-mock-id' }),
   sendApplicationApprovedEmail: vi.fn().mockResolvedValue({ id: 'email-mock-id' }),
   sendApplicationRejectedEmail: vi.fn().mockResolvedValue({ id: 'email-mock-id' }),
   sendStatusUpdateEmail: vi.fn().mockResolvedValue({ id: 'email-mock-id' }),
+  sendCancellationNotificationEmails: vi.fn().mockResolvedValue({ id: 'email-mock-id' }),
+  sendSubscriptionEmails: vi.fn().mockResolvedValue({ id: 'email-mock-id' }),
+  sendContactNotificationEmails: vi.fn().mockResolvedValue({ id: 'email-mock-id' }),
+};
+
+vi.mock('../../backend/services/emailService.js', () => ({
+  ...emailServiceMock,
+  default: emailServiceMock,
 }));
 
 // ─── Redis / Cache mock ───────────────────────────────────────

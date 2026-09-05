@@ -10,6 +10,15 @@ const SupabaseAuthContext = createContext({});
 // still works via the Supabase session if this fails, but cookie-auth'd API
 // calls depend on it. Deduped per access token to avoid redundant round-trips.
 let lastSessionToken = null;
+
+// True while a session is being restored from the refresh cookie on page load.
+//
+// This was a sessionStorage flag cleared immediately after `setSession()`
+// resolved, but the SIGNED_IN event that call triggers is delivered later - so
+// by the time the handler checked, the flag was usually already gone and a
+// routine page load looked like a fresh login. A module-scoped flag cleared on
+// the next macrotask outlives the event instead of racing it.
+let isRehydrating = false;
 const establishServerSession = async (session) => {
   if (!session?.access_token || session.access_token === lastSessionToken) return;
   lastSessionToken = session.access_token;
@@ -61,18 +70,20 @@ export const SupabaseAuthProvider = ({ children }) => {
               const payload = await resp.json();
               if (payload.access_token && payload.refresh_token) {
                 // Mark as rehydration so onAuthStateChange skips the login email.
-                sessionStorage.setItem('_rehydrating', '1');
+                isRehydrating = true;
                 const { data: setData } = await supabase.auth.setSession({
                   access_token: payload.access_token,
                   refresh_token: payload.refresh_token,
                 });
-                sessionStorage.removeItem('_rehydrating');
+                // Cleared on a later tick so the SIGNED_IN this triggers still
+                // sees it. Clearing here would reintroduce the original race.
+                setTimeout(() => { isRehydrating = false; }, 2000);
                 session = setData?.session ?? null;
               }
             }
           } catch (e) {
             console.warn('Session re-hydration skipped:', e?.message);
-            sessionStorage.removeItem('_rehydrating');
+            isRehydrating = false;
           }
         }
 
@@ -111,13 +122,17 @@ export const SupabaseAuthProvider = ({ children }) => {
 
       if (session?.user) {
         // 📧 Send login notification only on a genuine new sign-in (not refresh).
-        // Use sessionStorage so it dedupes within a browser session but allows
-        // a fresh email after the tab is closed and reopened (real re-login).
-        const alreadyNotified = sessionStorage.getItem('loginNotifiedUserId') === session.user.id;
-        // Skip email on rehydration (page refresh restoring an existing session)
-        const isRehydration = sessionStorage.getItem('_rehydrating') === '1';
-        if (event === 'SIGNED_IN' && !alreadyNotified && !isRehydration) {
-          sessionStorage.setItem('loginNotifiedUserId', session.user.id);
+        // localStorage, not sessionStorage: the latter is per-tab, so opening a
+        // second tab counted as a new login and sent another email. The backend
+        // dedupes too - that is the guarantee - but not asking is cheaper than
+        // being told no.
+        let alreadyNotified = false;
+        try {
+          alreadyNotified = localStorage.getItem('loginNotifiedUserId') === session.user.id;
+        } catch { /* storage blocked; the server-side dedupe still holds */ }
+
+        if (event === 'SIGNED_IN' && !alreadyNotified && !isRehydrating) {
+          try { localStorage.setItem('loginNotifiedUserId', session.user.id); } catch { /* ignore */ }
           try {
             const loginTime = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
             const provider = session.user.app_metadata?.provider || 'email';
@@ -143,7 +158,8 @@ export const SupabaseAuthProvider = ({ children }) => {
           }
         }
       } else {
-        sessionStorage.removeItem('loginNotifiedUserId');
+        // Signed out: the next sign-in is genuinely new.
+        try { localStorage.removeItem('loginNotifiedUserId'); } catch { /* ignore */ }
       }
     });
 
@@ -335,7 +351,9 @@ export const SupabaseAuthProvider = ({ children }) => {
 
       setUser(null);
       setSession(null);
-      sessionStorage.removeItem('loginNotifiedUserId');
+      // Must match where it is written, or an explicit sign-out would leave the
+      // marker behind and suppress the email on the next genuine login.
+      try { localStorage.removeItem('loginNotifiedUserId'); } catch { /* ignore */ }
 
       return { error: null };
     } catch (error) {
