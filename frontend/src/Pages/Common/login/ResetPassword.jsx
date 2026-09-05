@@ -1,10 +1,27 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
-import { getApiUrl } from "../../../utils/apiHelper";
+import { useNavigate, Link } from "react-router-dom";
+import supabase from "../../../lib/supabase";
 
+/**
+ * Set a new password from a recovery link.
+ *
+ * This page used to read `?token=` and `?email=` from the URL and POST them to
+ * `/api/auth/reset-password`, which checked a token table that does not exist
+ * and then wrote a bcrypt hash to `public.users.password`. The login form
+ * authenticates with `supabase.auth.signInWithPassword`, which reads
+ * `auth.users` — so even the success path changed a password nobody could sign
+ * in with.
+ *
+ * The link now comes from Supabase's own recovery flow. Clicking it lands here
+ * with the recovery tokens in the URL fragment; the client is configured with
+ * `detectSessionInUrl`, so it exchanges them for a short-lived session, and
+ * `updateUser` sets the password in the store that actually authenticates.
+ *
+ * That exchange is asynchronous and races the first render, which is why this
+ * waits for a session rather than reading the URL synchronously.
+ */
 const ResetPassword = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const [formData, setFormData] = useState({
     newPassword: "",
     confirmPassword: "",
@@ -12,17 +29,64 @@ const ResetPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-
-  // Get token and email from URL
-  const queryParams = new URLSearchParams(location.search);
-  const token = queryParams.get("token");
-  const email = queryParams.get("email");
+  // 'checking' until we know whether this link produced a usable session.
+  const [linkState, setLinkState] = useState("checking");
 
   useEffect(() => {
-    if (!token || !email) {
-      setError("Invalid or missing reset link. Please request a new one.");
+    let cancelled = false;
+
+    const fail = (message) => {
+      if (cancelled) return;
+      setLinkState("invalid");
+      setError(message);
+    };
+
+    // Supabase reports an expired or already-used link in the fragment rather
+    // than as a failed request, so this is the only place it can be read.
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    if (hash.get("error")) {
+      const code = hash.get("error_code") || "";
+      fail(
+        /expired|invalid/i.test(code)
+          ? "This reset link has expired. Reset links are valid for one hour and can be used once — please request a new one."
+          : hash.get("error_description")?.replace(/\+/g, " ") ||
+              "This reset link is not valid. Please request a new one.",
+      );
+      return () => { cancelled = true; };
     }
-  }, [token, email]);
+
+    // PASSWORD_RECOVERY fires once detectSessionInUrl has consumed the
+    // fragment. Subscribing before checking avoids missing it by a tick.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+      if (session && (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
+        setLinkState("ready");
+      }
+    });
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      if (data?.session) {
+        setLinkState("ready");
+        return;
+      }
+      // The exchange may still be in flight on a slow connection. Give it a
+      // moment before calling the link dead, rather than showing an error the
+      // user would have to reload past.
+      setTimeout(async () => {
+        if (cancelled) return;
+        const { data: retry } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (retry?.session) setLinkState("ready");
+        else fail("This reset link is invalid or has expired. Please request a new one.");
+      }, 2500);
+    });
+
+    return () => {
+      cancelled = true;
+      sub?.subscription?.unsubscribe();
+    };
+  }, []);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -50,28 +114,31 @@ const ResetPassword = () => {
     setError("");
 
     try {
-      const response = await fetch(getApiUrl("auth/reset-password"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          token,
-          newPassword: formData.newPassword,
-        }),
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: formData.newPassword,
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setSuccess(true);
-        setTimeout(() => navigate("/admin/login"), 3000);
+      if (updateError) {
+        // Supabase rejects a password identical to the current one, and
+        // rejects the whole call once the recovery session has expired.
+        setError(
+          /same.*password|different from the old/i.test(updateError.message)
+            ? "That is already your password. Please choose a different one."
+            : updateError.message || "Could not set your new password. Please request a new link.",
+        );
         return;
       }
 
-      setError(data.message || "Something went wrong. Please request a new link.");
+      setSuccess(true);
+      // Sign the recovery session out so the new password is actually used to
+      // get back in, rather than leaving a half-authenticated tab behind.
+      await supabase.auth.signOut().catch(() => {});
+      // A customer resetting their password belongs on the customer sign-in
+      // page. This used to send them to /admin/login.
+      setTimeout(() => navigate("/login"), 3000);
     } catch (err) {
       console.error("Reset password error:", err);
-      setError("Unable to connect to the server. Please try again.");
+      setError("Unable to reach the server. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -121,7 +188,25 @@ const ResetPassword = () => {
             </div>
           )}
 
-          {!success && !error.includes("missing reset link") && (
+          {/* Verifying the link is a real wait - the token exchange is a network
+              round trip - so say so rather than showing an empty card. */}
+          {!success && linkState === "checking" && (
+            <div className="py-6 flex items-center justify-center gap-3">
+              <span className="w-5 h-5 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
+              <p className="text-slate-400 text-sm font-medium">Checking your reset link…</p>
+            </div>
+          )}
+
+          {!success && linkState === "invalid" && (
+            <Link
+              to="/forgot-password"
+              className="block w-full text-center bg-[#1152d4] hover:bg-[#0d47b1] text-white font-bold text-sm py-4 rounded-2xl no-underline transition-colors"
+            >
+              Request a new reset link
+            </Link>
+          )}
+
+          {!success && linkState === "ready" && (
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">New Password</label>
@@ -175,7 +260,7 @@ const ResetPassword = () => {
           )}
 
           <div className="mt-8 text-center">
-            <Link to="/admin/login" className="text-xs font-bold text-slate-500 hover:text-white no-underline transition-colors uppercase tracking-widest flex items-center justify-center gap-2">
+            <Link to="/login" className="text-xs font-bold text-slate-500 hover:text-white no-underline transition-colors uppercase tracking-widest flex items-center justify-center gap-2">
               <span className="material-symbols-outlined text-sm">arrow_back</span>
               Back to Login
             </Link>

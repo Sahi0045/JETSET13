@@ -51,6 +51,14 @@ export const supabaseMock = {
     signOut:         vi.fn(),
     getUser:         vi.fn(),
     getSession:      vi.fn(),
+    // Service-role admin surface. Password recovery goes through
+    // `admin.generateLink`, because Supabase Auth is where the password the
+    // login form checks actually lives.
+    admin: {
+      generateLink:   vi.fn(),
+      listUsers:      vi.fn(),
+      updateUserById: vi.fn(),
+    },
   },
   storage: {
     from: vi.fn(() => ({
