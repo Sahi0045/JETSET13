@@ -270,7 +270,10 @@ export const runBookingChain = async (p) => {
     await callStep(ctx, {
       step: 'fop',
       operation: 'FOP_CreateFormOfPayment',
-      bodyXml: buildFopBody({ fopCode: config.fopCode }),
+      // Associate the payment with the TSTs it pays for, per Amadeus's own
+      // "form of payment associated to a TST" example. Without it the FP
+      // element is not linked to anything.
+      bodyXml: buildFopBody({ fopCode: config.fopCode, tstRefs }),
     });
 
     // ---- 6. Commit. Everything changes here. -------------------------------
