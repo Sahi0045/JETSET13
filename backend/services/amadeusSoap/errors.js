@@ -35,7 +35,14 @@ const collectMessages = (body) => {
   const visit = (node, depth = 0) => {
     if (!node || typeof node !== 'object' || depth > 8) return;
     for (const [key, value] of Object.entries(node)) {
-      if (/^(errorMessage|errorGroup|generalErrorInfo|errorAtMessageLevel|errorAtItineraryLevel|applicationError)$/i.test(key)) {
+      // Amadeus names the error container differently per schema, and two of
+      // them were missing here. FOP_CreateFormOfPayment reports a refusal in
+      // `transmissionError` and Queue_PlacePNR in `errorReturn`, so both were
+      // invisible: a rejected form of payment (2228 CHECK DATA FIELDS) was
+      // read as success and the chain committed a PNR that had none, and a
+      // rejected queue placement (91D) was recorded as queued. Found by
+      // recording a real booking chain against PDT.
+      if (/^(errorMessage|errorGroup|generalErrorInfo|errorAtMessageLevel|errorAtItineraryLevel|applicationError|transmissionError|errorReturn)$/i.test(key)) {
         for (const entry of arr(value)) {
           const text = JSON.stringify(entry);
           if (text && text !== '{}' && text !== '""') found.push(entry);
@@ -53,6 +60,7 @@ const collectMessages = (body) => {
 const describe = (node) => {
   const code = txt(at(node, 'errorOrWarningCodeDetails.errorDetails.errorCode'))
     || txt(at(node, 'applicationError.applicationErrorDetail.error'))
+    || txt(at(node, 'errorDefinition.errorDetails.errorCode'))
     || txt(at(node, 'errorDetails.errorCode'))
     || txt(at(node, 'errorCode'))
     || '';
@@ -64,7 +72,15 @@ const describe = (node) => {
       // Amadeus spells the human-readable part differently per schema:
       // errorMessageText/description here, freeText elsewhere.
       if (/freeText|errorFreeText|interactiveFreeText|description|errorText/i.test(key)) {
-        out.push(...arr(value).map(txt));
+        // A matching key does not always hold the text itself. Queue_PlacePNR
+        // nests it as `errorText > freeText`, and FOP wraps qualifiers in
+        // `freeTextDetails`. Taking the branch and stopping pushed an empty
+        // string and dropped the message, which is why a refused form of
+        // payment reported its code with no reason attached.
+        const values = arr(value);
+        const strings = values.map(txt).filter(Boolean);
+        if (strings.length) out.push(...strings);
+        else for (const nested of values) out.push(...collectText(nested, depth + 1));
       } else if (typeof value === 'object') {
         out.push(...collectText(value, depth + 1));
       }
