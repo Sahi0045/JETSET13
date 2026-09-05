@@ -85,3 +85,8 @@ ds-bundle/
 !.design-sync/build/
 .design-sync/build/app.compiled.css
 .design-sync/build/tailwind.out.css
+
+# Recorded Amadeus certification evidence (scripts/record-amadeus-fixture.mjs).
+# Regenerated per run, and carries the office id and WS username of whoever
+# recorded it. The pack goes to Amadeus directly, not through the repo.
+tests/fixtures/amadeus/certification/
