@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getApiUrl } from '../../utils/apiHelper';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const SubscriptionManagement = () => {
     const [subscriptions, setSubscriptions] = useState([]);
@@ -19,12 +20,10 @@ const SubscriptionManagement = () => {
     const fetchSubscriptions = async () => {
         try {
             setLoading(true);
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+            const token = getStoredToken();
             const response = await fetch(getApiUrl('subscription'), {
                 credentials: 'include', // send the httpOnly session cookie
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: adminHeaders()
             });
             const data = await response.json();
             if (data.success) {
@@ -49,7 +48,7 @@ const SubscriptionManagement = () => {
     const handleUpdate = async (e) => {
         e.preventDefault();
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+            const token = getStoredToken();
             const csrf = document.cookie.match(/(?:^|; )jt_csrf=([^;]+)/)?.[1];
             const response = await fetch(getApiUrl(`subscription/${editingSub.id}`), {
                 method: 'PUT',

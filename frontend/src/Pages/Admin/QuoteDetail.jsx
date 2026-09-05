@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const QuoteDetail = () => {
   const { id } = useParams();
@@ -24,20 +25,12 @@ const QuoteDetail = () => {
       setLoading(true);
       setError(null);
 
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      const token = getStoredToken();
 
-      if (!token) {
-        setError('Authentication required. Please log in again.');
-        setLoading(false);
-        return;
-      }
 
       // Fetch quote details
       const quoteResponse = await fetch(`/api/quotes?id=${id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include'
       });
 
@@ -60,10 +53,7 @@ const QuoteDetail = () => {
       // Fetch inquiry details
       if (quoteData.data.inquiry_id) {
         const inquiryResponse = await fetch(`/api/inquiries?id=${quoteData.data.inquiry_id}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
+          headers: adminHeaders(),
           credentials: 'include'
         });
 
@@ -77,10 +67,7 @@ const QuoteDetail = () => {
 
       // Fetch booking information
       const bookingInfoResponse = await fetch(`/api/quotes?id=${id}&endpoint=booking-info`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include'
       });
 
@@ -93,10 +80,7 @@ const QuoteDetail = () => {
 
       // Fetch payment information
       const paymentsResponse = await fetch(`/api/payments?action=get-payment-details&quoteId=${id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include'
       });
 

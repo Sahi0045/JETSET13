@@ -112,7 +112,7 @@ async function verifyRS256Token(token, header) {
   throw new Error(`No matching certificate found for kid: ${header.kid} (tried both Google OAuth and Firebase endpoints)`);
 }
 
-async function verifySupabaseToken(token) {
+export async function verifySupabaseToken(token) {
   const supabaseSecret = process.env.SUPABASE_JWT_SECRET;
 
   // Try JWT verification first if secret is available

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const InquiryList = () => {
   const [inquiries, setInquiries] = useState([]);
@@ -37,12 +38,8 @@ const InquiryList = () => {
       setLoading(true);
       
       // Get token from localStorage
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      const token = getStoredToken();
       
-      if (!token) {
-        console.error('No authentication token found');
-        return;
-      }
 
       const queryParams = new URLSearchParams({
         ...filters,
@@ -51,10 +48,7 @@ const InquiryList = () => {
       });
 
       const response = await fetch(`/api/inquiries?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include'
       });
 

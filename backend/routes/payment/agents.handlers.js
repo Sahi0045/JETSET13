@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { supabase } from './arcpay.config.js';
 import { JWT_SECRET, JWT_EXPIRE } from '../../config/jwt.js';
-import { isSuperAdmin } from '../../middleware/auth.middleware.js';
+import { isSuperAdmin, verifySupabaseToken } from '../../middleware/auth.middleware.js';
 import { sendTravelAgentInviteEmail } from '../../services/emailService.js';
 
 const INVITE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
@@ -28,17 +28,37 @@ async function getCaller(req) {
     const bearer = auth && auth.startsWith('Bearer ') ? auth.split(' ')[1] : null;
     const token = req.cookies?.jt_access || bearer;
     if (!token) return null;
-    let decoded;
+
+    // Two different kinds of token arrive here and they are signed with
+    // different secrets. Agent logins issue an app JWT (JWT_SECRET). The web
+    // session cookie holds a SUPABASE access token, signed with Supabase's
+    // secret - verifying that with JWT_SECRET always throws, so every
+    // cookie-authenticated admin came back as "Not authorized", which is what
+    // the Agents page showed. Try the app secret first, then fall back to the
+    // same Supabase verification the auth middleware uses.
+    let decoded = null;
     try {
         decoded = jwt.verify(token, JWT_SECRET);
     } catch {
-        return null;
+        decoded = await verifySupabaseToken(token);
     }
-    let { role, email, id } = decoded;
-    if (role !== 'agent' && id && !email) {
-        const { data } = await supabase.from('users').select('email, role').eq('id', id).maybeSingle();
-        if (data) { email = data.email; role = role || data.role; }
+    if (!decoded) return null;
+    let { role, email } = decoded;
+    // A Supabase token identifies the user in `sub` and carries the literal
+    // role "authenticated" - neither is the application role these gates check,
+    // so resolve it from `users` rather than trusting the claim.
+    const id = decoded.id ?? decoded.sub ?? decoded.user_id ?? null;
+    const roleIsUnresolved = !role || role === 'authenticated';
+
+    if (role !== 'agent' && (roleIsUnresolved || !email) && (id || email)) {
+        const query = supabase.from('users').select('email, role');
+        const { data } = await (id ? query.eq('id', id) : query.eq('email', email)).maybeSingle();
+        if (data) {
+            email = email || data.email;
+            role = roleIsUnresolved ? (data.role || role) : role;
+        }
     }
+
     return { id, role, email, isSuper: isSuperAdmin({ role, email }) };
 }
 

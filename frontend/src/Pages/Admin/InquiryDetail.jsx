@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const InquiryDetail = () => {
   const { id } = useParams();
@@ -55,20 +56,12 @@ const InquiryDetail = () => {
       setLoading(true);
       
       // Get token from localStorage
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      const token = getStoredToken();
       
-      if (!token) {
-        console.error('No authentication token found');
-        setLoading(false);
-        return;
-      }
 
       // Fetch inquiry details (Vercel uses query parameters, not path params)
       const inquiryResponse = await fetch(`/api/inquiries?id=${id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include'
       });
 
@@ -110,10 +103,7 @@ const InquiryDetail = () => {
 
       // Fetch quotes for this inquiry
       const quotesResponse = await fetch(`/api/quotes?inquiryId=${id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include'
       });
       const quotesData = await quotesResponse.json();
@@ -128,10 +118,7 @@ const InquiryDetail = () => {
           const bookingInfoPromises = quoteIds.map(async (quoteId) => {
             try {
               const bookingResponse = await fetch(`/api/quotes?id=${quoteId}&endpoint=booking-info`, {
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json'
-                },
+                headers: adminHeaders(),
                 credentials: 'include'
               });
               if (bookingResponse.ok) {
@@ -159,10 +146,7 @@ const InquiryDetail = () => {
           try {
             const paymentsPromises = quoteIds.map(quoteId =>
               fetch(`/api/payments?action=get-payment-details&quoteId=${quoteId}`, {
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json'
-                },
+                headers: adminHeaders(),
                 credentials: 'include'
               }).then(res => res.json())
             );
@@ -190,21 +174,12 @@ const InquiryDetail = () => {
       setUpdating(true);
       
       // Get token from localStorage
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      const token = getStoredToken();
       
-      if (!token) {
-        console.error('No authentication token found');
-        alert('Authentication required. Please log in again.');
-        setUpdating(false);
-        return;
-      }
 
       const response = await fetch(`/api/inquiries?id=${id}`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include',
         body: JSON.stringify(updateData)
       });
@@ -247,18 +222,11 @@ const InquiryDetail = () => {
     try {
       setSendingQuoteId(quoteId);
 
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      if (!token) {
-        alert('Authentication required. Please log in again.');
-        return;
-      }
+      const token = getStoredToken();
 
       const response = await fetch(`/api/quotes?id=${quoteId}&action=send`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include'
       });
 
@@ -324,18 +292,11 @@ const InquiryDetail = () => {
       setRefundProcessing(true);
       setRefundError(null);
 
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      if (!token) {
-        setRefundError('Authentication required. Please log in again.');
-        return;
-      }
+      const token = getStoredToken();
 
       const response = await fetch('/api/payments?action=payment-refund', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           paymentId: refundingPayment.id,
@@ -383,18 +344,11 @@ const InquiryDetail = () => {
       setVoidProcessing(true);
       setVoidError(null);
 
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      if (!token) {
-        setVoidError('Authentication required. Please log in again.');
-        return;
-      }
+      const token = getStoredToken();
 
       const response = await fetch('/api/payments?action=payment-void', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           paymentId: voidingPayment.id,
@@ -429,18 +383,11 @@ const InquiryDetail = () => {
     try {
       setCheckingStatusId(payment.id);
 
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
-      if (!token) {
-        alert('Authentication required. Please log in again.');
-        return;
-      }
+      const token = getStoredToken();
 
       const response = await fetch(`/api/payments?action=payment-retrieve&paymentId=${payment.id}`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         credentials: 'include'
       });
 

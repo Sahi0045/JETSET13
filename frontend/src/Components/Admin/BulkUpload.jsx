@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import './BulkUpload.css';
+import { getStoredToken } from '../../utils/adminAuth';
 
 const BulkUpload = ({ 
   endpoint = '/api/bulk-upload', 
@@ -80,7 +81,7 @@ const BulkUpload = ({
     formData.append('file', file);
 
     try {
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      const token = getStoredToken();
       
       const xhr = new XMLHttpRequest();
       

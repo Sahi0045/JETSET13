@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './TemplateManager.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const TemplateManager = ({ 
   apiEndpoint = '/api/templates',
@@ -38,13 +39,10 @@ const TemplateManager = ({
   const fetchTemplates = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      const token = getStoredToken();
       const response = await fetch(`${apiEndpoint}?action=list`, {
         credentials: 'include',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+        headers: adminHeaders()
       });
       
       const data = await response.json();
@@ -107,7 +105,7 @@ const TemplateManager = ({
   const handleSave = async () => {
     try {
       setSaving(true);
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      const token = getStoredToken();
       
       const payload = {
         ...formData,
@@ -118,10 +116,7 @@ const TemplateManager = ({
       const response = await fetch(apiEndpoint, {
         credentials: 'include',
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         body: JSON.stringify(payload)
       });
 
@@ -149,15 +144,12 @@ const TemplateManager = ({
     if (!confirm('Are you sure you want to delete this template?')) return;
     
     try {
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      const token = getStoredToken();
       
       const response = await fetch(apiEndpoint, {
         credentials: 'include',
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         body: JSON.stringify({ action: 'delete', id: templateId })
       });
 
@@ -184,15 +176,12 @@ const TemplateManager = ({
 
   const handleToggleActive = async (template) => {
     try {
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      const token = getStoredToken();
       
       const response = await fetch(apiEndpoint, {
         credentials: 'include',
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: adminHeaders(),
         body: JSON.stringify({ 
           action: 'update', 
           id: template.id,

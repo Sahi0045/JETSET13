@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const PaymentLinksList = () => {
   // Works under both the admin panel (/admin) and the agent portal (/agent).
@@ -22,7 +23,7 @@ const PaymentLinksList = () => {
   const fetchLinks = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      const token = getStoredToken();
       const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
       const agentId = adminUser.role === 'agent' ? adminUser.agentId : null;
 
@@ -33,10 +34,7 @@ const PaymentLinksList = () => {
 
       const response = await fetch(url, {
         credentials: 'include',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+        headers: adminHeaders()
       });
 
       const result = await response.json();

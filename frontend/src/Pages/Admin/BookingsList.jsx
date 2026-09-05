@@ -4,6 +4,7 @@ import { getApiUrl } from '../../utils/apiHelper';
 import { downloadCSV } from '../../utils/csv';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const BookingsList = () => {
     const [searchParams] = useSearchParams();
@@ -46,9 +47,9 @@ const BookingsList = () => {
     useEffect(() => {
         const fetchCancelFee = async () => {
             try {
-                const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+                const token = getStoredToken();
                 const response = await fetch(getApiUrl('admin/price-config/general'), {
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: adminHeaders(),
                     credentials: 'include'
                 });
                 const data = await response.json();
@@ -63,7 +64,7 @@ const BookingsList = () => {
     }, []);
 
     const getAuthHeaders = () => {
-        const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+        const token = getStoredToken();
         return {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'

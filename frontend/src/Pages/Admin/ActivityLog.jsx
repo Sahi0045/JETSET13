@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import { getApiUrl } from '../../utils/apiHelper';
 import './AdminPanel.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const getToken = () =>
-  localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+  getStoredToken();
 
 const ACTOR_TYPES = ['all', 'admin', 'agent', 'user', 'system'];
 const TARGET_TYPES = ['all', 'inquiry', 'quote', 'booking', 'visa_application', 'application', 'agent', 'user', 'payment_link', 'payment'];
@@ -36,7 +37,7 @@ const ActivityLog = () => {
       if (action) params.append('action', action);
       params.append('page', page); params.append('limit', 50);
       const res = await fetch(getApiUrl(`auth/audit-logs?${params.toString()}`), {
-        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        headers: adminHeaders(),
         credentials: 'include',
       });
       const data = await res.json();

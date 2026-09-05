@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
+import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
 const getToken = () =>
-  localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('supabase_token');
+  getStoredToken();
 
 const isSuperAdmin = () => localStorage.getItem('isSuperAdmin') === 'true';
 
@@ -12,7 +13,7 @@ async function call(action, body, method = 'POST') {
   const res = await fetch(`/api/payments?action=${action}`, {
         credentials: 'include',
     method,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+    headers: adminHeaders(),
     body: method === 'GET' ? undefined : JSON.stringify(body || {}),
   });
   let data = {};
