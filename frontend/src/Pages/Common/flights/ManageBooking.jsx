@@ -416,7 +416,12 @@ function ManageBooking() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
+                  // `focus-visible`, not `focus`: clicking a tab with a mouse left
+                  // the browser's default ring drawn around it until something
+                  // else took focus. Keyboard users still get a visible ring —
+                  // same treatment as the other tab strips (ServiceTabs,
+                  // flight-search-form).
+                  className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm transition-colors rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/40 ${activeTab === tab.id
                     ? 'border-[#0890BC] text-[#055B75]'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
