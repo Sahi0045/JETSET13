@@ -270,16 +270,43 @@ export const buildQueuePlaceBody = ({ recordLocator, queueOffice, queueNumber = 
  * through the airline instead. `stockProviderDetails` is mandatory even though
  * it looks incidental - the request is rejected without the plating carrier.
  */
-export const buildVoidTicketBody = ({ documentNumbers, validatingCarrier }) => {
+export const buildVoidTicketBody = ({ documentNumbers, marketIataCode, targetOffice }) => {
   const numbers = (documentNumbers ?? []).filter(Boolean);
   if (numbers.length === 0) throw new Error('a document number is required to void a ticket');
-  if (!validatingCarrier) throw new Error('the validating carrier is required to void a ticket');
+  if (!marketIataCode) throw new Error('the office market code is required to void a ticket');
 
   const body = [
     each(numbers, (number) => wrap('documentNumberDetails', wrap('documentDetails', el('number', String(number))))),
-    wrap('stockProviderDetails', wrap('companyDetails', el('marketingCompany', validatingCarrier))),
-  ].join('');
+
+    // stockProviderDetails is OfficeSettingsDetailsType, and its only child is
+    // `officeSettingsDetails` carrying the OFFICE'S MARKET (country) code -
+    // not a carrier. We previously sent
+    // `stockProviderDetails/companyDetails/marketingCompany` with the
+    // validating carrier, which is not an element of this type at all, so the
+    // void could never have been accepted: a same-day cancellation of a
+    // ticketed booking failed schema validation, `cancelBooking` rethrew, and
+    // the customer was left with a live ticket and no refund.
+    wrap('stockProviderDetails', wrap('officeSettingsDetails', el('marketIataCode', marketIataCode))),
+
+    targetOffice
+      ? wrap('targetOfficeDetails', wrap('originatorDetails', el('inHouseIdentification2', targetOffice)))
+      : '',
+  ].filter(Boolean).join('');
 
   const ns = OPERATIONS.Ticket_CancelDocument.namespace;
   return `    <Ticket_CancelDocument xmlns="${ns}">${body}</Ticket_CancelDocument>`;
 };
+
+/**
+ * Did the void actually happen?
+ *
+ * `responseType` X means the ticket was voided; the reply also carries a
+ * `statusCode`. Reading it matters because the caller cannot otherwise tell a
+ * void from a reply that merely parsed.
+ */
+export const readVoidTicketReply = (reply) => {
+  const type = atTxt(reply, 'transactionResults.responseDetails.responseType');
+  const status = atTxt(reply, 'transactionResults.responseDetails.statusCode');
+  return { voided: /^X$/i.test(type), responseType: type, status };
+};
+

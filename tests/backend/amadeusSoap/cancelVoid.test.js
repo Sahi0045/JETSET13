@@ -60,6 +60,16 @@ beforeEach(() => {
   axios.post.mockReset();
 });
 
+/**
+ * A confirmed void. Amadeus answers `responseType X` — anything else means the
+ * ticket is still live, and the chain must not cancel the itinerary on top of
+ * it. Previously this test returned a bare reply, which the chain read as
+ * success because it never checked.
+ */
+const voided = () => envelope('Ticket_CancelDocumentReply',
+  '<transactionResults><responseDetails><responseType>X</responseType>'
+  + '<statusCode>O</statusCode></responseDetails></transactionResults>', true);
+
 describe('reading a ticket element', () => {
   // `issuedOn` used to be new Date() at read time, which made every ticket look
   // issued today - the exact question the void decision turns on.
@@ -94,7 +104,7 @@ describe('cancelling', () => {
     const { cancelBooking } = await loadChain();
     axios.post
       .mockResolvedValueOnce(reply(retrievedWithTicket(todayDDMMMYY())))
-      .mockResolvedValueOnce(reply(ok('Ticket_CancelDocumentReply')))
+      .mockResolvedValueOnce(reply(voided()))
       .mockResolvedValueOnce(reply(ok('PNR_Reply')))
       .mockResolvedValue(reply(ok('Security_SignOutReply')));
 
@@ -150,18 +160,21 @@ describe('cancelling', () => {
     expect(didCancel()).toBe(false);
   });
 
-  it('sends the plating carrier, without which a void is rejected', async () => {
+  it('identifies the stock by market code, which is what the schema holds', async () => {
     const { cancelBooking } = await loadChain();
     axios.post
       .mockResolvedValueOnce(reply(retrievedWithTicket(todayDDMMMYY())))
-      .mockResolvedValueOnce(reply(ok('Ticket_CancelDocumentReply')))
+      .mockResolvedValueOnce(reply(voided()))
       .mockResolvedValueOnce(reply(ok('PNR_Reply')))
       .mockResolvedValue(reply(ok('Security_SignOutReply')));
 
     await cancelBooking('ABC123');
 
     const voidCall = axios.post.mock.calls.find(([, , cfg]) => cfg?.headers?.SOAPAction?.includes('TRCANQ'));
-    expect(voidCall[1]).toContain('<marketingCompany>AI</marketingCompany>');
+    // stockProviderDetails is OfficeSettingsDetailsType: a market code, not a
+    // carrier. The old assertion pinned an element this schema does not have.
+    expect(voidCall[1]).toContain('<marketIataCode>US</marketIataCode>');
+    expect(voidCall[1]).not.toContain('marketingCompany');
     // The document number goes without its separator.
     expect(voidCall[1]).toContain('<number>0572412345678</number>');
   });

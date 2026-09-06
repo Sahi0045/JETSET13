@@ -12,6 +12,7 @@ import {
   buildPricePnrBody,
   buildQueuePlaceBody,
   buildVoidTicketBody,
+  readVoidTicketReply,
   readCreateTstReply,
   readIssueTicketReply,
   readPricePnrReply,
@@ -415,17 +416,35 @@ export const cancelBooking = async (recordLocator) => {
 
     if (voidable.length > 0) {
       try {
-        await callStep(ctx, {
+        const voidReply = await callStep(ctx, {
           step: 'voidTicket',
           operation: 'Ticket_CancelDocument',
           bodyXml: buildVoidTicketBody({
             documentNumbers: voidable.map((t) => t.number.replace('-', '')),
-            validatingCarrier: voidable[0].validatingCarrier,
+            marketIataCode: config.marketIataCode,
+            targetOffice: config.officeId,
           }),
           pnr: recordLocator,
           committed: true,
           ticketed: true,
         });
+
+        // Confirm rather than assume. The reply says whether the ticket was
+        // actually voided (responseType X); treating "it parsed" as "it was
+        // voided" would let the itinerary be cancelled out from under a live
+        // ticket.
+        const result = readVoidTicketReply(voidReply);
+        if (!result.voided) {
+          throw new BookingChainError({
+            step: 'voidTicket',
+            pnr: recordLocator,
+            committed: true,
+            ticketed: true,
+            error: 'We could not void the ticket',
+            code: 502,
+            technicalError: `Ticket_CancelDocument responseType ${result.responseType || 'absent'}`,
+          });
+        }
         voided = true;
         log.info({ pnr: recordLocator, tickets: voidable.length }, 'tickets voided');
       } catch (cause) {

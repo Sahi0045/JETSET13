@@ -14,6 +14,7 @@ import {
   buildPricePnrBody,
   buildQueuePlaceBody,
   buildVoidTicketBody,
+  readVoidTicketReply,
   readPricePnrReply,
 } from '../../../backend/services/amadeusSoap/operations/ticketing.js';
 
@@ -463,12 +464,70 @@ describe('PNR_Cancel and PNR_Retrieve', () => {
 });
 
 describe('Ticket_CancelDocument', () => {
-  it('sends the plating carrier, which is mandatory despite looking incidental', () => {
-    const xml = buildVoidTicketBody({ documentNumbers: ['0572412345678'], validatingCarrier: 'AI' });
-    expect(xml).toContain('<stockProviderDetails><companyDetails><marketingCompany>AI</marketingCompany>');
+  /**
+   * The void request was invalid and could never have been accepted.
+   *
+   * We sent `stockProviderDetails/companyDetails/marketingCompany` with the
+   * validating carrier. `stockProviderDetails` is OfficeSettingsDetailsType,
+   * whose ONLY child is `officeSettingsDetails` — `companyDetails` is not an
+   * element of that type at all. Amadeus's own "ticket voiding" example
+   * carries the office's MARKET (country) code there, not a carrier.
+   *
+   * The consequence was a complete failure of the same-day void path: a
+   * customer cancelling a ticketed booking on the day of issue hit a schema
+   * rejection, `cancelBooking` rethrew rather than cancelling the itinerary on
+   * top of a live ticket, and they were left with neither a refund nor a
+   * cancellation. Never caught because the void has never been exercised — the
+   * old tests asserted the invalid shape and passed.
+   */
+  it('identifies the stock by the office market code, not by a carrier', () => {
+    const xml = buildVoidTicketBody({ documentNumbers: ['0572412345678'], marketIataCode: 'US' });
+
+    expect(xml).toContain('<stockProviderDetails><officeSettingsDetails><marketIataCode>US</marketIataCode></officeSettingsDetails></stockProviderDetails>');
+    expect(xml).not.toContain('companyDetails');
+    expect(xml).not.toContain('marketingCompany');
   });
 
-  it('refuses to void without one', () => {
-    expect(() => buildVoidTicketBody({ documentNumbers: ['0572412345678'] })).toThrow(/validating carrier/);
+  it('refuses to build without a market code', () => {
+    expect(() => buildVoidTicketBody({ documentNumbers: ['0572412345678'] })).toThrow(/market code/i);
+  });
+
+  it('refuses to build without a document number', () => {
+    expect(() => buildVoidTicketBody({ marketIataCode: 'US' })).toThrow(/document number/i);
+  });
+
+  it('voids several documents in one request', () => {
+    const xml = buildVoidTicketBody({
+      documentNumbers: ['0572412345678', '0572412345679'], marketIataCode: 'US',
+    });
+
+    expect(xml.match(/<documentNumberDetails>/g)).toHaveLength(2);
+  });
+
+  it('names the target office when one is given', () => {
+    const xml = buildVoidTicketBody({
+      documentNumbers: ['0572412345678'], marketIataCode: 'US', targetOffice: 'SCK1S2400',
+    });
+
+    expect(xml).toContain('<targetOfficeDetails><originatorDetails><inHouseIdentification2>SCK1S2400</inHouseIdentification2>');
   });
 });
+
+describe('readVoidTicketReply', () => {
+  // responseType X means the ticket was voided. Treating "the reply parsed" as
+  // "the ticket was voided" would let the itinerary be cancelled out from
+  // under a live ticket.
+  it('reads a confirmed void', () => {
+    expect(readVoidTicketReply({
+      transactionResults: { responseDetails: { responseType: 'X', statusCode: 'O' } },
+    }).voided).toBe(true);
+  });
+
+  it('does not treat any other response as a void', () => {
+    expect(readVoidTicketReply({
+      transactionResults: { responseDetails: { responseType: 'R', statusCode: 'O' } },
+    }).voided).toBe(false);
+    expect(readVoidTicketReply({}).voided).toBe(false);
+  });
+});
+
