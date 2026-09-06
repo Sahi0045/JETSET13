@@ -15,6 +15,7 @@ import { usePriceConfig } from '../../../hooks/queries';
 import CouponInput from '../../../components/CouponInput';
 import FlightSeatMap from './FlightSeatMap';
 import FlightFareRules from './FlightFareRules';
+import { formatCheckedBag } from '../../../utils/baggage';
 import FlightCancellationPolicy from './FlightCancellationPolicy';
 import useMembership from '../../../hooks/useMembership';
 import "./booking-confirmation.css";
@@ -144,16 +145,9 @@ function FlightBookingConfirmation() {
     return airport ? airport.name : code;
   };
 
-  // Helper to format baggage info from Amadeus data
-  // Amadeus sends either {weight, weightUnit} or {quantity} (pieces)
-  const formatBaggage = (bag) => {
-    if (!bag) return null;
-    if (typeof bag === 'string') return bag;
-    if (bag.weight && bag.weightUnit) return `${bag.weight} ${bag.weightUnit}`;
-    if (bag.weight) return `${bag.weight} KG`;
-    if (bag.quantity) return `${bag.quantity} ${bag.quantity === 1 ? 'Piece' : 'Pieces'}`;
-    return null;
-  };
+  // Shared with the search card and the fare selector, which each grew their
+  // own half-right copy of this and disagreed on screen.
+  const formatBaggage = formatCheckedBag;
 
 
   // Check authentication status on component mount

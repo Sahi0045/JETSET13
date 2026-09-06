@@ -5,6 +5,7 @@ import {
   RefreshCw, Check, Info, X,
 } from 'lucide-react';
 import Price from '../../../Components/Price';
+import { formatCheckedBag } from '../../../utils/baggage';
 
 const AIRLINE_LOGO_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iOCIgZmlsbD0iIzM3NzNmNCIvPgo8dGV4dCB4PSIyMCIgeT0iMjgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuKciO+4jzwvdGV4dD4KPHN2Zz4K';
 
@@ -197,7 +198,9 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
   }
 
   const segments = flight.segments || [];
-  const checkedWeight = flight.baggage?.checked?.weight;
+  // Weight OR pieces — reading only `.weight` showed a piece-based fare as
+  // "Cabin only" while the review page said "1 Piece" one click later.
+  const checkedBag = formatCheckedBag(flight.baggage?.checked);
   const cabinBag = flight.baggage?.cabin?.weight;
   const cabinClass = flight.cabin
     ? flight.cabin.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
@@ -348,7 +351,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
         <div className="flex items-center gap-3 sm:gap-4 text-[11px] text-gray-500 flex-wrap min-w-0">
           <span className="inline-flex items-center gap-1">
             <Luggage className="h-3.5 w-3.5 text-gray-400" />
-            {checkedWeight ? `${checkedWeight}${flight.baggage?.checked?.weightUnit || 'KG'} check-in` : 'Cabin only'}
+            {checkedBag ? `${checkedBag} check-in` : 'Cabin only'}
           </span>
           {cabinBag ? (
             <span className="inline-flex items-center gap-1">
@@ -421,7 +424,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
             <span><span className="text-gray-400">Class:</span> <span className="font-medium">{cabinClass}{flight.bookingClass ? ` (${flight.bookingClass})` : ''}</span></span>
             <span>
               <span className="text-gray-400">Check-in:</span>{' '}
-              <span className="font-medium">{checkedWeight ? `${checkedWeight}${flight.baggage?.checked?.weightUnit || 'KG'}` : 'Not included'}</span>
+              <span className="font-medium">{checkedBag || 'Not included'}</span>
             </span>
             {cabinBag ? (
               <span>
