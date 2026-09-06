@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { postAuthDestination } from '../../../utils/postAuthRedirect';
 import { FaGoogle, FaApple, FaEye, FaEyeSlash, FaSpinner, FaUserPlus } from 'react-icons/fa';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import './login.css';
 
 export default function SupabaseSignup() {
     const navigate = useNavigate();
+    const location = useLocation();
+    // Same rule as sign-in: go where they were heading, else home.
+    const destination = postAuthDestination(location.state);
     const { signUp, signInWithOAuth, user, loading: authLoading, error: authError } = useSupabaseAuth();
 
     const [data, setData] = useState({
@@ -26,7 +30,7 @@ export default function SupabaseSignup() {
     // Redirect if already logged in
     useEffect(() => {
         if (user && !authLoading) {
-            navigate('/my-trips');
+            navigate(destination, { replace: true });
         }
     }, [user, authLoading, navigate]);
 
@@ -37,7 +41,7 @@ export default function SupabaseSignup() {
             setErrors({});
 
             // Store intended destination for after auth
-            sessionStorage.setItem('auth_redirect', '/my-trips');
+            sessionStorage.setItem('auth_redirect', destination);
 
             const { error } = await signInWithOAuth('google', {
                 queryParams: {
@@ -66,7 +70,7 @@ export default function SupabaseSignup() {
             setProcessing(true);
             setErrors({});
 
-            sessionStorage.setItem('auth_redirect', '/my-trips');
+            sessionStorage.setItem('auth_redirect', destination);
 
             const { error } = await signInWithOAuth('apple', {
                 queryParams: {

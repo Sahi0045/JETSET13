@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { formatIsoDuration } from '../../../utils/dateUtils';
 import {
   ArrowLeft, Plane, Calendar, Clock, User, CreditCard,
   AlertCircle, AlertTriangle, CheckCircle, Info, Phone, Mail, Edit3,
@@ -416,7 +417,12 @@ function ManageBooking() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
+                  // `focus-visible`, not `focus`: clicking a tab with a mouse left
+                  // the browser's default ring drawn around it until something
+                  // else took focus. Keyboard users still get a visible ring —
+                  // same treatment as the other tab strips (ServiceTabs,
+                  // flight-search-form).
+                  className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm transition-colors rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#055B75]/40 ${activeTab === tab.id
                     ? 'border-[#0890BC] text-[#055B75]'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
@@ -480,7 +486,7 @@ function ManageBooking() {
                           <Plane className="w-6 h-6 text-[#0890BC] absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rotate-90" />
                         </div>
                         <div className="text-xs text-gray-500 mt-3">
-                          {bookingData?.duration || bookingData?.flight?.duration || 'Duration N/A'}
+                          {formatIsoDuration(bookingData?.duration || bookingData?.flight?.duration, 'Duration N/A')}
                         </div>
                         {(bookingData?.airline || bookingData?.flightNumber) && (
                           <div className="text-sm font-medium text-gray-700 mt-1">
@@ -555,9 +561,11 @@ function ManageBooking() {
             {activeTab === 'passenger' && (
               <div>
                 <h3 className="text-lg font-semibold mb-4">Passenger Information</h3>
-                {bookingData?.travelers && bookingData.travelers.length > 0 ? (
+                {/* Either shape: the record arrives as `travelers` from My Trips
+                    and as `passengerData` when this page fetches it itself. */}
+                {(bookingData?.travelers?.length ? bookingData.travelers : bookingData?.passengerData)?.length > 0 ? (
                   <div className="space-y-4">
-                    {bookingData.travelers.map((traveler, index) => (
+                    {(bookingData?.travelers?.length ? bookingData.travelers : bookingData.passengerData).map((traveler, index) => (
                       <div key={index} className="p-4 bg-gray-50 rounded-lg">
                         <h4 className="font-semibold mb-2">Passenger {index + 1}</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -860,7 +868,7 @@ function ManageBooking() {
                 <div className="mb-4">
                   <h4 className="text-xl font-bold text-gray-800">{bookingData?.originCity || bookingData?.bookingDetails?.flight?.departureCity} - {bookingData?.destinationCity || bookingData?.bookingDetails?.flight?.arrivalCity}</h4>
                   <p className="text-gray-500 text-sm">
-                    {bookingData?.departureDate || bookingData?.bookingDetails?.flight?.departureDate ? new Date(bookingData?.departureDate || bookingData?.bookingDetails?.flight?.departureDate).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : ''} • {bookingData?.stops === 0 ? 'Nonstop' : `${bookingData?.stops} Stop(s)`} • {bookingData?.duration || bookingData?.bookingDetails?.flight?.duration || 'Duration N/A'}
+                    {bookingData?.departureDate || bookingData?.bookingDetails?.flight?.departureDate ? new Date(bookingData?.departureDate || bookingData?.bookingDetails?.flight?.departureDate).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : ''} • {bookingData?.stops === 0 ? 'Nonstop' : `${bookingData?.stops} Stop(s)`} • {formatIsoDuration(bookingData?.duration || bookingData?.bookingDetails?.flight?.duration, 'Duration N/A')}
                   </p>
                 </div>
 
@@ -888,7 +896,7 @@ function ManageBooking() {
 
                     <div className="flex flex-col items-center px-4">
                       <Clock className="w-4 h-4 text-gray-400 mb-1" />
-                      <div className="text-xs text-gray-500">{bookingData?.duration || bookingData?.bookingDetails?.flight?.duration || '--'}</div>
+                      <div className="text-xs text-gray-500">{formatIsoDuration(bookingData?.duration || bookingData?.bookingDetails?.flight?.duration, '--')}</div>
                       <div className="w-24 h-[1px] bg-gray-300 my-1 relative">
                         <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-1 h-1 bg-gray-400 rounded-full"></div>
                         <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-1 bg-gray-400 rounded-full"></div>

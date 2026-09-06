@@ -1835,6 +1835,13 @@ router.get('/bookings/:bookingRef', async (req, res) => {
     // Format for frontend
     const formattedBooking = {
       ...data.booking_details,
+      // The passenger list lives in its own column, not inside booking_details,
+      // and was never included here. Manage Booking therefore showed "No
+      // passenger information available" whenever it loaded the booking itself
+      // — a refresh, or a shared link — and showed it correctly only when My
+      // Trips handed the record over through router state.
+      travelers: data.booking_details?.travelers ?? data.passenger_details ?? [],
+      passengerData: data.passenger_details ?? data.booking_details?.travelers ?? [],
       status: data.status,
       payment_status: data.payment_status,
       bookingReference: data.booking_reference,

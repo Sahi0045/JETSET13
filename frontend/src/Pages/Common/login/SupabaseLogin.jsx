@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef} from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     FaGoogle, FaApple, FaEye, FaEyeSlash, FaSpinner,
     FaShieldAlt, FaGlobeAmericas, FaTags, FaArrowLeft
 } from 'react-icons/fa';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import supabase from '../../../lib/supabase';
+import { postAuthDestination } from '../../../utils/postAuthRedirect';
 import './loginV2.css';
 import { renderGoogleButton, exchangeGoogleCredential } from '../../../utils/googleIdentity';
 
@@ -14,6 +15,11 @@ const LOGO_PNG = '/images/logos/WhatsApp_Image_2026-01-22_at_12.05.24_AM-removeb
 
 export default function SupabaseLogin() {
     const navigate = useNavigate();
+    const location = useLocation();
+    // Where the visitor was actually heading. Home is the fallback, not My
+    // Trips: signing in is not a request to see your bookings, and two callers
+    // (ProtectedRoute, Membership) already pass a destination that was ignored.
+    const destination = postAuthDestination(location.state);
     const { signIn, signInWithOAuth, user, loading: authLoading, error: authError } = useSupabaseAuth();
 
     const [data, setData] = useState({
@@ -29,9 +35,9 @@ export default function SupabaseLogin() {
     // Redirect if already logged in
     useEffect(() => {
         if (user && !authLoading) {
-            navigate('/my-trips');
+            navigate(destination, { replace: true });
         }
-    }, [user, authLoading, navigate]);
+    }, [user, authLoading, navigate, destination]);
 
     // Google's own rendered button.
     //
@@ -72,7 +78,7 @@ export default function SupabaseLogin() {
             setErrors({});
 
             // Store intended destination for after auth
-            sessionStorage.setItem('auth_redirect', '/my-trips');
+            sessionStorage.setItem('auth_redirect', destination);
 
             const { error } = await signInWithOAuth('google', {
                 queryParams: {
@@ -101,7 +107,7 @@ export default function SupabaseLogin() {
             setProcessing(true);
             setErrors({});
 
-            sessionStorage.setItem('auth_redirect', '/my-trips');
+            sessionStorage.setItem('auth_redirect', destination);
 
             const { error } = await signInWithOAuth('apple', {
                 queryParams: {
@@ -188,7 +194,7 @@ export default function SupabaseLogin() {
                 // Wait a moment for auth state to update, then navigate
                 setTimeout(() => {
                     if (profileCompleted || hasCompleteProfile) {
-                        navigate('/my-trips', { replace: true });
+                        navigate(destination, { replace: true });
                     } else {
                         navigate('/complete-profile', { replace: true });
                     }
