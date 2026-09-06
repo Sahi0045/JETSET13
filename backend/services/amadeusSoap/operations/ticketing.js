@@ -115,6 +115,16 @@ export const readPricePnrReply = (reply) => {
  * Root sequence (Ticket_CreateTSTFromPricing_04_1_1A.xsd):
  *   pnrLocatorData? -> psaList[1..1980]{itemReference, paxReference?}
  */
+/**
+ * Store the priced fare permanently in the PNR.
+ *
+ * Amadeus holds the result of Fare_PricePNRWithBookingClass for THREE MINUTES.
+ * After that the pricing is gone and the TST cannot be created from it, so
+ * nothing slow belongs between those two calls — no external lookup, no
+ * user interaction, and no operation that opens its own session. Today they
+ * run back to back and the window is never close to being a problem; this note
+ * exists so it stays that way.
+ */
 export const buildCreateTstBody = (pricingReferences) => {
   const refs = (pricingReferences ?? []).filter(Boolean);
   if (refs.length === 0) throw new Error('a pricing reference is required to create a TST');
