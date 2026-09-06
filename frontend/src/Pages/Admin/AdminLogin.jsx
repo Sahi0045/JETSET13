@@ -12,6 +12,8 @@ const AdminLogin = () => {
     password: ''
   });
   const [error, setError] = useState('');
+    // Arrived here because a session lapsed mid-session, not by choice.
+    const [expiredNotice] = useState(() => new URLSearchParams(window.location.search).has('expired'));
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -173,6 +175,12 @@ const AdminLogin = () => {
               </div>
 
               <form onSubmit={handleSubmit} className="admin-login-form">
+                {expiredNotice && !error && (
+                  <div className="error-alert">
+                    <div>Your admin session expired. Please sign in again.</div>
+                  </div>
+                )}
+
                 {error && (
                   <div className="error-alert">
                     <div className="error-icon">
