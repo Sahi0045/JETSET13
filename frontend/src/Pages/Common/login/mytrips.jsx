@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { formatIsoDuration } from "../../../utils/dateUtils"
 import {
   FaPlane, FaShip, FaHotel, FaSuitcaseRolling, FaClipboardList,
   FaCommentDots, FaStar, FaEye, FaCog, FaTimesCircle, FaCheckCircle,
@@ -760,7 +761,7 @@ export default function TravelDashboard() {
                     )}
                     {(booking.duration || booking.stops !== undefined) && (
                       <DetailCell label="Duration">
-                        {booking.duration || ''}
+                        {formatIsoDuration(booking.duration)}
                         {booking.stops !== undefined && booking.stops !== null && (
                           <span className="text-xs text-gray-500 ml-1 font-medium">• {booking.stops === 0 ? 'Direct' : `${booking.stops} Stop${booking.stops > 1 ? 's' : ''}`}</span>
                         )}

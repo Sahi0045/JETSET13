@@ -53,3 +53,27 @@ export const formatDateToISO = (date) => {
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
+
+/**
+ * "PT11H10M" -> "11h 10m".
+ *
+ * Amadeus stores flight durations as ISO 8601 and they were rendered verbatim,
+ * so Manage Booking and My Trips showed travellers "PT11H10M" between their two
+ * airports. Anything not an ISO duration is passed through, because several
+ * callers already hold a formatted string.
+ *
+ * @param {string} value
+ * @param {string} [fallback=''] shown when there is no duration at all
+ */
+export const formatIsoDuration = (value, fallback = '') => {
+    if (!value) return fallback;
+    const match = String(value).match(/^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?$/i);
+    if (!match || (!match[1] && !match[2] && !match[3])) return String(value);
+
+    const [, days, hours, minutes] = match;
+    const totalHours = (Number(days || 0) * 24) + Number(hours || 0);
+    return [
+        totalHours ? `${totalHours}h` : null,
+        minutes ? `${Number(minutes)}m` : null,
+    ].filter(Boolean).join(' ') || fallback;
+};
