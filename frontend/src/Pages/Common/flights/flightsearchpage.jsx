@@ -16,6 +16,7 @@ import {
 import { allAirports } from "./airports.js";
 import AirportService from "../../../Services/AirportService";
 import { getTodayDate, getSafeDate } from "../../../utils/dateUtils";
+import { parseCheckedBagLabel } from "../../../utils/baggage";
 
 // Import centralized API configuration
 import apiConfig from '@/config/api';
@@ -419,7 +420,7 @@ function FlightSearchPage() {
           },
           amenities: [],
           baggage: {
-            checked: flight.baggageDetails?.checked || { weight: parseInt(flight.baggage) || 0, weightUnit: 'KG' },
+            checked: flight.baggageDetails?.checked || parseCheckedBagLabel(flight.baggage),
             cabin: flight.baggageDetails?.cabin || { weight: 0, weightUnit: 'KG' }
           },
           cabin: flight.cabin || 'ECONOMY',
@@ -604,7 +605,7 @@ function FlightSearchPage() {
           },
           amenities: [],
           baggage: {
-            checked: flight.baggageDetails?.checked || { weight: parseInt(flight.baggage) || 0, weightUnit: 'KG' },
+            checked: flight.baggageDetails?.checked || parseCheckedBagLabel(flight.baggage),
             cabin: flight.baggageDetails?.cabin || { weight: 0, weightUnit: 'KG' }
           },
           cabin: flight.cabin || 'Economy',

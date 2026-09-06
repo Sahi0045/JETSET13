@@ -921,15 +921,29 @@ router.post('/fare-rules', async (req, res) => {
       return res.status(400).json({ success: false, error: 'flightOffer is required' });
     }
 
-    const priced = await FlightProvider.priceFlightOffer(flightOffer, {
-      include: ['detailed-fare-rules', 'bags']
-    });
+    // Filed rules where we can get them. getFiledFareRules runs informative
+    // pricing and Fare_CheckRules in one session and returns the same shape
+    // priceFlightOffer does, falling back to the thinner pricing text by
+    // itself - so this scraper below is unchanged either way.
+    let priced;
+    try {
+      priced = await FlightProvider.getFiledFareRules(flightOffer);
+    } catch (cause) {
+      console.warn('Filed fare rules unavailable, falling back to pricing text:', cause?.technicalError || cause?.message);
+      priced = await FlightProvider.priceFlightOffer(flightOffer, {
+        include: ['detailed-fare-rules', 'bags']
+      });
+    }
 
     const included = priced.included || {};
 
     // Structured extra-baggage options
     const bags = Object.values(included.bags || {}).map((b) => ({
       quantity: b.quantity,
+      // A weight allowance and a piece count are different things; the client
+      // renders whichever it is given.
+      weight: b.weight,
+      weightUnit: b.weightUnit,
       name: b.name,
       price: b.price ? { amount: parseFloat(b.price.amount), currency: b.price.currencyCode } : null,
       segmentIds: b.segmentIds || [],

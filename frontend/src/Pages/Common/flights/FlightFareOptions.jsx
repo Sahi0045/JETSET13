@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Check, Luggage, Briefcase, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
 import Price from '../../../Components/Price';
 import apiConfig from '@/config/api';
+import { formatCheckedBag } from '../../../utils/baggage';
 
 const prettyFare = (opt) => {
   const raw = opt.brandedFareLabel || opt.brandedFare || opt.cabin || 'Standard';
@@ -172,7 +173,9 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
                     <div className="space-y-1.5 text-xs text-gray-600 flex-1">
                       <div className="flex items-center gap-1.5">
                         <Luggage className="h-3.5 w-3.5 text-gray-400" />
-                        {checked?.weight ? `${checked.weight}${checked.weightUnit || 'KG'} check-in` : (opt.baggage || 'Cabin only')}
+                        {formatCheckedBag(checked)
+                          ? `${formatCheckedBag(checked)} check-in`
+                          : (opt.baggage || 'Cabin only')}
                       </div>
                       {cabinBag?.weight ? (
                         <div className="flex items-center gap-1.5">

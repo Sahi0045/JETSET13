@@ -14,6 +14,7 @@ import {
   buildPricePnrBody,
   buildQueuePlaceBody,
   buildVoidTicketBody,
+  readVoidTicketReply,
   readPricePnrReply,
 } from '../../../backend/services/amadeusSoap/operations/ticketing.js';
 
@@ -75,6 +76,47 @@ describe('Air_SellFromRecommendation', () => {
     expect(xml.match(/<itineraryDetails>/g)).toHaveLength(2);
     expect(xml).toContain('<origin>DEL</origin><destination>BOM</destination>');
     expect(xml).toContain('<origin>BOM</origin><destination>DEL</destination>');
+  });
+
+  /**
+   * A connection is ONE itineraryDetails holding both segments, and its
+   * origin/destination span the whole journey rather than either flight.
+   *
+   * This is the shape of Amadeus's own "selling connecting flights" example:
+   * one itineraryDetails for STO -> NYC, containing ARN -> AMS and AMS -> JFK.
+   * Getting it wrong would sell the two flights as separate journeys, and with
+   * `additionalMessageFunction M1` a failure on either is meant to roll back
+   * both — which only holds if they are in the same group.
+   *
+   * Round-trip legs were covered above; the connecting case was not, and it is
+   * the one where a mistake holds the wrong seats.
+   */
+  it('sells a connection as one leg spanning both segments', () => {
+    const connection = [
+      { ...segments[0], legIndex: 0, boardPoint: 'DEL', offPoint: 'BLR', flightNumber: '9484' },
+      {
+        legIndex: 0, boardPoint: 'BLR', offPoint: 'BOM', departureDate: '260926',
+        departureTime: '0700', arrivalDate: '260926', marketingCarrier: 'AI',
+        flightNumber: '9601', rbd: 'S',
+      },
+    ];
+    const xml = buildAirSellBody({ segments: connection, seats: 1 });
+
+    expect(xml.match(/<itineraryDetails>/g)).toHaveLength(1);
+    expect(xml.match(/<segmentInformation>/g)).toHaveLength(2);
+    // The leg is DEL -> BOM, not DEL -> BLR.
+    expect(xml).toContain('<origin>DEL</origin><destination>BOM</destination>');
+    // Both flights are present, in order.
+    expect(xml.indexOf('9484')).toBeLessThan(xml.indexOf('9601'));
+  });
+
+  it('asks Amadeus to roll back every segment if one cannot be sold', () => {
+    // M1 is the optimisation algorithm that cancels all flights when a sell
+    // fails. Without it a connection can be half-sold, leaving the customer
+    // holding one leg of a journey they cannot complete.
+    const xml = buildAirSellBody({ segments: roundTrip, seats: 1 });
+
+    expect(xml).toContain('<messageFunction>183</messageFunction><additionalMessageFunction>M1</additionalMessageFunction>');
   });
 
   it('refuses to sell nothing', () => {
@@ -422,12 +464,70 @@ describe('PNR_Cancel and PNR_Retrieve', () => {
 });
 
 describe('Ticket_CancelDocument', () => {
-  it('sends the plating carrier, which is mandatory despite looking incidental', () => {
-    const xml = buildVoidTicketBody({ documentNumbers: ['0572412345678'], validatingCarrier: 'AI' });
-    expect(xml).toContain('<stockProviderDetails><companyDetails><marketingCompany>AI</marketingCompany>');
+  /**
+   * The void request was invalid and could never have been accepted.
+   *
+   * We sent `stockProviderDetails/companyDetails/marketingCompany` with the
+   * validating carrier. `stockProviderDetails` is OfficeSettingsDetailsType,
+   * whose ONLY child is `officeSettingsDetails` — `companyDetails` is not an
+   * element of that type at all. Amadeus's own "ticket voiding" example
+   * carries the office's MARKET (country) code there, not a carrier.
+   *
+   * The consequence was a complete failure of the same-day void path: a
+   * customer cancelling a ticketed booking on the day of issue hit a schema
+   * rejection, `cancelBooking` rethrew rather than cancelling the itinerary on
+   * top of a live ticket, and they were left with neither a refund nor a
+   * cancellation. Never caught because the void has never been exercised — the
+   * old tests asserted the invalid shape and passed.
+   */
+  it('identifies the stock by the office market code, not by a carrier', () => {
+    const xml = buildVoidTicketBody({ documentNumbers: ['0572412345678'], marketIataCode: 'US' });
+
+    expect(xml).toContain('<stockProviderDetails><officeSettingsDetails><marketIataCode>US</marketIataCode></officeSettingsDetails></stockProviderDetails>');
+    expect(xml).not.toContain('companyDetails');
+    expect(xml).not.toContain('marketingCompany');
   });
 
-  it('refuses to void without one', () => {
-    expect(() => buildVoidTicketBody({ documentNumbers: ['0572412345678'] })).toThrow(/validating carrier/);
+  it('refuses to build without a market code', () => {
+    expect(() => buildVoidTicketBody({ documentNumbers: ['0572412345678'] })).toThrow(/market code/i);
+  });
+
+  it('refuses to build without a document number', () => {
+    expect(() => buildVoidTicketBody({ marketIataCode: 'US' })).toThrow(/document number/i);
+  });
+
+  it('voids several documents in one request', () => {
+    const xml = buildVoidTicketBody({
+      documentNumbers: ['0572412345678', '0572412345679'], marketIataCode: 'US',
+    });
+
+    expect(xml.match(/<documentNumberDetails>/g)).toHaveLength(2);
+  });
+
+  it('names the target office when one is given', () => {
+    const xml = buildVoidTicketBody({
+      documentNumbers: ['0572412345678'], marketIataCode: 'US', targetOffice: 'SCK1S2400',
+    });
+
+    expect(xml).toContain('<targetOfficeDetails><originatorDetails><inHouseIdentification2>SCK1S2400</inHouseIdentification2>');
   });
 });
+
+describe('readVoidTicketReply', () => {
+  // responseType X means the ticket was voided. Treating "the reply parsed" as
+  // "the ticket was voided" would let the itinerary be cancelled out from
+  // under a live ticket.
+  it('reads a confirmed void', () => {
+    expect(readVoidTicketReply({
+      transactionResults: { responseDetails: { responseType: 'X', statusCode: 'O' } },
+    }).voided).toBe(true);
+  });
+
+  it('does not treat any other response as a void', () => {
+    expect(readVoidTicketReply({
+      transactionResults: { responseDetails: { responseType: 'R', statusCode: 'O' } },
+    }).voided).toBe(false);
+    expect(readVoidTicketReply({}).voided).toBe(false);
+  });
+});
+

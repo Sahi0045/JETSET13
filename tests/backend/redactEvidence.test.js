@@ -192,3 +192,32 @@ describe('robustness', () => {
     expect(redact(null)).toBe('');
   });
 });
+
+describe('AP elements carry both phone and email', () => {
+  /**
+   * Amadeus uses `segmentName AP` for the phone AND the email, distinguishing
+   * them by `type` — `P02` is an address. Keying on the segment name alone
+   * masked an email with a phone number, which is not a leak but is misleading
+   * in evidence sent to Amadeus. Confirmed against a retrieved PNR:
+   * `AP type=5` was the phone and `AP type=P02` the email.
+   */
+  const { redact } = createRedactor();
+  const out = redact(`<soap:Envelope><soap:Body>
+    <dataElementsIndiv><elementManagementData><segmentName>AP</segmentName></elementManagementData>
+      <freetextData><freetextDetail><type>5</type></freetextDetail>
+      <longFreetext>+91 98765 43210</longFreetext></freetextData></dataElementsIndiv>
+    <dataElementsIndiv><elementManagementData><segmentName>AP</segmentName></elementManagementData>
+      <freetextData><freetextDetail><type>P02</type></freetextDetail>
+      <longFreetext>shubham@example.org</longFreetext></freetextData></dataElementsIndiv>
+  </soap:Body></soap:Envelope>`);
+
+  it('masks an AP typed P02 as an email, not a phone number', () => {
+    expect(out).toContain('traveller@example.com');
+    expect(out).not.toContain('shubham@example.org');
+  });
+
+  it('still masks an untyped AP as a phone number', () => {
+    expect(out).toContain('5555550100');
+    expect(out).not.toContain('98765');
+  });
+});

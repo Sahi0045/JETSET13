@@ -60,6 +60,11 @@ const readWsConfig = (env = process.env) => {
 
     bookingEnabled: isTrue(env.AMADEUS_WS_BOOKING_ENABLED, false),
     autoTicket: isTrue(env.AMADEUS_WS_AUTO_TICKET, false),
+    // The office's market (country) code, required by Ticket_CancelDocument to
+    // identify whose ticket stock is being voided. US because settlement is
+    // through ARC; confirm against the production office at cutover, as with
+    // the form-of-payment code.
+    marketIataCode: (env.AMADEUS_WS_MARKET_IATA_CODE || 'US').trim().toUpperCase(),
     queueNumber: (env.AMADEUS_WS_QUEUE_NUMBER || '50').trim(),
     queueOffice: (env.AMADEUS_WS_QUEUE_OFFICE || env.AMADEUS_WS_OFFICE_ID).trim(),
     // No FOP free-text setting: fopDetails accepts only fopCode, fopMapTable,

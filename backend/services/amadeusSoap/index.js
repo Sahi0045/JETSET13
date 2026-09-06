@@ -7,11 +7,12 @@ import { AmadeusSoapError, inspectReply } from './errors.js';
 import { mapMasterPricerReply } from './mappers/offer.js';
 import { buildMasterPricerBody } from './operations/masterPricer.js';
 import { buildInformativePricingBody } from './operations/informativePricing.js';
+import { DEFAULT_RULE_SECTIONS, buildCheckRulesBody, readCheckRulesReply } from './operations/fareRules.js';
 import { buildFlightInfoBody, readFlightInfoError, readFlightInfoReply } from './operations/flightInfo.js';
 import { applyPricingToOffer } from './mappers/pricing.js';
 import { cancelBooking, retrieveBooking, runBookingChain } from './bookingChain.js';
 import { unwrapEnvelope } from './parseXml.js';
-import { callStateless } from './session.js';
+import { callStateless, withSession } from './session.js';
 
 const log = logger.child({ svc: 'amadeus-ws' });
 
@@ -146,6 +147,90 @@ const searchFlights = async (params) => {
  * Returns the REST flight-offers-pricing envelope the route passes straight
  * through, plus the `included` block /fare-rules reshapes.
  */
+/**
+ * Filed fare rules for an offer, before any booking exists.
+ *
+ * Runs informative pricing and Fare_CheckRules in ONE session. CheckRules
+ * addresses a fare component of the pricing that preceded it, so the two calls
+ * have to share a session — which is exactly what the previous attempt missed
+ * when it concluded a committed PNR was required.
+ *
+ * Falls back to the informative-pricing rule text rather than failing: thin
+ * conditions beat none, and this sits on the review page.
+ */
+const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS } = {}) => {
+  const config = getWsConfig();
+  const offer = flightOffer?.originalOffer ?? flightOffer;
+  const ama = offer?._ama;
+
+  if (!ama?.segments?.length) {
+    throw new AmadeusSoapError({
+      error: 'This flight can no longer be priced - please search again',
+      code: 409,
+      technicalError: 'offer is missing _ama; it did not come from this provider',
+      operation: 'Fare_CheckRules',
+    });
+  }
+
+  return withSession(async (ctx) => {
+    const pricing = await ctx.call('Fare_InformativePricingWithoutPNR', buildInformativePricingBody({
+      paxRefs: ama.paxRefs,
+      segments: ama.segments,
+      currency: config.currency,
+      validatingCarrier: offer.validatingAirlineCodes?.[0],
+    }));
+
+    const { reply: pricedReply } = soapReply(pricing);
+    const priced = inspectReply(pricedReply, 'Fare_InformativePricingWithoutPNR');
+    if (priced.error) {
+      reportIfAlerting(priced.error);
+      throw priced.error;
+    }
+
+    const { offer: pricedOffer, text } = applyPricingToOffer(pricedReply, offer);
+    const filed = [];
+
+    for (const section of sections) {
+      try {
+        const result = await ctx.call('Fare_CheckRules', buildCheckRulesBody({ ruleSection: section }));
+        const { reply } = soapReply(result);
+        const inspected = inspectReply(reply, 'Fare_CheckRules');
+        if (inspected.error) {
+          log.warn({ section, reason: inspected.error.technicalError }, 'Fare_CheckRules section refused');
+          continue;
+        }
+        filed.push(...readCheckRulesReply(reply).sections);
+      } catch (cause) {
+        // One unreadable section must not cost the customer the whole panel.
+        log.warn({ section, reason: cause?.technicalError ?? cause?.message }, 'Fare_CheckRules failed');
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        type: 'flight-offers-pricing',
+        flightOffers: [pricedOffer],
+        bookingRequirements: {},
+      },
+      included: {
+        bags: buildBagsIncluded(pricedOffer),
+        // Filed rules when we got them, the thinner pricing text when we did
+        // not, so the shape the route scrapes never changes.
+        'detailed-fare-rules': filed.length > 0
+          ? buildFareRulesIncluded(filed.flatMap((section) => section.text
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => ({ text: line }))))
+          : buildFareRulesIncluded(text),
+      },
+      dictionaries: {},
+      filedSections: filed.map((s) => s.code).filter(Boolean),
+    };
+  });
+};
+
 const priceFlightOffer = async (flightOffer) => {
   const config = getWsConfig();
   const offer = flightOffer?.originalOffer ?? flightOffer;
@@ -200,8 +285,14 @@ const buildBagsIncluded = (offer) => {
   details.forEach((detail, index) => {
     const included = detail.includedCheckedBags;
     if (!included) return;
+    // A weight allowance is not a piece count. Putting the weight in
+    // `quantity` made the UI render "+15 checked bag 15kg" on the fare-rules
+    // panel for a 15 KG allowance. Carry each as itself and let the caller
+    // decide how to say it.
     bags[String(index + 1)] = {
-      quantity: included.quantity ?? included.weight ?? 0,
+      quantity: included.quantity,
+      weight: included.weight,
+      weightUnit: included.weight === undefined ? undefined : (included.weightUnit ?? 'KG'),
       name: included.weight === undefined
         ? 'CHECKED_BAG'
         : `CHECKED_BAG ${included.weight}${included.weightUnit ?? 'KG'}`,
@@ -216,9 +307,12 @@ const buildBagsIncluded = (offer) => {
  * Fare-rule free text in the REST `included['detailed-fare-rules']` shape.
  *
  * Amadeus returns rules as free text, so the route's existing penalty scraper
- * still applies - only the transport changed. Rule text richer than this needs
- * Fare_CheckRules, which requires a TST inside an active PNR session and so
- * arrives with the booking chain.
+ * still applies - only the transport changed.
+ *
+ * Richer text comes from Fare_CheckRules via `getFiledFareRules`, which does
+ * not need a booking: pricing and rules share a session and CheckRules
+ * addresses the fare component. This helper shapes both the same way, so the
+ * scraper cannot tell them apart.
  */
 const buildFareRulesIncluded = (text = []) => {
   const descriptions = text
@@ -238,6 +332,38 @@ const buildFareRulesIncluded = (text = []) => {
  * and in the agreed scope but returns "OPTION NOT PERMITTED" (code 1006) on
  * this office, so a flexible-date search is not available to us. Until Amadeus
  * enables it, each date is priced with an ordinary search.
+ *
+ * That conclusion was re-tested against the 20.2 schema and the live WSAP
+ * rather than assumed, because the same reasoning was wrong about
+ * FOP_CreateFormOfPayment: there, an invariant rejection turned out to be one
+ * element of ours, not their configuration.
+ *
+ * Every element we send is a valid root child in sequence order, and the
+ * rejection does not move across eight request shapes - one-way, round trip,
+ * dayInterval 1 and 3, two routes, and a bare request carrying no
+ * paxReference, no fareOptions and no date range at all. What makes this
+ * different from the FOP case is that MasterPricerCalendar has NO mandatory
+ * root elements, so there is no always-present element that could be the
+ * hidden culprit. The error also names an option rather than data.
+ *
+ * Amadeus's own 20.2 technical reference settles it. Its error codeset
+ * enumerates every request-level error this interface raises and runs
+ * 1000, 1001, 1002, 1003, 1004, 1005, then 1007 - 1006 is a deliberate gap.
+ * The reference also documents the errors a malformed calendar request WOULD
+ * produce, 935 "Invalid range of date option" and 979 "Specify range of dates
+ * in calendar", and we get neither. So 1006 is not something this operation
+ * says about a request; it comes from the layer that decides what the office
+ * is allowed to call.
+ *
+ * MPTBS is not a substitute, which is worth recording so it is not retried.
+ * It accepts `rangeOfDate`, and `rangeQualifier C` with `dayInterval 1` is
+ * even accepted on this office - but the reply comes back carrying ONLY the
+ * target date, with fewer recommendations rather than more dates. It is a
+ * within-day flexibility filter, not a date spread. `dayInterval` above 1 is
+ * refused with 935 "Invalid range of dates option".
+ *
+ * Amadeus saying otherwise would change this; nothing in our own code has been
+ * able to.
  *
  * That is the fan-out the old REST code did, with two differences that make it
  * safe: the date count is capped, and results are cached, so a customer paging
@@ -551,6 +677,7 @@ export default {
   getBusiestTravelPeriod,
 
   priceFlightOffer,
+  getFiledFareRules,
   getCalendarPrices,
   getCheapestFlightDates,
 

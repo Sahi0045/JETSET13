@@ -193,3 +193,58 @@ describe('no results', () => {
     expect(offers).toEqual([]);
   });
 });
+
+describe('baggage units', () => {
+  /**
+   * `quantityCode` says whether the allowance is a weight or a piece count.
+   * `unitQualifier` says which unit that weight is in — and we used to ignore
+   * it and label every weight KG.
+   *
+   * Wherever a carrier files in pounds, common on US itineraries and this is a
+   * US-settled agency, a 50 LB allowance was shown as 50 KG: more than twice
+   * what the passenger may actually carry.
+   *
+   * The recorded reply carries both fields:
+   *   <freeAllowance>15</freeAllowance><quantityCode>W</quantityCode><unitQualifier>K</unitQualifier>
+   *
+   * These mutate the real fixture's own baggage element rather than building a
+   * stand-in, so the recommendation-to-allowance join stays exactly as Amadeus
+   * files it.
+   */
+  const withAllowance = (baggageDetails) => {
+    const xml = readFileSync(new URL('../../fixtures/amadeus/mptbs-oneway-jfk-lhr.xml', import.meta.url), 'utf8');
+    const { body } = unwrapEnvelope(parseSoap(xml));
+    const reply = body[Object.keys(body).find((k) => k !== 'Fault')];
+
+    const groups = [].concat(reply.serviceFeesGrp ?? []);
+    for (const group of groups) {
+      for (const fba of [].concat(group.freeBagAllowanceGrp ?? [])) {
+        if (fba.freeBagAllownceInfo) fba.freeBagAllownceInfo.baggageDetails = baggageDetails;
+      }
+    }
+    return mapMasterPricerReply(reply, { config, searchSignature: 'test' });
+  };
+
+  const bagsOf = (result) =>
+    result.offers[0]?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.includedCheckedBags;
+
+  it('reports kilos as kilos', () => {
+    expect(bagsOf(withAllowance({ freeAllowance: '15', quantityCode: 'W', unitQualifier: 'K' })))
+      .toEqual({ weight: 15, weightUnit: 'KG' });
+  });
+
+  it('reports pounds as pounds, rather than as kilos', () => {
+    expect(bagsOf(withAllowance({ freeAllowance: '50', quantityCode: 'W', unitQualifier: 'L' })))
+      .toEqual({ weight: 50, weightUnit: 'LB' });
+  });
+
+  it('counts pieces when the allowance is a piece count', () => {
+    expect(bagsOf(withAllowance({ freeAllowance: '2', quantityCode: 'N' })))
+      .toEqual({ quantity: 2 });
+  });
+
+  it('falls back to kilos when no unit is filed', () => {
+    expect(bagsOf(withAllowance({ freeAllowance: '20', quantityCode: 'W' })))
+      .toEqual({ weight: 20, weightUnit: 'KG' });
+  });
+});

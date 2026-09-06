@@ -87,7 +87,11 @@ function FlightFareRules({ flightOffer, onBagsChange }) {
                         {on && <Check className="h-3 w-3 text-white" />}
                       </span>
                     )}
-                    +{b.quantity} {b.name === 'CHECKED_BAG' ? 'checked bag' : b.name?.toLowerCase().replace(/_/g, ' ')}
+                    {/* A weight allowance is not a piece count: a 15 KG bag
+                        used to render as "+15 checked bag 15kg". */}
+                    {b.weight
+                      ? `+${b.weight} ${b.weightUnit || 'KG'} checked baggage`
+                      : `+${b.quantity ?? 1} ${b.quantity === 1 || b.quantity === undefined ? 'checked bag' : 'checked bags'}`}
                   </span>
                   {b.price && (
                     <span className="font-semibold text-[#055B75]">

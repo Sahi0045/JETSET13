@@ -1,0 +1,72 @@
+import { describe, expect, it } from 'vitest';
+import { inspectReply } from '../../../backend/services/amadeusSoap/errors.js';
+import { readIssueTicketReply } from '../../../backend/services/amadeusSoap/operations/ticketing.js';
+import { parseSoap, unwrapEnvelope } from '../../../backend/services/amadeusSoap/parseXml.js';
+
+/**
+ * Ticket issuance reports SUCCESS inside an error container.
+ *
+ * `DocIssuance_IssueTicket` answers a successful issuance with
+ * `processingStatus O` AND an `errorGroup` whose `errorCode` is the literal
+ * string "OK" — this is Amadeus's own documented example, not an edge case.
+ *
+ * `errorGroup` is one of the containers `collectMessages` gathers, so without
+ * a guard a successful issuance reads as a failure. `callStep` throws on that,
+ * which means every ticket that issued correctly would have failed its
+ * booking, and the compensation path would have run for a customer holding a
+ * valid ticket. It would have surfaced the moment AMADEUS_WS_AUTO_TICKET was
+ * switched on — a launch-blocking bug that no test could catch, because we had
+ * never seen a real issuance reply.
+ */
+
+const body = (xml) => unwrapEnvelope(parseSoap(
+  `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>${xml}</soap:Body></soap:Envelope>`,
+)).body;
+
+const SUCCESS = `<DocIssuance_IssueTicketReply>
+  <processingStatus><statusCode>O</statusCode></processingStatus>
+  <errorGroup>
+    <errorOrWarningCodeDetails><errorDetails><errorCode>OK</errorCode></errorDetails></errorOrWarningCodeDetails>
+    <errorWarningDescription>
+      <freeTextDetails><textSubjectQualifier>3</textSubjectQualifier><source>M</source><encoding>1</encoding></freeTextDetails>
+      <freeText>OK</freeText>
+    </errorWarningDescription>
+  </errorGroup>
+</DocIssuance_IssueTicketReply>`;
+
+describe('a successful issuance', () => {
+  it('is not reported as a failure just because it carries an errorGroup', () => {
+    expect(inspectReply(body(SUCCESS), 'DocIssuance_IssueTicket').ok).toBe(true);
+  });
+
+  it('is read as issued', () => {
+    const reply = body(SUCCESS).DocIssuance_IssueTicketReply;
+    expect(readIssueTicketReply(reply).issued).toBe(true);
+  });
+});
+
+describe('a real failure still fails', () => {
+  it('reports an errorGroup carrying an actual error code', () => {
+    const xml = `<DocIssuance_IssueTicketReply>
+      <errorGroup>
+        <errorOrWarningCodeDetails><errorDetails><errorCode>288</errorCode></errorDetails></errorOrWarningCodeDetails>
+        <errorWarningDescription><freeText>UNABLE TO ISSUE</freeText></errorWarningDescription>
+      </errorGroup>
+    </DocIssuance_IssueTicketReply>`;
+    const inspected = inspectReply(body(xml), 'DocIssuance_IssueTicket');
+
+    expect(inspected.ok).toBe(false);
+    expect(inspected.error.amadeusCode).toBe('288');
+  });
+
+  it('fails when OK sits alongside a real error, rather than excusing it', () => {
+    // The guard must require EVERY code to be OK. One genuine error among
+    // several must still fail the step.
+    const xml = `<DocIssuance_IssueTicketReply>
+      <errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>OK</errorCode></errorDetails></errorOrWarningCodeDetails></errorGroup>
+      <errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>931</errorCode></errorDetails></errorOrWarningCodeDetails></errorGroup>
+    </DocIssuance_IssueTicketReply>`;
+
+    expect(inspectReply(body(xml), 'DocIssuance_IssueTicket').ok).toBe(false);
+  });
+});

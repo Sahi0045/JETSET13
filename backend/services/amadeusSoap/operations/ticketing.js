@@ -14,7 +14,15 @@ import { each, el, wrap } from '../xml.js';
 
 /** Shared by the pricing messages: RP published fares, FCO currency, VC plating carrier. */
 const pricingOptions = ({ currency, validatingCarrier }) => [
+  // RP published fares, RU unifares. The search asks for both (priceType RP,
+  // RU, TAC in Fare_MasterPricerTravelBoardSearch), so pricing has to as well:
+  // asking for published fares only would re-price a negotiated fare the
+  // customer chose as a published one, at a different amount, which trips the
+  // price-tolerance guard and aborts the booking with "the fare changed".
+  // Intermittent failures on exactly the cheapest fares. Amadeus's own example
+  // pairs them and says so: "Both published fares and unifares are requested."
   wrap('pricingOptionGroup', wrap('pricingOptionKey', el('pricingOptionKey', 'RP'))),
+  wrap('pricingOptionGroup', wrap('pricingOptionKey', el('pricingOptionKey', 'RU'))),
   currency
     ? wrap('pricingOptionGroup', [
       wrap('pricingOptionKey', el('pricingOptionKey', 'FCO')),
@@ -106,6 +114,16 @@ export const readPricePnrReply = (reply) => {
  *
  * Root sequence (Ticket_CreateTSTFromPricing_04_1_1A.xsd):
  *   pnrLocatorData? -> psaList[1..1980]{itemReference, paxReference?}
+ */
+/**
+ * Store the priced fare permanently in the PNR.
+ *
+ * Amadeus holds the result of Fare_PricePNRWithBookingClass for THREE MINUTES.
+ * After that the pricing is gone and the TST cannot be created from it, so
+ * nothing slow belongs between those two calls — no external lookup, no
+ * user interaction, and no operation that opens its own session. Today they
+ * run back to back and the window is never close to being a problem; this note
+ * exists so it stays that way.
  */
 export const buildCreateTstBody = (pricingReferences) => {
   const refs = (pricingReferences ?? []).filter(Boolean);
@@ -252,16 +270,43 @@ export const buildQueuePlaceBody = ({ recordLocator, queueOffice, queueNumber = 
  * through the airline instead. `stockProviderDetails` is mandatory even though
  * it looks incidental - the request is rejected without the plating carrier.
  */
-export const buildVoidTicketBody = ({ documentNumbers, validatingCarrier }) => {
+export const buildVoidTicketBody = ({ documentNumbers, marketIataCode, targetOffice }) => {
   const numbers = (documentNumbers ?? []).filter(Boolean);
   if (numbers.length === 0) throw new Error('a document number is required to void a ticket');
-  if (!validatingCarrier) throw new Error('the validating carrier is required to void a ticket');
+  if (!marketIataCode) throw new Error('the office market code is required to void a ticket');
 
   const body = [
     each(numbers, (number) => wrap('documentNumberDetails', wrap('documentDetails', el('number', String(number))))),
-    wrap('stockProviderDetails', wrap('companyDetails', el('marketingCompany', validatingCarrier))),
-  ].join('');
+
+    // stockProviderDetails is OfficeSettingsDetailsType, and its only child is
+    // `officeSettingsDetails` carrying the OFFICE'S MARKET (country) code -
+    // not a carrier. We previously sent
+    // `stockProviderDetails/companyDetails/marketingCompany` with the
+    // validating carrier, which is not an element of this type at all, so the
+    // void could never have been accepted: a same-day cancellation of a
+    // ticketed booking failed schema validation, `cancelBooking` rethrew, and
+    // the customer was left with a live ticket and no refund.
+    wrap('stockProviderDetails', wrap('officeSettingsDetails', el('marketIataCode', marketIataCode))),
+
+    targetOffice
+      ? wrap('targetOfficeDetails', wrap('originatorDetails', el('inHouseIdentification2', targetOffice)))
+      : '',
+  ].filter(Boolean).join('');
 
   const ns = OPERATIONS.Ticket_CancelDocument.namespace;
   return `    <Ticket_CancelDocument xmlns="${ns}">${body}</Ticket_CancelDocument>`;
 };
+
+/**
+ * Did the void actually happen?
+ *
+ * `responseType` X means the ticket was voided; the reply also carries a
+ * `statusCode`. Reading it matters because the caller cannot otherwise tell a
+ * void from a reply that merely parsed.
+ */
+export const readVoidTicketReply = (reply) => {
+  const type = atTxt(reply, 'transactionResults.responseDetails.responseType');
+  const status = atTxt(reply, 'transactionResults.responseDetails.statusCode');
+  return { voided: /^X$/i.test(type), responseType: type, status };
+};
+

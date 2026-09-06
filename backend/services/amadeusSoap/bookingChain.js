@@ -12,6 +12,7 @@ import {
   buildPricePnrBody,
   buildQueuePlaceBody,
   buildVoidTicketBody,
+  readVoidTicketReply,
   readCreateTstReply,
   readIssueTicketReply,
   readPricePnrReply,
@@ -409,23 +410,46 @@ export const cancelBooking = async (recordLocator) => {
     // has settled, and the ticket has to be refunded through the airline under
     // its own fare rules. Cancelling the itinerary without voiding a same-day
     // ticket throws away that window for no reason.
-    const voidable = tickets.filter((t) => t.issuedOn === today && t.number && t.validatingCarrier);
+    // The plating carrier used to be required here because the void request
+    // carried it. It does not: Ticket_CancelDocument identifies the stock by
+    // the office's market code. Keeping the carrier in this condition would
+    // send a perfectly voidable ticket down the airline-refund path whenever
+    // the FA free text did not happen to match the /ET../ pattern.
+    const voidable = tickets.filter((t) => t.issuedOn === today && t.number);
     const unvoidable = tickets.filter((t) => !voidable.includes(t));
     let voided = false;
 
     if (voidable.length > 0) {
       try {
-        await callStep(ctx, {
+        const voidReply = await callStep(ctx, {
           step: 'voidTicket',
           operation: 'Ticket_CancelDocument',
           bodyXml: buildVoidTicketBody({
             documentNumbers: voidable.map((t) => t.number.replace('-', '')),
-            validatingCarrier: voidable[0].validatingCarrier,
+            marketIataCode: config.marketIataCode,
+            targetOffice: config.officeId,
           }),
           pnr: recordLocator,
           committed: true,
           ticketed: true,
         });
+
+        // Confirm rather than assume. The reply says whether the ticket was
+        // actually voided (responseType X); treating "it parsed" as "it was
+        // voided" would let the itinerary be cancelled out from under a live
+        // ticket.
+        const result = readVoidTicketReply(voidReply);
+        if (!result.voided) {
+          throw new BookingChainError({
+            step: 'voidTicket',
+            pnr: recordLocator,
+            committed: true,
+            ticketed: true,
+            error: 'We could not void the ticket',
+            code: 502,
+            technicalError: `Ticket_CancelDocument responseType ${result.responseType || 'absent'}`,
+          });
+        }
         voided = true;
         log.info({ pnr: recordLocator, tickets: voidable.length }, 'tickets voided');
       } catch (cause) {

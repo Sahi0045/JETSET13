@@ -3,103 +3,75 @@ import { arr, at, atTxt, txt } from '../parseXml.js';
 import { el, wrap } from '../xml.js';
 
 /**
- * Fare_CheckRules — the airline's actual fare conditions.
+ * Fare_CheckRules — the airline's filed fare conditions.
  *
- * Informative pricing already returns some rule text, and that is what
- * `/fare-rules` shipped with. It is thin: a few lines, often without the
- * penalty amounts. CheckRules returns the filed rule sections, which is where
- * the cancellation and change fees actually live.
+ * Informative pricing returns some rule text, and that is what `/fare-rules`
+ * shipped with. It is thin: a few lines, usually without the penalty amounts.
+ * CheckRules returns the filed rule sections, which is where the cancellation
+ * and change fees actually live.
  *
- * It requires a TST inside an active PNR session. The schema suggests
- * otherwise - every field except `msgType` is optional, and there is an
- * apparent standalone path describing the fare with `transportInformation`,
- * `tripDescription` and rule sections instead of an `itemNumber` - but the
- * WSAP refuses it. Probed against 1ASIWJETJEC PDT, DEL-BOM on AI 9486:
+ * This module previously concluded that CheckRules needed a TST inside a
+ * committed PNR, and that a customer on the review page could therefore never
+ * see filed penalties. That was wrong, and the reasoning is worth keeping so
+ * nobody repeats it: the earlier probe tried `itemNumber` referencing a TST,
+ * sent STATELESSLY, and got BAD SYNTAX — then concluded the problem was the
+ * missing PNR rather than the missing session.
  *
- *   transportInformation + tripDescription + fareRule   -> CHECK FORMAT
- *   the same plus pricingInfo numberOfUnits PX 1        -> CHECK FORMAT
- *   messageFunction omitted                             -> BAD MSG CODE
- *   itemNumber TST 1, sent statelessly                  -> BAD SYNTAX
+ * What it actually needs, per Amadeus's "request fare rule category text"
+ * example, is a Fare_InformativePricingWithoutPNR reply EARLIER IN THE SAME
+ * SESSION. `itemNumber` then addresses a fare component of that pricing, not a
+ * TST. No PNR, no booking, nothing committed.
  *
- * "BAD MSG CODE" for the third confirms 712 is a recognised function, so the
- * rejection is about missing PNR context rather than the message itself.
+ * Verified against 1ASIWJETJEC PDT, DEL-BOM:
  *
- * So `/fare-rules`, which a customer opens on the review page before any
- * booking exists, cannot use this. It stays on the informative-pricing text.
- * These builders are kept because they are correct and cheap: the moment this
- * is called from inside the booking chain - after Ticket_CreateTSTFromPricing,
- * where a TST does exist - it will work, and that is where the filed
- * cancellation penalties for a BOOKED fare can be captured and stored.
+ *   informative pricing, then CheckRules FC 1, section 16  -> 184 lines of
+ *                                                             PE.PENALTIES
+ *   the same for section 10                                -> 26 lines of
+ *                                                             CO.COMBINABILITY
  *
- * Two corrections to the plan, taken from Fare_CheckRules_07_1_1A.xsd:
- * the rule-section element is `ruleSectionId`, not `ruleSectionLocalId`, and
- * the message function is `messageFunction` (an..3), not
- * `messageFunctionCode`.
+ * Request and reply disagree about the element name, which is why both halves
+ * were half-right before. The REQUEST asks with `ruleSectionId`. The REPLY
+ * answers with `ruleSectionLocalId` and `ruleCategoryCode`.
  */
 
 /**
  * Rule sections worth asking for.
  *
- * PE penalties, CD child/discounts, AP advance purchase. The reply grows a
- * section per code, and the route's scraper reads the penalty text out of it -
- * asking for everything would return pages of filed tariff nobody reads.
+ * 16 is penalties — cancellation and change fees, the reason this call exists.
+ * Amadeus accepts both the numeric category and its letter code; the numbers
+ * are what its own examples use.
+ *
+ * Asking for everything returns pages of filed tariff nobody reads, and each
+ * section is a separate round trip inside the session.
  */
-export const DEFAULT_RULE_SECTIONS = ['PE', 'CD', 'AP'];
+export const DEFAULT_RULE_SECTIONS = ['16'];
 
 /** '712' = "rules requested for a fare", per the message-function catalogue. */
 const MESSAGE_FUNCTION = '712';
 
 /**
- * @param {object} p
- * @param {string} p.carrier          marketing carrier, e.g. 'AI'
- * @param {string} [p.flightNumber]   e.g. '9486'
- * @param {string} [p.bookingClass]   RBD, e.g. 'X'
- * @param {string} p.origin           IATA
- * @param {string} p.destination      IATA
- * @param {string} [p.departDate]     DDMMYY
- * @param {string[]} [p.ruleSections] defaults to PE/CD/AP
+ * @param {object} [p]
+ * @param {number|string} [p.fareComponent=1] which fare component of the
+ *   preceding informative pricing to read rules for. A round trip prices as
+ *   two: outbound is 1, inbound is 2.
+ * @param {string} [p.ruleSection='16'] category to read.
  */
-export const buildCheckRulesBody = (p) => {
-  const {
-    carrier, flightNumber, bookingClass, origin, destination, departDate,
-    ruleSections = DEFAULT_RULE_SECTIONS,
-  } = p;
-
-  if (!carrier) throw new Error('carrier is required to check fare rules');
-  if (!origin || !destination) throw new Error('origin and destination are required to check fare rules');
-
-  // Root order follows the XSD sequence: msgType, ... transportInformation,
-  // tripDescription, pricingInfo, fareRule. Schema validation rejects a
-  // reordered body without naming the element, so this is not cosmetic.
+export const buildCheckRulesBody = ({ fareComponent = 1, ruleSection = '16' } = {}) => {
   const body = [
     wrap('msgType', wrap('messageFunctionDetails', el('messageFunction', MESSAGE_FUNCTION))),
 
-    wrap('transportInformation', [
-      wrap('transportService', [
-        wrap('companyIdentification', el('marketingCompany', carrier)),
-        flightNumber
-          ? wrap('productIdentificationDetails', el('flightNumber', String(flightNumber)))
-          : '',
+    // Addresses the fare component of the pricing already done in this
+    // session. The bare `number` selects the pricing record; the `FC`-typed
+    // one selects the fare component within it.
+    wrap('itemNumber', [
+      wrap('itemNumberDetails', el('number', '1')),
+      wrap('itemNumberDetails', [
+        el('number', String(fareComponent)),
+        el('type', 'FC'),
       ]),
-      bookingClass
-        ? wrap('availCabinConf', wrap('bookingClassDetails', el('designator', bookingClass)))
-        : '',
     ]),
 
-    wrap('tripDescription', [
-      wrap('origDest', [el('origin', origin), el('destination', destination)]),
-      departDate
-        ? wrap('dateFlightMovement', wrap('dateAndTimeDetails', [
-          el('qualifier', 'D'),
-          el('date', departDate),
-        ]))
-        : '',
-    ]),
-
-    wrap('fareRule', wrap('tarifFareRule', [
-      wrap('companyDetails', el('marketingCompany', carrier)),
-      ...ruleSections.map((section) => el('ruleSectionId', section)),
-    ])),
+    wrap('fareRule', wrap('tarifFareRule', el('ruleSectionId', String(ruleSection)))),
   ].join('');
 
   // The builder emits its own root element: the transport sends bodyXml
@@ -114,10 +86,13 @@ const isNoise = (text) => !text || /^\s*$/.test(text) || /^NO\s+(RULE|DATA)/i.te
 /**
  * Read the rule text back.
  *
- * `tariffInfo[]` holds a section per requested code; `infoText[]` carries
- * anything the airline filed outside a section. Both are free text - Amadeus
- * files these as prose, so there is nothing structured to extract here and the
- * route's existing scraper is what turns it into penalties.
+ * `tariffInfo[]` holds one entry per requested section. Each carries
+ * `fareRuleText[]`, and every entry there is an OBJECT — `{freeTextQualification,
+ * freeText}` — not a string. Reading the entry itself yielded nothing and threw
+ * away all 184 lines of a penalties section; the text is in `.freeText`.
+ *
+ * The section is identified by `ruleCategoryCode`, which comes back
+ * parenthesised as "(16)".
  *
  * @returns {{sections: Array<{code: string|null, text: string}>, error: string|null}}
  */
@@ -132,10 +107,15 @@ export const readCheckRulesReply = (reply) => {
   const sections = [];
 
   for (const info of arr(reply?.tariffInfo)) {
-    const code = atTxt(info, 'fareRuleInfo.ruleSectionId')
-      || atTxt(info, 'fareRuleInfo.fareRuleType')
+    const code = (atTxt(info, 'fareRuleInfo.ruleCategoryCode') || '').replace(/[()]/g, '')
+      || atTxt(info, 'fareRuleInfo.ruleSectionLocalId')
       || null;
-    const text = arr(info.fareRuleText).map(txt).filter(Boolean).join('\n');
+
+    const text = arr(info.fareRuleText)
+      .map((entry) => txt(entry?.freeText ?? entry))
+      .filter(Boolean)
+      .join('\n');
+
     if (!isNoise(text)) sections.push({ code, text });
   }
 

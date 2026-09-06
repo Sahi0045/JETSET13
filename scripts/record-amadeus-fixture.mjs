@@ -67,7 +67,6 @@ const { getWsConfig } = await import('../backend/services/amadeusSoap/config.js'
 const { OPERATIONS } = await import('../backend/services/amadeusSoap/codes.js');
 const { callStateless } = await import('../backend/services/amadeusSoap/session.js');
 const { buildCalendarBody } = await import('../backend/services/amadeusSoap/operations/masterPricer.js');
-const { buildCheckRulesBody } = await import('../backend/services/amadeusSoap/operations/fareRules.js');
 const { createRedactor } = await import('./lib/redact-evidence.mjs');
 
 /* ── Redaction ──────────────────────────────────────────────────────────── */
@@ -193,25 +192,17 @@ const recordPricing = async () => {
   }
   await attempt('informative pricing', () => FlightProvider.priceFlightOffer(offer));
 
-  // `/fare-rules` is served from informative pricing's rule text, because
-  // Fare_CheckRules needs a TST inside an active PNR session and refuses a
-  // standalone request with CHECK FORMAT. There is no facade method to call,
-  // so the operation is probed directly: the refusal is the evidence, and it
-  // shows the operation was implemented and tested rather than skipped.
-  const seg = offer._ama?.segments?.[0];
-  if (seg) {
-    await attempt('fare rules (expected CHECK FORMAT)', () => callStateless(
-      'Fare_CheckRules',
-      buildCheckRulesBody({
-        carrier: seg.marketingCarrier,
-        flightNumber: seg.flightNumber,
-        bookingClass: seg.rbd,
-        origin: seg.boardPoint,
-        destination: seg.offPoint,
-        departDate: seg.departureDate,
-      }),
-    ));
-  }
+  // Fare_CheckRules follows an informative pricing IN THE SAME SESSION, and
+  // `itemNumber` then addresses a fare component of that pricing. No PNR and
+  // no TST are involved.
+  //
+  // This step used to send a standalone request describing the fare itself,
+  // record the resulting CHECK FORMAT, and offer the refusal to Amadeus as
+  // evidence that the operation had at least been attempted. That was our bug,
+  // not a limitation: the missing thing was the session, not a booking. Left
+  // as it was, the certification pack would have shown a working operation
+  // failing.
+  await attempt('filed fare rules', () => FlightProvider.getFiledFareRules(offer));
 };
 
 const recordStatus = async () => {
