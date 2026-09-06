@@ -252,6 +252,15 @@ const buildFareRulesIncluded = (text = []) => {
  * root elements, so there is no always-present element that could be the
  * hidden culprit. The error also names an option rather than data.
  *
+ * Amadeus's own 20.2 technical reference settles it. Its error codeset
+ * enumerates every request-level error this interface raises and runs
+ * 1000, 1001, 1002, 1003, 1004, 1005, then 1007 - 1006 is a deliberate gap.
+ * The reference also documents the errors a malformed calendar request WOULD
+ * produce, 935 "Invalid range of date option" and 979 "Specify range of dates
+ * in calendar", and we get neither. So 1006 is not something this operation
+ * says about a request; it comes from the layer that decides what the office
+ * is allowed to call.
+ *
  * Amadeus saying otherwise would change this; nothing in our own code has been
  * able to.
  *
