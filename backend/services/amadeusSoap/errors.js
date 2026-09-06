@@ -58,11 +58,41 @@ const collectMessages = (body) => {
 
 /** Pull the numeric/alpha Amadeus code and its free text out of an error node. */
 const describe = (node) => {
+  /**
+   * Find the code wherever this schema happens to nest it.
+   *
+   * The named paths below cover the common shapes and are tried first because
+   * they are unambiguous. They are not exhaustive: Air_SellFromRecommendation
+   * reports a refusal as `errorAtMessageLevel > errorSegment > errorDetails >
+   * errorCode`, one level deeper than any of them, and with no free text at
+   * all. So the code was not found, the text was empty, and a real rejection
+   * reached the customer as "Amadeus returned an unspecified error" with
+   * nothing logged - the same silent-loss shape that once hid a failing form
+   * of payment. Recursing means a code cannot be lost to nesting again.
+   */
+  const findCode = (n, depth = 0) => {
+    if (!n || typeof n !== 'object' || depth > 6) return '';
+    for (const [key, value] of Object.entries(n)) {
+      if (/^(errorCode|error)$/i.test(key)) {
+        const found = arr(value).map(txt).find(Boolean);
+        if (found) return found;
+      }
+    }
+    for (const value of Object.values(n)) {
+      if (value && typeof value === 'object') {
+        const found = findCode(value, depth + 1);
+        if (found) return found;
+      }
+    }
+    return '';
+  };
+
   const code = txt(at(node, 'errorOrWarningCodeDetails.errorDetails.errorCode'))
     || txt(at(node, 'applicationError.applicationErrorDetail.error'))
     || txt(at(node, 'errorDefinition.errorDetails.errorCode'))
     || txt(at(node, 'errorDetails.errorCode'))
     || txt(at(node, 'errorCode'))
+    || findCode(node)
     || '';
 
   const collectText = (n, depth = 0) => {
