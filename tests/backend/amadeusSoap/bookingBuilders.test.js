@@ -421,11 +421,15 @@ describe('DocIssuance_IssueTicket', () => {
 });
 
 describe('Queue_PlacePNR', () => {
-  // `option` is AlphaNumericString_Length1To3, so the four-letter BLPC a human
-  // types at a terminal is rejected on length alone.
-  it('uses a placement code the schema can hold', () => {
+  // `QEQ`, from Amadeus's own "placing a PNR in a specified category of a
+  // specified queue" example. `BLPC` is the cryptic entry a human types; it is
+  // too long for AlphaNumericString_Length1To3, and truncating it to `BLP` was
+  // a guess. The WSAP answered `91A INACTIVE QUEUE BANK` either way, which
+  // reads like an office problem and was very nearly reported as one.
+  it('uses the documented placement option', () => {
     const xml = buildQueuePlaceBody({ recordLocator: 'ABC123', queueOffice: 'SCK1S2400', queueNumber: '50' });
-    expect(xml).toContain('<option>BLP</option>');
+
+    expect(xml).toContain('<option>QEQ</option>');
     expect(xml.match(/<option>(.*?)<\/option>/)[1].length).toBeLessThanOrEqual(3);
   });
 

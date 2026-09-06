@@ -231,7 +231,7 @@ export const readIssueTicketReply = (reply) => {
 /**
  * Put the PNR on a queue for the ticketing desk to review.
  *
- * BLPC places the record on a numbered queue in a named office. This is
+ * QEQ places the record on a numbered queue in a named office. This is
  * bookkeeping: a failure here leaves a perfectly good booking, so the chain
  * warns and carries on rather than compensating.
  */
@@ -239,9 +239,13 @@ export const buildQueuePlaceBody = ({ recordLocator, queueOffice, queueNumber = 
   if (!recordLocator) throw new Error('a record locator is required to queue a PNR');
 
   const body = [
-    // `option` is AlphaNumericString_Length1To3. BLPC - the four-letter entry a
-    // human types - is rejected for length; BLP is the placement code.
-    wrap('placementOption', wrap('selectionDetails', el('option', 'BLP'))),
+    // `QEQ`, from Amadeus's own "placing a PNR in a specified category of a
+    // specified queue" example. `BLPC` is the entry a human types at a cryptic
+    // terminal; it is rejected here for length, and truncating it to `BLP` was
+    // a guess that the WSAP answered `91A INACTIVE QUEUE BANK` — which reads
+    // like an office-configuration problem and was raised with Amadeus as one.
+    // Every other field in that example already matched ours exactly.
+    wrap('placementOption', wrap('selectionDetails', el('option', 'QEQ'))),
     wrap('targetDetails', [
       wrap('targetOffice', [
         // sourceQualifier1 is `3` - "the queue belongs to the requesting
