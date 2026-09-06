@@ -204,9 +204,16 @@ export const buildRetrieveBody = (recordLocator) => {
 /**
  * Cancel the itinerary and commit.
  *
- * entryType ITI cancels the air segments; optionCode 11 ends and retrieves so
- * the reply confirms what the PNR looks like afterwards rather than leaving it
- * uncommitted.
+ * entryType `I` cancels the itinerary — every travel segment. The comment here
+ * used to say ITI, which is the entry a human types at a terminal and which
+ * this schema rejects on length; the code below has been right for a while and
+ * the comment had not caught up.
+ *
+ * optionCode 11 ends and retrieves, so the reply confirms what the PNR looks
+ * like afterwards rather than leaving it uncommitted. Amadeus's own example
+ * uses 10, which ends the transaction without reading the record back — ours
+ * is the stricter choice, and it is what lets a caller verify the cancellation
+ * actually happened.
  */
 export const buildCancelBody = (recordLocator) => {
   const ns = OPERATIONS.PNR_Cancel.namespace;

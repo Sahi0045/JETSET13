@@ -95,9 +95,12 @@ export const readTickets = (reply) => {
     //                        |  carrier    issue date
     //                        electronic ticket marker
     //
-    // The plating carrier is mandatory to void a ticket, and the issue date
-    // decides whether voiding is even possible - after the day of issue the
-    // ticket has to be refunded through the airline instead.
+    // The issue date decides whether voiding is possible at all: after the day
+    // of issue the ticket has to be refunded through the airline instead.
+    //
+    // The plating carrier is read for the record, not because the void needs
+    // it — Ticket_CancelDocument identifies the stock by the office's market
+    // code, not by a carrier.
     const carrier = freetext.match(/\/ET([A-Z0-9]{2})\b/)?.[1] ?? null;
     const issuedOn = fromDDMMMYY(freetext.match(/\b(\d{2}[A-Z]{3}\d{2})\b/)?.[1]);
 

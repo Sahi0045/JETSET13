@@ -410,7 +410,12 @@ export const cancelBooking = async (recordLocator) => {
     // has settled, and the ticket has to be refunded through the airline under
     // its own fare rules. Cancelling the itinerary without voiding a same-day
     // ticket throws away that window for no reason.
-    const voidable = tickets.filter((t) => t.issuedOn === today && t.number && t.validatingCarrier);
+    // The plating carrier used to be required here because the void request
+    // carried it. It does not: Ticket_CancelDocument identifies the stock by
+    // the office's market code. Keeping the carrier in this condition would
+    // send a perfectly voidable ticket down the airline-refund path whenever
+    // the FA free text did not happen to match the /ET../ pattern.
+    const voidable = tickets.filter((t) => t.issuedOn === today && t.number);
     const unvoidable = tickets.filter((t) => !voidable.includes(t));
     let voided = false;
 
