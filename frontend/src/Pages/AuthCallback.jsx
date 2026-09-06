@@ -76,7 +76,7 @@ const AuthCallback = () => {
             const hasCompleteProfile = dbUser && dbUser.first_name && dbUser.last_name;
 
             // Redirect to intended destination or complete-profile
-            let intendedPath = sessionStorage.getItem('auth_redirect') || '/my-trips';
+            let intendedPath = sessionStorage.getItem('auth_redirect') || '/';
             
             if (!profileCompleted && !hasCompleteProfile) {
               intendedPath = '/complete-profile';
@@ -136,7 +136,7 @@ const AuthCallback = () => {
             const hasCompleteProfile = dbUser && dbUser.first_name && dbUser.last_name;
 
             // Redirect to intended destination or complete-profile
-            let intendedPath = sessionStorage.getItem('auth_redirect') || '/my-trips';
+            let intendedPath = sessionStorage.getItem('auth_redirect') || '/';
             
             if (!profileCompleted && !hasCompleteProfile) {
               intendedPath = '/complete-profile';
