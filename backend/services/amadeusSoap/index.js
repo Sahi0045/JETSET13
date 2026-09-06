@@ -261,6 +261,13 @@ const buildFareRulesIncluded = (text = []) => {
  * says about a request; it comes from the layer that decides what the office
  * is allowed to call.
  *
+ * MPTBS is not a substitute, which is worth recording so it is not retried.
+ * It accepts `rangeOfDate`, and `rangeQualifier C` with `dayInterval 1` is
+ * even accepted on this office - but the reply comes back carrying ONLY the
+ * target date, with fewer recommendations rather than more dates. It is a
+ * within-day flexibility filter, not a date spread. `dayInterval` above 1 is
+ * refused with 935 "Invalid range of dates option".
+ *
  * Amadeus saying otherwise would change this; nothing in our own code has been
  * able to.
  *
