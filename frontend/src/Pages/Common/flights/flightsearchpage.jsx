@@ -1,6 +1,6 @@
  
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Link, useSearchParams, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, ArrowUpDown, MapPin, Luggage, Sun, Sunrise, Sunset, Moon, ShieldCheck, RefreshCw, Briefcase } from "lucide-react";
 import Navbar from '../Navbar';
 import Footer from '../Footer';
@@ -30,13 +30,41 @@ import FlightFareOptions from './FlightFareOptions';
 import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
 import { computeBounds, recommendScore } from './flightSort';
+import { extractIata, searchFromQuery, searchToQuery } from './searchQuery';
 
 function FlightSearchPage() {
   const location = useLocation();
-  const searchData = location.state?.searchData;
+
+  /**
+   * Where the search comes from, in priority order.
+   *
+   * This page already writes `?from=&to=&date=` onto its own URL when the user
+   * picks a date in the strip, so that URL is a real, shareable search — but
+   * nothing ever read it back. Router state does not survive a refresh, a
+   * bookmark, a pasted link or a restored tab, and every one of those fell
+   * through to a hardcoded DEL-HYD search for today: the wrong route, silently,
+   * under the URL the user was actually looking at.
+   */
+  const searchDataFromUrl = useMemo(() => searchFromQuery(location.search), [location.search]);
+  const searchData = location.state?.searchData ?? searchDataFromUrl;
   const apiResponse = location.state?.apiResponse;
 
-  console.log('searchData:', searchData);
+  /**
+   * What the fetch below actually depends on: the search itself, not the
+   * identity of the object carrying it. Router state is a fresh object after
+   * every navigation, so keying on identity re-ran the search whenever the URL
+   * was rewritten with the same criteria.
+   */
+  const searchKey = useMemo(() => (searchData ? JSON.stringify([
+    extractIata(searchData.from),
+    extractIata(searchData.to),
+    searchData.departDate,
+    searchData.returnDate || '',
+    parseInt(searchData.adults) || parseInt(searchData.travelers) || 1,
+    parseInt(searchData.children) || 0,
+    parseInt(searchData.infants) || 0,
+    searchData.travelClass || 'ECONOMY',
+  ]) : null), [searchData]);
 
   // const location = useLocation();
   const navigate = useNavigate();
@@ -122,7 +150,7 @@ function FlightSearchPage() {
     };
 
     const initializeDates = () => {
-      const searchDate = location.state?.searchData?.departDate;
+      const searchDate = searchData?.departDate;
       const centerDate = searchDate ? getSafeDate(searchDate) : new Date();
       const dates = generateDateRange(centerDate);
       setDateRange(dates);
@@ -133,23 +161,17 @@ function FlightSearchPage() {
 
     // Fetch flight data if search parameters are available
     const fetchInitialFlights = async () => {
-      if (location.state?.searchData) {
+      if (searchData) {
         setLoading(true);
         setError(null);
         try {
-          console.log('Fetching flights with search data:', location.state.searchData);
+          console.log('Fetching flights with search data:', searchData);
 
           // Ensure all required fields are present
-          // Helper to extract code from string like "City (CODE)"
-          const extractCode = (str) => {
-            const match = str && str.match(/\(([A-Z]{3})\)$/);
-            return match ? match[1] : str;
-          };
-
-          const sd = location.state.searchData;
-          const searchData = {
-            from: extractCode(sd.from),
-            to: extractCode(sd.to),
+          const sd = searchData;
+          const payload = {
+            from: extractIata(sd.from),
+            to: extractIata(sd.to),
             departDate: sd.departDate,
             returnDate: sd.returnDate,
             adults: parseInt(sd.adults) || parseInt(sd.travelers) || 1,
@@ -160,19 +182,19 @@ function FlightSearchPage() {
           };
 
           // Apply initial filters if passed in state (e.g. from a previous search or deep link)
-          if (sd.maxPrice) searchData.maxPrice = sd.maxPrice;
-          if (sd.nonStop) searchData.nonStop = sd.nonStop;
-          if (sd.includedAirlineCodes) searchData.includedAirlineCodes = sd.includedAirlineCodes;
-          if (sd.excludedAirlineCodes) searchData.excludedAirlineCodes = sd.excludedAirlineCodes;
+          if (sd.maxPrice) payload.maxPrice = sd.maxPrice;
+          if (sd.nonStop) payload.nonStop = sd.nonStop;
+          if (sd.includedAirlineCodes) payload.includedAirlineCodes = sd.includedAirlineCodes;
+          if (sd.excludedAirlineCodes) payload.excludedAirlineCodes = sd.excludedAirlineCodes;
 
           // Validate required fields
-          if (!searchData.from || !searchData.to || !searchData.departDate) {
+          if (!payload.from || !payload.to || !payload.departDate) {
             throw new Error('Missing required fields: from, to, and departDate are required');
           }
 
           // Remove returnDate if it's empty
-          if (!searchData.returnDate) {
-            delete searchData.returnDate;
+          if (!payload.returnDate) {
+            delete payload.returnDate;
           }
 
           // Use API endpoint from centralized config
@@ -185,7 +207,7 @@ function FlightSearchPage() {
               'Content-Type': 'application/json',
               'Accept': 'application/json'
             },
-            body: JSON.stringify(searchData),
+            body: JSON.stringify(payload),
             credentials: 'omit',
             signal: controller.signal
           });
@@ -258,14 +280,35 @@ function FlightSearchPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [location.state]);
+  }, [searchKey]);
 
-  // Update search params when location state changes
+  // Keep the modify bar and filters in step with the resolved search,
+  // whether it arrived as router state or in the URL.
   useEffect(() => {
-    if (location.state?.searchData) {
-      setSearchParams(location.state.searchData);
+    if (searchData) {
+      setSearchParams(searchData);
     }
-  }, [location.state]);
+  }, [searchKey]);
+
+  /**
+   * Put the search on the URL when it arrived only as router state.
+   *
+   * Reading the URL alone fixes half the problem: it only helps once the URL
+   * has criteria on it, which until now happened only if the user picked a
+   * date in the strip. A search from the landing page left a bare
+   * /flights/search, so refreshing it still lost everything.
+   *
+   * `replace` so the back button still returns to the search form rather than
+   * to the same results under a different URL. The fetch is keyed on
+   * `searchKey`, so the new router state this creates does not re-run it.
+   */
+  useEffect(() => {
+    if (!searchData || location.search) return;
+    navigate(`/flights/search?${searchToQuery(searchData)}`, {
+      replace: true,
+      state: location.state,
+    });
+  }, [searchKey, location.search]);
 
   // Dynamic airline names - populated from Amadeus API responses (no hardcoding)
   // The backend transform already resolves airline codes to names using Amadeus dictionaries.carriers
@@ -1001,17 +1044,11 @@ function FlightSearchPage() {
     setError(null);
 
     try {
-      // Helper to extract code from string like "City (CODE)"
-      const extractCode = (str) => {
-        const match = str && str.match(/\(([A-Z]{3})\)$/);
-        return match ? match[1] : str;
-      };
-
       // Create new search params with updated date AND extracted codes
       const newSearchParams = {
         ...searchParams,
-        from: extractCode(searchParams.from),
-        to: extractCode(searchParams.to),
+        from: extractIata(searchParams.from),
+        to: extractIata(searchParams.to),
         departDate: selectedDate.isoDate,
         travelClass: searchParams.travelClass || 'ECONOMY',
         adults: parseInt(searchParams.adults) || parseInt(searchParams.travelers) || 1,
@@ -1076,8 +1113,9 @@ function FlightSearchPage() {
         );
       }
 
-      // Update URL with new search params
-      navigate(`/flights/search?from=${newSearchParams.from}&to=${newSearchParams.to}&date=${selectedDate.isoDate}`, {
+      // Put the whole search on the URL, not just the route and date, so a
+      // refresh here comes back with the same passengers and cabin.
+      navigate(`/flights/search?${searchToQuery(newSearchParams, selectedDate.isoDate)}`, {
         replace: true,
         state: { searchData: newSearchParams }
       });
@@ -1167,15 +1205,8 @@ function FlightSearchPage() {
   // Fetch lowest fare per day for the date strip (Amadeus cheapest-per-date)
   const loadDatePrices = useCallback(async (sp, isoDates) => {
     if (!sp || !Array.isArray(isoDates) || isoDates.length === 0) return;
-    const extractCode = (str) => {
-      if (!str) return '';
-      const m = String(str).match(/\(([A-Z]{3})\)$/);
-      if (m) return m[1];
-      if (/^[A-Z]{3}$/.test(String(str).trim())) return String(str).trim();
-      return str;
-    };
-    const fromCode = sp.fromCode || extractCode(sp.from);
-    const toCode = sp.toCode || extractCode(sp.to);
+    const fromCode = sp.fromCode || extractIata(sp.from);
+    const toCode = sp.toCode || extractIata(sp.to);
     if (!fromCode || !toCode) return;
     try {
       const res = await fetch(apiConfig.endpoints.flights.datePrices, {
