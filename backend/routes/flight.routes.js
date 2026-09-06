@@ -1554,9 +1554,14 @@ router.post('/order', async (req, res) => {
           currency: dbBooking.currency || firstOffer?.price?.currency || 'USD',
           travelDate: dbBooking.booking_details?.departure_date_full || firstSegment?.departure?.at?.split('T')[0],
           passengers: amadeusTravelers.length || travelersList.length || 1,
+          // Hand over the whole row, not three hand-picked fields. Passing
+          // only origin/destination/airline left the template with no times,
+          // terminals, cabin or flight number, and its `time || code` fallback
+          // then printed the airport code where the time belongs — "DEL / DEL".
           bookingDetails: {
-            origin: dbBooking.booking_details?.origin_city || firstSegment?.departure?.iataCode,
-            destination: dbBooking.booking_details?.destination_city || lastSegment?.arrival?.iataCode,
+            ...(dbBooking.booking_details || {}),
+            origin: dbBooking.booking_details?.origin || firstSegment?.departure?.iataCode,
+            destination: dbBooking.booking_details?.destination || lastSegment?.arrival?.iataCode,
             airline: dbBooking.booking_details?.airline_name || firstOffer?.validatingAirlineCodes?.[0]
           }
         };

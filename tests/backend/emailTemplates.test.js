@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '../../backend/services/email/templates.js';
-import { dataGrid, figureBlock, progressSteps, stayCard, stepList } from '../../backend/services/emailTemplate.js';
+import { dataGrid, figureBlock, humanDuration, progressSteps, stayCard, stepList } from '../../backend/services/emailTemplate.js';
 
 /**
  * Email templates.
@@ -222,5 +222,91 @@ describe('shared components', () => {
 
     expect(html).toContain('border-top:1px solid');
     expect(html).not.toMatch(/height:1px;\s*background:/);
+  });
+});
+
+/**
+ * The booking confirmation against a real stored booking row.
+ *
+ * Both defects here were found by completing an actual booking and reading the
+ * email that arrived, not by inspection:
+ *
+ *   - `booking_details` is stored snake_case and some callers hand the row
+ *     over as-is, but the template read camelCase only. Every time, terminal
+ *     and city came back undefined — and that is not a blank space, because
+ *     `segmentCard` falls back to `time || code`. The airport code printed
+ *     where the time belongs, and again beneath it: "DEL / DEL", "BOM / BOM".
+ *   - The `/order` caller compounded it by passing three hand-picked fields
+ *     instead of the row, so there was nothing to render in the first place.
+ *   - Durations are stored ISO 8601, so the traveller read "PT2H35M".
+ */
+describe('booking confirmation, from a stored booking row', () => {
+  // Shaped exactly as `booking_details` comes back from Supabase.
+  const row = {
+    origin: 'DEL', destination: 'BOM',
+    airline_name: 'AI', flight_number: 'AI2425', cabin_class: 'ECONOMY',
+    departure_time: '10:30 AM', arrival_time: '01:05 PM',
+    departure_terminal: '3', arrival_terminal: '2',
+    departure_date: '2026-09-27', arrival_date: '2026-09-27',
+    duration: 'PT2H35M', stops: 0, pnr: 'CPVKBU',
+  };
+
+  const html = T.generateBookingConfirmationTemplate({
+    customerName: 'LOCAL TESTER',
+    bookingReference: 'FLTMTPN6NTW',
+    bookingType: 'flight',
+    paymentAmount: 83.3,
+    currency: 'USD',
+    travelDate: '2026-09-27',
+    passengers: 1,
+    bookingDetails: row,
+  });
+
+  it('shows the times, not the airport code twice', () => {
+    expect(html).toContain('10:30 AM');
+    expect(html).toContain('01:05 PM');
+    // The regression signature: the code rendered as its own departure time.
+    expect(html).not.toMatch(/>\s*DEL\s*<\/div>\s*<div[^>]*>\s*DEL\b/);
+  });
+
+  it('reads snake_case fields the row actually stores', () => {
+    expect(html).toContain('Terminal 3');
+    expect(html).toContain('Terminal 2');
+    expect(html).toContain('AI2425');
+    expect(html).toContain('ECONOMY');
+  });
+
+  it('renders the duration for a human, not as ISO 8601', () => {
+    expect(html).toContain('2h 35m');
+    expect(html).not.toContain('PT2H35M');
+  });
+
+  it('still reads a camelCase caller, which other call sites pass', () => {
+    const camel = T.generateBookingConfirmationTemplate({
+      bookingReference: 'X', bookingType: 'flight', bookingDetails: {
+        origin: 'JFK', destination: 'LHR', departureTime: '19:25', arrivalTime: '06:10',
+        departureTerminal: '4', duration: 'PT7H45M',
+      },
+    });
+
+    expect(camel).toContain('19:25');
+    expect(camel).toContain('Terminal 4');
+    expect(camel).toContain('7h 45m');
+  });
+});
+
+describe('humanDuration', () => {
+  it('converts an ISO 8601 duration', () => {
+    expect(humanDuration('PT2H35M')).toBe('2h 35m');
+    expect(humanDuration('PT45M')).toBe('45m');
+    expect(humanDuration('PT7H')).toBe('7h');
+  });
+
+  it('passes through what is already formatted, and empties safely', () => {
+    // Some callers format before they get here; do not mangle their string.
+    expect(humanDuration('2h 35m')).toBe('2h 35m');
+    expect(humanDuration('')).toBe('');
+    expect(humanDuration(null)).toBe('');
+    expect(humanDuration(undefined)).toBe('');
   });
 });

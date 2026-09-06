@@ -473,7 +473,26 @@ export function generateBookingConfirmationTemplate(data) {
   const title = ({ flight: 'Flight Booking', hotel: 'Hotel Reservation', cruise: 'Cruise Booking', package: 'Travel Package' }[kind]) || 'Travel Booking';
   const formatCurrency = (amount) => money(amount, currency);
 
-  const d = bookingDetails;
+  /**
+   * Booking details reach this template in two shapes, and both are real.
+   *
+   * `booking_details` is stored snake_case, and some callers hand the row
+   * straight over; others build a camelCase object by hand. Reading only
+   * camelCase meant every snake_case field came back undefined, which is not
+   * a blank space on the page — `segmentCard` falls back to `time || code`,
+   * so a missing departure time rendered the airport code where the time
+   * belongs and then the code again beneath it: "DEL / DEL", "BOM / BOM", on
+   * every flight confirmation, with no times, terminals or cities anywhere.
+   */
+  const d = new Proxy(bookingDetails || {}, {
+    get(target, key) {
+      if (typeof key !== 'string' || key in target) return target[key];
+      const snake = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+      if (snake in target) return target[snake];
+      const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      return target[camel];
+    },
+  });
 
   const rows = [
     ['Booking Type', title],
@@ -494,9 +513,9 @@ export function generateBookingConfirmationTemplate(data) {
   // a hotel gets the stay card; anything else falls back to the route strip.
   const journey = kind === 'flight' && d.origin && d.destination
     ? segmentCard({
-      airline: d.Airline || d.airline,
+      airline: d.Airline || d.airlineName || d.airline,
       flightNumber: d.Flight || d.flightNumber,
-      cabin: d.Cabin || d.cabin,
+      cabin: d.Cabin || d.cabin || d.cabinClass,
       depTime: d.departureTime, depCode: d.origin, depCity: d.originCity, depDate: shortDate(travelDate), depTerminal: d.departureTerminal,
       arrTime: d.arrivalTime, arrCode: d.destination, arrCity: d.destinationCity, arrDate: shortDate(d.arrivalDate || travelDate), arrTerminal: d.arrivalTerminal,
       duration: d.duration, stops: d.stops,
