@@ -285,8 +285,14 @@ const buildBagsIncluded = (offer) => {
   details.forEach((detail, index) => {
     const included = detail.includedCheckedBags;
     if (!included) return;
+    // A weight allowance is not a piece count. Putting the weight in
+    // `quantity` made the UI render "+15 checked bag 15kg" on the fare-rules
+    // panel for a 15 KG allowance. Carry each as itself and let the caller
+    // decide how to say it.
     bags[String(index + 1)] = {
-      quantity: included.quantity ?? included.weight ?? 0,
+      quantity: included.quantity,
+      weight: included.weight,
+      weightUnit: included.weight === undefined ? undefined : (included.weightUnit ?? 'KG'),
       name: included.weight === undefined
         ? 'CHECKED_BAG'
         : `CHECKED_BAG ${included.weight}${included.weightUnit ?? 'KG'}`,

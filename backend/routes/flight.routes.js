@@ -940,6 +940,10 @@ router.post('/fare-rules', async (req, res) => {
     // Structured extra-baggage options
     const bags = Object.values(included.bags || {}).map((b) => ({
       quantity: b.quantity,
+      // A weight allowance and a piece count are different things; the client
+      // renders whichever it is given.
+      weight: b.weight,
+      weightUnit: b.weightUnit,
       name: b.name,
       price: b.price ? { amount: parseFloat(b.price.amount), currency: b.price.currencyCode } : null,
       segmentIds: b.segmentIds || [],
