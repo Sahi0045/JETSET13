@@ -326,6 +326,22 @@ export function statusPill(text, tone = 'success') {
  *
  * Times are passed pre-formatted: the sender knows the timezone, this does not.
  */
+/**
+ * "PT2H35M" -> "2h 35m".
+ *
+ * Amadeus durations are stored as ISO 8601 and were printed verbatim into the
+ * confirmation email, so a traveller read "PT2H35M" between their two
+ * airports. Anything that is not an ISO duration is passed through, since
+ * some callers already format it.
+ */
+export function humanDuration(value) {
+  if (!value) return '';
+  const m = String(value).match(/^P(?:\d+D)?T?(?:(\d+)H)?(?:(\d+)M)?$/i);
+  if (!m || (!m[1] && !m[2])) return String(value);
+  const [, h, min] = m;
+  return [h ? `${Number(h)}h` : null, min ? `${Number(min)}m` : null].filter(Boolean).join(' ');
+}
+
 export function segmentCard(seg = {}) {
   const {
     airline, flightNumber, cabin,
@@ -358,7 +374,7 @@ export function segmentCard(seg = {}) {
           <tr>
             ${end(depTime, depCode, depCity, depDate, depTerminal, 'left')}
             <td width="32%" align="center" valign="top" style="padding:4px 6px 0;">
-              <div style="font-family:${FONT}; font-size:12px; color:${BRAND.muted};">${duration || ''}</div>
+              <div style="font-family:${FONT}; font-size:12px; color:${BRAND.muted};">${humanDuration(duration)}</div>
               <!-- The rule is one bordered cell, not two background-filled
                    cells either side of a glyph. Backgrounds on a 1px-high <td>
                    collapse inconsistently - Gmail honoured the height, Outlook
