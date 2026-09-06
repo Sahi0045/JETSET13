@@ -100,6 +100,20 @@ export const inspectReply = (body, operation) => {
   if (nodes.length === 0) return { ok: true };
 
   const described = nodes.map(describe);
+
+  // DocIssuance_IssueTicket reports SUCCESS inside an errorGroup whose
+  // errorCode is the literal string "OK" — Amadeus's own "electronic ticketing
+  // issuance" example shows `processingStatus O` alongside
+  // `errorGroup/errorDetails/errorCode OK`. Since errorGroup is one of the
+  // containers collected above, a successful issuance would otherwise be read
+  // as a failure and thrown by callStep: with AMADEUS_WS_AUTO_TICKET on, every
+  // ticket that issued correctly would have failed the booking, and the
+  // compensation path would have been entered for a customer holding a valid
+  // ticket. An error code of "OK" is not an error under any reading.
+  if (described.length > 0 && described.every((d) => /^OK$/i.test(String(d.code || '').trim()))) {
+    return { ok: true };
+  }
+
   const blob = described.map((d) => `${d.code} ${d.text}`).join(' | ').trim();
   const rule = ERROR_CATALOGUE.find((r) => r.match.test(blob));
 
