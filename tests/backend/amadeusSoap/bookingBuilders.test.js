@@ -77,6 +77,47 @@ describe('Air_SellFromRecommendation', () => {
     expect(xml).toContain('<origin>BOM</origin><destination>DEL</destination>');
   });
 
+  /**
+   * A connection is ONE itineraryDetails holding both segments, and its
+   * origin/destination span the whole journey rather than either flight.
+   *
+   * This is the shape of Amadeus's own "selling connecting flights" example:
+   * one itineraryDetails for STO -> NYC, containing ARN -> AMS and AMS -> JFK.
+   * Getting it wrong would sell the two flights as separate journeys, and with
+   * `additionalMessageFunction M1` a failure on either is meant to roll back
+   * both — which only holds if they are in the same group.
+   *
+   * Round-trip legs were covered above; the connecting case was not, and it is
+   * the one where a mistake holds the wrong seats.
+   */
+  it('sells a connection as one leg spanning both segments', () => {
+    const connection = [
+      { ...segments[0], legIndex: 0, boardPoint: 'DEL', offPoint: 'BLR', flightNumber: '9484' },
+      {
+        legIndex: 0, boardPoint: 'BLR', offPoint: 'BOM', departureDate: '260926',
+        departureTime: '0700', arrivalDate: '260926', marketingCarrier: 'AI',
+        flightNumber: '9601', rbd: 'S',
+      },
+    ];
+    const xml = buildAirSellBody({ segments: connection, seats: 1 });
+
+    expect(xml.match(/<itineraryDetails>/g)).toHaveLength(1);
+    expect(xml.match(/<segmentInformation>/g)).toHaveLength(2);
+    // The leg is DEL -> BOM, not DEL -> BLR.
+    expect(xml).toContain('<origin>DEL</origin><destination>BOM</destination>');
+    // Both flights are present, in order.
+    expect(xml.indexOf('9484')).toBeLessThan(xml.indexOf('9601'));
+  });
+
+  it('asks Amadeus to roll back every segment if one cannot be sold', () => {
+    // M1 is the optimisation algorithm that cancels all flights when a sell
+    // fails. Without it a connection can be half-sold, leaving the customer
+    // holding one leg of a journey they cannot complete.
+    const xml = buildAirSellBody({ segments: roundTrip, seats: 1 });
+
+    expect(xml).toContain('<messageFunction>183</messageFunction><additionalMessageFunction>M1</additionalMessageFunction>');
+  });
+
   it('refuses to sell nothing', () => {
     expect(() => buildAirSellBody({ segments: [], seats: 1 })).toThrow(/segments are required/);
     expect(() => buildAirSellBody({ segments, seats: 0 })).toThrow(/at least 1/);
