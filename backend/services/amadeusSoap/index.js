@@ -7,11 +7,12 @@ import { AmadeusSoapError, inspectReply } from './errors.js';
 import { mapMasterPricerReply } from './mappers/offer.js';
 import { buildMasterPricerBody } from './operations/masterPricer.js';
 import { buildInformativePricingBody } from './operations/informativePricing.js';
+import { DEFAULT_RULE_SECTIONS, buildCheckRulesBody, readCheckRulesReply } from './operations/fareRules.js';
 import { buildFlightInfoBody, readFlightInfoError, readFlightInfoReply } from './operations/flightInfo.js';
 import { applyPricingToOffer } from './mappers/pricing.js';
 import { cancelBooking, retrieveBooking, runBookingChain } from './bookingChain.js';
 import { unwrapEnvelope } from './parseXml.js';
-import { callStateless } from './session.js';
+import { callStateless, withSession } from './session.js';
 
 const log = logger.child({ svc: 'amadeus-ws' });
 
@@ -146,6 +147,90 @@ const searchFlights = async (params) => {
  * Returns the REST flight-offers-pricing envelope the route passes straight
  * through, plus the `included` block /fare-rules reshapes.
  */
+/**
+ * Filed fare rules for an offer, before any booking exists.
+ *
+ * Runs informative pricing and Fare_CheckRules in ONE session. CheckRules
+ * addresses a fare component of the pricing that preceded it, so the two calls
+ * have to share a session — which is exactly what the previous attempt missed
+ * when it concluded a committed PNR was required.
+ *
+ * Falls back to the informative-pricing rule text rather than failing: thin
+ * conditions beat none, and this sits on the review page.
+ */
+const getFiledFareRules = async (flightOffer, { sections = DEFAULT_RULE_SECTIONS } = {}) => {
+  const config = getWsConfig();
+  const offer = flightOffer?.originalOffer ?? flightOffer;
+  const ama = offer?._ama;
+
+  if (!ama?.segments?.length) {
+    throw new AmadeusSoapError({
+      error: 'This flight can no longer be priced - please search again',
+      code: 409,
+      technicalError: 'offer is missing _ama; it did not come from this provider',
+      operation: 'Fare_CheckRules',
+    });
+  }
+
+  return withSession(async (ctx) => {
+    const pricing = await ctx.call('Fare_InformativePricingWithoutPNR', buildInformativePricingBody({
+      paxRefs: ama.paxRefs,
+      segments: ama.segments,
+      currency: config.currency,
+      validatingCarrier: offer.validatingAirlineCodes?.[0],
+    }));
+
+    const { reply: pricedReply } = soapReply(pricing);
+    const priced = inspectReply(pricedReply, 'Fare_InformativePricingWithoutPNR');
+    if (priced.error) {
+      reportIfAlerting(priced.error);
+      throw priced.error;
+    }
+
+    const { offer: pricedOffer, text } = applyPricingToOffer(pricedReply, offer);
+    const filed = [];
+
+    for (const section of sections) {
+      try {
+        const result = await ctx.call('Fare_CheckRules', buildCheckRulesBody({ ruleSection: section }));
+        const { reply } = soapReply(result);
+        const inspected = inspectReply(reply, 'Fare_CheckRules');
+        if (inspected.error) {
+          log.warn({ section, reason: inspected.error.technicalError }, 'Fare_CheckRules section refused');
+          continue;
+        }
+        filed.push(...readCheckRulesReply(reply).sections);
+      } catch (cause) {
+        // One unreadable section must not cost the customer the whole panel.
+        log.warn({ section, reason: cause?.technicalError ?? cause?.message }, 'Fare_CheckRules failed');
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        type: 'flight-offers-pricing',
+        flightOffers: [pricedOffer],
+        bookingRequirements: {},
+      },
+      included: {
+        bags: buildBagsIncluded(pricedOffer),
+        // Filed rules when we got them, the thinner pricing text when we did
+        // not, so the shape the route scrapes never changes.
+        'detailed-fare-rules': filed.length > 0
+          ? buildFareRulesIncluded(filed.flatMap((section) => section.text
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => ({ text: line }))))
+          : buildFareRulesIncluded(text),
+      },
+      dictionaries: {},
+      filedSections: filed.map((s) => s.code).filter(Boolean),
+    };
+  });
+};
+
 const priceFlightOffer = async (flightOffer) => {
   const config = getWsConfig();
   const offer = flightOffer?.originalOffer ?? flightOffer;
@@ -216,9 +301,12 @@ const buildBagsIncluded = (offer) => {
  * Fare-rule free text in the REST `included['detailed-fare-rules']` shape.
  *
  * Amadeus returns rules as free text, so the route's existing penalty scraper
- * still applies - only the transport changed. Rule text richer than this needs
- * Fare_CheckRules, which requires a TST inside an active PNR session and so
- * arrives with the booking chain.
+ * still applies - only the transport changed.
+ *
+ * Richer text comes from Fare_CheckRules via `getFiledFareRules`, which does
+ * not need a booking: pricing and rules share a session and CheckRules
+ * addresses the fare component. This helper shapes both the same way, so the
+ * scraper cannot tell them apart.
  */
 const buildFareRulesIncluded = (text = []) => {
   const descriptions = text
@@ -583,6 +671,7 @@ export default {
   getBusiestTravelPeriod,
 
   priceFlightOffer,
+  getFiledFareRules,
   getCalendarPrices,
   getCheapestFlightDates,
 
