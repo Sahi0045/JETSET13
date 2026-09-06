@@ -239,6 +239,22 @@ const buildFareRulesIncluded = (text = []) => {
  * this office, so a flexible-date search is not available to us. Until Amadeus
  * enables it, each date is priced with an ordinary search.
  *
+ * That conclusion was re-tested against the 20.2 schema and the live WSAP
+ * rather than assumed, because the same reasoning was wrong about
+ * FOP_CreateFormOfPayment: there, an invariant rejection turned out to be one
+ * element of ours, not their configuration.
+ *
+ * Every element we send is a valid root child in sequence order, and the
+ * rejection does not move across eight request shapes - one-way, round trip,
+ * dayInterval 1 and 3, two routes, and a bare request carrying no
+ * paxReference, no fareOptions and no date range at all. What makes this
+ * different from the FOP case is that MasterPricerCalendar has NO mandatory
+ * root elements, so there is no always-present element that could be the
+ * hidden culprit. The error also names an option rather than data.
+ *
+ * Amadeus saying otherwise would change this; nothing in our own code has been
+ * able to.
+ *
  * That is the fan-out the old REST code did, with two differences that make it
  * safe: the date count is capped, and results are cached, so a customer paging
  * a calendar cannot turn one page view into thirty GDS calls. The transport's
