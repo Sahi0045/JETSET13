@@ -108,10 +108,25 @@ describe('the SSR element on the request', () => {
       + '<companyId>YY</companyId><freetext>P/GBR/X1234567/GBR/01JAN90/M/25DEC30/TESTER/LOCAL/H</freetext></ssr>');
   });
 
-  it('associates the document with its own passenger', () => {
-    // The error names a passenger number - "MISSING FOR P1" - so an
-    // unassociated document belongs to nobody.
-    expect(xml).toContain('<referenceForDataElement><reference><qualifier>PT</qualifier><number>1</number></reference></referenceForDataElement>');
+  it('associates the document with PR, the reference this message creates', () => {
+    /**
+     * `PR`, not `PT`, and the difference was the whole bug.
+     *
+     * The XSD says a reference number "refers to an existing PNR
+     * segment/element that has been previously transmitted in a previous
+     * Server response message". A passenger TATTOO is assigned by the host,
+     * and Amadeus's own FP element — written later, once the PNR existed —
+     * carries `PT/2` for a single passenger. So the tattoo is not the ordinal,
+     * and `PT/1` pointed at a passenger that does not exist.
+     *
+     * The element was accepted (it is schema-valid either way), appeared on
+     * the working PNR, and was then purged at commit — after which ticketing
+     * answered `27791 SSR DOCS MISSING FOR P1`. With `PR`, which addresses the
+     * `elementManagementPassenger` reference created by this very message, a
+     * real ticket issues.
+     */
+    expect(xml).toContain('<referenceForDataElement><reference><qualifier>PR</qualifier><number>1</number></reference></referenceForDataElement>');
+    expect(xml).not.toContain('<qualifier>PT</qualifier>');
   });
 
   it('still builds a PNR for travellers with no document at all', () => {
@@ -122,5 +137,41 @@ describe('the SSR element on the request', () => {
 
     expect(domestic).not.toContain('<segmentName>SSR</segmentName>');
     expect(domestic).toContain('<segmentName>NM</segmentName>');
+  });
+});
+
+/**
+ * FM — the commission element.
+ *
+ * With SSR DOCS accepted, issuance moved on to `374 CMC RJT : NEED COMMISSION`.
+ * This office will not issue against a TST that does not state the agency's
+ * commission. Zero is the right figure — the customer pays us through ARC Pay
+ * and we settle the fare, so there is no airline commission to claim — but it
+ * has to be said rather than left out.
+ *
+ * With both in place a real e-ticket issued on PDT: 220-7491174912, LH.
+ */
+describe('the commission element', () => {
+  const xml = buildAddElementsBody({
+    travelers: [{ firstName: 'A', lastName: 'B', gender: 'MALE', ptc: 'ADT' }],
+    contact: {}, officeId: 'SCK1S2400',
+  });
+
+  it('is always present, because ticketing is refused without it', () => {
+    expect(xml).toContain('<segmentName>FM</segmentName>');
+  });
+
+  it('claims zero by default, and says so explicitly', () => {
+    expect(xml).toContain('<commission><passengerType>PAX</passengerType><indicator>P</indicator>'
+      + '<commissionInfo><percentage>0</percentage></commissionInfo></commission>');
+  });
+
+  it('can carry a real percentage when an office earns one', () => {
+    const paid = buildAddElementsBody({
+      travelers: [{ firstName: 'A', lastName: 'B', gender: 'MALE', ptc: 'ADT' }],
+      contact: {}, officeId: 'SCK1S2400', commissionPercent: 5,
+    });
+
+    expect(paid).toContain('<percentage>5</percentage>');
   });
 });
