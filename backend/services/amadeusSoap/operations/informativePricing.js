@@ -88,10 +88,17 @@ export const buildInformativePricingBody = (p) => {
   const body = [
     buildPassengerGroups(paxRefs, segments.length),
     buildSegmentGroups(segments),
-    // RP  - published fares only, matching what search returned
+    // RP  - published fares
+    // RU  - unifares (negotiated). The search asks for RP, RU and TAC, so
+    //       pricing has to accept the same fare types. Asking for published
+    //       fares only re-prices a negotiated fare - usually the cheapest
+    //       thing the customer was shown - as a published one, at a different
+    //       amount. This is the price on the review page and the amount taken
+    //       at ARC Pay, so the mismatch is money, not cosmetics.
     // FCO - price in this currency
     // VC  - plate on the validating carrier the recommendation named
     wrap('pricingOptionGroup', wrap('pricingOptionKey', el('pricingOptionKey', 'RP'))),
+    wrap('pricingOptionGroup', wrap('pricingOptionKey', el('pricingOptionKey', 'RU'))),
     wrap('pricingOptionGroup', [
       wrap('pricingOptionKey', el('pricingOptionKey', 'FCO')),
       // CurrenciesType -> firstCurrencyDetails; currencyQualifier is mandatory.
