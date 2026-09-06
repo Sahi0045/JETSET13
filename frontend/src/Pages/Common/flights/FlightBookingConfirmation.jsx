@@ -459,7 +459,7 @@ function FlightBookingConfirmation() {
         dateOfBirth: "",
         seatNumber: "",
         meal: "Regular",
-        baggage: "15 Kg",
+        baggage: "",
         mobile: "",
         email: "",
         gender: "male",
@@ -545,7 +545,7 @@ function FlightBookingConfirmation() {
 
   // Add a function to format duration
   const formatDuration = (duration) => {
-    if (!duration) return 'Unknown Duration';
+    if (!duration) return '';
     // Handle PT20H20M format
     if (duration.startsWith('PT')) {
       const hours = duration.match(/(\d+)H/)?.[1] || '0';
@@ -632,7 +632,7 @@ function FlightBookingConfirmation() {
       dateOfBirth: "",
       seatNumber: "",
       meal: "Regular",
-      baggage: "15 Kg",
+      baggage: "",
       mobile: "",
       email: "",
       gender: "male",
@@ -1017,7 +1017,19 @@ function FlightBookingConfirmation() {
 
                               {/* Duration Arrow */}
                               <div className="route-connector flex flex-col items-center justify-center flex-1 min-w-[60px] md:min-w-[80px]">
-                                <div className="text-xs text-gray-500 font-medium">{formatDuration(seg.duration)}</div>
+                                {/* Per-segment elapsed time is deliberately not
+                                    carried on the offer: MasterPricer gives
+                                    LOCAL airport times with no timezone, so
+                                    subtracting them is wrong for any flight
+                                    crossing zones. Rendering it anyway printed
+                                    "Unknown Duration" on every leg of every
+                                    connection. Show nothing rather than a
+                                    placeholder or, worse, a computed wrong
+                                    number — the itinerary total above is
+                                    Amadeus's own elapsed time and is correct. */}
+                                {seg.duration ? (
+                                  <div className="text-xs text-gray-500 font-medium">{formatDuration(seg.duration)}</div>
+                                ) : null}
                                 <div className="relative w-full flex items-center my-1">
                                   <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
                                   <div className="mx-1 text-gray-400 text-sm">&#9992;</div>
@@ -1107,7 +1119,7 @@ function FlightBookingConfirmation() {
                   </div>
                   <div className="info-box">
                     <span className="label">Baggage</span>
-                    <span className="value">{formatBaggage(bookingDetails?.baggage?.checkIn) || 'Included'}</span>
+                    <span className="value">{formatBaggage(bookingDetails?.baggage?.checkIn) || 'See fare rules'}</span>
                   </div>
                   {bookingDetails?.flight?.operatingAirlineName && bookingDetails.flight.operatingAirlineName !== bookingDetails.flight.airline && (
                     <div className="info-box">
@@ -1137,7 +1149,16 @@ function FlightBookingConfirmation() {
                     </span>
                     <span className="text-gray-300">|</span>
                     <span className="inline-flex items-center gap-1.5">
-                      <Luggage className="h-4 w-4 text-[#055B75]" /> Check-in: <strong className="text-gray-900">{formatBaggage(bookingDetails?.baggage?.checkIn) || '15 Kg'}</strong> / adult
+                      {/* Never invent an allowance. This read `|| '15 Kg'`,
+                          so a fare whose baggage Amadeus did not return told
+                          the customer they had 15 kg — a number nobody
+                          verified, on the page they check before flying. The
+                          tile above said "Included" for the same fare. */}
+                      <Luggage className="h-4 w-4 text-[#055B75]" /> Check-in:{' '}
+                      <strong className="text-gray-900">
+                        {formatBaggage(bookingDetails?.baggage?.checkIn) || 'see fare rules'}
+                      </strong>
+                      {formatBaggage(bookingDetails?.baggage?.checkIn) ? ' / adult' : ''}
                     </span>
                   </div>
                   <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#055B75]">

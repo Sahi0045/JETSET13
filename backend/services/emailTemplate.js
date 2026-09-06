@@ -231,8 +231,42 @@ export function paragraph(html) {
   return `<p style="margin:0 0 16px; font-family:${FONT}; font-size:15px; line-height:1.65; color:${BRAND.body};">${html}</p>`;
 }
 
+/**
+ * The plain-text alternative of an email.
+ *
+ * This removed TAGS only, which is not the same as removing non-text. The CSS
+ * inside `<style>` survived, and so did any comment containing a `>` — the
+ * booking confirmation's text part carried our media queries and a developer
+ * note about how Outlook collapses a 1px cell. Anything rendering the text
+ * alternative — some clients, screen readers, previews — showed that to the
+ * customer.
+ *
+ * Order matters: comments and style/script content have to go before tags are
+ * stripped, or their contents are simply promoted to text.
+ */
 export function stripHtml(html) {
-  return String(html).replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
+  return String(html ?? '')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    // Keep the block structure a reader needs; without it the whole email
+    // arrives as one unbroken paragraph.
+    .replace(/<(?:br|hr)[^>]*>/gi, '\n')
+    .replace(/<\/(?:p|div|tr|h[1-6]|li)>/gi, '\n')
+    .replace(/<[^>]*>?/gm, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;|&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/[ \t]+/g, ' ')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line, i, all) => line || all[i - 1])
+    .join('\n')
+    .trim();
 }
 
 

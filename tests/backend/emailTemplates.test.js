@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '../../backend/services/email/templates.js';
-import { dataGrid, figureBlock, humanDuration, progressSteps, stayCard, stepList } from '../../backend/services/emailTemplate.js';
+import { dataGrid, figureBlock, humanDuration, progressSteps, stayCard, stepList, stripHtml } from '../../backend/services/emailTemplate.js';
 
 /**
  * Email templates.
@@ -308,5 +308,66 @@ describe('humanDuration', () => {
     expect(humanDuration('')).toBe('');
     expect(humanDuration(null)).toBe('');
     expect(humanDuration(undefined)).toBe('');
+  });
+});
+
+/**
+ * The plain-text alternative.
+ *
+ * `stripHtml` removed TAGS, which is not the same as removing non-text: the
+ * CSS inside `<style>` survived, and so did any comment containing a `>`. The
+ * booking confirmation's text part carried our media queries and a developer
+ * note about how Outlook collapses a 1px cell, and anything rendering the text
+ * alternative showed that to the customer.
+ */
+describe('stripHtml', () => {
+  it('drops the contents of style and script, not just their tags', () => {
+    const out = stripHtml('<style>@media only screen { .jsCard { width:100% !important; } }</style><p>Hello</p>');
+
+    expect(out).toBe('Hello');
+    expect(out).not.toMatch(/media|important|width:/);
+  });
+
+  it('drops comments, including one containing a > character', () => {
+    // The real leak: "collapse inconsistently - Gmail honoured the height,
+    // Outlook did not" reached the inbox because `<[^>]*>` cannot match a
+    // comment whose body contains ">".
+    const out = stripHtml('<!-- a border-top -> renders everywhere --><p>Booking confirmed</p>');
+
+    expect(out).toBe('Booking confirmed');
+    expect(out).not.toMatch(/border-top|renders everywhere/);
+  });
+
+  it('keeps block structure instead of one unbroken paragraph', () => {
+    expect(stripHtml('<p>Line one</p><p>Line two</p>').split('\n').filter(Boolean))
+      .toEqual(['Line one', 'Line two']);
+  });
+
+  it('decodes the entities the templates actually emit', () => {
+    expect(stripHtml('<p>DEL&nbsp;&#9992;&nbsp;BOM</p>')).toContain('DEL');
+    expect(stripHtml('<p>Taxes &amp; fees</p>')).toBe('Taxes & fees');
+    expect(stripHtml('<p>&quot;quoted&quot;</p>')).toBe('"quoted"');
+  });
+
+  it('handles empty input without throwing', () => {
+    expect(stripHtml('')).toBe('');
+    expect(stripHtml(null)).toBe('');
+    expect(stripHtml(undefined)).toBe('');
+  });
+
+  it('renders a real confirmation with no CSS or comments in it', () => {
+    const html = T.generateBookingConfirmationTemplate({
+      customerName: 'A B', bookingReference: 'REF1', bookingType: 'flight',
+      paymentAmount: 83.3, currency: 'USD', travelDate: '2026-09-27', passengers: 1,
+      bookingDetails: {
+        origin: 'DEL', destination: 'BOM', airline_name: 'AI', flight_number: 'AI2425',
+        departure_time: '10:30 AM', arrival_time: '01:05 PM', duration: 'PT2H35M',
+      },
+    });
+    const text = stripHtml(html);
+
+    expect(text).toContain('REF1');
+    expect(text).toContain('10:30 AM');
+    expect(text).not.toMatch(/@media|!important|<!--|-->/);
   });
 });
