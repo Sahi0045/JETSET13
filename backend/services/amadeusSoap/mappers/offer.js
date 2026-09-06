@@ -167,8 +167,16 @@ const readBaggage = (reply, itemNumber) => {
 
   const allowance = num(details.freeAllowance) ?? 0;
   const code = txt(details.quantityCode);
-  // 'N' counts pieces; 'W' and 'K' are weights in kilos.
-  return code === 'N' ? { quantity: allowance } : { weight: allowance, weightUnit: 'KG' };
+  if (code === 'N') return { quantity: allowance };
+
+  // `quantityCode` says whether the allowance is a weight or a piece count;
+  // `unitQualifier` says which unit that weight is in. We used to ignore the
+  // second and label every weight KG, which is wrong wherever a carrier files
+  // in pounds - common on US itineraries, and this is a US-settled agency. A
+  // 50 LB allowance shown as 50 KG is a passenger told they may carry more
+  // than twice what they actually may.
+  const unit = txt(details.unitQualifier);
+  return { weight: allowance, weightUnit: unit === 'L' ? 'LB' : 'KG' };
 };
 
 /**
