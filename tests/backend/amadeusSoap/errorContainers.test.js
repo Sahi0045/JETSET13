@@ -97,3 +97,51 @@ describe('containers that already worked', () => {
     expect(inspectReply(unwrapEnvelope(parseSoap(xml)).body, 'FOP_CreateFormOfPayment').ok).toBe(true);
   });
 });
+
+/**
+ * An error code nested deeper than the named paths.
+ *
+ * Air_SellFromRecommendation refuses a segment with
+ * `errorAtMessageLevel > errorSegment > errorDetails > errorCode`, one level
+ * below every path `describe` knew, and carries NO free text at all. So the
+ * code was not found, the text was empty, and a real rejection reached the
+ * customer as "Amadeus returned an unspecified error" with nothing logged to
+ * chase — the same silent loss that once hid a failing form of payment.
+ *
+ * Seen against 1ASIWJETJEC PDT selling a DEL-BLR fare plated on HR: code 288
+ * with `actionDetails/statusCode UNS`.
+ */
+describe('an error code nested below the named paths', () => {
+  const reply = {
+    errorAtMessageLevel: { errorSegment: { errorDetails: { errorCode: '288', errorCategory: 'EC' } } },
+    itineraryDetails: { segmentInformation: { actionDetails: { statusCode: 'UNS' } } },
+  };
+
+  it('reports the code instead of discarding it', () => {
+    const result = inspectReply(reply, 'Air_SellFromRecommendation');
+
+    expect(result.ok).toBe(false);
+    expect(result.error.technicalError).toContain('288');
+    expect(result.error.technicalError).not.toMatch(/unspecified/i);
+  });
+
+  it('still finds a code sitting at one of the named paths', () => {
+    // The named paths are tried first and must keep working unchanged.
+    // A code with no catalogue rule, so it falls through to the default and
+    // the raw code is what reaches technicalError.
+    const named = inspectReply({ errorMessage: { errorDetails: { errorCode: '4321' } } }, 'X');
+
+    expect(named.error.technicalError).toContain('4321');
+  });
+
+  it('does not invent a code where there is none', () => {
+    const bare = inspectReply({ errorMessage: { somethingElse: { note: 'hello' } } }, 'X');
+
+    expect(bare.ok).toBe(false);
+    expect(bare.error.technicalError).not.toMatch(/\b288\b/);
+  });
+
+  it('leaves a clean reply alone', () => {
+    expect(inspectReply({ itineraryDetails: { segmentInformation: {} } }, 'X').ok).toBe(true);
+  });
+});

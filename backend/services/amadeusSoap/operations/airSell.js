@@ -30,8 +30,12 @@ const SOLD = new Set(['OK', 'KK', 'HK', 'SS', 'HL']);
  * Statuses that mean they are not, and never will be for this request.
  * UC is "unable to confirm" - the fare sold out between search and sell, which
  * is normal rather than exceptional and has to be handled as a clean refund.
+ *
+ * UNS was observed on a live refusal that this set did not name: the segment
+ * came back `actionDetails/statusCode UNS` alongside a message-level error
+ * carrying only the code 288 and no text at all.
  */
-const REFUSED = new Set(['UC', 'NO', 'US', 'UN', 'NN']);
+const REFUSED = new Set(['UC', 'NO', 'US', 'UN', 'NN', 'UNS']);
 
 /** Group the flat `_ama.segments` list back into the legs it came from. */
 const groupByLeg = (segments) => {

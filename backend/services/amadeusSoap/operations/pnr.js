@@ -1,5 +1,6 @@
 import { OPERATIONS } from '../codes.js';
 import { each, el, wrap } from '../xml.js';
+import { buildDocsFreetext } from './travelDocs.js';
 
 /**
  * PNR_AddMultiElements, PNR_Retrieve and PNR_Cancel.
@@ -115,6 +116,74 @@ const remarkElement = ({ number, text }) => wrap('dataElementsIndiv', [
 ]);
 
 /**
+ * SSR DOCS - the passenger's travel document.
+ *
+ * Per the XSD, `serviceRequest/ssr` is a sequence of
+ * `type, status, quantity, companyId, indicator, boardpoint, offpoint,
+ * freetext` — freetext repeating at most twice at 70 characters each, which is
+ * why a long DOCS string is split rather than truncated.
+ *
+ * `YY` addresses every airline on the record, which the XSD spells out as
+ * "Airline code or YY". Sending a single carrier would leave the other
+ * marketing carriers on an interline itinerary without the document.
+ *
+ * The element is associated to one passenger with a PT reference. Without that
+ * association Amadeus cannot tell whose document it is, and the error names a
+ * passenger number: "SSR DOCS MISSING FOR P1".
+ */
+const docsElement = ({ number, paxNumber, freetext }) => wrap('dataElementsIndiv', [
+  wrap('elementManagementData', [
+    wrap('reference', [el('qualifier', 'OT'), el('number', String(number))]),
+    el('segmentName', 'SSR'),
+  ]),
+  wrap('serviceRequest', wrap('ssr', [
+    el('type', 'DOCS'),
+    el('status', 'HK'),
+    el('quantity', '1'),
+    el('companyId', 'YY'),
+    ...(freetext.length > 70
+      ? [el('freetext', freetext.slice(0, 70)), el('freetext', freetext.slice(70, 140))]
+      : [el('freetext', freetext)]),
+  ])),
+  // `PR`, not `PT`. The XSD says a reference number "refers to an existing PNR
+  // segment/element that has been previously transmitted in a previous Server
+  // response message" — and a tattoo has not been assigned yet, because the
+  // passenger is created by this very message as `elementManagementPassenger`
+  // reference `PR/1`. Amadeus's own FP element, written after the PNR existed,
+  // carries `PT/2` for the single passenger: the tattoo is not the ordinal, so
+  // `PT/1` associated the document with a passenger that does not exist. The
+  // element was accepted, appeared on the working PNR, and was purged at commit.
+  wrap('referenceForDataElement', wrap('reference', [
+    el('qualifier', 'PR'),
+    el('number', String(paxNumber)),
+  ])),
+]);
+
+/**
+ * FM - the commission element.
+ *
+ * `DocIssuance_IssueTicket` answers `374 CMC RJT : NEED COMMISSION` without
+ * one: this office will not issue against a TST that does not state what the
+ * agency is taking. Zero is the correct figure here — the customer pays us
+ * through ARC Pay and we settle the fare, so there is no airline commission to
+ * claim. It still has to be said explicitly.
+ *
+ * Per the XSD the indicator codeset is `M, C, P, CR, PR`; `P` marks the value
+ * as a percentage, which is what `commissionInfo/percentage` carries.
+ */
+const commissionElement = ({ number, percentage }) => wrap('dataElementsIndiv', [
+  wrap('elementManagementData', [
+    wrap('reference', [el('qualifier', 'OT'), el('number', String(number))]),
+    el('segmentName', 'FM'),
+  ]),
+  wrap('commission', [
+    el('passengerType', 'PAX'),
+    el('indicator', 'P'),
+    wrap('commissionInfo', el('percentage', String(percentage))),
+  ]),
+]);
+
+/**
  * Ticketing time limit.
  *
  * TL means "cancel the booking if it is not ticketed by then". It is the safety
@@ -144,7 +213,7 @@ const ticketingElement = ({ number, date, time, queueOffice }) => wrap('dataElem
  * @param {string} [p.bookingReference] filed on the PNR as an RM remark
  */
 export const buildAddElementsBody = (p) => {
-  const { travelers, contact = {}, ticketing, bookingReference, officeId } = p;
+  const { travelers, contact = {}, ticketing, bookingReference, officeId, commissionPercent = 0 } = p;
   if (!travelers?.length) throw new Error('travelers are required to create a PNR');
 
   let number = 0;
@@ -165,6 +234,15 @@ export const buildAddElementsBody = (p) => {
     // RM - a remark carrying our booking reference, so a PNR found on a queue
     // can be traced back to its payment without a database lookup.
     bookingReference ? remarkElement({ number: ++number, text: `ARC ${bookingReference}` }) : '',
+    // FM - commission. Ticketing is refused without it (374 NEED COMMISSION).
+    commissionElement({ number: ++number, percentage: commissionPercent }),
+    // SSR DOCS per traveller who supplied a usable document. An international
+    // ticket cannot be issued without it; a domestic one generally can, so a
+    // traveller with no passport is skipped rather than failed.
+    ...travelers.map((traveler, index) => {
+      const freetext = buildDocsFreetext(traveler);
+      return freetext ? docsElement({ number: ++number, paxNumber: index + 1, freetext }) : '';
+    }),
   ].filter(Boolean).join('');
 
   const body = [

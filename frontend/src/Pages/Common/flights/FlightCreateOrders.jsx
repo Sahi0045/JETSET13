@@ -153,7 +153,15 @@ function FlightCreateOrders() {
         seatNumber: p.seatNumber || '',
         meal: p.meal || '',
         baggage: p.baggage || '',
-        requiresWheelchair: p.requiresWheelchair || false
+        requiresWheelchair: p.requiresWheelchair || false,
+        // Travel document. The form collects these and they were dropped here,
+        // so an international ticket could never be issued: Amadeus refuses
+        // with `27791 TICKETING INHIBITED-SSR DOCS MISSING FOR P1`, the PNR
+        // commits, the customer has paid, and the booking lands in review.
+        nationality: p.nationality || '',
+        passportNumber: p.passportNumber || '',
+        passportExpiry: p.passportExpiry || '',
+        documentType: p.documentType || (p.passportNumber ? 'PASSPORT' : '')
       })) || [];
 
       const fareBreakdown = orderData.calculatedFare || null;
@@ -184,7 +192,13 @@ function FlightCreateOrders() {
           firstName: p.firstName,
           lastName: p.lastName,
           dateOfBirth: p.dateOfBirth,
-          gender: p.gender
+          gender: p.gender,
+          // `/order` builds the SSR DOCS element from these; without them an
+          // international itinerary books but cannot be ticketed.
+          nationality: p.nationality,
+          passportNumber: p.passportNumber,
+          passportExpiry: p.passportExpiry,
+          documentType: p.documentType
         })),
         passengerDetails: passengerDetails, // Send full details to backend
         fareBreakdown: fareBreakdown,       // Send fare breakdown to backend
