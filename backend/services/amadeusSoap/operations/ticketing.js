@@ -226,9 +226,10 @@ export const buildQueuePlaceBody = ({ recordLocator, queueOffice, queueNumber = 
     wrap('placementOption', wrap('selectionDetails', el('option', 'BLP'))),
     wrap('targetDetails', [
       wrap('targetOffice', [
-        // sourceType is mandatory and comes first: OT marks the target as a
-        // named office rather than our own.
-        wrap('sourceType', el('sourceQualifier1', 'OT')),
+        // sourceQualifier1 is `3` - "the queue belongs to the requesting
+        // office", which is Amadeus's own documented example. `OT` was a
+        // guess and is refused with 91D CHECK FORMAT; `3` is accepted.
+        wrap('sourceType', el('sourceQualifier1', '3')),
         wrap('originatorDetails', el('inHouseIdentification1', queueOffice)),
       ]),
       wrap('queueNumber', wrap('queueDetails', el('number', String(queueNumber)))),

@@ -10,9 +10,26 @@ import { arr, at, atTxt, txt } from '../parseXml.js';
  */
 
 /** The record locator. Its presence is what distinguishes a real booking from a failed one. */
-export const readRecordLocator = (reply) => atTxt(reply, 'pnrHeader.reservationInfo.reservation.controlNumber')
-  || atTxt(reply, 'pnrHeader.reservationInfo.reservation.companyId')
-  || '';
+/**
+ * The PNR, or nothing.
+ *
+ * There used to be a fallback to `companyId` here, which is not a record
+ * locator at all - it is the owning system's code, and on this WSAP it is
+ * always the literal string `1A`. When a commit came back without a control
+ * number, this returned "1A", and "1A" is truthy: the booking chain's
+ * `if (!pnr) throw` guard let it through, marked the booking committed, and
+ * reported success with a fabricated PNR. The customer had already paid by
+ * then, and every later retrieve or cancel against "1A" fails with
+ * INVALID RECORD LOCATOR.
+ *
+ * A record locator is six alphanumeric characters. Anything else is not a
+ * booking, and saying so lets the chain take its compensation path instead of
+ * inventing a reference.
+ */
+export const readRecordLocator = (reply) => {
+  const value = atTxt(reply, 'pnrHeader.reservationInfo.reservation.controlNumber') || '';
+  return /^[A-Z0-9]{6}$/i.test(value.trim()) ? value.trim() : '';
+};
 
 /** Creation date, when the reply carries one (DDMMYY). */
 const readCreationDate = (reply) => atTxt(reply, 'pnrHeader.reservationInfo.reservation.date') || '';
