@@ -389,7 +389,10 @@ describe('Queue_PlacePNR', () => {
 
   it('names the target office with the mandatory sourceType first', () => {
     const xml = buildQueuePlaceBody({ recordLocator: 'ABC123', queueOffice: 'SCK1S2400', queueNumber: '50' });
-    expect(xml).toContain('<targetOffice><sourceType><sourceQualifier1>OT</sourceQualifier1></sourceType>');
+    // `3` means "the queue belongs to the requesting office", per Amadeus's
+    // own example. `OT` was a guess: the WSAP refuses it with 91D CHECK
+    // FORMAT, and accepts `3`.
+    expect(xml).toContain('<targetOffice><sourceType><sourceQualifier1>3</sourceQualifier1></sourceType>');
     expect(xml).toContain('<inHouseIdentification1>SCK1S2400</inHouseIdentification1>');
     expect(xml).toContain('<queueDetails><number>50</number></queueDetails>');
   });
