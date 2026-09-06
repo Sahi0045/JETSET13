@@ -15,6 +15,17 @@ const SUFFIXES = Object.freeze({
   Fare_MasterPricerTravelBoardSearch: 'FMPTBQ_24_6_1A',
   Fare_MasterPricerCalendar: 'FMPCAQ_20_2_1A',
   Fare_InformativePricingWithoutPNR: 'TIPNRQ_24_3_1A',
+  // Entitled and declared, but nothing calls it. Worth knowing what it is for:
+  // with the RLA option it prices the LOWEST AVAILABLE fare rather than the
+  // classes the offer was found in — Amadeus describes it as "useful if you
+  // are not sure if the requested fare is available".
+  //
+  // That is precisely the gap between search and sell. Today a fare that has
+  // gone by the time we sell it surfaces as UC/NO from
+  // Air_SellFromRecommendation, which is AFTER the customer has paid, so it
+  // costs a refund and a failed booking. Re-pricing here would catch it on the
+  // review page instead. Adding it is a product decision, not a defect: it
+  // means showing a customer a different price from the one they clicked.
   Fare_InformativeBestPricingWithoutPNR: 'TIBNRQ_23_1_1A',
   Fare_CheckRules: 'FARQNQ_07_1_1A',
   Air_FlightInfo: 'FLIREQ_07_1_1A',
