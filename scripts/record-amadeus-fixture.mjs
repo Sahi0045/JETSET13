@@ -149,6 +149,7 @@ const attempt = async (label, fn) => {
 };
 
 let offer = null;
+let intlOffer = null;
 
 const recordSearch = async () => {
   step('Search — Fare_MasterPricerTravelBoardSearch, Fare_MasterPricerCalendar');
@@ -160,6 +161,16 @@ const recordSearch = async () => {
   await attempt('round trip JFK-LHR', () => FlightProvider.searchFlights({
     from: 'JFK', to: 'LHR', departDate: dateIn(30), returnDate: dateIn(37), adults: 1,
   }));
+
+  // A one-way international fare, kept for the ticketed run. The domestic
+  // offer above cannot be ticketed on this office: AI answers `2161
+  // PROHIBITED TICKETING CARRIER` while LH issues normally, so recording
+  // DocIssuance at all requires a carrier the office is allowed to plate on.
+  const intl = await attempt('one-way JFK-LHR (ticketable carrier)', () => FlightProvider.searchFlights({
+    from: 'JFK', to: 'LHR', departDate: dateIn(30), adults: 1,
+  }));
+  intlOffer = (intl?.data ?? []).find((o) => o.validatingAirlineCodes?.[0] === 'LH')
+    ?? intl?.data?.[0] ?? intlOffer;
 
   // A route with no fares is a documented outcome, not an error, and the
   // reviewer wants to see it answered cleanly rather than as a fault.
@@ -212,20 +223,31 @@ const recordStatus = async () => {
 
 const recordBooking = async () => {
   step('Booking chain — Air_Sell through Security_SignOut (creates a real PNR)');
-  if (!offer) {
+  const keepTicketing = has('ticket');
+  if (!offer && !intlOffer) {
     note('no offer from search; skipping');
     return;
   }
 
+  // Ticketing needs a carrier this office may plate on, and an international
+  // itinerary needs SSR DOCS, so the ticketed run books the international offer.
+  const bookable = keepTicketing ? (intlOffer ?? offer) : offer;
+
   const order = await attempt('create order', () => FlightProvider.createFlightOrder({
     data: {
       type: 'flight-order',
-      flightOffers: [offer],
+      flightOffers: [bookable],
       travelers: [{
         id: '1',
         dateOfBirth: '1990-01-01',
         gender: 'MALE',
         name: { firstName: 'RECORD', lastName: 'TEST' },
+        // Without a document an international ticket is refused with
+        // `27791 TICKETING INHIBITED-SSR DOCS MISSING FOR P1`.
+        documents: [{
+          documentType: 'PASSPORT', number: 'X1234567', nationality: 'GB',
+          issuanceCountry: 'GB', expiryDate: '2030-12-25', holder: true,
+        }],
       }],
       contacts: [{
         emailAddress: 'record@example.com',
