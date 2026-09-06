@@ -62,7 +62,14 @@ const maskContactElements = (xml) =>
     const segment = block.match(/<segmentName>([^<]*)<\/segmentName>/i)?.[1];
     if (segment !== 'AP' && segment !== 'APE') return block;
 
-    const replacement = segment === 'APE' ? 'traveller@example.com' : '5555550100';
+    // Amadeus carries phone AND email in the same `AP` element and tells them
+    // apart by type: `P02` is an email address. Keying on the segment name
+    // alone put a phone number where an address belonged, which is misleading
+    // in evidence that goes to Amadeus. Confirmed against a retrieved PNR:
+    // `AP type=5` is the phone, `AP type=P02` the email.
+    const type = block.match(/<type>([^<]*)<\/type>/i)?.[1];
+    const isEmail = segment === 'APE' || type === 'P02';
+    const replacement = isEmail ? 'traveller@example.com' : '5555550100';
     return block.replace(
       /(<(?:\w+:)?(?:freeText|longFreetext|freetext)(?:\s[^>]*)?>)([\s\S]*?)(<\/(?:\w+:)?(?:freeText|longFreetext|freetext)>)/gi,
       `$1${replacement}$3`,
