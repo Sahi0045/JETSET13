@@ -1,6 +1,6 @@
 import express from 'express';
 import FlightProvider, { providerStatus } from '../services/flightProvider.js';
-import { resolveToIata } from '../services/airportsIndex.js';
+import { resolveToIata, searchLocations } from '../services/airportsIndex.js';
 import supabase from '../config/supabase.js';
 import fetch from 'node-fetch';
 import { get as cacheGet, set as cacheSet, withCache, CacheKeys, TTL } from '../services/cache.service.js';
@@ -119,6 +119,23 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
  * payment session data. A whole-column write would drop that, so this reads,
  * merges and writes back.
  */
+/**
+ * "DEL" -> "New Delhi", from the bundled dataset.
+ *
+ * Returns an empty string rather than guessing: a wrong city on a booking
+ * confirmation is worse than no city, and the code beside it is always right.
+ */
+function cityNameFor(code) {
+  const iata = String(code ?? '').trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(iata)) return '';
+  try {
+    const match = searchLocations(iata, 'AIRPORT,CITY', { limit: 1 })?.data?.[0];
+    return match?.code === iata ? (match.cityName || '') : '';
+  } catch {
+    return '';
+  }
+}
+
 async function patchBookingDetails(bookingReference, patch) {
   if (!supabase || !bookingReference) return null;
 
@@ -357,8 +374,12 @@ function buildBookingRow(bookingData, userId) {
       refundable: bookingData.refundable || false,
       baggage_details: bookingData.baggageDetails || null,
       baggage: bookingData.baggage || null,
-      origin_city: bookingData.originCity || '',
-      destination_city: bookingData.destinationCity || '',
+      // Fall back to the bundled airports dataset. Amadeus does not return a
+      // city name on a flight offer, so these were persisted empty on every
+      // booking and the confirmation email and Manage Booking then showed a
+      // bare code where "DEL · New Delhi" belongs.
+      origin_city: bookingData.originCity || cityNameFor(bookingData.origin),
+      destination_city: bookingData.destinationCity || cityNameFor(bookingData.destination),
       departure_date_full: bookingData.departureDateFull || '',
       arrival_date: bookingData.arrivalDate || '',
       price_base: bookingData.priceBase || null,

@@ -87,6 +87,11 @@ const buildSegment = (flight, index) => {
     // the card duration from itinerary.duration - Amadeus's own elapsed flight
     // time - and computes layovers between two times at the same airport, which
     // is unaffected. A wrong number here would eventually be trusted.
+    //
+    // The booking confirmation DID read it and printed "Unknown Duration" on
+    // every leg of every connection. That is now guarded there rather than
+    // filled in here: an absent duration is the honest answer, and the
+    // itinerary total beside it is Amadeus's own elapsed time.
     duration: undefined,
     numberOfStops: 0,
     blacklistedInEU: false,
