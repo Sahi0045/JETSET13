@@ -14,7 +14,15 @@ import { each, el, wrap } from '../xml.js';
 
 /** Shared by the pricing messages: RP published fares, FCO currency, VC plating carrier. */
 const pricingOptions = ({ currency, validatingCarrier }) => [
+  // RP published fares, RU unifares. The search asks for both (priceType RP,
+  // RU, TAC in Fare_MasterPricerTravelBoardSearch), so pricing has to as well:
+  // asking for published fares only would re-price a negotiated fare the
+  // customer chose as a published one, at a different amount, which trips the
+  // price-tolerance guard and aborts the booking with "the fare changed".
+  // Intermittent failures on exactly the cheapest fares. Amadeus's own example
+  // pairs them and says so: "Both published fares and unifares are requested."
   wrap('pricingOptionGroup', wrap('pricingOptionKey', el('pricingOptionKey', 'RP'))),
+  wrap('pricingOptionGroup', wrap('pricingOptionKey', el('pricingOptionKey', 'RU'))),
   currency
     ? wrap('pricingOptionGroup', [
       wrap('pricingOptionKey', el('pricingOptionKey', 'FCO')),
