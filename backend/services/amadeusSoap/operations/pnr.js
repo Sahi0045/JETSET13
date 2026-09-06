@@ -1,5 +1,6 @@
 import { OPERATIONS } from '../codes.js';
 import { each, el, wrap } from '../xml.js';
+import { buildDocsFreetext } from './travelDocs.js';
 
 /**
  * PNR_AddMultiElements, PNR_Retrieve and PNR_Cancel.
@@ -115,6 +116,42 @@ const remarkElement = ({ number, text }) => wrap('dataElementsIndiv', [
 ]);
 
 /**
+ * SSR DOCS - the passenger's travel document.
+ *
+ * Per the XSD, `serviceRequest/ssr` is a sequence of
+ * `type, status, quantity, companyId, indicator, boardpoint, offpoint,
+ * freetext` — freetext repeating at most twice at 70 characters each, which is
+ * why a long DOCS string is split rather than truncated.
+ *
+ * `YY` addresses every airline on the record, which the XSD spells out as
+ * "Airline code or YY". Sending a single carrier would leave the other
+ * marketing carriers on an interline itinerary without the document.
+ *
+ * The element is associated to one passenger with a PT reference. Without that
+ * association Amadeus cannot tell whose document it is, and the error names a
+ * passenger number: "SSR DOCS MISSING FOR P1".
+ */
+const docsElement = ({ number, paxNumber, freetext }) => wrap('dataElementsIndiv', [
+  wrap('elementManagementData', [
+    wrap('reference', [el('qualifier', 'OT'), el('number', String(number))]),
+    el('segmentName', 'SSR'),
+  ]),
+  wrap('serviceRequest', wrap('ssr', [
+    el('type', 'DOCS'),
+    el('status', 'HK'),
+    el('quantity', '1'),
+    el('companyId', 'YY'),
+    ...(freetext.length > 70
+      ? [el('freetext', freetext.slice(0, 70)), el('freetext', freetext.slice(70, 140))]
+      : [el('freetext', freetext)]),
+  ])),
+  wrap('referenceForDataElement', wrap('reference', [
+    el('qualifier', 'PT'),
+    el('number', String(paxNumber)),
+  ])),
+]);
+
+/**
  * Ticketing time limit.
  *
  * TL means "cancel the booking if it is not ticketed by then". It is the safety
@@ -165,6 +202,13 @@ export const buildAddElementsBody = (p) => {
     // RM - a remark carrying our booking reference, so a PNR found on a queue
     // can be traced back to its payment without a database lookup.
     bookingReference ? remarkElement({ number: ++number, text: `ARC ${bookingReference}` }) : '',
+    // SSR DOCS per traveller who supplied a usable document. An international
+    // ticket cannot be issued without it; a domestic one generally can, so a
+    // traveller with no passport is skipped rather than failed.
+    ...travelers.map((traveler, index) => {
+      const freetext = buildDocsFreetext(traveler);
+      return freetext ? docsElement({ number: ++number, paxNumber: index + 1, freetext }) : '';
+    }),
   ].filter(Boolean).join('');
 
   const body = [

@@ -535,6 +535,9 @@ const createFlightOrder = async (orderData, options = {}) => {
     lastName: traveler.name?.lastName ?? traveler.lastName,
     gender: traveler.gender,
     dateOfBirth: traveler.dateOfBirth,
+    // Carried through for SSR DOCS. Dropping it here is what left every
+    // international booking unticketable.
+    documents: traveler.documents,
   }));
 
   const contactSource = payload.contacts?.[0] ?? payload.travelers?.[0]?.contact ?? {};
