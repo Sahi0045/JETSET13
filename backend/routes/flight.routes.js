@@ -230,6 +230,52 @@ async function findExistingBooking(bookingReference) {
 }
 
 /**
+ * A booking/order reference, or null if it is not shaped like one.
+ *
+ * References are `FLT`+base36 or 6-char Amadeus PNRs — always `[A-Za-z0-9_-]`.
+ * Rejecting anything else BEFORE it reaches a Supabase `.or(...)` filter closes
+ * the PostgREST filter-injection that let `?userId=x,status.not.eq.zzz` return
+ * every row: no `.`, `,`, `(`, `)` or `:` can survive this, so no extra filter
+ * term can be smuggled in.
+ */
+function safeRef(value) {
+  const v = String(value ?? '').trim();
+  return /^[A-Za-z0-9_-]{1,64}$/.test(v) ? v : null;
+}
+
+/** Staff may read/cancel any booking; a customer only their own. */
+function isStaff(user) {
+  return !!user && ['admin', 'superadmin', 'agent'].includes(user.role);
+}
+
+/**
+ * Fetch a booking only when `user` is allowed to see it.
+ *
+ * The booking endpoints reach Supabase with the SERVICE-ROLE key, which
+ * bypasses RLS, so ownership has to be enforced here or any authenticated user
+ * could read or cancel any other customer's booking by its (guessable,
+ * timestamp-derived) reference. Returns `{ booking }` when owned/staff,
+ * `{ notFound: true }` otherwise — a non-owner is told 404, never 403, so the
+ * endpoint does not even confirm the reference exists.
+ */
+async function loadOwnedBooking(ref, user) {
+  const safe = safeRef(ref);
+  if (!supabase || !safe) return { notFound: true };
+  const { data } = await supabase
+    .from('bookings')
+    .select('*')
+    .or(`booking_reference.eq.${safe},booking_details->>order_id.eq.${safe},booking_details->>amadeus_order_id.eq.${safe}`)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return { notFound: true };
+  if (isStaff(user)) return { booking: data };
+  const owns = user && (data.user_id === user.id
+    || data.booking_details?.original_user_id === user.id);
+  return owns ? { booking: data } : { notFound: true };
+}
+
+/**
  * How long a chain may hold its claim before another request may take over.
  *
  * Long enough to cover a slow chain - ten sequential GDS calls, ~8s observed on
@@ -1632,10 +1678,18 @@ router.post('/order', async (req, res) => {
 // Cancel a flight order — delegates to the orchestrated cancel-booking
 // handler in payment.routes.js via internal request, which properly handles
 // Amadeus cancellation + ARC Pay refund/void + DB update
-router.delete('/order/:orderId', async (req, res) => {
+router.delete('/order/:orderId', protect, async (req, res) => {
   try {
     const { orderId } = req.params;
     console.log(`🗑️ Cancel flight order request: ${orderId}`);
+
+    // Cancelling triggers a real GDS cancel AND an ARC Pay refund. Enforce
+    // ownership first — this was callable unauthenticated, so anyone could
+    // cancel any booking and move money by guessing its reference.
+    const { notFound } = await loadOwnedBooking(orderId, req.user);
+    if (notFound) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
 
     // Delegate to the orchestrated cancel: it cancels the real Amadeus order (via the
     // stored amadeus_order_id), refunds/voids via ARC Pay, updates booking status, and
@@ -1756,10 +1810,18 @@ router.delete('/order/:orderId', async (req, res) => {
 
 // Get flight order details. Answers from the GDS or fails honestly - there is
 // no simulated fallback, which is the whole point of this handler.
-router.get('/order/:orderId', async (req, res) => {
+router.get('/order/:orderId', protect, async (req, res) => {
   const { orderId } = req.params;
 
   try {
+    // Confirm the caller owns this reference before we hand back live GDS data
+    // (PNR, traveller names). Without it any authenticated user could retrieve
+    // any reservation by reference.
+    const { notFound } = await loadOwnedBooking(orderId, req.user);
+    if (notFound) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
     const orderDetails = await FlightProvider.getFlightOrderDetails(orderId);
     return res.json({
       success: true,
@@ -1800,7 +1862,7 @@ router.get('/health', (req, res) => {
 });
 
 // Get a single booking by bookingReference (For Manage Booking page)
-router.get('/bookings/:bookingRef', async (req, res) => {
+router.get('/bookings/:bookingRef', protect, async (req, res) => {
   try {
     if (!supabase) {
       return res.status(503).json({
@@ -1809,27 +1871,11 @@ router.get('/bookings/:bookingRef', async (req, res) => {
       });
     }
 
-    const { bookingRef } = req.params;
-
-    if (!bookingRef) {
-      return res.status(400).json({
-        success: false,
-        error: 'No booking reference provided'
-      });
-    }
-
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('booking_reference', bookingRef)
-      .single();
-
-    if (error) {
-      console.error(`❌ Error fetching booking ${bookingRef}:`, error.message);
-      return res.status(error.code === 'PGRST116' ? 404 : 500).json({
-        success: false,
-        error: error.code === 'PGRST116' ? 'Booking not found' : error.message
-      });
+    // Ownership is enforced here because the service-role key bypasses RLS. A
+    // non-owner (or an unparseable reference) gets a flat 404.
+    const { booking: data, notFound } = await loadOwnedBooking(req.params.bookingRef, req.user);
+    if (notFound || !data) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
     }
 
     // Format for frontend
@@ -1864,7 +1910,7 @@ router.get('/bookings/:bookingRef', async (req, res) => {
 });
 
 // Get all bookings from database (for My Trips page)
-router.get('/bookings', async (req, res) => {
+router.get('/bookings', protect, async (req, res) => {
   try {
     if (!supabase) {
       return res.status(503).json({
@@ -1873,17 +1919,16 @@ router.get('/bookings', async (req, res) => {
       });
     }
 
-    // Filter by travel type if provided
-    const { type, userId } = req.query;
+    const { type } = req.query;
 
-    // SECURITY: Require userId to prevent exposing all bookings
-    if (!userId) {
-      return res.json({
-        success: true,
-        data: [],
-        count: 0,
-        message: 'No user ID provided'
-      });
+    // The user is taken from the verified session, NEVER from the query string.
+    // A client-supplied `userId` was both an access-control hole (pass anyone's
+    // id, get their bookings) and a PostgREST filter-injection sink
+    // (`?userId=x,status.not.eq.zzz` returned the whole table). `req.user.id`
+    // comes from a verified JWT and is a trusted UUID.
+    const userId = req.user.id;
+    if (!/^[0-9a-fA-F-]{36}$/.test(String(userId))) {
+      return res.status(400).json({ success: false, error: 'Invalid session' });
     }
 
     let query = supabase.from('bookings').select('*');
@@ -1892,8 +1937,8 @@ router.get('/bookings', async (req, res) => {
       query = query.eq('travel_type', type);
     }
 
-    // Filter by user_id OR by original_user_id stored in booking_details
-    // (fallback bookings where FK constraint prevented storing user_id directly)
+    // Own bookings, plus the original_user_id fallback for rows where an FK
+    // constraint prevented storing user_id directly.
     query = query.or(`user_id.eq.${userId},booking_details->>original_user_id.eq.${userId}`);
 
     // Order by created_at descending (newest first)

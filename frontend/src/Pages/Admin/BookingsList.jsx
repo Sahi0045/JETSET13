@@ -4,7 +4,7 @@ import { getApiUrl } from '../../utils/apiHelper';
 import { downloadCSV } from '../../utils/csv';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
-import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
+import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
 
 const BookingsList = () => {
     const [searchParams] = useSearchParams();
@@ -63,12 +63,18 @@ const BookingsList = () => {
         fetchCancelFee();
     }, []);
 
-    const getAuthHeaders = () => {
-        const token = getStoredToken();
-        return {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        };
+    // A dead admin session must look like one. Anything else renders an empty
+    // list or a bare "failed" against a working system.
+    const handleAdminError = (error) => {
+        if (error?.sessionExpired) {
+            // A hard navigation, not `navigate()`: clearing the flags re-renders
+            // ProtectedRoute, which sees a non-admin and bounces to the SITE
+            // login first. An admin whose session lapsed should land back on the
+            // admin login, and this is the one way to win that race.
+            window.location.replace('/admin/login?expired=1');
+            return true;
+        }
+        return false;
     };
 
     const fetchBookings = useCallback(async () => {
@@ -83,19 +89,17 @@ const BookingsList = () => {
             params.append('limit', 25);
 
             // Unified endpoint: flights + hotels + cruises (bookings table) + packages (quotes).
-            const response = await fetch(getApiUrl(`flights/admin-bookings-all?${params.toString()}`), {
-                headers: getAuthHeaders(),
-                credentials: 'include'
-            });
-            const result = await response.json();
+            const response = await adminFetch(getApiUrl(`flights/admin-bookings-all?${params.toString()}`));
+            const result = await readAdminResponse(response);
 
-            if (result.success) {
-                setBookings(result.data || []);
-                setTotalCount(result.count || 0);
-                setTotalPages(result.totalPages || 1);
-            }
+            setBookings(result.data || []);
+            setTotalCount(result.count || 0);
+            setTotalPages(result.totalPages || 1);
         } catch (error) {
-            console.error('Error fetching bookings:', error);
+            if (!handleAdminError(error)) {
+                console.error('Error fetching bookings:', error);
+                setActionMessage({ type: 'error', text: error.message || 'Could not load bookings' });
+            }
         } finally {
             setLoading(false);
         }
@@ -110,8 +114,8 @@ const BookingsList = () => {
         if (searchQuery) params.append('search', searchQuery);
         params.append('page', 1); params.append('limit', 5000);
         try {
-            const res = await fetch(getApiUrl(`flights/admin-bookings-all?${params.toString()}`), { headers: getAuthHeaders(), credentials: 'include' });
-            const data = await res.json();
+            const res = await adminFetch(getApiUrl(`flights/admin-bookings-all?${params.toString()}`));
+            const data = await readAdminResponse(res);
             downloadCSV(`bookings-${Date.now()}.csv`, data.data || [], [
                 { label: 'Type', key: 'type' }, { label: 'Reference', key: 'bookingReference' },
                 { label: 'Customer', key: 'customerName' }, { label: 'Email', key: 'customerEmail' },
@@ -141,13 +145,13 @@ const BookingsList = () => {
         if (!cancelModal) return;
         setCancelProcessing(true);
         try {
-            const response = await fetch(getApiUrl(`flights/admin-bookings/${cancelModal.id}/cancel`), {
+            // adminFetch, not fetch: a state-changing admin call needs the CSRF
+            // token from the cookie, which the old local header builder never sent.
+            const response = await adminFetch(getApiUrl(`flights/admin-bookings/${cancelModal.id}/cancel`), {
                 method: 'POST',
-                headers: getAuthHeaders(),
-                credentials: 'include',
                 body: JSON.stringify({ reason: cancelReason || 'Admin cancellation' })
             });
-            const result = await response.json();
+            const result = await readAdminResponse(response);
             if (result.success) {
                 const cancellation = result.data?.cancellation || {};
                 const refundAmount = cancellation.refundAmount || result.data?.refundAmount || 0;
@@ -206,10 +210,8 @@ const BookingsList = () => {
             const bookingRef = voidModal.bookingReference;
             const orderId = voidModal.arcOrderId || voidModal.bookingDetails?.arc_order_id || voidModal.bookingDetails?.order_id || bookingRef;
 
-            const response = await fetch(getApiUrl(`payments?action=payment-void`), {
+            const response = await adminFetch(getApiUrl(`payments?action=payment-void`), {
                 method: 'POST',
-                headers: getAuthHeaders(),
-                credentials: 'include',
                 body: JSON.stringify({
                     paymentId: orderId,
                     orderId: orderId,
@@ -245,13 +247,11 @@ const BookingsList = () => {
         if (!statusModal || !newStatus) return;
         setStatusProcessing(true);
         try {
-            const response = await fetch(getApiUrl(`flights/admin-bookings/${statusModal.id}`), {
+            const response = await adminFetch(getApiUrl(`flights/admin-bookings/${statusModal.id}`), {
                 method: 'PUT',
-                headers: getAuthHeaders(),
-                credentials: 'include',
                 body: JSON.stringify({ status: newStatus })
             });
-            const result = await response.json();
+            const result = await readAdminResponse(response);
             if (result.success) {
                 setActionMessage({ type: 'success', text: 'Booking status updated successfully' });
                 fetchBookings();

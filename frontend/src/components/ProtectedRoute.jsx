@@ -17,16 +17,22 @@ const ProtectedRoute = ({ children, requireAuth = true, requireAdmin = false }) 
         return <LoadingSpinner text="Authenticating..." fullScreen={true} />;
     }
 
+    // An admin who is not signed in belongs at the admin login, not the site
+    // one. Sending them to /login offered a Google button and a "create an
+    // account" link for a portal neither can open, and after signing in they
+    // landed on the public site rather than back where they were going.
+    const signInPath = requireAdmin ? '/admin/login' : '/login';
+
     // If route requires authentication and user is not logged in
     // Allow either regular auth or admin JWT auth
     if (requireAuth && !isAuthenticated && !isAdminLoggedIn) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
+        return <Navigate to={signInPath} state={{ from: location }} replace />;
     }
 
     // If route requires admin access and user is not admin
     // Check both regular user role and admin JWT
     if (requireAdmin && (!user || (user.role !== 'admin' && user.role !== 'agent')) && !isAdminLoggedIn) {
-        return <Navigate to="/" replace />;
+        return <Navigate to="/admin/login" state={{ from: location }} replace />;
     }
 
     // Allow users to access login pages even if logged in
