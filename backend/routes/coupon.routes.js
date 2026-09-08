@@ -1,6 +1,7 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { protect, admin } from '../middleware/auth.middleware.js';
 
 dotenv.config();
 
@@ -174,7 +175,7 @@ router.post('/use', async (req, res) => {
 // ADMIN: List all coupons
 // GET /api/coupons
 // ─────────────────────────────────────────────
-router.get('/', async (req, res) => {
+router.get('/', protect, admin, async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('coupons')
@@ -193,7 +194,7 @@ router.get('/', async (req, res) => {
 // ADMIN: Create a coupon
 // POST /api/coupons
 // ─────────────────────────────────────────────
-router.post('/', async (req, res) => {
+router.post('/', protect, admin, async (req, res) => {
     try {
         const { code, description, discountType, discountValue, minOrderValue, maxUses, validFrom, validUntil, applicableTo } = req.body;
 
@@ -226,7 +227,7 @@ router.post('/', async (req, res) => {
 // ADMIN: Update a coupon
 // PUT /api/coupons/:id
 // ─────────────────────────────────────────────
-router.put('/:id', async (req, res) => {
+router.put('/:id', protect, admin, async (req, res) => {
     try {
         const { id } = req.params;
         const b = req.body;
@@ -268,7 +269,7 @@ router.put('/:id', async (req, res) => {
 // ADMIN: Delete (deactivate) a coupon
 // DELETE /api/coupons/:id
 // ─────────────────────────────────────────────
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', protect, admin, async (req, res) => {
     try {
         const { id } = req.params;
         const { error } = await supabase.from('coupons').update({ is_active: false }).eq('id', id);

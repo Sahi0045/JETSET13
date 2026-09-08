@@ -9,6 +9,20 @@ const getApiBase = () => {
   return '/api/coupons';
 };
 
+// Coupon writes are now admin-gated server-side (protect + admin). Auth is the
+// httpOnly `jt_access` cookie set at admin login; `withCredentials` sends it and
+// `X-CSRF-Token` (echoed from the readable `jt_csrf` cookie) satisfies the
+// double-submit check `protect` enforces on state-changing requests.
+const readCookie = (name) => {
+  const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]+)`));
+  return m ? decodeURIComponent(m[1]) : null;
+};
+const AUTH_GET = { withCredentials: true };
+const authWrite = () => ({
+  withCredentials: true,
+  headers: { 'X-CSRF-Token': readCookie('jt_csrf') || '' },
+});
+
 const EMPTY_FORM = {
   code: '',
   description: '',
@@ -37,11 +51,13 @@ const CouponManagement = () => {
   const fetchCoupons = async () => {
     setLoading(true);
     try {
-      const resp = await axios.get(`${getApiBase()}`);
+      const resp = await axios.get(`${getApiBase()}`, AUTH_GET);
       if (resp.data.success && Array.isArray(resp.data.data)) setCoupons(resp.data.data);
       else setCoupons([]);
     } catch (e) {
-      setError('Failed to load coupons.');
+      setError(e.response?.status === 401 || e.response?.status === 403
+        ? 'Your admin session has expired. Please sign in again.'
+        : 'Failed to load coupons.');
     } finally {
       setLoading(false);
     }
@@ -61,9 +77,9 @@ const CouponManagement = () => {
       };
 
       if (editingId) {
-        await axios.put(`${getApiBase()}/${editingId}`, payload);
+        await axios.put(`${getApiBase()}/${editingId}`, payload, authWrite());
       } else {
-        await axios.post(`${getApiBase()}`, payload);
+        await axios.post(`${getApiBase()}`, payload, authWrite());
       }
       setForm(EMPTY_FORM);
       setShowForm(false);
@@ -94,12 +110,12 @@ const CouponManagement = () => {
 
   const handleDeactivate = async (id) => {
     if (!window.confirm('Deactivate this coupon?')) return;
-    await axios.delete(`${getApiBase()}/${id}`);
+    await axios.delete(`${getApiBase()}/${id}`, authWrite());
     fetchCoupons();
   };
 
   const handleToggleActive = async (coupon) => {
-    await axios.put(`${getApiBase()}/${coupon.id}`, { is_active: !coupon.is_active });
+    await axios.put(`${getApiBase()}/${coupon.id}`, { is_active: !coupon.is_active }, authWrite());
     fetchCoupons();
   };
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import supabase from '../lib/supabase';
 import { getApiUrl } from '../utils/apiHelper';
+import { authHeaders } from '../utils/authHeaders';
 
 // Create Auth Context
 const SupabaseAuthContext = createContext({});
@@ -140,7 +141,7 @@ export const SupabaseAuthProvider = ({ children }) => {
             const firstName = session.user.user_metadata?.first_name || session.user.user_metadata?.full_name?.split(' ')[0] || '';
             await fetch('/api/email/send', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: await authHeaders({ 'Content-Type': 'application/json' }),
               body: JSON.stringify({
                 type: 'login_notification',
                 to: session.user.email,
@@ -227,7 +228,7 @@ export const SupabaseAuthProvider = ({ children }) => {
 
           await fetch('/api/email/send', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: await authHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({
               type: 'login_notification',
               to: data.session.user.email,
@@ -303,6 +304,10 @@ export const SupabaseAuthProvider = ({ children }) => {
       // Get user email before signing out for the logout notification
       const currentUserEmail = user?.email;
       const currentUserName = user?.user_metadata?.first_name || user?.user_metadata?.full_name?.split(' ')[0] || '';
+      // Capture the auth header BEFORE signOut tears down the session — /email/send
+      // is behind `protect` now, and by the time the logout email fires below the
+      // Supabase session is already gone.
+      const logoutAuthHeaders = await authHeaders({ 'Content-Type': 'application/json' });
 
       // Best-effort local Supabase sign-out. With persistSession:false the SDK
       // may report "Auth session missing" — that must NOT abort logout, or the
@@ -330,7 +335,7 @@ export const SupabaseAuthProvider = ({ children }) => {
 
           await fetch('/api/email/send', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: logoutAuthHeaders,
             body: JSON.stringify({
               type: 'logout_notification',
               to: currentUserEmail,

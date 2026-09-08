@@ -3,6 +3,7 @@ import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
+import { protect, admin } from '../middleware/auth.middleware.js';
 
 dotenv.config();
 
@@ -314,7 +315,7 @@ router.post('/webhook', async (req, res) => {
 });
 
 // GET /api/subscription (Admin: list all subscriptions)
-router.get('/', async (req, res) => {
+router.get('/', protect, admin, async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('user_subscriptions')
@@ -341,7 +342,7 @@ router.get('/', async (req, res) => {
 });
 
 // PUT /api/subscription/:id (Admin: update subscription status)
-router.put('/:id', async (req, res) => {
+router.put('/:id', protect, admin, async (req, res) => {
     try {
         const { id } = req.params;
         const { status, plan_type, end_date } = req.body;

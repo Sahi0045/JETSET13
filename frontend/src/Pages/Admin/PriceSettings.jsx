@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getApiUrl } from '../../utils/apiHelper';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
-import { getStoredToken } from '../../utils/adminAuth';
+import { adminHeaders } from '../../utils/adminAuth';
 
 const PriceSettings = () => {
   const [settings, setSettings] = useState({
@@ -30,13 +30,11 @@ const PriceSettings = () => {
 
   useRegisterRefresh(useCallback(() => fetchPriceSettings(), []), []);
 
-  const getAuthHeaders = () => {
-    const token = getStoredToken();
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  };
+  // The PUT is now admin-gated server-side. Auth is the httpOnly jt_access cookie
+  // (sent via credentials:'include'); adminHeaders() adds the X-CSRF-Token that
+  // `protect` requires on state-changing cookie requests (and a legacy Bearer if
+  // one happens to exist). The GET stays public but the header is harmless there.
+  const getAuthHeaders = () => adminHeaders();
 
   const fetchPriceSettings = async () => {
     try {

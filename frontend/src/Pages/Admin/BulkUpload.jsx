@@ -3,6 +3,22 @@ import { Upload, FileText, CheckCircle, XCircle, AlertCircle, Download, Loader }
 
 const API_BASE = '/api';
 
+// The bulk upload/validate routes are admin-gated server-side. Send the
+// jt_access cookie (withCredentials) + the jt_csrf double-submit header. These
+// are multipart FormData posts, so we must NOT set Content-Type — the browser
+// adds the multipart boundary itself — which is why adminFetch (JSON headers)
+// isn't used here.
+const readCookie = (name) => {
+  const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]+)`));
+  return m ? decodeURIComponent(m[1]) : null;
+};
+const uploadInit = (formData) => ({
+  method: 'POST',
+  body: formData,
+  credentials: 'include',
+  headers: { 'X-CSRF-Token': readCookie('jt_csrf') || '' },
+});
+
 const CARD = {
   background: '#ffffff',
   border: '1px solid #e5e7eb',
@@ -63,7 +79,7 @@ export default function BulkUpload() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const response = await fetch(`${API_BASE}/bulk/validate`, { method: 'POST', body: formData });
+      const response = await fetch(`${API_BASE}/bulk/validate`, uploadInit(formData));
       const data = await response.json();
       if (data.success) setValidationPreview(data);
       else setError(data.message || 'Validation failed');
@@ -81,7 +97,7 @@ export default function BulkUpload() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const response = await fetch(`${API_BASE}/bulk/upload`, { method: 'POST', body: formData });
+      const response = await fetch(`${API_BASE}/bulk/upload`, uploadInit(formData));
       const data = await response.json();
       if (data.success) {
         setResult(data);
