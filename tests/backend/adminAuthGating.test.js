@@ -24,12 +24,20 @@ beforeAll(async () => {
   const adminRoutes = (await import('../../backend/routes/admin.routes.js')).default;
   const emailRoutes = (await import('../../backend/routes/email.routes.js')).default;
   const templateRoutes = (await import('../../backend/routes/template.routes.js')).default;
+  const subscriptionRoutes = (await import('../../backend/routes/subscription.routes.js')).default;
+  const bulkRoutes = (await import('../../backend/routes/bulkUpload.routes.js')).default;
+  const documentRoutes = (await import('../../backend/routes/document.routes.js')).default;
+  const videoRoutes = (await import('../../backend/routes/video.routes.js')).default;
   app = express();
   app.use(express.json());
   app.use('/api/coupons', couponRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/email', emailRoutes);
   app.use('/api/templates', templateRoutes);
+  app.use('/api/subscription', subscriptionRoutes);
+  app.use('/api/bulk', bulkRoutes);
+  app.use('/api/documents', documentRoutes);
+  app.use('/api/videos', videoRoutes);
 });
 
 describe('coupon admin routes are gated (was unauthenticated)', () => {
@@ -108,5 +116,52 @@ describe('inquiry-response templates are admin-only (whole router)', () => {
   ])('%s %s rejects an anonymous caller', async (method, path) => {
     const res = await request(app)[method](path).send({});
     expect(res.status).toBe(401);
+  });
+});
+
+describe('subscription admin routes are gated; customer paths stay open', () => {
+  it('GET /api/subscription (list) rejects an anonymous caller', async () => {
+    const res = await request(app).get('/api/subscription');
+    expect(res.status).toBe(401);
+  });
+
+  it('PUT /api/subscription/:id rejects an anonymous caller', async () => {
+    const res = await request(app).put('/api/subscription/abc').send({ status: 'active' });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('bulk upload: ingest is admin-only, blank template stays public', () => {
+  it.each([
+    ['post', '/api/bulk/upload'],
+    ['post', '/api/bulk/validate'],
+    ['get', '/api/bulk/history'],
+  ])('%s %s rejects an anonymous caller', async (method, path) => {
+    const res = await request(app)[method](path);
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('document + video CMS: writes are admin-only, reads stay public', () => {
+  it.each([
+    ['post', '/api/documents'],
+    ['put', '/api/documents/abc'],
+    ['delete', '/api/documents/abc'],
+    ['post', '/api/videos'],
+    ['put', '/api/videos/abc'],
+    ['delete', '/api/videos/abc'],
+  ])('%s %s rejects an anonymous caller', async (method, path) => {
+    const res = await request(app)[method](path).send({});
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /api/documents stays public (user Document Center) — never 401', async () => {
+    const res = await request(app).get('/api/documents');
+    expect(res.status).not.toBe(401);
+  });
+
+  it('GET /api/videos stays public — never 401', async () => {
+    const res = await request(app).get('/api/videos');
+    expect(res.status).not.toBe(401);
   });
 });

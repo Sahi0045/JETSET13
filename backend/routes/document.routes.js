@@ -7,6 +7,7 @@ import {
   deleteDocumentTemplate,
   incrementDownloadCount 
 } from '../services/documentTemplate.service.js';
+import { protect, admin } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', protect, admin, async (req, res) => {
   try {
     const template = await createDocumentTemplate({
       ...req.body,
@@ -47,7 +48,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', protect, admin, async (req, res) => {
   try {
     const template = await updateDocumentTemplate(req.params.id, req.body);
     res.json({ success: true, data: template });
@@ -57,7 +58,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', protect, admin, async (req, res) => {
   try {
     await deleteDocumentTemplate(req.params.id);
     res.json({ success: true, message: 'Template deleted' });

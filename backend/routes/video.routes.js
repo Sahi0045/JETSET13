@@ -7,6 +7,7 @@ import {
   deleteVideoTutorial,
   incrementViewCount 
 } from '../services/videoTutorials.service.js';
+import { protect, admin } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', protect, admin, async (req, res) => {
   try {
     const tutorial = await createVideoTutorial(req.body);
     res.status(201).json({ success: true, data: tutorial });
@@ -44,7 +45,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', protect, admin, async (req, res) => {
   try {
     const tutorial = await updateVideoTutorial(req.params.id, req.body);
     res.json({ success: true, data: tutorial });
@@ -54,7 +55,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', protect, admin, async (req, res) => {
   try {
     await deleteVideoTutorial(req.params.id);
     res.json({ success: true, message: 'Tutorial deleted' });
