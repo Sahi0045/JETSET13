@@ -227,7 +227,7 @@
 }
 
 .booking-card-body {
-    padding: 2rem;
+    padding: 1rem 1.25rem;
 }
 
 /* Route Display (DEL -> GOX) */
@@ -235,7 +235,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 2.5rem;
+    margin-bottom: 1rem;
 }
 
 .flight-endpoint {
@@ -244,12 +244,12 @@
 }
 
 .flight-endpoint .city-code {
-    font-size: 2.5rem;
+    font-size: 1.75rem;
     line-height: 1;
     font-weight: 800;
     color: var(--color-primary);
     letter-spacing: -0.02em;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.15rem;
 }
 
 .flight-endpoint .city-name {
@@ -259,10 +259,10 @@
 }
 
 .flight-endpoint .time {
-    font-size: 1.5rem;
+    font-size: 1.1rem;
     font-weight: 700;
     color: var(--color-text-main);
-    margin-top: 0.5rem;
+    margin-top: 0.15rem;
 }
 
 .flight-endpoint .airport {
@@ -355,14 +355,22 @@
 /* ===== PASSENGER FORM STYLE ===== */
 .form-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1.5rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.85rem 1rem;
 }
 
+/* Tablet: 2 columns */
+@media (max-width: 900px) {
+    .form-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Mobile: single column */
 @media (max-width: 640px) {
     .form-grid {
         grid-template-columns: 1fr !important;
-        gap: 1rem !important;
+        gap: 0.85rem !important;
     }
 }
 
@@ -381,7 +389,7 @@
 }
 
 .booking-confirmation-page .form-group {
-    margin-bottom: 1.5rem;
+    margin-bottom: 0;
 }
 
 .booking-confirmation-page .form-label {
@@ -887,8 +895,8 @@
 .passenger-item {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: 1.25rem;
-    margin-bottom: 1.5rem;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.85rem;
     background: #fff;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -904,8 +912,8 @@
     justify-content: space-between;
     gap: 0.75rem;
     flex-wrap: wrap;
-    margin-bottom: 1.25rem;
-    padding-bottom: 1rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.6rem;
     border-bottom: 1px dashed var(--color-border);
 }
 
