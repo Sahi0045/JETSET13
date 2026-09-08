@@ -39,7 +39,19 @@ const commitOk = envelope('PNR_Reply',
   + '<passengerData><travellerInformation><traveller><surname>SMITH</surname></traveller><passenger><firstName>JOHN MR</firstName></passenger></travellerInformation></passengerData></travellerInfo>', SESSION);
 const errorReply = (text) => envelope('PNR_Reply',
   `<generalErrorInfo><errorOrWarningCodeDetails><errorDetails><errorCode>999</errorCode></errorDetails></errorOrWarningCodeDetails><errorFreeText>${text}</errorFreeText></generalErrorInfo>`, SESSION);
-const signOutOk = envelope('Security_SignOutReply', '<dummy/>');
+const signOutOk = envelope('Security_SignOutReply', '<dummy/>')
+const issueOk = envelope('DocIssuance_IssueTicketReply', '<processingStatus><statusCode>O</statusCode></processingStatus>', SESSION)
+const pnrHeaderXml = '<pnrHeader><reservationInfo><reservation><controlNumber>ABC123</controlNumber><date>040926</date></reservation></reservationInfo></pnrHeader>'
+  + '<travellerInfo><elementManagementPassenger><reference><number>1</number></reference></elementManagementPassenger>'
+  + '<passengerData><travellerInformation><traveller><surname>SMITH</surname></traveller><passenger><firstName>JOHN MR</firstName></passenger></travellerInformation></passengerData></travellerInfo>'
+// A PNR_Retrieve reply whose FA element does not yet carry a ticket number.
+const retrieveNoTicket = envelope('PNR_Reply', pnrHeaderXml, SESSION)
+// The same, once the ticket number has landed in the FA free text.
+const retrieveWithTicket = envelope('PNR_Reply',
+  pnrHeaderXml
+  + '<dataElementsMaster><dataElementsIndiv><elementManagementData><segmentName>FA</segmentName></elementManagementData>'
+  + '<otherDataFreetext><longFreetext>FA PAX 057-2412345678/ETAI/USD221.70/04SEP26/SCK1S2400</longFreetext></otherDataFreetext>'
+  + '</dataElementsIndiv></dataElementsMaster>', SESSION);
 
 const offer = () => ({
   id: '1',
@@ -295,6 +307,39 @@ describe('after the PNR exists', () => {
     await expect(runBookingChain({ offer: offer(), travelers }))
       .rejects.toMatchObject({ step: 'issueTicket', committed: true, pnr: 'ABC123' });
   });
+
+  // The ticket number takes a moment to land in the PNR after issuance, so a
+  // single retrieve can miss it. We wait, retrieve, and retry until it appears.
+  it('retries reading the ticket number until it appears in the PNR', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true')
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0')
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_DELAY_MS', '0')
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_RETRIES', '3')
+    const { runBookingChain } = await loadChain()
+    // after commit: queue, issue, retrieve#1 (no number yet), retrieve#2 (number present)
+    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk, fopOk, issueOk, retrieveNoTicket, retrieveWithTicket)
+
+    const result = await runBookingChain({ offer: offer(), travelers })
+    expect(result.ticketed).toBe(true)
+    expect(result.tickets.length).toBeGreaterThan(0)
+    expect(result.order.needsReview).toBeUndefined()
+  })
+
+  // If the number never surfaces, the ticket still exists — leave the PNR for
+  // manual follow-up rather than silently confirm a booking with no number.
+  it('flags for manual follow-up when the ticket number never appears', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true')
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0')
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_DELAY_MS', '0')
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_RETRIES', '2') // 3 attempts total
+    const { runBookingChain } = await loadChain()
+    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk, fopOk, issueOk, retrieveNoTicket, retrieveNoTicket, retrieveNoTicket)
+
+    const result = await runBookingChain({ offer: offer(), travelers })
+    expect(result.ticketed).toBe(true)
+    expect(result.tickets?.length ?? 0).toBe(0)
+    expect(result.order.needsReview?.reason).toBe('ticket_numbers_not_retrieved')
+  })
 });
 
 describe('session hygiene', () => {

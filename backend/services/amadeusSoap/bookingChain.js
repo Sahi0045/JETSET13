@@ -21,6 +21,8 @@ import { callStateless, withSession } from './session.js';
 
 const log = logger.child({ svc: 'amadeus-ws', flow: 'booking' });
 
+const sleep = (ms) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
+
 /**
  * The booking chain: one HTTP request, one Amadeus session, ten calls.
  *
@@ -366,25 +368,43 @@ export const runBookingChain = async (p) => {
       ticketed = readIssueTicketReply(issueReply).issued;
     }
 
-    // ---- 9. Read the ticket numbers back -----------------------------------
-    // Issuance replies with a status only. Non-fatal: the tickets exist whether
-    // or not we manage to read their numbers in this request.
+    // ---- 9. Read the ticket numbers back (with retries) --------------------
+    // Issuance replies with a status only, and the ticket numbers take a moment
+    // to land in the PNR. Amadeus's reference flow waits, retrieves, and if the
+    // numbers are not there yet waits again and retries a few times before
+    // leaving the PNR for manual follow-up. Non-fatal throughout: the tickets
+    // exist whether or not we capture their numbers on this request.
     let tickets = order.tickets;
     if (config.autoTicket && ticketed) {
-      try {
-        const retrieved = await callStep(ctx, {
-          step: 'retrieve',
-          operation: 'PNR_Retrieve',
-          bodyXml: buildRetrieveBody(pnr),
-          pnr,
-          committed,
-          ticketed,
-        });
-        tickets = readTickets(retrieved);
-        order = buildFlightOrder(retrieved, { flightOffers: [offer], bookingReference });
-        order.tickets = tickets;
-      } catch (cause) {
-        log.warn({ pnr, reason: cause?.technicalError ?? cause?.message }, 'reading ticket numbers failed');
+      const attempts = Math.max(1, config.ticketRetrieveRetries + 1);
+      await sleep(config.ticketRetrieveInitialMs);
+      for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+          const retrieved = await callStep(ctx, {
+            step: 'retrieve',
+            operation: 'PNR_Retrieve',
+            bodyXml: buildRetrieveBody(pnr),
+            pnr,
+            committed,
+            ticketed,
+          });
+          const found = readTickets(retrieved);
+          if (found.length) {
+            tickets = found;
+            order = buildFlightOrder(retrieved, { flightOffers: [offer], bookingReference });
+            order.tickets = tickets;
+            break;
+          }
+        } catch (cause) {
+          log.warn({ pnr, attempt, reason: cause?.technicalError ?? cause?.message }, 'reading ticket numbers failed');
+        }
+        if (attempt < attempts) await sleep(config.ticketRetrieveDelayMs);
+      }
+      if (!tickets?.length) {
+        // Ticket issued but its number has not surfaced yet — flag for manual
+        // follow-up rather than silently confirm a booking with no ticket number.
+        order.needsReview = { reason: 'ticket_numbers_not_retrieved', at: new Date().toISOString() };
+        log.warn({ pnr, attempts }, 'ticket numbers not in PNR after retries; flagged for manual follow-up');
       }
     }
 
