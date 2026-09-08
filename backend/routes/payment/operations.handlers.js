@@ -3,6 +3,8 @@ import fetch from 'node-fetch';
 import FlightProvider from '../../services/flightProvider.js';
 import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig } from './arcpay.config.js';
 
+const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
+
 
 // ============================================
 // CANCEL BOOKING - Orchestrated cancellation
@@ -629,7 +631,7 @@ export async function handlePaymentVoid(req, res) {
         const { data: booking } = await supabase
             .from('bookings')
             .select('*')
-            .or(`booking_reference.eq.${ref},booking_details->>order_id.eq.${ref}`)
+            .or((r => `booking_reference.eq.${r},booking_details->>order_id.eq.${r}`)(sanitizeRef(ref)))
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -638,7 +640,7 @@ export async function handlePaymentVoid(req, res) {
         const { data: payment } = await supabase
             .from('payments')
             .select('*')
-            .or(`id.eq.${ref},arc_order_id.eq.${ref}`)
+            .or((r => `id.eq.${r},arc_order_id.eq.${r}`)(sanitizeRef(ref)))
             .limit(1)
             .maybeSingle();
 

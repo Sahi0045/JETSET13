@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { makeOrderRef } from '../../../utils/orderRef';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FaPlane, FaHotel, FaCar, FaUtensils, FaCalendarAlt, FaUsers, FaCreditCard, FaInfoCircle, FaLock, FaUser, FaPassport, FaEnvelope, FaPhone, FaIdCard } from 'react-icons/fa';
 import Navbar from '../Navbar';
@@ -235,7 +236,7 @@ const PackageBookingSummary = () => {
 
       // Create hosted checkout session
       // ARC Pay requires order IDs: alphanumeric, 11-40 characters
-      const orderId = `PKG${Date.now().toString(36).toUpperCase()}`;
+      const orderId = makeOrderRef('PKG');
       console.log('🚀 Creating ArcPay hosted checkout session...');
 
       const checkoutResponse = await ArcPayService.createHostedCheckout({
