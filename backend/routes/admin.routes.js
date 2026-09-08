@@ -1,5 +1,6 @@
 import express from 'express';
 import supabase from '../config/supabase.js';
+import { protect, admin } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
@@ -86,7 +87,7 @@ router.get('/price-settings', async (req, res) => {
 });
 
 // Update price settings
-router.put('/price-settings', async (req, res) => {
+router.put('/price-settings', protect, admin, async (req, res) => {
   try {
     const newSettings = req.body;
 
