@@ -522,13 +522,21 @@ export async function handleHostedCheckout(req, res) {
 export async function handleGetPendingBooking(req, res) {
     try {
         const orderId = req.query.orderId || req.body?.orderId;
+        const resultIndicator = req.query.resultIndicator || req.body?.resultIndicator;
         if (!orderId) {
             return res.status(400).json({ success: false, error: 'orderId is required' });
         }
 
+        // Reached from the ARC Pay return page, which has no login session, so
+        // this cannot use `protect`. Authorisation is the payment's
+        // successIndicator instead — a secret ARC hands only to the browser that
+        // actually completed the payment, stored on the booking as
+        // `booking_details.success_indicator`. Without this check the endpoint
+        // returned every booking's passenger PII (passport included) to anyone
+        // who guessed the timestamp-derived orderId.
         const { data: booking, error } = await supabase
             .from('bookings')
-            .select('*')
+            .select('total_amount, status, payment_status, booking_reference, booking_details')
             .eq('booking_reference', orderId)
             .single();
 
@@ -536,9 +544,22 @@ export async function handleGetPendingBooking(req, res) {
             return res.status(404).json({ success: false, error: 'Pending booking not found' });
         }
 
+        const expected = booking.booking_details?.success_indicator;
+        if (!expected || !resultIndicator || resultIndicator !== expected) {
+            return res.status(403).json({ success: false, error: 'Payment verification required' });
+        }
+
+        // Return ONLY what the callback consumes — the pending-booking blob, the
+        // ARC session id and the amount. Never the passenger_details column.
         return res.json({
             success: true,
-            booking: booking,
+            booking: {
+                booking_reference: booking.booking_reference,
+                total_amount: booking.total_amount,
+                status: booking.status,
+                payment_status: booking.payment_status,
+                booking_details: { session_id: booking.booking_details?.session_id || null }
+            },
             pendingBookingData: booking.booking_details?.pending_booking_data || null
         });
     } catch (error) {
