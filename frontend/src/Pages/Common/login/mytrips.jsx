@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { formatIsoDuration } from "../../../utils/dateUtils"
+import { authHeaders } from "../../../utils/authHeaders"
 import {
   FaPlane, FaShip, FaHotel, FaSuitcaseRolling, FaClipboardList,
   FaCommentDots, FaStar, FaEye, FaCog, FaTimesCircle, FaCheckCircle,
@@ -173,9 +174,7 @@ export default function TravelDashboard() {
 
       const response = await fetch(bookingsUrl, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: await authHeaders({ 'Content-Type': 'application/json' }),
         credentials: 'include'
       })
 
@@ -950,7 +949,8 @@ export default function TravelDashboard() {
                           // Flight: cancel the real Amadeus order + ARC Pay refund + DB status
                           const resp = await fetch(getApiUrl(`flights/order/${encodeURIComponent(ref)}`), {
                             method: 'DELETE',
-                            headers: { 'Content-Type': 'application/json' }
+                            headers: await authHeaders({ 'Content-Type': 'application/json' }),
+                            credentials: 'include'
                           })
                           result = await resp.json()
                         } else {

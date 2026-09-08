@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryKeys';
 import { getApiUrl } from '../../utils/apiHelper';
+import { authHeaders } from '../../utils/authHeaders';
 
 export function useFlightBooking(bookingId, options = {}) {
   return useQuery({
@@ -8,6 +9,7 @@ export function useFlightBooking(bookingId, options = {}) {
     queryFn: async () => {
       const res = await fetch(getApiUrl(`flights/bookings/${encodeURIComponent(bookingId)}`), {
         credentials: 'include',
+        headers: await authHeaders(),
       });
       if (!res.ok) throw new Error(`Failed to fetch booking (${res.status})`);
       const data = await res.json();
