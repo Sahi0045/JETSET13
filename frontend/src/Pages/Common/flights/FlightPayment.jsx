@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { makeOrderRef } from '../../../utils/orderRef';
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   CreditCard, Calendar, Lock, CheckCircle, ArrowLeft,
@@ -176,7 +177,7 @@ function FlightPayment() {
         localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingData));
 
         // ARC Pay requires order IDs: alphanumeric, 11-40 characters
-        const orderId = `FLT${Date.now().toString(36).toUpperCase()}`;
+        const orderId = makeOrderRef('FLT');
 
         // Build description with actual flight info
         const description = `Flight ${flightNumber} - ${departureAirport} to ${arrivalAirport}`;
@@ -382,7 +383,7 @@ function FlightPayment() {
 
       // Create hosted checkout session - redirects to ARC Pay payment page
       // ARC Pay requires order IDs: alphanumeric, 11-40 characters
-      const orderId = `FLT${Date.now().toString(36).toUpperCase()}`;
+      const orderId = makeOrderRef('FLT');
       console.log('🚀 Creating ARC Pay hosted checkout session...');
 
       const checkoutResponse = await ArcPayService.createHostedCheckout({

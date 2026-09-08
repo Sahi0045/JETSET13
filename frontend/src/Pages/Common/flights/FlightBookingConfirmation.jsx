@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { makeOrderRef } from '../../../utils/orderRef';
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Check, Printer, Download, Share2, ChevronDown, ChevronUp, CheckCircle, UserCircle, Plus, Edit, Save, Briefcase, Luggage, Info, ShieldCheck, Clock, PlusCircle } from "lucide-react";
 import Navbar from "../Navbar";
@@ -778,7 +779,7 @@ function FlightBookingConfirmation() {
       localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingDataForStorage));
 
       // Generate order ID
-      const orderId = `FLT${Date.now().toString(36).toUpperCase()}`;
+      const orderId = makeOrderRef('FLT');
       const description = `Flight ${flightNumber} - ${departureAirport} to ${arrivalAirport}`;
 
       // Create ARC Pay checkout session

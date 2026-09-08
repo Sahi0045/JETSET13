@@ -442,26 +442,12 @@ if (
       const port = await findAvailablePort(PORT);
       const server = app.listen(port, () => {
         console.log(`🚀 Server running on port ${port}`);
-
-        // Re-apply CORS middleware with updated settings
-        app.use((req, res, next) => {
-          res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-          res.header(
-            "Access-Control-Allow-Methods",
-            "GET,PUT,POST,DELETE,OPTIONS,PATCH",
-          );
-          res.header(
-            "Access-Control-Allow-Headers",
-            "Content-Type, Authorization, Accept, Origin, X-Requested-With, x-csrf-token",
-          );
-          res.header("Access-Control-Allow-Credentials", "true");
-          res.header("Access-Control-Expose-Headers", "set-cookie");
-
-          if (req.method === "OPTIONS") {
-            return res.sendStatus(200);
-          }
-          next();
-        });
+        // NOTE: CORS is configured once, above, via cors(buildCorsOptions()) —
+        // an allowlist that credentials require. A block used to sit here that
+        // re-registered CORS reflecting `req.headers.origin` with
+        // Allow-Credentials: true, i.e. it echoed any attacker origin AND
+        // allowed cookies. Removed: never reflect an arbitrary origin alongside
+        // credentials.
       });
     } catch (error) {
       console.error("❌ Failed to start server:", error);

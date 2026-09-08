@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { makeOrderRef } from '../../../utils/orderRef';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   CreditCard, Calendar, Lock, CheckCircle, ArrowLeft,
@@ -82,7 +83,7 @@ function FlightCreateOrders() {
           orderData = {
             // Payment info from location.state (comes from PaymentCallback)
             transactionId: orderData?.transactionId || sessionData?.sessionId || `TXN-${Date.now()}`,
-            orderId: orderData?.orderId || sessionData?.orderId || `FLT${Date.now().toString(36).toUpperCase()}`,
+            orderId: orderData?.orderId || sessionData?.orderId || makeOrderRef('FLT'),
             amount: bookingData?.amount || orderData?.amount || sessionData?.amount || 0,
             paymentVerified: orderData?.paymentVerified || true,
 

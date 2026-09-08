@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { makeOrderRef } from '../../../utils/orderRef';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Calendar, Users, MapPin, User, Mail, Phone, Check, Shield, ChevronLeft, Clock, AlertCircle, Lock } from 'lucide-react';
 import axios from 'axios';
@@ -140,7 +141,7 @@ const HotelBookingSummary = () => {
 
             // Create hosted checkout session
             // ARC Pay requires order IDs: alphanumeric, 11-40 characters
-            const orderId = `HTL${Date.now().toString(36).toUpperCase()}`;
+            const orderId = makeOrderRef('HTL');
             console.log('🚀 Creating ArcPay hosted checkout session...');
 
             const checkoutResponse = await ArcPayService.createHostedCheckout({

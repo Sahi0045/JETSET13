@@ -60,7 +60,7 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
       const { data: bk } = await supabase
         .from('bookings')
         .select('*')
-        .or(`booking_reference.eq.${ref},booking_details->>order_id.eq.${ref}`)
+        .or((r => `booking_reference.eq.${r},booking_details->>order_id.eq.${r}`)(sanitizeRef(ref)))
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -241,6 +241,16 @@ async function findExistingBooking(bookingReference) {
 function safeRef(value) {
   const v = String(value ?? '').trim();
   return /^[A-Za-z0-9_-]{1,64}$/.test(v) ? v : null;
+}
+
+/**
+ * A reference stripped to `[A-Za-z0-9_-]`, for interpolating into a PostgREST
+ * `.or(...)` filter. A valid reference is unchanged; a malicious one loses its
+ * `.` `,` `(` `)` `:` and can no longer smuggle in a filter term — it just
+ * matches nothing. `__none__` when empty, so the filter never goes malformed.
+ */
+function sanitizeRef(value) {
+  return String(value ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 }
 
 /** Staff may read/cancel any booking; a customer only their own. */
@@ -1741,7 +1751,7 @@ router.delete('/order/:orderId', protect, async (req, res) => {
         const { data: bk } = await supabase
           .from('bookings')
           .select('booking_reference, booking_details')
-          .or(`booking_reference.eq.${orderId},booking_details->>order_id.eq.${orderId},booking_details->>amadeus_order_id.eq.${orderId}`)
+          .or((r => `booking_reference.eq.${r},booking_details->>order_id.eq.${r},booking_details->>amadeus_order_id.eq.${r}`)(sanitizeRef(orderId)))
           .limit(1)
           .maybeSingle();
         // `orderId` may be a record locator rather than our own reference, so
@@ -1782,7 +1792,7 @@ router.delete('/order/:orderId', protect, async (req, res) => {
       const { error } = await supabase
         .from('bookings')
         .update({ status: 'cancelled' })
-        .or(`booking_reference.eq.${orderId},booking_details->>` + `order_id.eq.${orderId}`);
+        .or((r => `booking_reference.eq.${r},booking_details->>order_id.eq.${r}`)(sanitizeRef(orderId)));
 
       if (!error) {
         return res.json({

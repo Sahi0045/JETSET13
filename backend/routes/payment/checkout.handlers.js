@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { supabase, ARC_PAY_CONFIG, ARC_SETTLEMENT_CURRENCY } from './arcpay.config.js';
 
+const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
+
 
 // Initiate Payment - Create ARC Pay Hosted Checkout session
 export async function handleInitiatePayment(req, res) {
@@ -969,7 +971,7 @@ export async function handleReconcileBookingPayment(req, res) {
         const { data: booking } = await supabase
             .from('bookings')
             .select('*')
-            .or(`booking_reference.eq.${orderId},booking_details->>order_id.eq.${orderId}`)
+            .or((r => `booking_reference.eq.${r},booking_details->>order_id.eq.${r}`)(sanitizeRef(orderId)))
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
