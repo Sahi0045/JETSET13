@@ -90,6 +90,17 @@ const readWsConfig = (env = process.env) => {
     timeoutMs: asInt(env.AMADEUS_WS_TIMEOUT_MS, 25000),
     offerMaxAgeMin: asInt(env.AMADEUS_WS_OFFER_MAX_AGE_MIN, 30),
     priceTolerance: asFloat(env.AMADEUS_WS_PRICE_TOLERANCE, 0),
+    // Payment-coverage guard: the fraction of the GDS-priced fare the customer
+    // must have actually PAID (captured by ARC) for the booking to proceed to
+    // ticketing. 0 disables it. The charge is client-supplied at hosted
+    // checkout and never re-validated against the fare, so without this a
+    // tampered "$1" amount would buy a full-price ticket. It is a ratio, not an
+    // exact match, because the charged amount also carries the admin service
+    // fee (up) and any coupon (down) that Amadeus knows nothing about — set it
+    // below 1 by the largest legitimate discount you allow (e.g. 0.5 tolerates
+    // coupons up to 50% off). MUST be set > 0 before AMADEUS_WS_AUTO_TICKET
+    // goes true in production; see the cutover runbook.
+    minPaymentRatio: asFloat(env.AMADEUS_WS_MIN_PAYMENT_RATIO, 0),
     logEnvelopes: isTrue(env.AMADEUS_WS_LOG_ENVELOPES, false) && env.NODE_ENV !== 'production',
   });
 };

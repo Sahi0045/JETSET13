@@ -555,6 +555,9 @@ const createFlightOrder = async (orderData, options = {}) => {
     // The FARE the customer was quoted - not what they were charged, which
     // includes an admin service fee Amadeus knows nothing about.
     expectedTotal: options.expectedTotal ?? Number(offer.price?.total) ?? undefined,
+    // What ARC actually captured, read server-side from the booking row by the
+    // route. Lets the chain refuse to ticket a fare the customer underpaid.
+    paidAmount: options.paidAmount,
     onCommitted: options.onCommitted,
   });
 

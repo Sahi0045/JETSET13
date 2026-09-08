@@ -132,7 +132,7 @@ const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, tickete
  */
 export const runBookingChain = async (p) => {
   const config = getWsConfig();
-  const { offer, contact = {}, bookingReference, expectedTotal, onCommitted } = p;
+  const { offer, contact = {}, bookingReference, expectedTotal, paidAmount, onCommitted } = p;
 
   const ama = offer?._ama;
   if (!ama?.segments?.length) {
@@ -254,6 +254,30 @@ export const runBookingChain = async (p) => {
           error: 'The fare changed while we were booking - please search again',
           code: 409,
           technicalError: `priced ${priced.total} ${priced.currency}, expected ${expectedTotal}`,
+        });
+      }
+    }
+
+    // ---- 3c. Payment-coverage guard ---------------------------------------
+    // The fare-drift guard above checks the fare is stable; it does NOT check
+    // the customer actually PAID enough to cover it. The ARC charge amount is
+    // client-supplied at hosted checkout and never re-validated, so a tampered
+    // "$1" charge would otherwise buy this full-price ticket. `paidAmount` is
+    // the amount ARC captured, read server-side from the booking row (never
+    // from the order request), so this catches the shortfall here — before any
+    // seat is sold or ticket issued — and the caller reverses the charge.
+    //
+    // A ratio, not an exact match: the charge carries the admin service fee
+    // (up) and any coupon (down) Amadeus does not see, so `minPaymentRatio`
+    // (default 0 = disabled) is the floor as a fraction of the priced fare.
+    if (config.minPaymentRatio > 0 && paidAmount != null && priced.total != null) {
+      const floor = Number(priced.total) * config.minPaymentRatio;
+      if (Number(paidAmount) + 0.01 < floor) {
+        throw new BookingChainError({
+          step: 'paymentCoverage',
+          error: 'We could not confirm your payment covers this fare - please contact support.',
+          code: 402,
+          technicalError: `paid ${paidAmount}, fare ${priced.total} ${priced.currency}, floor ${floor.toFixed(2)} (ratio ${config.minPaymentRatio})`,
         });
       }
     }

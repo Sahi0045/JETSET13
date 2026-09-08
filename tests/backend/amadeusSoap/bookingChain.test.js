@@ -178,6 +178,41 @@ describe('failing before the PNR is committed', () => {
     expect(result.pnr).toBe('ABC123');
     expect(result.priced.total).toBe(76);
   });
+
+  // The fare-drift guard checks the fare is stable; it does NOT check the
+  // customer paid enough to cover it. The ARC charge is client-supplied at
+  // hosted checkout and never re-validated, so a tampered token payment would
+  // otherwise buy this full-price ticket. paidAmount is read server-side from
+  // the booking row by the route, so the shortfall is caught here, before any
+  // seat is sold, and the route reverses the charge.
+  it('aborts before ticketing when the captured payment is below the fare floor', async () => {
+    vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '0.5'); // floor = 76 * 0.5 = 38.00
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk);
+
+    await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 1 }))
+      .rejects.toMatchObject({ step: 'paymentCoverage', committed: false, code: 402 });
+  });
+
+  it('proceeds when the captured payment clears the floor', async () => {
+    vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '0.5');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+
+    const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 76 });
+    expect(result.pnr).toBe('ABC123');
+  });
+
+  // Default (ratio 0) leaves the guard off, so behaviour is unchanged until an
+  // operator sets the ratio at cutover — a token payment still books here.
+  it('leaves the guard disabled when the ratio is unset', async () => {
+    vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '0');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+
+    const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 1 });
+    expect(result.pnr).toBe('ABC123');
+  });
 });
 
 describe('committing', () => {
