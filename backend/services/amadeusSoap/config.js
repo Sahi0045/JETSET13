@@ -101,6 +101,15 @@ const readWsConfig = (env = process.env) => {
     // coupons up to 50% off). MUST be set > 0 before AMADEUS_WS_AUTO_TICKET
     // goes true in production; see the cutover runbook.
     minPaymentRatio: asFloat(env.AMADEUS_WS_MIN_PAYMENT_RATIO, 0),
+    // After DocIssuance_IssueTicket, the ticket number takes a moment to land in
+    // the PNR, so we wait, PNR_Retrieve, and if it is not there yet wait again
+    // and retry a few times before leaving the PNR for manual follow-up (matches
+    // Amadeus's reference ticketing flow). All non-fatal.
+    ticketRetrieveInitialMs: asInt(env.AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS, 3000),
+    // Extra retrieves after the first — default 2, so 3 total tries, matching the
+    // reference flow's "already retried 3 times?" gate.
+    ticketRetrieveRetries: asInt(env.AMADEUS_WS_TICKET_RETRIEVE_RETRIES, 2),
+    ticketRetrieveDelayMs: asInt(env.AMADEUS_WS_TICKET_RETRIEVE_DELAY_MS, 1000),
     logEnvelopes: isTrue(env.AMADEUS_WS_LOG_ENVELOPES, false) && env.NODE_ENV !== 'production',
   });
 };
