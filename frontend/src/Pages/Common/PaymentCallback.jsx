@@ -91,7 +91,9 @@ export default function PaymentCallback() {
           // 1. Try retrieving from database (survives browser clears/device changes)
           try {
             console.log('🗄️ Fetching pending booking from DB for orderId:', orderId);
-            const dbResponse = await fetch(`/api/payments?action=get-pending-booking&orderId=${orderId}`);
+            // Pass the ARC resultIndicator: get-pending-booking now requires it
+            // as proof this browser completed the payment (it returns 403 otherwise).
+            const dbResponse = await fetch(`/api/payments?action=get-pending-booking&orderId=${encodeURIComponent(orderId)}&resultIndicator=${encodeURIComponent(resultIndicator || '')}`);
             if (dbResponse.ok) {
               const dbResult = await dbResponse.json();
               if (dbResult.success && dbResult.pendingBookingData) {
