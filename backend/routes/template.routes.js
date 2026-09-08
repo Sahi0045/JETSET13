@@ -1,14 +1,20 @@
 import express from 'express';
-import { 
-  getTemplates, 
-  getTemplateById, 
-  createTemplate, 
-  updateTemplate, 
+import {
+  getTemplates,
+  getTemplateById,
+  createTemplate,
+  updateTemplate,
   deleteTemplate,
-  sendTemplateResponse 
+  sendTemplateResponse
 } from '../services/templateResponse.service.js';
+import { protect, admin } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
+
+// Inquiry-response templates are back-office content and /send emails a real
+// inquiry contact. The whole router is admin-only (the admin TemplateManager is
+// its only client); it was previously unauthenticated.
+router.use(protect, admin);
 
 router.get('/', async (req, res) => {
   try {

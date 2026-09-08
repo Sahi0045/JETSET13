@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit, Trash2, Send, Search } from 'lucide-react';
 import { useRegisterRefresh } from './shell/RefreshContext';
+import { adminFetch } from '../../utils/adminAuth';
 
 const API_BASE = '/api';
 
@@ -60,7 +61,7 @@ export default function TemplateManager() {
   const loadTemplates = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/templates`);
+      const response = await adminFetch(`${API_BASE}/templates`);
       const data = await response.json();
       if (data.success) {
         setTemplates(data.data);
@@ -88,13 +89,13 @@ export default function TemplateManager() {
 
       let response;
       if (selectedTemplate?.id) {
-        response = await fetch(`${API_BASE}/templates/${selectedTemplate.id}`, {
+        response = await adminFetch(`${API_BASE}/templates/${selectedTemplate.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
       } else {
-        response = await fetch(`${API_BASE}/templates`, {
+        response = await adminFetch(`${API_BASE}/templates`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -118,7 +119,7 @@ export default function TemplateManager() {
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this template?')) return;
     try {
-      const response = await fetch(`${API_BASE}/templates/${id}`, { method: 'DELETE' });
+      const response = await adminFetch(`${API_BASE}/templates/${id}`, { method: 'DELETE' });
       const data = await response.json();
       if (data.success) {
         loadTemplates();
@@ -134,7 +135,7 @@ export default function TemplateManager() {
     if (!sendDialog) return;
     setSending(true);
     try {
-      const response = await fetch(`${API_BASE}/templates/send`, {
+      const response = await adminFetch(`${API_BASE}/templates/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sendDialog)

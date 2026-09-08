@@ -22,10 +22,14 @@ let app;
 beforeAll(async () => {
   const couponRoutes = (await import('../../backend/routes/coupon.routes.js')).default;
   const adminRoutes = (await import('../../backend/routes/admin.routes.js')).default;
+  const emailRoutes = (await import('../../backend/routes/email.routes.js')).default;
+  const templateRoutes = (await import('../../backend/routes/template.routes.js')).default;
   app = express();
   app.use(express.json());
   app.use('/api/coupons', couponRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/email', emailRoutes);
+  app.use('/api/templates', templateRoutes);
 });
 
 describe('coupon admin routes are gated (was unauthenticated)', () => {
@@ -75,5 +79,34 @@ describe('admin price-settings: only the write is gated', () => {
   it('GET /api/admin/price-settings stays public (PricingService reads it) — never 401', async () => {
     const res = await request(app).get('/api/admin/price-settings');
     expect(res.status).not.toBe(401);
+  });
+});
+
+describe('email /send is no longer an open relay', () => {
+  it('POST /api/email/send rejects an anonymous caller', async () => {
+    const res = await request(app)
+      .post('/api/email/send')
+      .send({ type: 'quote_reminder', to: 'victim@example.com', data: {} });
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /api/email (contact/subscription forms) stays public — never 401', async () => {
+    const res = await request(app)
+      .post('/api/email')
+      .send({ type: 'subscription', email: 'someone@example.com', source: 'test' });
+    expect(res.status).not.toBe(401);
+  });
+});
+
+describe('inquiry-response templates are admin-only (whole router)', () => {
+  it.each([
+    ['get', '/api/templates'],
+    ['post', '/api/templates'],
+    ['put', '/api/templates/abc'],
+    ['delete', '/api/templates/abc'],
+    ['post', '/api/templates/send'],
+  ])('%s %s rejects an anonymous caller', async (method, path) => {
+    const res = await request(app)[method](path).send({});
+    expect(res.status).toBe(401);
   });
 });

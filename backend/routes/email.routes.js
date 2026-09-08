@@ -1,6 +1,7 @@
 import express from 'express';
 import emailService, { sendSubscriptionEmails, sendContactNotificationEmails } from '../services/emailService.js';
 import { get as cacheGet, set as cacheSet } from '../services/cache.service.js';
+import { protect } from '../middleware/auth.middleware.js';
 import {
   generateInquiryStatusTemplate,
   generateLoginNotificationTemplate,
@@ -9,6 +10,14 @@ import {
 } from '../services/email/templates.js';
 
 const router = express.Router();
+
+const isStaff = (user) => !!user && ['admin', 'superadmin', 'agent'].includes(user.role);
+
+// Templates a signed-in user is allowed to send to THEIR OWN address. Everything
+// else on /send (quote_reminder, inquiry_status, or any recipient that isn't the
+// caller) is staff-only — otherwise /send is an open relay for phishing/spam from
+// the Jetsetters domain.
+const SELF_NOTIFY_TYPES = new Set(['login_notification', 'logout_notification']);
 
 // Consolidated email endpoint (matches Vercel /api/email)
 router.post('/', async (req, res) => {
@@ -202,7 +211,7 @@ router.post('/booking-confirmation', async (req, res) => {
 });
 
 // POST /api/email/send - Generic email sending endpoint for My Trips
-router.post('/send', async (req, res) => {
+router.post('/send', protect, async (req, res) => {
   try {
     const { type, to, data } = req.body;
 
@@ -211,6 +220,20 @@ router.post('/send', async (req, res) => {
         success: false,
         error: 'Email type and recipient are required'
       });
+    }
+
+    // Staff may send any template to any recipient; a normal user may only send a
+    // self-notification (login/logout) to their own verified address. This closes
+    // the arbitrary-recipient relay while keeping the login/logout emails working.
+    if (!isStaff(req.user)) {
+      const ownEmail = String(req.user?.email || '').toLowerCase();
+      const target = String(to).toLowerCase();
+      if (!SELF_NOTIFY_TYPES.has(type) || !ownEmail || target !== ownEmail) {
+        return res.status(403).json({
+          success: false,
+          error: 'Not authorized to send this email.'
+        });
+      }
     }
 
     console.log('📧 Generic email request:', { type, to });

@@ -18,6 +18,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * where a new tab, cleared storage or a second device cannot defeat it.
  */
 
+// /api/email/send is behind `protect` (it was an open relay). The login
+// notification is sent by the just-signed-in user to their own address, so the
+// authenticated user here IS the recipient — which is what the self-recipient
+// rule in the route requires. Mock protect to model that signed-in user.
+vi.mock('../../backend/middleware/auth.middleware.js', () => ({
+  protect: (req, _res, next) => {
+    req.user = { id: 'u1', email: 'traveller@example.com', role: 'user' };
+    next();
+  },
+}));
+
 const makeApp = async () => {
   const routes = (await import('../../backend/routes/email.routes.js')).default;
   const app = express();
