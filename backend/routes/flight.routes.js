@@ -223,7 +223,7 @@ async function findExistingBooking(bookingReference) {
   if (!supabase || !bookingReference) return null;
   const { data } = await supabase
     .from('bookings')
-    .select('booking_reference, status, booking_details')
+    .select('booking_reference, status, booking_details, total_amount')
     .eq('booking_reference', bookingReference)
     .single();
   return data || null;
@@ -1387,6 +1387,10 @@ router.post('/order', async (req, res) => {
         // against this - not against what they were charged, which includes the
         // admin-configured service fee Amadeus knows nothing about.
         expectedTotal: Number(pricedOffer?.price?.total) || undefined,
+        // What ARC actually captured, read from the booking row (server-side,
+        // set at hosted checkout) — NOT from this request body, which the
+        // client controls. Lets the chain refuse to ticket an underpaid fare.
+        paidAmount: existing?.total_amount != null ? Number(existing.total_amount) : undefined,
         // Called the instant a record locator exists, before queueing or
         // ticketing is attempted. Persisting here is what makes a booking
         // recoverable if the rest of the chain, or this process, dies.
