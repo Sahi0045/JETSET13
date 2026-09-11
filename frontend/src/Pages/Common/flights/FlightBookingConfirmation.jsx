@@ -21,6 +21,18 @@ import FlightCancellationPolicy from './FlightCancellationPolicy';
 import useMembership from '../../../hooks/useMembership';
 import "./booking-confirmation.css";
 
+// Passport / travel-document fields only matter on international routes. Map each
+// IATA code to its country; an UNKNOWN airport defaults to "international" so we
+// never hide the passport field on a real international ticket (which would fail
+// issuance) — we only hide it when both ends are confidently the same country.
+const IATA_TO_COUNTRY = new Map(allAirports.map((a) => [a.code, a.country]));
+const isInternationalRoute = (depCode, arrCode) => {
+  const dep = IATA_TO_COUNTRY.get((depCode || '').toUpperCase());
+  const arr = IATA_TO_COUNTRY.get((arrCode || '').toUpperCase());
+  if (!dep || !arr) return true;
+  return dep !== arr;
+};
+
 
 function FlightBookingConfirmation() {
   const routerLocation = useLocation();
@@ -33,6 +45,11 @@ function FlightBookingConfirmation() {
   const [error, setError] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [editMode, setEditMode] = useState(true); // Start in edit mode for new bookings
+  // Collapsible passenger cards: null → first card open by default; '' → all
+  // collapsed; otherwise the id of the one open card. Keeps a long multi-pax
+  // form short — one card expanded at a time.
+  const [expandedPassengerId, setExpandedPassengerId] = useState(null);
+  const [showImportantInfo, setShowImportantInfo] = useState(false); // collapsed by default to shorten the page
   const [passengerData, setPassengerData] = useState([]);
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [selectedSeats, setSelectedSeats] = useState([]);
@@ -156,13 +173,29 @@ function FlightBookingConfirmation() {
     const checkAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        setIsLoggedIn(!!session);
+        // getSession() can return null before the session is restored from the
+        // refresh cookie, which wrongly showed the "log in" banner to a
+        // signed-in user. Fall back to the client-side auth markers the rest of
+        // the app sets, and keep listening for the session to arrive.
+        let loggedIn = !!session;
+        if (!loggedIn) {
+          try {
+            loggedIn = localStorage.getItem('isAuthenticated') === 'true'
+              || !!localStorage.getItem('user')
+              || !!localStorage.getItem('adminUser');
+          } catch { /* storage blocked */ }
+        }
+        setIsLoggedIn(loggedIn);
       } catch (error) {
         console.error('Auth check error:', error);
         setIsLoggedIn(false);
       }
     };
     checkAuth();
+    const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) setIsLoggedIn(true);
+    });
+    return () => authSub?.subscription?.unsubscribe();
   }, []);
 
   // Fetch booking details from mock data (fallback when no search-page data is passed).
@@ -579,6 +612,15 @@ function FlightBookingConfirmation() {
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
+  // A time value may be an ISO string ("2024-08-10T10:00:00Z") or already
+  // "HH:MM". Format the former to a clean time; pass a plain time through.
+  // Never render a raw ISO string as the departure/arrival time.
+  const displayTime = (v) => {
+    const f = formatTimeFromISO(v);
+    if (f) return f;
+    return String(v || '').includes('T') ? '' : (v || '');
+  };
+
   // Calculate layover duration between two ISO datetimes
   const calcLayover = (arrivalAt, departureAt) => {
     if (!arrivalAt || !departureAt) return '';
@@ -935,7 +977,7 @@ function FlightBookingConfirmation() {
           </div>
         </div>
 
-        <div className="booking-layout grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="booking-layout grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Left Column - Flight & Passenger Details */}
           <div className="lg:col-span-2">
 
@@ -1078,7 +1120,7 @@ function FlightBookingConfirmation() {
                     <div className="flight-endpoint">
                       <div className="city-code">{bookingDetails?.flight?.departureCode || bookingDetails?.flight?.departureCity?.substring(0, 3).toUpperCase()}</div>
                       <div className="city-name">{bookingDetails?.flight?.departureCity}</div>
-                      <div className="time">{bookingDetails?.flight?.departureTime}</div>
+                      <div className="time">{displayTime(bookingDetails?.flight?.departureTime)}</div>
                       <div className="text-xs text-gray-500 mt-0.5">{formatFullDate(bookingDetails?.flight?.departureDate)}</div>
                       <div className="airport" title={bookingDetails?.flight?.departureAirport}>
                         {getCityName(bookingDetails?.flight?.departureCode)} Airport{bookingDetails?.flight?.departureTerminal ? `, T${bookingDetails.flight.departureTerminal}` : ''}
@@ -1100,7 +1142,7 @@ function FlightBookingConfirmation() {
                     <div className="flight-endpoint">
                       <div className="city-code">{bookingDetails?.flight?.arrivalCode || bookingDetails?.flight?.arrivalCity?.substring(0, 3).toUpperCase()}</div>
                       <div className="city-name">{bookingDetails?.flight?.arrivalCity}</div>
-                      <div className="time">{bookingDetails?.flight?.arrivalTime}</div>
+                      <div className="time">{displayTime(bookingDetails?.flight?.arrivalTime)}</div>
                       <div className="text-xs text-gray-500 mt-0.5">{formatFullDate(bookingDetails?.flight?.arrivalDate || bookingDetails?.flight?.departureDate)}</div>
                       <div className="airport" title={bookingDetails?.flight?.arrivalAirport}>
                         {getCityName(bookingDetails?.flight?.arrivalCode)} Airport{bookingDetails?.flight?.arrivalTerminal ? `, T${bookingDetails.flight.arrivalTerminal}` : ''}
@@ -1109,44 +1151,12 @@ function FlightBookingConfirmation() {
                   </div>
                 )}
 
-                <div className="flight-info-grid">
-                  <div className="info-box">
-                    <span className="label">Date</span>
-                    <span className="value">{formatFullDate(bookingDetails?.flight?.departureDate)}</span>
-                  </div>
-                  <div className="info-box">
-                    <span className="label">Flight No</span>
-                    <span className="value">{bookingDetails?.flight?.flightNumber}</span>
-                  </div>
-                  <div className="info-box">
-                    <span className="label">Baggage</span>
-                    <span className="value">{formatBaggage(bookingDetails?.baggage?.checkIn) || 'See fare rules'}</span>
-                  </div>
-                  {bookingDetails?.flight?.operatingAirlineName && bookingDetails.flight.operatingAirlineName !== bookingDetails.flight.airline && (
-                    <div className="info-box">
-                      <span className="label">Operated by</span>
-                      <span className="value">{bookingDetails.flight.operatingAirlineName}</span>
-                    </div>
-                  )}
-                  {bookingDetails?.flight?.numberOfBookableSeats && bookingDetails.flight.numberOfBookableSeats <= 9 && (
-                    <div className="info-box">
-                      <span className="label">Seats Left</span>
-                      <span className="value text-red-600">{bookingDetails.flight.numberOfBookableSeats}</span>
-                    </div>
-                  )}
-                  {bookingDetails?.flight?.lastTicketingDate && (
-                    <div className="info-box">
-                      <span className="label">Book By</span>
-                      <span className="value">{formatShortDate(bookingDetails.flight.lastTicketingDate)}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Baggage & fare-rules strip (MakeMyTrip-style) */}
+                {/* One-line summary strip — the grey DATE/FLIGHT NO/BAGGAGE grid is
+                    folded in here (density pass); values are unchanged bindings. */}
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-4 px-4 py-3 rounded-lg bg-[#F0FAFC] border border-[#B9D0DC]/60 text-sm">
                   <div className="flex items-center gap-3 sm:gap-4 text-gray-700 flex-wrap">
                     <span className="inline-flex items-center gap-1.5">
-                      <Briefcase className="h-4 w-4 text-[#055B75]" /> Cabin: <strong className="text-gray-900">7 Kg</strong>
+                      <Briefcase className="h-4 w-4 text-[#055B75]" /> Cabin: <strong className="text-gray-900">{formatBaggage(bookingDetails?.baggage?.cabin) || 'see fare rules'}</strong>
                     </span>
                     <span className="text-gray-300">|</span>
                     <span className="inline-flex items-center gap-1.5">
@@ -1162,9 +1172,17 @@ function FlightBookingConfirmation() {
                       {formatBaggage(bookingDetails?.baggage?.checkIn) ? ' / adult' : ''}
                     </span>
                   </div>
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#055B75]">
-                    <ShieldCheck className="h-4 w-4" />
-                    {bookingDetails?.flight?.refundable ? 'Partially Refundable' : 'Non-Refundable'} · See fare rules below
+                  <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-semibold text-[#055B75]">
+                    <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" />{bookingDetails?.flight?.refundable ? 'Partially Refundable' : 'Non-Refundable'}</span>
+                    {bookingDetails?.flight?.numberOfBookableSeats && bookingDetails.flight.numberOfBookableSeats <= 9 && (
+                      <span className="text-red-600">· {bookingDetails.flight.numberOfBookableSeats} seats left</span>
+                    )}
+                    {bookingDetails?.flight?.lastTicketingDate && (
+                      <span className="text-gray-500 font-normal">· Book by {formatShortDate(bookingDetails.flight.lastTicketingDate)}</span>
+                    )}
+                    {bookingDetails?.flight?.operatingAirlineName && bookingDetails.flight.operatingAirlineName !== bookingDetails.flight.airline && (
+                      <span className="text-gray-500 font-normal">· Operated by {bookingDetails.flight.operatingAirlineName}</span>
+                    )}
                   </span>
                 </div>
               </div>
@@ -1206,15 +1224,6 @@ function FlightBookingConfirmation() {
               </div>
 
               <div className="booking-card-body">
-                {editMode && (
-                  <div className="alert-info">
-                    <div className="icon">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    </div>
-                    <div className="message">Please fill in all passenger details below. Fields marked with * are required.</div>
-                  </div>
-                )}
-
                 {!isLoggedIn && (
                   <div className="bg-[#f0f9ff] border border-[#bae6fd] p-4 mb-6 rounded-xl flex justify-between items-center">
                     <div className="flex items-center text-sm text-[#0369a1]">
@@ -1230,29 +1239,35 @@ function FlightBookingConfirmation() {
                   </div>
                 )}
 
-                {passengerData.map((passenger, index) => (
+                {passengerData.map((passenger, index) => {
+                  const isExpanded = expandedPassengerId === null ? index === 0 : expandedPassengerId === passenger.id;
+                  return (
                   <div key={passenger.id} className="passenger-item">
-                    <div className="passenger-header">
+                    <div className="passenger-header" role="button" tabIndex={0} aria-expanded={isExpanded} onClick={() => setExpandedPassengerId(isExpanded ? '' : passenger.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedPassengerId(isExpanded ? '' : passenger.id); } }} style={{ cursor: 'pointer' }}>
                       <div className="flex items-center gap-3">
                         <span className="passenger-badge">
                           Adult {index + 1}
                         </span>
                         {editMode && passengerData.length > 1 && (
                           <button
-                            onClick={() => handleRemovePassenger(passenger.id)}
+                            onClick={(e) => { e.stopPropagation(); handleRemovePassenger(passenger.id); }}
                             className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 rounded hover:bg-red-50"
                           >
                             REMOVE
                           </button>
                         )}
                       </div>
-                      <div className="flex items-center text-sm font-medium text-[#055B75]">
-                        <CheckCircle className="w-4 h-4 mr-1 text-[#10b981]" />
-                        {passenger.firstName} {passenger.lastName}
+                      <div className="flex items-center gap-2 text-sm font-medium text-[#055B75]">
+                        {(passenger.firstName || passenger.lastName) ? (
+                          <span className="flex items-center"><CheckCircle className="w-4 h-4 mr-1 text-[#10b981]" />{passenger.firstName} {passenger.lastName}</span>
+                        ) : (
+                          <span className="text-gray-400">Tap to {isExpanded ? 'collapse' : 'add details'}</span>
+                        )}
+                        <svg className="w-4 h-4 text-gray-500 transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
                       </div>
                     </div>
 
-                    <div className="form-grid">
+                    <div className="form-grid" style={{ display: isExpanded ? undefined : 'none' }}>
                       <div className="form-group">
                         <label>First Name <span className="required">*</span></label>
                         <input
@@ -1348,7 +1363,8 @@ function FlightBookingConfirmation() {
                           readOnly={!editMode}
                         />
                       </div>
-                      {/* Passport / Travel Document Fields */}
+                      {/* Passport / Travel Document Fields — shown for international routes only */}
+                      {isInternationalRoute(bookingDetails?.flight?.departureCode, bookingDetails?.flight?.arrivalCode) && (<>
                       <div className="form-group" style={{ position: 'relative' }}>
                         <label>Nationality</label>
                         <input
@@ -1419,6 +1435,7 @@ function FlightBookingConfirmation() {
                           readOnly={!editMode}
                         />
                       </div>
+                      </>)}
                       <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
                         <label className="flex items-center cursor-pointer select-none gap-2">
                           <input
@@ -1433,7 +1450,8 @@ function FlightBookingConfirmation() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
 
                 {editMode && (
                   <button
@@ -1447,7 +1465,7 @@ function FlightBookingConfirmation() {
             </div>
 
             {/* Booking Contact Details */}
-            <div className="booking-card mb-8">
+            <div className="booking-card mb-4">
               <div className="booking-card-header">
                 <h2>
                   <div className="bg-white/20 p-1.5 rounded-lg backdrop-blur-sm">
@@ -1499,22 +1517,22 @@ function FlightBookingConfirmation() {
                   </div>
                 </div>
 
-                <div className="mt-6 flex items-center gap-3 p-4 bg-[#f0fdf4] border border-[#dcfce7] rounded-xl">
-                  <div className="bg-[#10b981] p-1 rounded-full">
-                    <Check className="h-4 w-4 text-white" />
+                {bookingDetails?.contact?.phone && (
+                  <div className="mt-3 flex items-center gap-3 p-3 bg-[#f0fdf4] border border-[#dcfce7] rounded-xl">
+                    <div className="bg-[#10b981] p-1 rounded-full">
+                      <Check className="h-4 w-4 text-white" />
+                    </div>
+                    <span className="text-sm font-medium text-[#166534]">
+                      Booking alerts will be sent to {selectedCountryCode} {bookingDetails.contact.phone}
+                    </span>
                   </div>
-                  <span className="text-sm font-medium text-[#166534]">
-                    {passengerData.length > 0 ?
-                      `Booking alerts enabled for ${passengerData[0].firstName} ${passengerData[0].lastName}` :
-                      "Add passenger details to enable alerts"
-                    }
-                  </span>
-                </div>
+                )}
               </div>
             </div>
 
-            {/* Add-ons Section */}
-            <div className="booking-card mb-8">
+            {/* Add-ons Section — only rendered when add-ons actually exist */}
+            {bookingDetails?.addOns?.length > 0 && (
+            <div className="booking-card mb-4">
               <div className="booking-card-header">
                 <h2>
                   <span className="flex items-center gap-2">
@@ -1557,10 +1575,11 @@ function FlightBookingConfirmation() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Seat selection */}
             {routerLocation.state?.flightData?.originalOffer && (
-              <div className="booking-card mb-8">
+              <div className="booking-card mb-4">
                 <div className="booking-card-header">
                   <h2>
                     <span className="flex items-center gap-2">
@@ -1583,7 +1602,7 @@ function FlightBookingConfirmation() {
 
             {/* Fare rules & baggage */}
             {routerLocation.state?.flightData?.originalOffer && (
-              <div className="booking-card mb-8">
+              <div className="booking-card mb-4">
                 <div className="booking-card-header">
                   <h2>
                     <span className="flex items-center gap-2">
@@ -1602,7 +1621,7 @@ function FlightBookingConfirmation() {
             )}
 
             {/* VIP Service */}
-            <div className="booking-card mb-8">
+            <div className="booking-card mb-4">
               <div className="booking-card-body flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg text-white font-bold text-lg">
@@ -1629,7 +1648,7 @@ function FlightBookingConfirmation() {
 
             {/* Visa Requirements (International) */}
             {bookingDetails?.isInternational && bookingDetails?.visaRequirements && (
-              <div className="booking-card mb-8">
+              <div className="booking-card mb-4">
                 <div
                   className="booking-card-header cursor-pointer"
                   onClick={() => toggleSection('visaRequirements')}
@@ -1670,13 +1689,14 @@ function FlightBookingConfirmation() {
             )}
 
             {/* Important Information */}
-            <div className="booking-card mb-8">
-              <div className="booking-card-header" style={{ padding: '1.1rem 1.5rem', borderBottom: '1px solid #E2E8F0' }}>
-                <h2 style={{ color: '#055B75' }}>
+            <div className="booking-card mb-4">
+              <div className="booking-card-header" role="button" tabIndex={0} aria-expanded={showImportantInfo} onClick={() => setShowImportantInfo((v) => !v)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowImportantInfo((v) => !v); } }} style={{ padding: '1.1rem 1.5rem', borderBottom: showImportantInfo ? '1px solid #E2E8F0' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                <h2 style={{ color: '#055B75', margin: 0 }}>
                   <span className="flex items-center gap-2"><Info className="h-5 w-5" /> Important Information</span>
                 </h2>
+                <svg className="w-4 h-4 text-gray-500 transition-transform" style={{ transform: showImportantInfo ? 'rotate(180deg)' : 'none' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
               </div>
-              <div className="booking-card-body">
+              <div className="booking-card-body" style={{ display: showImportantInfo ? undefined : 'none' }}>
                 <ul className="space-y-3 text-sm text-gray-600">
                   {[
                     'Carry a valid government photo ID and a printed or digital copy of your e-ticket for check-in.',
@@ -1710,8 +1730,9 @@ function FlightBookingConfirmation() {
 
           </div> {/* End of Left Column */}
 
-          {/* Right Column - Fare Summary (Sticky) */}
-          <div className="lg:col-span-1">
+          {/* Right Column - Fare Summary (sticky on desktop so the total + Proceed
+              button stay in view without scrolling to the bottom) */}
+          <div className="lg:col-span-1 lg:sticky lg:top-6 lg:self-start">
             <div className="booking-card fare-summary-card">
               <div className="booking-card-header">
                 <h2>Fare Summary</h2>
@@ -1839,6 +1860,38 @@ function FlightBookingConfirmation() {
       </div>
 
       <Footer />
+
+      {/* Sticky CTA — keeps the total + Proceed button in view so the user never
+          has to scroll to the bottom to pay. Mobile/tablet only; desktop keeps
+          its sidebar summary+button. */}
+      <div aria-hidden="true" className="lg:hidden" style={{ height: '84px' }} />
+      <div
+        className="lg:hidden"
+        style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 60,
+          background: '#fff', borderTop: '1px solid #e5e7eb',
+          boxShadow: '0 -6px 24px rgba(0,0,0,0.10)', padding: '10px 16px',
+        }}
+      >
+        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+            <span style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Total</span>
+            <span style={{ fontSize: 20, fontWeight: 800, color: '#055B75' }}>
+              <Price amount={appliedCoupon ? appliedCoupon.finalTotal : calculatedFare?.totalAmount} />
+            </span>
+          </div>
+          <button
+            onClick={handleProceedToPayment}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, background: '#055B75', color: '#fff',
+              fontWeight: 700, fontSize: 15, padding: '13px 26px', borderRadius: 10, border: 'none',
+              cursor: 'pointer', boxShadow: '0 6px 16px rgba(5,91,117,0.3)', whiteSpace: 'nowrap',
+            }}
+          >
+            Proceed to Payment <CheckCircle className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
     </div >
   );
 }

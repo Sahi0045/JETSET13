@@ -172,6 +172,20 @@ export const runBookingChain = async (p) => {
     throw new BookingChainError({ step: 'validate', error: 'Passenger details are required', code: 400 });
   }
 
+  // A standard PNR holds at most 9 seat-holding passengers (infants on a lap do
+  // not count). 10+ is a group booking — a different flow the airline rejects on
+  // this path — so refuse it here, before any GDS call, rather than commit a
+  // booking the airline will bounce.
+  const seated = seatCount(travelers);
+  if (seated > config.maxPassengersPerPnr) {
+    throw new BookingChainError({
+      step: 'validate',
+      error: `A single booking can hold at most ${config.maxPassengersPerPnr} passengers. Please book larger groups separately or contact us.`,
+      code: 400,
+      technicalError: `${seated} seat-holding passengers exceeds the ${config.maxPassengersPerPnr}-per-PNR limit`,
+    });
+  }
+
   const validatingCarrier = offer.validatingAirlineCodes?.[0] ?? ama.segments[0]?.marketingCarrier;
   const started = Date.now();
 

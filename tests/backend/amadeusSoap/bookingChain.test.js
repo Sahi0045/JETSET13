@@ -105,6 +105,18 @@ describe('refusing before anything is sold', () => {
     expect(axios.post).not.toHaveBeenCalled();
   });
 
+  // A standard PNR caps at 9 seat-holders; 10+ is a group booking the airline
+  // rejects. Refuse it up front rather than commit something that will bounce.
+  it('refuses more than 9 passengers before touching the GDS', async () => {
+    const { runBookingChain } = await loadChain();
+    axios.post.mockReset();
+    const tooMany = Array.from({ length: 10 }, (_, i) => ({ firstName: `P${i + 1}`, lastName: 'Test', gender: 'MALE' }));
+
+    await expect(runBookingChain({ offer: offer(), travelers: tooMany }))
+      .rejects.toMatchObject({ step: 'validate', committed: false, code: 400 });
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
   // A PDT offer refers to inventory that does not exist in production, and the
   // reverse. Selling one against the other books the wrong thing.
   it('rejects an offer found on a different WSAP', async () => {

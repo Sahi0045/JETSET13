@@ -101,6 +101,10 @@ const readWsConfig = (env = process.env) => {
     // coupons up to 50% off). MUST be set > 0 before AMADEUS_WS_AUTO_TICKET
     // goes true in production; see the cutover runbook.
     minPaymentRatio: asFloat(env.AMADEUS_WS_MIN_PAYMENT_RATIO, 0),
+    // Max seat-holding passengers in a single PNR. A standard airline/GDS PNR
+    // caps at 9 (infants on a lap don't count); 10+ is a group booking, a
+    // different flow the airline rejects on the normal path.
+    maxPassengersPerPnr: asInt(env.AMADEUS_WS_MAX_PASSENGERS_PER_PNR, 9),
     // After DocIssuance_IssueTicket, the ticket number takes a moment to land in
     // the PNR, so we wait, PNR_Retrieve, and if it is not there yet wait again
     // and retry a few times before leaving the PNR for manual follow-up (matches

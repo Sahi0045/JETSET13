@@ -360,19 +360,21 @@ export default function FlightSearchForm({ initialData, onSearch }) {
   };
 
   // Counter grid (Adults / Children / Infants)
-  const renderCounter = (label, sub, value, setValue, options) => (
+  const renderCounter = (label, sub, value, setValue, options, isOptionDisabled = () => false) => (
     <div>
       <div className="text-[13px] font-bold text-gray-800">{label}</div>
       <div className="text-xs text-gray-400 mb-2">{sub}</div>
       <div className="flex flex-wrap gap-1.5">
         {options.map((opt) => {
           const active = opt.over ? value >= opt.val : value === opt.val;
+          const disabled = !active && isOptionDisabled(opt);
           return (
             <button
               key={opt.label}
               type="button"
-              onClick={() => setValue(opt.val)}
-              className={`h-8 min-w-[32px] px-2 rounded-md border text-sm font-semibold transition-colors ${active ? 'bg-[#055B75] text-white border-[#055B75]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#055B75]'}`}
+              disabled={disabled}
+              onClick={() => { if (!disabled) setValue(opt.val); }}
+              className={`h-8 min-w-[32px] px-2 rounded-md border text-sm font-semibold transition-colors ${active ? 'bg-[#055B75] text-white border-[#055B75]' : disabled ? 'bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed' : 'bg-white text-gray-600 border-gray-200 hover:border-[#055B75]'}`}
             >
               {opt.label}
             </button>
@@ -381,6 +383,11 @@ export default function FlightSearchForm({ initialData, onSearch }) {
       </div>
     </div>
   );
+
+  // A standard PNR holds at most 9 seat-holding passengers (adults + children);
+  // infants ride on a lap (1 per adult). Options that would break these caps are
+  // disabled so the user can't build a booking the airline would reject.
+  const MAX_SEATED = 9;
 
   const categoryTabs = [
     { key: 'cruise', label: 'Cruise', Icon: Ship, to: '/cruise' },
@@ -585,11 +592,12 @@ export default function FlightSearchForm({ initialData, onSearch }) {
               {showTravellers && (
                 <div onClick={(e) => e.stopPropagation()}
                   className="absolute right-0 top-full mt-2 w-[560px] max-w-[88vw] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 z-[100] text-left cursor-default">
-                  {renderCounter('ADULTS (12y +)', 'on the day of travel', adults, setAdults, adultOptions)}
+                  {renderCounter('ADULTS (12y +)', 'on the day of travel', adults, setAdults, adultOptions, (opt) => opt.over || (opt.val + children > MAX_SEATED))}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 mt-4">
-                    {renderCounter('CHILDREN (2y - 12y)', 'on the day of travel', children, setChildren, childOptions)}
-                    {renderCounter('INFANTS (below 2y)', 'on the day of travel', infants, setInfants, childOptions)}
+                    {renderCounter('CHILDREN (2y - 12y)', 'on the day of travel', children, setChildren, childOptions, (opt) => opt.over || (adults + opt.val > MAX_SEATED))}
+                    {renderCounter('INFANTS (below 2y)', 'on the day of travel', infants, setInfants, childOptions, (opt) => opt.over || (opt.val > adults))}
                   </div>
+                  <p className="text-xs text-gray-500 mt-3">Up to {MAX_SEATED} passengers (adults + children) per booking. For groups of {MAX_SEATED + 1}+, please <a href="/company" className="text-[#055B75] font-semibold underline">contact us</a>.</p>
                   <div className="mt-4">
                     <div className="text-[13px] font-bold text-gray-800 mb-2 uppercase tracking-wide">Choose Travel Class</div>
                     <div className="flex flex-wrap gap-2">
