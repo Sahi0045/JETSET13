@@ -19,6 +19,33 @@ import ArcPayService from '../../../Services/ArcPayService'
 import Price from '../../../Components/Price'
 
 // ----- Icon helpers (react-icons replace emoji) -----
+/**
+ * One inquiries request, however many callers want it.
+ *
+ * loadBookings and loadRequests each fetched `inquiries?endpoint=my`, and both
+ * run on mount - two identical round trips (~330ms each) for the same data. A
+ * caller inside the freshness window joins the in-flight (or just-finished)
+ * request instead of starting another.
+ */
+const INQUIRIES_FRESH_MS = 10000
+let inquiriesInFlight = { at: 0, promise: null }
+
+const fetchMyInquiries = (headers) => {
+  if (inquiriesInFlight.promise && Date.now() - inquiriesInFlight.at < INQUIRIES_FRESH_MS) {
+    return inquiriesInFlight.promise
+  }
+  const promise = fetch(getApiUrl('inquiries?endpoint=my'), { method: 'GET', headers, credentials: 'include' })
+    .then(async (response) => ({
+      ok: response.ok,
+      status: response.status,
+      body: response.ok ? await response.json().catch(() => null) : null,
+    }))
+    .catch(() => ({ ok: false, status: 0, body: null }))
+
+  inquiriesInFlight = { at: Date.now(), promise }
+  return promise
+}
+
 const TYPE_ICON = {
   flight: FaPlane,
   cruise: FaShip,
@@ -125,8 +152,15 @@ export default function TravelDashboard() {
     loadBookings()
     loadRequests()
 
-    // Reload when the window regains focus (user comes back from booking).
+    // Reload when the window regains focus (user comes back from booking) -
+    // but not on every alt-tab. Focus fires constantly, and each reload is two
+    // API round trips, so the page spent its life reloading and flashing its
+    // spinner. Anything newer than this is still fresh enough to show.
+    let lastLoadedAt = Date.now()
+    const REFRESH_AFTER_MS = 30000
     const handleFocus = () => {
+      if (Date.now() - lastLoadedAt < REFRESH_AFTER_MS) return
+      lastLoadedAt = Date.now()
       loadBookings()
       loadRequests()
     }
@@ -210,17 +244,13 @@ export default function TravelDashboard() {
         console.log('🔍 Loading paid bookings from database...')
 
         // Method 1: Fetch user's inquiries and their quotes
-        const inquiriesResponse = await fetch(getApiUrl('inquiries?endpoint=my'), {
-          method: 'GET',
-          headers: {
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
+        const inquiriesResponse = await fetchMyInquiries({
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json'
         })
 
         if (inquiriesResponse.ok) {
-          const inquiriesResult = await inquiriesResponse.json()
+          const inquiriesResult = inquiriesResponse.body || {}
           console.log('📋 Inquiries API response:', inquiriesResult)
 
           if (inquiriesResult.success) {
@@ -415,14 +445,10 @@ export default function TravelDashboard() {
       }
 
       // Use query parameter format for Vercel serverless functions
-      const response = await fetch(getApiUrl('inquiries?endpoint=my'), {
-        method: 'GET',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        credentials: 'include'
+      const response = await fetchMyInquiries({
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       })
 
       if (!response.ok) {
@@ -434,7 +460,7 @@ export default function TravelDashboard() {
         throw new Error(`Failed to fetch requests: ${response.status}`)
       }
 
-      const result = await response.json()
+      const result = response.body || {}
 
       if (result.success) {
         // Handle both response formats: { data: [...] } or { data: { inquiries: [...] } }

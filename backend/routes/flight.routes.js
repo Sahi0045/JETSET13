@@ -2065,8 +2065,10 @@ router.get('/bookings', protect, async (req, res) => {
     // constraint prevented storing user_id directly.
     query = query.or(`user_id.eq.${userId},booking_details->>original_user_id.eq.${userId}`);
 
-    // Order by created_at descending (newest first)
-    query = query.order('created_at', { ascending: false });
+    // Order by created_at descending (newest first). Bounded: every row carries
+    // a full booking_details blob, and My Trips shows a list - nobody scrolls
+    // past a few hundred, and an unbounded read gets slower forever.
+    query = query.order('created_at', { ascending: false }).limit(200);
 
     const { data, error } = await query;
 
