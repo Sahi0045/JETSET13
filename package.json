@@ -86,7 +86,7 @@
     "papaparse": "^5.4.1",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
-    "puppeteer": "^24.6.1",
+    "puppeteer": "^25.10.0",
     "react-datepicker": "^8.3.0",
     "react-helmet": "^6.1.0",
     "react-helmet-async": "^2.0.5",
