@@ -91,7 +91,13 @@ const readWsConfig = (env = process.env) => {
     queueTimeoutMs: asInt(env.AMADEUS_WS_QUEUE_TIMEOUT_MS, 8000),
     // Permits only a booking may take, so a burst of searches can never leave a
     // paid booking without a slot. Default a fifth of the ceiling (15 -> 3).
-    bookingReservedSlots: asInt(env.AMADEUS_WS_BOOKING_RESERVED_SLOTS, Math.floor(maxConcurrency / 5)),
+    // At least one, always. `Math.floor(maxConcurrency / 5)` is 0 when the
+    // ceiling falls back to its own default of 4 - which silently removes the
+    // protection entirely, in exactly the misconfigured deploy that needs it.
+    bookingReservedSlots: asInt(
+      env.AMADEUS_WS_BOOKING_RESERVED_SLOTS,
+      Math.max(1, Math.floor(maxConcurrency / 5)),
+    ),
     // How long a booking waits for a slot before it is handed to the durable
     // queue instead. Kept well inside the ~30s the Vercel proxy allows for the
     // whole request, which also has to fit the chain itself (~8s).

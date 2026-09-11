@@ -28,10 +28,20 @@ import Price from '../../../Components/Price'
  * request instead of starting another.
  */
 const INQUIRIES_FRESH_MS = 10000
-let inquiriesInFlight = { at: 0, promise: null }
+let inquiriesInFlight = { at: 0, promise: null, owner: null }
 
-const fetchMyInquiries = (headers) => {
-  if (inquiriesInFlight.promise && Date.now() - inquiriesInFlight.at < INQUIRIES_FRESH_MS) {
+/**
+ * @param {object} headers
+ * @param {string} owner - the signed-in user's id. The cache is keyed on it:
+ *   signing out does not reload the page, so without this a second person
+ *   signing in on the same tab within the freshness window would be handed the
+ *   FIRST person's inquiries. A shared cache must never outlive its session.
+ */
+const fetchMyInquiries = (headers, owner) => {
+  const usable = inquiriesInFlight.promise
+    && inquiriesInFlight.owner === owner
+    && Date.now() - inquiriesInFlight.at < INQUIRIES_FRESH_MS
+  if (usable) {
     return inquiriesInFlight.promise
   }
   const promise = fetch(getApiUrl('inquiries?endpoint=my'), { method: 'GET', headers, credentials: 'include' })
@@ -42,7 +52,7 @@ const fetchMyInquiries = (headers) => {
     }))
     .catch(() => ({ ok: false, status: 0, body: null }))
 
-  inquiriesInFlight = { at: Date.now(), promise }
+  inquiriesInFlight = { at: Date.now(), promise, owner }
   return promise
 }
 
@@ -247,7 +257,7 @@ export default function TravelDashboard() {
         const inquiriesResponse = await fetchMyInquiries({
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           'Content-Type': 'application/json'
-        })
+        }, user?.id || user?.uid || null)
 
         if (inquiriesResponse.ok) {
           const inquiriesResult = inquiriesResponse.body || {}
@@ -449,7 +459,7 @@ export default function TravelDashboard() {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         'Content-Type': 'application/json',
         'Accept': 'application/json'
-      })
+      }, user?.id || user?.uid || null)
 
       if (!response.ok) {
         if (response.status === 401) {
