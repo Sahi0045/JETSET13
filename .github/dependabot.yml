@@ -1,0 +1,22 @@
+# Automated dependency + GitHub Actions updates.
+# Added after a security audit found 83 npm advisories accruing unnoticed with no
+# SCA in CI. Dependabot opens PRs; the CI `npm audit` step (report-only for now)
+# gives visibility until the flagged runtime deps (xlsx, axios, multer,
+# fast-xml-parser, jspdf) are remediated, at which point the audit can be made a
+# hard gate (npm audit --omit=dev --audit-level=high).
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Batch low-risk patch/minor bumps into a single PR to cut review noise.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

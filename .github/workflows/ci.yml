@@ -31,3 +31,9 @@ jobs:
       # is intentionally excluded from CI (run it locally / in a gated job).
       - name: Unit tests (frontend + backend)
         run: npm run test:unit
+
+      # Report-only for now: a hard gate (--audit-level=high) would red the build
+      # until the flagged runtime deps are remediated. Dependabot (.github/
+      # dependabot.yml) opens the fix PRs; flip this to blocking once green.
+      - name: Dependency audit (report-only)
+        run: npm audit --omit=dev || true

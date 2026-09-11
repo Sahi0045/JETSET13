@@ -14,8 +14,12 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const email = 'akant@jetsetterss.com';
-const password = '123456789';
+const email = process.env.ADMIN_SEED_EMAIL || 'akant@jetsetterss.com';
+const password = process.env.ADMIN_SEED_PASSWORD;
+if (!password || password.length < 12) {
+  console.error('Refusing to run: set ADMIN_SEED_PASSWORD (>= 12 chars). Never hardcode an admin password.');
+  process.exit(1);
+}
 
 async function createAdmin() {
   console.log('🚀 Starting admin account creation for:', email);
