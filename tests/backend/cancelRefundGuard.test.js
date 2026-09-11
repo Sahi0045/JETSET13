@@ -23,6 +23,7 @@ const booking = (overrides = {}) => ({
   payment_status: 'paid',
   total_amount: 291,
   booking_details: { pnr: 'ABC123', order_id: 'FLT123' },
+  customer_email: 'traveler@example.com',
   ...overrides,
 });
 
@@ -64,7 +65,11 @@ vi.mock('../../backend/services/flightProvider.js', () => ({
 const runCancel = async (row) => {
   supabaseDouble = supabaseFor(row);
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
-  const req = createRequest({ method: 'POST', body: { bookingReference: 'FLT123', reason: 'test' } });
+  // Authorize as the booking owner: cancel now requires an admin/superadmin
+  // caller OR a request `email` matching the booking's contact email (see the
+  // ownership check in handleCancelBookingAction). Unauthenticated cancel-by-
+  // reference — the previous behaviour — is now correctly rejected with 403.
+  const req = createRequest({ method: 'POST', body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } });
   const res = createResponse();
   await handleCancelBookingAction(req, res);
   return res;

@@ -328,9 +328,13 @@ export const protect = async (req, res, next) => {
       // Remove password from user object and ensure role is included
       const { password, ...userWithoutPassword } = user;
 
-      // Check if Supabase token has role in user_metadata (takes precedence)
-      const supabaseRole = decoded?.user_metadata?.role;
-      const finalRole = supabaseRole || user.role || 'user';
+      // Role is authoritative from the DB `users` row ONLY. Never trust
+      // decoded.user_metadata.role: a user can set it themselves via
+      // supabase.auth.updateUser({ data: { role: 'admin' } }), so honouring it
+      // was a trivial self-service escalation to admin/superadmin on every
+      // admin-gated route. app_metadata (service-role controlled) would be the
+      // only safe token source, but the DB row is the system of record here.
+      const finalRole = user.role || 'user';
 
       req.user = {
         ...userWithoutPassword,
@@ -339,12 +343,6 @@ export const protect = async (req, res, next) => {
         // req.user.id is the local DB users table id which may differ from auth.users.id (decoded.sub).
         authUserId: decoded?.sub || decoded?.user_id || userWithoutPassword.id,
       };
-
-      console.log('Auth middleware: Setting req.user with role:', {
-        dbRole: user.role,
-        supabaseRole: supabaseRole,
-        finalRole: finalRole
-      });
 
       next();
     } catch (error) {
@@ -484,23 +482,16 @@ export const optionalProtect = async (req, res, next) => {
         // Remove password from user object and ensure role is included
         const { password, ...userWithoutPassword } = user;
 
-        // Check if Supabase token has role in user_metadata (takes precedence)
-        const supabaseRole = decoded?.user_metadata?.role;
-        const finalRole = supabaseRole || user.role || 'user';
+        // Role is authoritative from the DB `users` row ONLY — never
+        // decoded.user_metadata.role, which the user can self-set (privilege
+        // escalation). Same reasoning as in `protect`.
+        const finalRole = user.role || 'user';
 
         req.user = {
           ...userWithoutPassword,
           role: finalRole,
           authUserId: decoded?.sub || decoded?.user_id || userWithoutPassword.id,
         };
-        console.log('Optional auth: User authenticated:', {
-          email: req.user.email,
-          id: req.user.id,
-          role: req.user.role,
-          dbRole: user.role,
-          supabaseRole: supabaseRole,
-          finalRole: finalRole
-        });
       } else if (decoded) {
         console.log('Optional auth: User not found or could not be provisioned, continuing as guest', {
           decodedEmail: decoded.email,

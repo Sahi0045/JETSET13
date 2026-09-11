@@ -32,20 +32,24 @@ DROP POLICY IF EXISTS "Service role can manage all bookings" ON bookings;
 DROP POLICY IF EXISTS "Anon can create bookings" ON bookings;
 
 -- RLS Policies
--- Users can view their own bookings
+-- SECURITY: scope every policy `TO authenticated` and to the OWNER only.
+-- Never use `OR user_id IS NULL` or omit the TO clause: `user_id` is NULL on
+-- every guest and FK-fallback booking (the norm here), so that would expose all
+-- of them — passenger PII, PNR, customer_email, the ARC success_indicator — to
+-- the public anon key. All guest / NULL-owner reads and writes go through the
+-- service-role backend, which bypasses RLS. (See migration
+-- supabase/migrations/20260911000000_fix_bookings_anon_read_rls.sql.)
+-- Users can view ONLY their own bookings
 CREATE POLICY "Users can view their own bookings"
     ON bookings FOR SELECT
-    USING (auth.uid() = user_id OR user_id IS NULL);
+    TO authenticated
+    USING (auth.uid() = user_id);
 
--- Users can create their own bookings
+-- Users can create ONLY their own bookings
 CREATE POLICY "Users can create their own bookings"
     ON bookings FOR INSERT
-    WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
-
--- Allow anonymous bookings (for guest checkout)
-CREATE POLICY "Anon can create bookings"
-    ON bookings FOR INSERT
-    WITH CHECK (user_id IS NULL);
+    TO authenticated
+    WITH CHECK (auth.uid() = user_id);
 
 -- Service role can do everything (for backend API)
 CREATE POLICY "Service role can manage all bookings"

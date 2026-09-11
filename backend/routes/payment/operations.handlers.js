@@ -2,6 +2,7 @@ import axios from 'axios';
 import fetch from 'node-fetch';
 import FlightProvider from '../../services/flightProvider.js';
 import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig } from './arcpay.config.js';
+import { getCaller, requireAdmin } from './agents.handlers.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -79,8 +80,19 @@ export async function handleCancelBookingAction(req, res) {
             });
         }
 
-        if (email && booking.customer_email && email.toLowerCase() !== booking.customer_email.toLowerCase()) {
-            return res.status(403).json({ success: false, error: 'Email does not match the booking' });
+        // AUTHORIZATION: an admin/superadmin may cancel any booking; otherwise the
+        // caller must prove ownership by supplying the booking's contact email.
+        // Previously this check was SKIPPED whenever `email` was absent, so an
+        // unauthenticated caller could cancel + refund ANY booking just by knowing
+        // its (guessable) reference.
+        const caller = await getCaller(req);
+        const isStaff = !!caller && ['admin', 'superadmin'].includes(caller.role);
+        if (!isStaff) {
+            const provided = (email || '').toLowerCase().trim();
+            const owner = (booking.customer_email || '').toLowerCase().trim();
+            if (!provided || !owner || provided !== owner) {
+                return res.status(403).json({ success: false, error: 'Not authorized to cancel this booking' });
+            }
         }
 
         console.log('📋 Booking found:', booking.id, 'Status:', booking.status);
@@ -492,6 +504,12 @@ export async function handlePaymentRefund(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    // AUTHORIZATION: refunds are an admin/staff operation. This handler is
+    // dispatched from the public `?action=` router with NO `protect` middleware,
+    // so it must gate itself — previously it did not, leaving an unauthenticated
+    // ARC Pay refund endpoint reachable by anyone.
+    if (!(await requireAdmin(req, res))) return;
+
     try {
         console.log('💰 Handling PAYMENT-REFUND operation');
         const { paymentId, amount, reason = 'Admin initiated refund' } = req.body;
@@ -518,6 +536,17 @@ export async function handlePaymentRefund(req, res) {
         const refundAmount = parseFloat(amount || payment.amount || 0);
         if (isNaN(refundAmount) || refundAmount <= 0) {
             return res.status(400).json({ success: false, error: 'Invalid refund amount' });
+        }
+        // Never refund more than was captured. `amount` is admin-supplied; cap it
+        // at the recorded payment total minus anything already refunded.
+        const capturedAmount = Number(payment.amount) || 0;
+        const alreadyRefunded = Number(payment.refund_amount) || 0;
+        const refundCeiling = Math.max(0, capturedAmount - alreadyRefunded);
+        if (capturedAmount > 0 && refundAmount > refundCeiling + 0.001) {
+            return res.status(400).json({
+                success: false,
+                error: `Refund amount exceeds the refundable balance (${refundCeiling.toFixed(2)} ${payment.currency || 'USD'})`,
+            });
         }
 
         // Process refund via ARC Pay
@@ -616,6 +645,10 @@ export async function handlePaymentVoid(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
+
+    // AUTHORIZATION: voiding a gateway transaction is admin-only. Same reason as
+    // handlePaymentRefund — the `?action=` router applies no auth middleware.
+    if (!(await requireAdmin(req, res))) return;
 
     try {
         console.log('🚫 Handling PAYMENT-VOID operation');
