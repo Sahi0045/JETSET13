@@ -6,7 +6,8 @@ import fetch from 'node-fetch';
 import { get as cacheGet, set as cacheSet, withCache, CacheKeys, TTL } from '../services/cache.service.js';
 import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
-import { protect, admin } from '../middleware/auth.middleware.js';
+import { protect, admin, optionalProtect } from '../middleware/auth.middleware.js';
+import { resolveBookingUserId } from '../utils/bookingOwner.js';
 import { handleCancelBookingAction, reverseArcPaymentForOrder } from './payment/operations.handlers.js';
 import { reportError } from '../services/monitoring.js';
 import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
@@ -1215,8 +1216,12 @@ router.post('/seatmaps', async (req, res) => {
   }
 });
 
-// Flight order creation endpoint
-router.post('/order', async (req, res) => {
+// Flight order creation endpoint.
+//
+// `optionalProtect` never rejects: guests may still book. It just makes the
+// signed-in user available, so a customer's own ticket is filed under their
+// account instead of being orphaned.
+router.post('/order', optionalProtect, async (req, res) => {
   try {
     // Booking is staged behind its own flag while the SOAP chain is built, so
     // search can ship first, and it never falls through to a fabricated booking.
@@ -1246,7 +1251,12 @@ router.post('/order', async (req, res) => {
     console.log('📋 Flight order creation request received');
     console.log('Request body keys:', Object.keys(req.body));
 
-    const { flightOffer, flightOffers, travelers, payments, contactInfo, totalAmount, transactionId, amount, fareBreakdown, passengerDetails, userId } = req.body;
+    const { flightOffer, flightOffers, travelers, payments, contactInfo, totalAmount, transactionId, amount, fareBreakdown, passengerDetails } = req.body;
+
+    // From the session first, the body only as a fallback. Taking it from the
+    // body alone is why confirmed bookings ended up with no user_id and never
+    // appeared in the customer's My Trips - see utils/bookingOwner.js.
+    const userId = resolveBookingUserId(req);
 
     // Accept both flightOffer (singular) and flightOffers (plural)
     const offers = flightOffers || (flightOffer ? [flightOffer] : null);

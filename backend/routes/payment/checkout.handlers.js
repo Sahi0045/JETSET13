@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { supabase, ARC_PAY_CONFIG, ARC_SETTLEMENT_CURRENCY } from './arcpay.config.js';
+import { resolveBookingUserId } from '../../utils/bookingOwner.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -474,10 +475,18 @@ export async function handleHostedCheckout(req, res) {
         // Save pending booking data to DB so callback can retrieve it even if localStorage is cleared
         try {
             const passengerDetails = bookingData?.passengerData || bookingData?.travelers || [];
+            // Own the row from the moment it exists. Without this the booking
+            // is created here with no user, and My Trips - which lists the
+            // signed-in user's bookings - can never show it, however the rest
+            // of the flow goes. `resolveBookingUserId` reads the verified
+            // session; a genuine guest still books, with null.
+            const ownerId = resolveBookingUserId(req);
+
             await supabase.from('bookings').upsert({
                 booking_reference: orderId,
                 travel_type: bookingType || 'flight',
                 status: 'pending',
+                ...(ownerId ? { user_id: ownerId } : {}),
                 total_amount: parseFloat(amount) || 0,
                 payment_status: 'unpaid',
                 booking_details: {

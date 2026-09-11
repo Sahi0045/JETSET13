@@ -1,4 +1,5 @@
 import express from 'express';
+import { optionalProtect } from '../middleware/auth.middleware.js';
 
 // Domain handler modules (split out from the original monolithic payment.routes.js)
 import {
@@ -92,7 +93,10 @@ const actionHandlers = {
 const SUPPORTED_ACTIONS = Object.keys(actionHandlers);
 
 // Main action router - handles ?action= query parameters
-router.all('/', async (req, res) => {
+// `optionalProtect` so the signed-in user reaches the handlers: hosted checkout
+// creates the booking row, and a row created without a user is invisible in My
+// Trips forever. It never rejects, so guest checkout is unaffected.
+router.all('/', optionalProtect, async (req, res) => {
     const { action } = req.query;
 
     if (!action) {
