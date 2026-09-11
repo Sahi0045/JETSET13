@@ -285,8 +285,25 @@ export const runBookingChain = async (p) => {
     //
     // A ratio, not an exact match: the charge carries the admin service fee
     // (up) and any coupon (down) Amadeus does not see, so `minPaymentRatio`
-    // (default 0 = disabled) is the floor as a fraction of the priced fare.
-    if (config.minPaymentRatio > 0 && paidAmount != null && priced.total != null) {
+    // (default 0.8, 0 = disabled) is the floor as a fraction of the priced fare.
+    //
+    // No payment on record is refused, not waved through. The route reads
+    // `paidAmount` from the booking row that hosted checkout creates; if there
+    // is no row - a missing or made-up bookingReference on a direct POST to
+    // /order - there is no evidence anything was paid, and skipping the check
+    // would ticket for free.
+    if (config.minPaymentRatio > 0) {
+      const paid = paidAmount == null ? NaN : Number(paidAmount);
+      if (!Number.isFinite(paid)) {
+        throw new BookingChainError({
+          step: 'paymentCoverage',
+          error: 'We could not confirm your payment covers this fare - please contact support.',
+          code: 402,
+          technicalError: `no captured payment on record for booking ${bookingReference || '(none)'}`,
+        });
+      }
+    }
+    if (config.minPaymentRatio > 0 && priced.total != null) {
       const floor = Number(priced.total) * config.minPaymentRatio;
       if (Number(paidAmount) + 0.01 < floor) {
         throw new BookingChainError({

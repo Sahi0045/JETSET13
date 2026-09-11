@@ -106,9 +106,17 @@ jobs:
             cd /opt/jetsetters
 
             # Replace rather than overwrite - see the staging step above.
+            caddy_changed=false
             for f in docker-compose.yml Caddyfile; do
               staged="$HOME/config-staging/$f"
               if [ -f "$staged" ] && ! cmp -s "$staged" "$f"; then
+                if [ "$f" = Caddyfile ]; then
+                  # A Caddyfile Caddy rejects would take the API down on the
+                  # restart below. Refuse it here, before it replaces the live one.
+                  docker run --rm -v "$staged:/etc/caddy/Caddyfile:ro" caddy:2-alpine \
+                    caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+                  caddy_changed=true
+                fi
                 echo "updating $f"
                 rm -f "$f" && mv "$staged" "$f"
               fi
@@ -120,6 +128,15 @@ jobs:
 
             docker compose pull app
             docker compose up -d
+
+            # The Caddyfile is a single-file bind mount, and the swap above gave
+            # it a new inode: the running container still sees the OLD file, so
+            # `caddy reload` would just re-read that. Restarting re-binds the
+            # path. A second or two of downtime, only when the Caddyfile changed.
+            if [ "$caddy_changed" = true ]; then
+              echo "Caddyfile changed - restarting caddy"
+              docker compose restart caddy
+            fi
 
             # Point the local :latest tag at what was just deployed.
             #

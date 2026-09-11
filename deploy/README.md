@@ -164,6 +164,37 @@ of keeping all of it in the environment.
 
 ---
 
+## The load balancer (`jetsetters-api-lb`)
+
+A Lightsail load balancer in front of the box. It terminates TLS with its own
+certificate and forwards to the instance over plain HTTP on :80, from a private
+address in the Lightsail VPC. The Caddyfile's `:80` site serves exactly that —
+the LB's health check (`/api/health`) and anything it received over HTTPS
+(`X-Forwarded-Proto: https`) — and redirects all other plain HTTP to HTTPS.
+Direct HTTPS on :443 keeps working throughout, so the LB can be cut over and
+rolled back by DNS alone.
+
+**Egress is unchanged.** Outbound calls to Amadeus still leave from the
+instance's static IP `63.187.206.178`, which is what Amadeus allow-lists; the
+LB only handles inbound traffic. A second instance behind the LB would need its
+own static IP added to that allow-list before it could serve flights.
+
+**Cutover:**
+
+1. The LB must show the instance as **Healthy** (needs the `:80` Caddyfile).
+2. Create a certificate for `api.jetsetterss.com` on the LB, add the validation
+   CNAME records at Hostinger, wait for it to validate, attach it (HTTPS on).
+3. Test the LB before DNS moves:
+   `curl --resolve api.jetsetterss.com:443:<LB IP> https://api.jetsetterss.com/api/health`
+4. At Hostinger, lower the TTL of `api` to 300, then replace the A record
+   (`63.187.206.178`) with a CNAME to the LB's DNS name.
+
+**Rollback:** put the A record back to `63.187.206.178`. Caddy still holds a
+valid certificate and keeps renewing it — ACME HTTP challenges are answered on
+:80 even when they arrive through the LB.
+
+---
+
 ## Why the rate limit is higher here than on Vercel
 
 `RATE_LIMIT_MAX=2000` on this host, against the 300 default everywhere else.

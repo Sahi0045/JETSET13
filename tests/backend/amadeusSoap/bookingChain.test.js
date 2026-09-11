@@ -85,6 +85,8 @@ const queueReplies = (...xmls) => {
 const loadChain = async () => (await import('../../../backend/services/amadeusSoap/bookingChain.js'));
 
 beforeEach(() => {
+  // Without this a stub set inside one test leaks into every test after it.
+  vi.unstubAllEnvs();
   vi.stubEnv('AMADEUS_WS_ENDPOINT', 'https://node.test.invalid/1ASIWJETJEC');
   vi.stubEnv('AMADEUS_WS_WSAP', '1ASIWJETJEC');
   vi.stubEnv('AMADEUS_WS_USERNAME', 'WSTEST');
@@ -92,6 +94,10 @@ beforeEach(() => {
   vi.stubEnv('AMADEUS_WS_OFFICE_ID', 'SCK1S2400');
   vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
   vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'false');
+  // These tests are about the GDS steps, so the payment guard is switched off
+  // here. It is on by default in the app, and 'the payment-coverage guard'
+  // below exercises it at that default.
+  vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '0');
   vi.resetModules();
 });
 
@@ -202,13 +208,48 @@ describe('failing before the PNR is committed', () => {
     expect(result.pnr).toBe('ABC123');
     expect(result.priced.total).toBe(76);
   });
+});
 
-  // The fare-drift guard checks the fare is stable; it does NOT check the
-  // customer paid enough to cover it. The ARC charge is client-supplied at
-  // hosted checkout and never re-validated, so a tampered token payment would
-  // otherwise buy this full-price ticket. paidAmount is read server-side from
-  // the booking row by the route, so the shortfall is caught here, before any
-  // seat is sold, and the route reverses the charge.
+// The fare-drift guard checks the fare is stable; it does NOT check the
+// customer paid enough to cover it. The ARC charge is client-supplied at
+// hosted checkout and never re-validated, so a tampered token payment would
+// otherwise buy this full-price ticket. paidAmount is read server-side from
+// the booking row by the route, so the shortfall is caught here, before the
+// PNR is committed, and the route reverses the charge.
+describe('the payment-coverage guard', () => {
+  // Unset is the case that matters: a guard that is only on when someone
+  // remembers to configure it is off in practice.
+  it('refuses a token payment with the ratio unset', async () => {
+    vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk);
+
+    await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 1 }))
+      .rejects.toMatchObject({ step: 'paymentCoverage', committed: false, code: 402 });
+  });
+
+  // The largest flight coupon is 20% off, and the charge also carries the 2.5%
+  // service fee: 76 * 0.8 * 1.025 = 62.32, which must still book.
+  it('lets a 20%-off coupon through at the default', async () => {
+    vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+
+    const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 62.32 });
+    expect(result.pnr).toBe('ABC123');
+  });
+
+  // No booking row means no evidence of payment: a direct POST to /order with a
+  // missing or made-up bookingReference must not ticket for free.
+  it('refuses when there is no payment on record at all', async () => {
+    vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk);
+
+    await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76, bookingReference: 'MADE-UP' }))
+      .rejects.toMatchObject({ step: 'paymentCoverage', committed: false, code: 402 });
+  });
+
   it('aborts before ticketing when the captured payment is below the fare floor', async () => {
     vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '0.5'); // floor = 76 * 0.5 = 38.00
     const { runBookingChain } = await loadChain();
@@ -227,15 +268,34 @@ describe('failing before the PNR is committed', () => {
     expect(result.pnr).toBe('ABC123');
   });
 
-  // Default (ratio 0) leaves the guard off, so behaviour is unchanged until an
-  // operator sets the ratio at cutover — a token payment still books here.
-  it('leaves the guard disabled when the ratio is unset', async () => {
+  // 0 is the explicit off switch - a token payment, or none at all, books.
+  it('is disabled only when the ratio is explicitly 0', async () => {
     vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '0');
     const { runBookingChain } = await loadChain();
     queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
 
-    const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 1 });
+    const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76 });
     expect(result.pnr).toBe('ABC123');
+  });
+});
+
+describe('waiting for an Amadeus slot', () => {
+  // Nothing may be sent before the slot is held: a booking that times out here
+  // sold nothing, which is what lets the route queue it instead of refunding.
+  it('gives up in the booking lane before any GDS call', async () => {
+    vi.stubEnv('AMADEUS_WS_MAX_CONCURRENCY', '1');
+    vi.stubEnv('AMADEUS_WS_BOOKING_QUEUE_TIMEOUT_MS', '30');
+    const { runBookingChain } = await loadChain();
+    const { getSemaphore, withBookingPriority } = await import('../../../backend/services/amadeusSoap/semaphore.js');
+    const { getWsConfig } = await import('../../../backend/services/amadeusSoap/config.js');
+    axios.post.mockReset();
+    await getSemaphore(getWsConfig()).acquire(); // the only slot, held elsewhere
+
+    const err = await withBookingPriority(() => runBookingChain({ offer: offer(), travelers })).catch((e) => e);
+
+    expect(err).toMatchObject({ slotTimeout: true, priority: true, code: 503 });
+    expect(axios.post).not.toHaveBeenCalled();
+    getSemaphore(getWsConfig()).release();
   });
 });
 

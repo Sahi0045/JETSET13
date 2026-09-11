@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { protect, admin } from '../middleware/auth.middleware.js';
 import { handleCancelBookingAction, reverseArcPaymentForOrder } from './payment/operations.handlers.js';
 import { reportError } from '../services/monitoring.js';
+import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
 
 // Only the fields the handler genuinely requires; passthrough keeps the rest.
 const flightSearchSchema = z
@@ -340,6 +341,9 @@ async function claimBookingChain(bookingReference) {
 
   const startedAt = new Date().toISOString();
   const attempt = Number(chain?.attempt || 0) + 1;
+  // Carried across claims so a booking that keeps missing a slot cannot sit in
+  // the durable queue forever.
+  const queueAttempts = chain?.queueAttempts ? { queueAttempts: chain.queueAttempts } : {};
 
   // Compare-and-set on the exact stamp that was just read. Two racing requests
   // read the same prior value and both write conditioned on it; the first
@@ -354,7 +358,7 @@ async function claimBookingChain(bookingReference) {
   let update = supabase
     .from('bookings')
     .update({
-      booking_details: { ...details, gds_chain: { state: 'in_progress', startedAt, attempt } },
+      booking_details: { ...details, gds_chain: { state: 'in_progress', startedAt, attempt, ...queueAttempts } },
       updated_at: startedAt,
     })
     .eq('booking_reference', bookingReference);
@@ -376,6 +380,84 @@ async function claimBookingChain(bookingReference) {
     return { claimed: false };
   }
   return { claimed: true, attempt };
+}
+
+// A booking that cannot get an Amadeus slot is retried this many times by the
+// queue worker before it is refunded like any other failure. Each retry only
+// runs when a slot is free, so reaching this means Amadeus is saturated for
+// minutes, not seconds - and the 30-minute offer staleness limit refunds it
+// before then anyway.
+const MAX_QUEUE_ATTEMPTS = 10;
+
+/**
+ * Hand a paid booking that never got an Amadeus slot to the durable queue.
+ *
+ * Nothing was sold - the slot wait happens before the first GDS call - so the
+ * booking can simply be run again later. Refunding here would turn a
+ * few seconds of traffic into a lost customer. The order is kept on the
+ * booking row (the same row that already holds these passenger details) so it
+ * survives a restart or deploy; backend/jobs/bookingQueue.job.js replays it
+ * through this route once a slot is free, and clears it when it is done.
+ *
+ * Returns false when the booking cannot be queued, and the caller refunds.
+ */
+async function queueBookingForRetry(bookingReference, orderBody) {
+  if (!supabase || !bookingReference) return false;
+
+  const { data: row } = await supabase
+    .from('bookings')
+    .select('booking_details')
+    .eq('booking_reference', bookingReference)
+    .single();
+  // No checkout row means nothing to hold the order against - and nothing
+  // that proves a payment, which the chain would refuse on replay anyway.
+  if (!row) return false;
+
+  const details = row.booking_details || {};
+  const queueAttempts = Number(details.gds_chain?.queueAttempts || 0) + 1;
+  if (queueAttempts > MAX_QUEUE_ATTEMPTS) return false;
+
+  const queuedAt = new Date().toISOString();
+  const { error } = await supabase
+    .from('bookings')
+    .update({
+      booking_details: {
+        ...details,
+        queued_order: orderBody,
+        // Local dev and production share one database. Only a worker in the
+        // environment that queued a booking may run it - a laptop must never
+        // replay a customer's booking, and production must never book a test.
+        queued_env: process.env.NODE_ENV || 'development',
+        // `startedAt` is what the next claim compares-and-sets on.
+        gds_chain: { state: 'queued', startedAt: queuedAt, queuedAt, attempt: details.gds_chain?.attempt, queueAttempts },
+      },
+      updated_at: queuedAt,
+    })
+    .eq('booking_reference', bookingReference);
+
+  if (error) {
+    console.error('⚠️ Could not queue the booking, refunding instead:', error.message);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Tell the customer a queued booking is on its way. 202 + PENDING_CONFIRMATION
+ * is the shape both clients already show as a successful, pending booking.
+ */
+function respondQueued(res, bookingReference) {
+  console.warn('📥 No Amadeus slot free - booking queued for retry', bookingReference);
+  return res.status(202).json({
+    success: true,
+    data: { id: bookingReference, pnr: null, status: 'PENDING_CONFIRMATION', bookingReference },
+    pnr: null,
+    orderId: bookingReference,
+    bookingReference,
+    queued: true,
+    message: 'Your payment is received and your booking is being confirmed with the airline. '
+      + 'You will receive your confirmation by email within a few minutes.'
+  });
 }
 
 /** Release the claim so a later attempt is not blocked by a dead one. */
@@ -1334,7 +1416,7 @@ router.post('/order', async (req, res) => {
     let pricedOffer = firstOffer;
     try {
       console.log('💰 Pricing flight offer before booking...');
-      const pricingResult = await FlightProvider.priceFlightOffer(firstOffer);
+      const pricingResult = await withBookingPriority(() => FlightProvider.priceFlightOffer(firstOffer));
       if (pricingResult.success && pricingResult.data?.flightOffers?.[0]) {
         pricedOffer = pricingResult.data.flightOffers[0];
         console.log('✅ Flight offer priced successfully, using priced version');
@@ -1342,6 +1424,12 @@ router.post('/order', async (req, res) => {
         console.log('⚠️ Pricing failed, proceeding with original offer');
       }
     } catch (pricingError) {
+      // Already waited the whole booking wait for a slot. The chain would wait
+      // that long again and the request would outlive the Vercel proxy, so
+      // queue now instead.
+      if (pricingError?.slotTimeout && await queueBookingForRetry(req.body.bookingReference, req.body)) {
+        return respondQueued(res, req.body.bookingReference);
+      }
       console.log('⚠️ Pricing step failed, proceeding with original offer:', pricingError.message || pricingError.error);
     }
 
@@ -1381,7 +1469,9 @@ router.post('/order', async (req, res) => {
     // Wrap Amadeus service call in try-catch to handle errors gracefully
     let orderResponse;
     try {
-      orderResponse = await FlightProvider.createFlightOrder(flightOrderData, {
+      // The booking lane: the customer has paid, so this goes ahead of searches
+      // for an Amadeus slot and may use the slots searches cannot.
+      orderResponse = await withBookingPriority(() => FlightProvider.createFlightOrder(flightOrderData, {
         bookingReference: req.body.bookingReference,
         // The fare the customer was quoted. The chain compares the GDS price
         // against this - not against what they were charged, which includes the
@@ -1402,7 +1492,7 @@ router.post('/order', async (req, res) => {
             priced
           });
         }
-      });
+      }));
       console.log('✅ Amadeus service call completed:', {
         success: orderResponse?.success,
         mode: orderResponse?.mode,
@@ -1446,6 +1536,16 @@ router.post('/order', async (req, res) => {
           message: 'Your booking is confirmed and our team is finalising the ticket. '
             + 'You will receive your confirmation shortly.'
         });
+      }
+
+      // Every Amadeus slot stayed busy for the whole wait, so nothing was sent to
+      // the GDS. That is a traffic spike, not a failed booking: queue it and let
+      // the worker run it the moment a slot frees, rather than refund a customer
+      // who did nothing wrong. The 202 is the shape both clients already treat as
+      // a pending-but-successful booking.
+      if (providerError?.slotTimeout && !providerError?.committed
+        && await queueBookingForRetry(req.body.bookingReference, req.body)) {
+        return respondQueued(res, req.body.bookingReference);
       }
 
       // The customer has already been charged - hosted checkout runs before this
