@@ -281,10 +281,9 @@ router.get('/status/:userId', async (req, res) => {
 // POST /api/subscription/webhook
 router.post('/webhook', async (req, res) => {
     try {
-        const { orderId, result } = req.body;
-
-        if (result !== 'SUCCESS' || !orderId) {
-            return res.json({ success: false, message: 'Payment not successful' });
+        const { orderId } = req.body;
+        if (!orderId) {
+            return res.status(400).json({ success: false, message: 'orderId is required' });
         }
 
         const { data: sub, error } = await supabase
@@ -297,13 +296,42 @@ router.post('/webhook', async (req, res) => {
         if (!sub) {
             return res.status(404).json({ success: false, message: 'Unknown order' });
         }
-
         if (!sub.plan_type || !sub.user_id) {
             return res.status(400).json({ success: false, message: 'Invalid subscription row' });
         }
-
         if (sub.status === 'active') {
             return res.json({ success: true, message: 'Already active' });
+        }
+        // Only a pending intent may be activated — never resurrect a
+        // cancelled/expired subscription (mirrors /complete).
+        if (sub.status !== 'pending') {
+            return res.json({ success: false, message: 'Subscription is not pending activation' });
+        }
+
+        // SECURITY: this endpoint is unauthenticated and unsigned, so a caller
+        // could POST {orderId, result:'SUCCESS'} to activate a paid plan for
+        // free. NEVER trust a client-asserted result — verify the payment with
+        // ARC directly, exactly as /complete does.
+        const arcMerchantId = ARC_PAY_CONFIG.MERCHANT_ID;
+        const arcApiPassword = ARC_PAY_CONFIG.API_PASSWORD;
+        if (!arcMerchantId || !arcApiPassword) {
+            return res.status(503).json({ success: false, message: 'Payment verification unavailable.' });
+        }
+        const authHeader =
+            'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
+        let transaction;
+        try {
+            const orderResponse = await axios.get(
+                `${ARC_PAY_CONFIG.BASE_URL}/merchant/${arcMerchantId}/order/${encodeURIComponent(String(orderId).trim())}`,
+                { headers: { Authorization: authHeader, Accept: 'application/json' }, timeout: 30000 }
+            );
+            transaction = orderResponse.data;
+        } catch (e) {
+            console.error('Subscription webhook: ARC order fetch failed', e.response?.data || e.message);
+            return res.status(502).json({ success: false, message: 'Could not verify payment with ARC.' });
+        }
+        if (!arcOrderPaymentSuccess(transaction)) {
+            return res.json({ success: false, message: 'Payment not completed or still processing.' });
         }
 
         await activateSubscriptionRow(sub);

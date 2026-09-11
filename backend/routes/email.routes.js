@@ -53,9 +53,14 @@ router.post('/', async (req, res) => {
 });
 
 // Send callback confirmation email
-router.post('/send-callback-confirmation', async (req, res) => {
+router.post('/send-callback-confirmation', protect, async (req, res) => {
+  // Staff-only: this sends a branded email from the Jetsetters domain to an
+  // arbitrary recipient with caller-supplied content — an open phishing relay if
+  // left unauthenticated (mirror the /send hardening below). No web caller.
+  if (!isStaff(req.user)) {
+    return res.status(403).json({ success: false, error: 'Not authorized to send this email.' });
+  }
   console.log('🔶 Email route hit: /send-callback-confirmation');
-  console.log('🔶 Request body:', req.body);
 
   try {
     const { data, type } = req.body;
@@ -89,7 +94,6 @@ router.post('/send-callback-confirmation', async (req, res) => {
 // Send subscription notification emails (subscriber welcome + admin notification)
 router.post('/subscription-notification', async (req, res) => {
   console.log('📧 Subscription notification route hit');
-  console.log('📧 Request body:', req.body);
 
   try {
     const { email, source } = req.body;
@@ -125,7 +129,6 @@ router.post('/subscription-notification', async (req, res) => {
 // Send contact form notification emails (customer confirmation + admin notification)
 router.post('/contact-notification', async (req, res) => {
   console.log('📩 Contact notification route hit');
-  console.log('📩 Request body:', req.body);
 
   try {
     const { name, email, message } = req.body;
@@ -159,7 +162,14 @@ router.post('/contact-notification', async (req, res) => {
 });
 
 // POST /api/email/booking-confirmation - Send booking confirmation emails
-router.post('/booking-confirmation', async (req, res) => {
+router.post('/booking-confirmation', protect, async (req, res) => {
+  // Staff-only: sends a branded booking email to an arbitrary recipient with
+  // caller-supplied content — a phishing relay if unauthenticated. Normal-flow
+  // confirmations are sent server-side by the booking chain; this is a manual
+  // admin resend. No web caller.
+  if (!isStaff(req.user)) {
+    return res.status(403).json({ success: false, error: 'Not authorized.' });
+  }
   try {
     const {
       customerEmail,

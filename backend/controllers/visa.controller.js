@@ -72,7 +72,7 @@ function isArcOrderPaid(order) {
  */
 export const submitApplication = async (req, res) => {
   try {
-    console.log('--- submitApplication request body ---', JSON.stringify(req.body, null, 2));
+    console.log('submitApplication received; fields:', Object.keys(req.body || {}).join(', '));
     const { personalInfo, travelDetails, serviceTier, userId, documents, paymentStatus, notes } = req.body;
 
     // Basic validation
