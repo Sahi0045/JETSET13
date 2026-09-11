@@ -1703,7 +1703,12 @@ router.post('/order', optionalProtect, async (req, res) => {
       // numbers ManageBooking currently fabricates.
       gds: orderResponse.gds || null,
       tickets: orderResponse.tickets || [],
-      userId: req.body.userId || null
+      // `userId` is set once, at the top of this object, from the resolved
+      // session. It used to be set a SECOND time here from req.body.userId -
+      // and in an object literal the later key wins, so the session-resolved
+      // owner was silently thrown away and the client's value used instead.
+      // That quietly undid the ownership fix on the main write path: the row
+      // landed with user_id null again and vanished from My Trips.
     });
 
     console.log('📝 Database save result:', dbBooking ? 'Success' : 'Skipped/Failed');
