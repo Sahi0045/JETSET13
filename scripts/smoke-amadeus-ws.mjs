@@ -102,6 +102,9 @@ if (wantBooking && offer) {
     },
   }, {
     bookingReference: `SMOKE-${Date.now()}`,
+    // No card is charged here, so stand in for a fully paid checkout - the
+    // payment-coverage guard refuses a booking with no payment on record.
+    paidAmount: Number(offer.price.total),
     onCommitted: async ({ pnr: committed }) => console.log(`       committed PNR ${committed}`),
   }));
 

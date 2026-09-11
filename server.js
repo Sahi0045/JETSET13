@@ -40,6 +40,7 @@ import "./backend/bootstrap/httpDefaults.js"; // global axios timeout safety net
 import { validateEnv } from "./backend/config/validateEnv.js";
 import { initMonitoring } from "./backend/services/monitoring.js";
 import { installProcessGuards } from "./backend/bootstrap/processGuards.js";
+import { startBookingQueueWorker } from "./backend/jobs/bookingQueue.job.js";
 import {
   apiLimiter,
   authLimiter,
@@ -314,6 +315,9 @@ app.use(errorHandler);
 if (process.env.NODE_ENV !== "test") {
   const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+    // Finishes paid bookings that could not get an Amadeus slot. Lives here,
+    // with the booking chain, and never in the Vercel handler.
+    startBookingQueueWorker({ port: PORT });
   });
   // Crash guards + graceful shutdown (drain in-flight requests on SIGTERM/SIGINT)
   installProcessGuards({ server });

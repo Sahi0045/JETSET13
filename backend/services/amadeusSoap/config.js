@@ -48,6 +48,8 @@ const readWsConfig = (env = process.env) => {
     );
   }
 
+  const maxConcurrency = asInt(env.AMADEUS_WS_MAX_CONCURRENCY, 4);
+
   return Object.freeze({
     endpoint: env.AMADEUS_WS_ENDPOINT.trim(),
     wsap: (env.AMADEUS_WS_WSAP || '').trim() || env.AMADEUS_WS_ENDPOINT.trim().split('/').pop(),
@@ -85,22 +87,33 @@ const readWsConfig = (env = process.env) => {
     // A value that is correct on PDT is not evidence it is correct on PROD.
     fopCode: (env.AMADEUS_WS_FOP_CODE || 'CASH').trim(),
 
-    maxConcurrency: asInt(env.AMADEUS_WS_MAX_CONCURRENCY, 4),
+    maxConcurrency,
     queueTimeoutMs: asInt(env.AMADEUS_WS_QUEUE_TIMEOUT_MS, 8000),
+    // Permits only a booking may take, so a burst of searches can never leave a
+    // paid booking without a slot. Default a fifth of the ceiling (15 -> 3).
+    bookingReservedSlots: asInt(env.AMADEUS_WS_BOOKING_RESERVED_SLOTS, Math.floor(maxConcurrency / 5)),
+    // How long a booking waits for a slot before it is handed to the durable
+    // queue instead. Kept well inside the ~30s the Vercel proxy allows for the
+    // whole request, which also has to fit the chain itself (~8s).
+    bookingQueueTimeoutMs: asInt(env.AMADEUS_WS_BOOKING_QUEUE_TIMEOUT_MS, 10000),
     timeoutMs: asInt(env.AMADEUS_WS_TIMEOUT_MS, 25000),
     offerMaxAgeMin: asInt(env.AMADEUS_WS_OFFER_MAX_AGE_MIN, 30),
     priceTolerance: asFloat(env.AMADEUS_WS_PRICE_TOLERANCE, 0),
     // Payment-coverage guard: the fraction of the GDS-priced fare the customer
     // must have actually PAID (captured by ARC) for the booking to proceed to
-    // ticketing. 0 disables it. The charge is client-supplied at hosted
-    // checkout and never re-validated against the fare, so without this a
-    // tampered "$1" amount would buy a full-price ticket. It is a ratio, not an
-    // exact match, because the charged amount also carries the admin service
-    // fee (up) and any coupon (down) that Amadeus knows nothing about — set it
-    // below 1 by the largest legitimate discount you allow (e.g. 0.5 tolerates
-    // coupons up to 50% off). MUST be set > 0 before AMADEUS_WS_AUTO_TICKET
-    // goes true in production; see the cutover runbook.
-    minPaymentRatio: asFloat(env.AMADEUS_WS_MIN_PAYMENT_RATIO, 0),
+    // ticketing. The charge is client-supplied at hosted checkout and never
+    // re-validated against the fare, so without this a tampered "$1" amount
+    // would buy a full-price ticket. It is a ratio, not an exact match, because
+    // the charged amount also carries the admin service fee (up) and any coupon
+    // (down) that Amadeus knows nothing about.
+    //
+    // On by default. It used to default to 0 (off) with a note to switch it on
+    // at cutover - a security control that depends on someone remembering is
+    // off in practice. 0.8 clears the largest flight coupon (20% off): a 20%
+    // coupon on fare + 2.5% service fee lands at ~0.82 of the fare. If you
+    // create a flight coupon worth more than 20%, lower this below
+    // (1 - discount) or real bookings will be refused and refunded. 0 disables.
+    minPaymentRatio: asFloat(env.AMADEUS_WS_MIN_PAYMENT_RATIO, 0.8),
     // Max seat-holding passengers in a single PNR. A standard airline/GDS PNR
     // caps at 9 (infants on a lap don't count); 10+ is a group booking, a
     // different flow the airline rejects on the normal path.

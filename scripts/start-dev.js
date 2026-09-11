@@ -28,8 +28,10 @@ console.log('🚀 Starting development servers...');
 console.log('📡 Backend API: http://localhost:5004');
 console.log('🌐 Frontend: http://localhost:5173');
 
-// Start backend server with nodemon and fixed port 5004
-const backend = runCommand('nodemon', ['backend/server.js'], {
+// Start backend server with nodemon and fixed port 5004. Watch only what the
+// backend loads: unscoped, nodemon watches the whole repo and restarts the API
+// on every frontend .js edit that Vite already hot-reloads.
+const backend = runCommand('nodemon', ['--watch', 'backend', '--watch', '.env', 'backend/server.js'], {
   env: { ...process.env, NODE_ENV: 'development', PORT: '5004' }
 });
 
