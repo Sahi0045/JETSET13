@@ -29,6 +29,7 @@ const EMPTY_FORM = {
   discountType: 'percentage',
   discountValue: '',
   minOrderValue: '',
+  maxDiscountAmount: '',
   maxUses: '',
   validFrom: '',
   validUntil: '',
@@ -71,6 +72,7 @@ const CouponManagement = () => {
         ...form,
         discountValue: parseFloat(form.discountValue),
         minOrderValue: form.minOrderValue ? parseFloat(form.minOrderValue) : 0,
+        maxDiscountAmount: form.maxDiscountAmount ? parseFloat(form.maxDiscountAmount) : null,
         maxUses: form.maxUses ? parseInt(form.maxUses) : null,
         validFrom: form.validFrom || null,
         validUntil: form.validUntil || null,
@@ -99,6 +101,7 @@ const CouponManagement = () => {
       discountType: coupon.discount_type,
       discountValue: coupon.discount_value,
       minOrderValue: coupon.min_order_value || '',
+      maxDiscountAmount: coupon.max_discount_amount || '',
       maxUses: coupon.max_uses || '',
       validFrom: coupon.valid_from ? coupon.valid_from.substring(0, 16) : '',
       validUntil: coupon.valid_until ? coupon.valid_until.substring(0, 16) : '',
@@ -192,6 +195,21 @@ const CouponManagement = () => {
                 placeholder="0 = no minimum" />
             </div>
 
+            {/* Max Discount — the ceiling on what one booking can give away. */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">Max Discount ($)</label>
+              <input type="number" min="0" step="0.01" value={form.maxDiscountAmount} onChange={e => setForm({ ...form, maxDiscountAmount: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                placeholder="Blank = no cap" />
+              {form.discountType === 'percentage' && (
+                <p className="mt-1 text-[11px] leading-snug text-gray-500">
+                  Caps a % coupon on expensive tickets: {form.discountValue || '20'}% of a $1,200 fare is
+                  ${((parseFloat(form.discountValue) || 20) * 12).toFixed(0)}. The airline is still paid the full fare,
+                  so the discount comes out of your margin.
+                </p>
+              )}
+            </div>
+
             {/* Max Uses */}
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">Max Uses</label>
@@ -254,6 +272,10 @@ const CouponManagement = () => {
                     </td>
                     <td className="px-4 py-3 font-semibold text-green-700">
                       {coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`} off
+                      {coupon.max_discount_amount > 0 && <p className="text-xs text-gray-500 font-normal">Max ${coupon.max_discount_amount} per booking</p>}
+                      {coupon.discount_type === 'percentage' && !(coupon.max_discount_amount > 0) && (
+                        <p className="text-xs text-amber-600 font-normal">No cap</p>
+                      )}
                       {coupon.min_order_value > 0 && <p className="text-xs text-gray-400 font-normal">Min: ${coupon.min_order_value}</p>}
                     </td>
                     <td className="px-4 py-3 capitalize text-gray-700">{coupon.applicable_to}</td>

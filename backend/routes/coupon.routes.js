@@ -1,37 +1,20 @@
 import express from 'express';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { protect, admin } from '../middleware/auth.middleware.js';
+// The shared client, not a second one built here.
+//
+// This module used to call createClient itself off the same env vars, which
+// made every database path in it unmockable: the shared module is what tests
+// mock, so a test against these routes built a real client and hit the network.
+// flight.routes.js was fixed the same way and for the same reason.
+import supabase from '../config/supabase.js';
 
 dotenv.config();
 
 const router = express.Router();
 
-const supabaseUrl =
-  process.env.SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.VITE_SUPABASE_URL;
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.VITE_SUPABASE_ANON_KEY;
-
-const supabase =
-  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
-
-function requireSupabase(req, res, next) {
-  if (!supabase) {
-    return res.status(503).json({
-      success: false,
-      message: 'Coupons service is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.',
-    });
-  }
-  next();
-}
-
-router.use(requireSupabase);
+// No local `requireSupabase` gate any more: config/supabase.js fails fast at
+// import if the credentials are missing, the same as every other route module.
 
 // ─────────────────────────────────────────────
 // PUBLIC: Validate a coupon code
@@ -111,6 +94,22 @@ router.post('/validate', async (req, res) => {
         } else {
             discountAmount = parseFloat(coupon.discount_value);
         }
+        // Ceiling on what one booking may give away. A percentage coupon is
+        // unbounded in money terms: 20% off a $1,200 international ticket is
+        // $240, against a service fee of ~2.5% - and the airline is still paid
+        // the full fare through ARC, so the difference comes straight out of
+        // the agency's margin. `max_discount_amount` is what stops one
+        // expensive booking wiping out the earnings of many.
+        //
+        // Null/absent means no cap, so this is inert until a coupon sets one
+        // (and while the column does not exist yet).
+        const maxDiscount = coupon.max_discount_amount == null
+            ? null
+            : parseFloat(coupon.max_discount_amount);
+        if (maxDiscount != null && Number.isFinite(maxDiscount) && maxDiscount > 0) {
+            discountAmount = Math.min(discountAmount, maxDiscount);
+        }
+
         discountAmount = Math.min(discountAmount, total); // can't discount more than total
         discountAmount = parseFloat(discountAmount.toFixed(2));
 
@@ -122,6 +121,7 @@ router.post('/validate', async (req, res) => {
                 description: coupon.description,
                 discountType: coupon.discount_type,
                 discountValue: coupon.discount_value,
+                maxDiscountAmount: coupon.max_discount_amount ?? null,
                 applicableTo: coupon.applicable_to
             },
             discountAmount,
@@ -196,7 +196,7 @@ router.get('/', protect, admin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/', protect, admin, async (req, res) => {
     try {
-        const { code, description, discountType, discountValue, minOrderValue, maxUses, validFrom, validUntil, applicableTo } = req.body;
+        const { code, description, discountType, discountValue, minOrderValue, maxDiscountAmount, maxUses, validFrom, validUntil, applicableTo } = req.body;
 
         if (!code || !discountType || !discountValue) {
             return res.status(400).json({ success: false, message: 'code, discountType, discountValue are required.' });
@@ -208,6 +208,9 @@ router.post('/', protect, admin, async (req, res) => {
             discount_type: discountType,
             discount_value: discountValue,
             min_order_value: minOrderValue || 0,
+            // Blank means uncapped, which is the behaviour before this column
+            // existed. Requires scripts/db/coupon-max-discount.sql to have run.
+            max_discount_amount: maxDiscountAmount || null,
             max_uses: maxUses || null,
             valid_from: validFrom || new Date().toISOString(),
             valid_until: validUntil || null,
@@ -240,6 +243,9 @@ router.put('/:id', protect, admin, async (req, res) => {
         if (b.discount_value != null) updates.discount_value = b.discount_value;
         if (b.minOrderValue != null) updates.min_order_value = b.minOrderValue;
         if (b.min_order_value != null) updates.min_order_value = b.min_order_value;
+        // Sent blank to clear the cap, so the key being present is what counts.
+        if (b.maxDiscountAmount !== undefined) updates.max_discount_amount = b.maxDiscountAmount || null;
+        if (b.max_discount_amount !== undefined) updates.max_discount_amount = b.max_discount_amount || null;
         if (b.maxUses !== undefined) updates.max_uses = b.maxUses;
         if (b.max_uses !== undefined) updates.max_uses = b.max_uses;
         if (b.validFrom != null) updates.valid_from = b.validFrom;
