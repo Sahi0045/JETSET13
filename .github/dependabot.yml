@@ -15,8 +15,19 @@ updates:
       # Batch low-risk patch/minor bumps into a single PR to cut review noise.
       minor-and-patch:
         update-types: ["minor", "patch"]
+    # No automatic major-version PRs. The first run opened nine at once
+    # (tailwind 3->4, bcryptjs 2->3, fontawesome, genai, puppeteer, ...), each
+    # a migration rather than an update. Majors are done deliberately, by hand.
+    # Security updates are separate and still arrive for any version.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    # One PR for all workflow action bumps instead of one per action.
+    groups:
+      actions:
+        patterns: ["*"]
