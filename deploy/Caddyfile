@@ -1,15 +1,39 @@
 # api.jetsetterss.com
 #
-# Caddy obtains and renews the Let's Encrypt certificate itself, so there is no
-# certbot and no renewal cron. It needs port 80 reachable for the ACME HTTP
-# challenge - that is why 80 stays open even though nothing is served on it.
+# Two ways in:
+#
+#   1. Direct, HTTPS on :443. Caddy terminates TLS itself with a Let's Encrypt
+#      certificate it obtains and renews - no certbot, no renewal cron.
+#   2. Through the Lightsail load balancer (jetsetters-api-lb). The LB
+#      terminates TLS and talks to this box over plain HTTP on :80, from its
+#      private address in the Lightsail VPC (172.26.0.0/16).
+#
+# Port 80 therefore does three jobs: the LB's traffic, the LB's health check,
+# and the ACME HTTP challenge. Caddy answers ACME challenges on :80 before any
+# route runs, so the certificate keeps renewing even once DNS points at the LB.
 
 {
 	# Where Let's Encrypt sends expiry warnings if renewal ever stops working.
 	email support@jetsetterss.com
+
+	# Caddy's automatic HTTP->HTTPS redirect would bounce every request the LB
+	# forwards on :80 - and its health check - straight back out, so the LB
+	# could never mark this box healthy. The :80 site below does the redirect
+	# itself, for everything that did not come from the LB.
+	auto_https disable_redirects
+
+	servers {
+		# Only the LB and the Docker network are private peers here. For them
+		# Caddy keeps the X-Forwarded-For they send and appends to it; anyone
+		# else still has theirs replaced, exactly as before. Through the LB the
+		# app therefore sees "..., <Vercel edge>, <LB>", and with
+		# TRUST_PROXY_HOPS=2 req.ip is the Vercel edge - the same as on the
+		# direct path, so rate limiting behaves identically on both.
+		trusted_proxies static private_ranges
+	}
 }
 
-api.jetsetterss.com {
+(proxy) {
 	encode zstd gzip
 
 	reverse_proxy app:5004 {
@@ -44,7 +68,9 @@ api.jetsetterss.com {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		-Server
 	}
+}
 
+(access_log) {
 	log {
 		output file /var/log/caddy/access.log {
 			roll_size 20mb
@@ -52,4 +78,39 @@ api.jetsetterss.com {
 		}
 		format json
 	}
+}
+
+api.jetsetterss.com {
+	import proxy
+	import access_log
+}
+
+:80 {
+	# The LB's health check: plain HTTP from the LB itself.
+	@lbHealth {
+		remote_ip private_ranges
+		path /api/health
+	}
+	handle @lbHealth {
+		reverse_proxy app:5004
+	}
+
+	# A request the LB received over HTTPS and forwarded here. Both conditions,
+	# so nobody on the internet can get plaintext service by sending the header
+	# to this box directly.
+	@viaLb {
+		remote_ip private_ranges
+		header X-Forwarded-Proto https
+	}
+	handle @viaLb {
+		import proxy
+	}
+
+	# Everything else on plain HTTP - a browser typing http://, or the LB's own
+	# HTTP listener - is sent to HTTPS, as the automatic redirect used to do.
+	handle {
+		redir https://{host}{uri} 308
+	}
+
+	import access_log
 }
