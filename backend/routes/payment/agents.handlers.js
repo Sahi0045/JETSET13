@@ -22,7 +22,7 @@ function makeInvite() {
  * Agent tokens carry role:'agent' and are never admin/super-admin.
  * Returns { id, role, email, isSuper } or null if unauthenticated/invalid.
  */
-async function getCaller(req) {
+export async function getCaller(req) {
     // Prefer the httpOnly session cookie (web); fall back to Authorization: Bearer (mobile).
     const auth = req.headers.authorization;
     const bearer = auth && auth.startsWith('Bearer ') ? auth.split(' ')[1] : null;
@@ -73,7 +73,7 @@ async function requireSuperAdmin(req, res) {
 }
 
 /** Gate: any back-office staff (admin or super admin) — used for read-only agent lists. */
-async function requireAdmin(req, res) {
+export async function requireAdmin(req, res) {
     const caller = await getCaller(req);
     if (!caller || !['admin', 'superadmin'].includes(caller.role)) {
         res.status(403).json({ success: false, error: 'Not authorized.' });
