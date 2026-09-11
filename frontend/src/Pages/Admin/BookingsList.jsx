@@ -192,7 +192,9 @@ const BookingsList = () => {
                 setActionMessage({ type: 'error', text: result.error || 'Failed to cancel booking' });
             }
         } catch (error) {
-            setActionMessage({ type: 'error', text: 'Failed to cancel booking: ' + error.message });
+            if (!handleAdminError(error)) {
+                setActionMessage({ type: 'error', text: 'Failed to cancel booking: ' + error.message });
+            }
         } finally {
             setCancelProcessing(false);
             setCancelModal(null);
@@ -259,7 +261,9 @@ const BookingsList = () => {
                 setActionMessage({ type: 'error', text: result.error });
             }
         } catch (error) {
-            setActionMessage({ type: 'error', text: 'Failed to update status' });
+            if (!handleAdminError(error)) {
+                setActionMessage({ type: 'error', text: 'Failed to update status: ' + error.message });
+            }
         } finally {
             setStatusProcessing(false);
             setStatusModal(null);
