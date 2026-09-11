@@ -84,7 +84,7 @@ jobs:
       # replace them, because /opt/jetsetters itself is deploy-owned and
       # unlinking a file needs write permission on the directory, not the file.
       - name: Stage the compose file and Caddyfile
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
