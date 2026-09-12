@@ -20,6 +20,7 @@
  * than failing, so a deploy that has not been given a webhook is not a crash.
  */
 import supabase from '../config/supabase.js';
+import { postToSlack } from './slackAlert.js';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 const FIRST_RUN_DELAY_MS = 60 * 1000;      // let the app finish booting first
@@ -80,22 +81,6 @@ export function buildMessage(bookings) {
     '',
     ...bookings.map(describeBooking),
   ].join('\n\n');
-}
-
-async function postToSlack(text, webhookUrl) {
-  const response = await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text }),
-    signal: AbortSignal.timeout(15_000),
-  });
-  // A Slack webhook answers with the literal string "ok"; anything else means
-  // the message did not land, and the bookings must stay unmarked so the next
-  // run tries again.
-  const body = (await response.text()).trim();
-  if (!response.ok || body !== 'ok') {
-    throw new Error(`Slack webhook refused the message (${response.status}): ${body.slice(0, 200)}`);
-  }
 }
 
 /** Stamp the bookings so the next run stays quiet about them. */
