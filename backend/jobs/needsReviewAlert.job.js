@@ -114,8 +114,11 @@ async function markAlerted(bookings) {
   }
 }
 
-export async function runOnce({ webhookUrl = process.env.ALERT_SLACK_WEBHOOK_URL } = {}) {
-  if (!webhookUrl) return { skipped: 'no ALERT_SLACK_WEBHOOK_URL' };
+export async function runOnce({ webhookUrl = process.env.ALERT_SLACK_WEBHOOK_URL, dryRun = false } = {}) {
+  // A dry run asks the database what it would say and stops there, so it needs
+  // no webhook - that is the whole point of being able to check by hand from a
+  // laptop that has no production secrets.
+  if (!webhookUrl && !dryRun) return { skipped: 'no ALERT_SLACK_WEBHOOK_URL' };
 
   const { data, error } = await supabase
     .from('bookings')
@@ -129,7 +132,20 @@ export async function runOnce({ webhookUrl = process.env.ALERT_SLACK_WEBHOOK_URL
   const stuck = selectUnannounced(data || []);
   if (stuck.length === 0) return { announced: 0 };
 
-  await postToSlack(buildMessage(stuck), webhookUrl);
+  const message = buildMessage(stuck);
+
+  // Nothing sent, nothing stamped: a booking gets announced exactly once, and a
+  // dry run must not be what spends it.
+  if (dryRun) {
+    return {
+      announced: 0,
+      dryRun: true,
+      wouldAnnounce: stuck.map((b) => b.booking_reference),
+      message,
+    };
+  }
+
+  await postToSlack(message, webhookUrl);
   await markAlerted(stuck);
   log(`announced ${stuck.length} booking(s)`, { refs: stuck.map((b) => b.booking_reference) });
   return { announced: stuck.length };

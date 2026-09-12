@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { selectUnannounced, buildMessage } from '../../backend/jobs/needsReviewAlert.job.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { selectUnannounced, buildMessage, runOnce } from '../../backend/jobs/needsReviewAlert.job.js';
+import { supabaseMock } from './setup.js';
 
 /**
  * An alert channel is only useful while people still read it.
@@ -85,5 +86,87 @@ describe('the message', () => {
     withPassenger.passenger_details = [{ firstName: 'Jane', lastName: 'Doe', passportNumber: 'X1234567' }];
     const text = buildMessage([withPassenger]);
     expect(text).not.toMatch(/Jane|Doe|X1234567/);
+  });
+});
+
+/**
+ * `runOnce` is what both callers use: the scheduled job in the API process and
+ * scripts/alerts/needs-review-watch.mjs, which is a thin wrapper around it so a
+ * manual check cannot drift from the automatic one.
+ *
+ * The case worth pinning is the dry run. A booking is announced exactly once -
+ * `alerted_at` sees to that - so a dry run that posted, or that stamped the
+ * row, would silently spend the single alert a stuck booking gets and the real
+ * run would then stay quiet about it forever.
+ */
+describe('running the check once', () => {
+  const flagged = () => [booking({ booking_reference: 'FLTSTUCK1' })];
+
+  const mockRows = (rows) => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+    };
+    supabaseMock.from.mockReturnValue(chain);
+    return chain;
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' }),
+    );
+  });
+
+  it('a dry run reports what it would send', async () => {
+    mockRows(flagged());
+    const result = await runOnce({ webhookUrl: 'https://hooks.slack.test/x', dryRun: true });
+    expect(result.dryRun).toBe(true);
+    expect(result.wouldAnnounce).toEqual(['FLTSTUCK1']);
+    expect(result.message).toMatch(/FLTSTUCK1/);
+  });
+
+  it('a dry run sends nothing and stamps nothing', async () => {
+    const chain = mockRows(flagged());
+    await runOnce({ webhookUrl: 'https://hooks.slack.test/x', dryRun: true });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(chain.update).not.toHaveBeenCalled();
+  });
+
+  // So the queue can be checked from a laptop holding no production secrets.
+  it('a dry run needs no webhook', async () => {
+    mockRows(flagged());
+    const result = await runOnce({ webhookUrl: '', dryRun: true });
+    expect(result.skipped).toBeUndefined();
+    expect(result.dryRun).toBe(true);
+  });
+
+  it('a real run posts once to the webhook and marks the booking', async () => {
+    const chain = mockRows(flagged());
+    const result = await runOnce({ webhookUrl: 'https://hooks.slack.test/x' });
+    expect(result.announced).toBe(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe('https://hooks.slack.test/x');
+    expect(JSON.parse(init.body).text).toMatch(/FLTSTUCK1/);
+    expect(chain.update).toHaveBeenCalled();
+  });
+
+  it('refuses to announce with no webhook configured', async () => {
+    mockRows(flagged());
+    const result = await runOnce({ webhookUrl: '' });
+    expect(result.skipped).toMatch(/ALERT_SLACK_WEBHOOK_URL/);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('stays quiet when the queue is clear', async () => {
+    mockRows([]);
+    const result = await runOnce({ webhookUrl: 'https://hooks.slack.test/x' });
+    expect(result.announced).toBe(0);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
