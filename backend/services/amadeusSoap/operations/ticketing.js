@@ -220,12 +220,23 @@ export const buildIssueTicketBody = () => {
   return `    <DocIssuance_IssueTicket xmlns="${ns}">${body}</DocIssuance_IssueTicket>`;
 };
 
-/** Issuance reports success in a processing status rather than an error node. */
+/**
+ * Issuance reports success in a processing status rather than an error node.
+ *
+ * Only an explicit OK counts. This used to treat an EMPTY status - a reply
+ * shape nobody had seen, an unparsed element - as issued, and `P` (pending) as
+ * issued too. `issued` is the single value that becomes `gds.ticketed`, the
+ * flag that tells the customer "booked and ticketed" and that the
+ * paid-but-not-ticketed alarm uses to *exclude* a row. Guessing "yes" there
+ * hid exactly the bookings the alarm exists to find. No ticket has ever been
+ * issued on this system, so no real reply has ever exercised this line; it
+ * has to be right by construction.
+ */
 export const readIssueTicketReply = (reply) => {
   const status = atTxt(reply, 'processingStatus.statusCode')
     || atTxt(reply, 'processingStatus.action')
     || '';
-  return { issued: /^(O|OK|P)$/i.test(status) || status === '', status };
+  return { issued: /^(O|OK)$/i.test(status), status };
 };
 
 /**

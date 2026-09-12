@@ -1,65 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { buildBookingRow } from '../../backend/routes/flight.routes.js';
 
 /**
  * Tests for buildBookingRow and saveBookingToDatabase logic
  * 
- * Since these are defined in an Express router file, we extract the logic
- * into testable pure functions duplicated here (matching the source).
+ * `buildBookingRow` is imported from the route module. It used to be COPIED
+ * into this file "matching the source" - which meant the copy kept passing
+ * while the real function drifted, and a test that asserted `status` was
+ * `'confirmed'` was pinning a literal the real code had just stopped writing.
+ * A replica tests the replica.
  */
-
-// Replicate buildBookingRow from flight.routes.js
-function buildBookingRow(bookingData, userId) {
-  return {
-    user_id: userId || null,
-    booking_reference: bookingData.bookingReference,
-    travel_type: 'flight',
-    status: 'confirmed',
-    total_amount: parseFloat(bookingData.totalAmount) || 0,
-    payment_status: 'paid',
-    booking_details: {
-      pnr: bookingData.pnr,
-      order_id: bookingData.orderId,
-      transaction_id: bookingData.transactionId,
-      amount: parseFloat(bookingData.totalAmount) || 0,
-      currency: bookingData.currency || 'USD',
-      origin: bookingData.origin,
-      destination: bookingData.destination,
-      departure_date: bookingData.departureDate,
-      departure_time: bookingData.departureTime,
-      arrival_time: bookingData.arrivalTime,
-      airline: bookingData.airline,
-      airline_name: bookingData.airlineName,
-      flight_number: bookingData.flightNumber,
-      duration: bookingData.duration,
-      cabin_class: bookingData.cabinClass,
-      departure_terminal: bookingData.departureTerminal || '',
-      arrival_terminal: bookingData.arrivalTerminal || '',
-      aircraft: bookingData.aircraft || '',
-      stops: bookingData.stops ?? 0,
-      stop_details: bookingData.stopDetails || [],
-      branded_fare: bookingData.brandedFare || null,
-      branded_fare_label: bookingData.brandedFareLabel || null,
-      operating_carrier: bookingData.operatingCarrier || null,
-      operating_airline_name: bookingData.operatingAirlineName || null,
-      last_ticketing_date: bookingData.lastTicketingDate || null,
-      number_of_bookable_seats: bookingData.numberOfBookableSeats || null,
-      refundable: bookingData.refundable || false,
-      baggage_details: bookingData.baggageDetails || null,
-      baggage: bookingData.baggage || null,
-      origin_city: bookingData.originCity || '',
-      destination_city: bookingData.destinationCity || '',
-      departure_date_full: bookingData.departureDateFull || '',
-      arrival_date: bookingData.arrivalDate || '',
-      price_base: bookingData.priceBase || null,
-      price_grand_total: bookingData.priceGrandTotal || null,
-      price_fees: bookingData.priceFees || [],
-      flight_offer: bookingData.flightOffer,
-      fare_breakdown: bookingData.fareBreakdown || null,
-      original_user_id: bookingData.userId || null
-    },
-    passenger_details: bookingData.passengerDetails || bookingData.travelers
-  };
-}
 
 describe('buildBookingRow', () => {
   const baseBookingData = {
@@ -98,9 +48,47 @@ describe('buildBookingRow', () => {
     expect(row.travel_type).toBe('flight');
   });
 
-  it('sets initial status to confirmed', () => {
+  /**
+   * `status` is an observation, not a literal.
+   *
+   * It used to be 'confirmed' for every booking. With AUTO_TICKET off - every
+   * booking so far - that was a committed PNR on a ticketing deadline that the
+   * database could not tell apart from a ticketed one; nor could My Trips, the
+   * confirmation email, or the alarm. A booking is confirmed when a ticket
+   * exists.
+   */
+  it('is pending_ticketing for a committed PNR with no ticket', () => {
     const row = buildBookingRow(baseBookingData, null);
+    expect(row.status).toBe('pending_ticketing');
+  });
+
+  it('is pending_ticketing when the GDS says issuance did not happen', () => {
+    const row = buildBookingRow({ ...baseBookingData, gds: { ticketed: false }, tickets: [] }, null);
+    expect(row.status).toBe('pending_ticketing');
+  });
+
+  it('is confirmed once a ticket number exists', () => {
+    const row = buildBookingRow({ ...baseBookingData, tickets: [{ number: '057-2412345678', travelerId: '1' }] }, null);
     expect(row.status).toBe('confirmed');
+  });
+
+  it('is confirmed when the GDS reports issuance even before the numbers surface', () => {
+    const row = buildBookingRow({ ...baseBookingData, ticketed: true, tickets: [] }, null);
+    expect(row.status).toBe('confirmed');
+  });
+
+  // The chain's own verdict that issuance succeeded but the numbers had not
+  // surfaced before its retries ran out. It was computed, returned in the HTTP
+  // body, and never written - so the job that watches for it never saw it.
+  it('persists the chain\'s needs_review verdict', () => {
+    const needsReview = { reason: 'ticket_numbers_not_retrieved', at: '2026-09-13T00:00:00Z' };
+    const row = buildBookingRow({ ...baseBookingData, ticketed: true, needsReview }, null);
+    expect(row.booking_details.needs_review).toEqual(needsReview);
+  });
+
+  it('writes no needs_review key when there is nothing to review', () => {
+    const row = buildBookingRow(baseBookingData, null);
+    expect(row.booking_details).not.toHaveProperty('needs_review');
   });
 
   it('parses totalAmount as float', () => {

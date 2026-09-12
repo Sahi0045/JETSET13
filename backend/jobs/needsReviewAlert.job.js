@@ -40,10 +40,10 @@ const log = (msg, extra = {}) => console.log(`[NeedsReviewAlert] ${msg}`, extra)
  */
 export function selectUnannounced(rows = []) {
   return rows.filter((booking) => {
-    const details = booking?.booking_details || {};
+    if (!booking) return false;
+    const details = booking.booking_details || {};
     const review = details.needs_review;
-    if (!review) return false;                    // never flagged
-    if (review.alerted_at) return false;          // already announced once
+    if (review?.alerted_at) return false;         // already announced once
 
     // The ticket turned up later, by retry or by hand.
     if (details.gds?.ticketed === true) return false;
@@ -58,7 +58,15 @@ export function selectUnannounced(rows = []) {
     if (['cancelled', 'refunded'].includes(status)) return false;
     if (['refunded', 'partially_refunded', 'reversed'].includes(payment)) return false;
 
-    return true;
+    // Flagged by the chain or by a human: announce.
+    if (review) return true;
+
+    // Not flagged, and this is the case that was invisible: the ordinary
+    // outcome while AUTO_TICKET is off. The gateway took the money, the chain
+    // committed a PNR, issuance never ran, and the row was written `confirmed`
+    // with no flag on it. That is a customer holding a reservation on a
+    // ticketing deadline, and it was the MAJORITY case this job could not see.
+    return details.gds?.ticketed === false && Boolean(details.pnr) && payment === 'paid';
   });
 }
 
@@ -67,10 +75,11 @@ export function describeBooking(booking) {
   const details = booking.booking_details || {};
   const review = details.needs_review || {};
   const hours = Math.round((Date.now() - Date.parse(review.at || booking.created_at)) / 36e5);
+  const ticketed = (review.ticketed ?? details.gds?.ticketed) === true;
   return [
     `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
-    `PNR ${details.pnr || 'none'} · ticketed: ${review.ticketed === true ? 'yes' : 'NO'}`,
-    `reason: ${review.reason || 'unknown'} · flagged ${hours}h ago`,
+    `PNR ${details.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : 'NO'}`,
+    `reason: ${review.reason || 'PNR committed, never ticketed'} · flagged ${hours}h ago`,
   ].join('\n');
 }
 
@@ -87,9 +96,14 @@ export function buildMessage(bookings) {
 async function markAlerted(bookings) {
   for (const booking of bookings) {
     const details = booking.booking_details || {};
+    const now = new Date().toISOString();
+    // A row announced for the unflagged reason gets a flag written as it is
+    // announced, so from here on it is one class: flagged, and stamped.
+    const review = details.needs_review
+      || { reason: 'PNR committed, never ticketed', ticketed: false, at: now };
     const updated = {
       ...details,
-      needs_review: { ...(details.needs_review || {}), alerted_at: new Date().toISOString() },
+      needs_review: { ...review, alerted_at: now },
     };
     const { error } = await supabase
       .from('bookings')
@@ -105,10 +119,14 @@ export async function runOnce({ webhookUrl = process.env.ALERT_SLACK_WEBHOOK_URL
   // laptop that has no production secrets.
   if (!webhookUrl && !dryRun) return { skipped: 'no ALERT_SLACK_WEBHOOK_URL' };
 
+  // Two shapes of "took money, produced no ticket": rows the chain or a human
+  // flagged, and the ordinary outcome while AUTO_TICKET is off - a paid,
+  // committed PNR that issuance never touched. The second is the one that
+  // was invisible: it carries no flag, only `gds.ticketed: false` and a PNR.
   const { data, error } = await supabase
     .from('bookings')
     .select('booking_reference, status, payment_status, total_amount, created_at, booking_details')
-    .not('booking_details->needs_review', 'is', null)
+    .or('booking_details->needs_review.not.is.null,and(booking_details->gds->>ticketed.eq.false,booking_details->>pnr.not.is.null)')
     .order('created_at', { ascending: true })
     .limit(200);
 

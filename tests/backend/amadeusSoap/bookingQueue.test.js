@@ -32,12 +32,20 @@ const orderBody = {
   bookingReference: 'FLTQ1',
 };
 
-/** A booking row the way hosted checkout leaves it, plus whatever the test needs. */
+/**
+ * A booking row the way hosted checkout AND a completed payment leave it, plus
+ * whatever the test needs. The order route now verifies payment with the
+ * gateway before any GDS call; a row that already records the captured amount
+ * passes that check without a round trip, so what these tests exercise is the
+ * queue, not the gate.
+ */
 const checkoutRow = (details = {}) => ({
+  id: 1,
   booking_reference: 'FLTQ1',
   status: 'pending',
+  payment_status: 'paid',
   total_amount: 298.28,
-  booking_details: details,
+  booking_details: { arc_captured_amount: 298.28, arc_captured_currency: 'USD', ...details },
 });
 
 /** Supabase double: every read returns `row`, every write is recorded and succeeds. */
@@ -140,7 +148,11 @@ describe('POST /order when no Amadeus slot comes free', () => {
     expect(res.body.queued).toBeUndefined();
   });
 
-  // A direct POST with no checkout row has nothing to queue against.
+  // A direct POST with no checkout row has nothing to queue against - and, now
+  // that the route verifies payment before any GDS call, nothing proving a
+  // payment either. It is refused outright: not queued, and not "refunded".
+  // The refund that used to run here was a no-op (no ARC order to reverse)
+  // that also wrote the row `cancelled` - a misleading record of nothing.
   it('does not queue a booking that has no checkout row', async () => {
     mockProvider(vi.fn().mockRejectedValue(new SlotTimeoutError(true)));
     await useRow(null);
@@ -148,8 +160,10 @@ describe('POST /order when no Amadeus slot comes free', () => {
 
     const res = await request(app).post('/api/flights/order').send(orderBody);
 
+    expect(res.status).toBe(402);
+    expect(res.body.code).toBe('PAYMENT_NOT_FOUND');
     expect(res.body.queued).toBeUndefined();
-    expect(res.body.bookingFailed).toBe(true);
+    expect(res.body.refundAction).toBeUndefined();
   });
 
   // Only a slot timeout is safe to retry: anything else may have sold seats.

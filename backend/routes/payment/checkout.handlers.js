@@ -969,6 +969,145 @@ export async function handleGetPaymentDetails(req, res) {
 // and the booking is recoverable/fulfillable even if the browser flow stops here.
 //
 // Idempotent: a no-op once the booking is already paid or cancelled.
+/**
+ * The truth about a booking's payment, from the gateway, recorded on the row.
+ *
+ * Extracted from the HTTP handler so the order route can ask the same question
+ * before it sells a seat. Returns what a caller needs to decide and to price:
+ *
+ *   { paid, capturedAmount, capturedCurrency, arcTransactionId, orderStatus,
+ *     alreadyReconciled?, error? }
+ *
+ * `capturedAmount` is what ARC took, read from the captured transaction - never
+ * the row's `total_amount`, which is what the client asked to be charged before
+ * anyone paid. It is persisted as `arc_captured_amount` so later callers need
+ * no gateway round trip. A row reconciled before that field existed is paid
+ * but has no amount on record; one RETRIEVE_ORDER fills it in, and if the
+ * gateway cannot be reached the session amount stands in for it - that row
+ * was already verified against ARC once, so the session amount is what was
+ * captured. Refusing a paid customer over a missing number would be the
+ * mirror image of the bug this closes.
+ *
+ * Idempotent: a refunded or cancelled row answers `paid: false` without a
+ * gateway call, because that money is no longer available for a booking.
+ */
+export async function reconcileBookingPayment(booking) {
+    const details = booking.booking_details || {};
+    const known = Number(details.arc_captured_amount);
+    const hasKnownAmount = Number.isFinite(known) && known > 0;
+
+    const fromRow = (paid, extra = {}) => ({
+        paid,
+        capturedAmount: hasKnownAmount ? known : null,
+        capturedCurrency: details.arc_captured_currency || null,
+        arcTransactionId: details.arc_transaction_id || null,
+        orderStatus: details.arc_order_status || null,
+        ...extra,
+    });
+
+    if (booking.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(booking.payment_status)) {
+        return fromRow(false, { alreadyReconciled: true });
+    }
+    const alreadyPaid = booking.payment_status === 'paid';
+    if (alreadyPaid && hasKnownAmount) {
+        return fromRow(true, { alreadyReconciled: true });
+    }
+
+    const arcOrderId = details.order_id || booking.booking_reference;
+    const authHeader = 'Basic ' + Buffer.from(`merchant.${ARC_PAY_CONFIG.MERCHANT_ID}:${ARC_PAY_CONFIG.API_PASSWORD}`).toString('base64');
+
+    // RETRIEVE_ORDER from ARC to find a captured transaction.
+    let orderData = null;
+    try {
+        const orderResp = await axios.get(
+            `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}`,
+            { headers: { 'Authorization': authHeader, 'Accept': 'application/json' }, validateStatus: () => true }
+        );
+        if (orderResp.status === 200) orderData = orderResp.data;
+        else console.warn('⚠️ [reconcile] RETRIEVE_ORDER non-200:', orderResp.status);
+    } catch (retrieveErr) {
+        console.warn('⚠️ [reconcile] RETRIEVE_ORDER failed:', retrieveErr.message);
+    }
+
+    if (!orderData) {
+        if (alreadyPaid) {
+            // Verified against the gateway once already; only the amount is
+            // missing, and the session amount is what that capture was for.
+            const sessionAmount = Number(booking.total_amount);
+            return fromRow(true, {
+                alreadyReconciled: true,
+                capturedAmount: Number.isFinite(sessionAmount) && sessionAmount > 0 ? sessionAmount : null,
+            });
+        }
+        return fromRow(false, { error: 'Could not retrieve order from gateway' });
+    }
+
+    const txns = Array.isArray(orderData.transaction) ? orderData.transaction : [];
+    const captured = txns.find(t => {
+        const type = t.transaction?.type;
+        const ok = t.result === 'SUCCESS' || t.response?.gatewayCode === 'APPROVED';
+        return ok && ['PAYMENT', 'CAPTURE'].includes(type);
+    });
+    const isCaptured = !!captured || orderData.status === 'CAPTURED';
+
+    if (!isCaptured) {
+        if (alreadyPaid) {
+            // The row says paid and the gateway shows no capture. Do not silently
+            // side with either: keep the row's verdict so the customer is not
+            // refused, but surface the disagreement.
+            console.error('⚠️ [reconcile] row is paid but gateway shows no capture', {
+                bookingReference: booking.booking_reference, orderStatus: orderData.status || null
+            });
+            const sessionAmount = Number(booking.total_amount);
+            return fromRow(true, {
+                alreadyReconciled: true,
+                orderStatus: orderData.status || null,
+                capturedAmount: Number.isFinite(sessionAmount) && sessionAmount > 0 ? sessionAmount : null,
+                error: 'gateway shows no captured transaction for a row marked paid',
+            });
+        }
+        return fromRow(false, { orderStatus: orderData.status || null });
+    }
+
+    const arcTransactionId = captured?.transaction?.id || null;
+    const capturedAmountRaw = Number(captured?.transaction?.amount ?? orderData.amount);
+    const capturedAmount = Number.isFinite(capturedAmountRaw) && capturedAmountRaw > 0 ? capturedAmountRaw : null;
+    const capturedCurrency = captured?.transaction?.currency || orderData.currency || null;
+
+    const { error: updateErr } = await supabase
+        .from('bookings')
+        .update({
+            payment_status: 'paid',
+            // Only a row still waiting on payment moves to 'paid'; a booking the
+            // chain has already advanced keeps its own status.
+            status: booking.status === 'pending' ? 'paid' : booking.status,
+            booking_details: {
+                ...details,
+                arc_transaction_id: arcTransactionId,
+                arc_order_status: orderData.status || 'CAPTURED',
+                arc_captured_amount: capturedAmount,
+                arc_captured_currency: capturedCurrency,
+                payment_reconciled_at: new Date().toISOString()
+            }
+        })
+        .eq('id', booking.id);
+
+    if (updateErr) {
+        console.error('❌ [reconcile] booking paid-update failed:', updateErr.message);
+        return {
+            paid: true,
+            capturedAmount,
+            capturedCurrency,
+            arcTransactionId,
+            orderStatus: orderData.status || 'CAPTURED',
+            error: `Failed to record payment on booking: ${updateErr.message}`,
+        };
+    }
+
+    console.log('✅ [reconcile] Booking marked paid from gateway:', booking.booking_reference);
+    return { paid: true, capturedAmount, capturedCurrency, arcTransactionId, orderStatus: orderData.status || 'CAPTURED' };
+}
+
 export async function handleReconcileBookingPayment(req, res) {
     try {
         const orderId = req.body?.orderId || req.body?.bookingReference || req.query?.orderId;
@@ -989,75 +1128,29 @@ export async function handleReconcileBookingPayment(req, res) {
             return res.status(404).json({ success: false, error: 'Booking not found for the provided order id' });
         }
 
-        // Idempotent: nothing to do if it is already settled or cancelled.
-        if (booking.status === 'cancelled' || ['paid', 'refunded', 'partially_refunded'].includes(booking.payment_status)) {
+        const result = await reconcileBookingPayment(booking);
+
+        if (result.alreadyReconciled) {
             return res.json({
                 success: true,
                 alreadyReconciled: true,
-                paid: booking.payment_status === 'paid',
+                paid: result.paid,
                 booking: { reference: booking.booking_reference, status: booking.status, payment_status: booking.payment_status }
             });
         }
-
-        const arcOrderId = booking.booking_details?.order_id || booking.booking_reference;
-        const authHeader = 'Basic ' + Buffer.from(`merchant.${ARC_PAY_CONFIG.MERCHANT_ID}:${ARC_PAY_CONFIG.API_PASSWORD}`).toString('base64');
-
-        // RETRIEVE_ORDER from ARC to find a captured transaction.
-        let orderData = null;
-        try {
-            const orderResp = await axios.get(
-                `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}`,
-                { headers: { 'Authorization': authHeader, 'Accept': 'application/json' }, validateStatus: () => true }
-            );
-            if (orderResp.status === 200) orderData = orderResp.data;
-            else console.warn('⚠️ [reconcile] RETRIEVE_ORDER non-200:', orderResp.status);
-        } catch (retrieveErr) {
-            console.warn('⚠️ [reconcile] RETRIEVE_ORDER failed:', retrieveErr.message);
+        if (!result.paid) {
+            return result.error
+                ? res.json({ success: false, paid: false, error: result.error })
+                : res.json({ success: true, paid: false, orderStatus: result.orderStatus });
         }
-
-        if (!orderData) {
-            return res.json({ success: false, paid: false, error: 'Could not retrieve order from gateway' });
+        if (result.error) {
+            return res.status(500).json({ success: false, error: 'Failed to record payment on booking', details: result.error });
         }
-
-        const txns = Array.isArray(orderData.transaction) ? orderData.transaction : [];
-        const captured = txns.find(t => {
-            const type = t.transaction?.type;
-            const ok = t.result === 'SUCCESS' || t.response?.gatewayCode === 'APPROVED';
-            return ok && ['PAYMENT', 'CAPTURE'].includes(type);
-        });
-        const isCaptured = !!captured || orderData.status === 'CAPTURED';
-
-        if (!isCaptured) {
-            // Payment not captured (still pending / failed) — report, do not mark paid.
-            return res.json({ success: true, paid: false, orderStatus: orderData.status || null });
-        }
-
-        const arcTransactionId = captured?.transaction?.id || null;
-        const { error: updateErr } = await supabase
-            .from('bookings')
-            .update({
-                payment_status: 'paid',
-                status: 'paid',
-                booking_details: {
-                    ...booking.booking_details,
-                    arc_transaction_id: arcTransactionId,
-                    arc_order_status: orderData.status || 'CAPTURED',
-                    payment_reconciled_at: new Date().toISOString()
-                }
-            })
-            .eq('id', booking.id);
-
-        if (updateErr) {
-            console.error('❌ [reconcile] booking paid-update failed:', updateErr.message);
-            return res.status(500).json({ success: false, error: 'Failed to record payment on booking', details: updateErr.message });
-        }
-
-        console.log('✅ [reconcile] Booking marked paid from gateway:', booking.booking_reference);
         return res.json({
             success: true,
             paid: true,
             booking: { reference: booking.booking_reference, status: 'paid', payment_status: 'paid' },
-            arcTransactionId
+            arcTransactionId: result.arcTransactionId
         });
     } catch (error) {
         console.error('❌ [reconcile] error:', error);

@@ -37,8 +37,6 @@ import {
     handleAdminAgentDetail,
     handleRecordPayout,
 } from './payment/agents.handlers.js';
-import restRoutes from './payment/rest.routes.js';
-
 const router = express.Router();
 
 // ============================================
@@ -130,7 +128,12 @@ router.all('/', optionalProtect, async (req, res) => {
     }
 });
 
-// Additional REST endpoints (gateway status, order/session/process/verify/refund/test)
-router.use(restRoutes);
+// rest.routes.js used to be mounted here. Every endpoint in it answered success
+// without asking the gateway: /payment/process approved any card number with a
+// fabricated authorisation code, /payment/verify/:id was VERIFIED for every
+// input, /payment/refund was PROCESSED with an invented refund id, and
+// /order/create reported an order the gateway never created. All were
+// unauthenticated and live. Nothing called them - the clients use the
+// `?action=` dispatch above - so they existed only as a way to be wrong.
 
 export default router;
