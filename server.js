@@ -41,6 +41,7 @@ import { validateEnv } from "./backend/config/validateEnv.js";
 import { initMonitoring } from "./backend/services/monitoring.js";
 import { installProcessGuards } from "./backend/bootstrap/processGuards.js";
 import { startBookingQueueWorker } from "./backend/jobs/bookingQueue.job.js";
+import { startNeedsReviewAlertJob } from "./backend/jobs/needsReviewAlert.job.js";
 import {
   apiLimiter,
   authLimiter,
@@ -318,6 +319,9 @@ if (process.env.NODE_ENV !== "test") {
     // Finishes paid bookings that could not get an Amadeus slot. Lives here,
     // with the booking chain, and never in the Vercel handler.
     startBookingQueueWorker({ port: PORT });
+    // Says so when a booking took money but never produced a ticket. Asleep
+    // unless ALERT_SLACK_WEBHOOK_URL is set.
+    startNeedsReviewAlertJob();
   });
   // Crash guards + graceful shutdown (drain in-flight requests on SIGTERM/SIGINT)
   installProcessGuards({ server });
