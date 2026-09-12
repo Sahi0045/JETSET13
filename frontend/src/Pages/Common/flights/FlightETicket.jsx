@@ -1,7 +1,28 @@
 import React, { forwardRef } from 'react';
-import { Plane, Calendar, Clock, MapPin, User, Briefcase, Phone, Mail } from 'lucide-react';
+import { Plane, User } from 'lucide-react';
 import Price from '../../../Components/Price';
+import {
+    resolveTickets,
+    ticketState,
+    ticketForTraveler,
+    issueDate,
+    isPaid,
+} from '../../../utils/eTicket';
 
+/**
+ * The travel document a customer downloads and may carry to an airport.
+ *
+ * It previously asserted things it had no way to know: a `Math.random()` ticket
+ * number per passenger (regenerated every render), today's date as the date of
+ * issue, an unconditional "Payment Confirmed", a decorative barcode, and an
+ * invented airline when data was missing — all headed "E-Ticket". Since
+ * ticketing has never once succeeded here, every one of those documents was
+ * fiction, and someone could have been turned away at a counter holding one.
+ *
+ * The rule now: print only what the booking can prove, and say plainly when a
+ * ticket has not been issued yet. A booking with a PNR and no ticket is a real,
+ * valid reservation - it is simply not a ticket, and must not look like one.
+ */
 const FlightETicket = forwardRef(({ bookingData }, ref) => {
     if (!bookingData) return null;
 
@@ -12,29 +33,40 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
         totalAmount: bookingData.amount || bookingData.totalPrice || '0'
     };
 
-    // Get flight data - handle both nested and direct structures
+    // What the booking can actually prove about ticketing.
+    const tickets = resolveTickets(bookingData);
+    const state = ticketState(bookingData);
+    const issuedOn = issueDate(tickets);
+    const paid = isPaid(bookingData) || isPaid(bookingDetails);
+
+    const isTicketed = state === 'issued';
+    // "E-Ticket" is a claim. Only make it once a ticket exists.
+    const documentTitle = isTicketed ? 'E-Ticket' : 'Booking Confirmation';
+
+    // Get flight data - handle both nested and direct structures. Identifiers
+    // fall back to a visible placeholder rather than a plausible-looking
+    // invention: an unknown airline printed as "Jetsetters Air" reads as fact.
     const flight = bookingDetails?.flight || bookingData.flight || {
-        airline: bookingData.airlineName || bookingData.airline || 'Jetsetters Air',
-        flightNumber: bookingData.flightNumber || 'JS-001',
+        airline: bookingData.airlineName || bookingData.airline || '—',
+        flightNumber: bookingData.flightNumber || '—',
         stops: bookingData.stops || 0,
         cabin: bookingData.cabinClass || bookingData.cabin || 'Economy',
-        duration: bookingData.duration || 'Direct',
+        duration: bookingData.duration || '—',
         departureTime: bookingData.departureTime || '--:--',
         departureCity: bookingData.originCity || bookingData.origin || 'Departure',
-        departureAirport: bookingData.origin || 'DEP',
+        departureAirport: bookingData.origin || '—',
         departureDate: bookingData.departureDate || new Date().toISOString(),
         departureTerminal: bookingData.departureTerminal || null,
         arrivalTime: bookingData.arrivalTime || '--:--',
         arrivalCity: bookingData.destinationCity || bookingData.destination || 'Arrival',
-        arrivalAirport: bookingData.destination || 'ARR',
+        arrivalAirport: bookingData.destination || '—',
         arrivalDate: bookingData.arrivalDate || bookingData.departureDate || new Date().toISOString(),
         arrivalTerminal: bookingData.arrivalTerminal || null
     };
 
-    // Ensure bookingDetails has required fields
     const safeBookingDetails = {
         bookingId: bookingDetails?.bookingId || bookingData.orderId || bookingData.bookingReference || 'N/A',
-        status: bookingDetails?.status || bookingData.status || 'CONFIRMED',
+        status: bookingDetails?.status || bookingData.status || 'PENDING',
         pnr: bookingDetails?.pnr || bookingData.pnr || 'N/A',
         baggage: bookingDetails?.baggage || { checkIn: '23KG' }
     };
@@ -46,8 +78,12 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
         });
     };
 
-    const formatTime = (time) => {
-        return time; // Assuming time is already formatted "HH:MM"
+    /** What to print where a ticket number goes, for one passenger. */
+    const ticketLabel = (traveler, index) => {
+        const match = ticketForTraveler(tickets, traveler, index);
+        if (match?.number) return `Ticket #: ${match.number}`;
+        if (state === 'pending') return 'Ticket issued — number pending';
+        return 'Ticket not yet issued';
     };
 
     return (
@@ -64,18 +100,42 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                         <p className="text-sm text-blue-200 tracking-widest mt-1">JET SET GO</p>
                     </div>
                     <div className="text-right">
-                        <h2 className="text-2xl font-bold uppercase tracking-widest">E-Ticket</h2>
+                        <h2 className="text-2xl font-bold uppercase tracking-widest">{documentTitle}</h2>
                         <p className="text-blue-200 mt-1">Booking Reference: <span className="text-white font-mono text-xl font-bold">{safeBookingDetails.bookingId}</span></p>
                     </div>
                 </div>
 
-                {/* Status Strip */}
+                {/* Status Strip — the issue date is the one Amadeus reported, not
+                    the day this happened to be opened. */}
                 <div className="bg-[#034457] text-white px-8 py-2 flex justify-between items-center text-sm">
-                    <span>Date of Issue: {new Date().toLocaleDateString()}</span>
-                    <span className="font-bold uppercase px-3 py-1 bg-green-500 rounded text-xs">{safeBookingDetails.status}</span>
+                    <span>
+                        {issuedOn
+                            ? `Date of Issue: ${new Date(issuedOn).toLocaleDateString()}`
+                            : 'Ticket not yet issued'}
+                    </span>
+                    <span className={`font-bold uppercase px-3 py-1 rounded text-xs ${isTicketed ? 'bg-green-500' : 'bg-amber-500'}`}>
+                        {safeBookingDetails.status}
+                    </span>
                 </div>
 
                 <div className="p-8">
+                    {/* Says plainly what this document is not, so nobody travels on
+                        a reservation believing it is a ticket. */}
+                    {!isTicketed && (
+                        <div className="mb-6 border border-amber-300 bg-amber-50 rounded-lg px-5 py-4">
+                            <p className="font-bold text-amber-900 text-sm">
+                                {state === 'pending'
+                                    ? 'Your ticket has been issued. The ticket number is still being confirmed.'
+                                    : 'This is a confirmed reservation, not a ticket.'}
+                            </p>
+                            <p className="text-xs text-amber-800 mt-1">
+                                {state === 'pending'
+                                    ? 'We will email your ticket number shortly. Your booking reference and PNR below are valid.'
+                                    : 'Your seat is held under the PNR below. We will email your e-ticket once it is issued. Please do not travel on this document alone.'}
+                            </p>
+                        </div>
+                    )}
+
                     {/* Flight Summary Card */}
                     <div className="border border-gray-200 rounded-xl overflow-hidden mb-8 shadow-sm">
                         <div className="bg-gray-50 px-6 py-3 border-b border-gray-200 flex justify-between items-center">
@@ -90,7 +150,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-4">
                                     <div className="w-16 h-16 bg-blue-50 rounded-lg flex items-center justify-center text-2xl font-bold text-[#055B75] border border-blue-100">
-                                        {flight.airline.substring(0, 2).toUpperCase()}
+                                        {String(flight.airline).substring(0, 2).toUpperCase()}
                                     </div>
                                     <div>
                                         <h3 className="text-xl font-bold text-gray-900">{flight.airline}</h3>
@@ -129,7 +189,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                 <div className="flex-1 text-right">
                                     <div className="text-4xl font-light text-gray-900 mb-1">{flight.arrivalTime}</div>
                                     <div className="font-bold text-xl mb-1">{flight.arrivalCity} <span className="text-gray-400 font-normal">({flight.arrivalAirport})</span></div>
-                                    <div className="text-sm text-gray-500">{formatDate(flight.arrivalDate)}</div> // Assumes same day usually, strictly usually arrival date could be diff.
+                                    <div className="text-sm text-gray-500">{formatDate(flight.arrivalDate)}</div>
                                     {flight.arrivalTerminal && <div className="text-xs text-[#055B75] mt-1 font-medium">Terminal {flight.arrivalTerminal}</div>}
                                 </div>
                             </div>
@@ -147,7 +207,9 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                 <div key={idx} className="bg-white border border-gray-100 shadow-sm rounded-lg p-4 flex justify-between items-center">
                                     <div>
                                         <p className="font-bold text-gray-900 uppercase">{p.title} {p.firstName} {p.lastName}</p>
-                                        <p className="text-xs text-gray-500 mt-1">Ticket #: 732-{Math.floor(1000000000 + Math.random() * 9000000000)}</p>
+                                        <p className={`text-xs mt-1 ${isTicketed ? 'text-gray-500' : 'text-amber-700 font-medium'}`}>
+                                            {ticketLabel(p, idx)}
+                                        </p>
                                     </div>
                                     <div className="flex gap-8 text-sm text-gray-600">
                                         <div className="text-right">
@@ -176,26 +238,20 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                 <li>Check-in counters close 60 minutes before departure.</li>
                                 <li>Valid photo ID required for entry.</li>
                                 <li>Baggage allowances are as per airline regulations.</li>
+                                {!isTicketed && <li className="text-amber-700">Carry your issued e-ticket for check-in; this document alone is not accepted.</li>}
                             </ul>
                         </div>
                         <div className="text-right">
                             <div className="inline-block text-left">
-                                <p className="text-xs text-gray-400 uppercase mb-1">Total Amount Paid</p>
+                                <p className="text-xs text-gray-400 uppercase mb-1">Total Amount</p>
                                 <p className="text-3xl font-bold text-[#055B75]"><Price amount={calculatedFare.totalAmount} /></p>
-                                <p className="text-xs text-green-600 mt-1 font-medium">Payment Confirmed ✅</p>
+                                {/* Only claimed when the booking says so. */}
+                                {paid && <p className="text-xs text-green-600 mt-1 font-medium">Payment Confirmed ✅</p>}
                             </div>
-
-                            {/* Faux Barcode */}
-                            <div className="mt-6 flex justify-end">
-                                <div className="h-12 w-48 bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=')] bg-repeat-x opacity-20">
-                                    {/* Placeholder for barcode visual - just stripes */}
-                                    <div className="flex h-full w-full justify-end gap-1">
-                                        {[...Array(20)].map((_, i) => (
-                                            <div key={i} className={`h-full bg-black ${Math.random() > 0.5 ? 'w-1' : 'w-2'}`}></div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
+                            {/* The decorative barcode that used to sit here was
+                                random stripes on a document headed "E-Ticket".
+                                Nothing could scan it, and its only function was
+                                to look official. */}
                         </div>
                     </div>
 

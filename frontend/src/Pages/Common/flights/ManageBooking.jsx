@@ -9,6 +9,7 @@ import {
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
+import { ticketState } from '../../../utils/eTicket';
 import ArcPayService from '../../../Services/ArcPayService';
 import { getApiUrl } from '../../../utils/apiHelper';
 import { useFlightBooking } from '../../../hooks/queries';
@@ -382,7 +383,10 @@ function ManageBooking() {
               className="flex items-center bg-[#055B75] text-white px-4 py-2 rounded-lg hover:bg-[#034457] transition"
             >
               <Download className="w-4 h-4 mr-2" />
-              Download E-Ticket
+              {/* The document names itself honestly, so the button that offers
+                  it must too - clicking "E-Ticket" and receiving a reservation
+                  is the same misrepresentation in a different place. */}
+              {ticketState(bookingData) === 'issued' ? 'Download E-Ticket' : 'Download Booking Confirmation'}
             </button>
 
             {bookingData?.status?.toUpperCase() !== 'CANCELLED' && 
