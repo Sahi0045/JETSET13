@@ -42,6 +42,7 @@ import { initMonitoring } from "./backend/services/monitoring.js";
 import { installProcessGuards } from "./backend/bootstrap/processGuards.js";
 import { startBookingQueueWorker } from "./backend/jobs/bookingQueue.job.js";
 import { startNeedsReviewAlertJob } from "./backend/jobs/needsReviewAlert.job.js";
+import { startPaymentFailureAlertJob } from "./backend/jobs/paymentFailureAlert.job.js";
 import {
   apiLimiter,
   authLimiter,
@@ -322,6 +323,9 @@ if (process.env.NODE_ENV !== "test") {
     // Says so when a booking took money but never produced a ticket. Asleep
     // unless ALERT_SLACK_WEBHOOK_URL is set.
     startNeedsReviewAlertJob();
+    // Says so when a cancellation failed to return the customer's money. The
+    // booking row calls itself refunded either way, so nothing else would.
+    startPaymentFailureAlertJob();
   });
   // Crash guards + graceful shutdown (drain in-flight requests on SIGTERM/SIGINT)
   installProcessGuards({ server });
