@@ -189,6 +189,19 @@ function ManageBooking() {
     );
   }
 
+  // Raw database statuses are not customer copy, and the old fallback for an
+  // unknown status was 'Confirmed'.
+  const STATUS_LABELS = {
+    PENDING_TICKETING: 'Reserved - ticket being issued',
+    PENDING_CONFIRMATION: 'Being confirmed with the airline',
+    PAID: 'Paid - ticket being issued',
+    PENDING: 'Pending',
+    CONFIRMED: 'Confirmed',
+    FAILED: 'Failed',
+  };
+  const statusLabel = (status) =>
+    STATUS_LABELS[String(status || '').toUpperCase()] || (status ? String(status).replace(/_/g, ' ') : 'Pending');
+
   const renderStatusBanner = () => {
     const currentStatus = bookingData?.status?.toUpperCase() || '';
     if (currentStatus !== 'CANCELLED' && currentStatus !== 'CANCEL_REQUESTED') {
@@ -204,7 +217,7 @@ function ManageBooking() {
               <Info className="w-5 h-5 text-[#055B75] mr-2" />
             )}
             <span className={`font-medium ${currentStatus === 'CONFIRMED' ? 'text-emerald-800' : 'text-[#034457]'}`}>
-              Booking Status: {bookingData?.status || 'Confirmed'}
+              Booking Status: {statusLabel(bookingData?.status)}
             </span>
           </div>
         </div>
@@ -212,12 +225,20 @@ function ManageBooking() {
     }
 
     // Cancellation Logic
-    const cancelData = cancelResult || bookingData?.bookingDetails?.cancellation || {};
+    // `bookingData.cancellation` is what the bookings list now sends; the
+    // nested form is the older shape. Without either, every cancelled booking
+    // read as "Processing Refund - In Progress" - including ones whose refund
+    // the gateway had refused days earlier.
+    const cancelData = cancelResult || bookingData?.cancellation || bookingData?.bookingDetails?.cancellation || {};
     const paymentAction = cancelData.paymentAction || bookingData?.paymentAction;
-    const isRefundFailed = paymentAction === 'REFUND_FAILED';
+    // Mirrors REFUND_STUCK_ACTIONS / REFUND_DONE_ACTIONS in
+    // backend/services/email/templates.js so the page and the email agree.
+    const isRefundFailed = ['REFUND_FAILED', 'VOID_FAILED', 'VOID_MISSING_TXN_ID'].includes(paymentAction);
     const isManual = paymentAction === 'MANUAL_PROCESS_REQUIRED';
     const isNoRefund = paymentAction === 'NO_REFUND_FEE_COVERS';
-    const isRefunded = paymentAction === 'PARTIAL_REFUND' || paymentAction === 'REFUNDED' || bookingData?.payment_status === 'partially_refunded' || bookingData?.payment_status === 'refunded';
+    const isRefunded = ['PARTIAL_REFUND', 'FULL_REFUND', 'REFUNDED', 'VOID'].includes(paymentAction)
+      || bookingData?.payment_status === 'partially_refunded' || bookingData?.payment_status === 'refunded'
+      || bookingData?.paymentStatus === 'partially_refunded' || bookingData?.paymentStatus === 'refunded';
 
     // Default to pending if we have cancel data but it's not explicitly terminal
     const isPending = !isRefunded && !isRefundFailed && !isNoRefund && !isManual;
@@ -237,7 +258,7 @@ function ManageBooking() {
       {
         title: 'Refund Status',
         description: isRefunded ? `Successful ($${(cancelData.refundAmount || cancelData.netRefund || 0).toFixed(2)})` :
-          isRefundFailed ? 'Failed (Sandbox)' :
+          isRefundFailed ? 'Failed - being handled by our team' :
             isNoRefund ? 'No Refund Due' :
               isManual ? 'Manual Review' : 'Pending',
         status: isRefunded ? 'complete' : (isRefundFailed || isNoRefund || isManual) ? 'error' : 'upcoming',
@@ -312,18 +333,19 @@ function ManageBooking() {
               </div>
             </div>
 
-            {/* Error/Notice Message for Sandbox */}
+            {/* Refund outcome notice. Only rendered for outcomes that need
+                explanation; a successful refund speaks for itself above. */}
             {(isRefundFailed || isNoRefund || isManual) && (
               <div className="mt-10 p-5 bg-amber-50/80 backdrop-blur-sm rounded-xl border border-amber-200/60 flex items-start gap-4 shadow-inner">
                 <AlertCircle className="w-6 h-6 text-amber-500 shrink-0 mt-0.5" />
                 <div>
                   <h5 className="text-base font-bold text-amber-900">
-                    {isRefundFailed ? 'Test Environment Notice' : isManual ? 'Manual Review Required' : 'No Refund Due'}
+                    {isRefundFailed ? 'Refund Not Yet Processed' : isManual ? 'Manual Review Required' : 'No Refund Due'}
                   </h5>
                   <p className="text-sm text-amber-700/90 mt-1.5 leading-relaxed font-medium">
-                    {isRefundFailed ? "Refunds for test cards in the Sandbox environment deliberately return a failed status because real funds were never captured. In a live production environment, this step would process completely." :
-                      isManual ? "The automated refund could not be processed fully. Our support team has been notified and will manually review this transaction offline." :
-                        "The cancellation fee for this booking exceeds or equals the original amount paid. Therefore, no refund relies are due to this account."}
+                    {isRefundFailed ? "Your booking is cancelled, but our payment provider did not accept the automatic refund. Nothing has been returned to your card yet. Our team has been alerted and will process it manually; if you have not heard from us within 2 business days, call (877) 538-7380." :
+                      isManual ? "The automated refund could not be completed. Our support team has been notified and will review this transaction and contact you." :
+                        "The cancellation fee for this booking equals or exceeds the amount paid, so no refund is due."}
                   </p>
                 </div>
               </div>
@@ -355,7 +377,10 @@ function ManageBooking() {
                   <div className="flex justify-between items-center pt-2">
                     <span className="text-lg font-bold text-slate-800">Net Refund Total</span>
                     <span className={`text-xl font-bold ${isRefundFailed || isNoRefund ? 'text-slate-400' : 'text-emerald-600'}`}>
-                      ${(cancelData.refundAmount || cancelData.netRefund || (isRefundFailed ? Math.max(0, (bookingData?.totalAmount || bookingData?.amount || bookingData?.total_amount || 0) - (cancelData.cancellationFee || 0)) : 0)).toFixed(2)}
+                      {/* Only what was actually returned. This used to compute
+                          the refund the customer WOULD have got when the refund
+                          had failed, and print it in the total. */}
+                      ${(cancelData.refundAmount || cancelData.netRefund || 0).toFixed(2)}
                     </span>
                   </div>
                 </div>

@@ -176,7 +176,9 @@ export default function PaymentCallback() {
             setTimeout(() => {
               const navigationState = {
                 // Payment data from ARC Pay callback
-                transactionId: resultIndicator || sessionData?.sessionId || `TXN-${Date.now()}`,
+                // Null, not TXN-<timestamp>: this is printed on the customer's
+                // confirmation page as their transaction id.
+                transactionId: resultIndicator || sessionData?.sessionId || null,
                 orderId: orderId,
                 amount: bookingData?.amount || sessionData?.amount || 0,
                 paymentVerified: true,
@@ -190,7 +192,7 @@ export default function PaymentCallback() {
                 calculatedFare: bookingData?.calculatedFare,
 
                 // Contact info
-                customerEmail: bookingData?.passengerData?.[0]?.email || 'customer@jetsetgo.com'
+                customerEmail: bookingData?.passengerData?.[0]?.email || ''
               };
 
               console.log('🚀 Navigating with state:', navigationState);

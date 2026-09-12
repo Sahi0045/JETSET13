@@ -121,6 +121,51 @@ describe('cancellation', () => {
     expect(html).toContain('5-10 business days');
     expect(html).not.toMatch(/refunded shortly/i);
   });
+
+  // ARC Pay answers a refused refund with HTTP 200 and result FAILURE. The
+  // cancel path used to treat that as processed and this template then told
+  // the customer "$0.00 refund due ... within 5-10 business days".
+  it('does not promise a refund the gateway refused', () => {
+    const html = T.generateCancellationTemplate({
+      customerName: 'Jane', bookingReference: 'JTS-1234', refundAmount: 0, cancellationFee: 75,
+      paymentAction: 'REFUND_FAILED',
+    });
+
+    expect(html).not.toContain('5-10 business days');
+    expect(html).not.toContain('$0.00');
+    expect(html).toMatch(/nothing has been returned/i);
+    expect(html).toContain('(877) 538-7380');
+  });
+
+  it('treats every stuck action the same way', () => {
+    for (const paymentAction of ['VOID_FAILED', 'VOID_MISSING_TXN_ID', 'MANUAL_PROCESS_REQUIRED']) {
+      const html = T.generateCancellationTemplate({ bookingReference: 'X', refundAmount: 0, paymentAction });
+      expect(html, paymentAction).not.toContain('5-10 business days');
+      expect(html, paymentAction).not.toContain('$0.00');
+    }
+  });
+
+  it('says no refund is due when the fee covers the fare', () => {
+    const html = T.generateCancellationTemplate({
+      bookingReference: 'X', refundAmount: 0, cancellationFee: 100, paymentAction: 'NO_REFUND_FEE_COVERS',
+    });
+
+    expect(html).toMatch(/no refund is due/i);
+    expect(html).not.toContain('5-10 business days');
+  });
+
+  it('makes no promise when zero arrives with no action at all', () => {
+    // Older callers pass no paymentAction. Zero is not evidence of a refund.
+    const html = T.generateCancellationTemplate({ bookingReference: 'X', refundAmount: 0 });
+    expect(html).not.toContain('5-10 business days');
+  });
+
+  it('flags a stuck refund to the admin as action required', () => {
+    const html = T.generateAdminCancellationTemplate({
+      bookingReference: 'X', customerName: 'Jane', refundAmount: 0, paymentAction: 'REFUND_FAILED',
+    });
+    expect(html).toMatch(/action required/i);
+  });
 });
 
 describe('inquiry status', () => {

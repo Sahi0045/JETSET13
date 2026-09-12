@@ -2,16 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { makeOrderRef } from '../../../utils/orderRef';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  CreditCard, Calendar, Lock, CheckCircle, ArrowLeft,
-  Ticket, ShieldCheck, Loader, AlertCircle, Check,
-  Plane
+  Lock, CheckCircle, Loader, AlertCircle, Check, Clock
 } from 'lucide-react';
 import axios from 'axios';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import { endpoints } from '@/config/api';
-import ArcPayService from '../../../Services/ArcPayService';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 
 /**
@@ -24,7 +21,26 @@ const TERMINAL_ERROR_CODES = new Set([
   'BOOKING_CANCELLED',    // row already cancelled and refunded
   'BOOKING_DISABLED',     // booking switched off; the charge was reversed
   'OFFER_NOT_BOOKABLE',   // offer expired or failed the shape gate
+  'OFFER_MISSING',        // this session lost the offer; nothing to resend
+  'PASSENGERS_INCOMPLETE', // this session lost passenger details; same
 ]);
+
+/**
+ * What the server actually did with the order. Drives every word on this
+ * screen and on /booking-confirmation. Before this existed the page said
+ * "Booking Confirmed!" for a 202 that meant "we have not even tried yet".
+ *
+ *   ticketed - PNR committed and a ticket issued
+ *   held     - PNR committed, ticket not yet issued (the normal case while
+ *              auto-ticketing is off; also the needs-review case)
+ *   queued   - GDS was saturated; the booking is queued and nothing has been
+ *              sent to the airline yet
+ */
+function outcomeOf(body) {
+  if (body?.queued === true) return 'queued';
+  if (body?.ticketed === true) return 'ticketed';
+  return 'held';
+}
 
 function FlightCreateOrders() {
   const navigate = useNavigate();
@@ -33,6 +49,7 @@ function FlightCreateOrders() {
   const [loading, setLoading] = useState(true);
   const [processingOrder, setProcessingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [outcome, setOutcome] = useState(null);
   const [error, setError] = useState(null);
   // The backend's error `code`, kept so the failure screen can tell a retryable
   // problem from a terminal one. Sending someone back to a payment they already
@@ -81,11 +98,15 @@ function FlightCreateOrders() {
 
           // Merge localStorage data with location.state (location.state takes priority for payment info)
           orderData = {
-            // Payment info from location.state (comes from PaymentCallback)
-            transactionId: orderData?.transactionId || sessionData?.sessionId || `TXN-${Date.now()}`,
+            // Payment info from location.state (comes from PaymentCallback).
+            // Nothing is invented here: the transaction id and amount end up
+            // on the customer's confirmation page, and a made-up id or a
+            // default amount there is a fabricated receipt. The server
+            // verifies the payment against ARC Pay itself, so the old
+            // client-side "verified" flag proved nothing and is gone.
+            transactionId: orderData?.transactionId || sessionData?.sessionId || null,
             orderId: orderData?.orderId || sessionData?.orderId || makeOrderRef('FLT'),
-            amount: bookingData?.amount || orderData?.amount || sessionData?.amount || 0,
-            paymentVerified: orderData?.paymentVerified || true,
+            amount: bookingData?.amount || orderData?.amount || sessionData?.amount || null,
 
             // Flight data from localStorage
             selectedFlight: bookingData?.selectedFlight || bookingData?.flightData,
@@ -96,7 +117,7 @@ function FlightCreateOrders() {
             calculatedFare: bookingData?.calculatedFare,
 
             // Contact info
-            customerEmail: bookingData?.passengerData?.[0]?.email || orderData?.customerEmail || 'customer@jetsetgo.com'
+            customerEmail: bookingData?.passengerData?.[0]?.email || orderData?.customerEmail || ''
           };
 
           console.log('✅ Merged order data:', orderData);
@@ -109,7 +130,7 @@ function FlightCreateOrders() {
     // Final check - if we still don't have critical data, redirect
     const finalHasCriticalData = orderData?.selectedFlight || orderData?.originalOffer || orderData?.passengerData;
 
-    if (orderData && (orderData.paymentVerified || finalHasCriticalData)) {
+    if (orderData && finalHasCriticalData) {
       console.log('📝 Processing order with data:', orderData);
       // Mark as processed to prevent duplicate calls (React StrictMode / re-renders)
       orderProcessedRef.current = true;
@@ -132,22 +153,17 @@ function FlightCreateOrders() {
     setErrorCode(null);
 
     try {
-      // First verify the payment with ARC Pay
-      if (orderData.arcPayPaymentId) {
-        const paymentVerification = await ArcPayService.verifyPayment(orderData.arcPayPaymentId);
-
-        if (!paymentVerification.success) {
-          throw new Error('Payment verification failed');
-        }
-      }
-
-      // Prepare full passenger details for backend (and storage)
+      // Prepare full passenger details for backend (and storage). No
+      // defaults for name, date of birth or gender: these go onto a real
+      // PNR, and a placeholder passenger with a placeholder birthday is a
+      // ticket the airline will refuse at the gate. If the form data did not survive
+      // the payment round-trip, say so below instead of booking a stranger.
       const passengerDetails = orderData.passengerData?.map((p, i) => ({
         id: `${i + 1}`,
-        firstName: p.firstName || "Traveler",
-        lastName: p.lastName || "Name",
-        dateOfBirth: p.dateOfBirth || "1990-01-01",
-        gender: p.gender || "MALE",
+        firstName: p.firstName || '',
+        lastName: p.lastName || '',
+        dateOfBirth: p.dateOfBirth || '',
+        gender: p.gender || '',
         title: p.title || '',
         mobile: p.mobile || '',
         email: p.email || '',
@@ -165,27 +181,43 @@ function FlightCreateOrders() {
         documentType: p.documentType || (p.passportNumber ? 'PASSPORT' : '')
       })) || [];
 
+      const incomplete = passengerDetails.length === 0 || passengerDetails.some(
+        (p) => !p.firstName || !p.lastName || !p.dateOfBirth || !p.gender
+      );
+      if (incomplete) {
+        const err = new Error(
+          `Passenger details are missing from this session, so we did not send the booking to the airline. ` +
+          `Your payment reference is ${orderData.orderId || 'unavailable'}. Please contact support and we will complete or refund it.`
+        );
+        err.code = 'PASSENGERS_INCOMPLETE';
+        throw err;
+      }
+
       const fareBreakdown = orderData.calculatedFare || null;
 
       // Get user ID from auth context
       const userId = authUser?.id || null;
 
-      // Proceed with creating the flight order
-      // Prioritize originalOffer (full Amadeus API data) over transformed flight data
+      // Prioritize originalOffer (full Amadeus API data) over transformed
+      // flight data. There is no placeholder offer: sending one would make the
+      // server try to book (and then refund) an offer that never existed.
+      const flightOffer = orderData.originalOffer || orderData.selectedFlight?.originalOffer || orderData.selectedFlight || orderData.flightData || null;
+      if (!flightOffer) {
+        const err = new Error(
+          `Your flight selection is missing from this session, so we did not send the booking to the airline. ` +
+          `Your payment reference is ${orderData.orderId || 'unavailable'}. Please contact support and we will complete or refund it.`
+        );
+        err.code = 'OFFER_MISSING';
+        throw err;
+      }
+
+      const amountPaid = orderData.amount || orderData.calculatedFare?.totalAmount || orderData.selectedFlight?.price?.total || orderData.originalOffer?.price?.total || null;
+
       const flightBookingData = {
-        flightOffer: orderData.originalOffer || orderData.selectedFlight?.originalOffer || orderData.selectedFlight || orderData.flightData || {
-          type: "flight-offer",
-          id: "test-flight",
-          source: "GDS",
-          instantTicketingRequired: false,
-          price: {
-            currency: "USD",
-            total: orderData.amount || "100.00"
-          }
-        },
+        flightOffer,
         // Include totalAmount for database storage
-        totalAmount: orderData.amount || orderData.calculatedFare?.totalAmount || orderData.selectedFlight?.price?.total || orderData.originalOffer?.price?.total || "0",
-        transactionId: orderData.transactionId || `TXN-${Date.now()}`,
+        totalAmount: amountPaid,
+        transactionId: orderData.transactionId || null,
         orderId: orderData.orderId || null,
         bookingReference: orderData.orderId || null,
         travelers: passengerDetails.map(p => ({
@@ -203,10 +235,12 @@ function FlightCreateOrders() {
         })),
         passengerDetails: passengerDetails, // Send full details to backend
         fareBreakdown: fareBreakdown,       // Send fare breakdown to backend
+        // Contact details go onto the PNR; an invented phone number is what
+        // the airline would call about a schedule change.
         contactInfo: {
-          email: orderData.bookingDetails?.contact?.email || orderData.customerEmail || "test@jetsetgo.com",
-          countryCode: orderData.bookingDetails?.contact?.countryCode || "1",
-          phoneNumber: orderData.bookingDetails?.contact?.phone || "1234567890"
+          email: orderData.bookingDetails?.contact?.email || orderData.customerEmail || passengerDetails[0]?.email || '',
+          countryCode: orderData.bookingDetails?.contact?.countryCode || '1',
+          phoneNumber: orderData.bookingDetails?.contact?.phone || passengerDetails[0]?.mobile || ''
         },
         userId: userId
       };
@@ -224,18 +258,32 @@ function FlightCreateOrders() {
 
       const response = await axios.post(endpoints.flights.booking, flightBookingData);
 
-      if (response.data.success) {
-        setOrderSuccess(true);
-        setBookingReference(response.data.data.bookingReference || response.data.data.id);
-        setPnr(response.data.data.pnr || response.data.data.associatedRecords?.[0]?.reference);
+      const body = response.data || {};
+      if (body.success) {
+        // Read what the server said happened, not what we hoped. A 202 with
+        // `queued: true` means the GDS was saturated and nothing has been
+        // sent to the airline; `ticketed: false` with a PNR means the seats
+        // are held but no ticket exists yet. Both used to render as
+        // "Booking Confirmed!".
+        const result = outcomeOf(body);
+        const needsReview = Boolean(body.needsReview || body.data?.needsReview);
+        const reference = body.bookingReference || body.data?.bookingReference || body.data?.id || orderData.orderId || '';
+        const pnrValue = body.pnr || body.data?.pnr || body.data?.associatedRecords?.[0]?.reference || null;
+        const status = result === 'queued' ? 'PENDING_CONFIRMATION'
+          : result === 'ticketed' ? 'CONFIRMED'
+            : 'PENDING_TICKETING';
 
-        // Extract additional booking information if available
+        setOutcome(result);
+        setOrderSuccess(true);
+        setBookingReference(reference);
+        setPnr(pnrValue);
+
         const orderDetails = {
-          reference: response.data.data.bookingReference || response.data.data.id,
-          pnr: response.data.data.pnr || response.data.data.associatedRecords?.[0]?.reference,
-          status: response.data.data.status || 'CONFIRMED',
-          createdAt: response.data.data.createdAt || new Date().toISOString(),
-          travelers: response.data.data.travelers || orderData.passengerData || []
+          reference,
+          pnr: pnrValue,
+          status,
+          createdAt: body.data?.createdAt || new Date().toISOString(),
+          travelers: body.data?.travelers || orderData.passengerData || []
         };
 
         // Clear any old booking data and store fresh flight booking with PNR
@@ -251,8 +299,8 @@ function FlightCreateOrders() {
         const formattedTravelers = (orderDetails.travelers || orderData.passengerData || []).map(traveler => {
           if (typeof traveler === 'object') {
             return {
-              firstName: traveler.firstName || traveler.name?.firstName || 'Guest',
-              lastName: traveler.lastName || traveler.name?.lastName || 'Traveler',
+              firstName: traveler.firstName || traveler.name?.firstName || '',
+              lastName: traveler.lastName || traveler.name?.lastName || '',
               dateOfBirth: traveler.dateOfBirth,
               gender: traveler.gender
             };
@@ -265,10 +313,18 @@ function FlightCreateOrders() {
           orderId: orderDetails.reference,
           bookingReference: orderDetails.reference,
           pnr: orderDetails.pnr,
-          transactionId: orderData.transactionId || `TXN-${Date.now()}`,
-          amount: orderData.amount || orderData.price?.total || "100.00",
+          transactionId: orderData.transactionId || null,
+          amount: amountPaid,
           orderCreatedAt: orderDetails.createdAt,
           status: orderDetails.status,
+          // The server's verdict, for the confirmation page to render
+          // honestly. `tickets` is what a real e-ticket would print.
+          queued: result === 'queued',
+          ticketed: result === 'ticketed',
+          tickets: Array.isArray(body.tickets) ? body.tickets : [],
+          needsReview,
+          mode: body.mode || null,
+          message: body.message || '',
           // Include formatted travelers
           travelers: formattedTravelers,
           // Flight route details
@@ -311,9 +367,11 @@ function FlightCreateOrders() {
           }
         } catch (e) { /* ignore parse errors */ }
         // Avoid duplicates by booking reference
+        // A queued booking has no PNR yet; null === null must not make two
+        // different queued bookings look like one.
         const isDuplicate = existingBookings.some(b =>
           b.bookingReference === completedFlightBooking.bookingReference ||
-          b.pnr === completedFlightBooking.pnr
+          (completedFlightBooking.pnr && b.pnr === completedFlightBooking.pnr)
         );
         if (!isDuplicate) {
           existingBookings.push(completedFlightBooking);
@@ -326,12 +384,14 @@ function FlightCreateOrders() {
         // Also keep legacy key for backward compat (latest booking)
         localStorage.setItem('completedFlightBooking', JSON.stringify(completedFlightBooking));
 
-        // Navigate to booking confirmation page after a delay
+        // Hand the booking over in router state. The confirmation page used
+        // to re-read localStorage, which is shared across tabs and could
+        // show a different booking than the one just made.
         setTimeout(() => {
-          navigate('/booking-confirmation');
+          navigate('/booking-confirmation', { state: { bookingData: completedFlightBooking } });
         }, 2000);
       } else {
-        throw new Error(response.data.message || 'Failed to create flight order');
+        throw new Error(body.message || body.error || 'Failed to create flight order');
       }
     } catch (error) {
       console.error('Order processing error:', error);
@@ -341,7 +401,7 @@ function FlightCreateOrders() {
       // Extract more detailed error message with priority order
       let errorMessage = 'Failed to process order';
 
-      setErrorCode(error.response?.data?.code || null);
+      setErrorCode(error.response?.data?.code || error.code || null);
 
       if (error.response?.data) {
         // Backend returned structured error
@@ -440,7 +500,7 @@ function FlightCreateOrders() {
                 { icon: <Check />, label: "Flight Selection", completed: true },
                 { icon: <Check />, label: "Passenger Details", completed: true },
                 { icon: <Check />, label: "Payment", completed: true },
-                { icon: <CheckCircle />, label: "Confirmation", completed: orderSuccess, active: !orderSuccess }
+                { icon: <CheckCircle />, label: "Confirmation", completed: orderSuccess && outcome === 'ticketed', active: !(orderSuccess && outcome === 'ticketed') }
               ].map((step, index) => (
                 <React.Fragment key={step.label}>
                   <div className="flex flex-col items-center">
@@ -488,23 +548,49 @@ function FlightCreateOrders() {
                   </div>
                 ) : orderSuccess ? (
                   <div className="space-y-4">
-                    <div className="mx-auto w-16 h-16 rounded-full bg-green-50 flex items-center justify-center">
-                      <CheckCircle className="w-8 h-8 text-green-600" />
-                    </div>
-                    <h2 className="text-xl font-semibold text-gray-800">Booking Confirmed!</h2>
-                    <p className="text-gray-600">
-                      Your flight has been successfully booked. You'll be redirected to the confirmation page shortly.
-                    </p>
+                    {outcome === 'ticketed' ? (
+                      <>
+                        <div className="mx-auto w-16 h-16 rounded-full bg-green-50 flex items-center justify-center">
+                          <CheckCircle className="w-8 h-8 text-green-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-800">Booking Confirmed!</h2>
+                        <p className="text-gray-600">
+                          Your ticket has been issued. You'll be redirected to your confirmation shortly.
+                        </p>
+                      </>
+                    ) : outcome === 'queued' ? (
+                      <>
+                        <div className="mx-auto w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center">
+                          <Clock className="w-8 h-8 text-blue-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-800">Booking Received</h2>
+                        <p className="text-gray-600">
+                          Your payment is complete and your booking is in the queue. We are confirming your seats with the airline now; this can take a few minutes.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                          <Clock className="w-8 h-8 text-amber-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-800">Reservation Held</h2>
+                        <p className="text-gray-600">
+                          Your seats are reserved with the airline and your ticket is being issued. We'll email your e-ticket as soon as it is ready.
+                        </p>
+                      </>
+                    )}
 
                     <div className="py-3">
                       <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-500">Booking Reference:</span>
-                          <span className="font-semibold text-gray-800">{bookingReference || 'Generated'}</span>
+                          <span className="font-semibold text-gray-800">{bookingReference || 'Pending'}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">PNR Number:</span>
-                          <span className="font-semibold text-gray-800">{pnr || 'Generated'}</span>
+                          <span className="text-gray-500">Airline Reference (PNR):</span>
+                          <span className="font-semibold text-gray-800">
+                            {pnr || (outcome === 'queued' ? 'Pending airline confirmation' : 'Not yet assigned')}
+                          </span>
                         </div>
                       </div>
                     </div>

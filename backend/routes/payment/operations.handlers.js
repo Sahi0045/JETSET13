@@ -464,6 +464,10 @@ export async function handleCancelBookingAction(req, res) {
                 bookingType: booking.travel_type || 'flight',
                 refundAmount: cancellationResult.refundAmount,
                 cancellationFee: cancellationResult.cancellationFee,
+                // What actually happened to the money. Without it the email
+                // promised "refund due ... 5-10 business days" on every
+                // cancellation, including the ones where the gateway refused.
+                paymentAction: cancellationResult.paymentAction,
                 currency: 'USD'
             };
 
