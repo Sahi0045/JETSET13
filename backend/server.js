@@ -26,6 +26,7 @@ import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
 import { startWorkflowEngine } from './jobs/workflowEngine.js';
 import { startDataRetentionJob } from './jobs/dataRetention.job.js';
 import { startBookingQueueWorker } from './jobs/bookingQueue.job.js';
+import { startNeedsReviewAlertJob } from './jobs/needsReviewAlert.job.js';
 import { initializeDefaultTemplates } from './services/templateResponse.service.js';
 import { generateCallbackTemplate, generateAdminCallbackNotificationTemplate } from './services/email/templates.js';
 // Shared stability modules (same behavior across all 3 entry points)
@@ -275,6 +276,7 @@ const server = app.listen(PORT, () => {
     startWorkflowEngine().catch(e => console.error('[Workflow] Engine failed to start:', e.message));
     try { startDataRetentionJob(24); } catch(e) { console.error('[Retention] Job failed to start:', e.message); }
     startBookingQueueWorker({ port: PORT });
+    startNeedsReviewAlertJob();
 
     // Initialize default email templates
     initializeDefaultTemplates().catch(e => console.error('[Templates] Init failed:', e.message));

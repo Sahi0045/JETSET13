@@ -28,6 +28,11 @@ import 'dotenv/config';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createClient } from '@supabase/supabase-js';
+// One source of truth for WHICH bookings deserve an alert, shared with the
+// in-app job (backend/jobs/needsReviewAlert.job.js). Two copies of this
+// filtering would drift, and the drift would show up as either a muted channel
+// or a missed unticketed booking.
+import { selectUnannounced, buildMessage } from '../../backend/jobs/needsReviewAlert.job.js';
 
 const run = promisify(execFile);
 
@@ -44,8 +49,6 @@ const COMPOSIO = process.env.COMPOSIO_BIN || `${process.env.HOME}/.local/bin/com
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const hoursSince = (iso) => Math.round((Date.now() - Date.parse(iso)) / 36e5);
-
 /** Bookings flagged for review that nobody has been told about yet. */
 async function findUnannounced() {
   const { data, error } = await supabase
@@ -56,29 +59,7 @@ async function findUnannounced() {
 
   if (error) throw new Error(`Could not read bookings: ${error.message}`);
 
-  return (data || []).filter((b) => {
-    if (b.booking_details?.needs_review?.alerted_at) return false;   // already announced
-    if (b.booking_details?.gds?.ticketed === true) return false;     // ticket came through later
-    if (b.booking_details?.tickets?.length > 0) return false;        // ditto, via a retrieve
-
-    // Already dealt with: a cancelled or refunded booking has been resolved by
-    // hand, and nobody needs paging about it. The first dry run flagged
-    // FLTMTPRZA5T - cancelled and refunded days earlier - which is exactly the
-    // false alarm that gets a channel muted.
-    const settled = ['cancelled', 'refunded'].includes(String(b.status).toLowerCase())
-      || ['refunded', 'partially_refunded', 'reversed'].includes(String(b.payment_status).toLowerCase());
-    return !settled;
-  });
-}
-
-function describe(booking) {
-  const review = booking.booking_details?.needs_review || {};
-  return [
-    `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
-    `PNR ${booking.booking_details?.pnr || 'none'} · ticketed: ${review.ticketed === true ? 'yes' : 'NO'}`,
-    `reason: ${review.reason || 'unknown'}`,
-    `flagged ${hoursSince(review.at || booking.created_at)}h ago`,
-  ].join('\n');
+  return selectUnannounced(data || []);
 }
 
 async function sendToSlack(text) {
@@ -118,12 +99,7 @@ const main = async () => {
     return;
   }
 
-  const body = [
-    `:rotating_light: *${stuck.length} booking${stuck.length > 1 ? 's' : ''} paid but not ticketed*`,
-    'The customer has paid and holds a PNR, but no ticket was issued. These need manual ticketing.',
-    '',
-    ...stuck.map(describe),
-  ].join('\n\n');
+  const body = buildMessage(stuck);
 
   if (DRY_RUN) {
     console.log('--- would post to Slack channel', CHANNEL || '(none set)', '---');
