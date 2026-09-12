@@ -29,6 +29,11 @@ const OPTIONAL = [
   { keys: ['TWILIO_ACCOUNT_SID'], label: 'Twilio (SMS)' },
   { keys: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'], label: 'Gemini (chatbot)' },
   { keys: ['SENTRY_DSN'], label: 'Sentry (monitoring)' },
+  // Both money alarms (paid-but-not-ticketed, failed-refund) deliver through
+  // this one webhook and go silently asleep without it. It belongs on the boot
+  // banner precisely because its absence is otherwise invisible: the jobs do not
+  // crash, they just never speak again.
+  { keys: ['ALERT_SLACK_WEBHOOK_URL'], label: 'Slack alerts (stuck money)' },
 ];
 
 const isSet = (keys) =>
