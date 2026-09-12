@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { CheckCircle, Ship, Plane, Calendar, User, CreditCard, ArrowLeft, Clock, MapPin, Luggage, Users, Download, Mail } from 'lucide-react';
+import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
 import Navbar from './Navbar';
 
 // Helper function to calculate days until trip
@@ -111,21 +111,93 @@ function BookingConfirmation() {
   const TripIcon = isCruise ? Ship : Plane;
   const tripType = isCruise ? 'Cruise' : isFlight ? 'Flight' : isHotel ? 'Hotel' : 'Package';
 
+  // What actually happened, from the flags FlightCreateOrders records. This
+  // page used to celebrate a confirmed booking and a successful payment for
+  // every booking that reached it, including a 202 that meant "queued, nothing sent
+  // to the airline yet" and a held PNR with no ticket. A flight booking saved
+  // before those flags existed carries only `status`; no ticket has ever been
+  // issued through this flow, so "held" is the honest reading for it too.
+  // Non-flight bookings keep their original copy.
+  const statusUpper = String(bookingData.status || '').toUpperCase();
+  const hasTickets = Array.isArray(bookingData.tickets) && bookingData.tickets.length > 0;
+  const outcome = statusUpper === 'CANCELLED' ? 'cancelled'
+    : (bookingData.queued === true || statusUpper === 'PENDING_CONFIRMATION') ? 'queued'
+      : (bookingData.ticketed === true || hasTickets) ? 'ticketed'
+        : isFlight ? 'held'
+          : 'confirmed';
+
+  // Full class strings on purpose: Tailwind cannot see a class built from a
+  // template literal, so a `bg-${tone}-500` would be purged from the build.
+  const COPY = {
+    ticketed: {
+      Icon: CheckCircle,
+      iconWrap: 'bg-gradient-to-br from-green-400 to-green-600 animate-bounce',
+      badge: 'bg-green-500',
+      title: 'Booking Confirmed! 🎉',
+      lead: 'Your flight is booked and your ticket has been issued.',
+      badgeText: 'Ticketed',
+      mail: 'A confirmation email with your ticket details has been sent.',
+    },
+    held: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
+      badge: 'bg-amber-500',
+      title: 'Reservation Held',
+      lead: 'Your seats are reserved with the airline. Your ticket is being issued and is not ready yet.',
+      badgeText: 'Ticket pending',
+      mail: 'A confirmation email has been sent. Your e-ticket will follow by email once it is issued; until then this reference is your proof of booking.',
+    },
+    queued: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-blue-400 to-blue-600',
+      badge: 'bg-blue-500',
+      title: 'Booking Received',
+      lead: "Your payment is complete. We're confirming your seats with the airline now; this can take a few minutes.",
+      badgeText: 'Being confirmed',
+      mail: "You'll receive an email once the airline confirms your booking. You can check its status any time in My Trips.",
+    },
+    cancelled: {
+      Icon: XCircle,
+      iconWrap: 'bg-gradient-to-br from-rose-400 to-rose-600',
+      badge: 'bg-rose-500',
+      title: 'Booking Cancelled',
+      lead: 'This booking has been cancelled.',
+      badgeText: 'Cancelled',
+      mail: 'See Manage Booking in My Trips for the refund status.',
+    },
+    confirmed: {
+      Icon: CheckCircle,
+      iconWrap: 'bg-gradient-to-br from-green-400 to-green-600 animate-bounce',
+      badge: 'bg-green-500',
+      title: 'Booking Confirmed! 🎉',
+      lead: `Your ${tripType.toLowerCase()} has been successfully booked.`,
+      badgeText: 'Confirmed',
+      mail: 'A confirmation email has been sent with all the details of your booking.',
+    },
+  };
+  const copy = COPY[outcome];
+  const OutcomeIcon = copy.Icon;
+
+  // Only a real captured amount is printed. Zero or missing used to render
+  // as "Total Paid USD 0.00" beside a green success tick.
+  const paidAmount = parseFloat(bookingData.amount ?? bookingData.totalAmount);
+  const hasAmount = Number.isFinite(paidAmount) && paidAmount > 0;
+
   return (
     <>
       <Navbar forceScrolled />
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-20 pb-12">
         <div className="max-w-4xl mx-auto px-4">
-          {/* Success Header with Animation */}
+          {/* Outcome header */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-400 to-green-600 rounded-full mb-4 shadow-lg animate-bounce">
-              <CheckCircle className="w-10 h-10 text-white" />
+            <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 shadow-lg ${copy.iconWrap}`}>
+              <OutcomeIcon className="w-10 h-10 text-white" />
             </div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Booking Confirmed! 🎉
+              {copy.title}
             </h1>
             <p className="text-gray-600 mb-4">
-              Your {tripType.toLowerCase()} has been successfully booked.
+              {copy.lead}
             </p>
 
             {/* Travel Countdown */}
@@ -156,8 +228,8 @@ function BookingConfirmation() {
                   <p className="text-blue-200 text-sm">#{bookingData.orderId || bookingData.bookingReference || 'N/A'}</p>
                 </div>
                 <div className="ml-auto">
-                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-500 text-white text-sm font-semibold rounded-full">
-                    <CheckCircle className="w-4 h-4" /> Confirmed
+                  <span className={`inline-flex items-center gap-1 px-3 py-1 text-white text-sm font-semibold rounded-full ${copy.badge}`}>
+                    <OutcomeIcon className="w-4 h-4" /> {copy.badgeText}
                   </span>
                 </div>
               </div>
@@ -313,16 +385,25 @@ function BookingConfirmation() {
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Booking Reference</p>
                   <p className="text-lg font-bold text-gray-900 font-mono">{bookingData.orderId || bookingData.bookingReference || 'N/A'}</p>
                 </div>
-                {bookingData.pnr && (
+                {bookingData.pnr ? (
                   <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-6">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">PNR Number</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Airline Reference (PNR)</p>
                     <p className="text-lg font-bold text-blue-600 font-mono">{bookingData.pnr}</p>
                   </div>
+                ) : isFlight && (
+                  <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-6">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Airline Reference (PNR)</p>
+                    <p className="text-sm font-semibold text-gray-500">
+                      {outcome === 'queued' ? 'Assigned once the airline confirms' : 'Not yet assigned'}
+                    </p>
+                  </div>
                 )}
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Transaction ID</p>
-                  <p className="text-lg font-bold text-gray-900 font-mono break-all">{bookingData.transactionId || 'N/A'}</p>
-                </div>
+                {bookingData.transactionId && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Transaction ID</p>
+                    <p className="text-lg font-bold text-gray-900 font-mono break-all">{bookingData.transactionId}</p>
+                  </div>
+                )}
               </div>
 
               {/* Passenger Details - Support both flat travelers array and nested passengers.adults */}
@@ -423,14 +504,18 @@ function BookingConfirmation() {
 
                 <div className="flex justify-between items-center p-4 bg-green-50 rounded-xl border border-green-200">
                   <div>
-                    <p className="text-sm text-green-700">Total Paid</p>
-                    <p className="text-2xl font-bold text-green-800">
-                      {bookingData.currency || 'USD'} {parseFloat(bookingData.amount || bookingData.totalAmount || 0).toFixed(2)}
-                    </p>
+                    <p className="text-sm text-green-700">{outcome === 'cancelled' ? 'Amount Paid' : 'Total Paid'}</p>
+                    {hasAmount ? (
+                      <p className="text-2xl font-bold text-green-800">
+                        {bookingData.currency || 'USD'} {paidAmount.toFixed(2)}
+                      </p>
+                    ) : (
+                      <p className="text-sm font-semibold text-green-800">See your payment receipt email</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-green-700">
                     <CheckCircle className="w-5 h-5" />
-                    <span className="font-semibold">Payment Successful</span>
+                    <span className="font-semibold">Payment received</span>
                   </div>
                 </div>
               </div>
@@ -456,7 +541,7 @@ function BookingConfirmation() {
           </div>
 
           <p className="text-center text-sm text-gray-500 mt-6">
-            📧 A confirmation email has been sent with all the details of your booking.
+            📧 {copy.mail}
           </p>
         </div>
       </div>

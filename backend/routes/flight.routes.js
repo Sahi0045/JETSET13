@@ -2102,6 +2102,105 @@ router.get('/bookings/:bookingRef', protect, async (req, res) => {
 });
 
 // Get all bookings from database (for My Trips page)
+/**
+ * A bookings row as My Trips and Manage Booking consume it.
+ *
+ * Exported so the shape is testable: the list used to omit `cancellation`,
+ * `tickets`, `needs_review`, `gds` and `payment_status`, so Manage Booking
+ * had to guess - a cancelled row whose refund the gateway had refused rendered
+ * "Processing Refund - In Progress", and the e-ticket helper could not tell a
+ * held reservation from an issued ticket. Snake_case on those mirrors the
+ * single-booking endpoint, which hands the row over as-is.
+ */
+export function toClientBooking(booking) {
+  // Get amount from total_amount column or from booking_details or from flight_offer
+  const amount = booking.total_amount ||
+    booking.booking_details?.amount ||
+    booking.booking_details?.flight_offer?.price?.total ||
+    0;
+
+  return {
+    id: booking.id,
+    type: booking.travel_type,
+    bookingReference: booking.booking_reference,
+    status: booking.status,
+    totalAmount: parseFloat(amount) || 0,
+    amount: parseFloat(amount) || 0, // Add both for compatibility
+    currency: booking.booking_details?.currency || booking.booking_details?.flight_offer?.price?.currency || 'USD',
+    paymentStatus: booking.payment_status,
+    bookingDate: booking.created_at,
+    // Core booking_details
+    pnr: booking.booking_details?.pnr,
+    orderId: booking.booking_details?.order_id,
+    amadeusOrderId: booking.booking_details?.amadeus_order_id || booking.booking_details?.order_id || null,
+    transactionId: booking.booking_details?.transaction_id,
+    origin: booking.booking_details?.origin,
+    destination: booking.booking_details?.destination,
+    departureDate: booking.booking_details?.departure_date,
+    departureTime: booking.booking_details?.departure_time,
+    arrivalTime: booking.booking_details?.arrival_time,
+    arrivalDate: booking.booking_details?.arrival_date,
+    airline: booking.booking_details?.airline,
+    airlineName: booking.booking_details?.airline_name,
+    flightNumber: booking.booking_details?.flight_number,
+    duration: booking.booking_details?.duration,
+    cabinClass: booking.booking_details?.cabin_class,
+    // Amadeus enriched fields
+    departureTerminal: booking.booking_details?.departure_terminal || '',
+    arrivalTerminal: booking.booking_details?.arrival_terminal || '',
+    aircraft: booking.booking_details?.aircraft || '',
+    stops: booking.booking_details?.stops ?? 0,
+    stopDetails: booking.booking_details?.stop_details || [],
+    brandedFare: booking.booking_details?.branded_fare || null,
+    brandedFareLabel: booking.booking_details?.branded_fare_label || null,
+    operatingCarrier: booking.booking_details?.operating_carrier || null,
+    operatingAirlineName: booking.booking_details?.operating_airline_name || null,
+    lastTicketingDate: booking.booking_details?.last_ticketing_date || null,
+    numberOfBookableSeats: booking.booking_details?.number_of_bookable_seats || null,
+    refundable: booking.booking_details?.refundable || false,
+    baggageDetails: booking.booking_details?.baggage_details || null,
+    baggage: booking.booking_details?.baggage || null,
+    originCity: booking.booking_details?.origin_city || '',
+    destinationCity: booking.booking_details?.destination_city || '',
+    priceBase: booking.booking_details?.price_base || null,
+    priceGrandTotal: booking.booking_details?.price_grand_total || null,
+    priceFees: booking.booking_details?.price_fees || [],
+    fareBreakdown: booking.booking_details?.fare_breakdown || null,
+    // Travelers
+    travelers: booking.passenger_details,
+    // Cruise-specific fields
+    cruiseName: booking.booking_details?.cruise_name || '',
+    cruiseImage: booking.booking_details?.cruise_image || '',
+    cruiseDepartureDate: booking.booking_details?.departure_date || '',
+    cruiseReturnDate: booking.booking_details?.return_date || '',
+    cruiseDeparture: booking.booking_details?.departure || '',
+    cruiseArrival: booking.booking_details?.arrival || '',
+    cruiseDuration: booking.booking_details?.duration || '',
+    basePrice: booking.booking_details?.base_price || 0,
+    taxesAndFees: booking.booking_details?.taxes_and_fees || 0,
+    portCharges: booking.booking_details?.port_charges || 0,
+    // Hotel-specific fields (surfaced so My Trips can show name/dates and
+    // classify Upcoming/Past by check-in date on both web and app)
+    hotelName: booking.booking_details?.hotel_name || '',
+    hotelImage: booking.booking_details?.hotel_image || '',
+    location: booking.booking_details?.location || '',
+    hotelDestination: booking.booking_details?.location || '',
+    checkinDate: booking.booking_details?.check_in_date || '',
+    checkoutDate: booking.booking_details?.check_out_date || '',
+    roomType: booking.booking_details?.room_type || '',
+    guests: booking.booking_details?.guests || null,
+    hotelGuests: booking.booking_details?.guests || null,
+    nights: booking.booking_details?.nights || null,
+    pricePerNight: booking.booking_details?.price_per_night || null,
+    // Outcome fields - see the doc comment above.
+    payment_status: booking.payment_status,
+    cancellation: booking.booking_details?.cancellation || null,
+    tickets: booking.booking_details?.tickets || [],
+    needs_review: booking.booking_details?.needs_review || null,
+    gds: booking.booking_details?.gds || null
+  };
+}
+
 router.get('/bookings', protect, async (req, res) => {
   try {
     if (!supabase) {
@@ -2148,89 +2247,7 @@ router.get('/bookings', protect, async (req, res) => {
       });
     }
 
-    // Transform database format to frontend format
-    const transformedBookings = (data || []).map(booking => {
-      // Get amount from total_amount column or from booking_details or from flight_offer
-      const amount = booking.total_amount ||
-        booking.booking_details?.amount ||
-        booking.booking_details?.flight_offer?.price?.total ||
-        0;
-
-      return {
-        id: booking.id,
-        type: booking.travel_type,
-        bookingReference: booking.booking_reference,
-        status: booking.status,
-        totalAmount: parseFloat(amount) || 0,
-        amount: parseFloat(amount) || 0, // Add both for compatibility
-        currency: booking.booking_details?.currency || booking.booking_details?.flight_offer?.price?.currency || 'USD',
-        paymentStatus: booking.payment_status,
-        bookingDate: booking.created_at,
-        // Core booking_details
-        pnr: booking.booking_details?.pnr,
-        orderId: booking.booking_details?.order_id,
-        amadeusOrderId: booking.booking_details?.amadeus_order_id || booking.booking_details?.order_id || null,
-        transactionId: booking.booking_details?.transaction_id,
-        origin: booking.booking_details?.origin,
-        destination: booking.booking_details?.destination,
-        departureDate: booking.booking_details?.departure_date,
-        departureTime: booking.booking_details?.departure_time,
-        arrivalTime: booking.booking_details?.arrival_time,
-        arrivalDate: booking.booking_details?.arrival_date,
-        airline: booking.booking_details?.airline,
-        airlineName: booking.booking_details?.airline_name,
-        flightNumber: booking.booking_details?.flight_number,
-        duration: booking.booking_details?.duration,
-        cabinClass: booking.booking_details?.cabin_class,
-        // Amadeus enriched fields
-        departureTerminal: booking.booking_details?.departure_terminal || '',
-        arrivalTerminal: booking.booking_details?.arrival_terminal || '',
-        aircraft: booking.booking_details?.aircraft || '',
-        stops: booking.booking_details?.stops ?? 0,
-        stopDetails: booking.booking_details?.stop_details || [],
-        brandedFare: booking.booking_details?.branded_fare || null,
-        brandedFareLabel: booking.booking_details?.branded_fare_label || null,
-        operatingCarrier: booking.booking_details?.operating_carrier || null,
-        operatingAirlineName: booking.booking_details?.operating_airline_name || null,
-        lastTicketingDate: booking.booking_details?.last_ticketing_date || null,
-        numberOfBookableSeats: booking.booking_details?.number_of_bookable_seats || null,
-        refundable: booking.booking_details?.refundable || false,
-        baggageDetails: booking.booking_details?.baggage_details || null,
-        baggage: booking.booking_details?.baggage || null,
-        originCity: booking.booking_details?.origin_city || '',
-        destinationCity: booking.booking_details?.destination_city || '',
-        priceBase: booking.booking_details?.price_base || null,
-        priceGrandTotal: booking.booking_details?.price_grand_total || null,
-        priceFees: booking.booking_details?.price_fees || [],
-        fareBreakdown: booking.booking_details?.fare_breakdown || null,
-        // Travelers
-        travelers: booking.passenger_details,
-        // Cruise-specific fields
-        cruiseName: booking.booking_details?.cruise_name || '',
-        cruiseImage: booking.booking_details?.cruise_image || '',
-        cruiseDepartureDate: booking.booking_details?.departure_date || '',
-        cruiseReturnDate: booking.booking_details?.return_date || '',
-        cruiseDeparture: booking.booking_details?.departure || '',
-        cruiseArrival: booking.booking_details?.arrival || '',
-        cruiseDuration: booking.booking_details?.duration || '',
-        basePrice: booking.booking_details?.base_price || 0,
-        taxesAndFees: booking.booking_details?.taxes_and_fees || 0,
-        portCharges: booking.booking_details?.port_charges || 0,
-        // Hotel-specific fields (surfaced so My Trips can show name/dates and
-        // classify Upcoming/Past by check-in date on both web and app)
-        hotelName: booking.booking_details?.hotel_name || '',
-        hotelImage: booking.booking_details?.hotel_image || '',
-        location: booking.booking_details?.location || '',
-        hotelDestination: booking.booking_details?.location || '',
-        checkinDate: booking.booking_details?.check_in_date || '',
-        checkoutDate: booking.booking_details?.check_out_date || '',
-        roomType: booking.booking_details?.room_type || '',
-        guests: booking.booking_details?.guests || null,
-        hotelGuests: booking.booking_details?.guests || null,
-        nights: booking.booking_details?.nights || null,
-        pricePerNight: booking.booking_details?.price_per_night || null
-      };
-    });
+    const transformedBookings = (data || []).map(toClientBooking);
 
     console.log(`✅ Fetched ${transformedBookings.length} bookings from database`);
 

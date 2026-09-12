@@ -602,13 +602,71 @@ export function generateAdminBookingNotificationTemplate(data) {
   });
 }
 
+/**
+ * What happened to the money decides what this email is allowed to say.
+ *
+ * It used to promise "refund due … 5-10 business days" on every cancellation,
+ * including the ones where the gateway refused the refund - quoting $0.00 as
+ * the amount on its way. That customer would wait ten working days for money
+ * nobody was sending, and the one case that most needs a human
+ * (MANUAL_PROCESS_REQUIRED: the refund was never even attempted) read exactly
+ * like a bank being slow.
+ */
+export const REFUND_STUCK_ACTIONS = ['REFUND_FAILED', 'VOID_FAILED', 'VOID_MISSING_TXN_ID', 'MANUAL_PROCESS_REQUIRED'];
+export const REFUND_DONE_ACTIONS = ['PARTIAL_REFUND', 'FULL_REFUND', 'REFUNDED', 'VOID'];
+
+export function refundOutcome({ paymentAction, refundAmount } = {}) {
+  if (REFUND_STUCK_ACTIONS.includes(paymentAction)) return 'stuck';
+  if (paymentAction === 'NO_REFUND_FEE_COVERS') return 'fee_covers';
+  if (REFUND_DONE_ACTIONS.includes(paymentAction)) return 'refunded';
+  // Callers that predate paymentAction: only a positive amount is evidence of a
+  // refund. Zero with no action is unknown, and unknown must not promise.
+  return Number(refundAmount) > 0 ? 'refunded' : 'unknown';
+}
+
 export function generateCancellationTemplate(data) {
-  const { customerName, bookingReference, bookingType = 'travel', refundAmount, cancellationFee, currency = 'USD' } = data;
+  const { customerName, bookingReference, bookingType = 'travel', refundAmount, cancellationFee, currency = 'USD', paymentAction } = data;
   const icon = ({ flight: '✈️', hotel: '🏨', cruise: '🚢', package: '🎒' }[String(bookingType).toLowerCase()]) || '🌍';
   const fmt = (a) => money(a, currency);
+  const outcome = refundOutcome({ paymentAction, refundAmount });
+
+  const byOutcome = {
+    refunded: {
+      preheader: `${fmt(refundAmount)} refund on its way`,
+      figure: { label: 'Refund due', value: fmt(refundAmount) },
+      body: `
+      ${fareBreakdown(
+        [['Cancellation fee', fmt(cancellationFee)]],
+        { total: fmt(refundAmount), currency, label: 'Refund to original payment method', title: 'Refund breakdown' },
+      )}
+      ${highlightBox('Refunds reach the original payment method in 5-10 business days. Your bank decides the exact date, not us - if it has not landed after 10 working days, call and we will chase it.', {})}`,
+    },
+    fee_covers: {
+      preheader: 'no refund due',
+      figure: { label: 'Refund due', value: fmt(0), note: 'cancellation fee covers the fare' },
+      body: `
+      ${fareBreakdown(
+        [['Cancellation fee', fmt(cancellationFee)]],
+        { total: fmt(0), currency, label: 'Refund to original payment method', title: 'Refund breakdown' },
+      )}
+      ${highlightBox('No refund is due: the cancellation fee is equal to or more than the amount paid, so nothing is returned to your card.', {})}`,
+    },
+    stuck: {
+      preheader: 'refund needs manual processing',
+      figure: { label: 'Refund', value: 'Being processed by our team', note: statusPill('Action in progress', 'warning') },
+      body: `
+      ${highlightBox('We could not process your refund automatically. Our team has been notified and will process it and contact you. <strong>Nothing has been returned to your card yet.</strong> If you have not heard from us within 2 business days, call (877) 538-7380 and quote your booking reference.', {})}`,
+    },
+    unknown: {
+      preheader: 'cancellation confirmed',
+      figure: { label: 'Refund', value: 'If a refund is due, our team will process it' },
+      body: `
+      ${highlightBox('If a refund is due on this booking, our team will process it and let you know. Nothing further is needed from you.', {})}`,
+    },
+  }[outcome];
 
   return renderBrandedEmail({
-    preheader: line([line(['Booking', bookingReference, 'cancelled'], ' '), `${fmt(refundAmount)} refund due`], ' — '),
+    preheader: line([line(['Booking', bookingReference, 'cancelled'], ' '), byOutcome.preheader], ' — '),
     headerLabel: 'Booking Cancelled', emoji: icon,
     heading: 'Your booking is cancelled',
     subheading: bookingReference ? `Reference ${bookingReference}` : 'Your booking has been cancelled',
@@ -616,13 +674,8 @@ export function generateCancellationTemplate(data) {
       ${paragraph(`Hi <strong>${customerName || 'there'}</strong>, your booking has been cancelled as requested.`)}
       ${figureBlock([
     { label: 'Booking reference', value: bookingReference, mono: true, small: true, note: statusPill('Cancelled', 'danger') },
-    { label: 'Refund due', value: fmt(refundAmount) },
-  ])}
-      ${fareBreakdown(
-    [['Cancellation fee', fmt(cancellationFee)]],
-    { total: fmt(refundAmount), currency, label: 'Refund to original payment method', title: 'Refund breakdown' },
-  )}
-      ${highlightBox('Refunds reach the original payment method in 5-10 business days. Your bank decides the exact date, not us - if it has not landed after 10 working days, call and we will chase it.', {})}
+    byOutcome.figure,
+  ])}${byOutcome.body}
       ${actionRow([{ text: 'My trips', url: `${BRAND.site}/my-trips` }, { text: 'Book again', url: `${BRAND.site}/flights` }])}
     `,
   });
@@ -630,17 +683,22 @@ export function generateCancellationTemplate(data) {
 
 /** Internal cancellation alert. */
 export function generateAdminCancellationTemplate(data) {
-  const { customerName, customerEmail, bookingReference, bookingType = 'travel', refundAmount, cancellationFee, currency = 'USD' } = data;
+  const { customerName, customerEmail, bookingReference, bookingType = 'travel', refundAmount, cancellationFee, currency = 'USD', paymentAction } = data;
+  const stuck = refundOutcome({ paymentAction, refundAmount }) === 'stuck';
 
   return renderBrandedEmail({
-    preheader: line([line(['Cancellation', bookingReference], ' '), `${money(refundAmount, currency)} refund`], ' — '),
-    headerLabel: 'Booking cancelled', emoji: '⚠️',
-    heading: 'Booking cancellation',
+    // A stuck refund is the one line the desk must not skim past: the
+    // customer has been told a human will act, and this email is that human.
+    preheader: line([line(['Cancellation', bookingReference], ' '), stuck ? `REFUND ${paymentAction} - ACTION REQUIRED` : `${money(refundAmount, currency)} refund`], ' — '),
+    headerLabel: stuck ? 'Refund needs a human' : 'Booking cancelled', emoji: stuck ? '🚨' : '⚠️',
+    heading: stuck ? 'Refund not processed - action required' : 'Booking cancellation',
     subheading: line([customerName || 'Unknown customer', bookingReference]),
     contentHtml: `
       ${figureBlock([
         { label: 'Reference', value: bookingReference || '—', mono: true, small: true, note: statusPill('Cancelled', 'danger') },
-        { label: 'Refund due', value: money(refundAmount, currency) },
+        stuck
+          ? { label: 'Refund', value: `NOT PROCESSED (${paymentAction})`, note: statusPill('Action required', 'danger') }
+          : { label: 'Refund due', value: money(refundAmount, currency) },
       ])}
       ${fareBreakdown(
     [['Cancellation fee retained', money(cancellationFee, currency)]],
