@@ -106,6 +106,7 @@ describe('running the check once', () => {
     const chain = {
       select: vi.fn().mockReturnThis(),
       not: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -168,5 +169,93 @@ describe('running the check once', () => {
     const result = await runOnce({ webhookUrl: 'https://hooks.slack.test/x' });
     expect(result.announced).toBe(0);
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The case the alarm could not see - and it was the majority case.
+ *
+ * With AUTO_TICKET off, every booking the chain produces is a paid, committed
+ * PNR that issuance never touched. The row was written `confirmed` with no
+ * flag on it, so a job keyed on `needs_review` never looked. That is a
+ * customer holding a reservation on a ticketing deadline, believing they hold
+ * a ticket. The only trace is `gds.ticketed: false` beside a PNR.
+ */
+describe('a paid PNR that issuance never touched', () => {
+  const unflagged = (over = {}) => ({
+    booking_reference: 'FLTPNRONLY',
+    status: 'pending_ticketing',
+    payment_status: 'paid',
+    total_amount: 143.02,
+    created_at: new Date().toISOString(),
+    booking_details: { pnr: 'AMRHOG', gds: { ticketed: false }, ...over },
+  });
+
+  const mockRows = (rows) => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+    };
+    supabaseMock.from.mockReturnValue(chain);
+    return chain;
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' }),
+    );
+  });
+
+  it('is announced even though nothing flagged it', () => {
+    expect(selectUnannounced([unflagged()])).toHaveLength(1);
+  });
+
+  // No capture, no money at stake - an abandoned checkout, not a stuck booking.
+  it('is ignored when the payment was never captured', () => {
+    expect(selectUnannounced([{ ...unflagged(), payment_status: 'unpaid' }])).toHaveLength(0);
+  });
+
+  // Nothing was committed at the GDS, so nothing is being held.
+  it('is ignored without a PNR', () => {
+    expect(selectUnannounced([unflagged({ pnr: undefined })])).toHaveLength(0);
+  });
+
+  it('is ignored once ticketed', () => {
+    expect(selectUnannounced([unflagged({ gds: { ticketed: true } })])).toHaveLength(0);
+  });
+
+  it('is ignored when the flag is merely absent and ticketing is unknown', () => {
+    // `gds.ticketed` undefined is not the same as false: nothing is asserted.
+    expect(selectUnannounced([unflagged({ gds: {} })])).toHaveLength(0);
+  });
+
+  // Announcing it writes the flag it never had, so from then on it is one
+  // class - flagged, and stamped - and is never announced twice.
+  it('is announced once and then carries a reason and a stamp', async () => {
+    const chain = mockRows([unflagged()]);
+    const first = await runOnce({ webhookUrl: 'https://hooks.slack.test/x' });
+    expect(first.announced).toBe(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    const written = chain.update.mock.calls[0][0].booking_details.needs_review;
+    expect(written.reason).toMatch(/never ticketed/);
+    expect(written.ticketed).toBe(false);
+    expect(written.alerted_at).toBeTruthy();
+
+    // The stamped row is quiet next time.
+    expect(selectUnannounced([{ ...unflagged(), booking_details: { ...unflagged().booking_details, needs_review: written } }])).toHaveLength(0);
+  });
+
+  it('describes it honestly in the message', () => {
+    const text = buildMessage([unflagged()]);
+    expect(text).toMatch(/FLTPNRONLY/);
+    expect(text).toMatch(/ticketed: NO/);
+    expect(text).toMatch(/never ticketed/);
   });
 });

@@ -4,6 +4,22 @@ import axios from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { errorHandler } from '../../../backend/middleware/errorHandler.js';
 
+// The payment handlers take their Supabase client from arcpay.config.js, not
+// from config/supabase.js, so the global mock does not cover it. Without this,
+// the payment-gate test that reaches reconcile's `.update()` dialled the
+// placeholder host for real - a unit test making a network call, passing only
+// because DNS failed fast. Same shape as checkoutCurrency.test.js.
+vi.mock('../../../backend/routes/payment/arcpay.config.js', async () => {
+  const actual = await vi.importActual('../../../backend/routes/payment/arcpay.config.js');
+  const chain = {};
+  for (const m of ['select', 'update', 'insert', 'upsert', 'eq', 'or', 'order', 'limit']) {
+    chain[m] = vi.fn(() => chain);
+  }
+  chain.single = vi.fn().mockResolvedValue({ data: null, error: null });
+  chain.maybeSingle = chain.single;
+  return { ...actual, supabase: { from: vi.fn(() => chain) } };
+});
+
 /**
  * POST /api/flights/order must never fabricate a booking.
  *
@@ -312,10 +328,20 @@ const bookableOffer = {
 };
 
 describe('concurrent booking attempts', () => {
+  // A real in-flight booking: the gateway captured the charge and reconcile
+  // recorded the amount, so the order route's payment check passes without a
+  // gateway round trip and the claim is what this suite exercises.
   const inProgressRow = (startedAt) => ({
+    id: 1,
     booking_reference: 'FLTTEST1',
     status: 'pending',
-    booking_details: { gds_chain: { state: 'in_progress', startedAt, attempt: 1 } },
+    payment_status: 'paid',
+    total_amount: 291,
+    booking_details: {
+      arc_captured_amount: 291,
+      arc_captured_currency: 'USD',
+      gds_chain: { state: 'in_progress', startedAt, attempt: 1 },
+    },
   });
 
   beforeEach(() => {
@@ -457,5 +483,142 @@ describe('a booking that already has a PNR', () => {
 
     expect(res.body.mode).not.toBe('LIVE_GDS_BOOKING');
     expect(JSON.stringify(res.body)).not.toMatch(/mock/i);
+  });
+});
+
+/**
+ * Was this actually paid for?
+ *
+ * The route never used to ask. `paidAmount` was the row's `total_amount` - the
+ * figure the CLIENT asked to be charged when the checkout session was created,
+ * written while the row was still `unpaid` - and nothing read
+ * `payment_status`. Abandon the ARC page, come back to this route, and a seat
+ * was sold and a PNR committed for a charge that never happened. The browser
+ * flow does that on its own when the callback's pending-booking lookup fails.
+ *
+ * Now the route reconciles with the gateway before any GDS call. Every case
+ * below asserts the same thing first: Air_Sell was never sent.
+ */
+describe('the payment gate', () => {
+  const chainWith = (row) => {
+    const chain = {};
+    for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+      chain[m] = vi.fn(() => chain);
+    }
+    chain.single = vi.fn().mockResolvedValue({ data: row, error: null });
+    chain.maybeSingle = chain.single;
+    return chain;
+  };
+
+  const withRow = async (row) => {
+    const supabase = (await import('../../../backend/config/supabase.js')).default;
+    supabase.from.mockImplementation(() => chainWith(row));
+    return makeApp();
+  };
+
+  const unpaidRow = {
+    id: 1,
+    booking_reference: 'FLTTEST1',
+    status: 'pending',
+    payment_status: 'unpaid',
+    total_amount: 5000,           // what the client asked for; proves nothing
+    booking_details: { order_id: 'FLTTEST1' },
+  };
+
+  beforeEach(() => {
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
+    vi.resetModules();
+  });
+
+  it('refuses when no checkout row exists - there is nothing proving a payment', async () => {
+    const app = await withRow(null);
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.status).toBe(402);
+    expect(res.body.code).toBe('PAYMENT_NOT_FOUND');
+    expect(axios.post).not.toHaveBeenCalled();
+    // Nothing to reverse, so nothing was "refunded".
+    expect(res.body.refundAction).toBeUndefined();
+  });
+
+  it('refuses an unpaid row when the gateway shows no capture', async () => {
+    axios.get.mockResolvedValue({ status: 200, data: { status: 'PENDING', transaction: [] } });
+    const app = await withRow(unpaidRow);
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.status).toBe(402);
+    expect(res.body.code).toBe('PAYMENT_NOT_CAPTURED');
+    expect(res.body.orderStatus).toBe('PENDING');
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unpaid row when the gateway cannot be reached', async () => {
+    axios.get.mockRejectedValue(new Error('ECONNRESET'));
+    const app = await withRow(unpaidRow);
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.status).toBe(402);
+    expect(res.body.code).toBe('PAYMENT_NOT_CAPTURED');
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  // The exploit: the row says 5000 was requested. Nobody paid it.
+  it('does not let the row\'s total_amount stand in for a payment', async () => {
+    axios.get.mockResolvedValue({ status: 200, data: { status: 'PENDING', transaction: [] } });
+    const app = await withRow({ ...unpaidRow, total_amount: 5000 });
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.status).toBe(402);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('refuses a row whose payment was refunded', async () => {
+    const app = await withRow({ ...unpaidRow, payment_status: 'refunded' });
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.status).toBe(402);
+    expect(axios.post).not.toHaveBeenCalled();
+    // Settled rows are answered from the row; no gateway call.
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  it('lets a paid row with a recorded capture through without a gateway round trip', async () => {
+    const app = await withRow({
+      ...unpaidRow,
+      payment_status: 'paid',
+      booking_details: { order_id: 'FLTTEST1', arc_captured_amount: 291, arc_captured_currency: 'USD' },
+    });
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.body.code).not.toBe('PAYMENT_NOT_FOUND');
+    expect(res.body.code).not.toBe('PAYMENT_NOT_CAPTURED');
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  // The tab-died case: the customer paid, but the browser-driven reconcile
+  // never ran, so the row still says unpaid. The route asks the gateway itself.
+  it('accepts an unpaid row once the gateway confirms a capture', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        status: 'CAPTURED',
+        amount: 291,
+        currency: 'USD',
+        transaction: [{ result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount: 291, currency: 'USD' } }],
+      },
+    });
+    const app = await withRow(unpaidRow);
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.body.code).not.toBe('PAYMENT_NOT_FOUND');
+    expect(res.body.code).not.toBe('PAYMENT_NOT_CAPTURED');
+    expect(axios.get).toHaveBeenCalledTimes(1);
   });
 });

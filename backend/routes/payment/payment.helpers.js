@@ -54,6 +54,26 @@ export function getCardType(cardNumber) {
 /**
  * Extract caller info (admin vs agent) from Authorization header
  */
+/**
+ * Did the gateway actually do what we asked?
+ *
+ * ARC (MPGS) answers a refused refund or void with HTTP 200 and
+ * `result: "FAILURE"` - a declined reversal is a well-formed reply, not a
+ * transport error. Every reversal site used to check only the status code, so a
+ * refund the gateway refused was logged as "✅ REFUND successful: FAILURE" and
+ * the booking written `refunded`. The customer was told their money was on its
+ * way; nothing had moved.
+ *
+ * This is deliberately strict: a 2xx with no `result` at all counts as not
+ * succeeded. Failing that way leaves the money recorded as still held, which a
+ * human can fix; the other way tells a customer they were paid back when they
+ * were not.
+ */
+export function arcSucceeded(response) {
+    const status = Number(response?.status);
+    return status >= 200 && status < 300 && response?.data?.result === 'SUCCESS';
+}
+
 export function getCallerInfo(req) {
     try {
         // Prefer the httpOnly session cookie (web); fall back to Bearer (mobile).

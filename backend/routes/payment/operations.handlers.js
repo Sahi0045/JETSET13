@@ -3,6 +3,7 @@ import fetch from 'node-fetch';
 import FlightProvider from '../../services/flightProvider.js';
 import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig } from './arcpay.config.js';
 import { getCaller, requireAdmin } from './agents.handlers.js';
+import { arcSucceeded } from './payment.helpers.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -245,7 +246,9 @@ export async function handleCancelBookingAction(req, res) {
                                 }
                             }, { headers: authConfig.headers, validateStatus: () => true });
 
-                            if (refundResponse.status >= 200 && refundResponse.status < 300) {
+                            // Status code alone is not an answer: ARC returns 200 with
+                            // result FAILURE for a refund it refused.
+                            if (arcSucceeded(refundResponse)) {
                                 const refundData = refundResponse.data;
                                 console.log('✅ ARC Pay REFUND successful:', refundData.result);
                                 cancellationResult.paymentProcessed = true;
@@ -317,7 +320,7 @@ export async function handleCancelBookingAction(req, res) {
                                 }
                             }, { headers: authConfig.headers, validateStatus: () => true });
 
-                            if (voidResp.status === 200 || voidResp.status === 201) {
+                            if (arcSucceeded(voidResp)) {
                                 const voidData = voidResp.data;
                                 console.log('✅ ARC Pay VOID successful:', voidData.result);
                                 cancellationResult.paymentProcessed = true;
@@ -365,7 +368,7 @@ export async function handleCancelBookingAction(req, res) {
                             }
                         }, { headers: authConfig.headers, validateStatus: () => true });
 
-                        if (refundResp.status === 200 || refundResp.status === 201) {
+                        if (arcSucceeded(refundResp)) {
                             console.log('✅ ARC Pay REFUND successful (no payment record)');
                             cancellationResult.paymentProcessed = true;
                             cancellationResult.paymentAction = 'PARTIAL_REFUND';
@@ -401,9 +404,15 @@ export async function handleCancelBookingAction(req, res) {
             .from('bookings')
             .update({
                 status: 'cancelled',
+                // The money's state, not the attempt's. A refund the gateway
+                // refused leaves the charge exactly where it was - `paid` - yet
+                // this used to write `partially_refunded` regardless, so a
+                // customer who was never paid back read as settled in the admin
+                // panel and in My Trips. Only a reversal that actually happened
+                // changes the payment state.
                 payment_status: cancellationResult.paymentProcessed ?
                     (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded' : 'refunded') :
-                    (booking.payment_status === 'paid' ? 'partially_refunded' : booking.payment_status),
+                    booking.payment_status,
                 booking_details: {
                     ...booking.booking_details,
                     cancellation: {
@@ -932,12 +941,25 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
             apiOperation: 'VOID',
             transaction: { targetTransactionId: targetTxnId, reference: String(reason).substring(0, 40) }
         }, { headers: authConfig.headers, validateStatus: () => true });
-        if (voidResp.status >= 200 && voidResp.status < 300 && (voidResp.data?.result === 'SUCCESS' || !voidResp.data?.result)) {
+        // `|| !voidResp.data?.result` used to sit here - a reply with no result
+        // at all counted as a successful void. It does not.
+        if (arcSucceeded(voidResp)) {
             return { reversed: true, action: 'VOID', transactionId: voidTxnId, targetTransactionId: targetTxnId };
         }
 
         // 2) VOID rejected (likely already settled) → REFUND the full amount.
-        const refundAmt = parseFloat(amount || captured.transaction?.amount || order.amount || 0);
+        // Return what the gateway captured - read from the transaction it just
+        // showed us - never the caller's figure. Every call site passes
+        // `req.body.totalAmount`, which the client controls: with the VOID leg
+        // refused (already settled) and this REFUND leg running, a client that
+        // posted 1.00 against a 900.00 charge was refunded 1.00 and the row
+        // written `refunded`. `amount` stays in the signature and is ignored.
+        const refundAmt = parseFloat(captured.transaction?.amount ?? order.amount ?? 0);
+        if (amount != null && Number.isFinite(Number(amount)) && Math.abs(Number(amount) - refundAmt) > 0.01) {
+            console.warn('⚠️ reversal: caller amount ignored in favour of captured amount', {
+                orderId, caller: Number(amount), captured: refundAmt
+            });
+        }
         if (refundAmt > 0) {
             const refundTxnId = `refund-fail-${Date.now()}`;
             const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderId}/transaction/${refundTxnId}`;
@@ -945,7 +967,7 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
                 apiOperation: 'REFUND',
                 transaction: { amount: refundAmt.toFixed(2), currency, reference: String(reason).substring(0, 40) }
             }, { headers: authConfig.headers, validateStatus: () => true });
-            if (refundResp.status >= 200 && refundResp.status < 300) {
+            if (arcSucceeded(refundResp)) {
                 return { reversed: true, action: 'REFUND', amount: refundAmt, transactionId: refundTxnId };
             }
             return { reversed: false, action: 'FAILED', error: 'VOID and REFUND both failed', details: refundResp.data };

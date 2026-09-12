@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { protect, admin, optionalProtect } from '../middleware/auth.middleware.js';
 import { resolveBookingUserId } from '../utils/bookingOwner.js';
 import { handleCancelBookingAction, reverseArcPaymentForOrder } from './payment/operations.handlers.js';
+import { reconcileBookingPayment } from './payment/checkout.handlers.js';
 import { reportError } from '../services/monitoring.js';
 import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
 
@@ -225,7 +226,7 @@ async function findExistingBooking(bookingReference) {
   if (!supabase || !bookingReference) return null;
   const { data } = await supabase
     .from('bookings')
-    .select('booking_reference, status, booking_details, total_amount')
+    .select('id, booking_reference, status, payment_status, booking_details, total_amount')
     .eq('booking_reference', bookingReference)
     .single();
   return data || null;
@@ -472,15 +473,37 @@ async function releaseBookingChain(bookingReference, failedStep) {
   });
 }
 
-function buildBookingRow(bookingData, userId) {
+/**
+ * The row's `status` is an observation, not a literal.
+ *
+ * It used to be `'confirmed'` for every booking the chain produced. With
+ * AUTO_TICKET off - which is every booking so far - that is a committed PNR
+ * sitting on a ticketing deadline, and the database could not tell it apart
+ * from a ticketed one; nor could My Trips, the confirmation email, or the
+ * paid-but-not-ticketed alarm. A booking is confirmed when a ticket exists.
+ * Until then it is `pending_ticketing`: a real reservation, honestly labelled.
+ *
+ * `payment_status: 'paid'` stays a literal, and is now honest: the order route
+ * refuses to reach this function unless the gateway confirmed a capture.
+ */
+export function buildBookingRow(bookingData, userId) {
+  const ticketed = bookingData.ticketed === true
+    || bookingData.gds?.ticketed === true
+    || (Array.isArray(bookingData.tickets) && bookingData.tickets.length > 0);
+
   return {
     user_id: userId || null,
     booking_reference: bookingData.bookingReference,
     travel_type: 'flight',
-    status: 'confirmed',
+    status: ticketed ? 'confirmed' : 'pending_ticketing',
     total_amount: parseFloat(bookingData.totalAmount) || 0,
     payment_status: 'paid',
     booking_details: {
+      // The chain's own verdict that issuance succeeded but the ticket numbers
+      // had not surfaced before its retries ran out. It used to be computed,
+      // returned in the HTTP body, and never written anywhere - so the one
+      // job that watches for it never saw it.
+      ...(bookingData.needsReview ? { needs_review: bookingData.needsReview } : {}),
       pnr: bookingData.pnr,
       order_id: bookingData.orderId,
       // Real Amadeus order id — required to cancel the reservation via the GDS
@@ -1364,6 +1387,40 @@ router.post('/order', optionalProtect, async (req, res) => {
       });
     }
 
+    // Was this actually paid for? Ask the gateway, not the row.
+    //
+    // The row's `total_amount` is the figure the CLIENT asked to be charged when
+    // the checkout session was created, written while the row was still
+    // `unpaid`. Nothing here used to read `payment_status` at all, so a request
+    // that abandoned the ARC page and came straight back to this route got a
+    // seat sold, a PNR committed and - with auto-ticketing on - a ticket, for a
+    // charge that never happened. That is not an edge case: the browser flow
+    // does it on its own when the callback's pending-booking lookup fails.
+    //
+    // Reconciling here rather than trusting `payment_status` also covers the
+    // paid customer whose tab died before the browser-driven reconcile ran.
+    if (!existing) {
+      return res.status(402).json({
+        success: false,
+        error: 'No payment was found for this booking. Please complete payment before confirming.',
+        code: 'PAYMENT_NOT_FOUND'
+      });
+    }
+    const payment = await reconcileBookingPayment(existing);
+    if (!payment.paid) {
+      console.warn('⛔ Order refused: payment not captured', {
+        bookingReference: req.body.bookingReference,
+        orderStatus: payment.orderStatus || null,
+        reason: payment.error || 'no captured transaction'
+      });
+      return res.status(402).json({
+        success: false,
+        error: 'Payment for this booking has not been captured. Please complete payment before confirming.',
+        code: 'PAYMENT_NOT_CAPTURED',
+        ...(payment.orderStatus ? { orderStatus: payment.orderStatus } : {})
+      });
+    }
+
     // The PNR check above cannot catch two requests racing: neither has a PNR
     // yet, so both pass it and both sell seats against one payment. Claim the
     // reference before touching the GDS.
@@ -1487,10 +1544,11 @@ router.post('/order', optionalProtect, async (req, res) => {
         // against this - not against what they were charged, which includes the
         // admin-configured service fee Amadeus knows nothing about.
         expectedTotal: Number(pricedOffer?.price?.total) || undefined,
-        // What ARC actually captured, read from the booking row (server-side,
-        // set at hosted checkout) — NOT from this request body, which the
-        // client controls. Lets the chain refuse to ticket an underpaid fare.
-        paidAmount: existing?.total_amount != null ? Number(existing.total_amount) : undefined,
+        // What ARC actually captured, read back from the gateway by the
+        // reconcile above - NOT from this request body, and NOT from the row's
+        // total_amount, which is what the client asked to be charged before
+        // anyone paid. Lets the chain refuse to ticket an underpaid fare.
+        paidAmount: Number.isFinite(payment.capturedAmount) ? payment.capturedAmount : undefined,
         // Called the instant a record locator exists, before queueing or
         // ticketing is attempted. Persisting here is what makes a booking
         // recoverable if the rest of the chain, or this process, dies.
@@ -1700,9 +1758,14 @@ router.post('/order', optionalProtect, async (req, res) => {
       })),
       flightOffer: firstOffer,
       // What the GDS actually did, for reconciliation and for the ticket
-      // numbers ManageBooking currently fabricates.
+      // numbers the customer's document prints.
       gds: orderResponse.gds || null,
       tickets: orderResponse.tickets || [],
+      ticketed: orderResponse.ticketed === true,
+      // The chain's "issued, but the numbers had not surfaced" verdict. It was
+      // returned in the HTTP body and never written, so the alarm that watches
+      // `needs_review` could not see it.
+      needsReview: orderResponse.needsReview || orderResponse.data?.needsReview || null,
       // `userId` is set once, at the top of this object, from the resolved
       // session. It used to be set a SECOND time here from req.body.userId -
       // and in an object literal the later key wins, so the session-resolved

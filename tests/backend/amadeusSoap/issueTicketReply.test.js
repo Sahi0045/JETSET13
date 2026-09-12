@@ -70,3 +70,39 @@ describe('a real failure still fails', () => {
     expect(inspectReply(body(xml), 'DocIssuance_IssueTicket').ok).toBe(false);
   });
 });
+
+/**
+ * An ambiguous reply is not a ticket.
+ *
+ * `issued` becomes `gds.ticketed` - the flag that tells the customer "booked
+ * and ticketed", and that the paid-but-not-ticketed alarm uses to EXCLUDE a
+ * row. It used to be true for an empty status and for P (pending): a reply
+ * shape nobody had seen counted as a ticket, and then hid itself from the one
+ * job looking for it. No real issuance has ever run on this system, so this
+ * line has to be right by construction rather than by observation.
+ */
+describe('an ambiguous reply is not a ticket', () => {
+  const withStatus = (code) => body(
+    `<DocIssuance_IssueTicketReply><processingStatus><statusCode>${code}</statusCode></processingStatus></DocIssuance_IssueTicketReply>`,
+  ).DocIssuance_IssueTicketReply;
+
+  it('is not issued when there is no processing status at all', () => {
+    expect(readIssueTicketReply({}).issued).toBe(false);
+    expect(readIssueTicketReply({ errorGroup: {} }).issued).toBe(false);
+  });
+
+  it('is not issued for an empty status code', () => {
+    expect(readIssueTicketReply(withStatus('')).issued).toBe(false);
+  });
+
+  it('treats P (pending) as not yet issued', () => {
+    const read = readIssueTicketReply(withStatus('P'));
+    expect(read.issued).toBe(false);
+    expect(read.status).toBe('P');
+  });
+
+  it('still reads O and OK as issued', () => {
+    expect(readIssueTicketReply(withStatus('O')).issued).toBe(true);
+    expect(readIssueTicketReply(withStatus('OK')).issued).toBe(true);
+  });
+});
