@@ -198,61 +198,15 @@ function FlightBookingConfirmation() {
     return () => authSub?.subscription?.unsubscribe();
   }, []);
 
-  // Fetch booking details from mock data (fallback when no search-page data is passed).
-  // The mock dataset is large, so we load it lazily only when this fallback is triggered.
-  const fetchBookingFromMockData = async (id) => {
-    const { flightBookingData } = await import("./data-mock-booking");
-    const mockBooking = flightBookingData.bookings.find(b => b.bookingId === id) ||
-      flightBookingData.internationalBookings.find(b => b.bookingId === id) ||
-      flightBookingData.bookings[0];
-    return mockBooking || null;
-  };
+  // A mock-booking fallback used to live here (a bundled fixture, now deleted). Any
+  // load without router state - a refresh, back-navigation, a bookmark, a
+  // restored tab - silently rendered a hardcoded Air India booking under two
+  // strangers' names, unlabelled, and let the customer pay for it. There is
+  // no honest fallback: the offer exists only in the search page's state.
 
-  // Transform Amadeus API booking data to our format
-  const transformBookingData = (apiData, config) => {
-    // Check if it's already in our format (has flight.price)
-    if (apiData.flight?.price) return apiData;
-
-    // Transform from data.js format to UI format
-    const basePrice = apiData.payment?.amount || 0;
-    // Use admin price settings instead of hardcoded values
-    const fixedFee = config?.flight_taxes_fees || 0;
-    const percentageFee = basePrice * ((config?.flight_taxes_fees_percentage || 0) / 100);
-    const totalTaxes = fixedFee + percentageFee;
-
-    return {
-      bookingId: apiData.bookingId,
-      flight: {
-        ...apiData.flight,
-        departureDate: apiData.flight.departureTime, // Use time string as date base
-        arrivalDate: apiData.flight.arrivalTime,
-        stops: "0", // Default to direct if not specified
-        fareType: "Economy", // Default
-        cabin: "Economy",
-        departureAirport: `${apiData.flight.departureCity} Airport`,
-        arrivalAirport: `${apiData.flight.arrivalCity} Airport`,
-        price: {
-          base: basePrice,
-          airlineTaxes: 0,
-          serviceFee: totalTaxes,
-          fixedFee: fixedFee,
-          percentageFee: percentageFee,
-          totalTaxes: 0,
-          total: basePrice + totalTaxes,
-          currency: apiData.payment?.currency || "USD"
-        }
-      },
-      baggage: {
-        checkIn: apiData.flight?.baggage || "23 KG",
-        cabin: apiData.flight?.cabinBaggage || null
-      },
-      passengers: apiData.passengers,
-      contact: { email: "", phone: "" },
-      addOns: [], // Initialize empty
-      vipServiceFee: 30,
-      isInternational: false
-    };
-  };
+  // The mock-booking transformer that lived here is gone with its only caller.
+  // It was where "Economy", "23 KG", "<city> Airport" and a $30 VIP fee were
+  // invented for a data shape nothing produces.
 
   // Transform flight data from search page to booking format
   const transformFlightData = (flightData, config) => {
@@ -404,8 +358,7 @@ function FlightBookingConfirmation() {
 
   // Fetch booking details.
   // The cancelled flag prevents a stale fetch from clobbering state after the
-  // user navigates away or the booking id changes. Pricing config and the mock
-  // booking fallback are independent — we kick them off in parallel.
+  // user navigates away or the booking id changes.
   useEffect(() => {
     let cancelled = false;
 
@@ -435,20 +388,13 @@ function FlightBookingConfirmation() {
     const getBookingDetails = async () => {
       try {
         const hasSearchState = !!routerLocation.state?.flightData;
-        const targetId = bookingId || "TEST_BOOKING_123";
         const config = priceConfig;
-        const mockData = hasSearchState
-          ? null
-          : await fetchBookingFromMockData(targetId);
         if (cancelled) return;
 
         let bookingData;
         if (hasSearchState) {
           console.log("Using flight data from search page", routerLocation.state.flightData);
           bookingData = transformFlightData(routerLocation.state.flightData, config);
-        } else if (mockData) {
-          console.log("No state data, using mock data for ID:", targetId);
-          bookingData = transformBookingData(mockData, config);
         } else {
           setError("No flight data available. Please return to the search page and try again.");
           return;

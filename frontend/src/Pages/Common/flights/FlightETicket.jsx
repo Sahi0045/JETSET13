@@ -87,7 +87,10 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     };
 
     return (
-        <div className="hidden"> {/* Container for off-screen rendering */}
+        <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }} aria-hidden="true">
+            {/* Off-screen rather than display:none. html2canvas renders layout,
+                and a hidden element has none - the old `className="hidden"`
+                wrapper produced a blank PDF. Captured by ref, never in flow. */}
             <div
                 ref={ref}
                 className="w-[800px] bg-white text-gray-800 font-sans p-0 m-0 relative"
