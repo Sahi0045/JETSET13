@@ -104,6 +104,13 @@ export const ERROR_CATALOGUE = Object.freeze([
   // unknown PNR came back as a 502 "temporarily unavailable" - which reads as
   // our fault and invites a retry that can never succeed.
   { match: /\b1931\b|no match for record locator|(pnr|record locator|booking).*not found/i, code: 404, error: 'Booking not found' },
+  // The office is not allowed to issue tickets plated on this carrier - an
+  // office/ticketing-agreement setting on Amadeus's side, not a request fault.
+  // Captured on the PDT test office for an Air India booking on 2026-09-13,
+  // while a Lufthansa ticket issued the same hour. It arrives after the PNR is committed, so
+  // the booking stands and needs a human; alert so it is never mistaken for a
+  // code regression again.
+  { match: /\b2161\b|prohibited ticketing carrier/i, code: 502, error: 'Your ticket could not be issued automatically - our team will complete it', alert: true },
 ]);
 
 export const DEFAULT_ERROR = Object.freeze({ code: 502, error: 'Flight service temporarily unavailable' });

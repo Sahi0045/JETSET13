@@ -59,6 +59,32 @@ describe('a real failure still fails', () => {
     expect(inspected.error.amadeusCode).toBe('288');
   });
 
+  // The exact reply the PDT office returned for Air India PNR ASOV8X on
+  // 2026-09-13, while Lufthansa tickets issued. It arrives after commit, so the
+  // booking stands and a human must act: catalogued and alerting, never the
+  // generic "temporarily unavailable" that reads as our outage.
+  it('names a carrier the office may not ticket, and alerts', () => {
+    const xml = `<DocIssuance_IssueTicketReply>
+      <processingStatus><statusCode>X</statusCode></processingStatus>
+      <errorGroup>
+        <errorOrWarningCodeDetails><errorDetails><errorCode>2161</errorCode></errorDetails></errorOrWarningCodeDetails>
+        <errorWarningDescription>
+          <freeTextDetails><textSubjectQualifier>3</textSubjectQualifier><source>M</source><encoding>1</encoding></freeTextDetails>
+          <freeText>PROHIBITED TICKETING CARRIER - RE-ENTER TICKETING CARRIER</freeText>
+        </errorWarningDescription>
+      </errorGroup>
+    </DocIssuance_IssueTicketReply>`;
+    const parsed = body(xml);
+    const inspected = inspectReply(parsed, 'DocIssuance_IssueTicket');
+
+    expect(inspected.ok).toBe(false);
+    expect(inspected.error.amadeusCode).toBe('2161');
+    expect(inspected.error.technicalError).toMatch(/PROHIBITED TICKETING CARRIER/);
+    expect(inspected.error.alert).toBe(true);
+    expect(inspected.error.error).toMatch(/our team will complete it/);
+    expect(readIssueTicketReply(parsed.DocIssuance_IssueTicketReply)).toEqual({ issued: false, status: 'X' });
+  });
+
   it('fails when OK sits alongside a real error, rather than excusing it', () => {
     // The guard must require EVERY code to be OK. One genuine error among
     // several must still fail the step.

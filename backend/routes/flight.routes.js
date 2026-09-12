@@ -191,12 +191,22 @@ async function persistCommittedPnr({ bookingReference, pnr, tstRefs, priced }) {
  * Used when the chain created a real PNR and then failed: the money and the
  * booking are both real but out of step, and no automatic action is safe.
  */
-async function flagForReview({ bookingReference, pnr, reason, ticketed }) {
-  console.error('⚠️ Booking needs review', { bookingReference, pnr, reason, ticketed });
+async function flagForReview({ bookingReference, pnr, reason, ticketed, amadeus = null }) {
+  console.error('⚠️ Booking needs review', { bookingReference, pnr, reason, ticketed, amadeus });
 
   const patched = await patchBookingDetails(bookingReference, {
     pnr: pnr || undefined,
-    needs_review: { reason, ticketed: Boolean(ticketed), at: new Date().toISOString() }
+    needs_review: {
+      reason,
+      ticketed: Boolean(ticketed),
+      at: new Date().toISOString(),
+      // What Amadeus actually said. Without it the row read only "chain failed
+      // after commit at issueTicket" and the refusal itself - 2161 PROHIBITED
+      // TICKETING CARRIER on every Air India booking - existed only in a dev
+      // terminal's scrollback, so a carrier the office may not ticket looked
+      // like a code regression. Amadeus error text carries no passenger data.
+      ...(amadeus ? { amadeus } : {})
+    }
   });
 
   // The airline holds a real booking, so the row has to say so. Only the happy
@@ -1583,7 +1593,14 @@ router.post('/order', optionalProtect, async (req, res) => {
           bookingReference: req.body.bookingReference,
           pnr: providerError.pnr,
           reason: `chain failed after commit at ${providerError.step}`,
-          ticketed: providerError.ticketed
+          ticketed: providerError.ticketed,
+          amadeus: (providerError.amadeusCode || providerError.technicalError)
+            ? {
+              operation: providerError.operation || null,
+              code: providerError.amadeusCode || null,
+              message: providerError.technicalError || null
+            }
+            : null
         });
         reportError(providerError, {
           service: 'amadeus-ws',

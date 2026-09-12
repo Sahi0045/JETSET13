@@ -80,6 +80,12 @@ export function describeBooking(booking) {
     `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
     `PNR ${details.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : 'NO'}`,
     `reason: ${review.reason || 'PNR committed, never ticketed'} · flagged ${hours}h ago`,
+    // The GDS's own words, when the chain recorded them. "failed at
+    // issueTicket" alone cannot tell a carrier the office may not ticket from
+    // missing passenger documents or a code fault.
+    ...(review.amadeus
+      ? [`Amadeus ${review.amadeus.operation || ''}: ${review.amadeus.message || review.amadeus.code || 'no detail'}`.replace(/\s+:/, ':')]
+      : []),
   ].join('\n');
 }
 

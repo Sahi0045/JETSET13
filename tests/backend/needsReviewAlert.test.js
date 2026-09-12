@@ -79,6 +79,26 @@ describe('the message', () => {
     expect(text).toMatch(/AMRHOG/);
   });
 
+  // "failed at issueTicket" alone made a carrier the office may not ticket look
+  // like a code regression. The GDS's own words settle it at a glance.
+  it('quotes what Amadeus said when the chain recorded it', () => {
+    const text = buildMessage([booking({
+      booking_details: {
+        needs_review: {
+          at: new Date().toISOString(),
+          reason: 'chain failed after commit at issueTicket',
+          ticketed: false,
+          amadeus: { operation: 'DocIssuance_IssueTicket', code: '2161', message: '2161 PROHIBITED TICKETING CARRIER - RE-ENTER TICKETING CARRIER' },
+        },
+      },
+    })]);
+    expect(text).toMatch(/Amadeus DocIssuance_IssueTicket: 2161 PROHIBITED TICKETING CARRIER/);
+  });
+
+  it('adds no Amadeus line when nothing was recorded', () => {
+    expect(buildMessage([booking()])).not.toMatch(/Amadeus/);
+  });
+
   // Alerts get forwarded; passenger data must not ride along.
   it('carries no passenger details', () => {
     const withPassenger = booking();
