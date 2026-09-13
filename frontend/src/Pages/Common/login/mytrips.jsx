@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { formatIsoDuration } from "../../../utils/dateUtils"
+import { bookingStatusBadge, needsAttention, cancellationMessage } from "../../../utils/bookingStatus"
+import { resolveTickets, ticketState } from "../../../utils/eTicket"
 import { authHeaders } from "../../../utils/authHeaders"
 import {
   FaPlane, FaShip, FaHotel, FaSuitcaseRolling, FaClipboardList,
@@ -601,7 +603,10 @@ export default function TravelDashboard() {
       });
     }
     if (activeTab === "Cancelled") return list.filter((b) => normalizeStatus(b.status) === 'CANCELLED');
-    if (activeTab === "Failed") return list.filter((b) => normalizeStatus(b.status) === 'FAILED');
+    // Bookings someone has to act on: a reservation flagged for review, a
+    // refund that did not go through. This matched a 'failed' status that
+    // nothing ever writes, so the tab could never show anything.
+    if (activeTab === "Failed") return list.filter((b) => needsAttention(b));
     return list;
   };
 
@@ -683,6 +688,14 @@ export default function TravelDashboard() {
     const daysUntilTrip = getDaysUntil();
     const normalizeStatus = (s) => (s || '').toUpperCase();
     const statusUp = normalizeStatus(booking.status);
+    // From the booking record, not `status` alone - see utils/bookingStatus.js.
+    const badge = bookingStatusBadge(booking);
+    const BADGE_TONES = {
+      success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      danger: 'bg-red-50 text-red-700 border-red-200',
+      warning: 'bg-amber-50 text-amber-800 border-amber-200',
+      neutral: 'bg-[#F0FAFC] text-[#055B75] border-[#B9D0DC]',
+    };
 
     const DetailCell = ({ label, children }) => (
       <div className="bg-white rounded-lg p-2.5 border border-[#D1E9F0] min-w-0">
@@ -736,16 +749,21 @@ export default function TravelDashboard() {
           </div>
 
           <div className="flex flex-col items-start sm:items-end gap-2">
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border ${statusUp === 'CONFIRMED' || booking.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-              statusUp === 'CANCELLED' ? 'bg-red-50 text-red-700 border-red-200' :
-                'bg-[#F0FAFC] text-[#055B75] border-[#B9D0DC]'
-              }`}>
-              {statusUp === 'CONFIRMED' || booking.status === 'paid' ? <FaCheckCircle className="w-3 h-3" /> :
-                statusUp === 'CANCELLED' ? <FaTimesCircle className="w-3 h-3" /> : null}
-              {booking.status === 'paid' ? 'Paid' : statusUp === 'CONFIRMED' ? 'Confirmed' : statusUp === 'CANCELLED' ? 'Cancelled' : (booking.status || 'Confirmed')}
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border ${BADGE_TONES[badge.tone]}`}>
+              {badge.tone === 'success' ? <FaCheckCircle className="w-3 h-3" /> :
+                badge.tone === 'danger' ? <FaTimesCircle className="w-3 h-3" /> : null}
+              {badge.label}
             </span>
           </div>
         </div>
+
+        {needsAttention(booking) && (
+          <div className="mb-4 p-3 rounded-xl border border-amber-200 bg-amber-50 text-sm text-amber-800">
+            {statusUp === 'CANCELLED'
+              ? 'The refund for this cancellation did not go through automatically. Our team has been alerted and will refund you.'
+              : 'Your seats are reserved, but your ticket has not been issued yet. Our team is working on it and will email you.'}
+          </div>
+        )}
 
         {/* Travel details panel */}
         {(booking.origin || booking.destination || booking.departureDate || booking.hotelDestination || booking.cruiseDestination || booking.returnDate || booking.checkinDate || booking.checkoutDate || booking.cruiseDepartureDate) && (
@@ -809,6 +827,17 @@ export default function TravelDashboard() {
                 {(booking.pnr || booking.cabinClass || booking.baggage || booking.brandedFareLabel) && (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                     {booking.pnr && <DetailCell label="PNR"><span className="tracking-wider">{booking.pnr}</span></DetailCell>}
+                    {/* A PNR alone is a reservation. It used to be the only
+                        thing shown, identical for ticketed and unticketed. */}
+                    {booking.pnr && (
+                      <DetailCell label="Ticket">
+                        {(() => {
+                          const numbers = resolveTickets(booking).map((t) => t?.number).filter(Boolean);
+                          if (numbers.length) return <span className="tracking-wider">{numbers.join(', ')}</span>;
+                          return ticketState(booking) === 'pending' ? 'Issued, number pending' : 'Not yet issued';
+                        })()}
+                      </DetailCell>
+                    )}
                     {booking.cabinClass && <DetailCell label="Cabin Class"><span className="capitalize">{booking.cabinClass.replace('_', ' ')}</span></DetailCell>}
                     {booking.baggage && <DetailCell label="Baggage">{typeof booking.baggage === 'object' ? JSON.stringify(booking.baggage) : booking.baggage}</DetailCell>}
                     {booking.brandedFareLabel && <DetailCell label="Fare Type">{booking.brandedFareLabel}</DetailCell>}
@@ -955,7 +984,12 @@ export default function TravelDashboard() {
           )}
           {isFlightBooking && !isDatabaseBooking && (
             <button
-              onClick={() => navigate('/manage-booking', { state: { bookingData: booking } })}
+              // The reference goes in the URL, so a refresh or a shared link
+              // still finds the booking. Router state alone was lost on refresh.
+              onClick={() => {
+                const ref = booking.bookingReference || booking.orderId
+                navigate(ref ? `/manage-booking/${encodeURIComponent(ref)}` : '/manage-booking', { state: { bookingData: booking } })
+              }}
               className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white text-[#055B75] text-sm font-semibold rounded-lg border-2 border-[#B9D0DC] hover:bg-[#F0FAFC] hover:border-[#055B75] transition-all"
             >
               <FaCog className="w-4 h-4" /> Manage Booking
@@ -994,9 +1028,12 @@ export default function TravelDashboard() {
                           result = await ArcPayService.cancelBooking(ref, userEmail, 'Customer request')
                         }
                         if (result.success) {
-                          const refundMsg = result.cancellation?.refundAmount ? `. Refund: $${result.cancellation.refundAmount}` : ''
-                          const amaMsg = isFlight ? (result.amadeusCancelled ? ' Airline reservation cancelled.' : ' (airline cancellation pending)') : ''
-                          alert((result.message || 'Booking cancelled successfully') + refundMsg + amaMsg)
+                          // What happened to the money, from the cancellation
+                          // record. A refused refund used to read as a plain
+                          // "cancelled successfully": its amount is 0, which is
+                          // falsy, so not even a refund line appeared.
+                          const amaMsg = isFlight ? (result.amadeusCancelled ? ' The airline reservation is cancelled.' : ' The airline cancellation is still being processed.') : ''
+                          alert(cancellationMessage(result) + amaMsg)
                           // Reload bookings to reflect the cancellation
                           loadBookings()
                         } else {

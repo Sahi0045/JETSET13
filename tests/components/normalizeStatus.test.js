@@ -57,10 +57,9 @@ describe('normalizeStatus (mytrips tab filtering)', () => {
       expect(filtered.map(b => b.orderId)).toEqual(['003', '004']);
     });
 
-    it('Failed tab shows both lowercase and uppercase failed', () => {
-      const filtered = bookings.filter(b => normalizeStatus(b.status) === 'FAILED');
-      expect(filtered.map(b => b.orderId)).toEqual(['005', '006']);
-    });
+    // The Failed tab no longer matches a 'failed' status - nothing writes one,
+    // so it could never show anything. It lists bookings that need attention;
+    // see tests/utils/bookingStatus.test.js.
 
     it('Upcoming tab excludes cancelled and failed', () => {
       const filtered = bookings.filter(b => {

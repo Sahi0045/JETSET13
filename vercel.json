@@ -126,7 +126,7 @@
       "destination": "/visa/$1/index.html"
     },
     {
-      "source": "/(dashboard|login|signup|profiledashboard|complete-profile|help|supabase-login|supabase-signup|supabase-profile|supabase-auth-debug|supabase-auth-status|auth/callback|my-trips|manage-booking|forgot-password|reset-password|booking-confirmation|cruise|cruises|itinerary|cruise-booking-summary|cruise-booking-success|flight|flights|flight-payment|flight-create-orders|flight-booking-success|packages|hotels|hotel-booking-success|membership|request|quote-detail|payment/callback|payment/success|payment/failed|admin|agent|visa/agent|visa/admin|cookies|careers|resources|destinations|travel-blog|support|faqs|company|contact|privacy-policy|terms-conditions)",
+      "source": "/(dashboard|login|signup|profiledashboard|complete-profile|help|supabase-login|supabase-signup|supabase-profile|supabase-auth-debug|supabase-auth-status|auth/callback|my-trips|manage-booking|forgot-password|reset-password|booking-confirmation|cruise|cruises|itinerary|cruise-booking-summary|cruise-booking-success|flight|flights|flight-payment|flight-create-orders|packages|hotels|hotel-booking-success|membership|request|quote-detail|payment/callback|payment/success|payment/failed|admin|agent|visa/agent|visa/admin|cookies|careers|resources|destinations|travel-blog|support|faqs|company|contact|privacy-policy|terms-conditions)",
       "destination": "/spa-shell.html"
     },
     {
