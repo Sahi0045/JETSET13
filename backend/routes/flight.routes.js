@@ -303,7 +303,7 @@ function isStaff(user) {
  * `{ notFound: true }` otherwise — a non-owner is told 404, never 403, so the
  * endpoint does not even confirm the reference exists.
  */
-async function loadOwnedBooking(ref, user) {
+async function loadOwnedBooking(ref, user, { email } = {}) {
   const safe = safeRef(ref);
   if (!supabase || !safe) return { notFound: true };
   const { data } = await supabase
@@ -317,7 +317,23 @@ async function loadOwnedBooking(ref, user) {
   if (isStaff(user)) return { booking: data };
   const owns = user && (data.user_id === user.id
     || data.booking_details?.original_user_id === user.id);
-  return owns ? { booking: data } : { notFound: true };
+  if (owns) return { booking: data };
+
+  // A guest proves the booking is theirs with the email it was made with, as
+  // well as the reference. References are random, but they sit in URLs and
+  // emails, so a reference alone is never enough. Guests used to have no way in
+  // at all: both booking reads required an account, and a guest booking has
+  // no owner, so the confirmation email's link led nowhere.
+  const presented = String(email || '').trim().toLowerCase();
+  if (presented) {
+    const known = [
+      data.booking_details?.customer_email,
+      data.booking_details?.contact?.email,
+      ...(Array.isArray(data.passenger_details) ? data.passenger_details.map((p) => p?.email) : []),
+    ].filter(Boolean).map((e) => String(e).trim().toLowerCase());
+    if (known.includes(presented)) return { booking: data };
+  }
+  return { notFound: true };
 }
 
 /**
@@ -1278,23 +1294,28 @@ router.post('/fare-rules', async (req, res) => {
         if (anchor < 0 || charges.length === 0) return null;
         // first charge at/after the anchor, else the closest overall
         const after = charges.filter((c) => c.index >= anchor).sort((a, b) => a.index - b.index)[0];
-        return after || charges[0];
+        return after || null;
       };
 
+      // Each fee only from its own mention. The cancellation fee used to fall
+      // back to the change fee, and either one to the first charge anywhere in
+      // the text - the page then printed a change fee as the cost of cancelling.
       const changeCharge = nearest(changeIdx);
-      const cancelCharge = nearest(cancelIdx) || changeCharge;
+      const cancelCharge = nearest(cancelIdx);
 
-      // Cutoff window, e.g. "TILL 02 HRS" / "WITHIN 4 HOURS" / "4 HOURS BEFORE"
+      // Cutoff window, e.g. "TILL 02 HRS" / "WITHIN 4 HOURS" / "4 HOURS BEFORE".
+      // Null when the rules do not say: this defaulted to 4 hours, which the
+      // page drew as a precise deadline.
       const cutoffMatch = penaltyText.match(/TILL\s+0?(\d{1,2})\s*HRS?/) ||
         penaltyText.match(/WITHIN\s+0?(\d{1,2})\s*H(?:OUR|RS?)/) ||
         penaltyText.match(/0?(\d{1,2})\s*HOURS?\s+(?:BEFORE|PRIOR)/);
-      const cutoffHours = cutoffMatch ? parseInt(cutoffMatch[1], 10) : 4;
+      const cutoffHours = cutoffMatch ? parseInt(cutoffMatch[1], 10) : null;
 
       const isNonRefundable = /NON[\s-]?REFUND/i.test(penaltyText);
 
-      // Offer-level refundable flag + total
-      const tp = flightOffer.travelerPricings?.[0];
-      const refundableFlag = tp?.price?.refundableTaxes ? true : (isNonRefundable ? false : null);
+      // Refundability as the fare itself states it (null when it does not).
+      // This read `refundableTaxes`, a tax amount, as a yes/no answer.
+      const refundableFlag = flightOffer._ama?.refundable ?? (isNonRefundable ? false : null);
 
       cancellation = {
         hasData: charges.length > 0 || cutoffMatch != null,
@@ -2317,7 +2338,10 @@ router.get('/health', (req, res) => {
 });
 
 // Get a single booking by bookingReference (For Manage Booking page)
-router.get('/bookings/:bookingRef', protect, async (req, res) => {
+// optionalProtect, not protect: a guest may open their booking with the email
+// it was made with (x-booking-email). Ownership is still enforced in
+// loadOwnedBooking, and anyone else still gets a flat 404.
+router.get('/bookings/:bookingRef', optionalProtect, async (req, res) => {
   try {
     if (!supabase) {
       return res.status(503).json({
@@ -2328,14 +2352,32 @@ router.get('/bookings/:bookingRef', protect, async (req, res) => {
 
     // Ownership is enforced here because the service-role key bypasses RLS. A
     // non-owner (or an unparseable reference) gets a flat 404.
-    const { booking: data, notFound } = await loadOwnedBooking(req.params.bookingRef, req.user);
+    const { booking: data, notFound } = await loadOwnedBooking(req.params.bookingRef, req.user, {
+      email: req.get('x-booking-email')
+    });
     if (notFound || !data) {
       return res.status(404).json({ success: false, error: 'Booking not found' });
     }
 
-    // Format for frontend
+    // Never hand back the payment secrets. `success_indicator` is what proves
+    // the payer to POST /order, `pending_booking_data` holds every traveller's
+    // passport as posted at checkout, and the session and checkout URL belong
+    // to the gateway. They were all spread into this response.
+    const {
+      success_indicator: _successIndicator,
+      session_id: _sessionId,
+      pending_booking_data: _pendingBookingData,
+      queued_order: _queuedOrder,
+      arc_pay_checkout_url: _checkoutUrl,
+      ...details
+    } = data.booking_details || {};
+
+    // Format for frontend: the stored details, plus the camelCase shape the
+    // bookings list sends. Manage Booking read camelCase fields that this
+    // endpoint never had, so a refreshed page showed "Date N/A" and "--:--".
     const formattedBooking = {
-      ...data.booking_details,
+      ...details,
+      ...toClientBooking({ ...data, booking_details: details }),
       // The passenger list lives in its own column, not inside booking_details,
       // and was never included here. Manage Booking therefore showed "No
       // passenger information available" whenever it loaded the booking itself
