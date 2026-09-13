@@ -47,7 +47,7 @@ async function invokeOrchestratedCancel(bookingReference, reason) {
 // value by convention in both clients, and `reverseArcPaymentForOrder` gives up
 // immediately on a falsy one - so a client that omitted `orderId` produced a
 // charge with no booking and no automatic reversal.
-async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, code }) {
+async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, reason, code }) {
   console.warn('🚑 Ticket not booked after payment — reversing charge. order:', orderId, '| reason:', errorMsg);
   const reversal = await reverseArcPaymentForOrder(orderId, {
     amount,
@@ -68,14 +68,31 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
         .limit(1)
         .maybeSingle();
       if (bk) {
+        // A reversal the gateway refused - or could not attempt - leaves the
+        // customer charged with no booking. Writing that row `cancelled` hid it
+        // from the paid-but-not-ticketed alarm, which skips cancelled rows, and
+        // nothing ever read `fulfillment_failed`, so the one case that needs a
+        // human reached no one. It keeps its status and is flagged instead.
+        // Every caller runs after the payment was verified, so "not reversed"
+        // means the money is still held.
+        const stuck = !reversal.reversed;
+        const now = new Date().toISOString();
         await supabase.from('bookings').update({
-          status: 'cancelled',
+          ...(stuck ? {} : { status: 'cancelled' }),
           payment_status: reversal.reversed ? 'refunded' : bk.payment_status,
           booking_details: {
             ...bk.booking_details,
-            fulfillment_failed: { at: new Date().toISOString(), error: errorMsg, reversal }
+            fulfillment_failed: { at: now, error: errorMsg, reversal },
+            ...(stuck ? {
+              needs_review: {
+                reason: 'charge not reversed after the booking failed',
+                ticketed: false,
+                at: now,
+                reversal: { action: reversal.action || null, error: reversal.error || null }
+              }
+            } : {})
           },
-          updated_at: new Date().toISOString()
+          updated_at: now
         }).eq('id', bk.id);
       }
     }
@@ -83,14 +100,17 @@ async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amou
     console.error('⚠️ Could not update booking after fulfillment failure:', e.message);
   }
 
-  const userMessage = reversal.reversed
-    ? 'We could not confirm your flight booking, so your payment has been reversed. The amount will be returned to your original payment method.'
-    : 'We could not confirm your flight booking. Your payment could not be auto-reversed and our team will process your refund shortly.';
+  const outcome = reversal.reversed
+    ? 'Your payment has been reversed and will return to your original payment method.'
+    : 'Your payment could not be reversed automatically. Our team has been alerted and will refund you; if you have not heard from us within 2 business days, call (877) 538-7380.';
+  const userMessage = `We could not confirm your flight booking. ${outcome}`;
 
-  // `customerMessage`/`status` let a caller keep its own wording and status -
-  // the booking-disabled gate says "call us" and answers 503 - without needing
-  // a second, divergent refund path.
-  const shown = customerMessage || userMessage;
+  // `reason` is what went wrong, in the customer's words; the reversal outcome
+  // is always appended from what the gateway actually did. Callers used to
+  // pass a finished sentence - "so your payment has been reversed" - that was
+  // shown even when the reversal had failed. `status` lets a caller keep its
+  // own HTTP status without a second, divergent refund path.
+  const shown = customerMessage || (reason ? `${reason} ${outcome}` : userMessage);
 
   return res.status(status).json({
     success: false,
@@ -209,16 +229,18 @@ async function flagForReview({ bookingReference, pnr, reason, ticketed, amadeus 
     }
   });
 
-  // The airline holds a real booking, so the row has to say so. Only the happy
-  // path ever wrote status 'confirmed', which left a genuine - possibly
-  // ticketed - PNR sitting at 'pending' in Manage Booking and the admin views,
-  // where it reads as an incomplete booking a human might "clean up".
+  // The airline holds a real booking, so the row has to say so - and say what
+  // kind. Leaving it at 'pending' made a genuine PNR read as an incomplete
+  // booking a human might "clean up". Writing 'confirmed' was the opposite
+  // lie: an unticketed reservation shown in My Trips as a confirmed trip. Same
+  // rule as buildBookingRow - confirmed only once a ticket exists.
   if (supabase && pnr) {
+    const status = ticketed ? 'confirmed' : 'pending_ticketing';
     const { error } = await supabase
       .from('bookings')
-      .update({ status: 'confirmed', updated_at: new Date().toISOString() })
+      .update({ status, updated_at: new Date().toISOString() })
       .eq('booking_reference', bookingReference);
-    if (error) console.error('⚠️ Could not mark the reviewed booking confirmed:', error.message);
+    if (error) console.error('⚠️ Could not record the reviewed booking status:', error.message);
   }
 
   return patched;
@@ -236,7 +258,7 @@ async function findExistingBooking(bookingReference) {
   if (!supabase || !bookingReference) return null;
   const { data } = await supabase
     .from('bookings')
-    .select('id, booking_reference, status, payment_status, booking_details, total_amount')
+    .select('id, booking_reference, status, payment_status, booking_details, total_amount, user_id')
     .eq('booking_reference', bookingReference)
     .single();
   return data || null;
@@ -484,6 +506,69 @@ async function releaseBookingChain(bookingReference, failedStep) {
 }
 
 /**
+ * Did this request come from whoever paid for the booking?
+ *
+ * Every refund path in POST /order reverses the payment behind the reference
+ * in the body, and the route has no auth middleware. Knowing a reference is not
+ * proof of anything - it sits in callback URLs, emails and support tickets.
+ * Two things are:
+ *
+ *   - the signed-in owner of the row, or staff;
+ *   - the success indicator ARC issued for this checkout session. ARC hands it
+ *     only to the paying browser, on the redirect back, and both clients post
+ *     it on as `transactionId` (or `resultIndicator`). The queue stores the
+ *     original body, so a replay carries it too.
+ */
+export function provesPayer(req, booking) {
+  const user = req?.user;
+  const details = booking?.booking_details || {};
+  if (user && (isStaff(user)
+    || (booking?.user_id && booking.user_id === user.id)
+    || (details.original_user_id && details.original_user_id === user.id))) {
+    return true;
+  }
+  const expected = details.success_indicator;
+  const presented = req?.body?.resultIndicator || req?.body?.transactionId;
+  return Boolean(expected) && Boolean(presented) && String(presented) === String(expected);
+}
+
+/**
+ * How often a running chain renews its claim. Well inside CHAIN_CLAIM_TTL_MS,
+ * so a live chain never looks abandoned.
+ */
+const CHAIN_HEARTBEAT_MS = 30_000;
+
+/**
+ * Renew the claim of a chain that is still running.
+ *
+ * The claim expires so a killed request cannot lock a booking out forever. But
+ * a live chain slower than the TTL looked exactly as dead: the queue worker, or
+ * the customer retrying, took the claim over and ran Air_Sell a second time
+ * against one payment. A compare-and-set on the state and the stamp just read,
+ * so a renewal can never undo a commit or a release that landed in between.
+ */
+async function refreshChainClaim(bookingReference) {
+  if (!supabase || !bookingReference) return false;
+  const { data: row } = await supabase
+    .from('bookings')
+    .select('booking_details')
+    .eq('booking_reference', bookingReference)
+    .single();
+  const details = row?.booking_details || {};
+  const chain = details.gds_chain;
+  if (chain?.state !== 'in_progress' || !chain.startedAt) return false;
+
+  const { data } = await supabase
+    .from('bookings')
+    .update({ booking_details: { ...details, gds_chain: { ...chain, startedAt: new Date().toISOString() } } })
+    .eq('booking_reference', bookingReference)
+    .eq('booking_details->gds_chain->>state', 'in_progress')
+    .eq('booking_details->gds_chain->>startedAt', chain.startedAt)
+    .select('booking_reference');
+  return Boolean(data?.length);
+}
+
+/**
  * The row's `status` is an observation, not a literal.
  *
  * It used to be `'confirmed'` for every booking the chain produced. With
@@ -573,32 +658,49 @@ export function buildBookingRow(bookingData, userId) {
 }
 
 // Helper to handle duplicate booking_reference
-async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
-  console.log('🔄 Booking reference already exists, updating with merged data...');
+export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
+  console.log('🔄 Booking reference already exists, merging into the checkout row...');
 
-  // Fetch existing booking to get ARC Pay session data
   const { data: existingBooking } = await supabase
     .from('bookings')
-    .select('booking_details')
+    .select('status, user_id, payment_status, total_amount, booking_details')
     .eq('booking_reference', bookingData.bookingReference)
     .single();
 
-  // Merge: keep ARC Pay fields from existing booking_details, add new flight data
+  // Every save lands here: hosted checkout creates the row before the customer
+  // pays, so the insert always collides. The merge used to overwrite that row
+  // with the template, keeping only four session fields. That set user_id to
+  // null on a queue replay (no session), so the booking vanished from My
+  // Trips; forced a cancelled or refunded row back to a live status; replaced
+  // total_amount with the order request's figure; and dropped the payment
+  // evidence (arc_transaction_id, arc_captured_amount, payment_reconciled_at),
+  // the chain claim, any cancellation record and the customer's email.
+  //
+  // Now what checkout and the gateway established is kept, and what the chain
+  // just learned is laid on top of it.
+  const existingDetails = existingBooking?.booking_details || {};
   const mergedDetails = {
+    ...existingDetails,
     ...rowTemplate.booking_details,
-    // Preserve ARC Pay data from the pending booking
-    session_id: existingBooking?.booking_details?.session_id || rowTemplate.booking_details.session_id,
-    success_indicator: existingBooking?.booking_details?.success_indicator || rowTemplate.booking_details.success_indicator,
-    arc_pay_checkout_url: existingBooking?.booking_details?.arc_pay_checkout_url || rowTemplate.booking_details.arc_pay_checkout_url,
-    checkout_created_at: existingBooking?.booking_details?.checkout_created_at || rowTemplate.booking_details.checkout_created_at,
+    original_user_id: rowTemplate.booking_details.original_user_id || existingDetails.original_user_id || null,
   };
+
+  const update = {
+    ...rowTemplate,
+    booking_details: mergedDetails,
+    user_id: existingBooking?.user_id || rowTemplate.user_id || null,
+  };
+  // Never resurrect a cancelled booking, or re-mark returned money as paid.
+  if (existingBooking?.status === 'cancelled') update.status = 'cancelled';
+  if (['refunded', 'partially_refunded'].includes(existingBooking?.payment_status)) {
+    update.payment_status = existingBooking.payment_status;
+  }
+  // What checkout asked the gateway to charge, not the order request's figure.
+  if (Number(existingBooking?.total_amount) > 0) update.total_amount = existingBooking.total_amount;
 
   const { data: updatedData, error: updateError } = await supabase
     .from('bookings')
-    .update({
-      ...rowTemplate,
-      booking_details: mergedDetails,
-    })
+    .update(update)
     .eq('booking_reference', bookingData.bookingReference)
     .select()
     .single();
@@ -1255,7 +1357,106 @@ router.post('/seatmaps', async (req, res) => {
 // signed-in user available, so a customer's own ticket is filed under their
 // account instead of being orphaned.
 router.post('/order', optionalProtect, async (req, res) => {
+  // Hoisted so the outer catch knows what this request had established before
+  // it failed: a verified payment gets reversed, a held claim released.
+  let payment = null;
+  let chainClaimed = false;
   try {
+    // ---- Whose payment is this, and is it real? ------------------------------
+    //
+    // Everything below that moves money - the booking-disabled gate, the offer
+    // gates, a failed chain - reverses the charge behind `bookingReference`.
+    // Those gates used to run FIRST, before anything checked that a payment
+    // existed or that the caller had made it. An unauthenticated POST carrying
+    // nothing but another customer's order id reversed that customer's payment
+    // and wrote their booking cancelled - even one already holding a PNR,
+    // because the PNR check came later as well. With booking disabled in
+    // production, any body at all did it.
+    //
+    // So: find the booking, prove the caller paid for it, settle the
+    // idempotent cases, verify the capture with the gateway - and only then let
+    // anything refund or book.
+    const existing = await findExistingBooking(req.body.bookingReference);
+    if (!existing) {
+      return res.status(402).json({
+        success: false,
+        error: 'No payment was found for this booking. Please complete payment before confirming.',
+        code: 'PAYMENT_NOT_FOUND'
+      });
+    }
+
+    if (!provesPayer(req, existing)) {
+      console.warn('⛔ Order refused: caller did not prove they made this payment', {
+        bookingReference: existing.booking_reference
+      });
+      return res.status(403).json({
+        success: false,
+        error: `We could not confirm this payment belongs to you. Please contact support at (877) 538-7380 with booking reference ${existing.booking_reference}.`,
+        code: 'PAYER_NOT_VERIFIED'
+      });
+    }
+
+    if (existing.status === 'cancelled') {
+      return res.status(409).json({
+        success: false,
+        error: 'This booking was cancelled and cannot be completed',
+        code: 'BOOKING_CANCELLED'
+      });
+    }
+
+    // One payment, one booking. A double-clicked confirm button, a client retry
+    // or a refreshed callback page all arrive with the same reference; without
+    // this the second one sells a second set of seats against a single charge.
+    // The answer says what the booking actually is: it used to report
+    // CONFIRMED for any row with a PNR, ticketed or not.
+    if (existing.booking_details?.pnr) {
+      const details = existing.booking_details;
+      const tickets = Array.isArray(details.tickets) ? details.tickets : [];
+      const ticketed = details.gds?.ticketed === true || tickets.length > 0;
+      console.log('↩️ Already booked, returning the stored order', details.pnr);
+      return res.json({
+        success: true,
+        data: {
+          id: details.pnr,
+          pnr: details.pnr,
+          status: ticketed ? 'CONFIRMED' : 'PENDING_TICKETING',
+          bookingReference: existing.booking_reference
+        },
+        pnr: details.pnr,
+        orderId: details.pnr,
+        bookingReference: existing.booking_reference,
+        mode: 'ALREADY_BOOKED',
+        ticketed,
+        tickets,
+        needsReview: Boolean(details.needs_review),
+        savedToDatabase: true,
+        message: ticketed ? 'This booking already exists' : 'This booking already exists; its ticket has not been issued yet'
+      });
+    }
+
+    // Was this actually paid for? Ask the gateway, not the row. The row's
+    // `total_amount` is what the client asked to be charged, written while the
+    // row was still unpaid, and `payment_status` alone can be written by paths
+    // that never asked ARC. Reconciling also covers the paid customer whose tab
+    // died before the browser-driven reconcile ran.
+    payment = await reconcileBookingPayment(existing);
+    if (!payment.paid) {
+      console.warn('⛔ Order refused: payment not captured', {
+        bookingReference: existing.booking_reference,
+        orderStatus: payment.orderStatus || null,
+        reason: payment.error || 'no captured transaction'
+      });
+      return res.status(402).json({
+        success: false,
+        error: payment.gatewayUnavailable
+          ? 'We could not reach the payment gateway to confirm your payment. Please try again in a minute.'
+          : 'Payment for this booking has not been captured. Please complete payment before confirming.',
+        code: 'PAYMENT_NOT_CAPTURED',
+        ...(payment.gatewayUnavailable ? { retryable: true } : {}),
+        ...(payment.orderStatus ? { orderStatus: payment.orderStatus } : {})
+      });
+    }
+
     // Booking is staged behind its own flag while the SOAP chain is built, so
     // search can ship first, and it never falls through to a fabricated booking.
     //
@@ -1277,7 +1478,7 @@ router.post('/order', optionalProtect, async (req, res) => {
         errorMsg: 'booking refused: AMADEUS_WS_BOOKING_ENABLED is false',
         status: 503,
         code: 'BOOKING_DISABLED',
-        customerMessage: 'Online booking is temporarily unavailable. Please call (877) 538-7380 to complete your reservation.',
+        reason: 'Online booking is temporarily unavailable, so your reservation was not made. Call (877) 538-7380 and we will book it for you by phone.',
       });
     }
 
@@ -1324,6 +1525,7 @@ router.post('/order', optionalProtect, async (req, res) => {
         errorMsg: `no flight offers in request; keys=${Object.keys(req.body).join(',')}`,
         status: 400,
         code: 'OFFER_MISSING',
+        reason: 'Your flight selection did not reach us, so the booking was not sent to the airline.',
       });
     }
 
@@ -1362,74 +1564,12 @@ router.post('/order', optionalProtect, async (req, res) => {
           + `source=${!!firstOffer?.source} travelerPricings=${!!firstOffer?.travelerPricings}`,
         status: 400,
         code: 'OFFER_NOT_BOOKABLE',
-        customerMessage: 'This fare can no longer be booked, so your payment has been reversed. Please search again.',
+        reason: 'This fare can no longer be booked, so the booking was not sent to the airline. Please search again.',
       });
     }
 
-    // One payment, one booking. A double-clicked confirm button, a client
-    // retry or a refreshed callback page all arrive with the same
-    // bookingReference; without this the second one sells a second set of
-    // seats against a single charge.
-    const existing = await findExistingBooking(req.body.bookingReference);
-    if (existing?.booking_details?.pnr) {
-      console.log('↩️ Already booked, returning the stored order', existing.booking_details.pnr);
-      return res.json({
-        success: true,
-        data: {
-          id: existing.booking_details.pnr,
-          pnr: existing.booking_details.pnr,
-          status: 'CONFIRMED',
-          bookingReference: existing.booking_reference
-        },
-        pnr: existing.booking_details.pnr,
-        orderId: existing.booking_details.pnr,
-        bookingReference: existing.booking_reference,
-        mode: 'ALREADY_BOOKED',
-        savedToDatabase: true,
-        message: 'This booking already exists'
-      });
-    }
-    if (existing?.status === 'cancelled') {
-      return res.status(409).json({
-        success: false,
-        error: 'This booking was cancelled and cannot be completed',
-        code: 'BOOKING_CANCELLED'
-      });
-    }
-
-    // Was this actually paid for? Ask the gateway, not the row.
-    //
-    // The row's `total_amount` is the figure the CLIENT asked to be charged when
-    // the checkout session was created, written while the row was still
-    // `unpaid`. Nothing here used to read `payment_status` at all, so a request
-    // that abandoned the ARC page and came straight back to this route got a
-    // seat sold, a PNR committed and - with auto-ticketing on - a ticket, for a
-    // charge that never happened. That is not an edge case: the browser flow
-    // does it on its own when the callback's pending-booking lookup fails.
-    //
-    // Reconciling here rather than trusting `payment_status` also covers the
-    // paid customer whose tab died before the browser-driven reconcile ran.
-    if (!existing) {
-      return res.status(402).json({
-        success: false,
-        error: 'No payment was found for this booking. Please complete payment before confirming.',
-        code: 'PAYMENT_NOT_FOUND'
-      });
-    }
-    const payment = await reconcileBookingPayment(existing);
-    if (!payment.paid) {
-      console.warn('⛔ Order refused: payment not captured', {
-        bookingReference: req.body.bookingReference,
-        orderStatus: payment.orderStatus || null,
-        reason: payment.error || 'no captured transaction'
-      });
-      return res.status(402).json({
-        success: false,
-        error: 'Payment for this booking has not been captured. Please complete payment before confirming.',
-        code: 'PAYMENT_NOT_CAPTURED',
-        ...(payment.orderStatus ? { orderStatus: payment.orderStatus } : {})
-      });
-    }
+    // The payer, cancelled, already-booked and payment checks that used to sit
+    // here now run at the very top of the handler - see there for why.
 
     // The PNR check above cannot catch two requests racing: neither has a PNR
     // yet, so both pass it and both sell seats against one payment. Claim the
@@ -1438,6 +1578,34 @@ router.post('/order', optionalProtect, async (req, res) => {
     // Deliberately NOT refunded. The request holding the claim may be seconds
     // from a confirmed booking, and reversing its payment from here would
     // cancel a booking that is about to succeed. The customer is told to wait.
+    // Every traveller must be a real, complete person before anything is sold,
+    // and there must be exactly as many as the fare was priced for. The mapping
+    // below used to fill the gaps with an invented name, birthday, gender and
+    // phone number and put them on a real PNR and in the database; and extra
+    // travellers added on the review page were booked on the fare of however
+    // many the search priced. The review page now refuses to send either, so
+    // reaching this means the data was lost or altered after payment.
+    const travellerIncomplete = travelersList.length === 0 || travelersList.some(
+      (t) => !String(t?.firstName || '').trim() || !String(t?.lastName || '').trim() || !t?.dateOfBirth || !t?.gender
+    );
+    const pricedTravellers = Array.isArray(firstOffer.travelerPricings) ? firstOffer.travelerPricings.length : 0;
+    const countMismatch = pricedTravellers > 0 && travelersList.length !== pricedTravellers;
+    if (travellerIncomplete || countMismatch) {
+      return await refundOnFulfillmentFailure(res, {
+        orderId: req.body.orderId || req.body.bookingReference,
+        bookingReference: req.body.bookingReference,
+        currency: firstOffer?.price?.currency || 'USD',
+        errorMsg: travellerIncomplete
+          ? 'traveller details incomplete'
+          : `offer priced for ${pricedTravellers} travellers, request carries ${travelersList.length}`,
+        status: 400,
+        code: travellerIncomplete ? 'PASSENGERS_INCOMPLETE' : 'PASSENGER_COUNT_MISMATCH',
+        reason: travellerIncomplete
+          ? 'Some passenger details were missing, so the booking was not sent to the airline.'
+          : 'The number of passengers did not match the fare you paid for, so the booking was not sent to the airline.',
+      });
+    }
+
     const claim = await claimBookingChain(req.body.bookingReference);
     if (!claim.claimed) {
       return res.status(409).json({
@@ -1446,27 +1614,31 @@ router.post('/order', optionalProtect, async (req, res) => {
         code: 'BOOKING_IN_PROGRESS'
       });
     }
+    chainClaimed = true;
 
 
     // Prepare flight order data for Amadeus (only if we have valid Amadeus format)
     // The travelers from frontend are already in correct format: { id, firstName, lastName, dateOfBirth, gender }
     // But Amadeus needs name.firstName and name.lastName
+    // No invented phone number. A made-up one is the number the airline would
+    // call about a schedule change.
+    const contactPhones = contactInfo?.phoneNumber
+      ? [{ deviceType: 'MOBILE', countryCallingCode: contactInfo.countryCode || '1', number: String(contactInfo.phoneNumber) }]
+      : [];
+
     const amadeusTravelers = travelersList.map((traveler, idx) => {
       const travelerObj = {
         id: traveler.id || `${idx + 1}`,
-        dateOfBirth: traveler.dateOfBirth || '1990-01-01',
-        gender: (traveler.gender || 'MALE').toUpperCase() === 'MALE' ? 'MALE' : 'FEMALE',
+        // All validated above: nothing here is filled in.
+        dateOfBirth: traveler.dateOfBirth,
+        gender: String(traveler.gender).trim().toUpperCase().startsWith('F') ? 'FEMALE' : 'MALE',
         name: {
-          firstName: traveler.firstName || 'Test',
-          lastName: traveler.lastName || 'User'
+          firstName: String(traveler.firstName).trim(),
+          lastName: String(traveler.lastName).trim()
         },
         contact: contactInfo ? {
           emailAddress: contactInfo.email || travelersList[0]?.email,
-          phones: [{
-            deviceType: 'MOBILE',
-            countryCallingCode: contactInfo.countryCode || '1',
-            number: contactInfo.phoneNumber || '1234567890'
-          }]
+          phones: contactPhones
         } : undefined
       };
 
@@ -1521,16 +1693,14 @@ router.post('/order', optionalProtect, async (req, res) => {
         },
         contacts: [{
           addresseeName: {
-            firstName: amadeusTravelers[0]?.name?.firstName || 'Guest',
-            lastName: amadeusTravelers[0]?.name?.lastName || 'User'
+            firstName: amadeusTravelers[0]?.name?.firstName,
+            lastName: amadeusTravelers[0]?.name?.lastName
           },
           purpose: 'STANDARD',
-          phones: amadeusTravelers[0]?.contact?.phones || [{
-            deviceType: 'MOBILE',
-            countryCallingCode: '1',
-            number: '1234567890'
-          }],
-          emailAddress: contactInfo?.email || travelersList[0]?.email || 'guest@jetsetters.com'
+          phones: contactPhones,
+          // The address checkout recorded is the fallback, not a made-up one
+          // (the old placeholder was not even this company's domain).
+          emailAddress: contactInfo?.email || travelersList[0]?.email || existing.booking_details?.customer_email || undefined
         }]
       }
     };
@@ -1545,6 +1715,11 @@ router.post('/order', optionalProtect, async (req, res) => {
 
     // Wrap Amadeus service call in try-catch to handle errors gracefully
     let orderResponse;
+    // Keep the claim fresh while the chain runs - see refreshChainClaim.
+    const heartbeat = setInterval(() => {
+      refreshChainClaim(req.body.bookingReference).catch(() => {});
+    }, CHAIN_HEARTBEAT_MS);
+    heartbeat.unref?.();
     try {
       // The booking lane: the customer has paid, so this goes ahead of searches
       // for an Amadeus slot and may use the slots searches cannot.
@@ -1618,8 +1793,8 @@ router.post('/order', optionalProtect, async (req, res) => {
           orderId: providerError.pnr,
           bookingReference: req.body.bookingReference,
           needsReview: true,
-          message: 'Your booking is confirmed and our team is finalising the ticket. '
-            + 'You will receive your confirmation shortly.'
+          message: 'Your seats are reserved with the airline and our team is finalising your ticket. '
+            + 'We will email you as soon as it is issued.'
         });
       }
 
@@ -1664,6 +1839,8 @@ router.post('/order', optionalProtect, async (req, res) => {
         currency: firstOffer?.price?.currency || 'USD',
         errorMsg: failureDetail
       });
+    } finally {
+      clearInterval(heartbeat);
     }
 
     if (!orderResponse || !orderResponse.success) {
@@ -1725,7 +1902,10 @@ router.post('/order', optionalProtect, async (req, res) => {
       pnr: pnrValue,
       orderId: req.body.orderId || orderIdValue,
       amadeusOrderId: orderIdValue, // the real Amadeus order id (for cancellation)
-      transactionId: req.body.transactionId || `TXN-${Date.now()}`,
+      // The gateway's transaction id, from the reconcile above. The body's
+      // `transactionId` is ARC's success indicator - the secret that proves
+      // who paid - and when absent this used to invent a TXN-<timestamp>.
+      transactionId: payment?.arcTransactionId || null,
       // What the customer was actually charged, which is the fare plus the
       // admin-configured service fee. Refunds read `total_amount`
       // (operations.handlers.js:270), so writing the fare alone here refunds
@@ -1817,9 +1997,13 @@ router.post('/order', optionalProtect, async (req, res) => {
         const customerName = `${customerFirstName} ${customerLastName}`.trim();
 
         // Find a valid email address (avoid empty strings)
+        // No placeholder recipient: a confirmation sent to an address we made
+        // up was reported as sent while the customer received nothing. The
+        // address checkout recorded is the last resort; with none, the
+        // customer send is skipped and says so.
         let finalEmail = contactInfo?.email || req.body.customerEmail || '';
         if (!finalEmail && fallbackTraveler?.email) finalEmail = fallbackTraveler.email;
-        if (!finalEmail) finalEmail = 'guest@jetsetterss.com';
+        if (!finalEmail) finalEmail = dbBooking.booking_details?.customer_email || '';
 
         const bookingEmailData = {
           customerEmail: finalEmail,
@@ -1859,7 +2043,11 @@ router.post('/order', optionalProtect, async (req, res) => {
       data: orderResponse.data,
       pnr: pnrValue,
       orderId: orderIdValue,
-      bookingReference: orderIdValue,
+      // Our reference, the one the database, emails and Manage Booking are
+      // keyed by. This used to be the PNR, so a successful booking and a
+      // queued or already-booked one handed the customer different kinds of
+      // reference for the same field.
+      bookingReference: dbBooking?.booking_reference || req.body.bookingReference || orderIdValue,
       mode: orderResponse.mode,
       ticketed: orderResponse.ticketed ?? false,
       tickets: orderResponse.tickets || [],
@@ -1875,11 +2063,55 @@ router.post('/order', optionalProtect, async (req, res) => {
       name: error.name,
       bookingReference: req.body?.bookingReference || null
     });
+    if (res.headersSent) return;
 
-    res.status(500).json({
+    // This used to log, answer 500 with the raw exception text, and write
+    // nothing: a verified payment kept with no booking, the claim left
+    // in_progress for two minutes, and the queue then emailing "our team will
+    // contact you about your refund". Now the request cleans up after itself,
+    // using what it had established before it failed.
+    const ref = req.body?.bookingReference || null;
+    try {
+      const row = ref ? await findExistingBooking(ref) : null;
+      const pnr = row?.booking_details?.pnr;
+      if (pnr && row.status !== 'cancelled') {
+        // A PNR exists: the airline holds seats. Never refund that
+        // automatically - a human decides.
+        await flagForReview({
+          bookingReference: ref,
+          pnr,
+          reason: `order route failed after commit: ${String(error.message || error).slice(0, 200)}`,
+          ticketed: row.booking_details?.gds?.ticketed === true
+        });
+        return res.status(202).json({
+          success: true,
+          data: { id: pnr, pnr, status: 'PENDING_CONFIRMATION', bookingReference: ref },
+          pnr,
+          orderId: pnr,
+          bookingReference: ref,
+          needsReview: true,
+          message: 'Your seats are reserved with the airline and our team is completing your booking. '
+            + 'We will email you as soon as it is done.'
+        });
+      }
+      if (chainClaimed) await releaseBookingChain(ref, 'unexpected-error');
+      if (payment?.paid) {
+        return await refundOnFulfillmentFailure(res, {
+          orderId: req.body?.orderId || ref,
+          bookingReference: ref,
+          errorMsg: `order route error: ${String(error.message || error).slice(0, 200)}`,
+          status: 500,
+          code: 'ORDER_FAILED'
+        });
+      }
+    } catch (recoveryError) {
+      console.error('❌ Could not recover from the order error:', recoveryError.message);
+    }
+
+    return res.status(500).json({
       success: false,
-      error: error.message || 'Failed to create flight order',
-      details: process.env.NODE_ENV !== 'production' ? error.stack : undefined
+      error: 'We could not complete your booking. Please contact support at (877) 538-7380 with your booking reference.',
+      code: 'ORDER_FAILED'
     });
   }
 });

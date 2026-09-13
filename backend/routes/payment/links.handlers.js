@@ -2,6 +2,7 @@ import axios from 'axios';
 import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig } from './arcpay.config.js';
 import { getCallerInfo, generateLinkToken } from './payment.helpers.js';
 import { generatePaymentLinkTemplate } from '../../services/email/templates.js';
+import { reconcileBookingPayment } from './checkout.handlers.js';
 
 
 /**
@@ -339,100 +340,100 @@ export async function handleProcessPaymentLink(req, res) {
  */
 export async function handleCompletePaymentLink(req, res) {
     try {
-        const { paymentLinkToken, orderId, resultIndicator } = req.body;
+        const { paymentLinkToken, orderId, resultIndicator } = req.body || {};
 
-        if (!paymentLinkToken || !orderId) {
-            return res.status(400).json({ success: false, error: 'paymentLinkToken and orderId required' });
+        // This used to mark the link paid, the booking confirmed and paid, and
+        // the payment completed for ANY post carrying a token and an order id:
+        // no session, no comparison of `resultIndicator`, no call to the
+        // gateway - `resultIndicator` was simply stored as if it were the
+        // transaction id. And because the order route trusted a row already
+        // marked paid, that one unauthenticated request was enough to sell a
+        // seat for a payment that never happened.
+        if (!paymentLinkToken || !orderId || !resultIndicator) {
+            return res.status(400).json({ success: false, error: 'paymentLinkToken, orderId and resultIndicator are required' });
         }
 
-        console.log('🔗 Completing payment link:', paymentLinkToken, 'orderId:', orderId);
-
-        // Get the payment link details
         const { data: paymentLink } = await supabase
             .from('payment_links')
             .select('*')
             .eq('link_token', paymentLinkToken)
-            .single();
+            .maybeSingle();
+        if (!paymentLink) {
+            return res.status(404).json({ success: false, error: 'Payment link not found' });
+        }
 
-        // Update payment link status
-        await supabase
-            .from('payment_links')
-            .update({ status: 'paid', paid_at: new Date().toISOString() })
-            .eq('link_token', paymentLinkToken);
-
-        // Update booking status
-        await supabase
-            .from('bookings')
-            .update({ status: 'confirmed', payment_status: 'paid' })
-            .eq('booking_reference', orderId);
-
-        // Find payment record — try arc_order_id first, then metadata
-        let paymentRecord = null;
-        
-        const { data: byOrderId } = await supabase
+        // The payments row opened with this link's checkout session holds the
+        // indicator ARC issued for that session. Only the paying browser
+        // receives it, on the redirect back.
+        const { data: paymentRecord } = await supabase
             .from('payments')
             .select('*')
             .eq('arc_order_id', orderId)
-            .limit(1);
-        
-        if (byOrderId && byOrderId.length > 0) {
-            paymentRecord = byOrderId[0];
-        } else {
-            // Fallback: search by metadata containing the payment_link_token
-            const { data: byMetadata } = await supabase
-                .from('payments')
-                .select('*')
-                .contains('metadata', { payment_link_token: paymentLinkToken })
-                .limit(1);
-            if (byMetadata && byMetadata.length > 0) {
-                paymentRecord = byMetadata[0];
-            }
+            .limit(1)
+            .maybeSingle();
+        const belongsToLink = paymentRecord?.metadata?.payment_link_token === paymentLinkToken;
+        if (!paymentRecord || !belongsToLink || !paymentRecord.success_indicator
+            || String(resultIndicator) !== String(paymentRecord.success_indicator)) {
+            console.warn('⛔ complete-payment-link refused: indicator does not match this link\'s session', { orderId });
+            return res.status(403).json({ success: false, error: 'This payment could not be verified' });
         }
 
-        let paymentId;
-        if (paymentRecord) {
-            paymentId = paymentRecord.id;
-            await supabase
-                .from('payments')
-                .update({
-                    payment_status: 'completed',
-                    completed_at: new Date().toISOString(),
-                    arc_transaction_id: resultIndicator || null,
-                    arc_order_id: orderId
-                })
-                .eq('id', paymentId);
-        } else {
-            // No payment record found — create one from the payment link data
-            const { data: newPayment } = await supabase.from('payments').insert({
-                amount: paymentLink?.amount || 0,
-                currency: paymentLink?.currency || 'USD',
+        // The indicator proves who is asking. Only the gateway can say the
+        // money was captured.
+        const { data: booking } = await supabase
+            .from('bookings')
+            .select('*')
+            .eq('booking_reference', orderId)
+            .maybeSingle();
+        if (!booking) {
+            return res.status(404).json({ success: false, error: 'Booking not found for this payment' });
+        }
+
+        const payment = await reconcileBookingPayment(booking);
+        if (!payment.paid) {
+            return res.status(402).json({
+                success: false,
+                error: payment.gatewayUnavailable
+                    ? 'We could not reach the payment gateway to confirm this payment. Please try again shortly.'
+                    : 'This payment has not been captured',
+                ...(payment.gatewayUnavailable ? { retryable: true } : {})
+            });
+        }
+
+        const now = new Date().toISOString();
+        await supabase
+            .from('payment_links')
+            .update({ status: 'paid', paid_at: now })
+            .eq('link_token', paymentLinkToken);
+
+        // reconcileBookingPayment has recorded payment_status and the captured
+        // amount. A payment link is an agent-arranged booking with no GDS step
+        // here, so a verified capture is what confirms it.
+        await supabase
+            .from('bookings')
+            .update({ status: 'confirmed' })
+            .eq('id', booking.id);
+
+        await supabase
+            .from('payments')
+            .update({
                 payment_status: 'completed',
-                completed_at: new Date().toISOString(),
-                arc_order_id: orderId,
-                arc_transaction_id: resultIndicator || null,
-                customer_email: paymentLink?.customer_email,
-                customer_name: paymentLink?.customer_name,
-                metadata: {
-                    payment_link_id: paymentLink?.id,
-                    payment_link_token: paymentLinkToken,
-                    order_id: orderId
-                },
-                created_at: new Date().toISOString()
-            }).select().single();
-            paymentId = newPayment?.id || orderId;
-        }
+                completed_at: now,
+                arc_transaction_id: payment.arcTransactionId || null
+            })
+            .eq('id', paymentRecord.id);
 
-        console.log('✅ Payment link completed successfully:', paymentLinkToken, 'paymentId:', paymentId);
+        console.log('✅ Payment link completed after gateway verification:', orderId);
 
         return res.json({
             success: true,
-            paymentId,
+            paymentId: paymentRecord.id,
             paymentLink,
             message: 'Payment link completed successfully'
         });
     } catch (error) {
-        console.error('❌ Complete payment link error:', error);
-        return res.status(500).json({ success: false, error: error.message });
+        console.error('❌ Complete payment link error:', error.message);
+        return res.status(500).json({ success: false, error: 'Failed to complete payment link' });
     }
 }
 

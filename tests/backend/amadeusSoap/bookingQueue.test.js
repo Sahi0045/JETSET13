@@ -30,6 +30,9 @@ const orderBody = {
   totalAmount: '298.28',
   orderId: 'FLTQ1',
   bookingReference: 'FLTQ1',
+  // ARC's success indicator, carried in the stored order so a replay proves
+  // the payer the same way the original request did.
+  transactionId: 'SI-Q',
 };
 
 /**
@@ -45,7 +48,7 @@ const checkoutRow = (details = {}) => ({
   status: 'pending',
   payment_status: 'paid',
   total_amount: 298.28,
-  booking_details: { arc_captured_amount: 298.28, arc_captured_currency: 'USD', ...details },
+  booking_details: { success_indicator: 'SI-Q', arc_captured_amount: 298.28, arc_captured_currency: 'USD', ...details },
 });
 
 /** Supabase double: every read returns `row`, every write is recorded and succeeds. */
@@ -255,6 +258,18 @@ describe('the queue worker', () => {
 
     expect(outcome).toBe('failed');
     expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'jane@example.com' }));
+  });
+
+  // The email used to echo the route's raw error, and otherwise promise a
+  // refund "shortly" whether or not one was attempted or accepted.
+  it('promises a refund only when the route says one went through', async () => {
+    const { failureCopy } = await import('../../../backend/jobs/bookingQueue.job.js');
+
+    expect(failureCopy({ bookingFailed: true, refunded: true })).toMatch(/payment has been reversed/);
+    expect(failureCopy({ bookingFailed: true, refunded: false })).toMatch(/refund did not go through/);
+    expect(failureCopy({ success: false, code: 'PAYMENT_NOT_CAPTURED' })).not.toMatch(/refund|reversed/i);
+    // A crash message never reaches the customer.
+    expect(failureCopy({ error: 'TypeError: cannot read properties of undefined' })).not.toMatch(/TypeError/);
   });
 
   it('retries on the next tick when the replay never completes', async () => {

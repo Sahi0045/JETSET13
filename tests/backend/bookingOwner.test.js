@@ -22,20 +22,21 @@ describe('resolving who owns a booking', () => {
     expect(resolveBookingUserId({ user: { id: SESSION_ID }, body: { userId: BODY_ID } })).toBe(SESSION_ID);
   });
 
-  // Mobile posts userId without a session cookie, and that still has to work.
-  it('falls back to the body when there is no session', () => {
-    expect(resolveBookingUserId({ body: { userId: BODY_ID } })).toBe(BODY_ID);
+  // The body is never an owner. A guest request carrying someone else's user
+  // id used to file its booking - passenger data, cancel and refund rights -
+  // under that account.
+  it('never takes the owner from the body, even a well-formed user id', () => {
+    expect(resolveBookingUserId({ body: { userId: BODY_ID } })).toBeNull();
   });
 
-  // Anything that is not a UUID would poison a database filter downstream.
   it('ignores a body value that is not a user id', () => {
     for (const junk of ['x,status.not.eq.zzz', '', 'null', '1 OR 1=1', 42, {}]) {
       expect(resolveBookingUserId({ body: { userId: junk } })).toBeNull();
     }
   });
 
-  it('ignores a session id that is not a user id', () => {
-    expect(resolveBookingUserId({ user: { id: 'not-a-uuid' }, body: { userId: BODY_ID } })).toBe(BODY_ID);
+  it('ignores a session id that is not a user id, and does not fall back to the body', () => {
+    expect(resolveBookingUserId({ user: { id: 'not-a-uuid' }, body: { userId: BODY_ID } })).toBeNull();
   });
 
   // A real guest checkout stays a guest booking rather than throwing.

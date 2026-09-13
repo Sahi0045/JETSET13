@@ -105,7 +105,7 @@ describe('answering from the gateway', () => {
   it('marks an unpaid row paid when ARC shows a capture, and records what was captured', async () => {
     axios.get.mockResolvedValue(captured(291));
 
-    const result = await reconcile(row());
+    const result = await reconcile(row({ total_amount: 291 }));
 
     expect(result.paid).toBe(true);
     expect(result.capturedAmount).toBe(291);
@@ -125,6 +125,8 @@ describe('answering from the gateway', () => {
 
     expect(result.capturedAmount).toBe(291);
     expect(result.capturedAmount).not.toBe(5000);
+    // And holding less than checkout asked for does not pay for the booking.
+    expect(result.paid).toBe(false);
   });
 
   it('does not mark paid when ARC shows no capture', async () => {
@@ -156,25 +158,83 @@ describe('answering from the gateway', () => {
     expect(updates).toHaveLength(0);
   });
 
-  it('a pending row moves to paid; a row the chain has advanced keeps its status', async () => {
-    axios.get.mockResolvedValue(captured());
+  // `status: 'paid'` is outside the booking vocabulary; My Trips printed it raw.
+  it('records the payment without touching the booking status', async () => {
+    axios.get.mockResolvedValue(captured(5000));
 
     await reconcile(row({ status: 'pending' }));
     await reconcile(row({ status: 'pending_ticketing' }));
 
-    expect(updates[0].status).toBe('paid');
-    expect(updates[1].status).toBe('pending_ticketing');
+    expect(updates).toHaveLength(2);
+    for (const update of updates) {
+      expect(update.payment_status).toBe('paid');
+      expect(update).not.toHaveProperty('status');
+    }
+  });
+
+  // A refund on the gateway means the money is no longer there to pay for a seat.
+  it('is not paid when the capture has since been refunded', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        status: 'CAPTURED',
+        transaction: [
+          { result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount: 291 } },
+          { result: 'SUCCESS', transaction: { id: 'ref-1', type: 'REFUND', amount: 291 } },
+        ],
+      },
+    });
+
+    const result = await reconcile(row({ total_amount: 291 }));
+
+    expect(result.paid).toBe(false);
+    expect(updates).toHaveLength(0);
+  });
+
+  it('is not paid when part of the capture went back', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        status: 'CAPTURED',
+        transaction: [
+          { result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount: 291 } },
+          { result: 'SUCCESS', transaction: { id: 'ref-1', type: 'REFUND', amount: 100 } },
+        ],
+      },
+    });
+
+    const result = await reconcile(row({ total_amount: 291 }));
+
+    expect(result.paid).toBe(false);
+    expect(result.error).toMatch(/less than/);
+  });
+
+  it('is not paid when a capture was voided', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        status: 'CAPTURED',
+        transaction: [
+          { result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount: 291 } },
+          { result: 'SUCCESS', transaction: { id: 'void-1', type: 'VOID' } },
+        ],
+      },
+    });
+
+    expect((await reconcile(row({ total_amount: 291 }))).paid).toBe(false);
   });
 });
 
 /**
- * Rows reconciled before the captured amount was recorded.
+ * Rows marked paid without a recorded capture.
  *
- * They are paid - verified against ARC once already - but carry no amount.
- * Refusing them over a missing number would be the mirror image of the bug
- * this closes: a paid customer told their payment was not found.
+ * Some were reconciled before the amount was recorded. Others were written
+ * `paid` by a path that never asked the gateway - complete-payment-link did it
+ * on an unauthenticated POST - and this function used to take the row's word
+ * whenever the gateway was unreachable or disagreed. That turned a forged
+ * `paid` into a sold seat. The gateway is asked; its answer stands.
  */
-describe('a row paid before the amount was recorded', () => {
+describe('a row marked paid without a recorded capture', () => {
   const legacyPaid = () => row({
     payment_status: 'paid',
     total_amount: 291,
@@ -192,22 +252,23 @@ describe('a row paid before the amount was recorded', () => {
     expect(updates[0].booking_details.arc_captured_amount).toBe(291);
   });
 
-  it('stays paid, on the session amount, when the gateway cannot be reached', async () => {
+  it('is not trusted when the gateway cannot be reached - the caller may retry', async () => {
     axios.get.mockRejectedValue(new Error('ECONNRESET'));
 
     const result = await reconcile(legacyPaid());
 
-    expect(result.paid).toBe(true);
-    expect(result.capturedAmount).toBe(291);
-    expect(result.alreadyReconciled).toBe(true);
+    expect(result.paid).toBe(false);
+    expect(result.gatewayUnavailable).toBe(true);
+    expect(updates).toHaveLength(0);
   });
 
-  it('stays paid but says so when the gateway disagrees with the row', async () => {
+  // The forged-row case: something wrote `paid`, the gateway holds nothing.
+  it('is not paid when the gateway shows no capture, and says why', async () => {
     axios.get.mockResolvedValue({ status: 200, data: { status: 'PENDING', transaction: [] } });
 
     const result = await reconcile(legacyPaid());
 
-    expect(result.paid).toBe(true);
+    expect(result.paid).toBe(false);
     expect(result.error).toMatch(/no captured transaction/);
   });
 });

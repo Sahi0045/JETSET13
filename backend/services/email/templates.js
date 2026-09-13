@@ -455,6 +455,24 @@ export function generateQuoteExpiredTemplate({ customerName, title, quoteId }) {
  * Bookings.
  * ──────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * A flight the airline holds but has not ticketed.
+ *
+ * Decided from what the booking chain recorded - `gds.ticketed` and the ticket
+ * numbers - and only when that record is present. The confirmation email used
+ * to say "Booking Confirmed!", "is confirmed" and a green status for every
+ * committed PNR, and with auto-ticketing off that was every booking. Callers
+ * that pass no GDS record at all (payment links, other flows) keep the
+ * confirmation they always had.
+ */
+export function isUnticketedFlight({ bookingType, bookingDetails } = {}) {
+  if (String(bookingType || '').toLowerCase() !== 'flight') return false;
+  const details = bookingDetails || {};
+  if (!details.gds || typeof details.gds !== 'object') return false;
+  const tickets = Array.isArray(details.tickets) ? details.tickets : [];
+  return details.gds.ticketed !== true && tickets.length === 0;
+}
+
 export function generateBookingConfirmationTemplate(data) {
   const {
     customerName,
@@ -538,13 +556,31 @@ export function generateBookingConfirmationTemplate(data) {
       ? 'Online check-in opens around 30 days before sailing. Boarding closes well before departure, and passports must be valid for six months beyond your return.'
       : 'Check-in opens 24-48 hours before departure. Bring photo ID, and allow 2 hours at the airport for domestic flights, 3 for international.';
 
+  const unticketed = isUnticketedFlight({ bookingType, bookingDetails });
+  const ticketDeadline = unticketed ? (d.lastTicketingDate || d.gds?.last_ticketing_date || null) : null;
+  const opening = unticketed
+    ? `Hi <strong>${customerName || 'there'}</strong>, your seats are reserved with the airline. Your e-ticket has not been issued yet, and we will email it to you as soon as it is.`
+    : `Hi <strong>${customerName || 'there'}</strong>, your ${title.toLowerCase()} is confirmed.`;
+  const ticketNote = unticketed
+    ? highlightBox(
+      ticketDeadline
+        ? `Your reservation is held until ${longDate(ticketDeadline)}. We issue your ticket before then, and we will contact you if anything prevents it.`
+        : 'We issue your ticket before the airline\'s ticketing deadline, and we will contact you if anything prevents it.',
+      { bg: '#FFF6E5', border: '#E0A100', color: '#7A5B00' },
+    )
+    : '';
+
   const content = `
-    ${paragraph(`Hi <strong>${customerName || 'there'}</strong>, your ${title.toLowerCase()} is confirmed.`)}
+    ${paragraph(opening)}
     ${journey}
     ${figureBlock([
-    { label: 'Booking reference', value: bookingReference, mono: true, small: true, note: statusPill(paymentStatus || 'Paid', 'success') },
+    {
+      label: 'Booking reference', value: bookingReference, mono: true, small: true,
+      note: unticketed ? statusPill('Ticket pending', 'warning') : statusPill(paymentStatus || 'Paid', 'success'),
+    },
     { label: 'Travellers', value: String(passengers), small: true },
   ])}
+    ${ticketNote}
     ${fareBreakdown(
     [
       d.baseFare ? ['Base fare', formatCurrency(d.baseFare)] : null,
@@ -553,7 +589,14 @@ export function generateBookingConfirmationTemplate(data) {
     { total: formatCurrency(paymentAmount), currency, label: 'Total paid' },
   )}
     ${actionRow([
-    { text: 'Manage booking', url: `${BRAND.site}/manage-booking` },
+    // To this booking. The bare /manage-booking page answers "No booking ID
+    // provided", so the button every confirmation carried led to an error.
+    {
+      text: 'Manage booking',
+      url: bookingReference
+        ? `${BRAND.site}/manage-booking/${encodeURIComponent(bookingReference)}`
+        : `${BRAND.site}/my-trips`,
+    },
     { text: 'My trips', url: `${BRAND.site}/my-trips` },
   ])}
     ${detailCard('Booking details', rows)}
@@ -561,10 +604,12 @@ export function generateBookingConfirmationTemplate(data) {
   `;
 
   return renderBrandedEmail({
-    preheader: line([`Your ${title.toLowerCase()}`, bookingReference, 'is confirmed'], ' '),
-    headerLabel: 'Booking Confirmed',
+    preheader: unticketed
+      ? line(['Your seats are reserved', bookingReference, 'and your ticket will follow'], ' ')
+      : line([`Your ${title.toLowerCase()}`, bookingReference, 'is confirmed'], ' '),
+    headerLabel: unticketed ? 'Reservation Held' : 'Booking Confirmed',
     emoji: icon,
-    heading: 'Booking Confirmed!',
+    heading: unticketed ? 'Reservation Held' : 'Booking Confirmed!',
     subheading: 'Thank you for choosing Jetsetters',
     contentHtml: content,
     cta: { text: 'View My Trips', url: `${process.env.FRONTEND_URL || BRAND.site}/my-trips` },

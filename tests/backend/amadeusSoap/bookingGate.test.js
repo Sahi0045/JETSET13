@@ -1,7 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import axios from 'axios';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { errorHandler } from '../../../backend/middleware/errorHandler.js';
 
 // The payment handlers take their Supabase client from arcpay.config.js, not
@@ -30,7 +30,8 @@ vi.mock('../../../backend/routes/payment/arcpay.config.js', async () => {
  * sends, and again as an "emergency fallback" outside production.
  */
 
-const makeApp = async () => {
+const makeApp = async (row) => {
+  if (row !== undefined) await seedRow(row);
   const routes = (await import('../../../backend/routes/flight.routes.js')).default;
   const app = express();
   app.use(express.json());
@@ -55,6 +56,43 @@ const orderBody = {
   totalAmount: '291.00',
   orderId: 'FLTTEST1',
   bookingReference: 'FLTTEST1',
+  // ARC's success indicator, which the paying browser received on the redirect
+  // back and posts on. It is what proves the caller made the payment.
+  transactionId: 'SI-TEST-1',
+};
+
+/**
+ * A checkout row holding a real, captured payment whose success indicator
+ * matches the one `orderBody` carries.
+ */
+const paidRow = (over = {}) => ({
+  id: 1,
+  booking_reference: 'FLTTEST1',
+  status: 'pending',
+  payment_status: 'paid',
+  total_amount: 291,
+  user_id: null,
+  ...over,
+  booking_details: {
+    order_id: 'FLTTEST1',
+    success_indicator: 'SI-TEST-1',
+    arc_captured_amount: 291,
+    arc_captured_currency: 'USD',
+    ...(over.booking_details || {}),
+  },
+});
+
+const seedRow = async (row) => {
+  const supabase = (await import('../../../backend/config/supabase.js')).default;
+  supabase.from.mockImplementation(() => {
+    const chain = {};
+    for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+      chain[m] = vi.fn(() => chain);
+    }
+    chain.single = vi.fn().mockResolvedValue({ data: row, error: null });
+    chain.maybeSingle = chain.single;
+    return chain;
+  });
 };
 
 beforeEach(() => {
@@ -67,6 +105,9 @@ beforeEach(() => {
 });
 
 describe('booking gate', () => {
+  // A verified payment from the caller, so the gate itself is what is tested.
+  beforeEach(async () => { await seedRow(paidRow()); });
+
   // The flag was config-only until this test existed: it was set to false in
   // production and no route read it.
   it('refuses with 503 when AMADEUS_WS_BOOKING_ENABLED is false', async () => {
@@ -134,6 +175,8 @@ describe('booking gate', () => {
 });
 
 describe('no fabricated bookings', () => {
+  beforeEach(async () => { await seedRow(paidRow()); });
+
   // Mobile posts the flattened card as flightOffer. That used to fail the
   // Amadeus-shape check and drop into a branch that invented a PNR, saved it
   // and emailed a confirmation - for a customer who had already paid.
@@ -168,6 +211,8 @@ describe('no fabricated bookings', () => {
 });
 
 describe('accepting the offer the mobile app actually sends', () => {
+  beforeEach(async () => { await seedRow(paidRow()); });
+
   // Mobile posts the flattened UI card and keeps the bookable offer on
   // `originalOffer`. Reading only the top level made every mobile booking fail
   // the shape check - which is how they ended up in the fabricated-PNR branch.
@@ -242,9 +287,10 @@ describe('no simulated bookings on retrieval', () => {
  * checkout, same outcome for the customer.
  */
 describe('post-payment rejections reverse the charge', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
     vi.resetModules();
+    await seedRow(paidRow());
   });
 
   it('refunds when the offer cannot be sold', async () => {
@@ -338,6 +384,7 @@ describe('concurrent booking attempts', () => {
     payment_status: 'paid',
     total_amount: 291,
     booking_details: {
+      success_indicator: 'SI-TEST-1',
       arc_captured_amount: 291,
       arc_captured_currency: 'USD',
       gds_chain: { state: 'in_progress', startedAt, attempt: 1 },
@@ -430,7 +477,7 @@ describe('a booking that already has a PNR', () => {
   const bookedRow = {
     booking_reference: 'FLTTEST1',
     status: 'confirmed',
-    booking_details: { pnr: 'CHOY42', amadeus_order_id: 'CHOY42' },
+    booking_details: { pnr: 'CHOY42', amadeus_order_id: 'CHOY42', success_indicator: 'SI-TEST-1', gds: { ticketed: true } },
   };
 
   const withStoredBooking = async () => {
@@ -522,7 +569,7 @@ describe('the payment gate', () => {
     status: 'pending',
     payment_status: 'unpaid',
     total_amount: 5000,           // what the client asked for; proves nothing
-    booking_details: { order_id: 'FLTTEST1' },
+    booking_details: { order_id: 'FLTTEST1', success_indicator: 'SI-TEST-1' },
   };
 
   beforeEach(() => {
@@ -591,7 +638,7 @@ describe('the payment gate', () => {
     const app = await withRow({
       ...unpaidRow,
       payment_status: 'paid',
-      booking_details: { order_id: 'FLTTEST1', arc_captured_amount: 291, arc_captured_currency: 'USD' },
+      booking_details: { order_id: 'FLTTEST1', success_indicator: 'SI-TEST-1', arc_captured_amount: 291, arc_captured_currency: 'USD' },
     });
 
     const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
@@ -613,12 +660,165 @@ describe('the payment gate', () => {
         transaction: [{ result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount: 291, currency: 'USD' } }],
       },
     });
-    const app = await withRow(unpaidRow);
+    // The checkout asked for 291 and the gateway holds 291.
+    const app = await withRow({ ...unpaidRow, total_amount: 291 });
 
     const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
 
     expect(res.body.code).not.toBe('PAYMENT_NOT_FOUND');
     expect(res.body.code).not.toBe('PAYMENT_NOT_CAPTURED');
     expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Only whoever paid can make this route move money.
+ *
+ * The refund paths reverse the payment behind the reference in the body, and
+ * the route has no auth middleware. They used to run before anything checked
+ * a payment existed or who was asking: a POST carrying only another customer's
+ * order id reversed their payment and wrote their booking cancelled - even a
+ * booking already holding a PNR. With booking disabled in production, any body
+ * at all did it.
+ */
+describe('proving the caller made the payment', () => {
+  beforeEach(() => {
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'false');
+    vi.resetModules();
+  });
+
+  it('does not reverse a payment for a caller who cannot prove they made it', async () => {
+    const app = await makeApp(paidRow());
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, transactionId: 'guessed' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('PAYER_NOT_VERIFIED');
+    expect(res.body.refundAction).toBeUndefined();
+    // No RETRIEVE_ORDER, so no reversal was even attempted.
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller who presents nothing at all', async () => {
+    const { transactionId, ...anonymous } = orderBody;
+    const app = await makeApp(paidRow());
+
+    const res = await request(app).post('/api/flights/order').send(anonymous);
+
+    expect(res.status).toBe(403);
+    expect(res.body.refundAction).toBeUndefined();
+  });
+
+  it('never reverses the payment behind a booking that already holds a PNR', async () => {
+    const app = await makeApp(paidRow({ status: 'pending_ticketing', booking_details: { pnr: 'CHOY42', gds: { ticketed: false } } }));
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.status).toBe(200);
+    expect(res.body.mode).toBe('ALREADY_BOOKED');
+    expect(res.body.refundAction).toBeUndefined();
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  // It used to answer CONFIRMED for any row with a PNR.
+  it('reports an unticketed stored booking as pending, not confirmed', async () => {
+    const app = await makeApp(paidRow({ status: 'pending_ticketing', booking_details: { pnr: 'CHOY42', gds: { ticketed: false } } }));
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.body.data.status).toBe('PENDING_TICKETING');
+    expect(res.body.ticketed).toBe(false);
+  });
+
+  it('lets the payer through, on the indicator their browser was given', async () => {
+    const app = await makeApp(paidRow());
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    // Past the payer check, into the booking-disabled refund.
+    expect(res.body.code).toBe('BOOKING_DISABLED');
+  });
+});
+
+describe('provesPayer', () => {
+  it('accepts the owner, staff, or the matching indicator - nothing else', async () => {
+    const { provesPayer } = await import('../../../backend/routes/flight.routes.js');
+    const row = paidRow({ user_id: 'user-1' });
+
+    expect(provesPayer({ user: { id: 'user-1' }, body: {} }, row)).toBe(true);
+    expect(provesPayer({ user: { id: 'user-2', role: 'admin' }, body: {} }, row)).toBe(true);
+    expect(provesPayer({ user: { id: 'user-2' }, body: {} }, row)).toBe(false);
+    expect(provesPayer({ body: { transactionId: 'SI-TEST-1' } }, row)).toBe(true);
+    expect(provesPayer({ body: { resultIndicator: 'SI-TEST-1' } }, row)).toBe(true);
+    expect(provesPayer({ body: { transactionId: 'SI-TEST-2' } }, row)).toBe(false);
+    // An empty indicator can never match an empty one.
+    expect(provesPayer({ body: { transactionId: '' } }, paidRow({ booking_details: { success_indicator: '' } }))).toBe(false);
+  });
+});
+
+describe('traveller details are checked before anything is sold', () => {
+  beforeEach(() => {
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
+    vi.resetModules();
+  });
+
+  it('refuses and reverses when a traveller has no date of birth', async () => {
+    const app = await makeApp(paidRow());
+
+    const res = await request(app).post('/api/flights/order').send({
+      ...orderBody,
+      flightOffer: bookableOffer,
+      travelers: [{ id: '1', firstName: 'Jane', lastName: 'Doe', gender: 'FEMALE' }],
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('PASSENGERS_INCOMPLETE');
+    expect(res.body.bookingFailed).toBe(true);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  // Extra travellers added on the review page were booked on the fare of the
+  // number the search priced.
+  it('refuses more travellers than the fare was priced for', async () => {
+    const app = await makeApp(paidRow());
+
+    const res = await request(app).post('/api/flights/order').send({
+      ...orderBody,
+      flightOffer: bookableOffer,
+      travelers: [orderBody.travelers[0], { ...orderBody.travelers[0], id: '2', firstName: 'John' }],
+    });
+
+    expect(res.body.code).toBe('PASSENGER_COUNT_MISMATCH');
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('has no invented passenger, contact or transaction id left in the route', async () => {
+    const source = (await import('node:fs')).readFileSync(
+      new URL('../../../backend/routes/flight.routes.js', import.meta.url), 'utf8',
+    );
+    for (const banned of ["'1990-01-01'", "'1234567890'", "'guest@jetsetters.com'", "'guest@jetsetterss.com'", "|| 'Test'", "|| 'User'", 'TXN-${Date.now()}']) {
+      expect(source, `${banned} must not survive in the flight route`).not.toContain(banned);
+    }
+  });
+});
+
+describe('an unexpected error after the payment was verified', () => {
+  afterEach(() => {
+    vi.doUnmock('../../../backend/services/flightProvider.js');
+  });
+
+  it('reverses the payment and does not show the customer the exception', async () => {
+    vi.doMock('../../../backend/services/flightProvider.js', () => ({
+      default: {},
+      providerStatus: () => { throw new Error('kaboom internal detail'); },
+    }));
+    const app = await makeApp(paidRow());
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.status).toBe(500);
+    expect(res.body.bookingFailed).toBe(true);
+    expect(res.body).toHaveProperty('refundAction');
+    expect(res.body.error).not.toMatch(/kaboom/);
   });
 });

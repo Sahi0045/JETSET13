@@ -72,6 +72,28 @@ async function clearQueuedOrder(bookingReference) {
  * later has to reach them by email. Success already sends the confirmation
  * email from the route.
  */
+/**
+ * What to tell the customer, from what the route actually did.
+ *
+ * This used to print the route's raw `error` - an exception message on a crash -
+ * and otherwise promise "Our team will contact you about your refund shortly"
+ * for every failure, including ones where no refund was attempted and ones
+ * where the refund was refused. Only `refunded: true` means money went back.
+ */
+export function failureCopy(result) {
+  if (result?.refunded === true) {
+    return 'We could not confirm your booking with the airline, so your payment has been reversed. '
+      + 'It usually reaches your card within 5-10 business days.';
+  }
+  if (result?.bookingFailed === true) {
+    return 'We could not confirm your booking, and the automatic refund did not go through. '
+      + 'Our team has been alerted and will refund you manually. If you have not heard from us '
+      + 'within 2 business days, call (877) 538-7380 with your booking reference.';
+  }
+  return 'We could not confirm your booking. Our team has been alerted and will contact you. '
+    + 'You can also call (877) 538-7380 with your booking reference.';
+}
+
 async function notifyFailure(order, bookingReference, result) {
   const to = order?.contactInfo?.email;
   if (!to) return;
@@ -82,7 +104,7 @@ async function notifyFailure(order, bookingReference, result) {
       data: {
         bookingReference,
         status: 'Not confirmed',
-        whatHappensNext: result?.error || 'Our team will contact you about your refund shortly.',
+        whatHappensNext: failureCopy(result),
       },
     });
   } catch (error) {
@@ -127,8 +149,8 @@ export async function replay(row, { baseUrl, fetchImpl = fetch } = {}) {
     return 'confirmed';
   }
 
-  // A real failure: the route has already refunded and marked the row.
-  log('queued booking failed and was refunded by the route', { bookingReference: ref, status });
+  // A real failure. Whether money went back is in the body, not assumed.
+  log('queued booking failed', { bookingReference: ref, status, refunded: body?.refunded === true, code: body?.code || null });
   await notifyFailure(order, ref, body);
   await clearQueuedOrder(ref);
   return 'failed';

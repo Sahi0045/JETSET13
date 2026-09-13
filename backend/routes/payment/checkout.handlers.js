@@ -1008,6 +1008,10 @@ export async function reconcileBookingPayment(booking) {
     if (booking.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(booking.payment_status)) {
         return fromRow(false, { alreadyReconciled: true });
     }
+    // `arc_captured_amount` is written only by this function, after the gateway
+    // showed a capture - so a row carrying it was verified. `payment_status:
+    // 'paid'` alone proves nothing: other code paths write it, and one of them
+    // (complete-payment-link) wrote it on an unauthenticated, unverified POST.
     const alreadyPaid = booking.payment_status === 'paid';
     if (alreadyPaid && hasKnownAmount) {
         return fromRow(true, { alreadyReconciled: true });
@@ -1030,57 +1034,72 @@ export async function reconcileBookingPayment(booking) {
     }
 
     if (!orderData) {
-        if (alreadyPaid) {
-            // Verified against the gateway once already; only the amount is
-            // missing, and the session amount is what that capture was for.
-            const sessionAmount = Number(booking.total_amount);
-            return fromRow(true, {
-                alreadyReconciled: true,
-                capturedAmount: Number.isFinite(sessionAmount) && sessionAmount > 0 ? sessionAmount : null,
-            });
-        }
-        return fromRow(false, { error: 'Could not retrieve order from gateway' });
+        // No answer is not a yes. A row marked paid without a recorded capture
+        // used to be trusted here on its word, and a paid row can be written by
+        // paths that never asked the gateway. The caller may retry.
+        return fromRow(false, {
+            error: 'Could not retrieve order from gateway',
+            gatewayUnavailable: true,
+            ...(alreadyPaid ? { disagreement: 'row marked paid, gateway not reachable to confirm' } : {}),
+        });
     }
 
     const txns = Array.isArray(orderData.transaction) ? orderData.transaction : [];
-    const captured = txns.find(t => {
-        const type = t.transaction?.type;
-        const ok = t.result === 'SUCCESS' || t.response?.gatewayCode === 'APPROVED';
-        return ok && ['PAYMENT', 'CAPTURE'].includes(type);
-    });
-    const isCaptured = !!captured || orderData.status === 'CAPTURED';
+    const succeeded = (t) => t.result === 'SUCCESS' || t.response?.gatewayCode === 'APPROVED';
+    const captures = txns.filter(t => succeeded(t) && ['PAYMENT', 'CAPTURE'].includes(t.transaction?.type));
+    const captured = captures[0] || null;
 
-    if (!isCaptured) {
+    // What is actually still held: captures, less anything already returned. A
+    // successful VOID returns the lot. Reading the first SUCCESS capture alone
+    // counted money as available for a booking after it had been refunded.
+    const sumOf = (list) => list.reduce((s, t) => s + (Number(t.transaction?.amount) || 0), 0);
+    const voided = txns.some(t => t.transaction?.type === 'VOID' && t.result === 'SUCCESS');
+    const capturedTotal = captures.length ? sumOf(captures) : (orderData.status === 'CAPTURED' ? Number(orderData.amount) || 0 : 0);
+    const refundedTotal = sumOf(txns.filter(t => t.transaction?.type === 'REFUND' && t.result === 'SUCCESS'));
+    const netCaptured = voided ? 0 : Math.round((capturedTotal - refundedTotal) * 100) / 100;
+
+    if (netCaptured <= 0) {
         if (alreadyPaid) {
-            // The row says paid and the gateway shows no capture. Do not silently
-            // side with either: keep the row's verdict so the customer is not
-            // refused, but surface the disagreement.
-            console.error('⚠️ [reconcile] row is paid but gateway shows no capture', {
+            // The row says paid and the gateway says nothing is held. The gateway
+            // is the one holding the money, so it wins; the disagreement is logged
+            // because something wrote that row without asking.
+            console.error('⚠️ [reconcile] row is paid but gateway holds no captured funds', {
                 bookingReference: booking.booking_reference, orderStatus: orderData.status || null
             });
-            const sessionAmount = Number(booking.total_amount);
-            return fromRow(true, {
-                alreadyReconciled: true,
-                orderStatus: orderData.status || null,
-                capturedAmount: Number.isFinite(sessionAmount) && sessionAmount > 0 ? sessionAmount : null,
-                error: 'gateway shows no captured transaction for a row marked paid',
-            });
         }
-        return fromRow(false, { orderStatus: orderData.status || null });
+        return fromRow(false, {
+            orderStatus: orderData.status || null,
+            ...(alreadyPaid ? { error: 'gateway shows no captured transaction for a row marked paid' } : {}),
+        });
+    }
+
+    // The checkout session asked ARC for `total_amount`. Holding less than that
+    // means part of it went back, and a partly refunded payment does not pay
+    // for the booking it was taken for.
+    const sessionAmount = Number(booking.total_amount);
+    if (Number.isFinite(sessionAmount) && sessionAmount > 0 && netCaptured + 0.01 < sessionAmount) {
+        console.error('⚠️ [reconcile] captured funds below the checkout amount', {
+            bookingReference: booking.booking_reference, netCaptured, sessionAmount
+        });
+        return fromRow(false, {
+            orderStatus: orderData.status || null,
+            capturedAmount: netCaptured,
+            error: `gateway holds ${netCaptured.toFixed(2)}, less than the ${sessionAmount.toFixed(2)} charged at checkout`,
+        });
     }
 
     const arcTransactionId = captured?.transaction?.id || null;
-    const capturedAmountRaw = Number(captured?.transaction?.amount ?? orderData.amount);
-    const capturedAmount = Number.isFinite(capturedAmountRaw) && capturedAmountRaw > 0 ? capturedAmountRaw : null;
+    const capturedAmount = netCaptured;
     const capturedCurrency = captured?.transaction?.currency || orderData.currency || null;
 
     const { error: updateErr } = await supabase
         .from('bookings')
         .update({
             payment_status: 'paid',
-            // Only a row still waiting on payment moves to 'paid'; a booking the
-            // chain has already advanced keeps its own status.
-            status: booking.status === 'pending' ? 'paid' : booking.status,
+            // No `status` write. This used to move a pending row to 'paid', a
+            // value outside the booking vocabulary that My Trips and Manage
+            // Booking render as a raw string. Payment is `payment_status`'s job;
+            // the booking's own status is set by whatever books it.
             booking_details: {
                 ...details,
                 arc_transaction_id: arcTransactionId,
@@ -1149,7 +1168,7 @@ export async function handleReconcileBookingPayment(req, res) {
         return res.json({
             success: true,
             paid: true,
-            booking: { reference: booking.booking_reference, status: 'paid', payment_status: 'paid' },
+            booking: { reference: booking.booking_reference, status: booking.status, payment_status: 'paid' },
             arcTransactionId: result.arcTransactionId
         });
     } catch (error) {
