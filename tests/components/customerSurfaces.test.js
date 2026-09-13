@@ -119,6 +119,12 @@ describe('the order page reports what the server did', () => {
     expect(src).toMatch(/PASSENGERS_INCOMPLETE/);
   });
 
+  // The abandoned-checkout job books a paid, abandoned checkout with the same
+  // builder; two copies would drift and book differently.
+  it('builds its order with the shared builder the abandoned-checkout job uses', () => {
+    expect(src).toMatch(/buildFlightOrderBody\(orderData/);
+  });
+
   it('reads queued and ticketed from the response', () => {
     expect(src).toMatch(/body\?\.queued === true/);
     expect(src).toMatch(/body\?\.ticketed === true/);

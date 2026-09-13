@@ -10,6 +10,7 @@ import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
 import { endpoints } from '@/config/api';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
+import { buildFlightOrderBody } from '../../../../../shared/flightOrderBody';
 
 /**
  * Failures where the reference the user is holding can never be completed: the
@@ -156,40 +157,16 @@ function FlightCreateOrders() {
     setErrorCode(null);
 
     try {
-      // Prepare full passenger details for backend (and storage). No
-      // defaults for name, date of birth or gender: these go onto a real
-      // PNR, and a placeholder passenger with a placeholder birthday is a
-      // ticket the airline will refuse at the gate. If the form data did not survive
-      // the payment round-trip, say so below instead of booking a stranger.
-      const passengerDetails = orderData.passengerData?.map((p, i) => ({
-        id: `${i + 1}`,
-        firstName: p.firstName || '',
-        lastName: p.lastName || '',
-        dateOfBirth: p.dateOfBirth || '',
-        gender: p.gender || '',
-        // The fare type the review page locked this traveller to.
-        ptc: ['ADULT', 'CHILD', 'HELD_INFANT', 'SEATED_INFANT'].includes(p.type) ? p.type : '',
-        title: p.title || '',
-        mobile: p.mobile || '',
-        email: p.email || '',
-        seatNumber: p.seatNumber || '',
-        meal: p.meal || '',
-        baggage: p.baggage || '',
-        requiresWheelchair: p.requiresWheelchair || false,
-        // Travel document. The form collects these and they were dropped here,
-        // so an international ticket could never be issued: Amadeus refuses
-        // with `27791 TICKETING INHIBITED-SSR DOCS MISSING FOR P1`, the PNR
-        // commits, the customer has paid, and the booking lands in review.
-        nationality: p.nationality || '',
-        passportNumber: p.passportNumber || '',
-        passportExpiry: p.passportExpiry || '',
-        documentType: p.documentType || (p.passportNumber ? 'PASSPORT' : '')
-      })) || [];
+      // The same builder the abandoned-checkout job uses to finish a booking
+      // whose customer paid and closed the tab - see shared/flightOrderBody.js.
+      // It invents nothing: if the form data did not survive the payment
+      // round-trip, it says so and we tell the customer instead of booking a
+      // stranger.
+      const { body: flightBookingData, passengerDetails, problem } = buildFlightOrderBody(orderData, {
+        userId: authUser?.id || null,
+      });
 
-      const incomplete = passengerDetails.length === 0 || passengerDetails.some(
-        (p) => !p.firstName || !p.lastName || !p.dateOfBirth || !p.gender
-      );
-      if (incomplete) {
+      if (problem === 'PASSENGERS_INCOMPLETE') {
         const err = new Error(
           `Passenger details are missing from this session, so we did not send the booking to the airline. ` +
           `Your payment reference is ${orderData.orderId || 'unavailable'}. Please contact support and we will complete or refund it.`
@@ -198,16 +175,7 @@ function FlightCreateOrders() {
         throw err;
       }
 
-      const fareBreakdown = orderData.calculatedFare || null;
-
-      // Get user ID from auth context
-      const userId = authUser?.id || null;
-
-      // Prioritize originalOffer (full Amadeus API data) over transformed
-      // flight data. There is no placeholder offer: sending one would make the
-      // server try to book (and then refund) an offer that never existed.
-      const flightOffer = orderData.originalOffer || orderData.selectedFlight?.originalOffer || orderData.selectedFlight || orderData.flightData || null;
-      if (!flightOffer) {
+      if (problem === 'OFFER_MISSING') {
         const err = new Error(
           `Your flight selection is missing from this session, so we did not send the booking to the airline. ` +
           `Your payment reference is ${orderData.orderId || 'unavailable'}. Please contact support and we will complete or refund it.`
@@ -216,40 +184,9 @@ function FlightCreateOrders() {
         throw err;
       }
 
-      const amountPaid = orderData.amount || orderData.calculatedFare?.totalAmount || orderData.selectedFlight?.price?.total || orderData.originalOffer?.price?.total || null;
-
-      const flightBookingData = {
-        flightOffer,
-        // Include totalAmount for database storage
-        totalAmount: amountPaid,
-        transactionId: orderData.transactionId || null,
-        orderId: orderData.orderId || null,
-        bookingReference: orderData.orderId || null,
-        travelers: passengerDetails.map(p => ({
-          id: p.id,
-          firstName: p.firstName,
-          lastName: p.lastName,
-          dateOfBirth: p.dateOfBirth,
-          gender: p.gender,
-          ptc: p.ptc || undefined,
-          // `/order` builds the SSR DOCS element from these; without them an
-          // international itinerary books but cannot be ticketed.
-          nationality: p.nationality,
-          passportNumber: p.passportNumber,
-          passportExpiry: p.passportExpiry,
-          documentType: p.documentType
-        })),
-        passengerDetails: passengerDetails, // Send full details to backend
-        fareBreakdown: fareBreakdown,       // Send fare breakdown to backend
-        // Contact details go onto the PNR; an invented phone number is what
-        // the airline would call about a schedule change.
-        contactInfo: {
-          email: orderData.bookingDetails?.contact?.email || orderData.customerEmail || passengerDetails[0]?.email || '',
-          countryCode: orderData.bookingDetails?.contact?.countryCode || '1',
-          phoneNumber: orderData.bookingDetails?.contact?.phone || passengerDetails[0]?.mobile || ''
-        },
-        userId: userId
-      };
+      // Read back for the confirmation record below.
+      const amountPaid = flightBookingData.totalAmount;
+      const fareBreakdown = flightBookingData.fareBreakdown;
 
       console.log('Sending flight booking data:', flightBookingData);
       console.log('📋 Flight booking request details:', {

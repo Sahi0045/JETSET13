@@ -28,6 +28,7 @@ import { startDataRetentionJob } from './jobs/dataRetention.job.js';
 import { startBookingQueueWorker } from './jobs/bookingQueue.job.js';
 import { startNeedsReviewAlertJob } from './jobs/needsReviewAlert.job.js';
 import { startPaymentFailureAlertJob } from './jobs/paymentFailureAlert.job.js';
+import { startAbandonedCheckoutJob } from './jobs/abandonedCheckout.job.js';
 import { initializeDefaultTemplates } from './services/templateResponse.service.js';
 import { generateCallbackTemplate, generateAdminCallbackNotificationTemplate } from './services/email/templates.js';
 // Shared stability modules (same behavior across all 3 entry points)
@@ -279,6 +280,8 @@ const server = app.listen(PORT, () => {
     startBookingQueueWorker({ port: PORT });
     startNeedsReviewAlertJob();
     startPaymentFailureAlertJob();
+    // Asleep outside production unless ABANDONED_CHECKOUT_JOB=true.
+    startAbandonedCheckoutJob({ port: PORT });
 
     // Initialize default email templates
     initializeDefaultTemplates().catch(e => console.error('[Templates] Init failed:', e.message));
