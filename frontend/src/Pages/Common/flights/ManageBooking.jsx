@@ -9,7 +9,7 @@ import {
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
-import { ticketState } from '../../../utils/eTicket';
+import { isPaid, ticketState } from '../../../utils/eTicket';
 import ArcPayService from '../../../Services/ArcPayService';
 import { useFlightBooking } from '../../../hooks/queries';
 import { useQueryClient } from '@tanstack/react-query';
@@ -30,8 +30,14 @@ function ManageBooking() {
 
   // If live data was passed from My Trips routing, use it; otherwise fetch via hook.
   const passedData = (location.state?.bookingData?.source !== 'localStorage') ? location.state?.bookingData : null;
+  // A guest has no account to own the booking. They prove it is theirs with
+  // the email it was made with - the reference alone is not enough. Without
+  // this a guest's confirmation email linked to a page they could never open.
+  const [lookupEmail, setLookupEmail] = useState('');
+  const [submittedEmail, setSubmittedEmail] = useState(null);
   const { data: fetchedBooking, isLoading: queryLoading, error: queryError } = useFlightBooking(bookingId, {
     enabled: !passedData && !!bookingId,
+    email: submittedEmail,
   });
   const bookingData = useMemo(() => {
     const base = passedData || fetchedBooking || null;
@@ -149,10 +155,6 @@ function ManageBooking() {
     }
   };
 
-  const modifyBooking = () => {
-    // Navigate to modify booking flow
-    alert('Booking modification will be implemented soon');
-  };
 
   if (loading) {
     return (
@@ -172,11 +174,35 @@ function ManageBooking() {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
+        <div className="flex items-center justify-center min-h-[60vh] px-4">
+          <div className="text-center max-w-md">
             <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">Error Loading Booking</h2>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">We couldn't open this booking</h2>
             <p className="text-gray-600 mb-4">{error}</p>
+            {bookingId && (
+              <form
+                className="text-left bg-white border border-gray-200 rounded-lg p-4 mb-4"
+                onSubmit={(e) => { e.preventDefault(); if (lookupEmail.trim()) setSubmittedEmail(lookupEmail.trim()); }}
+              >
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="booking-lookup-email">
+                  Booked without an account? Enter the email used when booking.
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="booking-lookup-email"
+                    type="email"
+                    required
+                    value={lookupEmail}
+                    onChange={(e) => setLookupEmail(e.target.value)}
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    placeholder="you@example.com"
+                  />
+                  <button type="submit" className="bg-[#0890BC] text-white px-4 py-2 rounded-lg text-sm hover:bg-[#055B75] transition">
+                    Find booking
+                  </button>
+                </div>
+              </form>
+            )}
             <button
               onClick={() => navigate('/my-trips')}
               className="bg-[#0890BC] text-white px-6 py-2 rounded-lg hover:bg-[#055B75] transition"
@@ -433,13 +459,16 @@ function ManageBooking() {
             {bookingData?.status?.toUpperCase() !== 'CANCELLED' && 
              (!bookingData?.departureDate || new Date(bookingData.departureDate) >= new Date(new Date().setHours(0,0,0,0))) && (
               <>
-                <button
-                  onClick={modifyBooking}
+                {/* Changes are made by the support team; there is no
+                    self-serve change flow. This button used to open an alert
+                    promising a modification feature that did not exist. */}
+                <a
+                  href="tel:+18775387380"
                   className="flex items-center bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
                 >
-                  <Edit3 className="w-4 h-4 mr-2" />
-                  Modify Booking
-                </button>
+                  <Phone className="w-4 h-4 mr-2" />
+                  Call to change this booking
+                </a>
                 <button
                   onClick={handleCancelBooking}
                   className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
@@ -552,7 +581,11 @@ function ManageBooking() {
                           {bookingData?.arrivalTime || bookingData?.flight?.arrivalTime || '--:--'}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {bookingData?.departureDate ? new Date(bookingData.departureDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date N/A'}
+                          {/* The arrival date. This printed the departure date,
+                              wrong for every overnight flight. */}
+                          {(bookingData?.arrivalDate || bookingData?.arrival_date)
+                            ? new Date(bookingData.arrivalDate || bookingData.arrival_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            : 'Date N/A'}
                         </div>
                       </div>
                     </div>
@@ -643,7 +676,9 @@ function ManageBooking() {
                           {traveler.passportNumber && (
                             <div>
                               <label className="text-sm font-medium text-gray-500">Passport Number</label>
-                              <p className="font-mono">{traveler.passportNumber}</p>
+                              {/* Masked: this page is opened on shared screens
+                                  and captured into the downloadable document. */}
+                              <p className="font-mono">{`•••• ${String(traveler.passportNumber).slice(-4)}`}</p>
                             </div>
                           )}
                           {traveler.passportExpiry && (
@@ -679,7 +714,15 @@ function ManageBooking() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Payment Status</label>
-                      <p className="text-lg font-semibold text-green-600">Paid</p>
+                      {/* From the payment record. This said "Paid" for every
+                          booking, including unpaid and refunded ones. */}
+                      {isPaid(bookingData) ? (
+                        <p className="text-lg font-semibold text-green-600">Paid</p>
+                      ) : (
+                        <p className="text-lg font-semibold text-gray-700 capitalize">
+                          {String(bookingData?.payment_status || bookingData?.paymentStatus || 'Not recorded').replace(/_/g, ' ')}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Transaction ID</label>
@@ -687,19 +730,23 @@ function ManageBooking() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Booking Date</label>
-                      <p>{new Date(bookingData?.orderCreatedAt || bookingData?.bookingDate).toLocaleDateString()}</p>
+                      <p>{(bookingData?.orderCreatedAt || bookingData?.bookingDate) && !Number.isNaN(new Date(bookingData?.orderCreatedAt || bookingData?.bookingDate).getTime())
+                        ? new Date(bookingData?.orderCreatedAt || bookingData?.bookingDate).toLocaleDateString()
+                        : 'N/A'}</p>
                     </div>
                   </div>
 
-                  <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
-                    <div className="flex items-center">
-                      <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-                      <span className="font-medium text-green-800">Payment Confirmed</span>
+                  {isPaid(bookingData) && (
+                    <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="flex items-center">
+                        <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+                        <span className="font-medium text-green-800">Payment received</span>
+                      </div>
+                      <p className="text-sm text-green-700 mt-1">
+                        Your payment has been received.
+                      </p>
                     </div>
-                    <p className="text-sm text-green-700 mt-1">
-                      Your payment has been successfully processed and your booking is confirmed.
-                    </p>
-                  </div>
+                  )}
                 </div>
               </div>
             )}

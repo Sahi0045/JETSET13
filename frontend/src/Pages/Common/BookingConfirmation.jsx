@@ -33,33 +33,16 @@ function BookingConfirmation() {
   useEffect(() => {
     // First check if data was passed via navigation state
     if (location.state?.bookingData) {
-      console.log('📝 Using booking data from navigation state:', location.state.bookingData);
       setBookingData(location.state.bookingData);
       setLoading(false);
       return;
     }
 
-    // Get booking data from localStorage - prioritize flight bookings
-    const flightBooking = localStorage.getItem('completedFlightBooking');
-    const cruiseBooking = localStorage.getItem('completedBooking');
-
-    console.log('🔍 BookingConfirmation - localStorage check:');
-    console.log('flightBooking:', flightBooking ? 'Found' : 'Not found');
-    console.log('cruiseBooking:', cruiseBooking ? 'Found' : 'Not found');
-
-    if (flightBooking) {
-      const flightData = JSON.parse(flightBooking);
-      console.log('📝 Parsed flight data:', flightData);
-      setBookingData({ ...flightData, type: 'flight' });
-    } else if (cruiseBooking) {
-      const cruiseData = JSON.parse(cruiseBooking);
-      console.log('📝 Parsed cruise data:', cruiseData);
-      setBookingData({ ...cruiseData, type: 'cruise' });
-    } else {
-      console.log('❌ No booking data found');
-      setTimeout(() => navigate('/my-trips'), 2000);
-    }
-
+    // No router state means the page was opened directly - a refresh, a
+    // bookmark, a shared link. It used to read whichever booking was last
+    // written to this browser's localStorage and present it as a fresh
+    // confirmation: an old booking, or someone else's on a shared computer.
+    // The "No Booking Found" screen below sends them to My Trips instead.
     setLoading(false);
   }, [navigate, location.state]);
 

@@ -4,20 +4,9 @@ import { protect, admin } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
-// Default price settings
-const DEFAULT_SETTINGS = {
-  flight_taxes_fees: 25.00,
-  flight_taxes_fees_percentage: 5.0,
-  cruise_taxes_fees: 150.00,
-  cruise_taxes_fees_percentage: 8.0,
-  cruise_port_charges: 50.00,
-  hotel_taxes_fees: 35.00,
-  hotel_taxes_fees_percentage: 12.0,
-  hotel_service_fee_percentage: 5.0,
-  package_markup_percentage: 10.0,
-  service_fee_percentage: 2.5,
-  cancellation_fee: 50.00
-};
+// Default price settings - one copy, shared with checkout's charge verification
+// so the page's quote and the server's check merge the stored row identically.
+import { DEFAULT_PRICE_SETTINGS as DEFAULT_SETTINGS } from '../config/priceDefaults.js';
 
 // Get current price settings
 router.get('/price-settings', async (req, res) => {

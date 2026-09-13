@@ -153,6 +153,10 @@ export default function CheapestFlights({ onBookFlight }) {
   const [originCity, setOriginCity] = useState("");
   const [originCode, setOriginCode] = useState("");
   const [loadedImages, setLoadedImages] = useState({});
+  // When the prices shown were fetched, and whether that fetch was just now.
+  // A cache up to six hours old used to be painted under "Live prices".
+  const [pricesAsOf, setPricesAsOf] = useState(null);
+  const [pricesLive, setPricesLive] = useState(false);
 
   // Render destination cards instantly; enrich with live prices in the background.
   useEffect(() => {
@@ -226,6 +230,8 @@ export default function CheapestFlights({ onBookFlight }) {
       setFlights(initial);
       setError(null);
       setLoading(false);
+      setPricesLive(false);
+      setPricesAsOf(cached ? cached.at : null);
     }
 
     // 2) Enrich with live cheapest prices in the background (never blocks the UI)
@@ -263,6 +269,8 @@ export default function CheapestFlights({ onBookFlight }) {
             .map((b) => byCode[b.destinationCode] || b)
             .sort((a, b) => (a.price == null ? Infinity : a.price) - (b.price == null ? Infinity : b.price));
           setFlights(merged);
+          setPricesLive(true);
+          setPricesAsOf(Date.now());
           try { localStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), flights: merged })); } catch (e) { /* quota */ }
         }
       } catch (e) {
@@ -277,6 +285,12 @@ export default function CheapestFlights({ onBookFlight }) {
   const handleImageLoad = useCallback((id) => {
     setLoadedImages(prev => ({ ...prev, [id]: true }));
   }, []);
+
+  // "Best Price" means the lowest price shown - one card, not every card that
+  // has a price, which is what it used to label.
+  const cheapestId = flights
+    .filter((f) => f.isApiData && f.price != null)
+    .sort((a, b) => a.price - b.price)[0]?.id;
 
   // Loading skeleton
   if (loading) {
@@ -331,8 +345,16 @@ export default function CheapestFlights({ onBookFlight }) {
             </div>
           )}
         <div className="md:ml-auto flex items-center text-sm text-ink/60">
-          <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
-          Live prices from Amadeus
+          {pricesLive ? (
+            <>
+              <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+              Live prices from Amadeus
+            </>
+          ) : pricesAsOf ? (
+            <>Prices as of {new Date(pricesAsOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, updating…</>
+          ) : (
+            <>Checking prices…</>
+          )}
         </div>
       </div>
 
@@ -362,8 +384,8 @@ export default function CheapestFlights({ onBookFlight }) {
               {/* Corner decoration */}
               <div className="absolute top-0 right-0 w-12 h-12 bg-[#65B3CF]/20 backdrop-blur-sm rounded-bl-xl"></div>
 
-              {/* Price tag — only for API data */}
-              {flight.isApiData && (
+              {/* Price tag — only on the cheapest priced card */}
+              {flight.isApiData && flight.id === cheapestId && (
                 <div className="absolute bottom-2 right-2 bg-[#055B75]/90 backdrop-blur-sm text-white text-xs font-bold py-1 px-2 rounded-md flex items-center shadow-sm">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />

@@ -60,10 +60,13 @@ const runCheckout = async (body) => {
   return res;
 };
 
+// A hotel checkout: the currency pinning applies to every booking type, and a
+// flight's amount is now verified against the airline's price before this
+// point (see flightCheckout.test.js), which is not what these tests are about.
 const baseBody = {
   amount: '291.00',
   orderId: 'FLTTEST123456',
-  bookingType: 'flight',
+  bookingType: 'hotel',
   customerEmail: 'jane@example.com',
   customerName: 'Jane Doe',
 };

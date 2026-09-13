@@ -46,14 +46,17 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
 
   if (!flightOffer) return null;
 
+  // Only what the fare rules say. This drew a second penalty tier at 1.6x the
+  // first, a 4-hour cutoff when the rules gave none, rupees when no currency
+  // was given, and used the change fee as the cancellation fee - all rendered
+  // as precise amounts and times on the page where the customer decides.
   const dep = departureAt ? new Date(departureAt) : null;
-  const cutoffHours = c?.cutoffHours || 4;
-  const cutoff = dep ? new Date(dep.getTime() - cutoffHours * 3600000) : null;
-  const sym = cur(c?.currency || 'INR');
-  const tier1 = c?.cancelFee != null ? `${sym}${c.cancelFee.toLocaleString('en-IN')}` : (c?.changeFee != null ? `${sym}${c.changeFee.toLocaleString('en-IN')}` : '—');
-  const tier2 = c?.refundable
-    ? `${sym}${Math.round((c.cancelFee || c.changeFee || 0) * 1.6).toLocaleString('en-IN')}`
-    : 'Non-Refundable';
+  const cutoffHours = Number.isFinite(c?.cutoffHours) ? c.cutoffHours : null;
+  const cutoff = dep && cutoffHours != null ? new Date(dep.getTime() - cutoffHours * 3600000) : null;
+  const sym = cur(c?.currency || c?.fareCurrency || '');
+  const fmtAmount = (n) => `${sym}${Number(n).toLocaleString('en-US')}`;
+  const tier1 = c?.cancelFee != null ? fmtAmount(c.cancelFee) : 'See fare rules';
+  const tier2 = c?.refundable === false ? 'Non-refundable' : 'See fare rules';
 
   return (
     <div className="booking-card mb-8">
@@ -96,7 +99,7 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
                 <span className="text-[11px] sm:text-xs text-gray-500 w-[92px] sm:w-[150px] flex-shrink-0">Cancellation Penalty :</span>
                 <div className="relative flex-1 h-5">
                   <span className="absolute left-0 text-xs sm:text-sm font-bold text-gray-800 whitespace-nowrap">{tier1}</span>
-                  <span className={`absolute right-0 text-xs sm:text-sm font-bold whitespace-nowrap ${c.refundable ? 'text-gray-800' : 'text-red-500'}`}>{tier2}</span>
+                  <span className={`absolute right-0 text-xs sm:text-sm font-bold whitespace-nowrap ${c.refundable === false ? 'text-red-500' : 'text-gray-800'}`}>{tier2}</span>
                 </div>
               </div>
 
@@ -104,13 +107,16 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
               <div className="flex items-center">
                 <span className="w-[92px] sm:w-[150px] flex-shrink-0" />
                 <div className="relative flex-1 h-2 rounded-full" style={{ background: 'linear-gradient(90deg, #16a34a 0%, #84cc16 45%, #eab308 65%, #ef4444 100%)' }}>
-                  <span className="absolute top-1/2 -translate-y-1/2 h-4 w-0 border-l-2 border-dashed border-gray-500" style={{ left: '64%' }} />
+                  {cutoff && (
+                    <span className="absolute top-1/2 -translate-y-1/2 h-4 w-0 border-l-2 border-dashed border-gray-500" style={{ left: '64%' }} />
+                  )}
                 </div>
               </div>
 
-              {/* Time tiers */}
+              {/* Time tiers - in the viewer's own time zone, which is how these
+                  are formatted. The label said IST regardless. */}
               <div className="flex items-start mt-1.5">
-                <span className="text-[11px] sm:text-xs text-gray-500 w-[92px] sm:w-[150px] flex-shrink-0">Cancel Between (IST) :</span>
+                <span className="text-[11px] sm:text-xs text-gray-500 w-[92px] sm:w-[150px] flex-shrink-0">Cancel between (your time) :</span>
                 <div className="relative flex-1 h-9 text-[11px] sm:text-xs">
                   <span className="absolute left-0 font-semibold text-gray-700">Now</span>
                   {cutoff && (
@@ -132,14 +138,17 @@ function FlightCancellationPolicy({ flightOffer, fromCode, toCode, departureAt }
             {/* Summary chips */}
             <div className="flex flex-wrap gap-x-6 gap-y-2 mt-5 pt-4 border-t border-gray-100 text-xs text-gray-600">
               {c.cancelFee != null && (
-                <span><span className="text-gray-400">Cancellation fee:</span> <span className="font-semibold text-gray-800">{sym}{c.cancelFee.toLocaleString('en-IN')}</span></span>
+                <span><span className="text-gray-400">Cancellation fee:</span> <span className="font-semibold text-gray-800">{fmtAmount(c.cancelFee)}</span></span>
               )}
               {c.changeFee != null && (
-                <span><span className="text-gray-400">Date change fee:</span> <span className="font-semibold text-gray-800">{sym}{c.changeFee.toLocaleString('en-IN')}</span></span>
+                <span><span className="text-gray-400">Date change fee:</span> <span className="font-semibold text-gray-800">{fmtAmount(c.changeFee)}</span></span>
               )}
               <span>
                 <span className="text-gray-400">Refundable:</span>{' '}
-                <span className={`font-semibold ${c.refundable ? 'text-emerald-600' : 'text-red-500'}`}>{c.refundable ? 'Yes' : 'No'}</span>
+                {/* Unknown is not "No". */}
+                <span className={`font-semibold ${c.refundable === true ? 'text-emerald-600' : c.refundable === false ? 'text-red-500' : 'text-gray-600'}`}>
+                  {c.refundable === true ? 'Yes' : c.refundable === false ? 'No' : 'See fare rules'}
+                </span>
               </span>
               <span className="text-gray-400">Charges per the airline fare rules; taxes/GST may apply.</span>
             </div>

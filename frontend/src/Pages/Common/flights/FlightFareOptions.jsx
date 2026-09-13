@@ -5,7 +5,8 @@ import apiConfig from '@/config/api';
 import { formatCheckedBag } from '../../../utils/baggage';
 
 const prettyFare = (opt) => {
-  const raw = opt.brandedFareLabel || opt.brandedFare || opt.cabin || 'Standard';
+  // "This fare" rather than an invented "Standard" brand.
+  const raw = opt.brandedFareLabel || opt.brandedFare || opt.cabin || 'This fare';
   return raw
     .toString()
     .replace(/_/g, ' ')
@@ -96,6 +97,9 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
   // Merge a chosen fare option onto the base (display) flight, keeping booking data
   const handleSelect = (opt) => {
     if (!opt) { onSelect(flight); return; }
+    // A fare option is only bookable with its own offer. Falling back to the
+    // clicked flight's offer showed one fare's price and booked another fare.
+    if (!opt.originalOffer) { onSelect(flight); return; }
     const merged = {
       ...flight,
       price: opt.price || flight.price,
@@ -108,7 +112,7 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
       baggage: opt.baggageDetails
         ? { checked: opt.baggageDetails.checked || flight.baggage?.checked, cabin: opt.baggageDetails.cabin || flight.baggage?.cabin }
         : flight.baggage,
-      originalOffer: opt.originalOffer || flight.originalOffer,
+      originalOffer: opt.originalOffer,
     };
     onSelect(merged);
   };
@@ -175,7 +179,7 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
                         <Luggage className="h-3.5 w-3.5 text-gray-400" />
                         {formatCheckedBag(checked)
                           ? `${formatCheckedBag(checked)} check-in`
-                          : (opt.baggage || 'Cabin only')}
+                          : (opt.baggage || (checked != null ? 'No checked bag' : 'Baggage: see fare rules'))}
                       </div>
                       {cabinBag?.weight ? (
                         <div className="flex items-center gap-1.5">
@@ -184,8 +188,8 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
                         </div>
                       ) : null}
                       <div className="flex items-center gap-1.5">
-                        <ShieldCheck className={`h-3.5 w-3.5 ${opt.refundable ? 'text-emerald-500' : 'text-gray-400'}`} />
-                        {opt.refundable ? 'Refundable' : 'Non-refundable'}
+                        <ShieldCheck className={`h-3.5 w-3.5 ${opt.refundable === true ? 'text-emerald-500' : 'text-gray-400'}`} />
+                        {opt.refundable === true ? 'Refundable' : opt.refundable === false ? 'Non-refundable' : 'Refunds: see fare rules'}
                       </div>
                       {perks.slice(0, 3).map((p, idx) => (
                         <div key={idx} className="flex items-center gap-1.5 text-emerald-700">

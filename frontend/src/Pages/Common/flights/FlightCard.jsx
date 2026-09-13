@@ -201,10 +201,15 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
   // Weight OR pieces — reading only `.weight` showed a piece-based fare as
   // "Cabin only" while the review page said "1 Piece" one click later.
   const checkedBag = formatCheckedBag(flight.baggage?.checked);
+  // Whether the fare said anything about checked bags at all. "Cabin only"
+  // is a claim; with no data the honest answer is "see fare rules".
+  const bagKnown = flight.baggage?.checked != null;
   const cabinBag = flight.baggage?.cabin?.weight;
+  // No cabin data means no cabin label, not "Economy".
   const cabinClass = flight.cabin
     ? flight.cabin.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
-    : 'Economy';
+    : null;
+  const refundLabel = flight.refundable === true ? 'Refundable' : flight.refundable === false ? 'Non-refundable' : 'Refunds: see fare rules';
   const seatsLeft = flight.numberOfBookableSeats;
 
   const amenities = Array.isArray(flight.amenities) ? flight.amenities : [];
@@ -311,7 +316,9 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
                       <span className="font-bold text-[#055B75]"><Price amount={{ amount: totalFare, currency }} /></span>
                     </div>
                   </div>
-                  <div className="text-[10px] text-gray-400 mt-2">Per adult · {cabinClass}</div>
+                  {/* The airline's total covers every traveller on the search;
+                      it was labelled "Per adult". */}
+                  <div className="text-[10px] text-gray-400 mt-2">Total for all travellers{cabinClass ? ` · ${cabinClass}` : ''}</div>
                 </div>
               )}
             </div>
@@ -351,7 +358,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
         <div className="flex items-center gap-3 sm:gap-4 text-[11px] text-gray-500 flex-wrap min-w-0">
           <span className="inline-flex items-center gap-1">
             <Luggage className="h-3.5 w-3.5 text-gray-400" />
-            {checkedBag ? `${checkedBag} check-in` : 'Cabin only'}
+            {checkedBag ? `${checkedBag} check-in` : bagKnown ? 'No checked bag' : 'Baggage: see fare rules'}
           </span>
           {cabinBag ? (
             <span className="inline-flex items-center gap-1">
@@ -360,13 +367,15 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
             </span>
           ) : null}
           <span className="inline-flex items-center gap-1">
-            <ShieldCheck className={`h-3.5 w-3.5 ${flight.refundable ? 'text-emerald-500' : 'text-gray-400'}`} />
-            {flight.refundable ? 'Refundable' : 'Non-refundable'}
+            <ShieldCheck className={`h-3.5 w-3.5 ${flight.refundable === true ? 'text-emerald-500' : 'text-gray-400'}`} />
+            {refundLabel}
           </span>
-          <span className="hidden sm:inline-flex items-center gap-1">
-            <Dot className="h-3.5 w-3.5 text-gray-400 -mx-1" />
-            {cabinClass}
-          </span>
+          {cabinClass && (
+            <span className="hidden sm:inline-flex items-center gap-1">
+              <Dot className="h-3.5 w-3.5 text-gray-400 -mx-1" />
+              {cabinClass}
+            </span>
+          )}
           {seatsLeft && seatsLeft <= 9 && (
             <span className="text-red-600 font-medium">{seatsLeft} seat{seatsLeft > 1 ? 's' : ''} left</span>
           )}
@@ -421,10 +430,12 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
 
           {/* Fare / baggage summary */}
           <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-x-6 gap-y-2 text-xs text-gray-600">
-            <span><span className="text-gray-400">Class:</span> <span className="font-medium">{cabinClass}{flight.bookingClass ? ` (${flight.bookingClass})` : ''}</span></span>
+            {(cabinClass || flight.bookingClass) && (
+              <span><span className="text-gray-400">Class:</span> <span className="font-medium">{cabinClass || ''}{flight.bookingClass ? ` (${flight.bookingClass})` : ''}</span></span>
+            )}
             <span>
               <span className="text-gray-400">Check-in:</span>{' '}
-              <span className="font-medium">{checkedBag || 'Not included'}</span>
+              <span className="font-medium">{checkedBag || (bagKnown ? 'Not included' : 'See fare rules')}</span>
             </span>
             {cabinBag ? (
               <span>

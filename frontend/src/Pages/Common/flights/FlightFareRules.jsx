@@ -9,6 +9,7 @@ function FlightFareRules({ flightOffer, onBagsChange }) {
   const [fareRules, setFareRules] = useState([]);
   const [openRule, setOpenRule] = useState(null);
   const [selectedBagIdx, setSelectedBagIdx] = useState([]);
+  const selectable = typeof onBagsChange === 'function';
 
   const toggleBag = (idx) => {
     const next = selectedBagIdx.includes(idx)
@@ -65,24 +66,30 @@ function FlightFareRules({ flightOffer, onBagsChange }) {
 
   return (
     <div className="space-y-4">
-      {/* Extra baggage options */}
+      {/* Extra baggage options. Selectable only when the caller books what is
+          selected. The review page used to add these to the charge and never
+          send them to the airline, so it now shows them as information. */}
       {bags.length > 0 && (
         <div>
           <div className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1.5">
-            <Luggage className="h-4 w-4 text-[#055B75]" /> Add extra baggage
+            <Luggage className="h-4 w-4 text-[#055B75]" /> {selectable ? 'Add extra baggage' : 'Extra baggage the airline sells for this fare'}
           </div>
+          {!selectable && (
+            <p className="text-xs text-gray-500 mb-2">Extra bags can be added with the airline after booking; they are not added here.</p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {bags.map((b, i) => {
-              const on = selectedBagIdx.includes(i);
+              const on = selectable && selectedBagIdx.includes(i);
               return (
                 <button
                   key={i}
                   type="button"
-                  onClick={() => b.price && toggleBag(i)}
-                  className={`flex items-center justify-between border rounded-lg px-3 py-2 text-sm text-left transition-colors ${on ? 'border-[#055B75] bg-[#F0FAFC]' : 'border-gray-200 hover:border-[#65B3CF]'}`}
+                  disabled={!selectable}
+                  onClick={() => selectable && b.price && toggleBag(i)}
+                  className={`flex items-center justify-between border rounded-lg px-3 py-2 text-sm text-left transition-colors ${on ? 'border-[#055B75] bg-[#F0FAFC]' : 'border-gray-200'} ${selectable ? 'hover:border-[#65B3CF]' : 'cursor-default'}`}
                 >
                   <span className="flex items-center gap-2 text-gray-700">
-                    {b.price && (
+                    {selectable && b.price && (
                       <span className={`h-4 w-4 rounded border flex items-center justify-center flex-shrink-0 ${on ? 'bg-[#055B75] border-[#055B75]' : 'border-gray-300'}`}>
                         {on && <Check className="h-3 w-3 text-white" />}
                       </span>
