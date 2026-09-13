@@ -9,6 +9,7 @@ import Price from "../../../Components/Price";
 import currencyService from "../../../Services/CurrencyService";
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext";
 import { clearFlightReview, readFlightReview, saveFlightReview } from "../../../utils/flightReviewResume";
+import NoticeDialog from "../../../Components/NoticeDialog";
 import ArcPayService from "../../../Services/ArcPayService";
 import { useLocationContext } from '../../../Context/LocationContext';
 import { allAirports } from './airports';
@@ -73,6 +74,8 @@ function FlightBookingConfirmation() {
   const [pricedFare, setPricedFare] = useState(null);
   const [fareNotice, setFareNotice] = useState(null);
   const [checkingOut, setCheckingOut] = useState(false);
+  // What the page needs to tell the customer, in the site's own dialog.
+  const [notice, setNotice] = useState(null);
   const [calculatedFare, setCalculatedFare] = useState({
     baseFare: 0,
     totalTax: 0,
@@ -598,6 +601,22 @@ function FlightBookingConfirmation() {
     });
   };
 
+  // Open the traveller's card, bring it into view and put the cursor in its
+  // first empty field. Runs once the dialog has closed: closing hands focus back
+  // to the Proceed button, which would otherwise scroll the page straight back.
+  const showTraveller = (passengerId) => {
+    setEditMode(true);
+    setExpandedPassengerId(passengerId);
+    setTimeout(() => {
+      const card = document.getElementById(`traveller-${passengerId}`);
+      if (!card) return;
+      // Clear of the fixed navbar.
+      window.scrollTo({ top: card.getBoundingClientRect().top + window.scrollY - 120, behavior: 'smooth' });
+      const empty = [...card.querySelectorAll('input, select')].find((field) => !field.readOnly && !field.disabled && !field.value);
+      empty?.focus({ preventScroll: true });
+    }, 250);
+  };
+
   // Handle proceeding to payment - DIRECT to ARC Pay (bypass FlightPayment.jsx)
   const handleProceedToPayment = async () => {
     if (checkingOut) return;
@@ -610,32 +629,42 @@ function FlightBookingConfirmation() {
     // Everything the airline needs, checked before payment. The server refuses
     // an incomplete traveller too - but only after the charge, and then has to
     // reverse it. Stopping here costs the customer nothing.
-    const problems = [];
+    const groups = [];
     passengerData.forEach((p, index) => {
-      const who = `${PASSENGER_TYPES[p.type]?.label || 'Traveller'} ${index + 1}`;
-      if (!p.firstName?.trim() || !p.lastName?.trim()) problems.push(`${who}: enter the first and last name exactly as on the ID.`);
+      const group = { id: p.id, label: `${PASSENGER_TYPES[p.type]?.label || 'Traveller'} ${index + 1}`, items: [] };
+      const add = (text) => group.items.push(text);
+      if (!p.firstName?.trim() || !p.lastName?.trim()) add('Enter the first and last name exactly as on the ID.');
       if (!p.dateOfBirth) {
-        problems.push(`${who}: enter the date of birth.`);
+        add('Enter the date of birth.');
       } else {
         const ageProblem = passengerAgeProblem(p.type, p.dateOfBirth, travelDate);
-        if (ageProblem) problems.push(`${who}: ${ageProblem}`);
+        if (ageProblem) add(ageProblem);
       }
-      if (!p.gender) problems.push(`${who}: select a gender.`);
-      if (index === 0 && !p.mobile) problems.push(`${who}: enter a mobile number for booking updates.`);
+      if (!p.gender) add('Select a gender.');
+      if (index === 0 && !p.mobile) add('Enter a mobile number for booking updates.');
       // A passport was optional on international routes, and an international
       // ticket without one cannot be issued.
       if (international) {
-        if (!p.nationality) problems.push(`${who}: select a nationality.`);
-        if (!p.passportNumber?.trim()) problems.push(`${who}: enter the passport number.`);
+        if (!p.nationality) add('Select a nationality.');
+        if (!p.passportNumber?.trim()) add('Enter the passport number.');
         if (!p.passportExpiry) {
-          problems.push(`${who}: enter the passport expiry date.`);
+          add('Enter the passport expiry date.');
         } else if (lastDate && new Date(p.passportExpiry) <= new Date(String(lastDate).slice(0, 10))) {
-          problems.push(`${who}: the passport expires before the trip ends.`);
+          add('The passport expires before the trip ends.');
         }
       }
+      if (group.items.length) groups.push(group);
     });
-    if (problems.length) {
-      alert(`Please check the traveller details:\n\n${problems.join('\n')}`);
+    if (groups.length) {
+      setNotice({
+        tone: 'attention',
+        title: 'Check the traveller details',
+        message: 'The airline needs these to issue the ticket.',
+        groups,
+        reassure: true,
+        actionLabel: groups.length === 1 ? `Go to ${groups[0].label}` : 'Review details',
+        onAction: () => showTraveller(groups[0].id),
+      });
       return;
     }
 
@@ -751,13 +780,29 @@ function FlightBookingConfirmation() {
       // would bounce straight back here, so say what to do instead; the
       // details they typed stay on the page.
       if (refusal.code === 'LOGIN_REQUIRED') {
-        alert('We could not confirm your sign-in. Please log out, log in again and retry. Nothing has been charged.');
+        setNotice({
+          tone: 'error',
+          title: 'Please sign in again',
+          message: 'We could not confirm your sign-in. Log out, log in again, then retry. The details you entered stay on this page.',
+          reassure: true,
+        });
         return;
       }
-      alert(refusal.error || 'We could not start the payment. Nothing has been charged. Please try again.');
+      setNotice({
+        tone: 'error',
+        title: 'We could not start the payment',
+        // The dialog says nothing was charged itself; some server messages do too.
+        message: String(refusal.error || 'Please try again in a moment.').replace(/\s*Nothing has been charged\.?/i, ''),
+        reassure: true,
+      });
     } catch (error) {
       console.error('❌ Payment initiation error:', error?.message);
-      alert('Payment service temporarily unavailable. Nothing has been charged. Please try again.');
+      setNotice({
+        tone: 'error',
+        title: 'Payment service unavailable',
+        message: 'We could not reach the payment service. Please try again in a moment.',
+        reassure: true,
+      });
     } finally {
       setCheckingOut(false);
     }
@@ -1093,7 +1138,7 @@ function FlightBookingConfirmation() {
                 {passengerData.map((passenger, index) => {
                   const isExpanded = expandedPassengerId === null ? index === 0 : expandedPassengerId === passenger.id;
                   return (
-                  <div key={passenger.id} className="passenger-item">
+                  <div key={passenger.id} id={`traveller-${passenger.id}`} className="passenger-item">
                     <div className="passenger-header" role="button" tabIndex={0} aria-expanded={isExpanded} onClick={() => setExpandedPassengerId(isExpanded ? '' : passenger.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedPassengerId(isExpanded ? '' : passenger.id); } }} style={{ cursor: 'pointer' }}>
                       <div className="flex items-center gap-3">
                         <span className="passenger-badge">
@@ -1516,6 +1561,14 @@ function FlightBookingConfirmation() {
                 >
                   {checkingOut ? 'Checking the fare…' : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
                 </button>
+
+                {/* Renders into a portal, so it covers both this button and the mobile bar's. */}
+                <NoticeDialog
+                  open={Boolean(notice)}
+                  {...(notice || {})}
+                  title={notice?.title || ''}
+                  onClose={() => setNotice(null)}
+                />
 
                 <div className="secure-payment-badge">
                   <span className="flex items-center gap-1">
