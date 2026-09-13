@@ -61,6 +61,8 @@ class ArcPayService {
                 currency: checkoutData.currency || 'USD',
                 orderId: checkoutData.orderId,
                 bookingType: checkoutData.bookingType || 'flight',
+                // Evaluated by the server on the total it computes itself.
+                couponCode: checkoutData.couponCode,
                 customerEmail: checkoutData.customerEmail,
                 customerName: checkoutData.customerName,
                 customerPhone: checkoutData.customerPhone,

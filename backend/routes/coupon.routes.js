@@ -8,6 +8,7 @@ import { protect, admin } from '../middleware/auth.middleware.js';
 // mock, so a test against these routes built a real client and hit the network.
 // flight.routes.js was fixed the same way and for the same reason.
 import supabase from '../config/supabase.js';
+import { evaluateCoupon } from '../services/coupon.service.js';
 
 dotenv.config();
 
@@ -25,93 +26,14 @@ router.post('/validate', async (req, res) => {
     try {
         const { code, orderTotal = 0, bookingType = 'all', userId } = req.body;
 
-        if (!code) {
-            return res.status(400).json({ success: false, message: 'Coupon code is required.' });
+        // The same evaluation checkout runs on the total it computes itself.
+        // `max_discount_amount` caps what one booking may give away - see
+        // services/coupon.service.js.
+        const result = await evaluateCoupon(supabase, { code, orderTotal, bookingType, userId });
+        if (!result.ok) {
+            return res.status(result.status).json({ success: false, message: result.message });
         }
-
-        const { data: coupon, error } = await supabase
-            .from('coupons')
-            .select('*')
-            .eq('code', code.trim().toUpperCase())
-            .eq('is_active', true)
-            .maybeSingle();
-
-        if (error) throw error;
-
-        if (!coupon) {
-            return res.status(404).json({ success: false, message: 'Invalid or expired coupon code.' });
-        }
-
-        // Check validity dates
-        const now = new Date();
-        if (coupon.valid_from && new Date(coupon.valid_from) > now) {
-            return res.status(400).json({ success: false, message: 'This coupon is not yet active.' });
-        }
-        if (coupon.valid_until && new Date(coupon.valid_until) < now) {
-            return res.status(400).json({ success: false, message: 'This coupon has expired.' });
-        }
-
-        // Check max uses
-        if (coupon.max_uses !== null && coupon.current_uses >= coupon.max_uses) {
-            return res.status(400).json({ success: false, message: 'This coupon has reached its maximum usage limit.' });
-        }
-
-        // Check minimum order value
-        if (parseFloat(coupon.min_order_value) > 0 && parseFloat(orderTotal) < parseFloat(coupon.min_order_value)) {
-            return res.status(400).json({
-                success: false,
-                message: `This coupon requires a minimum order of $${coupon.min_order_value}.`
-            });
-        }
-
-        // Check booking type applicability
-        if (coupon.applicable_to !== 'all' && coupon.applicable_to !== bookingType) {
-            return res.status(400).json({
-                success: false,
-                message: `This coupon is only valid for ${coupon.applicable_to} bookings.`
-            });
-        }
-
-        // Check for user-specific usage limit (max 1 use per user)
-        if (userId) {
-            const { data: existing } = await supabase
-                .from('coupon_usage')
-                .select('id')
-                .eq('coupon_id', coupon.id)
-                .eq('user_id', userId)
-                .maybeSingle();
-
-            if (existing) {
-                return res.status(400).json({ success: false, message: 'You have already used this coupon.' });
-            }
-        }
-
-        // Calculate discount
-        let discountAmount = 0;
-        const total = parseFloat(orderTotal);
-        if (coupon.discount_type === 'percentage') {
-            discountAmount = (total * parseFloat(coupon.discount_value)) / 100;
-        } else {
-            discountAmount = parseFloat(coupon.discount_value);
-        }
-        // Ceiling on what one booking may give away. A percentage coupon is
-        // unbounded in money terms: 20% off a $1,200 international ticket is
-        // $240, against a service fee of ~2.5% - and the airline is still paid
-        // the full fare through ARC, so the difference comes straight out of
-        // the agency's margin. `max_discount_amount` is what stops one
-        // expensive booking wiping out the earnings of many.
-        //
-        // Null/absent means no cap, so this is inert until a coupon sets one
-        // (and while the column does not exist yet).
-        const maxDiscount = coupon.max_discount_amount == null
-            ? null
-            : parseFloat(coupon.max_discount_amount);
-        if (maxDiscount != null && Number.isFinite(maxDiscount) && maxDiscount > 0) {
-            discountAmount = Math.min(discountAmount, maxDiscount);
-        }
-
-        discountAmount = Math.min(discountAmount, total); // can't discount more than total
-        discountAmount = parseFloat(discountAmount.toFixed(2));
+        const { coupon, discountAmount, finalTotal } = result;
 
         return res.json({
             success: true,
@@ -125,7 +47,7 @@ router.post('/validate', async (req, res) => {
                 applicableTo: coupon.applicable_to
             },
             discountAmount,
-            finalTotal: parseFloat((total - discountAmount).toFixed(2))
+            finalTotal
         });
 
     } catch (error) {

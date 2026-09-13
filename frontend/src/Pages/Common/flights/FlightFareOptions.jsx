@@ -96,6 +96,9 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
   // Merge a chosen fare option onto the base (display) flight, keeping booking data
   const handleSelect = (opt) => {
     if (!opt) { onSelect(flight); return; }
+    // A fare option is only bookable with its own offer. Falling back to the
+    // clicked flight's offer showed one fare's price and booked another fare.
+    if (!opt.originalOffer) { onSelect(flight); return; }
     const merged = {
       ...flight,
       price: opt.price || flight.price,
@@ -108,7 +111,7 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
       baggage: opt.baggageDetails
         ? { checked: opt.baggageDetails.checked || flight.baggage?.checked, cabin: opt.baggageDetails.cabin || flight.baggage?.cabin }
         : flight.baggage,
-      originalOffer: opt.originalOffer || flight.originalOffer,
+      originalOffer: opt.originalOffer,
     };
     onSelect(merged);
   };

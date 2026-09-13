@@ -792,6 +792,22 @@ describe('traveller details are checked before anything is sold', () => {
     expect(axios.post).not.toHaveBeenCalled();
   });
 
+  // Types used to be assigned by position: whoever was typed second in a one
+  // adult + one child search became the child.
+  it('refuses passenger types that do not match the fare', async () => {
+    const app = await makeApp(paidRow());
+
+    const res = await request(app).post('/api/flights/order').send({
+      ...orderBody,
+      flightOffer: bookableOffer,
+      travelers: [{ ...orderBody.travelers[0], ptc: 'CHILD' }],
+    });
+
+    expect(res.body.code).toBe('PASSENGER_COUNT_MISMATCH');
+    expect(res.body.technicalError).toMatch(/passenger types/);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
   it('has no invented passenger, contact or transaction id left in the route', async () => {
     const source = (await import('node:fs')).readFileSync(
       new URL('../../../backend/routes/flight.routes.js', import.meta.url), 'utf8',

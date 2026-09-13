@@ -195,6 +195,52 @@ describe('Manage Booking explains a refused refund honestly', () => {
   });
 });
 
+/**
+ * The review page charges what checkout verifies.
+ *
+ * It multiplied the airline's all-passenger total by the passenger count again
+ * (two adults paid four fares), added $90 of insurance, transfer and "VIP"
+ * nothing ever fulfilled, charged for seats and bags never sent to the airline,
+ * let the customer add travellers the fare was not priced for, typed everyone
+ * as an Adult, and sent the offer id to the card network as the flight number.
+ */
+describe('the review page charges what checkout verifies', () => {
+  const src = page('FlightBookingConfirmation.jsx');
+
+  it('uses the shared charge formula and no per-passenger multiplication', () => {
+    expect(src).toMatch(/computeFlightCharge\(/);
+    expect(src).not.toMatch(/effectivePassengerCount/);
+  });
+
+  it('offers nothing it does not fulfil', () => {
+    for (const phantom of ['Travel Insurance', 'Airport Transfer', 'Upgrade to VIP', 'vipServiceFee', 'seatExtraFee', 'bagExtraFee', 'onBagsChange={']) {
+      expect(src, phantom).not.toContain(phantom);
+    }
+  });
+
+  it('locks travellers to the fare and checks their ages', () => {
+    expect(src).not.toMatch(/Add Another Traveller/);
+    expect(src).not.toMatch(/type: "Adult"/);
+    expect(src).toMatch(/passengerAgeProblem\(/);
+  });
+
+  it('checks the fare with the airline and handles a changed price', () => {
+    expect(src).toMatch(/apiConfig\.endpoints\.flights\.price/);
+    expect(src).toMatch(/PRICE_CHANGED/);
+  });
+
+  it('sends real flight numbers, the coupon code, and no placeholder identity', () => {
+    expect(src).not.toMatch(/rawFlightData\?\.id \|\| '000'/);
+    expect(src).toMatch(/couponCode/);
+    expect(src).not.toMatch(/customer@jetsetgo\.com|'Guest User'|BOOK-\$\{Date\.now\(\)\}/);
+  });
+
+  it('promises nothing before payment it cannot keep', () => {
+    expect(src).not.toMatch(/Instant Confirmation/);
+    expect(src).not.toMatch(/visaRequirements\?\.officialWebsite/);
+  });
+});
+
 describe('FlightETicket can actually be captured', () => {
   const src = page('FlightETicket.jsx');
 
