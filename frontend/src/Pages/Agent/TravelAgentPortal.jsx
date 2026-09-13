@@ -4,15 +4,22 @@ import { getApiUrl } from "../../utils/apiHelper";
 import PaymentLinkCreate from "../Admin/PaymentLinkCreate";
 import PaymentLinksList from "../Admin/PaymentLinksList";
 
+// The session is the httpOnly cookie set at sign-in; this is only the profile
+// saved beside it. The portal also demanded a stored token, which nothing has
+// written since sessions moved to cookies - so a signed-in agent was sent
+// straight back to the login page and never saw their dashboard.
 function readSession() {
   try {
-    const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
-    const raw = localStorage.getItem("adminUser") || localStorage.getItem("user");
-    const user = raw ? JSON.parse(raw) : null;
-    return { token, user };
+    return { user: JSON.parse(localStorage.getItem("adminUser") || "null") };
   } catch {
-    return { token: null, user: null };
+    return { user: null };
   }
+}
+
+function endSession() {
+  ["adminUser", "adminToken", "token", "isAuthenticated"].forEach((key) => {
+    try { localStorage.removeItem(key); } catch { /* storage blocked */ }
+  });
 }
 
 const TYPE_META = {
@@ -31,7 +38,7 @@ const money = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFract
 
 // ── Dashboard (the portal landing) ───────────────────────────────────────────
 function AgentDashboard() {
-  const session = readSession();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -39,9 +46,14 @@ function AgentDashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(getApiUrl("payments?action=agent-stats"), {
-          headers: { Authorization: `Bearer ${session.token}` },
-        });
+        const res = await fetch(getApiUrl("payments?action=agent-stats"), { credentials: "include" });
+        // The cookie lapsed while the saved profile did not: sign in again
+        // rather than show an error that looks like an empty account.
+        if (res.status === 401 || res.status === 403) {
+          endSession();
+          navigate("/agent/login?expired", { replace: true });
+          return;
+        }
         const json = await res.json();
         if (res.ok && json.success) setData(json);
         else setError(json.error || "Failed to load your dashboard.");
@@ -176,14 +188,19 @@ const TravelAgentPortal = () => {
 
   // Separate endpoints: only agents live under /agent. Anyone else is bounced out.
   useEffect(() => {
-    if (!session.token || !session.user) { navigate("/admin/login", { replace: true }); return; }
+    if (!session.user) { navigate("/agent/login", { replace: true }); return; }
     if (session.user.role !== "agent") { navigate("/admin", { replace: true }); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  const logout = () => {
-    ["adminToken", "adminUser", "token", "user", "isAuthenticated"].forEach((k) => localStorage.removeItem(k));
-    navigate("/admin/login");
+  // Clears the server session too; removing the saved profile alone left the
+  // cookie signed in.
+  const logout = async () => {
+    try {
+      await fetch(getApiUrl("auth/logout"), { method: "POST", credentials: "include" });
+    } catch { /* signed out on this device regardless */ }
+    endSession();
+    navigate("/agent/login", { replace: true });
   };
 
   if (!session.user || session.user.role !== "agent") return null;

@@ -57,7 +57,7 @@ const TravelAgentSetPassword = () => {
       });
       if (res.ok && res.success) {
         setState("done");
-        setTimeout(() => navigate("/admin/login"), 2200);
+        setTimeout(() => navigate("/agent/login"), 2200);
       } else {
         setError(res.error || "Could not set your password.");
       }
@@ -123,7 +123,7 @@ const TravelAgentSetPassword = () => {
             <span className="material-symbols-outlined text-5xl text-emerald-500 block mb-3">check_circle</span>
             <p className="text-slate-700 font-bold mb-1">Password set!</p>
             <p className="text-slate-500 text-sm mb-6">Taking you to the sign-in page…</p>
-            <Link to="/admin/login" className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1152d4] text-white rounded-xl font-bold text-sm no-underline">
+            <Link to="/agent/login" className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1152d4] text-white rounded-xl font-bold text-sm no-underline">
               <span className="material-symbols-outlined text-base">login</span> Sign in now
             </Link>
           </div>

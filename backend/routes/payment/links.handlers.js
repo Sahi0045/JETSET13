@@ -275,6 +275,10 @@ export async function handleProcessPaymentLink(req, res) {
             travel_type: paymentLink.booking_type,
             total_amount: parseFloat(paymentLink.amount),
             status: 'pending',
+            // The agent who made the sale, so the booking shows under them in the
+            // admin panel. It was left off, so no agent view could ever find the
+            // booking an agent's sale produced.
+            agent_id: paymentLink.agent_id || null,
             passenger_details: [{ firstName, lastName, email: paymentLink.customer_email || '' }],
             booking_details: {
                 source: 'payment_link',
