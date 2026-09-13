@@ -920,10 +920,7 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
         const order = orderResp.data;
         const txns = Array.isArray(order.transaction) ? order.transaction : [];
 
-        // Already reversed on the gateway? Treat as success (idempotent).
-        const alreadyReversed = order.status === 'CANCELLED' || order.status === 'REFUNDED' ||
-            txns.some(t => ['VOID', 'REFUND'].includes(t.transaction?.type) && t.result === 'SUCCESS');
-        if (alreadyReversed) {
+        if (order.status === 'CANCELLED' || order.status === 'REFUNDED') {
             return { reversed: true, action: 'ALREADY_REVERSED', orderStatus: order.status };
         }
 
@@ -937,31 +934,51 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
             return { reversed: false, action: 'NONE', error: 'no captured transaction to reverse' };
         }
         const targetTxnId = captured.transaction.id;
+        const capturedAmt = parseFloat(captured.transaction?.amount ?? order.amount ?? 0);
 
-        // 1) Try VOID first (works pre-settlement; no money actually moved, no fee).
-        const voidTxnId = `void-fail-${Date.now()}`;
-        const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderId}/transaction/${voidTxnId}`;
-        const voidResp = await axios.put(voidUrl, {
-            apiOperation: 'VOID',
-            transaction: { targetTransactionId: targetTxnId, reference: String(reason).substring(0, 40) }
-        }, { headers: authConfig.headers, validateStatus: () => true });
-        // `|| !voidResp.data?.result` used to sit here - a reply with no result
-        // at all counted as a successful void. It does not.
-        if (arcSucceeded(voidResp)) {
-            return { reversed: true, action: 'VOID', transactionId: voidTxnId, targetTransactionId: targetTxnId };
+        // Already reversed on the gateway? Only when the money is actually back.
+        // This used to answer "reversed" for ANY successful refund on the order,
+        // so an earlier partial refund (say the cancellation fee withheld) made
+        // a later full reversal report success having returned nothing more.
+        // A successful VOID returns everything; refunds are summed against what
+        // was captured, and only the remainder is refunded below.
+        const voided = txns.some(t => t.transaction?.type === 'VOID' && t.result === 'SUCCESS');
+        const alreadyRefunded = txns
+            .filter(t => t.transaction?.type === 'REFUND' && t.result === 'SUCCESS')
+            .reduce((sum, t) => sum + (parseFloat(t.transaction?.amount) || 0), 0);
+        if (voided || (capturedAmt > 0 && alreadyRefunded + 0.01 >= capturedAmt)) {
+            return { reversed: true, action: 'ALREADY_REVERSED', orderStatus: order.status };
         }
 
-        // 2) VOID rejected (likely already settled) → REFUND the full amount.
+        // 1) Try VOID first (works pre-settlement; no money actually moved, no fee).
+        // Only when nothing has been refunded yet: a VOID reverses the whole
+        // transaction, which is not possible once part of it has gone back.
+        let voidResp = null;
+        if (alreadyRefunded === 0) {
+            const voidTxnId = `void-fail-${Date.now()}`;
+            const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderId}/transaction/${voidTxnId}`;
+            voidResp = await axios.put(voidUrl, {
+                apiOperation: 'VOID',
+                transaction: { targetTransactionId: targetTxnId, reference: String(reason).substring(0, 40) }
+            }, { headers: authConfig.headers, validateStatus: () => true });
+            // `|| !voidResp.data?.result` used to sit here - a reply with no result
+            // at all counted as a successful void. It does not.
+            if (arcSucceeded(voidResp)) {
+                return { reversed: true, action: 'VOID', transactionId: voidTxnId, targetTransactionId: targetTxnId };
+            }
+        }
+
+        // 2) VOID rejected (likely already settled) → REFUND what is left.
         // Return what the gateway captured - read from the transaction it just
         // showed us - never the caller's figure. Every call site passes
         // `req.body.totalAmount`, which the client controls: with the VOID leg
         // refused (already settled) and this REFUND leg running, a client that
         // posted 1.00 against a 900.00 charge was refunded 1.00 and the row
         // written `refunded`. `amount` stays in the signature and is ignored.
-        const refundAmt = parseFloat(captured.transaction?.amount ?? order.amount ?? 0);
+        const refundAmt = Math.round((capturedAmt - alreadyRefunded) * 100) / 100;
         if (amount != null && Number.isFinite(Number(amount)) && Math.abs(Number(amount) - refundAmt) > 0.01) {
             console.warn('⚠️ reversal: caller amount ignored in favour of captured amount', {
-                orderId, caller: Number(amount), captured: refundAmt
+                orderId, caller: Number(amount), captured: capturedAmt, alreadyRefunded
             });
         }
         if (refundAmt > 0) {
@@ -976,7 +993,7 @@ export async function reverseArcPaymentForOrder(orderId, { amount, currency = 'U
             }
             return { reversed: false, action: 'FAILED', error: 'VOID and REFUND both failed', details: refundResp.data };
         }
-        return { reversed: false, action: 'FAILED', error: 'VOID failed and no amount available to refund', details: voidResp.data };
+        return { reversed: false, action: 'FAILED', error: 'VOID failed and no amount available to refund', details: voidResp?.data ?? null };
     } catch (err) {
         return { reversed: false, action: 'FAILED', error: err.message };
     }

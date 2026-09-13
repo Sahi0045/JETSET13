@@ -23,6 +23,9 @@ const TERMINAL_ERROR_CODES = new Set([
   'OFFER_NOT_BOOKABLE',   // offer expired or failed the shape gate
   'OFFER_MISSING',        // this session lost the offer; nothing to resend
   'PASSENGERS_INCOMPLETE', // this session lost passenger details; same
+  'PASSENGER_COUNT_MISMATCH', // more travellers than the fare was priced for
+  'PAYER_NOT_VERIFIED',   // this browser cannot prove it made the payment
+  'ORDER_FAILED',         // an unexpected error; the payment was reversed or flagged
 ]);
 
 /**

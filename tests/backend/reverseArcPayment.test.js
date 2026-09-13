@@ -137,6 +137,68 @@ describe('what counts as reversed', () => {
   });
 });
 
+/**
+ * An earlier partial refund is not a full reversal.
+ *
+ * Any successful REFUND on the order used to count as "already reversed", so a
+ * cancellation that withheld a fee - or any small goodwill refund - made a
+ * later full reversal report success having returned nothing more.
+ */
+describe('an order that was partly refunded before', () => {
+  const partlyRefunded = (captured, refunded) => ({
+    status: 200,
+    data: {
+      status: 'CAPTURED',
+      amount: captured,
+      transaction: [
+        { result: 'SUCCESS', transaction: { id: 'pay-1', type: 'PAYMENT', amount: captured } },
+        { result: 'SUCCESS', transaction: { id: 'ref-1', type: 'REFUND', amount: refunded } },
+      ],
+    },
+  });
+
+  it('refunds only what is left, and skips the VOID that can no longer work', async () => {
+    axios.get.mockResolvedValue(partlyRefunded(900, 50));
+    axios.put.mockResolvedValueOnce(ok);
+
+    const result = await reverse('FLT1', {});
+
+    expect(result.reversed).toBe(true);
+    expect(result.action).toBe('REFUND');
+    expect(result.amount).toBe(850);
+    expect(axios.put).toHaveBeenCalledTimes(1);
+    expect(putBody(0).apiOperation).toBe('REFUND');
+    expect(putBody(0).transaction.amount).toBe('850.00');
+  });
+
+  it('is already reversed only when the refunds cover the capture', async () => {
+    axios.get.mockResolvedValue(partlyRefunded(900, 900));
+
+    const result = await reverse('FLT1', {});
+
+    expect(result.action).toBe('ALREADY_REVERSED');
+    expect(axios.put).not.toHaveBeenCalled();
+  });
+
+  it('treats a successful VOID as fully reversed', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        status: 'CAPTURED',
+        transaction: [
+          { result: 'SUCCESS', transaction: { id: 'pay-1', type: 'PAYMENT', amount: 900 } },
+          { result: 'SUCCESS', transaction: { id: 'void-1', type: 'VOID' } },
+        ],
+      },
+    });
+
+    const result = await reverse('FLT1', {});
+
+    expect(result.action).toBe('ALREADY_REVERSED');
+    expect(axios.put).not.toHaveBeenCalled();
+  });
+});
+
 describe('nothing to reverse', () => {
   it('reports NONE when the order shows no captured transaction', async () => {
     axios.get.mockResolvedValue({ status: 200, data: { status: 'PENDING', transaction: [] } });

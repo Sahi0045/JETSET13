@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import dotenv from 'dotenv';
 import { renderBrandedEmail, detailCard, highlightBox, paragraph, BRAND } from './emailTemplate.js';
+import { isUnticketedFlight } from './email/templates.js';
 import {
   generateCruiseCallbackTemplate,
   generatePackageCallbackTemplate,
@@ -470,6 +471,10 @@ export const sendBookingConfirmationEmail = async (bookingData) => {
   }
 
   try {
+    // Same rule as the template: a flight the airline holds but has not
+    // ticketed is a reservation, and the subject line is what everyone reads.
+    const unticketed = isUnticketedFlight({ bookingType, bookingDetails });
+
     const html = generateBookingConfirmationTemplate({
       customerName: customerName || 'Valued Customer',
       bookingReference,
@@ -485,13 +490,23 @@ export const sendBookingConfirmationEmail = async (bookingData) => {
     const response = await getResend().emails.send({
       from: 'Jetsetters <noreply@jetsetterss.com>',
       to: [customerEmail],
-      subject: `✅ Booking Confirmed - ${bookingReference} | Jetsetters`,
+      subject: unticketed
+        ? `Reservation held - ${bookingReference} | Jetsetters`
+        : `✅ Booking Confirmed - ${bookingReference} | Jetsetters`,
       html,
       text: stripHtml(html)
     });
 
+    // Resend reports a refused send in `error`; it does not throw. This used to
+    // log "sent" and return success for every send, delivered or not.
+    if (response?.error) {
+      const reason = response.error.message || String(response.error);
+      console.error('❌ Booking confirmation email refused:', reason);
+      return { success: false, error: reason };
+    }
+
     console.log('✅ Booking confirmation email sent to:', customerEmail);
-    return { success: true, data: response };
+    return { success: true, data: response?.data ?? response };
   } catch (error) {
     console.error('❌ Error sending booking confirmation email:', error);
     return { success: false, error: error.message };
@@ -523,10 +538,20 @@ export const sendBookingNotificationEmails = async (bookingData) => {
 
     console.log('✅ Booking admin notification sent to:', adminEmail);
 
+    // Success means the customer's email went out. This used to be `true` even
+    // when the customer send failed or was skipped for want of an address, so
+    // the order route logged "sent successfully" for emails nobody received.
+    const customerOk = customerResult?.success === true;
+    const adminOk = !adminResult?.error;
     return {
-      success: true,
+      success: customerOk,
+      ...(customerOk ? {} : { error: customerResult?.error || 'customer email not sent' }),
       customerEmail: customerResult,
-      adminNotification: { success: true, data: adminResult }
+      adminNotification: {
+        success: adminOk,
+        data: adminResult?.data ?? adminResult,
+        ...(adminOk ? {} : { error: adminResult.error.message || String(adminResult.error) })
+      }
     };
   } catch (error) {
     console.error('❌ Error sending booking notification emails:', error);
