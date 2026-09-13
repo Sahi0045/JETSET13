@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { protect, admin, optionalProtect } from '../middleware/auth.middleware.js';
 import { resolveBookingUserId } from '../utils/bookingOwner.js';
 import { handleCancelBookingAction, reverseArcPaymentForOrder } from './payment/operations.handlers.js';
+import { emailMatchesBooking, isBookingOwner } from '../utils/bookingAccess.js';
 import { reconcileBookingPayment } from './payment/checkout.handlers.js';
 import { reportError } from '../services/monitoring.js';
 import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
@@ -27,14 +28,24 @@ const router = express.Router();
 // Invoke the single orchestrated cancel handler (Amadeus cancel + ARC Pay refund/void +
 // DB update + email) in-process — no HTTP self-call, so it works on Vercel serverless.
 // Single source of truth for cancellation; returns that handler's response payload + status.
-async function invokeOrchestratedCancel(bookingReference, reason) {
+//
+// `req` is the caller's own request, because the handler decides who may cancel
+// from the session. Called with only a body it saw nobody, so every My Trips and
+// admin panel cancel failed there.
+async function invokeOrchestratedCancel(bookingReference, reason, req) {
   let payload = null;
   let statusCode = 200;
   const fakeRes = {
     status(code) { statusCode = code; return this; },
     json(body) { payload = body; return this; }
   };
-  await handleCancelBookingAction({ method: 'POST', body: { bookingReference, reason } }, fakeRes);
+  await handleCancelBookingAction({
+    method: 'POST',
+    body: { bookingReference, reason },
+    user: req?.user,
+    headers: req?.headers || {},
+    cookies: req?.cookies || {},
+  }, fakeRes);
   return { statusCode, payload };
 }
 
@@ -315,24 +326,14 @@ async function loadOwnedBooking(ref, user, { email } = {}) {
     .maybeSingle();
   if (!data) return { notFound: true };
   if (isStaff(user)) return { booking: data };
-  const owns = user && (data.user_id === user.id
-    || data.booking_details?.original_user_id === user.id);
-  if (owns) return { booking: data };
+  if (isBookingOwner(user?.id, data)) return { booking: data };
 
   // A guest proves the booking is theirs with the email it was made with, as
   // well as the reference. References are random, but they sit in URLs and
   // emails, so a reference alone is never enough. Guests used to have no way in
   // at all: both booking reads required an account, and a guest booking has
   // no owner, so the confirmation email's link led nowhere.
-  const presented = String(email || '').trim().toLowerCase();
-  if (presented) {
-    const known = [
-      data.booking_details?.customer_email,
-      data.booking_details?.contact?.email,
-      ...(Array.isArray(data.passenger_details) ? data.passenger_details.map((p) => p?.email) : []),
-    ].filter(Boolean).map((e) => String(e).trim().toLowerCase());
-    if (known.includes(presented)) return { booking: data };
-  }
+  if (emailMatchesBooking(email, data)) return { booking: data };
   return { notFound: true };
 }
 
@@ -2186,7 +2187,7 @@ router.delete('/order/:orderId', protect, async (req, res) => {
     // persists the full cancellation record. Single source of truth — called in-process
     // (no HTTP self-call) so it also works on Vercel serverless.
     try {
-      const { payload: cancelResult } = await invokeOrchestratedCancel(orderId, 'Customer cancellation via flight order API');
+      const { payload: cancelResult } = await invokeOrchestratedCancel(orderId, 'Customer cancellation via flight order API', req);
 
       if (cancelResult?.success) {
         return res.json({
@@ -3235,7 +3236,7 @@ router.post('/admin-bookings/:id/cancel', protect, admin, async (req, res) => {
     // Delegate to the single orchestrated cancel handler (Amadeus cancel + ARC Pay
     // refund/void + DB update + email). No HTTP self-call, so it works on serverless.
     const bookingRef = booking.booking_reference || booking.booking_details?.order_id;
-    const { statusCode, payload } = await invokeOrchestratedCancel(bookingRef, reason);
+    const { statusCode, payload } = await invokeOrchestratedCancel(bookingRef, reason, req);
 
     if (!payload?.success) {
       return res.status(statusCode || 500).json(payload || { success: false, error: 'Cancellation failed' });

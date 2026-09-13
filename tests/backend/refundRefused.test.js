@@ -22,8 +22,9 @@ const booking = () => ({
   status: 'confirmed',
   payment_status: 'paid',
   total_amount: 291,
-  booking_details: { pnr: 'ABC123', order_id: 'FLT123' },
-  customer_email: 'traveler@example.com',
+  // Where checkout writes the email; see cancelRefundGuard.test.js.
+  booking_details: { pnr: 'ABC123', order_id: 'FLT123', customer_email: 'traveler@example.com' },
+  user_id: null,
 });
 
 const supabaseFor = (row) => {

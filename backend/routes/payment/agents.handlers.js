@@ -24,7 +24,8 @@ function makeInvite() {
  */
 export async function getCaller(req) {
     // Prefer the httpOnly session cookie (web); fall back to Authorization: Bearer (mobile).
-    const auth = req.headers.authorization;
+    // Optional chaining: an in-process caller may build a request with no headers.
+    const auth = req.headers?.authorization;
     const bearer = auth && auth.startsWith('Bearer ') ? auth.split(' ')[1] : null;
     const token = req.cookies?.jt_access || bearer;
     if (!token) return null;
