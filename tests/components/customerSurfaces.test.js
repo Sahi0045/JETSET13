@@ -241,6 +241,131 @@ describe('the review page charges what checkout verifies', () => {
   });
 });
 
+/**
+ * My Trips, Manage Booking and the surrounding pages say what the record says.
+ */
+describe('My Trips reads the booking record', () => {
+  const trips = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
+
+  it('derives its badge from the record and never defaults to Confirmed', () => {
+    expect(trips).toMatch(/bookingStatusBadge\(booking\)/);
+    expect(trips).not.toMatch(/booking\.status \|\| 'Confirmed'/);
+  });
+
+  it('lists bookings that need attention under Failed', () => {
+    expect(trips).toMatch(/activeTab === "Failed"\) return list\.filter\(\(b\) => needsAttention\(b\)\)/);
+  });
+
+  it('reports what happened to the refund on cancel', () => {
+    expect(trips).toMatch(/cancellationMessage\(result\)/);
+    expect(trips).not.toMatch(/Refund: \$\$\{/);
+  });
+
+  it('opens Manage Booking by reference so a refresh still works', () => {
+    expect(trips).toMatch(/\/manage-booking\/\$\{encodeURIComponent\(ref\)\}/);
+  });
+});
+
+describe('Manage Booking claims nothing it cannot back', () => {
+  const src = page('ManageBooking.jsx');
+
+  it('has no pretend modify flow', () => {
+    expect(src).not.toMatch(/will be implemented soon/);
+  });
+
+  it('masks passport numbers and shows the arrival date for arrival', () => {
+    expect(src).not.toMatch(/\{traveler\.passportNumber\}<\/p>/);
+    expect(src).toMatch(/bookingData\?\.arrivalDate \|\| bookingData\?\.arrival_date/);
+  });
+
+  it('reads payment from the record', () => {
+    expect(src).toMatch(/isPaid\(bookingData\)/);
+    expect(src).not.toMatch(/successfully processed and your booking is confirmed/);
+  });
+
+  it('lets a guest find their booking by email', () => {
+    expect(src).toMatch(/Enter the email used when booking/);
+  });
+});
+
+describe('policy, offers and prices shown as they are', () => {
+  it('the cancellation card invents no tier, cutoff, currency or time zone', () => {
+    const policy = page('FlightCancellationPolicy.jsx');
+    expect(policy).not.toMatch(/\* 1\.6/);
+    expect(policy).not.toMatch(/cutoffHours \|\| 4/);
+    expect(policy).not.toMatch(/\|\| 'INR'/);
+    expect(policy).not.toMatch(/\(IST\)/);
+  });
+
+  it('the search page advertises no offers that do not exist', () => {
+    expect(page('flightsearchpage.jsx')).not.toMatch(/promoBanners/);
+  });
+
+  it('cheapest fares labels cached prices as cached and marks one best price', () => {
+    const cheapest = page('cheapest-flight.jsx');
+    expect(cheapest).toMatch(/pricesLive \?/);
+    expect(cheapest).toMatch(/flight\.id === cheapestId/);
+  });
+
+  it('the confirmation page does not read an old booking from storage', () => {
+    expect(commonPage('BookingConfirmation.jsx')).not.toMatch(/localStorage\.getItem/);
+  });
+
+  it('the travel document invents no cabin, date, bag or seat', () => {
+    const ticket = page('FlightETicket.jsx');
+    for (const invented of ["'23KG'", "'ANY'", "'Economy'", 'new Date().toISOString()']) {
+      expect(ticket, invented).not.toContain(invented);
+    }
+  });
+
+  it('the unreachable success page is gone', () => {
+    expect(existsSync(path.join(FLIGHTS, 'FlightBookingSuccess.jsx'))).toBe(false);
+    expect(readFileSync(path.resolve(process.cwd(), 'frontend/src/app.jsx'), 'utf8')).not.toMatch(/\/flight-booking-success/);
+  });
+});
+
+/**
+ * Search results show what the fare says - and "see fare rules" when it is
+ * silent. Missing baggage became "Cabin only", a missing cabin "Economy",
+ * refundability came from a tax amount, seats were "Available", a connecting
+ * flight could be drawn as one invented non-stop leg, and an all-traveller
+ * total was labelled "Per adult".
+ */
+describe('search results show what the fare says', () => {
+  const search = page('flightsearchpage.jsx');
+  const card = page('FlightCard.jsx');
+  const options = page('FlightFareOptions.jsx');
+  const review = page('FlightBookingConfirmation.jsx');
+
+  it('the search page invents no baggage, cabin, refundability or seats', () => {
+    expect(search).not.toMatch(/\{ weight: 0, weightUnit: 'KG' \}/);
+    // The result's cabin and class, not the search form's default travel class
+    // (a real request parameter when the customer picks none).
+    expect(search).not.toMatch(/\s(cabin|class): [^\n]*\|\| '(ECONOMY|Economy)'/);
+    expect(search).not.toMatch(/refundableTaxes \? true : false/);
+    expect(search).not.toMatch(/\|\| 'Available'/);
+  });
+
+  it('draws no invented non-stop leg for a connecting flight', () => {
+    expect(search).toMatch(/\(flight\.stops \|\| 0\) > 0 \? \[\] : \[\{/);
+    expect(search).toMatch(/if \(\(flight\.stops \|\| 0\) > 0\) return \[\];/);
+  });
+
+  it('cards and fare options say "see fare rules" when the fare is silent', () => {
+    expect(card).not.toMatch(/: 'Cabin only'/);
+    expect(card).not.toMatch(/Per adult · \{cabinClass\}/);
+    expect(card).not.toMatch(/: 'Economy';/);
+    expect(options).not.toMatch(/\|\| 'Cabin only'\)/);
+    expect(options).not.toMatch(/'Standard'/);
+  });
+
+  it('the review page calls an unknown fare neither Economy nor non-refundable', () => {
+    expect(review).not.toMatch(/'Partially Refundable'/);
+    expect(review).not.toMatch(/'Economy Class'/);
+    expect(review).toMatch(/refundable: flightData\.refundable \?\? null/);
+  });
+});
+
 describe('FlightETicket can actually be captured', () => {
   const src = page('FlightETicket.jsx');
 

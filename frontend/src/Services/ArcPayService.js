@@ -89,38 +89,9 @@ class ArcPayService {
         }
     }
 
-    // Initialize Payment (Create Order)
-    async initializePayment(paymentData) {
-        try {
-            console.log('💳 Initializing payment with data:', paymentData);
-
-            const orderPayload = {
-                amount: paymentData.amount,
-                currency: paymentData.currency || 'USD',
-                orderId: paymentData.orderId,
-                customerEmail: paymentData.customerEmail,
-                customerName: paymentData.customerName,
-                description: paymentData.description || `Payment for ${paymentData.orderId}`,
-                returnUrl: paymentData.returnUrl,
-                cancelUrl: paymentData.cancelUrl
-            };
-
-            const response = await this.api.post('?action=order-create', orderPayload);
-
-            return {
-                success: true,
-                orderId: response.data.orderId,
-                orderData: response.data.orderData,
-                message: response.data.message
-            };
-        } catch (error) {
-            console.error('Payment initialization failed:', error);
-            return {
-                success: false,
-                error: error.response?.data || error.message
-            };
-        }
-    }
+    // initializePayment was removed: it posted to an `order-create` action that
+    // no handler serves, reported success for any 2xx without reading the
+    // body, and nothing called it.
 
     // Process Payment
     async processPayment(orderId, paymentData) {

@@ -801,11 +801,6 @@ export const ROUTE_SEO = {
     description: 'Your Jetsetters cruise booking is confirmed. Review your trip details and next steps.',
     shouldIndex: false,
   },
-  '/flight-booking-success': {
-    title: 'Flight Booking Confirmed | Jetsetters',
-    description: 'Your Jetsetters flight booking is confirmed. Review your itinerary and travel details.',
-    shouldIndex: false,
-  },
   '/hotel-booking-success': {
     title: 'Hotel Booking Confirmed | Jetsetters',
     description: 'Your Jetsetters hotel booking is confirmed. Review your stay details and next steps.',

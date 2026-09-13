@@ -369,11 +369,6 @@ const FlightCreateOrders = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Creating Orders..." /> }))
 );
 
-const FlightBookingSuccess = React.lazy(() =>
-  import('./Pages/Common/flights/FlightBookingSuccess')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Booking Successful..." /> }))
-);
-
 const Packages = React.lazy(() =>
   import('./Pages/Common/packages/planding')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading Packages..." /> }))
@@ -700,7 +695,6 @@ const App = () => {
           <Route path="/flights/booking-confirmation" element={<FlightBookingConfirmation />} />
           <Route path="/flight-payment" element={<FlightPayment />} />
           <Route path="/flight-create-orders" element={<FlightCreateOrders />} />
-          <Route path="/flight-booking-success" element={<FlightBookingSuccess />} />
           <Route path="/packages" element={<Packages />} />
 
           {/* Hotels Routes - Primary */}

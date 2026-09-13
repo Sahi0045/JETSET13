@@ -382,12 +382,14 @@ function FlightSearchPage() {
             fees: price.fees || []
           },
           amenities: fareDetails?.amenities || [],
+          // Null when the fare does not say. A `{weight: 0}` stand-in rendered
+          // as "Cabin only" - a claim of no checked bag on fares that include one.
           baggage: {
-            checked: fareDetails?.includedCheckedBags || { weight: 0, weightUnit: 'KG' },
-            cabin: fareDetails?.includedCabinBags || { weight: 0, weightUnit: 'KG' }
+            checked: fareDetails?.includedCheckedBags || null,
+            cabin: fareDetails?.includedCabinBags || null
           },
-          cabin: fareDetails?.cabin || 'ECONOMY',
-          class: fareDetails?.class || 'ECONOMY',
+          cabin: fareDetails?.cabin || null,
+          class: fareDetails?.class || null,
           brandedFare: fareDetails?.brandedFare || null,
           brandedFareLabel: fareDetails?.brandedFareLabel || null,
           operatingCarrier: firstSegment.operating?.carrierCode || null,
@@ -395,7 +397,7 @@ function FlightSearchPage() {
           lastTicketingDate: flight.lastTicketingDate || null,
           numberOfBookableSeats: flight.numberOfBookableSeats || null,
           isUpsellOffer: flight.isUpsellOffer || false,
-          refundable: travelerPricing?.price?.refundableTaxes ? true : false,
+          refundable: flight._ama?.refundable ?? null,
           segments: segments.map(segment => ({
             departure: {
               time: new Date(segment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
@@ -464,10 +466,10 @@ function FlightSearchPage() {
           amenities: [],
           baggage: {
             checked: flight.baggageDetails?.checked || parseCheckedBagLabel(flight.baggage),
-            cabin: flight.baggageDetails?.cabin || { weight: 0, weightUnit: 'KG' }
+            cabin: flight.baggageDetails?.cabin || null
           },
-          cabin: flight.cabin || 'ECONOMY',
-          class: flight.cabin || 'ECONOMY',
+          cabin: flight.cabin || null,
+          class: flight.cabin || null,
           brandedFare: flight.brandedFare || null,
           brandedFareLabel: flight.brandedFareLabel || null,
           operatingCarrier: flight.operatingCarrier || null,
@@ -477,12 +479,12 @@ function FlightSearchPage() {
           isUpsellOffer: flight.isUpsellOffer || false,
           aircraft: flight.aircraft || 'Unknown',
           flightNumber: flight.flightNumber,
-          refundable: flight.refundable || false,
+          refundable: flight.refundable ?? null,
           amenities: flight.amenities || flight.originalOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.amenities || [],
           fareBasis: flight.fareBasis || null,
           bookingClass: flight.bookingClass || null,
           validatingAirlineCodes: flight.validatingAirlineCodes || [],
-          seats: flight.numberOfBookableSeats || flight.seats || 'Available',
+          seats: flight.numberOfBookableSeats ?? null,
           stopDetails: flight.stopDetails || [],
           segments: (() => {
             // Extract real segments from originalOffer for multi-stop flights
@@ -516,7 +518,11 @@ function FlightSearchPage() {
                 stops: 0
               }));
             }
-            // Single segment fallback
+            // Single segment fallback - only for a flight that IS a single
+            // segment. A connecting flight with no segment data used to be
+            // drawn as one invented non-stop leg; the stop details say where
+            // it stops instead.
+            if ((flight.stops || 0) > 0) return [];
             return [{
               departure: {
                 time: flight.departure.time,
@@ -641,7 +647,9 @@ function FlightSearchPage() {
           price: {
             amount: flight.price.amount,
             total: flight.price.total,
-            currency: flight.price.currency || currencyService.getCurrency(),
+            // The fare's own currency, else USD - never the visitor's display
+            // currency, which would relabel the number without converting it.
+            currency: flight.price.currency || 'USD',
             base: flight.price.base || '0',
             grandTotal: flight.price.grandTotal || flight.price.total,
             fees: flight.price.fees || []
@@ -649,10 +657,10 @@ function FlightSearchPage() {
           amenities: [],
           baggage: {
             checked: flight.baggageDetails?.checked || parseCheckedBagLabel(flight.baggage),
-            cabin: flight.baggageDetails?.cabin || { weight: 0, weightUnit: 'KG' }
+            cabin: flight.baggageDetails?.cabin || null
           },
-          cabin: flight.cabin || 'Economy',
-          class: flight.cabin || 'Economy',
+          cabin: flight.cabin || null,
+          class: flight.cabin || null,
           brandedFare: flight.brandedFare || null,
           brandedFareLabel: flight.brandedFareLabel || null,
           operatingCarrier: flight.operatingCarrier || null,
@@ -662,10 +670,11 @@ function FlightSearchPage() {
           isUpsellOffer: flight.isUpsellOffer || false,
           aircraft: flight.aircraft || 'Unknown',
           flightNumber: flight.flightNumber,
-          refundable: flight.refundable || false,
-          seats: flight.numberOfBookableSeats || flight.seats || 0,
+          refundable: flight.refundable ?? null,
+          seats: flight.numberOfBookableSeats ?? null,
           stopDetails: flight.stopDetails || [],
-          segments: [{
+          // No invented non-stop leg for a connecting flight.
+          segments: (flight.stops || 0) > 0 ? [] : [{
             departure: {
               time: flight.departure.time,
               airport: flight.departure.airport,
@@ -1291,12 +1300,6 @@ function FlightSearchPage() {
   const fromCityName = cityMap[fromCode] || String(searchParams.from || '').replace(/\s*\([A-Z]{3}\)$/, '') || fromCode;
   const toCityName = cityMap[toCode] || String(searchParams.to || '').replace(/\s*\([A-Z]{3}\)$/, '') || toCode;
 
-  const promoBanners = [
-    { title: 'Price Drop Protection', desc: 'Get refund if fare drops', accent: 'from-emerald-500 to-teal-600', Icon: ShieldCheck },
-    { title: 'VISA Exclusive Offer', desc: 'Extra 10% off with VISA cards', accent: 'from-indigo-500 to-blue-600', Icon: Briefcase },
-    { title: 'Flat 10% Instant Discount', desc: 'On select banking partners', accent: 'from-amber-500 to-orange-600', Icon: RefreshCw },
-  ];
-
   return (
     <div className="bg-gray-100 min-h-screen">
       <Navbar />
@@ -1388,23 +1391,10 @@ function FlightSearchPage() {
             )}
           </div>
 
-          {/* Promotional banners — compact scrollable offer strip */}
-          <div className="flex gap-2 overflow-x-auto hide-scrollbar snap-x -mx-4 px-4 pb-1 mb-5">
-            {promoBanners.map(({ title, desc, accent, Icon }, i) => (
-              <div
-                key={i}
-                className="snap-start flex items-center gap-2.5 flex-shrink-0 bg-white rounded-full border border-gray-200 shadow-sm pl-1.5 pr-4 py-1.5"
-              >
-                <div className={`h-8 w-8 rounded-full bg-gradient-to-br ${accent} flex items-center justify-center text-white flex-shrink-0`}>
-                  <Icon className="h-4 w-4" />
-                </div>
-                <div className="leading-tight">
-                  <div className="text-[12px] font-semibold text-gray-800 whitespace-nowrap">{title}</div>
-                  <div className="text-[10px] text-gray-500 whitespace-nowrap">{desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+          {/* The promotional strip that sat here advertised "Price Drop
+              Protection", "Extra 10% off with VISA cards" and a "Flat 10%
+              Instant Discount". None of them existed: no product, no discount
+              logic, nothing a customer could claim. */}
 
           {loading ? (
             <div className="flex flex-col justify-center items-center py-20 bg-white rounded-xl shadow-md min-h-[400px]">

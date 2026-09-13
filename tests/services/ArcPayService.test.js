@@ -232,26 +232,10 @@ describe('ArcPayService', () => {
     });
   });
 
-  describe('initializePayment', () => {
-    it('creates order with payment data', async () => {
-      mockAxiosInstance.post.mockResolvedValue({
-        data: {
-          orderId: 'ORD-NEW',
-          orderData: { status: 'CREATED' },
-          message: 'Order created'
-        }
-      });
-
-      const result = await service.initializePayment({
-        amount: 250,
-        currency: 'USD',
-        orderId: 'ORD-NEW',
-        customerEmail: 'buyer@test.com'
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.orderId).toBe('ORD-NEW');
-    });
+  // initializePayment was deleted: it posted to an action no handler serves
+  // and reported success without reading the reply.
+  it('no longer offers initializePayment', () => {
+    expect(service.initializePayment).toBeUndefined();
   });
 
   describe('processPayment', () => {
