@@ -167,6 +167,8 @@ function FlightCreateOrders() {
         lastName: p.lastName || '',
         dateOfBirth: p.dateOfBirth || '',
         gender: p.gender || '',
+        // The fare type the review page locked this traveller to.
+        ptc: ['ADULT', 'CHILD', 'HELD_INFANT', 'SEATED_INFANT'].includes(p.type) ? p.type : '',
         title: p.title || '',
         mobile: p.mobile || '',
         email: p.email || '',
@@ -229,6 +231,7 @@ function FlightCreateOrders() {
           lastName: p.lastName,
           dateOfBirth: p.dateOfBirth,
           gender: p.gender,
+          ptc: p.ptc || undefined,
           // `/order` builds the SSR DOCS element from these; without them an
           // international itinerary books but cannot be ticketed.
           nationality: p.nationality,
@@ -629,11 +632,15 @@ function FlightCreateOrders() {
                           Start a new search
                         </button>
                       ) : (
+                        // A retryable failure (a dropped connection, a busy
+                        // moment). Trying again resends this same order, which
+                        // the server handles once. "Return to Payment" used to
+                        // lead to a legacy payment page that charges again.
                         <button
-                          onClick={() => navigate("/flight-payment")}
+                          onClick={() => window.location.reload()}
                           className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
                         >
-                          Return to Payment
+                          Try again
                         </button>
                       )}
                     </div>

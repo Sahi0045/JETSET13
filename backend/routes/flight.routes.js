@@ -1589,7 +1589,17 @@ router.post('/order', optionalProtect, async (req, res) => {
       (t) => !String(t?.firstName || '').trim() || !String(t?.lastName || '').trim() || !t?.dateOfBirth || !t?.gender
     );
     const pricedTravellers = Array.isArray(firstOffer.travelerPricings) ? firstOffer.travelerPricings.length : 0;
-    const countMismatch = pricedTravellers > 0 && travelersList.length !== pricedTravellers;
+    // And the same mix of passenger types. A child booked on an adult fare, or
+    // an adult on a child's, is a ticket the airline can refuse at check-in.
+    // The review page sends each traveller's type; a client that sends none
+    // falls back to the offer's order, as before.
+    const sentTypes = travelersList.map((t) => t?.ptc).filter(Boolean);
+    const pricedTypes = (firstOffer.travelerPricings || []).map((t) => t.travelerType);
+    const typeMismatch = sentTypes.length > 0 && (
+      sentTypes.length !== travelersList.length
+      || [...sentTypes].sort().join() !== [...pricedTypes].sort().join()
+    );
+    const countMismatch = (pricedTravellers > 0 && travelersList.length !== pricedTravellers) || typeMismatch;
     if (travellerIncomplete || countMismatch) {
       return await refundOnFulfillmentFailure(res, {
         orderId: req.body.orderId || req.body.bookingReference,
@@ -1597,7 +1607,9 @@ router.post('/order', optionalProtect, async (req, res) => {
         currency: firstOffer?.price?.currency || 'USD',
         errorMsg: travellerIncomplete
           ? 'traveller details incomplete'
-          : `offer priced for ${pricedTravellers} travellers, request carries ${travelersList.length}`,
+          : typeMismatch
+            ? `passenger types [${sentTypes}] do not match the fare's [${pricedTypes}]`
+            : `offer priced for ${pricedTravellers} travellers, request carries ${travelersList.length}`,
         status: 400,
         code: travellerIncomplete ? 'PASSENGERS_INCOMPLETE' : 'PASSENGER_COUNT_MISMATCH',
         reason: travellerIncomplete
@@ -1632,6 +1644,8 @@ router.post('/order', optionalProtect, async (req, res) => {
         // All validated above: nothing here is filled in.
         dateOfBirth: traveler.dateOfBirth,
         gender: String(traveler.gender).trim().toUpperCase().startsWith('F') ? 'FEMALE' : 'MALE',
+        // Checked against the fare above; the chain books each traveller on it.
+        ...(traveler.ptc ? { ptc: traveler.ptc } : {}),
         name: {
           firstName: String(traveler.firstName).trim(),
           lastName: String(traveler.lastName).trim()

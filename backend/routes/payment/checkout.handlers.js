@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { supabase, ARC_PAY_CONFIG, ARC_SETTLEMENT_CURRENCY } from './arcpay.config.js';
 import { resolveBookingUserId } from '../../utils/bookingOwner.js';
+import { verifyFlightCharge } from '../../services/flightCheckout.service.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -217,9 +218,37 @@ export async function handleHostedCheckout(req, res) {
             console.warn(`⚠️ Charging in ${currency}; caller asked for ${requestedCurrency}, which this merchant cannot settle`);
         }
 
+        // A flight is charged what the airline prices it at plus the configured
+        // fee, less a coupon the server evaluated itself - never the body's
+        // `amount`. See services/flightCheckout.service.js for what that fixes.
+        let chargeAmount = amount;
+        let verifiedCharge = null;
+        if (bookingType === 'flight') {
+            const verdict = await verifyFlightCharge({
+                client: supabase,
+                amount,
+                bookingData,
+                couponCode: req.body.couponCode,
+                userId: resolveBookingUserId(req),
+                settlementCurrency: currency,
+            });
+            if (!verdict.ok) {
+                console.warn('⛔ Flight checkout refused:', { orderId, code: verdict.code });
+                return res.status(verdict.status).json({
+                    success: false,
+                    error: verdict.message,
+                    code: verdict.code,
+                    ...(verdict.charge ? { expectedAmount: verdict.charge.total, charge: verdict.charge } : {}),
+                    ...(verdict.pricedFare ? { pricedFare: verdict.pricedFare } : {}),
+                });
+            }
+            verifiedCharge = { ...verdict.charge, coupon: verdict.coupon, pricedFare: verdict.pricedFare };
+            chargeAmount = verdict.charge.total;
+        }
+
         console.log('💳 Creating ARC Pay hosted checkout session...');
         console.log('   Order ID:', orderId);
-        console.log('   Amount:', amount, currency);
+        console.log('   Amount:', chargeAmount, currency);
         console.log('   Booking Type:', bookingType);
 
         // ARC Pay credentials
@@ -265,7 +294,7 @@ export async function handleHostedCheckout(req, res) {
             order: {
                 id: orderId,
                 reference: orderId,
-                amount: parseFloat(amount).toFixed(2),
+                amount: Number(chargeAmount).toFixed(2),
                 currency: currency,
                 description: description || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking - ${orderId}`
             }
@@ -299,17 +328,16 @@ export async function handleHostedCheckout(req, res) {
                 const travelAgentCode = sanitizeAirlineField(process.env.ARC_TRAVEL_AGENT_CODE || arcMerchantId.replace('TESTARC', '').substring(0, 8) || '05511704', 25);
                 const travelAgentName = sanitizeAirlineField(process.env.ARC_TRAVEL_AGENT_NAME || 'Jetsetters Corporation', 25);
 
+                // Real names only. A traveller with no usable name is left out
+                // rather than sent to the card network as "TEST TRAVELER".
+                const cleanName = (v) => String(v || '').toUpperCase().replace(/[^A-Z\s]/g, '').trim().substring(0, 20);
                 const passengers = bookingData?.passengerData || bookingData?.travelers || [];
-                const passengerList = passengers.length > 0
-                    ? passengers.map(p => ({
-                        // Remove special characters, limit length, capitalize
-                        firstName: (p.firstName || p.name?.firstName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20) || 'TEST',
-                        lastName: (p.lastName || p.name?.lastName || '').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20) || 'TRAVELER'
+                const passengerList = passengers
+                    .map(p => ({
+                        firstName: cleanName(p.firstName || p.name?.firstName),
+                        lastName: cleanName(p.lastName || p.name?.lastName)
                     }))
-                    : [{
-                        firstName: (firstName || 'TEST').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20),
-                        lastName: (lastName || 'TRAVELER').toUpperCase().replace(/[^A-Z\s]/g, '').substring(0, 20)
-                    }];
+                    .filter(p => p.firstName && p.lastName);
 
                 const safeDepartureDate = (segmentDeparture) => {
                     if (!segmentDeparture) return new Date().toISOString().split('T')[0];
@@ -373,7 +401,12 @@ export async function handleHostedCheckout(req, res) {
                     ? segments.map((segment, index) => {
                         const segCarrier = (segment?.carrierCode || segment?.carrier || actualCarrierCode).substring(0, 2).toUpperCase();
                         // MPGS Max length for flight number is 4-5 alphanumeric. Example format AI131.
-                        const rawFNum = String(segment?.number || segment?.flightNumber || index + 1).replace(/[^0-9A-Z]/gi, '');
+                        // A leg with no flight number is not sent with an
+                        // invented one: it used to fall back to the segment's
+                        // position, and the offer id before that.
+                        const rawNumber = segment?.number || segment?.flightNumber;
+                        if (!rawNumber) return null;
+                        const rawFNum = String(rawNumber).replace(/[^0-9A-Z]/gi, '');
                         // Check if it already has the carrier code prepended, if not prepend it
                         let fNum = rawFNum.startsWith(segCarrier) ? rawFNum : `${segCarrier}${rawFNum}`;
 
@@ -394,22 +427,22 @@ export async function handleHostedCheckout(req, res) {
                             travelClass: 'W' // Changed from Y to W as per user requirements
                         }
                     })
-                    : [{
-                        carrierCode: 'XD', // Fallback
-                        departureAirport: origin.substring(0, 3).toUpperCase(),
-                        departureDate: new Date().toISOString().split('T')[0],
-                        departureTime: '00:00+05:30', // Match example timezone
-                        destinationAirport: destination.substring(0, 3).toUpperCase(),
-                        flightNumber: 'AI131',
-                        travelClass: 'W' // Changed from Y to W
-                    }];
+                    : [];
 
-                const bookingRef = (flight?.pnr || flight?.bookingReference || orderId || '').toString().substring(0, 6).toUpperCase() || '501337';
+                // Without a real itinerary and real traveller names there is no
+                // honest airline data to send. It used to invent a leg - carrier
+                // XD, flight AI131 - and send that instead. The charge still goes
+                // through, just without interchange data.
+                if (legArray.length === 0 || legArray.some((leg) => !leg) || passengerList.length === 0) {
+                    throw new Error('no complete itinerary or traveller names for airline data');
+                }
 
-                // Match the ticket number format from the working example (e.g. BOM1234567LHR)
-                const depCode = legArray[0]?.departureAirport || 'BOM';
-                const arrCode = legArray[legArray.length - 1]?.destinationAirport || 'LHR';
-                const ticketNumber = `${depCode}${Date.now().toString().slice(-7)}${arrCode}`.substring(0, 13);
+                const bookingRef = String(flight?.pnr || flight?.bookingReference || orderId).substring(0, 6).toUpperCase();
+
+                // The document is the agency's own charge order, so its number is
+                // our order reference - not a ticket number assembled from the
+                // route and the clock, which is what used to be sent.
+                const ticketNumber = String(orderId).replace(/[^A-Za-z0-9]/g, '').slice(-13).toUpperCase();
 
                 requestBody.airline = {
                     bookingReference: bookingRef,
@@ -487,13 +520,17 @@ export async function handleHostedCheckout(req, res) {
                 travel_type: bookingType || 'flight',
                 status: 'pending',
                 ...(ownerId ? { user_id: ownerId } : {}),
-                total_amount: parseFloat(amount) || 0,
+                // What ARC was asked to charge: for a flight, the verified figure.
+                total_amount: parseFloat(chargeAmount) || 0,
                 payment_status: 'unpaid',
                 booking_details: {
                     order_id: orderId,
                     session_id: sessionId,
                     success_indicator: successIndicator,
                     pending_booking_data: req.body,
+                    // How the charge was arrived at: the airline's fare, the fee,
+                    // any coupon. The support desk's answer to "why this amount".
+                    ...(verifiedCharge ? { verified_charge: verifiedCharge } : {}),
                     customer_email: customerEmail || null,
                     arc_pay_checkout_url: paymentPageUrl,
                     checkout_created_at: new Date().toISOString()

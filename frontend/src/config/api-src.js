@@ -108,6 +108,9 @@ export const endpoints = {
   // Flight endpoints
   flights: {
     search: createEndpoint('/flights/search'),
+    // The airline's current price for an offer. The review page checks it on
+    // arrival; checkout checks it again server-side.
+    price: createEndpoint('/flights/price'),
     booking: createEndpoint('/flights/order'),
     analytics: createEndpoint('/flights/analytics'),
     cheapestDates: createEndpoint('/flights/cheapest-dates'),
