@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import axios from 'axios';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequest, createResponse } from './helpers/express.helpers.js';
 
 /**
@@ -132,7 +133,7 @@ describe('hosted checkout for a flight', () => {
 
   const CUSTOMER = { id: '0b7c1f2e-3d4a-4b5c-8d6e-7f8091a2b3c4' };
 
-  const run = async (verdict, { user = CUSTOMER } = {}) => {
+  const run = async (verdict, { user = CUSTOMER, body = {} } = {}) => {
     const verifyFlightCharge = vi.fn().mockResolvedValue(verdict);
     vi.doMock('../../backend/services/flightCheckout.service.js', () => ({ verifyFlightCharge }));
     vi.doMock('../../backend/routes/payment/arcpay.config.js', async () => {
@@ -147,7 +148,7 @@ describe('hosted checkout for a flight', () => {
     const req = createRequest({
       method: 'POST',
       user,
-      body: { amount: '802.00', orderId: 'FLTX1', bookingType: 'flight', bookingData: bookingFor(2) },
+      body: { amount: '802.00', orderId: 'FLTX1', bookingType: 'flight', bookingData: bookingFor(2), ...body },
     });
     const res = createResponse();
     await handleHostedCheckout(req, res);
@@ -188,5 +189,41 @@ describe('hosted checkout for a flight', () => {
     const { verifyFlightCharge } = await run({ ok: true, charge: { total: 402 }, coupon: null, pricedFare: { total: 400, currency: 'USD' } });
 
     expect(verifyFlightCharge).toHaveBeenCalledWith(expect.objectContaining({ userId: CUSTOMER.id }));
+  });
+
+  describe('airline data sent with the charge', () => {
+    const verified = { ok: true, charge: { total: 402 }, coupon: null, pricedFare: { total: 400, currency: 'USD' } };
+    const withLegs = {
+      flightData: {
+        itineraries: [{
+          segments: [{ carrierCode: 'LH', number: '401', departure: { iataCode: 'JFK', at: '2026-10-04T18:00:00' }, arrival: { iataCode: 'FRA' } }],
+        }],
+      },
+    };
+    const initiated = () => axios.post.mock.calls.find(([, sent]) => sent?.apiOperation === 'INITIATE_CHECKOUT')?.[1];
+
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("carries the agency's own ARC code when one is configured", async () => {
+      vi.stubEnv('ARC_TRAVEL_AGENT_CODE', '12345678');
+      await run(verified, { body: withLegs });
+
+      expect(initiated().airline.ticket.issue.travelAgentCode).toBe('12345678');
+    });
+
+    // Unset, it was derived from the merchant id: the live merchant sent part of
+    // its merchant id to the card network as an agency code.
+    it('sends no airline data rather than an invented agency code, and still opens the checkout', async () => {
+      vi.stubEnv('ARC_TRAVEL_AGENT_CODE', '');
+      await run(verified, { body: withLegs });
+
+      expect(initiated()).toBeDefined();
+      expect(initiated().airline).toBeUndefined();
+    });
+
+    it('holds no test merchant id to derive a code from', () => {
+      const source = readFileSync(new URL('../../backend/routes/payment/checkout.handlers.js', import.meta.url), 'utf8');
+      expect(source).not.toMatch(/TESTARC|05511704/);
+    });
   });
 });

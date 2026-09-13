@@ -24,6 +24,8 @@ const OPTIONAL = [
   // flights to a clean 503 via the AMADEUS_WS_ENABLED kill switch - never a crash.
   { keys: ['AMADEUS_WS_ENDPOINT'], label: 'Amadeus Web Services (flights)' },
   { keys: ['ARC_PAY_MERCHANT_ID'], label: 'ARC Pay (payments)' },
+  // Without it flight charges go through with no airline data attached.
+  { keys: ['ARC_TRAVEL_AGENT_CODE'], label: 'ARC travel agent code (airline data)' },
   { keys: ['RESEND_API_KEY'], label: 'Resend (email)' },
   { keys: ['REDIS_URL'], label: 'Redis (caching)' },
   { keys: ['TWILIO_ACCOUNT_SID'], label: 'Twilio (SMS)' },

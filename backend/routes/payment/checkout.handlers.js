@@ -339,7 +339,17 @@ export async function handleHostedCheckout(req, res) {
                 // (e.g. "JetSet Travel LLC" -> "JetSetTravelLLC") or ARC rejects the request with
                 // "Invalid character ' '".
                 const sanitizeAirlineField = (v, max) => String(v || '').replace(/[^A-Za-z0-9]/g, '').substring(0, max);
-                const travelAgentCode = sanitizeAirlineField(process.env.ARC_TRAVEL_AGENT_CODE || arcMerchantId.replace('TESTARC', '').substring(0, 8) || '05511704', 25);
+                // The agency's own ARC accreditation number, from configuration
+                // only. When unset it used to be made up - the merchant id with a
+                // test prefix stripped, else the test merchant's digits - so the
+                // live merchant sent the first 8 characters of its merchant id to
+                // the card network as an agency code. With no real code there is
+                // no honest airline data to send, so none is; the charge goes
+                // through without it, the same as for a missing itinerary below.
+                const travelAgentCode = sanitizeAirlineField(process.env.ARC_TRAVEL_AGENT_CODE, 25);
+                if (!travelAgentCode) {
+                    throw new Error('ARC_TRAVEL_AGENT_CODE is not set');
+                }
                 const travelAgentName = sanitizeAirlineField(process.env.ARC_TRAVEL_AGENT_NAME || 'Jetsetters Corporation', 25);
 
                 // Real names only. A traveller with no usable name is left out
@@ -478,7 +488,9 @@ export async function handleHostedCheckout(req, res) {
                 // Card brand interchange has VERY strict rules.
                 console.log('✈️ ARC Pay Airline Data mapped successfully:', JSON.stringify(requestBody.airline, null, 2));
             } catch (airlineError) {
-                console.error('⚠️ Error constructing airline data:', airlineError);
+                // Expected when the data is incomplete or unconfigured: the charge
+                // is created without airline data. The reason is enough to log.
+                console.warn('⚠️ No airline data sent with this charge:', airlineError.message);
             }
         }
 
