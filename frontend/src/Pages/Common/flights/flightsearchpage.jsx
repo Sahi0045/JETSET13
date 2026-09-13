@@ -647,7 +647,9 @@ function FlightSearchPage() {
           price: {
             amount: flight.price.amount,
             total: flight.price.total,
-            currency: flight.price.currency || currencyService.getCurrency(),
+            // The fare's own currency, else USD - never the visitor's display
+            // currency, which would relabel the number without converting it.
+            currency: flight.price.currency || 'USD',
             base: flight.price.base || '0',
             grandTotal: flight.price.grandTotal || flight.price.total,
             fees: flight.price.fees || []
