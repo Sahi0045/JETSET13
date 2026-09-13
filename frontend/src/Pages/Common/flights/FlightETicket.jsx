@@ -50,17 +50,19 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
         airline: bookingData.airlineName || bookingData.airline || '—',
         flightNumber: bookingData.flightNumber || '—',
         stops: bookingData.stops || 0,
-        cabin: bookingData.cabinClass || bookingData.cabin || 'Economy',
+        cabin: bookingData.cabinClass || bookingData.cabin || null,
         duration: bookingData.duration || '—',
         departureTime: bookingData.departureTime || '--:--',
         departureCity: bookingData.originCity || bookingData.origin || 'Departure',
         departureAirport: bookingData.origin || '—',
-        departureDate: bookingData.departureDate || new Date().toISOString(),
+        // No date is not today's date: a missing date printed as the day the
+        // document was downloaded.
+        departureDate: bookingData.departureDate || null,
         departureTerminal: bookingData.departureTerminal || null,
         arrivalTime: bookingData.arrivalTime || '--:--',
         arrivalCity: bookingData.destinationCity || bookingData.destination || 'Arrival',
         arrivalAirport: bookingData.destination || '—',
-        arrivalDate: bookingData.arrivalDate || bookingData.departureDate || new Date().toISOString(),
+        arrivalDate: bookingData.arrivalDate || null,
         arrivalTerminal: bookingData.arrivalTerminal || null
     };
 
@@ -68,12 +70,15 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
         bookingId: bookingDetails?.bookingId || bookingData.orderId || bookingData.bookingReference || 'N/A',
         status: bookingDetails?.status || bookingData.status || 'PENDING',
         pnr: bookingDetails?.pnr || bookingData.pnr || 'N/A',
-        baggage: bookingDetails?.baggage || { checkIn: '23KG' }
+        // Never an invented allowance on a travel document.
+        baggage: bookingDetails?.baggage || null
     };
 
     // Format helpers
     const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('en-US', {
+        const date = dateString ? new Date(dateString) : null;
+        if (!date || Number.isNaN(date.getTime())) return '—';
+        return date.toLocaleDateString('en-US', {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
         });
     };
@@ -217,15 +222,15 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                     <div className="flex gap-8 text-sm text-gray-600">
                                         <div className="text-right">
                                             <span className="block text-xs text-gray-400 uppercase">Seat</span>
-                                            <span className="font-mono font-bold text-gray-800">{p.seatNumber || 'ANY'}</span>
+                                            <span className="font-mono font-bold text-gray-800">{p.seatNumber || 'Not assigned'}</span>
                                         </div>
                                         <div className="text-right">
                                             <span className="block text-xs text-gray-400 uppercase">Class</span>
-                                            <span className="font-medium text-gray-800">{flight.cabin || 'Economy'}</span>
+                                            <span className="font-medium text-gray-800">{flight.cabin || '—'}</span>
                                         </div>
                                         <div className="text-right">
                                             <span className="block text-xs text-gray-400 uppercase">Baggage</span>
-                                            <span className="font-medium text-gray-800">{safeBookingDetails.baggage.checkIn}</span>
+                                            <span className="font-medium text-gray-800">{safeBookingDetails.baggage?.checkIn || 'As per fare rules'}</span>
                                         </div>
                                     </div>
                                 </div>

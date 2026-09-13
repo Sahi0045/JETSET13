@@ -10,7 +10,6 @@ const importers = {
   '/flights/booking-confirmation': () => import('../Pages/Common/flights/FlightBookingConfirmation'),
   '/flights/payment': () => import('../Pages/Common/flights/FlightPayment'),
   '/flights/create-orders': () => import('../Pages/Common/flights/FlightCreateOrders'),
-  '/flights/booking-success': () => import('../Pages/Common/flights/FlightBookingSuccess'),
   '/flights/manage-booking': () => import('../Pages/Common/flights/ManageBooking'),
 
   '/hotels': () => import('../Pages/Common/hotels/HotelsLanding'),

@@ -1291,12 +1291,6 @@ function FlightSearchPage() {
   const fromCityName = cityMap[fromCode] || String(searchParams.from || '').replace(/\s*\([A-Z]{3}\)$/, '') || fromCode;
   const toCityName = cityMap[toCode] || String(searchParams.to || '').replace(/\s*\([A-Z]{3}\)$/, '') || toCode;
 
-  const promoBanners = [
-    { title: 'Price Drop Protection', desc: 'Get refund if fare drops', accent: 'from-emerald-500 to-teal-600', Icon: ShieldCheck },
-    { title: 'VISA Exclusive Offer', desc: 'Extra 10% off with VISA cards', accent: 'from-indigo-500 to-blue-600', Icon: Briefcase },
-    { title: 'Flat 10% Instant Discount', desc: 'On select banking partners', accent: 'from-amber-500 to-orange-600', Icon: RefreshCw },
-  ];
-
   return (
     <div className="bg-gray-100 min-h-screen">
       <Navbar />
@@ -1388,23 +1382,10 @@ function FlightSearchPage() {
             )}
           </div>
 
-          {/* Promotional banners — compact scrollable offer strip */}
-          <div className="flex gap-2 overflow-x-auto hide-scrollbar snap-x -mx-4 px-4 pb-1 mb-5">
-            {promoBanners.map(({ title, desc, accent, Icon }, i) => (
-              <div
-                key={i}
-                className="snap-start flex items-center gap-2.5 flex-shrink-0 bg-white rounded-full border border-gray-200 shadow-sm pl-1.5 pr-4 py-1.5"
-              >
-                <div className={`h-8 w-8 rounded-full bg-gradient-to-br ${accent} flex items-center justify-center text-white flex-shrink-0`}>
-                  <Icon className="h-4 w-4" />
-                </div>
-                <div className="leading-tight">
-                  <div className="text-[12px] font-semibold text-gray-800 whitespace-nowrap">{title}</div>
-                  <div className="text-[10px] text-gray-500 whitespace-nowrap">{desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+          {/* The promotional strip that sat here advertised "Price Drop
+              Protection", "Extra 10% off with VISA cards" and a "Flat 10%
+              Instant Discount". None of them existed: no product, no discount
+              logic, nothing a customer could claim. */}
 
           {loading ? (
             <div className="flex flex-col justify-center items-center py-20 bg-white rounded-xl shadow-md min-h-[400px]">

@@ -30,7 +30,6 @@ const EXACT_SPA_ROUTES = new Set([
   '/flights/booking-confirmation',
   '/flight-payment',
   '/flight-create-orders',
-  '/flight-booking-success',
   '/packages',
   '/hotels',
   '/hotels/search',
