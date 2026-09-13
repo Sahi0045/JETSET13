@@ -324,6 +324,48 @@ describe('policy, offers and prices shown as they are', () => {
   });
 });
 
+/**
+ * Search results show what the fare says - and "see fare rules" when it is
+ * silent. Missing baggage became "Cabin only", a missing cabin "Economy",
+ * refundability came from a tax amount, seats were "Available", a connecting
+ * flight could be drawn as one invented non-stop leg, and an all-traveller
+ * total was labelled "Per adult".
+ */
+describe('search results show what the fare says', () => {
+  const search = page('flightsearchpage.jsx');
+  const card = page('FlightCard.jsx');
+  const options = page('FlightFareOptions.jsx');
+  const review = page('FlightBookingConfirmation.jsx');
+
+  it('the search page invents no baggage, cabin, refundability or seats', () => {
+    expect(search).not.toMatch(/\{ weight: 0, weightUnit: 'KG' \}/);
+    // The result's cabin and class, not the search form's default travel class
+    // (a real request parameter when the customer picks none).
+    expect(search).not.toMatch(/\s(cabin|class): [^\n]*\|\| '(ECONOMY|Economy)'/);
+    expect(search).not.toMatch(/refundableTaxes \? true : false/);
+    expect(search).not.toMatch(/\|\| 'Available'/);
+  });
+
+  it('draws no invented non-stop leg for a connecting flight', () => {
+    expect(search).toMatch(/\(flight\.stops \|\| 0\) > 0 \? \[\] : \[\{/);
+    expect(search).toMatch(/if \(\(flight\.stops \|\| 0\) > 0\) return \[\];/);
+  });
+
+  it('cards and fare options say "see fare rules" when the fare is silent', () => {
+    expect(card).not.toMatch(/: 'Cabin only'/);
+    expect(card).not.toMatch(/Per adult · \{cabinClass\}/);
+    expect(card).not.toMatch(/: 'Economy';/);
+    expect(options).not.toMatch(/\|\| 'Cabin only'\)/);
+    expect(options).not.toMatch(/'Standard'/);
+  });
+
+  it('the review page calls an unknown fare neither Economy nor non-refundable', () => {
+    expect(review).not.toMatch(/'Partially Refundable'/);
+    expect(review).not.toMatch(/'Economy Class'/);
+    expect(review).toMatch(/refundable: flightData\.refundable \?\? null/);
+  });
+});
+
 describe('FlightETicket can actually be captured', () => {
   const src = page('FlightETicket.jsx');
 

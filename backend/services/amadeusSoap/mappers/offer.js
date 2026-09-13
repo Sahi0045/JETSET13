@@ -314,7 +314,9 @@ const mapRecommendation = (recommendation, ctx) => {
         const fare = productFares[legIndex]?.fares[i] ?? productFares[legIndex]?.fares[0] ?? {};
         return {
           segmentId: segment.id,
-          cabin: CABIN_BY_DESIGNATOR[fare.cabinDesignator] ?? 'ECONOMY',
+          // Null when Amadeus gives no cabin designator. Defaulting to ECONOMY
+          // put a cabin on the customer's screen that no fare stated.
+          cabin: CABIN_BY_DESIGNATOR[fare.cabinDesignator] ?? null,
           fareBasis: fare.fareBasis ?? '',
           brandedFare: null,
           class: fare.rbd ?? '',
