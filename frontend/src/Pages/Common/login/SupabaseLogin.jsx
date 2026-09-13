@@ -382,7 +382,9 @@ export default function SupabaseLogin() {
 
                             <p className="jsl-signup">
                                 Don&apos;t have an account?{' '}
-                                <Link to="/supabase-signup" className="jsl-link strong">Create one</Link>
+                                {/* The destination rides along, so someone sent here
+                                    to book a flight gets back to it after signing up. */}
+                                <Link to="/supabase-signup" state={location.state} className="jsl-link strong">Create one</Link>
                             </p>
                         </form>
 

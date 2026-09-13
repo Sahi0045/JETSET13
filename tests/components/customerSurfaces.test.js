@@ -366,6 +366,38 @@ describe('search results show what the fare says', () => {
   });
 });
 
+/**
+ * Flights are booked from an account: guest checkout was switched off on
+ * 2026-09-13. The review page's "LOGIN NOW" set a local flag and logged nobody
+ * in, and a visitor sent to log in would have lost the flight they picked.
+ */
+describe('flights are booked from an account', () => {
+  const review = page('FlightBookingConfirmation.jsx');
+
+  it('sends a signed-out visitor to log in, with the flight kept', () => {
+    expect(review).toMatch(/useSupabaseAuth\(\)/);
+    expect(review).toMatch(/saveFlightReview\(reviewState\)/);
+    expect(review).toMatch(/readFlightReview\(\)/);
+  });
+
+  it('has no pretend login', () => {
+    expect(review).not.toMatch(/handleLogin/);
+    expect(review).not.toMatch(/LOGIN NOW/);
+    expect(review).not.toMatch(/localStorage\.getItem\('isAuthenticated'\)/);
+  });
+
+  it('handles checkout refusing a signed-out customer', () => {
+    expect(review).toMatch(/refusal\.code === 'LOGIN_REQUIRED'/);
+  });
+
+  it('keeps the way back through creating an account', () => {
+    expect(commonPage('login/SupabaseLogin.jsx')).toMatch(/to="\/supabase-signup" state=\{location\.state\}/);
+    const signup = commonPage('login/SupabaseSignup.jsx');
+    expect(signup).toMatch(/navigate\('\/supabase-login', \{ state: location\.state \}\)/);
+    expect(signup).toMatch(/to="\/supabase-login" state=\{location\.state\}/);
+  });
+});
+
 describe('FlightETicket can actually be captured', () => {
   const src = page('FlightETicket.jsx');
 

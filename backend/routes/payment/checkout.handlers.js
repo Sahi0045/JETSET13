@@ -224,12 +224,26 @@ export async function handleHostedCheckout(req, res) {
         let chargeAmount = amount;
         let verifiedCharge = null;
         if (bookingType === 'flight') {
+            // Flights are booked from an account: guest checkout was switched
+            // off on 2026-09-13. A guest booking has no owner, so it never
+            // appears in My Trips, and the only way back to it was the email
+            // typed at checkout - which the page marks optional. Refused here,
+            // before the fare is priced or a payment session exists. To allow
+            // guests again, remove this and the review page's sign-in redirect.
+            const signedInUserId = resolveBookingUserId(req);
+            if (!signedInUserId) {
+                return res.status(401).json({
+                    success: false,
+                    code: 'LOGIN_REQUIRED',
+                    error: 'Please log in to book a flight. Nothing has been charged.',
+                });
+            }
             const verdict = await verifyFlightCharge({
                 client: supabase,
                 amount,
                 bookingData,
                 couponCode: req.body.couponCode,
-                userId: resolveBookingUserId(req),
+                userId: signedInUserId,
                 settlementCurrency: currency,
             });
             if (!verdict.ok) {
