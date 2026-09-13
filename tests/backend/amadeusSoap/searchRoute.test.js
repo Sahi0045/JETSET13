@@ -36,6 +36,42 @@ beforeEach(() => {
   vi.resetModules();
 });
 
+/**
+ * A search result must not state what the fare does not.
+ *
+ * Refundability was read from `refundableTaxes`, a tax amount this provider
+ * never sets, so every fare was "Non-refundable". The cabin defaulted to
+ * Economy, seats to "Available", and offers that failed to transform vanished
+ * with nothing counting them.
+ */
+describe('what a search result does not invent', () => {
+  it('takes refundability from the fare rules and leaves unknowns unknown', async () => {
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+
+    const res = await request(app)
+      .post('/api/flights/search')
+      .send({ from: 'JFK', to: 'LHR', departDate: '2026-11-15', adults: 1 });
+
+    expect(res.body.data.length).toBeGreaterThan(0);
+    for (const card of res.body.data) {
+      expect(card.refundable).toBe(card.originalOffer?._ama?.refundable ?? null);
+      expect(card.seats).not.toBe('Available');
+    }
+    expect(res.body.meta).toHaveProperty('droppedCount', 0);
+  });
+
+  it('has no invented cabin, seats or refundability left in the route', () => {
+    const source = readFileSync(new URL('../../../backend/routes/flight.routes.js', import.meta.url), 'utf8');
+    expect(source).not.toContain("}, 'ECONOMY');");
+    expect(source).not.toContain("|| 'Available'");
+    expect(source).not.toMatch(/refundableTaxes \? true : false/);
+    expect(source).not.toMatch(/res\.status\(200\)\.json\(\{ success: false/);
+    // Fare detail was dumped to production logs on every search.
+    expect(source).not.toContain('DEBUG: First flight travelerPricing');
+  });
+});
+
 describe('POST /api/flights/search', () => {
   it('returns cards carrying every field the clients read', async () => {
     axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
