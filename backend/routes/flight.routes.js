@@ -953,10 +953,6 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
       const travelerPricing = flight.travelerPricings?.[0];
       const fareDetails = travelerPricing?.fareDetailsBySegment?.[0];
 
-      if (index === 0) {
-        console.log('DEBUG: First flight travelerPricing:', JSON.stringify(travelerPricing, null, 2));
-      }
-
       // Check all segments to find the highest cabin class
       const allCabins = travelerPricing?.fareDetailsBySegment?.map(f => f.cabin) || [];
       const cabinPriority = { 'FIRST': 4, 'BUSINESS': 3, 'PREMIUM_ECONOMY': 2, 'ECONOMY': 1 };

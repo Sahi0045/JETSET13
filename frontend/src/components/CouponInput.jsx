@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
+import Price from '../Components/Price';
 
 /**
  * CouponInput - A reusable coupon input component
@@ -73,7 +74,9 @@ const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove }) => 
                         🎉 Coupon <span className="font-mono">{applied.coupon.code}</span> applied!
                     </p>
                     <p className="text-xs text-green-600 mt-0.5">
-                        You save <span className="font-semibold">${applied.discountAmount}</span>. New total: <span className="font-semibold">${applied.finalTotal}</span>
+                        {/* Through <Price>, like every other figure in the fare
+                            summary; a bare "$" disagreed with the total beside it. */}
+                        You save <span className="font-semibold"><Price amount={applied.discountAmount} /></span>. New total: <span className="font-semibold"><Price amount={applied.finalTotal} /></span>
                     </p>
                 </div>
                 <button

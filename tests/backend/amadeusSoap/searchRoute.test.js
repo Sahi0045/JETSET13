@@ -67,6 +67,8 @@ describe('what a search result does not invent', () => {
     expect(source).not.toContain("|| 'Available'");
     expect(source).not.toMatch(/refundableTaxes \? true : false/);
     expect(source).not.toMatch(/res\.status\(200\)\.json\(\{ success: false/);
+    // Fare detail was dumped to production logs on every search.
+    expect(source).not.toContain('DEBUG: First flight travelerPricing');
   });
 });
 
