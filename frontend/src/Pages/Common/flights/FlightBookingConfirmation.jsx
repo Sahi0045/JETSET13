@@ -14,11 +14,13 @@ import { allAirports } from './airports';
 import PricingService from '../../../Services/PricingService';
 import { usePriceConfig } from '../../../hooks/queries';
 import CouponInput from '../../../components/CouponInput';
-import FlightSeatMap from './FlightSeatMap';
 import FlightFareRules from './FlightFareRules';
 import { formatCheckedBag } from '../../../utils/baggage';
 import FlightCancellationPolicy from './FlightCancellationPolicy';
-import useMembership from '../../../hooks/useMembership';
+import apiConfig from '@/config/api';
+// The same formula checkout verifies the charge with, so this page can never
+// quote a total the server will not accept.
+import { computeFlightCharge, passengerAgeProblem, PASSENGER_TYPES } from '../../../../../shared/flightCharge';
 import "./booking-confirmation.css";
 
 // Passport / travel-document fields only matter on international routes. Map each
@@ -38,7 +40,6 @@ function FlightBookingConfirmation() {
   const routerLocation = useLocation();
   const { country, callingCode, currency: userCurrency } = useLocationContext();
   const navigate = useNavigate();
-  const membership = useMembership();
   const { bookingId } = useParams();
   const [bookingDetails, setBookingDetails] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -51,39 +52,27 @@ function FlightBookingConfirmation() {
   const [expandedPassengerId, setExpandedPassengerId] = useState(null);
   const [showImportantInfo, setShowImportantInfo] = useState(false); // collapsed by default to shorten the page
   const [passengerData, setPassengerData] = useState([]);
-  const [selectedAddons, setSelectedAddons] = useState([]);
-  const [selectedSeats, setSelectedSeats] = useState([]);
-  const [seatExtraFee, setSeatExtraFee] = useState(0); // seat fees (offer currency)
-  const [selectedBags, setSelectedBags] = useState([]); // chosen extra-baggage options
-  const [bagExtraFee, setBagExtraFee] = useState(0); // extra-bag fees (offer currency)
-  const [vipService, setVipService] = useState(false);
-
-  // Assign chosen seats to passengers (in order) so they flow into the order/payment
-  const handleSeatsChange = (seatNumbers, seatObjs = []) => {
-    setSelectedSeats(seatNumbers);
-    setSeatExtraFee(seatObjs.reduce((sum, s) => sum + (s.price || 0), 0));
-    setPassengerData((prev) =>
-      prev.map((p, i) => ({ ...p, seatNumber: seatNumbers[i] || '' }))
-    );
-  };
-
-  // Track chosen extra-baggage options + their total fee
-  const handleBagsChange = (bags = [], totalFee = 0) => {
-    setSelectedBags(bags);
-    setBagExtraFee(totalFee);
-  };
+  // Seats, extra bags, "travel insurance", "airport transfer" and a "VIP
+  // service" used to be offered here and added to the charge. None of them was
+  // ever sent to the airline or to any supplier: the customer paid for a seat
+  // nobody requested, a bag never added to the booking, and insurance that did
+  // not exist. They stay off the page until each is a real, fulfilled product.
   const { data: priceConfig, error: priceConfigError } = usePriceConfig('all');
   const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
+  // The total a coupon's discount was computed on, so a changed total drops it.
+  const couponBase = React.useRef(null);
+  // The airline's price for this offer, checked on arrival and again by the
+  // server at checkout. Null until the check answers; the search price stands.
+  const [pricedFare, setPricedFare] = useState(null);
+  const [fareNotice, setFareNotice] = useState(null);
+  const [checkingOut, setCheckingOut] = useState(false);
   const [calculatedFare, setCalculatedFare] = useState({
     baseFare: 0,
-    countryTax: 0,
-    platformFee: 0,
     totalTax: 0,
     serviceFee: 0,
-    addonsTotal: 0,
-    vipServiceFee: 0,
     totalAmount: 0,
-    currency: userCurrency || 'EUR'
+    passengers: 1,
+    currency: 'USD'
   });
   const [expandedSections, setExpandedSections] = useState({
     flightDetails: true,
@@ -228,13 +217,16 @@ function FlightBookingConfirmation() {
     const baseFareReal = (amaBase > 0 && amaBase <= fareTotal) ? amaBase : fareTotal;
     const airlineTaxes = Math.max(0, fareTotal - baseFareReal);
 
-    // Platform service/convenience fee (admin-configured markup on top of the airline fare)
-    const fixedFee = config?.flight_taxes_fees || 0;
-    const percentageFee = fareTotal * ((config?.flight_taxes_fees_percentage || 0) / 100);
-    const serviceFee = fixedFee + percentageFee;
+    // The platform fee, from the formula checkout verifies. `fareTotal` is the
+    // offer's all-passenger total, priced for exactly these travellers.
+    const pricedTravellers = flightData.originalOffer?.travelerPricings?.length || 1;
+    const fee = computeFlightCharge({ fareTotal, passengers: pricedTravellers, config });
+    const fixedFee = fee.fixedFee;
+    const percentageFee = fee.percentageFee;
+    const serviceFee = fee.serviceFee;
 
     return {
-      bookingId: bookingId || `BOOK-${Date.now()}`,
+      bookingId: bookingId || null,
       flight: {
         airline: flightData.airline.name,
         airlineCode: flightData.airline.code,
@@ -321,38 +313,12 @@ function FlightBookingConfirmation() {
         email: "",
         phone: ""
       },
-      addOns: [
-        {
-          id: 1,
-          name: "Travel Insurance",
-          title: "Travel Insurance",
-          description: "Comprehensive coverage for your journey",
-          price: 25,
-          popular: true,
-          selected: false,
-          benefits: [
-            "Trip cancellation coverage",
-            "Medical emergency coverage",
-            "Lost baggage protection"
-          ]
-        },
-        {
-          id: 2,
-          name: "Airport Transfer",
-          title: "Airport Transfer",
-          description: "Comfortable ride to/from your accommodation",
-          price: 35,
-          popular: false,
-          selected: false,
-          benefits: [
-            "24/7 service availability",
-            "Professional drivers",
-            "Free waiting time"
-          ]
-        }
-      ],
-      vipServiceFee: 30,
-      isInternational: flightData.departure.airport !== flightData.arrival.airport
+      // International if any leg crosses a border, not only the two ends: a
+      // connection abroad needs a passport too. This compared the two airport
+      // codes, so every flight with different ends - all of them - counted.
+      isInternational: (flightData.segments || []).some((seg) =>
+        isInternationalRoute(seg.departure?.airport, seg.arrival?.airport))
+        || isInternationalRoute(flightData.departure.airport, flightData.arrival.airport)
     };
   };
 
@@ -405,8 +371,7 @@ function FlightBookingConfirmation() {
         }
 
         setBookingDetails(bookingData);
-        const initialPassengerCount = Math.max(1, passengerData.length);
-        updateFareSummary(initialPassengerCount, bookingData);
+        updateFareSummary(bookingData);
       } catch (error) {
         if (cancelled) return;
         console.error("Error getting booking details:", error);
@@ -420,85 +385,102 @@ function FlightBookingConfirmation() {
     return () => { cancelled = true; };
   }, [routerLocation.state, bookingId, priceConfig, priceConfigError]);
 
-  // Add an effect to update fare when passengers, addons, VIP, or extras change
+  // Recompute when the airline's checked price arrives or the fee config changes.
   useEffect(() => {
-    if (bookingDetails) {
-      updateFareSummary(passengerData.length);
-    }
-  }, [passengerData.length, selectedAddons, vipService, seatExtraFee, bagExtraFee, membership.isActive]);
+    if (bookingDetails) updateFareSummary();
+  }, [pricedFare, priceConfig]);
 
-  // Ensure there's always at least one passenger
+  // Check the fare with the airline on arrival. Search results can be minutes
+  // old, and a fare that had moved or expired used to be found only after the
+  // card was charged. Checkout checks again, server-side, before any payment.
+  useEffect(() => {
+    const offer = routerLocation.state?.flightData?.originalOffer;
+    if (!bookingDetails || !offer) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(apiConfig.endpoints.flights.price, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ flightOffer: offer }),
+        });
+        const body = await res.json();
+        const price = body?.data?.flightOffers?.[0]?.price;
+        const total = Number(price?.grandTotal ?? price?.total);
+        if (cancelled || !body?.success || !Number.isFinite(total) || total <= 0) return;
+        const searched = Number(bookingDetails.flight.price.base || 0) + Number(bookingDetails.flight.price.airlineTaxes || 0);
+        setPricedFare({ total, base: Number(price.base) || null, currency: price.currency || null });
+        if (Math.abs(total - searched) > 0.01) {
+          setFareNotice(`The airline's current fare for this flight is ${price.currency || ''} ${total.toFixed(2)}, not the ${searched.toFixed(2)} shown in search. The total below uses the current fare.`);
+        }
+      } catch {
+        // Not fatal: checkout verifies the fare with the airline regardless.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [Boolean(bookingDetails), routerLocation.state]);
+
+  // A coupon's discount was computed on the total at the moment it was applied.
+  // If the total changes, the coupon has to be applied again - the page used to
+  // go on charging the old, frozen figure.
+  useEffect(() => {
+    if (appliedCoupon && couponBase.current !== null && couponBase.current !== calculatedFare.totalAmount) {
+      setAppliedCoupon(null);
+      couponBase.current = null;
+      setFareNotice((notice) => notice || 'The total changed, so your coupon was removed. Please apply it again.');
+    }
+  }, [calculatedFare.totalAmount]);
+
+  // One traveller per passenger the fare was priced for, each locked to the
+  // type the airline priced. The form used to start with one "Adult" and let
+  // the customer add more "Adults": a one adult + one child search booked the
+  // child on an adult fare, whoever was typed second became the child in the
+  // airline's system, and every added traveller was charged the whole fare.
   useEffect(() => {
     if (passengerData.length === 0 && bookingDetails) {
-      const defaultPassenger = {
-        id: 1,
-        type: "Adult",
-        title: "Mr",
+      const pricings = routerLocation.state?.flightData?.originalOffer?.travelerPricings;
+      const types = Array.isArray(pricings) && pricings.length
+        ? pricings.map((p) => p.travelerType || 'ADULT')
+        : ['ADULT'];
+      setPassengerData(types.map((type, index) => ({
+        id: index + 1,
+        type,
+        title: "",
         firstName: "",
         lastName: "",
         dateOfBirth: "",
-        seatNumber: "",
         meal: "Regular",
-        baggage: "",
         mobile: "",
         email: "",
-        gender: "male",
+        // No default gender: a preselected one went onto the ticket unchecked.
+        gender: "",
         requiresWheelchair: false,
         nationality: "",
         passportNumber: "",
         passportExpiry: "",
         countryCode: callingCode || '+91'
-      };
-      setPassengerData([defaultPassenger]);
+      })));
     }
   }, [bookingDetails, passengerData.length]);
 
-  // Update fare summary when passenger count or booking details change
-  const updateFareSummary = (passengerCount, bookingData = bookingDetails) => {
-    if (!bookingData || !bookingData.flight || !bookingData.flight.price) return;
-
-    // Real Amadeus base fare + airline taxes, and the platform service fee
-    const baseFare = parseFloat(bookingData.flight.price.base) || 0;
-    const airlineTaxes = bookingData.flight.price.airlineTaxes != null
-      ? bookingData.flight.price.airlineTaxes
-      : (bookingData.flight.price.totalTaxes || 0);
-    const serviceFeePer = bookingData.flight.price.serviceFee || 0;
-
-    // Calculate add-ons total
-    const addonsTotal = selectedAddons.reduce((sum, addonId) => {
-      const addon = bookingData.addOns.find(a => a.id === addonId);
-      return sum + (addon ? addon.price : 0);
-    }, 0);
-
-    // Calculate VIP service fee if selected
-    const vipServiceFee = vipService ? (bookingData.vipServiceFee || 0) : 0;
-
-    // Seat + extra-baggage fees (already in the offer's currency).
-    // Premium members get free seat selection — waive the seat fee.
-    const seatFeeWaived = membership.isActive && (seatExtraFee || 0) > 0;
-    const effectiveSeatFee = seatFeeWaived ? 0 : (seatExtraFee || 0);
-    const extrasTotal = effectiveSeatFee + (bagExtraFee || 0);
-
-    // Calculate per passenger costs (minimum 1 passenger)
-    const effectivePassengerCount = Math.max(1, passengerCount);
-    const totalBaseFare = baseFare * effectivePassengerCount;
-    const totalTax = airlineTaxes * effectivePassengerCount;
-    const totalServiceFee = serviceFeePer * effectivePassengerCount;
-    const totalAmount = totalBaseFare + totalTax + totalServiceFee + addonsTotal + vipServiceFee + extrasTotal;
+  // The fare summary, from the shared formula checkout verifies. The airline's
+  // total covers every traveller already; it used to be multiplied by the
+  // passenger count again, so two adults were charged four fares.
+  const updateFareSummary = (bookingData = bookingDetails) => {
+    if (!bookingData?.flight?.price || !priceConfig) return;
+    const searched = bookingData.flight.price;
+    const fareTotal = pricedFare?.total ?? (Number(searched.base || 0) + Number(searched.airlineTaxes || 0));
+    const base = pricedFare?.base ?? Number(searched.base || 0);
+    const passengers = routerLocation.state?.flightData?.originalOffer?.travelerPricings?.length || 1;
+    const charge = computeFlightCharge({ fareTotal, passengers, config: priceConfig });
 
     setCalculatedFare({
-      baseFare: totalBaseFare,
-      totalTax: totalTax,
-      serviceFee: totalServiceFee,
-      addonsTotal,
-      vipServiceFee,
-      seatFee: effectiveSeatFee,
-      seatFeeWaived,
-      seatFeeOriginal: seatExtraFee || 0,
-      bagFee: bagExtraFee || 0,
-      extrasTotal,
-      totalAmount,
-      currency: bookingData.flight.price.currency || 'EUR'
+      baseFare: base,
+      totalTax: Math.max(0, Math.round((fareTotal - base) * 100) / 100),
+      serviceFee: charge.serviceFee,
+      totalAmount: charge.total,
+      passengers,
+      currency: pricedFare?.currency || searched.currency || 'USD'
     });
   };
 
@@ -611,41 +593,8 @@ function FlightBookingConfirmation() {
     }
   };
 
-  const handleAddPassenger = () => {
-    const newPassenger = {
-      id: passengerData.length + 1,
-      type: "Adult",
-      title: "Mr",
-      firstName: "",
-      lastName: "",
-      dateOfBirth: "",
-      seatNumber: "",
-      meal: "Regular",
-      baggage: "",
-      mobile: "",
-      email: "",
-      gender: "male",
-      requiresWheelchair: false,
-      nationality: "",
-      passportNumber: "",
-      passportExpiry: "",
-      countryCode: callingCode || '+91'
-    };
-    const updatedPassengers = [...passengerData, newPassenger];
-    setPassengerData(updatedPassengers);
-    updateFareSummary(updatedPassengers.length);
-  };
-
-  const handleRemovePassenger = (id) => {
-    if (passengerData.length <= 1) {
-      alert("Cannot remove the last passenger");
-      return;
-    }
-
-    const updatedPassengers = passengerData.filter(passenger => passenger.id !== id);
-    setPassengerData(updatedPassengers);
-    updateFareSummary(updatedPassengers.length);
-  };
+  // No adding or removing travellers here: the fare was priced for the
+  // travellers the search asked for. A different party is a new search.
 
   const savePassengerDetails = () => {
     // In a real app, this would send the updated data to the server
@@ -657,135 +606,124 @@ function FlightBookingConfirmation() {
     });
   };
 
-  // Handle addon selection
-  const toggleAddon = (addonId) => {
-    const addon = bookingDetails.addOns.find(a => a.id === addonId);
-    if (!addon) return;
-
-    let newSelectedAddons;
-    if (selectedAddons.includes(addonId)) {
-      newSelectedAddons = selectedAddons.filter(id => id !== addonId);
-    } else {
-      newSelectedAddons = [...selectedAddons, addonId];
-    }
-    setSelectedAddons(newSelectedAddons);
-
-    // Update fare summary after toggling addon
-    const passengerCount = passengerData.length || 1;
-    updateFareSummary(passengerCount, bookingDetails);
-  };
-
-  // Toggle VIP service
-  const toggleVipService = () => {
-    setVipService(!vipService);
-  };
-
   // Handle proceeding to payment - DIRECT to ARC Pay (bypass FlightPayment.jsx)
   const handleProceedToPayment = async () => {
-    // Validate passenger data
-    const isPassengerDataValid = passengerData.every(p =>
-      p.firstName && p.lastName && p.mobile && p.dateOfBirth
-    );
+    if (checkingOut) return;
+    const travelDate = bookingDetails?.flight?.departureDate;
+    const lastDate = bookingDetails?.flight?.segments?.at?.(-1)?.arrival?.at
+      || bookingDetails?.flight?.arrivalDate
+      || travelDate;
+    const international = Boolean(bookingDetails?.isInternational);
 
-    if (!isPassengerDataValid) {
-      alert("Please fill in all required passenger details before proceeding.");
+    // Everything the airline needs, checked before payment. The server refuses
+    // an incomplete traveller too - but only after the charge, and then has to
+    // reverse it. Stopping here costs the customer nothing.
+    const problems = [];
+    passengerData.forEach((p, index) => {
+      const who = `${PASSENGER_TYPES[p.type]?.label || 'Traveller'} ${index + 1}`;
+      if (!p.firstName?.trim() || !p.lastName?.trim()) problems.push(`${who}: enter the first and last name exactly as on the ID.`);
+      if (!p.dateOfBirth) {
+        problems.push(`${who}: enter the date of birth.`);
+      } else {
+        const ageProblem = passengerAgeProblem(p.type, p.dateOfBirth, travelDate);
+        if (ageProblem) problems.push(`${who}: ${ageProblem}`);
+      }
+      if (!p.gender) problems.push(`${who}: select a gender.`);
+      if (index === 0 && !p.mobile) problems.push(`${who}: enter a mobile number for booking updates.`);
+      // A passport was optional on international routes, and an international
+      // ticket without one cannot be issued.
+      if (international) {
+        if (!p.nationality) problems.push(`${who}: select a nationality.`);
+        if (!p.passportNumber?.trim()) problems.push(`${who}: enter the passport number.`);
+        if (!p.passportExpiry) {
+          problems.push(`${who}: enter the passport expiry date.`);
+        } else if (lastDate && new Date(p.passportExpiry) <= new Date(String(lastDate).slice(0, 10))) {
+          problems.push(`${who}: the passport expires before the trip ends.`);
+        }
+      }
+    });
+    if (problems.length) {
+      alert(`Please check the traveller details:\n\n${problems.join('\n')}`);
       return;
     }
 
+    setCheckingOut(true);
     try {
-      console.log('🚀 Initiating direct ARC Pay checkout...');
-
-      // Prepare flight data for ARC Pay - use routerLocation.state for raw flight data
       const rawFlightData = routerLocation.state?.flightData;
-      const amount = appliedCoupon
-        ? appliedCoupon.finalTotal
-        : calculatedFare.totalAmount;
+      const amount = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
 
-      // Get flight details
-      const flightNumber = `${rawFlightData?.airline?.code || 'XX'} ${rawFlightData?.id || '000'}`;
-      const carrierCode = rawFlightData?.airline?.code || 'XX';
-      const departureAirport = rawFlightData?.departure?.airport || 'XXX';
-      const arrivalAirport = rawFlightData?.arrival?.airport || 'XXX';
-      const departureDate = rawFlightData?.departure?.rawDate || rawFlightData?.departure?.date || new Date().toISOString().split('T')[0];
+      // The real flight numbers. This used to send the offer id - "AI 1" - as
+      // the flight number to the card network, on every segment.
+      const carrierCode = rawFlightData?.airline?.code || '';
+      const departureAirport = rawFlightData?.departure?.airport || '';
+      const arrivalAirport = rawFlightData?.arrival?.airport || '';
+      const departureDate = rawFlightData?.departure?.rawDate || rawFlightData?.departure?.date || '';
       const segments = rawFlightData?.segments || [];
+      const flightNumber = bookingDetails?.flight?.flightNumber || '';
+      const segmentNumber = (seg) => seg.number || seg.flightNumber || '';
+      const segmentCarrier = (seg) => seg.carrier || seg.airline?.code || carrierCode;
 
-      // Build flight data for ARC Pay
       const flightDataForArcPay = {
-        flightNumber: flightNumber,
-        carrierCode: carrierCode,
+        flightNumber,
+        carrierCode,
         origin: departureAirport,
         destination: arrivalAirport,
-        departureDate: departureDate,
+        departureDate,
         segments: segments.map(seg => ({
-          carrierCode: seg.carrier || carrierCode,
-          flightNumber: seg.number || flightNumber.split(' ')[1] || '000',
-          departure: {
-            iataCode: seg.departure?.airport || departureAirport,
-            at: seg.departure?.time || departureDate
-          },
-          arrival: {
-            iataCode: seg.arrival?.airport || arrivalAirport,
-            at: seg.arrival?.time || ''
-          }
+          carrierCode: segmentCarrier(seg),
+          flightNumber: segmentNumber(seg),
+          departure: { iataCode: seg.departure?.airport || departureAirport, at: seg.departure?.at || seg.departure?.time || departureDate },
+          arrival: { iataCode: seg.arrival?.airport || arrivalAirport, at: seg.arrival?.at || seg.arrival?.time || '' }
         })),
         originalOffer: rawFlightData?.originalOffer || rawFlightData,
         itineraries: rawFlightData?.itineraries || [{
           segments: segments.map(seg => ({
-            carrierCode: seg.carrier || carrierCode,
-            number: seg.number || flightNumber.split(' ')[1] || '000',
-            departure: { iataCode: seg.departure?.airport || departureAirport, at: seg.departure?.time || departureDate },
-            arrival: { iataCode: seg.arrival?.airport || arrivalAirport, at: seg.arrival?.time || '' }
+            carrierCode: segmentCarrier(seg),
+            number: segmentNumber(seg),
+            departure: { iataCode: seg.departure?.airport || departureAirport, at: seg.departure?.at || seg.departure?.time || departureDate },
+            arrival: { iataCode: seg.arrival?.airport || arrivalAirport, at: seg.arrival?.at || seg.arrival?.time || '' }
           }))
         }]
       };
 
-      // Ensure contact info is populated from first passenger if missing
       const finalContact = {
         email: bookingDetails?.contact?.email || passengerData?.[0]?.email || "",
         phone: bookingDetails?.contact?.phone || passengerData?.[0]?.mobile || ""
       };
 
-      const finalBookingDetails = {
-        ...bookingDetails,
-        contact: finalContact
-      };
-
-      // Store ALL booking data in localStorage before redirect
       const bookingDataForStorage = {
         selectedFlight: rawFlightData,
         originalOffer: rawFlightData?.originalOffer || rawFlightData,
-        passengerData: passengerData, // Contains full details: title, meal, seat, etc.
-        selectedSeats: selectedSeats, // chosen seat numbers (ancillary)
-        selectedBags: selectedBags, // chosen extra-baggage options (ancillary)
-        bookingDetails: finalBookingDetails,
-        calculatedFare: calculatedFare,
-        amount: amount,
+        passengerData,
+        bookingDetails: { ...bookingDetails, contact: finalContact },
+        calculatedFare,
+        amount,
+        couponCode: appliedCoupon?.code || null,
         flightData: flightDataForArcPay
       };
 
-      console.log('💾 Storing booking data in localStorage:', bookingDataForStorage);
+      // Not logged: it carries names, dates of birth and passport numbers.
       localStorage.setItem('pendingFlightBooking', JSON.stringify(bookingDataForStorage));
 
-      // Generate order ID
       const orderId = makeOrderRef('FLT');
-      const description = `Flight ${flightNumber} - ${departureAirport} to ${arrivalAirport}`;
+      const description = `Flight ${flightNumber || carrierCode} - ${departureAirport} to ${arrivalAirport}`;
 
-      // Create ARC Pay checkout session
-      console.log('📞 Creating ARC Pay checkout session...');
       const checkoutResponse = await ArcPayService.createHostedCheckout({
-        amount: amount,
-        // calculatedFare.currency is seeded from the visitor's location
-        // (userCurrency || 'EUR' at init), so it is a display currency, not a
-        // charge currency. The merchant settles only in USD.
+        amount,
+        // The merchant settles only in USD; the server pins it regardless.
         currency: 'USD',
-        orderId: orderId,
+        orderId,
         bookingType: 'flight',
-        customerEmail: passengerData?.[0]?.email || 'customer@jetsetgo.com',
+        // The server evaluates the coupon itself on the total it computes.
+        couponCode: appliedCoupon?.code || undefined,
+        // No placeholder address: the email step is optional, and a made-up
+        // one is where ARC would send the receipt.
+        customerEmail: finalContact.email || undefined,
         customerName: passengerData?.[0]
-          ? `${passengerData[0].firstName} ${passengerData[0].lastName}`
-          : 'Guest User',
-        customerPhone: passengerData?.[0]?.phone || passengerData?.[0]?.mobile,
-        description: description,
+          ? `${passengerData[0].firstName} ${passengerData[0].lastName}`.trim()
+          : undefined,
+        customerPhone: passengerData?.[0]?.mobile,
+        description,
         returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=flight`,
         cancelUrl: `${window.location.origin}/flights?cancelled=true`,
         flightData: flightDataForArcPay,
@@ -793,61 +731,36 @@ function FlightBookingConfirmation() {
       });
 
       if (checkoutResponse.success && checkoutResponse.checkoutUrl) {
-        console.log('✅ Checkout session created successfully');
-        console.log('🔗 Redirecting to:', checkoutResponse.checkoutUrl);
-
-        // Store payment session info
         localStorage.setItem('pendingPaymentSession', JSON.stringify({
           sessionId: checkoutResponse.sessionId,
-          orderId: orderId,
+          orderId,
           bookingType: 'flight',
-          amount: amount
+          amount
         }));
-
-        // Direct redirect to ARC Pay
         window.location.href = checkoutResponse.checkoutUrl;
-      } else {
-        console.error('❌ Checkout creation failed:', checkoutResponse.error);
-        alert('Failed to create payment session. Please try again.');
+        return;
       }
+
+      // The server prices the fare with the airline and computes the total
+      // itself. When the figure on this page is out of date it says so, with
+      // the current fare, and nothing is charged.
+      const refusal = checkoutResponse.error || {};
+      if (refusal.code === 'PRICE_CHANGED' && refusal.pricedFare?.total) {
+        setPricedFare(refusal.pricedFare);
+        setAppliedCoupon(null);
+        couponBase.current = null;
+        setFareNotice(`${refusal.error} The total has been updated. Nothing has been charged.`);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      alert(refusal.error || 'We could not start the payment. Nothing has been charged. Please try again.');
     } catch (error) {
-      console.error('❌ Payment initiation error:', error);
-      alert('Payment service temporarily unavailable. Please try again.');
+      console.error('❌ Payment initiation error:', error?.message);
+      alert('Payment service temporarily unavailable. Nothing has been charged. Please try again.');
+    } finally {
+      setCheckingOut(false);
     }
   };
-
-  const renderAddon = (addon) => (
-    <div key={addon.id} className="flex justify-between items-start p-4 border rounded-lg mb-4">
-      <div className="flex-1">
-        <h3 className="font-semibold text-gray-800">{addon.name}</h3>
-        <p className="text-sm text-gray-600 mt-1">{addon.description}</p>
-        <ul className="mt-2 space-y-1">
-          {addon.benefits.map((benefit, index) => (
-            <li key={index} className="flex items-center text-sm text-gray-600">
-              <svg className="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-              </svg>
-              {benefit}
-            </li>
-          ))}
-        </ul>
-        <button className="text-sm text-blue-600 hover:text-blue-800 mt-1">
-          Know More
-        </button>
-      </div>
-      <div className="text-right">
-        <div className="text-gray-600 text-sm">
-          {calculatedFare.currency} {addon.price.toFixed(2)}
-        </div>
-        <button
-          onClick={() => toggleAddon(addon.id)}
-          className={`mt-2 ${selectedAddons.includes(addon.id) ? 'bg-green-600' : 'bg-blue-600'} text-white px-4 py-1 rounded hover:opacity-90 transition-colors text-sm`}
-        >
-          {selectedAddons.includes(addon.id) ? 'Added' : 'Add'}
-        </button>
-      </div>
-    </div>
-  );
 
 
 
@@ -1192,16 +1105,8 @@ function FlightBookingConfirmation() {
                     <div className="passenger-header" role="button" tabIndex={0} aria-expanded={isExpanded} onClick={() => setExpandedPassengerId(isExpanded ? '' : passenger.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedPassengerId(isExpanded ? '' : passenger.id); } }} style={{ cursor: 'pointer' }}>
                       <div className="flex items-center gap-3">
                         <span className="passenger-badge">
-                          Adult {index + 1}
+                          {PASSENGER_TYPES[passenger.type]?.label || 'Traveller'} {index + 1}
                         </span>
-                        {editMode && passengerData.length > 1 && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleRemovePassenger(passenger.id); }}
-                            className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 rounded hover:bg-red-50"
-                          >
-                            REMOVE
-                          </button>
-                        )}
                       </div>
                       <div className="flex items-center gap-2 text-sm font-medium text-[#055B75]">
                         {(passenger.firstName || passenger.lastName) ? (
@@ -1273,7 +1178,7 @@ function FlightBookingConfirmation() {
 
                       {/* New Row */}
                       <div className="form-group">
-                        <label>Mobile No <span className="required">*</span></label>
+                        <label>Mobile No {index === 0 ? <span className="required">*</span> : <span className="text-xs font-normal text-gray-400">(optional)</span>}</label>
                         <div style={{ display: 'flex', gap: '0' }}>
                           <select
                             className="form-input"
@@ -1294,7 +1199,7 @@ function FlightBookingConfirmation() {
                             value={passenger.mobile}
                             onChange={(e) => handlePassengerChange(passenger.id, 'mobile', e.target.value.replace(/[^0-9]/g, ''))}
                             readOnly={!editMode}
-                            required
+                            required={index === 0}
                           />
                         </div>
                       </div>
@@ -1309,10 +1214,10 @@ function FlightBookingConfirmation() {
                           readOnly={!editMode}
                         />
                       </div>
-                      {/* Passport / Travel Document Fields — shown for international routes only */}
-                      {isInternationalRoute(bookingDetails?.flight?.departureCode, bookingDetails?.flight?.arrivalCode) && (<>
+                      {/* Passport / Travel Document Fields — required on international itineraries */}
+                      {bookingDetails?.isInternational && (<>
                       <div className="form-group" style={{ position: 'relative' }}>
-                        <label>Nationality</label>
+                        <label>Nationality <span className="required">*</span></label>
                         <input
                           type="text"
                           className="form-input"
@@ -1361,7 +1266,7 @@ function FlightBookingConfirmation() {
                         )}
                       </div>
                       <div className="form-group">
-                        <label>Passport Number</label>
+                        <label>Passport Number <span className="required">*</span></label>
                         <input
                           type="text"
                           className="form-input"
@@ -1372,7 +1277,7 @@ function FlightBookingConfirmation() {
                         />
                       </div>
                       <div className="form-group">
-                        <label>Passport Expiry Date</label>
+                        <label>Passport Expiry Date <span className="required">*</span></label>
                         <input
                           type="date"
                           className="form-input"
@@ -1399,14 +1304,9 @@ function FlightBookingConfirmation() {
                   );
                 })}
 
-                {editMode && (
-                  <button
-                    onClick={handleAddPassenger}
-                    className="btn-add w-full justify-center mt-4"
-                  >
-                    <Plus className="h-5 w-5" /> Add Another Traveller
-                  </button>
-                )}
+                <p className="text-xs text-gray-500 mt-3">
+                  This fare is priced for {passengerData.length} traveller{passengerData.length === 1 ? '' : 's'}. To change who is travelling, please search again.
+                </p>
               </div>
             </div>
 
@@ -1423,7 +1323,7 @@ function FlightBookingConfirmation() {
               <div className="booking-card-body">
                 <p className="text-[#626363] text-sm mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100 flex items-center">
                   <span className="bg-[#65B3CF] text-white text-xs px-2 py-0.5 rounded mr-2">INFO</span>
-                  Your booking confirmation & ticket will be sent to the contact details below.
+                  Your booking reference is sent to these contact details after payment, and your e-ticket once it is issued.
                 </p>
                 <div className="form-grid">
                   <div className="form-group">
@@ -1476,76 +1376,6 @@ function FlightBookingConfirmation() {
               </div>
             </div>
 
-            {/* Add-ons Section — only rendered when add-ons actually exist */}
-            {bookingDetails?.addOns?.length > 0 && (
-            <div className="booking-card mb-4">
-              <div className="booking-card-header">
-                <h2>
-                  <span className="flex items-center gap-2">
-                    <Plus className="h-5 w-5" />
-                    Flight Add-ons
-                  </span>
-                </h2>
-              </div>
-              <div className="booking-card-body">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {bookingDetails?.addOns && bookingDetails.addOns.length > 0 ? (
-                    bookingDetails.addOns.map((addon) => (
-                      <div key={addon.id} className={`addon-card ${selectedAddons.includes(addon.id) ? 'selected' : ''}`}>
-                        <div className="addon-header">
-                          <h3 className="addon-title">{addon.name}</h3>
-                          <div className="addon-price">{calculatedFare.currency || '€'}{addon.price}</div>
-                        </div>
-                        <p className="text-sm text-[#7F8073] mb-3">{addon.description}</p>
-                        <ul className="addon-benefits">
-                          {addon.benefits.map((benefit, i) => (
-                            <li key={i}>{benefit}</li>
-                          ))}
-                        </ul>
-                        <button
-                          onClick={() => toggleAddon(addon.id)}
-                          className={`w-full mt-4 py-2 rounded-lg font-semibold text-sm transition-colors ${selectedAddons.includes(addon.id)
-                            ? 'bg-[#10b981] text-white border-transparent'
-                            : 'border-2 border-[#65B3CF] text-[#055B75] hover:bg-[#65B3CF]/10'
-                            }`}
-                        >
-                          {selectedAddons.includes(addon.id) ? (
-                            <span className="flex items-center justify-center gap-2"><Check className="h-4 w-4" /> Added</span>
-                          ) : '+ Add to Trip'}
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-gray-500 col-span-2 text-center py-4">No add-ons available.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-            )}
-
-            {/* Seat selection */}
-            {routerLocation.state?.flightData?.originalOffer && (
-              <div className="booking-card mb-4">
-                <div className="booking-card-header">
-                  <h2>
-                    <span className="flex items-center gap-2">
-                      <UserCircle className="h-5 w-5" />
-                      Select Your Seat <span className="text-sm font-normal text-gray-400">(optional)</span>
-                    </span>
-                  </h2>
-                </div>
-                <div className="booking-card-body">
-                  <FlightSeatMap
-                    flightOffer={routerLocation.state.flightData.originalOffer}
-                    passengerCount={passengerData.length || 1}
-                    selectedSeats={selectedSeats}
-                    onSeatsChange={handleSeatsChange}
-                    feeWaived={membership.isActive}
-                  />
-                </div>
-              </div>
-            )}
-
             {/* Fare rules & baggage */}
             {routerLocation.state?.flightData?.originalOffer && (
               <div className="booking-card mb-4">
@@ -1560,77 +1390,8 @@ function FlightBookingConfirmation() {
                 <div className="booking-card-body">
                   <FlightFareRules
                     flightOffer={routerLocation.state.flightData.originalOffer}
-                    onBagsChange={handleBagsChange}
                   />
                 </div>
-              </div>
-            )}
-
-            {/* VIP Service */}
-            <div className="booking-card mb-4">
-              <div className="booking-card-body flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg text-white font-bold text-lg">
-                    VIP
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-[#055B75] mb-1">Fly Like a VIP</h3>
-                    <p className="text-sm text-[#626363] max-w-md">
-                      Get Priority Check-in, Priority Boarding, and Priority Baggage Handling for just <span className="font-bold text-[#055B75]">{calculatedFare.currency} {(bookingDetails?.vipServiceFee || 0).toFixed(2)}</span>.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={toggleVipService}
-                  className={`px-6 py-3 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 whitespace-nowrap ${vipService
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-white text-amber-600 border-2 border-amber-500 hover:bg-amber-50'
-                    }`}
-                >
-                  {vipService ? <><CheckCircle className="h-5 w-5" /> VIP Added</> : 'Upgrade to VIP'}
-                </button>
-              </div>
-            </div>
-
-            {/* Visa Requirements (International) */}
-            {bookingDetails?.isInternational && bookingDetails?.visaRequirements && (
-              <div className="booking-card mb-4">
-                <div
-                  className="booking-card-header cursor-pointer"
-                  onClick={() => toggleSection('visaRequirements')}
-                >
-                  <h2>Visa & Travel Documents</h2>
-                  {expandedSections.visaRequirements ? <ChevronUp /> : <ChevronDown />}
-                </div>
-
-                {expandedSections.visaRequirements && (
-                  <div className="booking-card-body">
-                    <div className="alert-warning bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r mb-6 flex gap-3">
-                      <div className="text-amber-500 mt-1">⚠️</div>
-                      <div>
-                        <h4 className="font-bold text-amber-800 text-sm">International Travel Requirement</h4>
-                        <p className="text-sm text-amber-700">Ensure you have valid visas for {bookingDetails?.visaRequirements?.destination}.</p>
-                      </div>
-                    </div>
-                    <div className="grid md:grid-cols-3 gap-6 mb-6">
-                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                        <div className="text-xs text-[#7F8073] uppercase mb-1">Destination</div>
-                        <div className="font-bold text-[#055B75]">{bookingDetails?.visaRequirements?.destination}</div>
-                      </div>
-                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                        <div className="text-xs text-[#7F8073] uppercase mb-1">Visa Type</div>
-                        <div className="font-bold text-[#055B75]">{bookingDetails?.visaRequirements?.visaType}</div>
-                      </div>
-                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                        <div className="text-xs text-[#7F8073] uppercase mb-1">Processing</div>
-                        <div className="font-bold text-[#055B75]">{bookingDetails?.visaRequirements?.processingTime}</div>
-                      </div>
-                    </div>
-                    <a href={bookingDetails?.visaRequirements?.officialWebsite} target="_blank" rel="noreferrer" className="text-[#055B75] font-semibold hover:underline flex items-center gap-1">
-                      Check Official Requirements <Share2 className="h-4 w-4" />
-                    </a>
-                  </div>
-                )}
               </div>
             )}
 
@@ -1664,7 +1425,7 @@ function FlightBookingConfirmation() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
               {[
                 { Icon: ShieldCheck, label: 'Secure Payment' },
-                { Icon: CheckCircle, label: 'Instant Confirmation' },
+                { Icon: CheckCircle, label: 'Fare checked with the airline' },
                 { Icon: Clock, label: '24x7 Support' },
                 { Icon: Briefcase, label: 'Best Fares' },
               ].map(({ Icon, label }, i) => (
@@ -1684,13 +1445,18 @@ function FlightBookingConfirmation() {
                 <h2>Fare Summary</h2>
               </div>
               <div className="booking-card-body">
+                {fareNotice && (
+                  <div className="mb-3 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800" role="status">
+                    {fareNotice}
+                  </div>
+                )}
                 {/* Base Fare */}
                 <div className="flex items-start gap-3 py-3 border-b border-gray-100">
                   <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[#65B3CF] flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-gray-800">Base Fare</div>
                     <div className="text-xs text-gray-400 mt-0.5">
-                      Adult(s) ({passengerData.length || 1} &times; <Price amount={(calculatedFare.baseFare || 0) / (passengerData.length || 1)} />)
+                      For {calculatedFare.passengers} traveller{calculatedFare.passengers === 1 ? '' : 's'}
                     </div>
                   </div>
                   <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><Price amount={calculatedFare.baseFare} /></div>
@@ -1720,44 +1486,6 @@ function FlightBookingConfirmation() {
                   </div>
                 )}
 
-                {/* Other Services (seats, baggage, add-ons, VIP) */}
-                {(() => {
-                  const other = (calculatedFare.addonsTotal || 0) + (calculatedFare.seatFee || 0) + (calculatedFare.bagFee || 0) + (calculatedFare.vipServiceFee || 0);
-                  if (other <= 0) return null;
-                  const parts = [];
-                  if (calculatedFare.seatFee > 0) parts.push(`Seat${selectedSeats.length > 1 ? 's' : ''}${selectedSeats.length ? ` (${selectedSeats.join(', ')})` : ''}`);
-                  if (calculatedFare.bagFee > 0) parts.push('Extra baggage');
-                  if (calculatedFare.addonsTotal > 0) parts.push('Add-ons');
-                  if (vipService) parts.push('VIP services');
-                  return (
-                    <div className="flex items-start gap-3 py-3 border-b border-gray-100">
-                      <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[#65B3CF] flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-bold text-gray-800">Other Services</div>
-                        <div className="text-xs text-gray-400 mt-0.5">{parts.join(' · ')}</div>
-                      </div>
-                      <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><Price amount={other} /></div>
-                    </div>
-                  );
-                })()}
-
-                {/* Premium perk: free seat selection */}
-                {calculatedFare.seatFeeWaived && (
-                  <div className="flex items-start gap-3 py-3 border-b border-gray-100">
-                    <CheckCircle className="h-5 w-5 text-[#055B75] mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-[#055B75]">Seat selection — Free with Premium</div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {selectedSeats.length ? `Seat${selectedSeats.length > 1 ? 's' : ''} ${selectedSeats.join(', ')}` : 'Member benefit'}
-                      </div>
-                    </div>
-                    <div className="text-sm font-semibold whitespace-nowrap">
-                      <span className="text-gray-400 line-through mr-1"><Price amount={calculatedFare.seatFeeOriginal} /></span>
-                      <span className="text-[#055B75]">Free</span>
-                    </div>
-                  </div>
-                )}
-
                 {/* Discounts */}
                 {appliedCoupon && (
                   <div className="flex items-start gap-3 py-3 border-b border-gray-100">
@@ -1773,11 +1501,14 @@ function FlightBookingConfirmation() {
                 {/* Coupon Input */}
                 <div className="mt-4 mb-2">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Have a coupon?</p>
+                  {/* Keyed on the total, so a changed total also resets the
+                      input's own "applied" display along with the coupon. */}
                   <CouponInput
+                    key={calculatedFare.totalAmount}
                     orderTotal={calculatedFare.totalAmount}
                     bookingType="flights"
-                    onApply={(coupon) => setAppliedCoupon(coupon)}
-                    onRemove={() => setAppliedCoupon(null)}
+                    onApply={(coupon) => { couponBase.current = calculatedFare.totalAmount; setAppliedCoupon(coupon); }}
+                    onRemove={() => { couponBase.current = null; setAppliedCoupon(null); }}
                   />
                 </div>
 
@@ -1788,9 +1519,10 @@ function FlightBookingConfirmation() {
 
                 <button
                   onClick={handleProceedToPayment}
+                  disabled={checkingOut}
                   className="btn-primary mt-4"
                 >
-                  Proceed to Payment <CheckCircle className="h-5 w-5" />
+                  {checkingOut ? 'Checking the fare…' : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
                 </button>
 
                 <div className="secure-payment-badge">
@@ -1828,13 +1560,14 @@ function FlightBookingConfirmation() {
           </div>
           <button
             onClick={handleProceedToPayment}
+            disabled={checkingOut}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8, background: '#055B75', color: '#fff',
               fontWeight: 700, fontSize: 15, padding: '13px 26px', borderRadius: 10, border: 'none',
               cursor: 'pointer', boxShadow: '0 6px 16px rgba(5,91,117,0.3)', whiteSpace: 'nowrap',
             }}
           >
-            Proceed to Payment <CheckCircle className="h-5 w-5" />
+            {checkingOut ? 'Checking the fare…' : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
           </button>
         </div>
       </div>

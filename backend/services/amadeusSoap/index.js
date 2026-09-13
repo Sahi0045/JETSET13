@@ -535,6 +535,10 @@ const createFlightOrder = async (orderData, options = {}) => {
     lastName: traveler.name?.lastName ?? traveler.lastName,
     gender: traveler.gender,
     dateOfBirth: traveler.dateOfBirth,
+    // The fare type the review page booked this traveller on. Without it the
+    // chain assigns types by position, so whoever is typed second in a one
+    // adult + one child search becomes the child.
+    ptc: traveler.ptc,
     // Carried through for SSR DOCS. Dropping it here is what left every
     // international booking unticketable.
     documents: traveler.documents,
