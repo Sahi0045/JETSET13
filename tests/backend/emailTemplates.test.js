@@ -108,6 +108,66 @@ describe('booking confirmation', () => {
   });
 });
 
+/**
+ * A flight the airline holds but has not ticketed is not a confirmed booking.
+ *
+ * Every committed PNR used to get "Booking Confirmed!", "is confirmed" and a
+ * green Paid pill - with auto-ticketing off, that was every flight booking.
+ * The "Manage booking" button also pointed at the bare page, which answers "No
+ * booking ID provided".
+ */
+describe('booking confirmation for a flight not yet ticketed', () => {
+  const base = {
+    customerName: 'Jane', bookingReference: 'FLTDC7158CDFAA147', bookingType: 'flight',
+    paymentAmount: 133.05, currency: 'USD', passengers: 1, travelDate: '2026-09-19',
+  };
+  const held = { origin: 'DEL', destination: 'BLR', pnr: 'ASOV8X', gds: { ticketed: false }, tickets: [] };
+
+  it('says the seats are reserved and the ticket is to follow', () => {
+    const html = T.generateBookingConfirmationTemplate({ ...base, bookingDetails: held });
+
+    expect(html).toContain('Reservation Held');
+    expect(html).toContain('Ticket pending');
+    expect(html).not.toContain('Booking Confirmed');
+    expect(html).not.toMatch(/is confirmed/);
+  });
+
+  it('gives the ticketing deadline when the chain recorded one', () => {
+    const html = T.generateBookingConfirmationTemplate({
+      ...base, bookingDetails: { ...held, last_ticketing_date: '2026-09-15' },
+    });
+    expect(html).toMatch(/held until/);
+  });
+
+  it('still confirms a ticketed flight', () => {
+    const html = T.generateBookingConfirmationTemplate({
+      ...base, bookingDetails: { ...held, gds: { ticketed: true }, tickets: [{ number: '220-7491174926' }] },
+    });
+    expect(html).toContain('Booking Confirmed');
+    expect(html).not.toContain('Reservation Held');
+  });
+
+  it('keeps the confirmation for callers that record no booking-chain outcome', () => {
+    const html = T.generateBookingConfirmationTemplate({ ...base, bookingDetails: { origin: 'DEL', destination: 'BLR' } });
+    expect(html).toContain('Booking Confirmed');
+  });
+
+  it('links Manage booking to this booking, not the page that errors without one', () => {
+    const html = T.generateBookingConfirmationTemplate({ ...base, bookingDetails: held });
+    expect(html).toContain('/manage-booking/FLTDC7158CDFAA147');
+    expect(html).not.toMatch(/\/manage-booking"/);
+  });
+
+  it('isUnticketedFlight only judges flights that carry a chain record', () => {
+    expect(T.isUnticketedFlight({ bookingType: 'flight', bookingDetails: held })).toBe(true);
+    expect(T.isUnticketedFlight({ bookingType: 'flight', bookingDetails: { gds: { ticketed: true } } })).toBe(false);
+    expect(T.isUnticketedFlight({ bookingType: 'flight', bookingDetails: { gds: {}, tickets: [{ number: 'x' }] } })).toBe(false);
+    expect(T.isUnticketedFlight({ bookingType: 'flight', bookingDetails: {} })).toBe(false);
+    expect(T.isUnticketedFlight({ bookingType: 'hotel', bookingDetails: held })).toBe(false);
+    expect(T.isUnticketedFlight()).toBe(false);
+  });
+});
+
 describe('cancellation', () => {
   it('leads with the refund and states a real timeframe', () => {
     const html = T.generateCancellationTemplate({

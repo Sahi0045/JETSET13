@@ -92,7 +92,7 @@ export function describeBooking(booking) {
 export function buildMessage(bookings) {
   return [
     `:rotating_light: *${bookings.length} booking${bookings.length > 1 ? 's' : ''} paid but not ticketed*`,
-    'The customer has paid and holds a PNR, but no ticket was issued. These need manual ticketing.',
+    'The customer has paid and no ticket was issued. Each one needs a human: ticket it, or refund it.',
     '',
     ...bookings.map(describeBooking),
   ].join('\n\n');
