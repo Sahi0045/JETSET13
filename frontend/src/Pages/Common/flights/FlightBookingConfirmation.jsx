@@ -247,6 +247,9 @@ function FlightBookingConfirmation() {
         arrivalDate: flightData.arrival.rawDate || flightData.arrival.date,
         cabin: flightData.cabin,
         fareType: flightData.class,
+        // Carried through so the summary can say what the fare says. It was
+        // never passed, so this page read every fare as "Non-Refundable".
+        refundable: flightData.refundable ?? null,
         brandedFare: flightData.brandedFare || null,
         brandedFareLabel: flightData.brandedFareLabel || null,
         operatingCarrier: flightData.operatingCarrier || null,
@@ -858,9 +861,11 @@ function FlightBookingConfirmation() {
                       {bookingDetails.flight.brandedFareLabel}
                     </span>
                   )}
-                  <span className="cabin-class-badge">
-                    {bookingDetails?.flight?.cabin || 'Economy Class'}
-                  </span>
+                  {bookingDetails?.flight?.cabin && (
+                    <span className="cabin-class-badge">
+                      {bookingDetails.flight.cabin}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -937,9 +942,11 @@ function FlightBookingConfirmation() {
                                   <div className="mx-1 text-gray-400 text-sm">&#9992;</div>
                                   <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
                                 </div>
-                                <div className="text-[10px] font-medium px-2 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1]">
-                                  {bookingDetails?.flight?.cabin || 'Economy'}
-                                </div>
+                                {bookingDetails?.flight?.cabin && (
+                                  <div className="text-[10px] font-medium px-2 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1]">
+                                    {bookingDetails.flight.cabin}
+                                  </div>
+                                )}
                               </div>
 
                               {/* Arrival */}
@@ -1032,7 +1039,7 @@ function FlightBookingConfirmation() {
                     </span>
                   </div>
                   <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-semibold text-[#055B75]">
-                    <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" />{bookingDetails?.flight?.refundable ? 'Partially Refundable' : 'Non-Refundable'}</span>
+                    <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" />{bookingDetails?.flight?.refundable === true ? 'Refundable (fees may apply)' : bookingDetails?.flight?.refundable === false ? 'Non-refundable' : 'Refunds: see fare rules'}</span>
                     {bookingDetails?.flight?.numberOfBookableSeats && bookingDetails.flight.numberOfBookableSeats <= 9 && (
                       <span className="text-red-600">· {bookingDetails.flight.numberOfBookableSeats} seats left</span>
                     )}

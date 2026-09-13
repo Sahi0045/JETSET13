@@ -644,7 +644,8 @@ export function buildBookingRow(bookingData, userId) {
       operating_airline_name: bookingData.operatingAirlineName || null,
       last_ticketing_date: bookingData.lastTicketingDate || null,
       number_of_bookable_seats: bookingData.numberOfBookableSeats || null,
-      refundable: bookingData.refundable || false,
+      // Null when the fare did not say; `|| false` stored "non-refundable".
+      refundable: bookingData.refundable ?? null,
       baggage_details: bookingData.baggageDetails || null,
       baggage: bookingData.baggage || null,
       // Fall back to the bundled airports dataset. Amadeus does not return a
@@ -960,9 +961,11 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
       const allCabins = travelerPricing?.fareDetailsBySegment?.map(f => f.cabin) || [];
       const cabinPriority = { 'FIRST': 4, 'BUSINESS': 3, 'PREMIUM_ECONOMY': 2, 'ECONOMY': 1 };
 
-      const cabin = allCabins.reduce((prev, current) => {
-        return (cabinPriority[current] || 0) > (cabinPriority[prev] || 0) ? current : prev;
-      }, 'ECONOMY');
+      // Null when the fare does not say. Seeding this with 'ECONOMY' meant a
+      // fare with no cabin data - or one in a cabin this table does not list -
+      // was shown to the customer as Economy.
+      const cabinRank = (c) => (c ? (cabinPriority[c] ?? 0.5) : -1);
+      const cabin = allCabins.reduce((prev, current) => (cabinRank(current) > cabinRank(prev) ? current : prev), null);
 
       // Extract branded fare info
       const brandedFare = fareDetails?.brandedFare || null;
@@ -1000,8 +1003,12 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
           checked: fareDetails?.includedCheckedBags || null,
           cabin: fareDetails?.includedCabinBags || null
         },
-        refundable: travelerPricing?.price?.refundableTaxes ? true : false,
-        seats: flight.numberOfBookableSeats || 'Available',
+        // Refundability as the fare's penalty rules state it, or null when they
+        // do not. This read `refundableTaxes` - a tax amount this provider never
+        // sets - so every fare was shown as "Non-refundable".
+        refundable: flight._ama?.refundable ?? null,
+        // Unknown is not "Available".
+        seats: flight.numberOfBookableSeats ?? null,
         isUpsellOffer: flight.isUpsellOffer || false,
         // Richer Amadeus fare data surfaced to the UI
         amenities: fareDetails?.amenities || [],
@@ -1088,6 +1095,12 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
       );
 
       console.log(`✅ Transformed ${transformedFlights.length} flights for frontend`);
+      // Offers that failed to transform used to vanish without a trace: the
+      // two counts below disagreed and nothing ever said so.
+      const droppedCount = Math.max(0, amadeusResponse.data.length - transformedFlights.length);
+      if (droppedCount > 0) {
+        console.warn(`⚠️ ${droppedCount} of ${amadeusResponse.data.length} flight offers could not be shown`);
+      }
 
       res.json({
         success: true,
@@ -1096,6 +1109,7 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
           searchParams: searchParams,
           resultCount: transformedFlights.length,
           totalResults: amadeusResponse.data.length,
+          droppedCount,
           source: 'amadeus-gds'
         }
       });
@@ -1183,11 +1197,12 @@ router.post('/upsell', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Branded-fare upsell error:', error);
-    // Soft-fail: no upsell options just means the caller falls back to the base fare
-    res.status(200).json({
+    // The caller still falls back to the fare that was clicked, but a failure is
+    // reported as one: a 200 here read as "this flight has no other fares".
+    res.status(502).json({
       success: false,
       data: [],
-      error: error.error || error.message || 'No fare options available'
+      error: error.error || error.message || 'Fare options are temporarily unavailable'
     });
   }
 });
@@ -1334,7 +1349,9 @@ router.post('/fare-rules', async (req, res) => {
     res.json({ success: true, bags, fareRules: fareRules.slice(0, 8), cancellation });
   } catch (error) {
     console.error('❌ Fare-rules error:', error);
-    res.status(200).json({ success: false, bags: [], fareRules: [] });
+    // A failure, reported as one. A 200 with empty lists read to every caller
+    // as "this fare has no rules or baggage".
+    res.status(502).json({ success: false, bags: [], fareRules: [], error: 'Fare rules are temporarily unavailable' });
   }
 });
 
@@ -1368,7 +1385,8 @@ router.post('/seatmaps', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('❌ SeatMap error:', error);
-    res.status(200).json({ success: false, data: [] });
+    // A failure, reported as one - not a 200 meaning "no seat map".
+    res.status(502).json({ success: false, data: [], error: 'Seat maps are temporarily unavailable' });
   }
 });
 
@@ -1957,7 +1975,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       airlineName: firstOffer?.validatingAirlineCodes?.[0] || firstSegment.carrierCode || '',
       flightNumber: firstSegment.number ? `${firstSegment.carrierCode}${firstSegment.number}` : '',
       duration: firstItinerary?.duration || '',
-      cabinClass: fareDetails?.cabin || 'ECONOMY',
+      cabinClass: fareDetails?.cabin || null,
       departureTerminal: firstSegment.departure?.terminal || '',
       arrivalTerminal: lastSegment.arrival?.terminal || '',
       aircraft: firstSegment.aircraft?.code || '',
@@ -1969,7 +1987,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       operatingAirlineName: firstSegment.operating?.carrierCode || null,
       lastTicketingDate: firstOffer?.lastTicketingDate || null,
       numberOfBookableSeats: firstOffer?.numberOfBookableSeats || null,
-      refundable: firstOffer?.travelerPricings?.[0]?.price?.refundableTaxes ? true : false,
+      refundable: firstOffer?._ama?.refundable ?? null,
       baggageDetails: {
         checked: fareDetails?.includedCheckedBags || null,
         cabin: fareDetails?.includedCabinBags || null
@@ -2462,7 +2480,7 @@ export function toClientBooking(booking) {
     operatingAirlineName: booking.booking_details?.operating_airline_name || null,
     lastTicketingDate: booking.booking_details?.last_ticketing_date || null,
     numberOfBookableSeats: booking.booking_details?.number_of_bookable_seats || null,
-    refundable: booking.booking_details?.refundable || false,
+    refundable: booking.booking_details?.refundable ?? null,
     baggageDetails: booking.booking_details?.baggage_details || null,
     baggage: booking.booking_details?.baggage || null,
     originCity: booking.booking_details?.origin_city || '',
