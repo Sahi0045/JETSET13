@@ -286,6 +286,10 @@ describe('Manage Booking claims nothing it cannot back', () => {
   it('lets a guest find their booking by email', () => {
     expect(src).toMatch(/Enter the email used when booking/);
   });
+
+  it('cancels with the email the guest proved the booking with', () => {
+    expect(src).toMatch(/submittedEmail \|\| bookingData\.email/);
+  });
 });
 
 describe('policy, offers and prices shown as they are', () => {

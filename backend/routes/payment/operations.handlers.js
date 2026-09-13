@@ -4,6 +4,8 @@ import FlightProvider from '../../services/flightProvider.js';
 import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig } from './arcpay.config.js';
 import { getCaller, requireAdmin } from './agents.handlers.js';
 import { arcSucceeded } from './payment.helpers.js';
+import { resolveBookingUserId } from '../../utils/bookingOwner.js';
+import { emailMatchesBooking, hasBookingOwner, isBookingOwner } from '../../utils/bookingAccess.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -73,27 +75,44 @@ export async function handleCancelBookingAction(req, res) {
             });
         }
 
+        // AUTHORIZATION, before anything about the booking is disclosed. Cancelling
+        // releases the seat and moves money:
+        //  - staff (admin/superadmin) may cancel any booking;
+        //  - a booking that belongs to an account is cancelled by that account,
+        //    signed in - an email alone is not enough to cancel someone's trip;
+        //  - a booking made as a guest (no owner) by an email it was made with,
+        //    the same proof Manage Booking accepts to open it.
+        //
+        // This compared the request email with `booking.customer_email`, a column
+        // the bookings table does not have - checkout writes the address into
+        // booking_details - so every customer cancel was refused, signed in or
+        // not. The in-process callers (My Trips' DELETE /flights/order and the
+        // admin panel) passed no email and no session at all. The other cancel
+        // tests' fixtures had the column, which is how it shipped.
+        const caller = await getCaller(req);
+        const isStaff = [caller?.role, req.user?.role].some((role) => ['admin', 'superadmin'].includes(role));
+        if (!isStaff) {
+            const sessionUserId = resolveBookingUserId(req);
+            const owned = hasBookingOwner(booking);
+            const allowed = owned ? isBookingOwner(sessionUserId, booking) : emailMatchesBooking(email, booking);
+            if (!allowed) {
+                const mustSignIn = owned && !sessionUserId;
+                return res.status(403).json({
+                    success: false,
+                    code: mustSignIn ? 'LOGIN_REQUIRED' : 'NOT_AUTHORIZED',
+                    error: mustSignIn
+                        ? 'Please log in to the account this booking was made with to cancel it.'
+                        : 'Not authorized to cancel this booking'
+                });
+            }
+        }
+
         if (booking.status === 'cancelled') {
             return res.status(400).json({
                 success: false,
                 error: 'Booking is already cancelled',
                 booking: { id: booking.id, reference: booking.booking_reference, status: booking.status }
             });
-        }
-
-        // AUTHORIZATION: an admin/superadmin may cancel any booking; otherwise the
-        // caller must prove ownership by supplying the booking's contact email.
-        // Previously this check was SKIPPED whenever `email` was absent, so an
-        // unauthenticated caller could cancel + refund ANY booking just by knowing
-        // its (guessable) reference.
-        const caller = await getCaller(req);
-        const isStaff = !!caller && ['admin', 'superadmin'].includes(caller.role);
-        if (!isStaff) {
-            const provided = (email || '').toLowerCase().trim();
-            const owner = (booking.customer_email || '').toLowerCase().trim();
-            if (!provided || !owner || provided !== owner) {
-                return res.status(403).json({ success: false, error: 'Not authorized to cancel this booking' });
-            }
         }
 
         console.log('📋 Booking found:', booking.id, 'Status:', booking.status);

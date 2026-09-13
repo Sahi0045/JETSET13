@@ -66,7 +66,9 @@ function ManageBooking() {
       // Call the cancel-booking API
       const result = await ArcPayService.cancelBooking(
         bookingRef,
-        bookingData.email || bookingData.bookingDetails?.contact?.email || null,
+        // The email the guest proved the booking with, first. A signed-in owner
+        // needs none: the server takes them from the session.
+        submittedEmail || bookingData.email || bookingData.bookingDetails?.contact?.email || null,
         cancelReason
       );
 

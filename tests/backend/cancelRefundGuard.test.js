@@ -22,8 +22,11 @@ const booking = (overrides = {}) => ({
   status: 'confirmed',
   payment_status: 'paid',
   total_amount: 291,
-  booking_details: { pnr: 'ABC123', order_id: 'FLT123' },
-  customer_email: 'traveler@example.com',
+  // The email where checkout writes it. These fixtures used to carry a
+  // top-level `customer_email` - a column the bookings table does not have -
+  // which is how a cancel check that refused every customer passed here.
+  booking_details: { pnr: 'ABC123', order_id: 'FLT123', customer_email: 'traveler@example.com' },
+  user_id: null,
   ...overrides,
 });
 
@@ -65,10 +68,8 @@ vi.mock('../../backend/services/flightProvider.js', () => ({
 const runCancel = async (row) => {
   supabaseDouble = supabaseFor(row);
   const { handleCancelBookingAction } = await import('../../backend/routes/payment/operations.handlers.js');
-  // Authorize as the booking owner: cancel now requires an admin/superadmin
-  // caller OR a request `email` matching the booking's contact email (see the
-  // ownership check in handleCancelBookingAction). Unauthenticated cancel-by-
-  // reference — the previous behaviour — is now correctly rejected with 403.
+  // Authorize as the guest who made the booking, with its email. Who may cancel
+  // is covered in cancelAuthorization.test.js.
   const req = createRequest({ method: 'POST', body: { bookingReference: 'FLT123', reason: 'test', email: 'traveler@example.com' } });
   const res = createResponse();
   await handleCancelBookingAction(req, res);
@@ -151,7 +152,7 @@ describe('bookings with nothing to release', () => {
   // A cruise or package was never sold through the GDS, so there is no seat to
   // release and withholding the refund would strand the customer.
   it('refunds a package without asking the GDS to cancel anything', async () => {
-    const res = await runCancel(booking({ travel_type: 'package', booking_details: { order_id: 'PKG1' } }));
+    const res = await runCancel(booking({ travel_type: 'package', booking_details: { order_id: 'PKG1', customer_email: 'traveler@example.com' } }));
 
     expect(res.statusCode).not.toBe(502);
     expect(cancelFlightOrder).not.toHaveBeenCalled();
@@ -159,7 +160,7 @@ describe('bookings with nothing to release', () => {
 
   // A flight that failed before the PNR was committed has no record locator.
   it('refunds a flight that never reached the GDS', async () => {
-    const res = await runCancel(booking({ booking_details: { order_id: 'FLT123' } }));
+    const res = await runCancel(booking({ booking_details: { order_id: 'FLT123', customer_email: 'traveler@example.com' } }));
 
     expect(res.statusCode).not.toBe(502);
     expect(cancelFlightOrder).not.toHaveBeenCalled();
