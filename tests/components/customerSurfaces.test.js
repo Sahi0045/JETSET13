@@ -408,6 +408,24 @@ describe('flights are booked from an account', () => {
   });
 });
 
+/**
+ * The review page told customers what was wrong in the browser's own alert box:
+ * "localhost:5173 says", one plain-text list, no way to the field.
+ */
+describe("the review page speaks in the site's dialog, not the browser's", () => {
+  const review = page('FlightBookingConfirmation.jsx');
+
+  it('has no browser alert left', () => {
+    expect(review).not.toMatch(/\balert\(/);
+  });
+
+  it('groups traveller issues and takes the customer to them', () => {
+    expect(review).toMatch(/<NoticeDialog/);
+    expect(review).toMatch(/onAction: \(\) => showTraveller\(/);
+    expect(review).toMatch(/id=\{`traveller-\$\{passenger\.id\}`\}/);
+  });
+});
+
 describe('FlightETicket can actually be captured', () => {
   const src = page('FlightETicket.jsx');
 
