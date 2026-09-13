@@ -7,7 +7,8 @@ import Footer from "../Footer";
 import withPageElements from "../PageWrapper";
 import Price from "../../../Components/Price";
 import currencyService from "../../../Services/CurrencyService";
-import supabase from "../../../lib/supabase";
+import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext";
+import { clearFlightReview, readFlightReview, saveFlightReview } from "../../../utils/flightReviewResume";
 import ArcPayService from "../../../Services/ArcPayService";
 import { useLocationContext } from '../../../Context/LocationContext';
 import { allAirports } from './airports';
@@ -44,7 +45,13 @@ function FlightBookingConfirmation() {
   const [bookingDetails, setBookingDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // Flights are booked from an account: guest checkout is switched off, and
+  // checkout refuses a request without a session. The flight lives in router
+  // state, which the trip through login does not carry, so it is kept for this
+  // tab and read back on return - see utils/flightReviewResume.js.
+  const { user, loading: authLoading } = useSupabaseAuth();
+  const [resumedReview] = useState(() => (routerLocation.state?.flightData ? null : readFlightReview()));
+  const reviewState = routerLocation.state?.flightData ? routerLocation.state : resumedReview;
   const [editMode, setEditMode] = useState(true); // Start in edit mode for new bookings
   // Collapsible passenger cards: null → first card open by default; '' → all
   // collapsed; otherwise the id of the one open card. Keeps a long multi-pax
@@ -157,35 +164,22 @@ function FlightBookingConfirmation() {
   const formatBaggage = formatCheckedBag;
 
 
-  // Check authentication status on component mount
+  // A signed-out visitor logs in before typing anyone's details, and comes back
+  // here with the flight they picked. `replace`, so Back from the login page
+  // returns to the search results rather than into this redirect.
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        // getSession() can return null before the session is restored from the
-        // refresh cookie, which wrongly showed the "log in" banner to a
-        // signed-in user. Fall back to the client-side auth markers the rest of
-        // the app sets, and keep listening for the session to arrive.
-        let loggedIn = !!session;
-        if (!loggedIn) {
-          try {
-            loggedIn = localStorage.getItem('isAuthenticated') === 'true'
-              || !!localStorage.getItem('user')
-              || !!localStorage.getItem('adminUser');
-          } catch { /* storage blocked */ }
-        }
-        setIsLoggedIn(loggedIn);
-      } catch (error) {
-        console.error('Auth check error:', error);
-        setIsLoggedIn(false);
-      }
-    };
-    checkAuth();
-    const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) setIsLoggedIn(true);
+    if (authLoading) return;
+    if (user) {
+      // A fresh arrival from search supersedes a flight kept for an earlier login.
+      if (routerLocation.state?.flightData) clearFlightReview();
+      return;
+    }
+    saveFlightReview(reviewState);
+    navigate('/login', {
+      replace: true,
+      state: { returnUrl: `${routerLocation.pathname}${routerLocation.search}` },
     });
-    return () => authSub?.subscription?.unsubscribe();
-  }, []);
+  }, [authLoading, user]);
 
   // A mock-booking fallback used to live here (a bundled fixture, now deleted). Any
   // load without router state - a refresh, back-navigation, a bookmark, a
@@ -356,14 +350,14 @@ function FlightBookingConfirmation() {
 
     const getBookingDetails = async () => {
       try {
-        const hasSearchState = !!routerLocation.state?.flightData;
+        const hasSearchState = !!reviewState?.flightData;
         const config = priceConfig;
         if (cancelled) return;
 
         let bookingData;
         if (hasSearchState) {
-          console.log("Using flight data from search page", routerLocation.state.flightData);
-          bookingData = transformFlightData(routerLocation.state.flightData, config);
+          console.log("Using flight data from search page", reviewState.flightData);
+          bookingData = transformFlightData(reviewState.flightData, config);
         } else {
           setError("No flight data available. Please return to the search page and try again.");
           return;
@@ -386,7 +380,7 @@ function FlightBookingConfirmation() {
 
     getBookingDetails();
     return () => { cancelled = true; };
-  }, [routerLocation.state, bookingId, priceConfig, priceConfigError]);
+  }, [reviewState, bookingId, priceConfig, priceConfigError]);
 
   // Recompute when the airline's checked price arrives or the fee config changes.
   useEffect(() => {
@@ -397,7 +391,7 @@ function FlightBookingConfirmation() {
   // old, and a fare that had moved or expired used to be found only after the
   // card was charged. Checkout checks again, server-side, before any payment.
   useEffect(() => {
-    const offer = routerLocation.state?.flightData?.originalOffer;
+    const offer = reviewState?.flightData?.originalOffer;
     if (!bookingDetails || !offer) return undefined;
     let cancelled = false;
     (async () => {
@@ -421,7 +415,7 @@ function FlightBookingConfirmation() {
       }
     })();
     return () => { cancelled = true; };
-  }, [Boolean(bookingDetails), routerLocation.state]);
+  }, [Boolean(bookingDetails), reviewState]);
 
   // A coupon's discount was computed on the total at the moment it was applied.
   // If the total changes, the coupon has to be applied again - the page used to
@@ -441,7 +435,7 @@ function FlightBookingConfirmation() {
   // airline's system, and every added traveller was charged the whole fare.
   useEffect(() => {
     if (passengerData.length === 0 && bookingDetails) {
-      const pricings = routerLocation.state?.flightData?.originalOffer?.travelerPricings;
+      const pricings = reviewState?.flightData?.originalOffer?.travelerPricings;
       const types = Array.isArray(pricings) && pricings.length
         ? pricings.map((p) => p.travelerType || 'ADULT')
         : ['ADULT'];
@@ -474,7 +468,7 @@ function FlightBookingConfirmation() {
     const searched = bookingData.flight.price;
     const fareTotal = pricedFare?.total ?? (Number(searched.base || 0) + Number(searched.airlineTaxes || 0));
     const base = pricedFare?.base ?? Number(searched.base || 0);
-    const passengers = routerLocation.state?.flightData?.originalOffer?.travelerPricings?.length || 1;
+    const passengers = reviewState?.flightData?.originalOffer?.travelerPricings?.length || 1;
     const charge = computeFlightCharge({ fareTotal, passengers, config: priceConfig });
 
     setCalculatedFare({
@@ -564,11 +558,6 @@ function FlightBookingConfirmation() {
     return `${hours}h ${minutes}m`;
   };
 
-  const handleLogin = () => {
-    // In a real app, this would trigger a login flow
-    setIsLoggedIn(true);
-  };
-
   const toggleEditMode = () => {
     setEditMode(!editMode);
   };
@@ -652,7 +641,7 @@ function FlightBookingConfirmation() {
 
     setCheckingOut(true);
     try {
-      const rawFlightData = routerLocation.state?.flightData;
+      const rawFlightData = reviewState?.flightData;
       const amount = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
 
       // The real flight numbers. This used to send the offer id - "AI 1" - as
@@ -734,6 +723,7 @@ function FlightBookingConfirmation() {
       });
 
       if (checkoutResponse.success && checkoutResponse.checkoutUrl) {
+        clearFlightReview();
         localStorage.setItem('pendingPaymentSession', JSON.stringify({
           sessionId: checkoutResponse.sessionId,
           orderId,
@@ -756,6 +746,14 @@ function FlightBookingConfirmation() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
+      // Checkout found no session although this page has a signed-in user (a
+      // signed-out one is sent to log in on arrival). Sending them to /login
+      // would bounce straight back here, so say what to do instead; the
+      // details they typed stay on the page.
+      if (refusal.code === 'LOGIN_REQUIRED') {
+        alert('We could not confirm your sign-in. Please log out, log in again and retry. Nothing has been charged.');
+        return;
+      }
       alert(refusal.error || 'We could not start the payment. Nothing has been charged. Please try again.');
     } catch (error) {
       console.error('❌ Payment initiation error:', error?.message);
@@ -767,7 +765,8 @@ function FlightBookingConfirmation() {
 
 
 
-  if (loading) {
+  // Nothing to show a signed-out visitor: the effect above is sending them to log in.
+  if (loading || authLoading || !user) {
     return (
       <div className="booking-confirmation-page">
         <Navbar forceScrolled={true} />
@@ -1055,12 +1054,12 @@ function FlightBookingConfirmation() {
             </div>
 
             {/* Cancellation & Date Change Policy (Amadeus fare rules) */}
-            {routerLocation.state?.flightData?.originalOffer && (
+            {reviewState?.flightData?.originalOffer && (
               <FlightCancellationPolicy
-                flightOffer={routerLocation.state.flightData.originalOffer}
+                flightOffer={reviewState.flightData.originalOffer}
                 fromCode={bookingDetails?.flight?.departureCode}
                 toCode={bookingDetails?.flight?.arrivalCode}
-                departureAt={routerLocation.state.flightData.originalOffer?.itineraries?.[0]?.segments?.[0]?.departure?.at}
+                departureAt={reviewState.flightData.originalOffer?.itineraries?.[0]?.segments?.[0]?.departure?.at}
               />
             )}
 
@@ -1090,20 +1089,6 @@ function FlightBookingConfirmation() {
               </div>
 
               <div className="booking-card-body">
-                {!isLoggedIn && (
-                  <div className="bg-[#f0f9ff] border border-[#bae6fd] p-4 mb-6 rounded-xl flex justify-between items-center">
-                    <div className="flex items-center text-sm text-[#0369a1]">
-                      <UserCircle className="w-5 h-5 mr-3" />
-                      Log in to view your saved traveller list and unlock exclusive deals!
-                    </div>
-                    <button
-                      onClick={handleLogin}
-                      className="text-[#0284c7] font-bold text-sm hover:underline"
-                    >
-                      LOGIN NOW
-                    </button>
-                  </div>
-                )}
 
                 {passengerData.map((passenger, index) => {
                   const isExpanded = expandedPassengerId === null ? index === 0 : expandedPassengerId === passenger.id;
@@ -1384,7 +1369,7 @@ function FlightBookingConfirmation() {
             </div>
 
             {/* Fare rules & baggage */}
-            {routerLocation.state?.flightData?.originalOffer && (
+            {reviewState?.flightData?.originalOffer && (
               <div className="booking-card mb-4">
                 <div className="booking-card-header">
                   <h2>
@@ -1396,7 +1381,7 @@ function FlightBookingConfirmation() {
                 </div>
                 <div className="booking-card-body">
                   <FlightFareRules
-                    flightOffer={routerLocation.state.flightData.originalOffer}
+                    flightOffer={reviewState.flightData.originalOffer}
                   />
                 </div>
               </div>

@@ -130,10 +130,11 @@ describe('verifyFlightCharge', () => {
 describe('hosted checkout for a flight', () => {
   const arcSession = { status: 201, data: { result: 'SUCCESS', session: { id: 'S1' }, successIndicator: 'SI' } };
 
-  const run = async (verdict) => {
-    vi.doMock('../../backend/services/flightCheckout.service.js', () => ({
-      verifyFlightCharge: vi.fn().mockResolvedValue(verdict),
-    }));
+  const CUSTOMER = { id: '0b7c1f2e-3d4a-4b5c-8d6e-7f8091a2b3c4' };
+
+  const run = async (verdict, { user = CUSTOMER } = {}) => {
+    const verifyFlightCharge = vi.fn().mockResolvedValue(verdict);
+    vi.doMock('../../backend/services/flightCheckout.service.js', () => ({ verifyFlightCharge }));
     vi.doMock('../../backend/routes/payment/arcpay.config.js', async () => {
       const actual = await vi.importActual('../../backend/routes/payment/arcpay.config.js');
       return {
@@ -145,11 +146,12 @@ describe('hosted checkout for a flight', () => {
     const { handleHostedCheckout } = await import('../../backend/routes/payment/checkout.handlers.js');
     const req = createRequest({
       method: 'POST',
+      user,
       body: { amount: '802.00', orderId: 'FLTX1', bookingType: 'flight', bookingData: bookingFor(2) },
     });
     const res = createResponse();
     await handleHostedCheckout(req, res);
-    return res;
+    return { res, verifyFlightCharge };
   };
 
   beforeEach(() => {
@@ -158,7 +160,7 @@ describe('hosted checkout for a flight', () => {
   });
 
   it('never opens a payment session for an amount the server did not verify', async () => {
-    const res = await run({ ok: false, status: 409, code: 'PRICE_CHANGED', message: 'The total is 402.00 USD.', charge: { total: 402 } });
+    const { res } = await run({ ok: false, status: 409, code: 'PRICE_CHANGED', message: 'The total is 402.00 USD.', charge: { total: 402 } });
 
     expect(res.statusCode).toBe(409);
     expect(axios.post).not.toHaveBeenCalled();
@@ -169,5 +171,22 @@ describe('hosted checkout for a flight', () => {
 
     const sent = axios.post.mock.calls.find(([, body]) => body?.apiOperation === 'INITIATE_CHECKOUT')?.[1];
     expect(sent.order.amount).toBe('402.00');
+  });
+
+  // Guest flight booking is switched off (2026-09-13): a booking with no
+  // account behind it never shows in My Trips.
+  it('refuses a signed-out customer before pricing the fare or opening a payment session', async () => {
+    const { res, verifyFlightCharge } = await run({ ok: true, charge: { total: 402 } }, { user: null });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body.code).toBe('LOGIN_REQUIRED');
+    expect(verifyFlightCharge).not.toHaveBeenCalled();
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('prices the fare for the signed-in customer', async () => {
+    const { verifyFlightCharge } = await run({ ok: true, charge: { total: 402 }, coupon: null, pricedFare: { total: 400, currency: 'USD' } });
+
+    expect(verifyFlightCharge).toHaveBeenCalledWith(expect.objectContaining({ userId: CUSTOMER.id }));
   });
 });

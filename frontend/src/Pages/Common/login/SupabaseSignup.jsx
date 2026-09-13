@@ -173,7 +173,9 @@ export default function SupabaseSignup() {
 
             // Optionally redirect after a delay
             setTimeout(() => {
-                navigate('/supabase-login');
+                // Keep the destination: someone sent here to book a flight
+                // goes back to it once they sign in.
+                navigate('/supabase-login', { state: location.state });
             }, 3000);
 
         } catch (error) {
@@ -365,7 +367,7 @@ export default function SupabaseSignup() {
                         </div>
 
                         <div className="signup-link">
-                            Already have an account? <Link to="/supabase-login" className="text-link">Login</Link>
+                            Already have an account? <Link to="/supabase-login" state={location.state} className="text-link">Login</Link>
                         </div>
                     </form>
 
