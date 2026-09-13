@@ -575,6 +575,10 @@ const TravelAgentSetPassword = React.lazy(() =>
   import('./Pages/Agent/TravelAgentSetPassword')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading..." /> }))
 );
+const TravelAgentLogin = React.lazy(() =>
+  import('./Pages/Agent/TravelAgentLogin')
+    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Loading..." /> }))
+);
 
 const AdminLogin = React.lazy(() =>
   import('./Pages/Admin/AdminLogin')
@@ -769,6 +773,7 @@ const App = () => {
           } />
 
           {/* Travel agent portal — scoped, separate endpoint for sales agents */}
+          <Route path="/agent/login" element={<TravelAgentLogin />} />
           <Route path="/agent/set-password" element={<TravelAgentSetPassword />} />
           <Route path="/agent/*" element={<TravelAgentPortal />} />
 

@@ -330,6 +330,49 @@ export async function handleResendAgentInvite(req, res) {
 }
 
 /**
+ * A payment link's status as of now.
+ *
+ * A link is only written `expired` when a customer opens it after it lapsed, so
+ * one nobody opened stayed `pending` for good - and counted as pending revenue
+ * and pending commission on both the admin and the agent dashboards.
+ */
+export function linkStatusNow(link, now = Date.now()) {
+    if (link?.status === 'pending' && link.expires_at && Date.parse(link.expires_at) < now) return 'expired';
+    return link?.status || 'pending';
+}
+
+/**
+ * The bookings an agent's sales produced, newest first.
+ *
+ * `bookings.agent_id` is written when checkout starts from an agent's link.
+ * Rows created before that carry only the link id in booking_details, so both
+ * are read.
+ */
+export async function bookingsForAgent(agentId, linkIds = []) {
+    const columns = 'id, booking_reference, travel_type, status, payment_status, total_amount, created_at, booking_details';
+    const [byAgent, byLink] = await Promise.all([
+        supabase.from('bookings').select(columns).eq('agent_id', agentId),
+        linkIds.length
+            ? supabase.from('bookings').select(columns).in('booking_details->>payment_link_id', linkIds)
+            : Promise.resolve({ data: [] }),
+    ]);
+    const unique = new Map();
+    for (const b of [...(byAgent?.data || []), ...(byLink?.data || [])]) unique.set(b.id, b);
+    return [...unique.values()]
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+        .map((b) => ({
+            id: b.id,
+            bookingReference: b.booking_reference,
+            type: b.travel_type,
+            status: b.status,
+            paymentStatus: b.payment_status,
+            amount: Number(b.total_amount) || 0,
+            createdAt: b.created_at,
+            paymentLinkId: b.booking_details?.payment_link_id || null,
+        }));
+}
+
+/**
  * List Agents (Admin only)
  */
 export async function handleListAgents(req, res) {
@@ -346,27 +389,25 @@ export async function handleListAgents(req, res) {
 
         // Per-agent sales + commission stats.
         const enrichedAgents = await Promise.all(agents.map(async (agent) => {
-            const { count: linkCount } = await supabase
+            const { data: links } = await supabase
                 .from('payment_links')
-                .select('*', { count: 'exact', head: true })
+                .select('id, amount, status, expires_at')
                 .eq('agent_id', agent.id);
 
-            const { data: paidLinks } = await supabase
-                .from('payment_links')
-                .select('amount')
-                .eq('agent_id', agent.id)
-                .eq('status', 'paid');
-
-            const totalRevenue = (paidLinks || []).reduce((sum, l) => sum + parseFloat(l.amount || 0), 0);
+            const all = links || [];
+            const paidLinks = all.filter((l) => linkStatusNow(l) === 'paid');
+            const totalRevenue = paidLinks.reduce((sum, l) => sum + parseFloat(l.amount || 0), 0);
             const rate = parseFloat(agent.commission_rate || 0);
             const commission = +(totalRevenue * rate / 100).toFixed(2);
+            const bookings = await bookingsForAgent(agent.id, all.map((l) => l.id));
 
             return {
                 ...agent,
-                totalLinks: linkCount || 0,
-                paidCount: (paidLinks || []).length,
+                totalLinks: all.length,
+                paidCount: paidLinks.length,
                 totalRevenue,
                 commission,
+                bookingsCount: bookings.length,
             };
         }));
 
@@ -393,11 +434,11 @@ export async function handleAgentStats(req, res) {
 
         const { data: links } = await supabase
             .from('payment_links')
-            .select('id, customer_name, customer_email, booking_type, amount, currency, status, created_at, paid_at')
+            .select('id, customer_name, customer_email, booking_type, amount, currency, status, expires_at, created_at, paid_at')
             .eq('agent_id', agent.id)
             .order('created_at', { ascending: false });
 
-        const all = links || [];
+        const all = (links || []).map((l) => ({ ...l, status: linkStatusNow(l) }));
         const paid = all.filter((l) => l.status === 'paid');
         const pending = all.filter((l) => l.status === 'pending');
         const totalRevenue = paid.reduce((s, l) => s + parseFloat(l.amount || 0), 0);
@@ -451,11 +492,11 @@ export async function handleAdminAgentDetail(req, res) {
 
         const { data: links } = await supabase
             .from('payment_links')
-            .select('id, customer_name, customer_email, booking_type, amount, currency, status, description, created_at, paid_at')
+            .select('id, customer_name, customer_email, booking_type, amount, currency, status, expires_at, description, created_at, paid_at')
             .eq('agent_id', agentId)
             .order('created_at', { ascending: false });
 
-        const all = links || [];
+        const all = (links || []).map((l) => ({ ...l, status: linkStatusNow(l) }));
         const paid = all.filter((l) => l.status === 'paid');
         const pending = all.filter((l) => l.status === 'pending');
         const totalRevenue = paid.reduce((s, l) => s + parseFloat(l.amount || 0), 0);
@@ -477,6 +518,15 @@ export async function handleAdminAgentDetail(req, res) {
             .order('created_at', { ascending: false });
         const commissionPaidOut = +(payouts || []).reduce((s, p) => s + parseFloat(p.amount || 0), 0).toFixed(2);
 
+        // The bookings the sales produced, so the panel can open the actual
+        // booking. It linked to a search by customer email, and the bookings
+        // search only matches references, so it always came back empty.
+        const bookings = await bookingsForAgent(agentId, all.map((l) => l.id));
+        const bookingByLink = new Map();
+        for (const b of bookings) {
+            if (b.paymentLinkId && !bookingByLink.has(b.paymentLinkId)) bookingByLink.set(b.paymentLinkId, b);
+        }
+
         return res.json({
             success: true,
             agent: {
@@ -493,7 +543,8 @@ export async function handleAdminAgentDetail(req, res) {
                 commissionOutstanding: +(commissionEarned - commissionPaidOut).toFixed(2),
                 byType,
             },
-            sales: all,
+            sales: all.map((l) => ({ ...l, bookingReference: bookingByLink.get(l.id)?.bookingReference || null })),
+            bookings,
             payouts: payouts || [],
         });
     } catch (error) {

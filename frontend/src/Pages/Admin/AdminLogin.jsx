@@ -48,7 +48,9 @@ const AdminLogin = () => {
 
       const data = await response.json();
 
-      if (response.ok && data.role === 'admin') {
+      // A super admin's role is 'superadmin'; checking for 'admin' alone turned
+      // them away with "Invalid credentials".
+      if (response.ok && ['admin', 'superadmin'].includes(data.role)) {
         // Admin login success. Backend set the httpOnly session cookie; we keep
         // only non-sensitive profile flags client-side (no token in storage).
         localStorage.setItem('adminUser', JSON.stringify({
@@ -67,36 +69,10 @@ const AdminLogin = () => {
         return;
       }
 
-      // Try agent login
-      const agentResponse = await fetch('/api/payments?action=agent-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(formData)
-      });
-
-      const agentData = await agentResponse.json();
-
-      if (agentResponse.ok && agentData.success) {
-        // Agent login success. Backend set the httpOnly session cookie; keep
-        // only non-sensitive profile flags client-side (no token in storage).
-        localStorage.setItem('adminUser', JSON.stringify({
-          id: agentData.id, email: agentData.email,
-          firstName: agentData.firstName, lastName: agentData.lastName,
-          role: 'agent', agentId: agentData.agentId
-        }));
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('user', JSON.stringify({
-          id: agentData.id, email: agentData.email,
-          firstName: agentData.firstName, lastName: agentData.lastName,
-          role: 'agent', agentId: agentData.agentId
-        }));
-        navigate('/agent');
-        return;
-      }
-
-      // Both failed
-      throw new Error(agentData.error || data.message || 'Invalid credentials');
+      // Admins only. Travel agents sign in at /agent/login; this form used to
+      // retry the same email and password against the agents table whenever
+      // the admin login failed.
+      throw new Error(data.message || 'Invalid credentials');
     } catch (err) {
       console.error('Login error:', err);
       setError(err.message || 'Invalid email or password');
@@ -172,6 +148,9 @@ const AdminLogin = () => {
               <div className="form-header">
                 <h2>Welcome Back</h2>
                 <p>Please sign in to access your admin dashboard</p>
+                <p style={{ marginTop: 8, fontSize: 13 }}>
+                  Travel agent? <Link to="/agent/login" style={{ color: '#055B75', fontWeight: 600 }}>Sign in to the agent portal</Link>
+                </p>
               </div>
 
               <form onSubmit={handleSubmit} className="admin-login-form">

@@ -235,6 +235,7 @@ const AgentManagement = () => {
                     <span>📧 {agent.email}</span>
                     {agent.phone && <span>📱 {agent.phone}</span>}
                     <span>🔗 {agent.totalLinks || 0} sales</span>
+                    <span>🧾 {agent.bookingsCount || 0} bookings</span>
                     <span>💰 ${(agent.totalRevenue || 0).toFixed(0)}</span>
                     <span>📊 {agent.commission_rate || 0}% · ${(agent.commission || 0).toFixed(0)} comm.</span>
                   </div>
@@ -346,6 +347,47 @@ const AgentManagement = () => {
                     </div>
                   )}
 
+                  {/* Bookings this agent's sales created */}
+                  <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: '20px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', padding: '12px 16px', borderBottom: '1px solid #f1f5f9' }}>
+                      Bookings ({(detail.bookings || []).length})
+                    </div>
+                    {(detail.bookings || []).length === 0 ? (
+                      <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                        No bookings yet. A booking appears once a customer starts checkout from one of this agent's links.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ textAlign: 'left', color: '#94a3b8', fontSize: '11px', textTransform: 'uppercase' }}>
+                              <th style={{ padding: '8px 16px' }}>Reference</th>
+                              <th style={{ padding: '8px' }}>Type</th>
+                              <th style={{ padding: '8px', textAlign: 'right' }}>Amount</th>
+                              <th style={{ padding: '8px' }}>Booking</th>
+                              <th style={{ padding: '8px' }}>Payment</th>
+                              <th style={{ padding: '8px 16px' }}>Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {detail.bookings.map((b) => (
+                              <tr key={b.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '8px 16px' }}>
+                                  <Link to={`/admin/bookings?search=${encodeURIComponent(b.bookingReference)}`} style={{ color: '#055B75', fontWeight: 600, textDecoration: 'none' }}>{b.bookingReference} →</Link>
+                                </td>
+                                <td style={{ padding: '8px', textTransform: 'capitalize' }}>{b.type || '—'}</td>
+                                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>${Number(b.amount || 0).toLocaleString()}</td>
+                                <td style={{ padding: '8px', textTransform: 'capitalize' }}>{String(b.status || '—').replace(/_/g, ' ')}</td>
+                                <td style={{ padding: '8px', textTransform: 'capitalize' }}>{String(b.paymentStatus || '—').replace(/_/g, ' ')}</td>
+                                <td style={{ padding: '8px 16px', color: '#94a3b8', fontSize: 12 }}>{b.createdAt ? new Date(b.createdAt).toLocaleDateString() : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Sales list */}
                   <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                     <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', padding: '12px 16px', borderBottom: '1px solid #f1f5f9' }}>
@@ -369,7 +411,9 @@ const AgentManagement = () => {
                           <tbody>
                             {detail.sales.map((l) => {
                               const sb = STATUS_STYLE[l.status === 'paid' ? 'active' : l.status === 'pending' ? 'invited' : 'disabled'];
-                              const q = encodeURIComponent(l.customer_email || l.customer_name || '');
+                              // The booking this sale created. Linking by customer
+                              // email found nothing: bookings search matches references.
+                              const q = l.bookingReference ? encodeURIComponent(l.bookingReference) : '';
                               return (
                                 <tr key={l.id} style={{ borderTop: '1px solid #f1f5f9' }}>
                                   <td style={{ padding: '8px 16px' }}>
@@ -384,8 +428,8 @@ const AgentManagement = () => {
                                   <td style={{ padding: '8px 16px', color: '#94a3b8', fontSize: 12 }}>{l.created_at ? new Date(l.created_at).toLocaleDateString() : '—'}</td>
                                   <td style={{ padding: '8px 16px', textAlign: 'right' }}>
                                     {q ? (
-                                      <Link to={`/admin/bookings?search=${q}`} title="Open this customer's bookings" style={{ color: '#055B75', fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>Bookings →</Link>
-                                    ) : <span style={{ color: '#cbd5e1' }}>—</span>}
+                                      <Link to={`/admin/bookings?search=${q}`} title="Open the booking this sale created" style={{ color: '#055B75', fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>{l.bookingReference} →</Link>
+                                    ) : <span style={{ color: '#cbd5e1', fontSize: 12 }} title="The customer has not started checkout from this link">No booking</span>}
                                   </td>
                                 </tr>
                               );
