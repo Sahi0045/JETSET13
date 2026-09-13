@@ -382,12 +382,14 @@ function FlightSearchPage() {
             fees: price.fees || []
           },
           amenities: fareDetails?.amenities || [],
+          // Null when the fare does not say. A `{weight: 0}` stand-in rendered
+          // as "Cabin only" - a claim of no checked bag on fares that include one.
           baggage: {
-            checked: fareDetails?.includedCheckedBags || { weight: 0, weightUnit: 'KG' },
-            cabin: fareDetails?.includedCabinBags || { weight: 0, weightUnit: 'KG' }
+            checked: fareDetails?.includedCheckedBags || null,
+            cabin: fareDetails?.includedCabinBags || null
           },
-          cabin: fareDetails?.cabin || 'ECONOMY',
-          class: fareDetails?.class || 'ECONOMY',
+          cabin: fareDetails?.cabin || null,
+          class: fareDetails?.class || null,
           brandedFare: fareDetails?.brandedFare || null,
           brandedFareLabel: fareDetails?.brandedFareLabel || null,
           operatingCarrier: firstSegment.operating?.carrierCode || null,
@@ -395,7 +397,7 @@ function FlightSearchPage() {
           lastTicketingDate: flight.lastTicketingDate || null,
           numberOfBookableSeats: flight.numberOfBookableSeats || null,
           isUpsellOffer: flight.isUpsellOffer || false,
-          refundable: travelerPricing?.price?.refundableTaxes ? true : false,
+          refundable: flight._ama?.refundable ?? null,
           segments: segments.map(segment => ({
             departure: {
               time: new Date(segment.departure.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
@@ -464,10 +466,10 @@ function FlightSearchPage() {
           amenities: [],
           baggage: {
             checked: flight.baggageDetails?.checked || parseCheckedBagLabel(flight.baggage),
-            cabin: flight.baggageDetails?.cabin || { weight: 0, weightUnit: 'KG' }
+            cabin: flight.baggageDetails?.cabin || null
           },
-          cabin: flight.cabin || 'ECONOMY',
-          class: flight.cabin || 'ECONOMY',
+          cabin: flight.cabin || null,
+          class: flight.cabin || null,
           brandedFare: flight.brandedFare || null,
           brandedFareLabel: flight.brandedFareLabel || null,
           operatingCarrier: flight.operatingCarrier || null,
@@ -477,12 +479,12 @@ function FlightSearchPage() {
           isUpsellOffer: flight.isUpsellOffer || false,
           aircraft: flight.aircraft || 'Unknown',
           flightNumber: flight.flightNumber,
-          refundable: flight.refundable || false,
+          refundable: flight.refundable ?? null,
           amenities: flight.amenities || flight.originalOffer?.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.amenities || [],
           fareBasis: flight.fareBasis || null,
           bookingClass: flight.bookingClass || null,
           validatingAirlineCodes: flight.validatingAirlineCodes || [],
-          seats: flight.numberOfBookableSeats || flight.seats || 'Available',
+          seats: flight.numberOfBookableSeats ?? null,
           stopDetails: flight.stopDetails || [],
           segments: (() => {
             // Extract real segments from originalOffer for multi-stop flights
@@ -516,7 +518,11 @@ function FlightSearchPage() {
                 stops: 0
               }));
             }
-            // Single segment fallback
+            // Single segment fallback - only for a flight that IS a single
+            // segment. A connecting flight with no segment data used to be
+            // drawn as one invented non-stop leg; the stop details say where
+            // it stops instead.
+            if ((flight.stops || 0) > 0) return [];
             return [{
               departure: {
                 time: flight.departure.time,
@@ -641,7 +647,9 @@ function FlightSearchPage() {
           price: {
             amount: flight.price.amount,
             total: flight.price.total,
-            currency: flight.price.currency || currencyService.getCurrency(),
+            // The fare's own currency, else USD - never the visitor's display
+            // currency, which would relabel the number without converting it.
+            currency: flight.price.currency || 'USD',
             base: flight.price.base || '0',
             grandTotal: flight.price.grandTotal || flight.price.total,
             fees: flight.price.fees || []
@@ -649,10 +657,10 @@ function FlightSearchPage() {
           amenities: [],
           baggage: {
             checked: flight.baggageDetails?.checked || parseCheckedBagLabel(flight.baggage),
-            cabin: flight.baggageDetails?.cabin || { weight: 0, weightUnit: 'KG' }
+            cabin: flight.baggageDetails?.cabin || null
           },
-          cabin: flight.cabin || 'Economy',
-          class: flight.cabin || 'Economy',
+          cabin: flight.cabin || null,
+          class: flight.cabin || null,
           brandedFare: flight.brandedFare || null,
           brandedFareLabel: flight.brandedFareLabel || null,
           operatingCarrier: flight.operatingCarrier || null,
@@ -662,10 +670,11 @@ function FlightSearchPage() {
           isUpsellOffer: flight.isUpsellOffer || false,
           aircraft: flight.aircraft || 'Unknown',
           flightNumber: flight.flightNumber,
-          refundable: flight.refundable || false,
-          seats: flight.numberOfBookableSeats || flight.seats || 0,
+          refundable: flight.refundable ?? null,
+          seats: flight.numberOfBookableSeats ?? null,
           stopDetails: flight.stopDetails || [],
-          segments: [{
+          // No invented non-stop leg for a connecting flight.
+          segments: (flight.stops || 0) > 0 ? [] : [{
             departure: {
               time: flight.departure.time,
               airport: flight.departure.airport,
