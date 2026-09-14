@@ -142,6 +142,8 @@ it('an admin still opens any booking', async () => {
   const res = await request(await makeApp()).get('/api/flights/bookings/FLT123').set(as({ id: STRANGER, role: 'admin' }));
   expect(res.status).toBe(200);
   expect(res.body.data.bookingReference).toBe('FLT123');
+  // Staff see the passport number as stored; everyone else gets it masked.
+  expect(res.body.data.passengerData[0].passportNumber).toBe('X1234567');
 });
 
 describe('DELETE /flights/order/:ref when the orchestrator says no', () => {

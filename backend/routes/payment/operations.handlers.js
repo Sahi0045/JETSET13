@@ -5,7 +5,7 @@ import { supabase, ARC_PAY_CONFIG, getArcPayAuthConfig } from './arcpay.config.j
 import { getCaller, requireAdmin } from './agents.handlers.js';
 import { arcSucceeded } from './payment.helpers.js';
 import { resolveBookingUserId } from '../../utils/bookingOwner.js';
-import { emailMatchesBooking, hasBookingOwner, isBookingOwner } from '../../utils/bookingAccess.js';
+import { emailIsBookers, hasBookingOwner, isBookingOwner } from '../../utils/bookingAccess.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -80,8 +80,11 @@ export async function handleCancelBookingAction(req, res) {
         //  - staff (admin/superadmin) may cancel any booking;
         //  - a booking that belongs to an account is cancelled by that account,
         //    signed in - an email alone is not enough to cancel someone's trip;
-        //  - a booking made as a guest (no owner) by an email it was made with,
-        //    the same proof Manage Booking accepts to open it.
+        //  - a booking made as a guest (no owner) by the email of whoever booked
+        //    it - the one checkout recorded, or the contact's. A traveller's
+        //    address opens the booking in Manage Booking but does not cancel it:
+        //    it is whatever the booker typed for that traveller, and a cancel
+        //    releases every seat and refunds the booker's card.
         //
         // This compared the request email with `booking.customer_email`, a column
         // the bookings table does not have - checkout writes the address into
@@ -94,7 +97,7 @@ export async function handleCancelBookingAction(req, res) {
         if (!isStaff) {
             const sessionUserId = resolveBookingUserId(req);
             const owned = hasBookingOwner(booking);
-            const allowed = owned ? isBookingOwner(sessionUserId, booking) : emailMatchesBooking(email, booking);
+            const allowed = owned ? isBookingOwner(sessionUserId, booking) : emailIsBookers(email, booking);
             if (!allowed) {
                 const mustSignIn = owned && !sessionUserId;
                 return res.status(403).json({
@@ -102,7 +105,9 @@ export async function handleCancelBookingAction(req, res) {
                     code: mustSignIn ? 'LOGIN_REQUIRED' : 'NOT_AUTHORIZED',
                     error: mustSignIn
                         ? 'Please log in to the account this booking was made with to cancel it.'
-                        : 'Not authorized to cancel this booking'
+                        : owned
+                            ? 'Not authorized to cancel this booking'
+                            : 'To cancel a booking made without an account, use the email address it was booked with.'
                 });
             }
         }

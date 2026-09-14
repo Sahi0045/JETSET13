@@ -2412,32 +2412,31 @@ router.get('/bookings/:bookingRef', optionalProtect, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Booking not found' });
     }
 
-    // Never hand back the payment secrets. `success_indicator` is what proves
-    // the payer to POST /order, `pending_booking_data` holds every traveller's
-    // passport as posted at checkout, and the session and checkout URL belong
-    // to the gateway. They were all spread into this response.
-    const {
-      success_indicator: _successIndicator,
-      session_id: _sessionId,
-      pending_booking_data: _pendingBookingData,
-      queued_order: _queuedOrder,
-      arc_pay_checkout_url: _checkoutUrl,
-      ...details
-    } = data.booking_details || {};
-
-    // Format for frontend: the stored details, plus the camelCase shape the
-    // bookings list sends. Manage Booking read camelCase fields that this
-    // endpoint never had, so a refreshed page showed "Date N/A" and "--:--".
+    // Built by name from what Manage Booking, the e-ticket and the app read -
+    // never by spreading the row. This spread `booking_details` less five
+    // payment secrets, and `passenger_details` as stored, so every read handed
+    // over passport numbers, the fare and fee workings (`verified_charge`), the
+    // GDS office and session (`gds`), the chain's bookkeeping (`gds_chain`,
+    // `fulfillment_failed`), the owner's account id, the raw Amadeus offer and
+    // the booker's own address - which a traveller who opened a guest booking
+    // with their own address could then use to cancel it. A page that needs
+    // another field gets it added to toClientBooking, by name.
+    //
+    // Passport numbers arrive masked except for staff. The stored number is
+    // for the airline; nobody opening their booking needs it back.
+    const showPassports = isStaff(req.user);
     const formattedBooking = {
-      ...details,
-      ...toClientBooking({ ...data, booking_details: details }),
+      // The camelCase shape the bookings list sends. Manage Booking read
+      // camelCase fields that this endpoint never had, so a refreshed page
+      // showed "Date N/A" and "--:--".
+      ...toClientBooking(data, { showPassports }),
       // The passenger list lives in its own column, not inside booking_details,
       // and was never included here. Manage Booking therefore showed "No
       // passenger information available" whenever it loaded the booking itself
       // — a refresh, or a shared link — and showed it correctly only when My
       // Trips handed the record over through router state.
-      travelers: data.booking_details?.travelers ?? data.passenger_details ?? [],
-      passengerData: data.passenger_details ?? data.booking_details?.travelers ?? [],
+      travelers: clientTravellers(data.booking_details?.travelers ?? data.passenger_details, { showPassports }),
+      passengerData: clientTravellers(data.passenger_details ?? data.booking_details?.travelers, { showPassports }),
       status: data.status,
       payment_status: data.payment_status,
       bookingReference: data.booking_reference,
@@ -2459,6 +2458,38 @@ router.get('/bookings/:bookingRef', optionalProtect, async (req, res) => {
   }
 });
 
+/**
+ * A passport number as a customer-facing response carries it: the last three
+ * characters, the rest masked. Enough to tell which passport a booking was
+ * made on; not enough to use it.
+ */
+function maskPassport(number) {
+  const value = String(number);
+  return value.length > 3 ? `${'•'.repeat(value.length - 3)}${value.slice(-3)}` : '•••';
+}
+
+// What a page renders about a traveller. Anything else on the stored record -
+// frequent-flyer numbers, document issue details, whatever a client posted at
+// checkout - stays in the database.
+const CLIENT_TRAVELLER_FIELDS = [
+  'id', 'travelerId', 'type', 'title', 'firstName', 'lastName', 'gender', 'dateOfBirth',
+  'nationality', 'email', 'mobile', 'passportExpiry', 'seatNumber',
+];
+
+/** Travellers as a response carries them, with passports masked unless `showPassports`. */
+function clientTravellers(list, { showPassports = false } = {}) {
+  if (!Array.isArray(list)) return [];
+  return list.map((traveller) => {
+    const out = Object.fromEntries(
+      CLIENT_TRAVELLER_FIELDS.filter((key) => traveller?.[key] != null).map((key) => [key, traveller[key]])
+    );
+    if (traveller?.passportNumber) {
+      out.passportNumber = showPassports ? traveller.passportNumber : maskPassport(traveller.passportNumber);
+    }
+    return out;
+  });
+}
+
 // Get all bookings from database (for My Trips page)
 /**
  * A bookings row as My Trips and Manage Booking consume it.
@@ -2467,10 +2498,14 @@ router.get('/bookings/:bookingRef', optionalProtect, async (req, res) => {
  * `tickets`, `needs_review`, `gds` and `payment_status`, so Manage Booking
  * had to guess - a cancelled row whose refund the gateway had refused rendered
  * "Processing Refund - In Progress", and the e-ticket helper could not tell a
- * held reservation from an issued ticket. Snake_case on those mirrors the
- * single-booking endpoint, which hands the row over as-is.
+ * held reservation from an issued ticket. Snake_case on those mirrors what the
+ * single-booking endpoint used to send.
+ *
+ * It is also the allow-list for both booking reads: every field is named, and
+ * the nested records (travellers, `needs_review`, `gds`) are cut down to what a
+ * page uses. `showPassports` is for staff only.
  */
-export function toClientBooking(booking) {
+export function toClientBooking(booking, { showPassports = false } = {}) {
   // Get amount from total_amount column or from booking_details or from flight_offer
   const amount = booking.total_amount ||
     booking.booking_details?.amount ||
@@ -2524,8 +2559,8 @@ export function toClientBooking(booking) {
     priceGrandTotal: booking.booking_details?.price_grand_total || null,
     priceFees: booking.booking_details?.price_fees || [],
     fareBreakdown: booking.booking_details?.fare_breakdown || null,
-    // Travelers
-    travelers: booking.passenger_details,
+    // Travelers, cut down to what a page renders; passports masked for all but staff.
+    travelers: clientTravellers(booking.passenger_details, { showPassports }),
     // Cruise-specific fields
     cruiseName: booking.booking_details?.cruise_name || '',
     cruiseImage: booking.booking_details?.cruise_image || '',
@@ -2554,8 +2589,17 @@ export function toClientBooking(booking) {
     payment_status: booking.payment_status,
     cancellation: booking.booking_details?.cancellation || null,
     tickets: booking.booking_details?.tickets || [],
-    needs_review: booking.booking_details?.needs_review || null,
-    gds: booking.booking_details?.gds || null
+    // The reason is what the e-ticket reads ("ticket_numbers_not_retrieved").
+    // The rest of the record is for the support desk: gateway errors, reversal
+    // attempts, the GDS detail.
+    needs_review: booking.booking_details?.needs_review
+      ? { reason: booking.booking_details.needs_review.reason ?? null }
+      : null,
+    // Whether the GDS ticketed. The rest is the office id, the GDS session and
+    // TST references, which no page reads.
+    gds: booking.booking_details?.gds
+      ? { ticketed: booking.booking_details.gds.ticketed ?? null }
+      : null
   };
 }
 

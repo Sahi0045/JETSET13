@@ -116,10 +116,17 @@ describe('a booking made as a guest', () => {
     expectWentAhead(await cancel(guestBooking(), { email: '  checkout@example.COM ' }));
   });
 
-  it("is cancelled with the contact's or a traveller's email", async () => {
+  it("is cancelled with the contact's email", async () => {
     expectWentAhead(await cancel(guestBooking(), { email: 'contact@example.com' }));
-    cancelFlightOrder.mockClear();
-    expectWentAhead(await cancel(guestBooking(), { email: 'ann.traveller@example.com' }));
+  });
+
+  // A traveller's address opens the booking in Manage Booking. It is whatever
+  // the booker typed for them, and a cancel releases every seat and refunds
+  // the booker's card, so it does not cancel.
+  it("is refused with a traveller's email, and says which email it needs", async () => {
+    const res = await cancel(guestBooking(), { email: 'ann.traveller@example.com' });
+    expectRefused(res, 'NOT_AUTHORIZED');
+    expect(res.body.error).toMatch(/email address it was booked with/i);
   });
 
   it('is refused with another email', async () => {
@@ -179,4 +186,19 @@ it('tells a stranger nothing about the booking, not even that it is already canc
   const res = await cancel(ownedBooking({ status: 'cancelled' }));
   expect(res.statusCode).toBe(403);
   expect(JSON.stringify(res.body)).not.toMatch(/already cancelled/i);
+});
+
+describe('bookingAccess', () => {
+  it("opens a guest booking with any traveller's email but cancels only with the booker's", async () => {
+    const { emailMatchesBooking, emailIsBookers } = await import('../../backend/utils/bookingAccess.js');
+    const booking = guestBooking();
+
+    expect(emailMatchesBooking('ann.traveller@example.com', booking)).toBe(true);
+    expect(emailIsBookers('ann.traveller@example.com', booking)).toBe(false);
+
+    expect(emailIsBookers('  CHECKOUT@example.com ', booking)).toBe(true);
+    expect(emailIsBookers('contact@example.com', booking)).toBe(true);
+    expect(emailIsBookers('', booking)).toBe(false);
+    expect(emailIsBookers(undefined, guestBooking({ booking_details: {} }))).toBe(false);
+  });
 });

@@ -92,3 +92,89 @@ describe('opening a guest booking', () => {
     expect(body).not.toContain('X1234567');
   });
 });
+
+describe('what an opened booking carries', () => {
+  // A guest booking with two travellers, opened by the second traveller's
+  // address - the weakest proof this endpoint accepts.
+  const fullRow = {
+    ...row,
+    passenger_details: [
+      {
+        firstName: 'Jane', lastName: 'Doe', email: 'booker@example.com', title: 'MS', type: 'ADULT',
+        passportNumber: 'X1234567', passportExpiry: '2031-01-01', dateOfBirth: '1990-01-01',
+        mobile: '5550100', nationality: 'US', gender: 'FEMALE', frequentFlyer: 'FF-SECRET-99',
+      },
+      { firstName: 'Sam', lastName: 'Doe', email: 'sam.traveller@example.com', passportNumber: 'Y7654321' },
+    ],
+    booking_details: {
+      ...row.booking_details,
+      customer_email: 'booker@example.com',
+      contact: { email: 'booker.contact@example.com' },
+      origin: 'DEL',
+      destination: 'BOM',
+      flight_number: 'AI131',
+      verified_charge: { fee: 'FEE-WORKINGS' },
+      gds_chain: { state: 'done', startedAt: 'CHAIN-STAMP' },
+      gds: { officeId: 'OFFICE-SECRET', sessionId: 'GDS-SESSION', ticketed: true },
+      fulfillment_failed: { error: 'FULFILMENT-ERROR' },
+      original_user_id: 'ACCOUNT-ID-SECRET',
+      needs_review: { reason: 'ticket_numbers_not_retrieved', detail: 'REVIEW-DETAIL-SECRET' },
+      flight_offer: { id: 'OFFER-SECRET' },
+      tickets: [{ number: '057-2412345678', travelerId: '1' }],
+    },
+  };
+
+  const open = async () => request(await makeApp(fullRow))
+    .get('/api/flights/bookings/FLTGUEST1')
+    .set('x-booking-email', 'sam.traveller@example.com');
+
+  it('masks every passport number to its last three characters', async () => {
+    const res = await open();
+    expect(res.status).toBe(200);
+    const body = JSON.stringify(res.body);
+    expect(body).not.toContain('X1234567');
+    expect(body).not.toContain('Y7654321');
+    for (const list of [res.body.data.passengerData, res.body.data.travelers]) {
+      expect(list.map((p) => p.passportNumber)).toEqual(['•••••567', '•••••321']);
+    }
+  });
+
+  it('carries none of the booking internals', async () => {
+    const body = JSON.stringify((await open()).body);
+    for (const internal of [
+      'FEE-WORKINGS', 'CHAIN-STAMP', 'OFFICE-SECRET', 'GDS-SESSION', 'FULFILMENT-ERROR',
+      'ACCOUNT-ID-SECRET', 'REVIEW-DETAIL-SECRET', 'OFFER-SECRET', 'FF-SECRET-99',
+    ]) {
+      expect(body, internal).not.toContain(internal);
+    }
+  });
+
+  // Cancelling a guest booking takes the booker's address. Handing it to a
+  // traveller who opened the booking with their own would undo that.
+  it("never tells a traveller the booker's addresses", async () => {
+    const res = await open();
+    expect(JSON.stringify(res.body)).not.toContain('booker.contact@example.com');
+    expect(res.body.data).not.toHaveProperty('customer_email');
+    expect(res.body.data).not.toHaveProperty('contact');
+  });
+
+  it('still carries what Manage Booking and the e-ticket render', async () => {
+    const { data } = (await open()).body;
+    expect(data).toMatchObject({
+      bookingReference: 'FLTGUEST1',
+      pnr: 'ABC123',
+      origin: 'DEL',
+      destination: 'BOM',
+      flightNumber: 'AI131',
+      arrivalDate: '2026-09-20',
+      payment_status: 'paid',
+      status: 'pending_ticketing',
+      tickets: [{ number: '057-2412345678', travelerId: '1' }],
+      needs_review: { reason: 'ticket_numbers_not_retrieved' },
+    });
+    expect(data.passengerData[0]).toMatchObject({
+      title: 'MS', firstName: 'Jane', lastName: 'Doe', dateOfBirth: '1990-01-01', mobile: '5550100',
+      nationality: 'US', gender: 'FEMALE', passportExpiry: '2031-01-01',
+    });
+  });
+});

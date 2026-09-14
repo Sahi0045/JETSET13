@@ -679,8 +679,11 @@ function ManageBooking() {
                             <div>
                               <label className="text-sm font-medium text-gray-500">Passport Number</label>
                               {/* Masked: this page is opened on shared screens
-                                  and captured into the downloadable document. */}
-                              <p className="font-mono">{`•••• ${String(traveler.passportNumber).slice(-4)}`}</p>
+                                  and captured into the downloadable document.
+                                  The server already sends only the last three
+                                  characters; this masks a record from anywhere
+                                  else the same way. */}
+                              <p className="font-mono">{`•••• ${String(traveler.passportNumber).slice(-3)}`}</p>
                             </div>
                           )}
                           {traveler.passportExpiry && (
