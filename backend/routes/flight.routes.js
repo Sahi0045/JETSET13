@@ -301,9 +301,19 @@ function sanitizeRef(value) {
   return String(value ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 }
 
-/** Staff may read/cancel any booking; a customer only their own. */
+/**
+ * Staff may read and cancel any booking; a customer only their own.
+ *
+ * Admins only. `agent` used to be here too, and in `users` that is the visa
+ * agents' role - accounts that process visa applications and have nothing to
+ * do with flights. It handed every one of them any customer's booking,
+ * passports and dates of birth included, and let them past the ownership check
+ * on DELETE /order, whose fallback cancelled at the airline with no refund.
+ * Travel agents sign in with a token that never becomes `req.user`, and their
+ * portal reads its own sales through `agent-stats`, not these routes.
+ */
 function isStaff(user) {
-  return !!user && ['admin', 'superadmin', 'agent'].includes(user.role);
+  return !!user && ['admin', 'superadmin'].includes(user.role);
 }
 
 /**
@@ -2197,45 +2207,62 @@ router.delete('/order/:orderId', protect, async (req, res) => {
     // stored amadeus_order_id), refunds/voids via ARC Pay, updates booking status, and
     // persists the full cancellation record. Single source of truth — called in-process
     // (no HTTP self-call) so it also works on Vercel serverless.
+    let orchestrated = null;
     try {
-      const { payload: cancelResult } = await invokeOrchestratedCancel(orderId, 'Customer cancellation via flight order API', req);
-
-      if (cancelResult?.success) {
-        return res.json({
-          success: true,
-          message: cancelResult.message || `Order ${orderId} cancelled`,
-          cancellation: cancelResult.cancellation,
-          booking: cancelResult.booking,
-          amadeusCancelled: cancelResult.cancellation?.amadeusCancelled ?? false,
-          mode: 'ORCHESTRATED_CANCELLATION'
-        });
-      }
-
-      // A `needsReview` answer is a DECISION, not a malfunction: the airline
-      // still holds the booking, so the orchestrator withheld the refund on
-      // purpose. Falling through to the fallback below would overwrite that
-      // with `status: 'cancelled'` and tell the customer it worked - burying
-      // the flag and leaving them believing they have no flight when they do.
-      if (cancelResult?.needsReview) {
-        console.error('⛔ Cancel needs review; not overriding with the fallback', { orderId });
-        return res.status(502).json({
-          success: false,
-          error: cancelResult.error
-            || 'We could not cancel your reservation with the airline. '
-              + 'Our team has been alerted - please call (877) 538-7380 if it is urgent.',
-          bookingReference: cancelResult.bookingReference,
-          needsReview: true,
-          mode: 'ORCHESTRATED_CANCELLATION'
-        });
-      }
-
-      console.warn('⚠️ Orchestrated cancel returned error:', cancelResult?.error);
+      orchestrated = await invokeOrchestratedCancel(orderId, 'Customer cancellation via flight order API', req);
     } catch (invokeError) {
       console.warn('⚠️ Orchestrated cancel failed:', invokeError.message);
     }
+    const cancelResult = orchestrated?.payload;
 
-    // Fallback: only for when the orchestrator was unreachable. It issues no
-    // refund, so it must not claim a cancellation it cannot substantiate.
+    if (cancelResult?.success) {
+      return res.json({
+        success: true,
+        message: cancelResult.message || `Order ${orderId} cancelled`,
+        cancellation: cancelResult.cancellation,
+        booking: cancelResult.booking,
+        amadeusCancelled: cancelResult.cancellation?.amadeusCancelled ?? false,
+        mode: 'ORCHESTRATED_CANCELLATION'
+      });
+    }
+
+    // A `needsReview` answer is a DECISION, not a malfunction: the airline
+    // still holds the booking, so the orchestrator withheld the refund on
+    // purpose. Falling through to the fallback below would overwrite that
+    // with `status: 'cancelled'` and tell the customer it worked - burying
+    // the flag and leaving them believing they have no flight when they do.
+    if (cancelResult?.needsReview) {
+      console.error('⛔ Cancel needs review; not overriding with the fallback', { orderId });
+      return res.status(502).json({
+        success: false,
+        error: cancelResult.error
+          || 'We could not cancel your reservation with the airline. '
+            + 'Our team has been alerted - please call (877) 538-7380 if it is urgent.',
+        bookingReference: cancelResult.bookingReference,
+        needsReview: true,
+        mode: 'ORCHESTRATED_CANCELLATION'
+      });
+    }
+
+    // Every other answer is the orchestrator's decision too, and it stands: a
+    // caller it refused (403), a booking already cancelled (400), a write that
+    // failed (500). All of these used to fall through to the fallback below,
+    // which cancels at the airline and marks the row cancelled with no refund -
+    // so the one caller the orchestrator had just turned away still got the
+    // booking cancelled, and the customer lost the seat and the money.
+    if (cancelResult) {
+      console.warn('⚠️ Orchestrated cancel returned error:', cancelResult.error);
+      return res.status(orchestrated.statusCode >= 400 ? orchestrated.statusCode : 500).json({
+        success: false,
+        error: cancelResult.error || 'Unable to cancel the order',
+        ...(cancelResult.code ? { code: cancelResult.code } : {}),
+        mode: 'ORCHESTRATED_CANCELLATION'
+      });
+    }
+
+    // Fallback: only for when the orchestrator threw or gave no answer at all.
+    // It issues no refund, so it must not claim a cancellation it cannot
+    // substantiate.
     let amadeusCancelled = false;
     let bookingRef = orderId;
     if (supabase) {
