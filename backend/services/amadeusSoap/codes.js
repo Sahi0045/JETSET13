@@ -94,6 +94,10 @@ export const ERROR_CATALOGUE = Object.freeze([
   // 931 is Amadeus's own code for "no itinerary found"; matching the code as
   // well as the text keeps this working if the wording is ever localised.
   { match: /\b931\b|no.*(itinerary|fare|recommendation).*found|not.*available.*date/i, empty: true },
+  // The passenger mix itself was refused (955 a type, 926 a count). It is the
+  // request, not the service, so it must not read as "temporarily unavailable"
+  // and invite a retry: every search with an infant failed this way.
+  { match: /\b(955|926)\b|invalid passenger type|invalid number of passenger/i, code: 400, error: 'That group of passengers cannot be booked together. Check the number of adults, children and infants.' },
   { match: /invalid.*(city|airport|location)|unknown.*location/i, code: 400, error: 'Unknown airport or city code' },
   { match: /(authenticat|invalid.*(user|password|office)|not.*authoriz)/i, code: 502, error: 'Flight service temporarily unavailable', alert: true },
   { match: /(session|conversation).*(limit|exceed|maximum)|too many/i, code: 503, error: 'Too many concurrent requests, please retry', retryAfter: 2 },

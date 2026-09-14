@@ -4,10 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { searchFromQuery, searchToQuery } from '../../frontend/src/Pages/Common/flights/searchQuery.js';
 
 /**
- * Who is travelling is chosen on the search: the airline prices an exact group,
- * so the review page cannot add a passenger to a fare. Customers could not tell.
- * The results card labelled a two-adult total "per adult", and the review page
- * only said "please search again", with no way back to the search.
+ * Who is travelling decides the fare: the airline prices an exact group, so a
+ * traveller cannot simply be added to a fare. Customers could not tell. The
+ * results card labelled a two-adult total "per adult", and the review page only
+ * said "please search again", with no way back to the search.
+ *
+ * The review page now changes the group itself, the way Amadeus prices it -
+ * the same fare searched again for the new group - and can still go back to
+ * the results.
  *
  * Read from source like customerSurfaces.test.js: a label quietly restored or
  * a button quietly unwired is what a helper's unit test cannot see.
@@ -29,10 +33,33 @@ describe('the results card says who its price is for', () => {
   });
 });
 
-describe('changing who is travelling', () => {
+describe('adding or removing travellers on the review page', () => {
+  it('re-searches the same route for the new group and takes only the same fare', () => {
+    expect(review).toMatch(/const search = searchForGroup\(reviewState\?\.searchData, offer, group\)/);
+    expect(review).toMatch(/fetch\(apiConfig\.endpoints\.flights\.search,/);
+    expect(review).toMatch(/const match = findSameFare\(offer, body\.data\)/);
+  });
+
+  it('changes nothing, and says so, when the group cannot have this fare', () => {
+    expect(review).toMatch(/if \(!match\?\.originalOffer\) \{\s*setGroupChange\(\{ busy: false, problem: null, unavailable: \{ group, search \} \}\);\s*return;/);
+  });
+
+  it('swaps in the new offer, checks its price again and keeps what was typed', () => {
+    expect(review).toMatch(/setPassengerData\(\(current\) => rebuildTravellers\(current, match\.originalOffer\.travelerPricings, blankTraveller\)\)/);
+    expect(review).toMatch(/setPricedFare\(null\);/);
+    expect(review).toMatch(/state: \{ \.\.\.\(routerLocation\.state \|\| \{\}\), flightData, searchData:/);
+    expect(review).toMatch(/contact: previous\.contact/);
+  });
+
+  it('refuses a group Amadeus cannot book before searching, and cannot pay mid-change', () => {
+    expect(review).toMatch(/const problem = travellerGroupProblem\(group\)/);
+    expect(review).toMatch(/if \(checkingOut \|\| groupChange\.busy\) return;/);
+  });
+});
+
+describe('going back to the results to change who is travelling', () => {
   it('the review page goes back to the same search with the traveller picker open', () => {
-    expect(review).toMatch(/onClick=\{changeTravellers\}/);
-    expect(review).toMatch(/Change travellers/);
+    expect(review).toMatch(/onSearchAgain=\{changeTravellers\}/);
     expect(review).toMatch(/navigate\(`\/flights\/search\?\$\{searchToQuery\(search\)\}`, \{ state: \{ searchData: search, editTravellers: true \} \}\)/);
   });
 

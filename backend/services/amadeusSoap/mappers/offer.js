@@ -293,16 +293,30 @@ const mapRecommendation = (recommendation, ctx) => {
     .map((s) => Number.parseInt(fareByLeg.flatMap((l) => l.fares).find((f) => f.rbd === s.rbd)?.avlStatus ?? '', 10))
     .filter(Number.isFinite);
 
+  // Amadeus numbers the passengers with seats; an infant carries the reference
+  // of the adult whose lap it is on (see operations/masterPricer.js). Every
+  // traveller still needs an id of its own - the review page makes one form per
+  // pricing, and matching a fare by id gave an infant its adult's fare - so an
+  // infant is numbered after everyone with a seat and keeps its adult's
+  // reference in `associatedAdultId`, as the REST API does.
+  const seatedRefs = paxProducts
+    .filter((product) => (atTxt(product, 'paxReference.ptc') || 'ADT') !== 'INF')
+    .flatMap((product) => arr(at(product, 'paxReference.traveller')).map((t) => Number.parseInt(txt(t.ref), 10)))
+    .filter(Number.isFinite);
+  let lastTravelerId = Math.max(0, ...seatedRefs);
+
   const travelerPricings = paxProducts.flatMap((product) => {
     const ptc = atTxt(product, 'paxReference.ptc') || 'ADT';
     const type = { ADT: 'ADULT', CHD: 'CHILD', INF: 'HELD_INFANT' }[ptc] ?? 'ADULT';
+    const onLap = type === 'HELD_INFANT';
     // Per-passenger, from this group's own paxFareDetail - not the offer total.
     const paxTotal = num(at(product, 'paxFareDetail.totalFareAmount')) ?? total;
     const paxTax = num(at(product, 'paxFareDetail.totalTaxAmount')) ?? 0;
     const productFares = readFareDetails(product);
 
     return arr(at(product, 'paxReference.traveller')).map((traveller) => ({
-      travelerId: txt(traveller.ref),
+      travelerId: onLap ? String(++lastTravelerId) : txt(traveller.ref),
+      ...(onLap ? { associatedAdultId: txt(traveller.ref) } : {}),
       fareOption: 'STANDARD',
       travelerType: type,
       price: {

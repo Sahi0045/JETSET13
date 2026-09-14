@@ -16,25 +16,47 @@ import { toDDMMYY } from '../mappers/datetime.js';
  * `travelFlightInfo` in particular sits *before* `itinerary`.
  */
 
-const PTC = Object.freeze({ adults: 'ADT', children: 'CHD', infants: 'INF' });
-
-/** Seats requested (PX) and recommendations wanted back (RC). */
-const buildNumberOfUnit = (paxTotal, max) => wrap('numberOfUnit', [
-  wrap('unitNumberDetail', [el('numberOfUnits', String(paxTotal)), el('typeOfUnit', 'PX')]),
+/**
+ * Seats requested (PX) and recommendations wanted back (RC).
+ *
+ * PX counts SEATS - adults and children. An infant on a lap holds none, and
+ * counting one returns "926 Invalid number of passenger" (live WSAP,
+ * 2026-09-15).
+ */
+const buildNumberOfUnit = (seats, max) => wrap('numberOfUnit', [
+  wrap('unitNumberDetail', [el('numberOfUnits', String(seats)), el('typeOfUnit', 'PX')]),
   wrap('unitNumberDetail', [el('numberOfUnits', String(max)), el('typeOfUnit', 'RC')]),
 ]);
 
-/** One traveller reference per passenger, grouped by passenger type code. */
+/**
+ * One traveller reference per passenger, grouped by passenger type code.
+ *
+ * Adults and children are numbered 1..n once overall. An infant has no number
+ * of its own: it rides on an adult's lap, so it carries that adult's reference
+ * with infantIndicator 1 - infant 1 on adult 1, infant 2 on adult 2. Numbered as
+ * a passenger in its own right, as it was, every search with an infant failed
+ * with "955 Invalid passenger type code". Verified against the live WSAP on
+ * 2026-09-15 for 1+1, 2+2 and 2 adults + 1 child + 1 infant.
+ */
 const buildPaxReferences = ({ adults = 1, children = 0, infants = 0 }) => {
-  const counts = { adults, children, infants };
   let ref = 0;
-  return Object.entries(counts)
+  const seated = [['ADT', adults], ['CHD', children]]
     .filter(([, n]) => n > 0)
-    .map(([kind, n]) => {
-      const travellers = Array.from({ length: n }, () => el('ref', String(++ref)));
-      return wrap('paxReference', [el('ptc', PTC[kind]), each(travellers, (t) => wrap('traveller', t))]);
-    })
+    .map(([ptc, n]) => wrap('paxReference', [
+      el('ptc', ptc),
+      each(Array.from({ length: n }, () => ++ref), (r) => wrap('traveller', el('ref', String(r)))),
+    ]))
     .join('');
+  const onLaps = infants > 0
+    ? wrap('paxReference', [
+      el('ptc', 'INF'),
+      each(Array.from({ length: infants }, (_, i) => i + 1), (adultRef) => wrap('traveller', [
+        el('ref', String(adultRef)),
+        el('infantIndicator', '1'),
+      ])),
+    ])
+    : '';
+  return seated + onLaps;
 };
 
 /**
@@ -125,12 +147,15 @@ const buildItinerary = (leg, index, dayInterval = null) => wrap('itinerary', [
 
 const normalize = (p) => {
   if (!p.from || !p.to || !p.departDate) throw new Error('from, to and departDate are required');
-  return {
+  const group = {
     adults: Number(p.adults ?? 1) || 1,
     children: Number(p.children ?? 0) || 0,
     infants: Number(p.infants ?? 0) || 0,
-    currency: p.currency ?? 'USD',
   };
+  // Each infant rides on an adult's lap and borrows that adult's reference, so
+  // an infant without an adult has nothing to point at.
+  if (group.infants > group.adults) throw new Error('each infant must travel with an adult');
+  return { ...group, currency: p.currency ?? 'USD' };
 };
 
 /**
@@ -150,7 +175,8 @@ const normalize = (p) => {
  */
 export const buildMasterPricerBody = (p) => {
   const { adults, children, infants, currency } = normalize(p);
-  const paxTotal = adults + children + infants;
+  // Seats, not people: an infant on a lap is not counted (buildNumberOfUnit).
+  const paxTotal = adults + children;
 
   const body = [
     buildNumberOfUnit(paxTotal, Number(p.max ?? 50) || 50),
@@ -176,7 +202,8 @@ export const buildMasterPricerBody = (p) => {
  */
 export const buildCalendarBody = (p) => {
   const { adults, children, infants, currency } = normalize(p);
-  const paxTotal = adults + children + infants;
+  // Seats, not people: an infant on a lap is not counted (buildNumberOfUnit).
+  const paxTotal = adults + children;
   const dayInterval = Number(p.dayInterval ?? 3) || 3;
 
   const body = [

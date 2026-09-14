@@ -46,7 +46,14 @@ const buildPassengerGroups = (paxRefs, segmentCount) => {
     // passenger. Emitting one travellersID each returns error 477, "the number
     // of Passengers IDs does not match the number of passengers in the group".
     wrap('travellersID', each(refs, (ref) => wrap('travellerDetails', el('measurementValue', String(ref))))),
-    code === 'ADT' ? '' : wrap('discountPtc', el('valueQualifier', code)),
+    code === 'ADT' ? '' : wrap('discountPtc', [
+      el('valueQualifier', code),
+      // 766: an infant without a seat. An infant's traveller ID is its
+      // adult's reference (see masterPricer.js), so without the qualifier the
+      // group reads as a second passenger on that seat. Priced correctly on
+      // the live WSAP on 2026-09-15.
+      code === 'INF' ? wrap('fareDetails', el('qualifier', '766')) : '',
+    ]),
   ])).join('');
 };
 

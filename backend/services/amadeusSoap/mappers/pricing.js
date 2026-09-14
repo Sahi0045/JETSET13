@@ -86,6 +86,7 @@ export const applyPricingToOffer = (reply, offer) => {
   const perGroup = groups.map((group) => {
     const fareInfoGroup = group.fareInfoGroup ?? {};
     const amounts = readAmounts(fareInfoGroup.fareAmount);
+    const pricedAs = txt(arr(at(arr(fareInfoGroup.segmentLevelGroup)[0], 'ptcSegment.quantityDetails'))[0]?.unitQualifier);
     const paxCount = Number.parseInt(atTxt(group, 'numberOfPax.segmentControlDetails.numberOfUnits'), 10) || 1;
 
     const totalAmount = amounts[AMOUNT_TOTAL];
@@ -103,6 +104,8 @@ export const applyPricingToOffer = (reply, offer) => {
       // Traveller references this group priced, so passengers map to their own
       // fare rather than being matched by position.
       refs: arr(at(group, 'passengersID.travellerDetails')).map((t) => txt(t.measurementValue)),
+      // The passenger type the group was priced as: ADT, CNN for a child, INF.
+      type: { ADT: 'ADULT', CNN: 'CHILD', CHD: 'CHILD', CH: 'CHILD', INF: 'HELD_INFANT', IN: 'HELD_INFANT' }[pricedAs] ?? null,
       base,
       total: totalAmount?.amount ?? base,
       currency,
@@ -119,7 +122,12 @@ export const applyPricingToOffer = (reply, offer) => {
   const base = perGroup.reduce((sum, g) => sum + (g.base ?? 0) * g.paxCount, 0);
 
   const travelerPricings = (offer.travelerPricings ?? []).map((pricing, index) => {
-    const group = perGroup.find((g) => g.refs.includes(String(pricing.travelerId)))
+    // An infant is priced under its adult's reference (operations/
+    // masterPricer.js), so the reference alone found the ADULT group and gave
+    // the infant an adult fare. The type decides between them.
+    const ref = String(pricing.associatedAdultId ?? pricing.travelerId);
+    const group = perGroup.find((g) => g.refs.includes(ref) && (!g.type || g.type === pricing.travelerType))
+      ?? perGroup.find((g) => g.refs.includes(ref))
       ?? perGroup[Math.min(index, perGroup.length - 1)];
     return {
       ...pricing,

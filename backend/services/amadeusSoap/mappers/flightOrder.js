@@ -41,18 +41,31 @@ const readCreationDate = (reply) => atTxt(reply, 'pnrHeader.reservationInfo.rese
  * back as "JOHN MR". Stripping it here keeps the confirmation page showing the
  * name the customer typed rather than the GDS spelling of it.
  */
-export const readTravelers = (reply) => arr(reply?.travellerInfo).map((info, index) => {
-  const surname = atTxt(info, 'passengerData.travellerInformation.traveller.surname');
-  const given = atTxt(info, 'passengerData.travellerInformation.passenger.firstName');
+export const readTravelers = (reply) => arr(reply?.travellerInfo).flatMap((info, index) => {
   const reference = atTxt(info, 'elementManagementPassenger.reference.number') || String(index + 1);
+  // An infant is not a passenger of its own on a PNR: it rides on its adult's
+  // name element (operations/pnr.js), and the reply lists it there as a second
+  // `passenger` of type INF, under the adult's surname. Reading one passenger
+  // per element dropped the infant and, with two present, blanked the adult's
+  // first name (seen on the live WSAP, 2026-09-15).
+  const people = arr(at(info, 'passengerData')).flatMap((data) => {
+    const surname = atTxt(data, 'travellerInformation.traveller.surname');
+    return arr(at(data, 'travellerInformation.passenger')).map((passenger) => ({ surname, passenger }));
+  });
+  const elementSurname = people.find((p) => p.surname)?.surname || '';
 
-  return {
-    id: reference,
-    name: {
-      firstName: given.replace(/\s+(MR|MRS|MS|MISS|MSTR|DR)$/i, '').trim() || given,
-      lastName: surname,
-    },
-  };
+  return people.map(({ surname, passenger }) => {
+    const given = txt(passenger.firstName);
+    const onLap = txt(passenger.type) === 'INF';
+    return {
+      id: onLap ? `${reference}-INF` : reference,
+      ...(onLap ? { travelerType: 'HELD_INFANT', associatedAdultId: reference } : {}),
+      name: {
+        firstName: given.replace(/\s+(MR|MRS|MS|MISS|MSTR|DR)$/i, '').trim() || given,
+        lastName: surname || elementSurname,
+      },
+    };
+  });
 }).filter((t) => t.name.lastName);
 
 /**

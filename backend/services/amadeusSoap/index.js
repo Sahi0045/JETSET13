@@ -13,6 +13,7 @@ import { applyPricingToOffer } from './mappers/pricing.js';
 import { cancelBooking, retrieveBooking, runBookingChain } from './bookingChain.js';
 import { unwrapEnvelope } from './parseXml.js';
 import { callStateless, withSession } from './session.js';
+import { travellerGroupProblem } from '../../../shared/travellerGroup.js';
 
 const log = logger.child({ svc: 'amadeus-ws' });
 
@@ -75,6 +76,17 @@ const searchFlights = async (params) => {
       code: 400,
       operation: 'Fare_MasterPricerTravelBoardSearch',
     });
+  }
+
+  // A group Amadeus cannot book together is refused here, in words the customer
+  // can act on, rather than sent and answered with a bare 955 or 926.
+  const groupProblem = travellerGroupProblem({
+    adults: params.adults ?? params.travelers ?? 1,
+    children: params.children ?? 0,
+    infants: params.infants ?? 0,
+  });
+  if (groupProblem) {
+    throw new AmadeusSoapError({ error: groupProblem, code: 400, operation: 'Fare_MasterPricerTravelBoardSearch' });
   }
 
   const request = {

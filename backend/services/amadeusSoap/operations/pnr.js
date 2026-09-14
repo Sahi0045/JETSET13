@@ -1,6 +1,6 @@
 import { OPERATIONS } from '../codes.js';
 import { each, el, wrap } from '../xml.js';
-import { buildDocsFreetext } from './travelDocs.js';
+import { buildDocsFreetext, toDDMMMYY } from './travelDocs.js';
 
 /**
  * PNR_AddMultiElements, PNR_Retrieve and PNR_Cancel.
@@ -46,36 +46,90 @@ const titleFor = (traveler, ptc) => {
   return isFemale ? 'MS' : 'MR';
 };
 
+const isInfant = (traveler) => (PTC_TO_CODE[traveler.ptc] ?? traveler.ptc) === 'INF';
+
 /**
- * One travellerInfo per passenger.
+ * Who is which passenger on the PNR.
  *
- * `quantity` is 1 because each passenger is its own element; grouping by
- * surname is an optimisation that makes the traveller references harder to line
- * up against the fare groups later, and the references are what the pricing
- * step needs.
+ * Every passenger with a seat is one travellerInfo, numbered PR 1..n in order.
+ * An infant is not a passenger of its own on a PNR: it goes on an adult's name
+ * element - infant 1 on the first adult, infant 2 on the second, the pairing
+ * the search and pricing requests use. So an infant has no PR number, and what
+ * belongs to it (its travel document) is addressed to its adult's.
+ *
+ * @returns {Array<{traveler, paxNumber:number, infant:?object}>}
  */
-const buildTravellers = (travelers) => each(travelers, (traveler, index) => {
+export const assignPassengers = (travelers) => {
+  const seated = travelers.filter((t) => !isInfant(t));
+  const infants = travelers.filter(isInfant);
+  const adults = seated.filter((t) => (PTC_TO_CODE[t.ptc] ?? t.ptc ?? 'ADT') === 'ADT');
+  if (infants.length > adults.length) {
+    throw new Error(`${infants.length} infants need as many adults to travel on; the booking has ${adults.length}`);
+  }
+  return seated.map((traveler, index) => ({
+    traveler,
+    paxNumber: index + 1,
+    infant: adults.includes(traveler) ? infants[adults.indexOf(traveler)] ?? null : null,
+  }));
+};
+
+/**
+ * An infant, as the second passengerData on its adult's name element.
+ *
+ * Verified against the live WSAP on 2026-09-15: the adult's traveller carries
+ * quantity 2 and infantIndicator 3 - an infant with its own surname, given name
+ * and date of birth - and the infant follows with type INF. Sold, priced (an
+ * INF fare) and turned into a TST that way. Without the infant's surname
+ * Amadeus refuses the message: "traveller: Missing mandatory item".
+ */
+const infantPassengerData = (infant) => {
+  const surname = sanitizeName(infant.lastName);
+  const firstName = sanitizeName(infant.firstName);
+  if (!surname || !firstName) throw new Error('an infant is missing a usable name');
+  const born = toDDMMMYY(infant.dateOfBirth);
+  if (!born) throw new Error('an infant needs a date of birth');
+
+  return wrap('passengerData', [
+    wrap('travellerInformation', [
+      wrap('traveller', el('surname', surname)),
+      wrap('passenger', [el('firstName', `${firstName} ${titleFor(infant, 'INF')}`), el('type', 'INF')]),
+    ]),
+    wrap('dateOfBirth', wrap('dateAndTimeDetails', el('date', born))),
+  ]);
+};
+
+/**
+ * One travellerInfo per passenger with a seat, carrying any infant on its lap.
+ *
+ * `quantity` counts the people on the name element: 1, or 2 with an infant.
+ * Grouping adults by surname is an optimisation that makes the traveller
+ * references harder to line up against the fare groups later, and the
+ * references are what the pricing step needs.
+ */
+const buildTravellers = (travelers) => each(assignPassengers(travelers), ({ traveler, paxNumber, infant }) => {
   const ptc = PTC_TO_CODE[traveler.ptc] ?? traveler.ptc ?? 'ADT';
   const surname = sanitizeName(traveler.lastName);
   const firstName = sanitizeName(traveler.firstName);
-  if (!surname || !firstName) throw new Error(`traveler ${index + 1} is missing a usable name`);
+  if (!surname || !firstName) throw new Error(`traveler ${paxNumber} is missing a usable name`);
 
   return wrap('travellerInfo', [
     wrap('elementManagementPassenger', [
-      wrap('reference', [el('qualifier', 'PR'), el('number', String(index + 1))]),
+      wrap('reference', [el('qualifier', 'PR'), el('number', String(paxNumber))]),
       el('segmentName', 'NM'),
     ]),
     wrap('passengerData', [
       wrap('travellerInformation', [
-        wrap('traveller', [el('surname', surname), el('quantity', '1')]),
+        wrap('traveller', [el('surname', surname), el('quantity', infant ? '2' : '1')]),
         wrap('passenger', [
           el('firstName', `${firstName} ${titleFor(traveler, ptc)}`),
           // Without an explicit type every passenger prices as an adult, and a
           // child on an adult fare is a fare the airline can reject at check-in.
           ptc === 'ADT' ? '' : el('type', ptc),
+          infant ? el('infantIndicator', '3') : '',
         ]),
       ]),
     ]),
+    infant ? infantPassengerData(infant) : '',
   ]);
 });
 
@@ -239,10 +293,14 @@ export const buildAddElementsBody = (p) => {
     // SSR DOCS per traveller who supplied a usable document. An international
     // ticket cannot be issued without it; a domestic one generally can, so a
     // traveller with no passport is skipped rather than failed.
-    ...travelers.map((traveler, index) => {
-      const freetext = buildDocsFreetext(traveler);
-      return freetext ? docsElement({ number: ++number, paxNumber: index + 1, freetext }) : '';
-    }),
+    // An infant has no passenger number of its own, so its document goes on its
+    // adult's; the I in its DOCS gender (MI/FI) is what marks it as the infant's.
+    ...assignPassengers(travelers).flatMap(({ traveler, paxNumber, infant }) => [traveler, infant]
+      .filter(Boolean)
+      .map((person) => {
+        const freetext = buildDocsFreetext(person);
+        return freetext ? docsElement({ number: ++number, paxNumber, freetext }) : '';
+      })),
   ].filter(Boolean).join('');
 
   const body = [
