@@ -68,6 +68,16 @@ function FlightSearchPage() {
 
   // const location = useLocation();
   const navigate = useNavigate();
+
+  // Sent back from the review page to change who is travelling: open the modify
+  // form on the traveller picker, once. The flag is then dropped from history,
+  // so a refresh shows the results rather than reopening the picker.
+  const [openTravellers] = useState(() => Boolean(location.state?.editTravellers));
+  useEffect(() => {
+    if (!location.state?.editTravellers) return;
+    const { editTravellers: _opened, ...state } = location.state;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state });
+  }, []);
   const [searchParams, setSearchParams] = useState(searchData || {
     from: 'DEL',
     to: 'HYD',
@@ -1311,6 +1321,7 @@ function FlightSearchPage() {
         searchParams={searchParams}
         cityMap={cityMap}
         onSearch={handleSearch}
+        openTravellers={openTravellers}
       />
 
       {/* Date Navigation Bar */}

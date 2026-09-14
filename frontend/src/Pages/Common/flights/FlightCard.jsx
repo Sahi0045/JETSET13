@@ -184,6 +184,16 @@ function SegmentList({ segments = [], stopDetails = [], cityMap = {} }) {
   );
 }
 
+// What the price on the card covers. The airline's total is for every traveller
+// the search priced; a two-adult total was labelled "per adult", so the
+// customer read half the real price per person.
+const pricedForLabel = (offer) => {
+  const travellers = offer?.travelerPricings?.length || 0;
+  if (travellers > 1) return `for ${travellers} travellers`;
+  if (travellers === 1) return 'for 1 traveller';
+  return 'total fare';
+};
+
 function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) {
   const [expanded, setExpanded] = useState(false);
   const [showBreakup, setShowBreakup] = useState(false);
@@ -283,7 +293,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
               <div className="text-xl sm:text-2xl font-bold text-[#055B75] leading-none">
                 <Price amount={flight.price} />
               </div>
-              <div className="text-[11px] text-gray-400 mt-1">per adult</div>
+              <div className="text-[11px] text-gray-400 mt-1">{pricedForLabel(flight.originalOffer)}</div>
               {baseFare > 0 && (
                 <button
                   onClick={() => setShowBreakup(v => !v)}

@@ -14,7 +14,7 @@ import { format, parseISO, isValid } from 'date-fns';
 // Get this from a config or parent component
 const USE_AMADEUS_API = true;
 
-export default function FlightSearchForm({ initialData, onSearch }) {
+export default function FlightSearchForm({ initialData, onSearch, openTravellers = false }) {
   const { city, loaded, country: userCountry } = useLocationContext();
   const navigate = useNavigate();
   const [formData, setFormData] = useState(initialData || defaultSearchData)
@@ -27,7 +27,8 @@ export default function FlightSearchForm({ initialData, onSearch }) {
   const [isSearching, setIsSearching] = useState(false);
   const [showDepartCalendar, setShowDepartCalendar] = useState(false);
   const [showReturnCalendar, setShowReturnCalendar] = useState(false);
-  const [showTravellers, setShowTravellers] = useState(false);
+  // Open on arrival when the customer came to change who is travelling.
+  const [showTravellers, setShowTravellers] = useState(Boolean(openTravellers));
   const [adults, setAdults] = useState(Number(initialData?.adults) || Number(initialData?.travelers) || 1);
   const [children, setChildren] = useState(Number(initialData?.children) || 0);
   const [infants, setInfants] = useState(Number(initialData?.infants) || 0);
