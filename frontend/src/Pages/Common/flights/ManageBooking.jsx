@@ -10,6 +10,8 @@ import Navbar from '../Navbar';
 import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
 import { isPaid, ticketState } from '../../../utils/eTicket';
+import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
+import { refundOutcome } from '../../../../../shared/cancellationOutcome';
 import ArcPayService from '../../../Services/ArcPayService';
 import { useFlightBooking } from '../../../hooks/queries';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,10 +41,17 @@ function ManageBooking() {
     enabled: !passedData && !!bookingId,
     email: submittedEmail,
   });
+  // What the cancel API said happened, once it has answered.
+  const [cancelResult, setCancelResult] = useState(null);
   const bookingData = useMemo(() => {
     const base = passedData || fetchedBooking || null;
-    return base && cancelledLocally ? { ...base, status: 'CANCELLED' } : base;
-  }, [passedData, fetchedBooking, cancelledLocally]);
+    // The page's copy takes the cancellation record the server just returned,
+    // so the tracker reads the same outcome as the banner - not an older
+    // record, or none.
+    return base && cancelledLocally
+      ? { ...base, status: 'CANCELLED', cancellation: cancelResult?.cancellation ?? base.cancellation }
+      : base;
+  }, [passedData, fetchedBooking, cancelledLocally, cancelResult]);
   const loading = !passedData && queryLoading;
   const error = !passedData && queryError ? queryError.message : (!bookingId && !passedData ? 'No booking ID provided' : null);
 
@@ -50,7 +59,6 @@ function ManageBooking() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('Change of plans');
-  const [cancelResult, setCancelResult] = useState(null);
 
   const handleCancelBooking = () => {
     setShowCancelModal(true);
@@ -81,13 +89,10 @@ function ManageBooking() {
         setCancelledLocally(true);
         queryClient.invalidateQueries({ queryKey: ['flights', 'booking', bookingId] });
         setShowCancelModal(false);
-        setCancelResult({
-          success: true,
-          refundAmount: outcome.refundAmount || outcome.netRefund || 0,
-          cancellationFee: outcome.cancellationFee || 0,
-          netRefund: outcome.netRefund || outcome.refundAmount || 0,
-          paymentAction: outcome.paymentAction
-        });
+        // The record as the server wrote it. The banner, the tracker and the
+        // email all word it with cancellationMessage, so one outcome reads the
+        // same everywhere.
+        setCancelResult({ success: true, cancellation: outcome });
       } else {
         // The server refused. This branch used to mark the booking cancelled
         // anyway - in localStorage, no less - and tell the customer a refund
@@ -115,6 +120,8 @@ function ManageBooking() {
   const ticketRef = React.useRef(null);
 
   const downloadETicket = async () => {
+    // A cancelled booking has no document to hand out.
+    if (String(bookingData?.status || '').toUpperCase() === 'CANCELLED') return;
     if (!ticketRef.current) {
       alert("Ticket template not ready. Please wait and try again.");
       return;
@@ -217,59 +224,63 @@ function ManageBooking() {
     );
   }
 
-  // Raw database statuses are not customer copy, and the old fallback for an
-  // unknown status was 'Confirmed'.
-  const STATUS_LABELS = {
-    PENDING_TICKETING: 'Reserved - ticket being issued',
-    PENDING_CONFIRMATION: 'Being confirmed with the airline',
-    PAID: 'Paid - ticket being issued',
-    PENDING: 'Pending',
-    CONFIRMED: 'Confirmed',
-    FAILED: 'Failed',
+  const BANNER_TONES = {
+    success: { box: 'bg-emerald-50 border border-emerald-200', text: 'text-emerald-800', icon: 'text-emerald-600' },
+    danger: { box: 'bg-red-50 border border-red-200', text: 'text-red-800', icon: 'text-red-600' },
+    warning: { box: 'bg-amber-50 border border-amber-200', text: 'text-amber-900', icon: 'text-amber-600' },
+    neutral: { box: 'bg-[#F0FAFC] border border-[#B9D0DC]', text: 'text-[#034457]', icon: 'text-[#055B75]' },
   };
-  const statusLabel = (status) =>
-    STATUS_LABELS[String(status || '').toUpperCase()] || (status ? String(status).replace(/_/g, ' ') : 'Pending');
 
   const renderStatusBanner = () => {
     const currentStatus = bookingData?.status?.toUpperCase() || '';
     if (currentStatus !== 'CANCELLED' && currentStatus !== 'CANCEL_REQUESTED') {
+      // From the whole record - tickets, the queue, a review flag, the payment -
+      // not from `status` alone. A reservation with no ticket showed a green
+      // "Confirmed", and a raw database status was printed as it was.
+      // bookingStatusBadge never says "Confirmed" for a state nobody mapped.
+      const badge = bookingStatusBadge(bookingData);
+      const tone = BANNER_TONES[badge.tone] || BANNER_TONES.neutral;
+      const attention = attentionMessage(bookingData);
       return (
-        <div className={`p-4 rounded-lg mb-6 ${currentStatus === 'CONFIRMED' ? 'bg-emerald-50 border border-emerald-200' :
-          currentStatus === 'FAILED' ? 'bg-red-50 border border-red-200' :
-            'bg-[#F0FAFC] border border-[#B9D0DC]'
-          }`}>
+        <div className={`p-4 rounded-lg mb-6 ${tone.box}`}>
           <div className="flex items-center">
-            {currentStatus === 'CONFIRMED' ? (
-              <CheckCircle className="w-5 h-5 text-emerald-600 mr-2" />
+            {badge.tone === 'success' ? (
+              <CheckCircle className={`w-5 h-5 mr-2 ${tone.icon}`} />
             ) : (
-              <Info className="w-5 h-5 text-[#055B75] mr-2" />
+              <Info className={`w-5 h-5 mr-2 ${tone.icon}`} />
             )}
-            <span className={`font-medium ${currentStatus === 'CONFIRMED' ? 'text-emerald-800' : 'text-[#034457]'}`}>
-              Booking Status: {statusLabel(bookingData?.status)}
+            <span className={`font-medium ${tone.text}`}>
+              Booking Status: {badge.label}
             </span>
           </div>
+          {attention && <p className={`text-sm mt-2 ${tone.text}`}>{attention}</p>}
         </div>
       );
     }
 
-    // Cancellation Logic
-    // `bookingData.cancellation` is what the bookings list now sends; the
-    // nested form is the older shape. Without either, every cancelled booking
-    // read as "Processing Refund - In Progress" - including ones whose refund
-    // the gateway had refused days earlier.
-    const cancelData = cancelResult || bookingData?.cancellation || bookingData?.bookingDetails?.cancellation || {};
-    const paymentAction = cancelData.paymentAction || bookingData?.paymentAction;
-    // Mirrors REFUND_STUCK_ACTIONS / REFUND_DONE_ACTIONS in
-    // backend/services/email/templates.js so the page and the email agree.
-    const isRefundFailed = ['REFUND_FAILED', 'VOID_FAILED', 'VOID_MISSING_TXN_ID'].includes(paymentAction);
-    const isManual = paymentAction === 'MANUAL_PROCESS_REQUIRED';
-    const isNoRefund = paymentAction === 'NO_REFUND_FEE_COVERS';
-    const isRefunded = ['PARTIAL_REFUND', 'FULL_REFUND', 'REFUNDED', 'VOID'].includes(paymentAction)
-      || bookingData?.payment_status === 'partially_refunded' || bookingData?.payment_status === 'refunded'
-      || bookingData?.paymentStatus === 'partially_refunded' || bookingData?.paymentStatus === 'refunded';
+    // Cancellation tracker.
+    //
+    // `bookingData.cancellation` is what the bookings list sends, and what the
+    // cancel API just returned; the nested form is the older shape. What the
+    // money did comes from refundStatus, which puts the cancellation record
+    // ahead of payment_status: "Refunded" never appears over a reversal that
+    // failed, and a cancellation with no record reads as a refund still owed
+    // rather than "Processing Refund - In Progress" for ever.
+    const cancelData = bookingData?.cancellation || bookingData?.bookingDetails?.cancellation || {};
+    const refund = refundStatus({ ...bookingData, status: 'cancelled', cancellation: cancelData })
+      || { key: 'none', label: 'No payment recorded', tone: 'neutral' };
+    const refunded = refund.key === 'refunded';
 
-    // Default to pending if we have cancel data but it's not explicitly terminal
-    const isPending = !isRefunded && !isRefundFailed && !isNoRefund && !isManual;
+    // [refund step, its state, status step, its state]
+    const TRACK = {
+      refunded: ['Processed', 'complete', refund.label, 'complete'],
+      none_due: ['Reviewed', 'complete', 'No refund due', 'complete'],
+      nothing_held: ['Reviewed', 'complete', 'Nothing to refund', 'complete'],
+      none: ['No payment recorded', 'complete', 'Nothing to refund', 'complete'],
+      failed: ['Not processed', 'error', 'Failed - being handled by our team', 'error'],
+      review: ['Under review', 'current', 'Our team will email you', 'upcoming'],
+      pending: ['Pending', 'current', 'Not refunded yet', 'upcoming'],
+    }[refund.key];
 
     // Timeline Steps
     const steps = [
@@ -278,20 +289,23 @@ function ManageBooking() {
         description: cancelData.cancelledAt ? new Date(cancelData.cancelledAt).toLocaleDateString() : 'Received',
         status: 'complete',
       },
-      {
-        title: 'Processing Refund',
-        description: isRefunded ? 'Approved' : (isRefundFailed || isNoRefund || isManual) ? 'Reviewed' : 'In Progress',
-        status: isRefunded || isRefundFailed || isNoRefund || isManual ? 'complete' : 'current',
-      },
-      {
-        title: 'Refund Status',
-        description: isRefunded ? `Successful ($${(cancelData.refundAmount || cancelData.netRefund || 0).toFixed(2)})` :
-          isRefundFailed ? 'Failed - being handled by our team' :
-            isNoRefund ? 'No Refund Due' :
-              isManual ? 'Manual Review' : 'Pending',
-        status: isRefunded ? 'complete' : (isRefundFailed || isNoRefund || isManual) ? 'error' : 'upcoming',
-      }
+      { title: 'Refund', description: TRACK[0], status: TRACK[1] },
+      { title: 'Refund Status', description: TRACK[2], status: TRACK[3] },
     ];
+
+    // Said in words wherever the tracker alone does not settle it, in the same
+    // sentence the result banner and the email use.
+    const NOTICE_TITLES = {
+      failed: 'Refund Not Yet Processed',
+      review: 'Refund Under Review',
+      none_due: 'No Refund Due',
+      nothing_held: 'Nothing To Refund',
+      pending: 'Refund Pending',
+    };
+    const noticeTitle = NOTICE_TITLES[refund.key];
+    const noticeText = cancelData.paymentAction
+      ? cancellationMessage({ cancellation: cancelData })
+      : attentionMessage({ ...bookingData, status: 'cancelled', cancellation: cancelData });
 
     return (
       <div className="mb-8">
@@ -361,20 +375,14 @@ function ManageBooking() {
               </div>
             </div>
 
-            {/* Refund outcome notice. Only rendered for outcomes that need
-                explanation; a successful refund speaks for itself above. */}
-            {(isRefundFailed || isNoRefund || isManual) && (
+            {/* Refund outcome notice, for every outcome that is not simply a
+                refund made. */}
+            {noticeTitle && noticeText && (
               <div className="mt-10 p-5 bg-amber-50/80 backdrop-blur-sm rounded-xl border border-amber-200/60 flex items-start gap-4 shadow-inner">
                 <AlertCircle className="w-6 h-6 text-amber-500 shrink-0 mt-0.5" />
                 <div>
-                  <h5 className="text-base font-bold text-amber-900">
-                    {isRefundFailed ? 'Refund Not Yet Processed' : isManual ? 'Manual Review Required' : 'No Refund Due'}
-                  </h5>
-                  <p className="text-sm text-amber-700/90 mt-1.5 leading-relaxed font-medium">
-                    {isRefundFailed ? "Your booking is cancelled, but our payment provider did not accept the automatic refund. Nothing has been returned to your card yet. Our team has been alerted and will process it manually; if you have not heard from us within 2 business days, call (877) 538-7380." :
-                      isManual ? "The automated refund could not be completed. Our support team has been notified and will review this transaction and contact you." :
-                        "The cancellation fee for this booking equals or exceeds the amount paid, so no refund is due."}
-                  </p>
+                  <h5 className="text-base font-bold text-amber-900">{noticeTitle}</h5>
+                  <p className="text-sm text-amber-700/90 mt-1.5 leading-relaxed font-medium">{noticeText}</p>
                 </div>
               </div>
             )}
@@ -390,25 +398,25 @@ function ManageBooking() {
                   <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
                     <span className="text-slate-600 font-medium">Original Booking Amount</span>
                     <span className="font-semibold text-slate-800">
-                      ${(bookingData?.totalAmount || bookingData?.amount || bookingData?.total_amount || 0).toFixed(2)}
+                      ${Number(bookingData?.totalAmount || bookingData?.amount || bookingData?.total_amount || 0).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
-                    <span className="text-slate-600 flex items-center gap-1.5 font-medium">
-                      Cancellation Fee
-                      <span className="text-xs px-2 py-0.5 bg-slate-200 text-slate-600 rounded-full font-bold">Standard</span>
-                    </span>
+                    {/* Only a fee the cancellation actually kept. It used to be
+                        labelled "Standard" beside every booking, including the
+                        ones that pay no fee. */}
+                    <span className="text-slate-600 font-medium">Cancellation Fee</span>
                     <span className="text-rose-600 font-semibold">
-                      -${(cancelData.cancellationFee || 0).toFixed(2)}
+                      -${Number(cancelData.cancellationFee || 0).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center pt-2">
-                    <span className="text-lg font-bold text-slate-800">Net Refund Total</span>
-                    <span className={`text-xl font-bold ${isRefundFailed || isNoRefund ? 'text-slate-400' : 'text-emerald-600'}`}>
+                    <span className="text-lg font-bold text-slate-800">Refunded To Your Card</span>
+                    <span className={`text-xl font-bold ${refunded ? 'text-emerald-600' : 'text-slate-400'}`}>
                       {/* Only what was actually returned. This used to compute
                           the refund the customer WOULD have got when the refund
                           had failed, and print it in the total. */}
-                      ${(cancelData.refundAmount || cancelData.netRefund || 0).toFixed(2)}
+                      ${Number(cancelData.refundAmount || cancelData.netRefund || 0).toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -447,16 +455,21 @@ function ManageBooking() {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-3 mb-6">
-            <button
-              onClick={downloadETicket}
-              className="flex items-center bg-[#055B75] text-white px-4 py-2 rounded-lg hover:bg-[#034457] transition"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              {/* The document names itself honestly, so the button that offers
-                  it must too - clicking "E-Ticket" and receiving a reservation
-                  is the same misrepresentation in a different place. */}
-              {ticketState(bookingData) === 'issued' ? 'Download E-Ticket' : 'Download Booking Confirmation'}
-            </button>
+            {/* A cancelled booking offers no document. Its tickets were voided
+                or refunded with the airline, and a PDF of them is a travel
+                document for a flight the customer no longer holds. */}
+            {bookingData?.status?.toUpperCase() !== 'CANCELLED' && (
+              <button
+                onClick={downloadETicket}
+                className="flex items-center bg-[#055B75] text-white px-4 py-2 rounded-lg hover:bg-[#034457] transition"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {/* The document names itself honestly, so the button that offers
+                    it must too - clicking "E-Ticket" and receiving a reservation
+                    is the same misrepresentation in a different place. */}
+                {ticketState(bookingData) === 'issued' ? 'Download E-Ticket' : 'Download Booking Confirmation'}
+              </button>
+            )}
 
             {bookingData?.status?.toUpperCase() !== 'CANCELLED' && 
              (!bookingData?.departureDate || new Date(bookingData.departureDate) >= new Date(new Date().setHours(0,0,0,0))) && (
@@ -775,51 +788,42 @@ function ManageBooking() {
         </div>
       </div>
 
-      {/* Cancellation Result Banner */}
-      {cancelResult && (
-        <div className={`mx-4 sm:mx-8 mb-6 p-4 rounded-lg ${cancelResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-          {cancelResult.success ? (
-            <div className="flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 className="font-semibold text-green-800">Booking Cancelled Successfully</h4>
-                {cancelResult.paymentAction === 'PARTIAL_REFUND' && cancelResult.refundAmount > 0 ? (
-                  <p className="text-green-700 text-sm mt-1">
-                    Net refund of <strong>${parseFloat(cancelResult.refundAmount).toFixed(2)}</strong> has been initiated (after ${parseFloat(cancelResult.cancellationFee || 0).toFixed(2)} cancellation fee).
-                    It may take 5-7 business days to appear in your account.
-                  </p>
-                ) : (cancelResult.paymentAction === 'FEE_CHARGED' || cancelResult.paymentAction === 'FULL_FEE') ? (
-                  <p className="text-yellow-700 text-sm mt-1">
-                    A cancellation fee of <strong>${parseFloat(cancelResult.cancellationFee || 0).toFixed(2)}</strong> has been charged.
-                    {cancelResult.paymentAction === 'FULL_FEE' ? ' No refund is due as the fee covers the full booking amount.' : ' No additional refund is due.'}
-                  </p>
-                ) : cancelResult.paymentAction === 'VOID_AND_FEE' ? (
-                  <p className="text-green-700 text-sm mt-1">
-                    Original payment has been voided and a cancellation fee of <strong>${parseFloat(cancelResult.cancellationFee || 0).toFixed(2)}</strong> has been charged.
-                  </p>
-                ) : cancelResult.refundAmount ? (
-                  <p className="text-green-700 text-sm mt-1">
-                    A {cancelResult.paymentAction === 'REFUND' ? 'full refund' : 'reversal'} of <strong>${parseFloat(cancelResult.refundAmount).toFixed(2)}</strong> has been initiated.
-                    It may take 5-10 business days to appear in your account.
-                  </p>
-                ) : cancelResult.note ? (
-                  <p className="text-green-700 text-sm mt-1">{cancelResult.note}</p>
-                ) : (
-                  <p className="text-green-700 text-sm mt-1">Your booking has been cancelled.</p>
-                )}
+      {/* Cancellation result. Worded by cancellationMessage, like the tracker
+          above and the email, so one outcome reads the same everywhere. It was
+          a green success banner whatever the refund did, and its own branches
+          promised a shorter wait than the email did. */}
+      {cancelResult && (() => {
+        if (!cancelResult.success) {
+          return (
+            <div className="mx-4 sm:mx-8 mb-6 p-4 rounded-lg bg-red-50 border border-red-200">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="font-semibold text-red-800">Cancellation Error</h4>
+                  <p className="text-red-700 text-sm mt-1">{cancelResult.error}</p>
+                </div>
               </div>
             </div>
-          ) : (
+          );
+        }
+        const outcome = refundOutcome(cancelResult.cancellation || {});
+        const tone = outcome === 'stuck' ? 'bg-red-50 border border-red-200 text-red-800'
+          : ['review', 'unknown'].includes(outcome) ? 'bg-amber-50 border border-amber-200 text-amber-900'
+            : 'bg-green-50 border border-green-200 text-green-800';
+        return (
+          <div className={`mx-4 sm:mx-8 mb-6 p-4 rounded-lg ${tone}`}>
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+              {outcome === 'stuck'
+                ? <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                : <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />}
               <div>
-                <h4 className="font-semibold text-red-800">Cancellation Error</h4>
-                <p className="text-red-700 text-sm mt-1">{cancelResult.error}</p>
+                <h4 className="font-semibold">Booking Cancelled</h4>
+                <p className="text-sm mt-1">{cancellationMessage({ cancellation: cancelResult.cancellation })}</p>
               </div>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       {/* Cancel Booking Modal */}
       {showCancelModal && (
@@ -832,10 +836,20 @@ function ManageBooking() {
               <div className="flex items-start">
                 <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 mr-2 flex-shrink-0" />
                 <div className="text-sm text-yellow-700">
-                  <p className="font-medium mb-2">Cancellation Policy</p>
-                  <p>• A cancellation fee will be deducted from your refund</p>
-                  <p>• Estimated net refund will be calculated at processing time</p>
-                  <p>• Processing time: 5-7 business days</p>
+                  <p className="font-medium mb-2">What happens to your payment</p>
+                  {/* Only what the cancellation will do. This promised a fee on
+                      every booking and 5-7 days, while the result screen and
+                      the email said 5-10 - and a booking never ticketed pays
+                      no fee at all. */}
+                  {['issued', 'pending'].includes(ticketState(bookingData)) ? (
+                    <>
+                      <p>• Your ticket has been issued, so a cancellation fee may apply.</p>
+                      <p>• What is refunded depends on your fare's rules; some fares need our team to review the refund first.</p>
+                    </>
+                  ) : (
+                    <p>• No ticket has been issued yet, so no cancellation fee applies and what you paid is returned.</p>
+                  )}
+                  <p>• You will see what happens to your payment as soon as the cancellation completes.</p>
                 </div>
               </div>
             </div>

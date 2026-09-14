@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { formatIsoDuration } from "../../../utils/dateUtils"
-import { bookingStatusBadge, needsAttention, cancellationMessage } from "../../../utils/bookingStatus"
+import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage } from "../../../utils/bookingStatus"
 import { resolveTickets, ticketState } from "../../../utils/eTicket"
 import { authHeaders } from "../../../utils/authHeaders"
 import {
@@ -690,6 +690,9 @@ export default function TravelDashboard() {
     const statusUp = normalizeStatus(booking.status);
     // From the booking record, not `status` alone - see utils/bookingStatus.js.
     const badge = bookingStatusBadge(booking);
+    // For a cancelled booking, what happened to the money - see refundStatus.
+    const refund = refundStatus(booking);
+    const attention = attentionMessage(booking);
     const BADGE_TONES = {
       success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       danger: 'bg-red-50 text-red-700 border-red-200',
@@ -754,14 +757,21 @@ export default function TravelDashboard() {
                 badge.tone === 'danger' ? <FaTimesCircle className="w-3 h-3" /> : null}
               {badge.label}
             </span>
+            {refund && (
+              <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full border ${BADGE_TONES[refund.tone]}`}>
+                {refund.label}
+              </span>
+            )}
           </div>
         </div>
 
-        {needsAttention(booking) && (
+        {/* One sentence per case, from the record. This said "the refund did
+            not go through" for every cancelled booking needing attention -
+            a refund under review included - and "your seats are reserved"
+            for a booking the airline never received. */}
+        {attention && (
           <div className="mb-4 p-3 rounded-xl border border-amber-200 bg-amber-50 text-sm text-amber-800">
-            {statusUp === 'CANCELLED'
-              ? 'The refund for this cancellation did not go through automatically. Our team has been alerted and will refund you.'
-              : 'Your seats are reserved, but your ticket has not been issued yet. Our team is working on it and will email you.'}
+            {attention}
           </div>
         )}
 
@@ -832,6 +842,9 @@ export default function TravelDashboard() {
                     {booking.pnr && (
                       <DetailCell label="Ticket">
                         {(() => {
+                          // A cancelled booking's tickets were voided or refunded:
+                          // no number is shown as though it could still be used.
+                          if (statusUp === 'CANCELLED') return 'Cancelled';
                           const numbers = resolveTickets(booking).map((t) => t?.number).filter(Boolean);
                           if (numbers.length) return <span className="tracking-wider">{numbers.join(', ')}</span>;
                           return ticketState(booking) === 'pending' ? 'Issued, number pending' : 'Not yet issued';
@@ -1031,13 +1044,16 @@ export default function TravelDashboard() {
                           // What happened to the money, from the cancellation
                           // record. A refused refund used to read as a plain
                           // "cancelled successfully": its amount is 0, which is
-                          // falsy, so not even a refund line appeared.
-                          const amaMsg = isFlight ? (result.amadeusCancelled ? ' The airline reservation is cancelled.' : ' The airline cancellation is still being processed.') : ''
-                          alert(cancellationMessage(result) + amaMsg)
+                          // falsy, so not even a refund line appeared. Nothing
+                          // is added to it: "the airline cancellation is still
+                          // being processed" went on bookings that never had a
+                          // reservation, and a cancel the airline refused is not
+                          // a success at all.
+                          alert(cancellationMessage(result))
                           // Reload bookings to reflect the cancellation
                           loadBookings()
                         } else {
-                          alert(result.error || 'Failed to cancel booking. Please try again.')
+                          alert(result.error || result.message || 'Failed to cancel booking. Please try again.')
                         }
                       } catch (err) {
                         console.error('Cancel error:', err)

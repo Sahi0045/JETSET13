@@ -40,8 +40,12 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     const paid = isPaid(bookingData) || isPaid(bookingDetails);
 
     const isTicketed = state === 'issued';
-    // "E-Ticket" is a claim. Only make it once a ticket exists.
-    const documentTitle = isTicketed ? 'E-Ticket' : 'Booking Confirmation';
+    // A cancelled booking's tickets were voided or refunded with the airline.
+    // Its document still downloaded headed "E-Ticket", with every number on it.
+    const isCancelled = state === 'cancelled';
+    // "E-Ticket" is a claim. Only make it once a ticket exists, and never for a
+    // booking that no longer holds one.
+    const documentTitle = isCancelled ? 'Cancelled Booking' : isTicketed ? 'E-Ticket' : 'Booking Confirmation';
 
     // Get flight data - handle both nested and direct structures. Identifiers
     // fall back to a visible placeholder rather than a plausible-looking
@@ -85,6 +89,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
 
     /** What to print where a ticket number goes, for one passenger. */
     const ticketLabel = (traveler, index) => {
+        if (isCancelled) return 'Cancelled — not valid for travel';
         const match = ticketForTraveler(tickets, traveler, index);
         if (match?.number) return `Ticket #: ${match.number}`;
         // Tickets exist, but none can be tied to this traveller for certain
@@ -120,11 +125,13 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                     the day this happened to be opened. */}
                 <div className="bg-[#034457] text-white px-8 py-2 flex justify-between items-center text-sm">
                     <span>
-                        {issuedOn
-                            ? `Date of Issue: ${new Date(issuedOn).toLocaleDateString()}`
-                            : 'Ticket not yet issued'}
+                        {isCancelled
+                            ? 'Cancelled — not valid for travel'
+                            : issuedOn
+                                ? `Date of Issue: ${new Date(issuedOn).toLocaleDateString()}`
+                                : 'Ticket not yet issued'}
                     </span>
-                    <span className={`font-bold uppercase px-3 py-1 rounded text-xs ${isTicketed ? 'bg-green-500' : 'bg-amber-500'}`}>
+                    <span className={`font-bold uppercase px-3 py-1 rounded text-xs ${isCancelled ? 'bg-red-600' : isTicketed ? 'bg-green-500' : 'bg-amber-500'}`}>
                         {safeBookingDetails.status}
                     </span>
                 </div>
@@ -132,7 +139,15 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                 <div className="p-8">
                     {/* Says plainly what this document is not, so nobody travels on
                         a reservation believing it is a ticket. */}
-                    {!isTicketed && (
+                    {isCancelled && (
+                        <div className="mb-6 border border-red-300 bg-red-50 rounded-lg px-5 py-4">
+                            <p className="font-bold text-red-900 text-sm">This booking has been cancelled. It is not valid for travel.</p>
+                            <p className="text-xs text-red-800 mt-1">
+                                Any ticket on it has been voided or refunded with the airline, so no ticket number is shown. Keep this only as a record of the cancellation.
+                            </p>
+                        </div>
+                    )}
+                    {!isTicketed && !isCancelled && (
                         <div className="mb-6 border border-amber-300 bg-amber-50 rounded-lg px-5 py-4">
                             <p className="font-bold text-amber-900 text-sm">
                                 {state === 'pending'
@@ -218,7 +233,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                 <div key={idx} className="bg-white border border-gray-100 shadow-sm rounded-lg p-4 flex justify-between items-center">
                                     <div>
                                         <p className="font-bold text-gray-900 uppercase">{p.title} {p.firstName} {p.lastName}</p>
-                                        <p className={`text-xs mt-1 ${isTicketed ? 'text-gray-500' : 'text-amber-700 font-medium'}`}>
+                                        <p className={`text-xs mt-1 ${isCancelled ? 'text-red-700 font-medium' : isTicketed ? 'text-gray-500' : 'text-amber-700 font-medium'}`}>
                                             {ticketLabel(p, idx)}
                                         </p>
                                     </div>
@@ -249,7 +264,9 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                 <li>Check-in counters close 60 minutes before departure.</li>
                                 <li>Valid photo ID required for entry.</li>
                                 <li>Baggage allowances are as per airline regulations.</li>
-                                {!isTicketed && <li className="text-amber-700">Carry your issued e-ticket for check-in; this document alone is not accepted.</li>}
+                                {isCancelled
+                                    ? <li className="text-red-700">This booking is cancelled and cannot be used to travel.</li>
+                                    : !isTicketed && <li className="text-amber-700">Carry your issued e-ticket for check-in; this document alone is not accepted.</li>}
                             </ul>
                         </div>
                         <div className="text-right">
@@ -257,7 +274,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                 <p className="text-xs text-gray-400 uppercase mb-1">Total Amount</p>
                                 <p className="text-3xl font-bold text-[#055B75]"><Price amount={calculatedFare.totalAmount} /></p>
                                 {/* Only claimed when the booking says so. */}
-                                {paid && <p className="text-xs text-green-600 mt-1 font-medium">Payment Confirmed ✅</p>}
+                                {paid && !isCancelled && <p className="text-xs text-green-600 mt-1 font-medium">Payment Confirmed ✅</p>}
                             </div>
                             {/* The decorative barcode that used to sit here was
                                 random stripes on a document headed "E-Ticket".

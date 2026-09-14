@@ -41,6 +41,12 @@ const REVIEW_PATHS = [
   (b) => b?.bookingDetails?.needs_review,
 ];
 
+/** Whether the booking was cancelled, from whichever shape it arrived in. */
+export function isCancelledBooking(bookingData) {
+  return [bookingData?.status, bookingData?.bookingDetails?.status, bookingData?.booking_details?.status, bookingData?.data?.status]
+    .some((status) => String(status ?? '').toUpperCase() === 'CANCELLED');
+}
+
 /** Every ticket on the booking, from whichever shape it arrived in. */
 export function resolveTickets(bookingData) {
   for (const read of TICKET_PATHS) {
@@ -59,9 +65,15 @@ export function resolveTickets(bookingData) {
  * Telling that customer "not ticketed" would be as wrong as inventing a number
  * for them — their ticket exists.
  *
- * @returns {'issued'|'pending'|'none'}
+ * And one ahead of all three: `cancelled`. A cancelled booking's tickets were
+ * voided or refunded with the airline, but their numbers stay on the record -
+ * which is how the document went on printing them, headed "E-Ticket", after the
+ * trip was cancelled.
+ *
+ * @returns {'cancelled'|'issued'|'pending'|'none'}
  */
 export function ticketState(bookingData) {
+  if (isCancelledBooking(bookingData)) return 'cancelled';
   if (resolveTickets(bookingData).length > 0) return 'issued';
 
   for (const read of REVIEW_PATHS) {

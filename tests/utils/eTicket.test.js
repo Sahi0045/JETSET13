@@ -80,6 +80,16 @@ describe('the three ticket states', () => {
   });
 });
 
+describe('a cancelled booking', () => {
+  // Its tickets were voided or refunded, but the numbers stay on the record,
+  // and the document went on printing them under "E-Ticket".
+  it('has no usable ticket, whatever numbers it still carries', () => {
+    expect(ticketState({ status: 'cancelled', tickets: [ticket()] })).toBe('cancelled');
+    expect(ticketState({ status: 'CANCELLED', booking_details: { tickets: [ticket()] } })).toBe('cancelled');
+    expect(ticketState({ bookingDetails: { status: 'CANCELLED', tickets: [ticket()] } })).toBe('cancelled');
+  });
+});
+
 describe('matching a ticket to its passenger', () => {
   const jane = { id: '1', firstName: 'JANE' };
   const john = { id: '2', firstName: 'JOHN' };

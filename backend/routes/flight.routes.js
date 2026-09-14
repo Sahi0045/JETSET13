@@ -2754,6 +2754,11 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     pricePerNight: booking.booking_details?.price_per_night || null,
     // Outcome fields - see the doc comment above.
     payment_status: booking.payment_status,
+    // Paid, and waiting in the durable queue for an Amadeus slot: nothing has
+    // been sent to the airline. Without it the confirmation page called this
+    // "Reservation Held - your seats are reserved". Only the fact of it: the
+    // stored order carries passport numbers and stays in the database.
+    queued: Boolean(booking.booking_details?.queued_order) && !booking.booking_details?.pnr,
     cancellation: booking.booking_details?.cancellation || null,
     tickets: booking.booking_details?.tickets || [],
     // The reason is what the e-ticket reads ("ticket_numbers_not_retrieved").
