@@ -5,8 +5,10 @@ import { Check, Printer, Download, Share2, ChevronDown, ChevronUp, CheckCircle, 
 import Navbar from "../Navbar";
 import Footer from "../Footer";
 import withPageElements from "../PageWrapper";
-import Price from "../../../Components/Price";
-import currencyService from "../../../Services/CurrencyService";
+// Every amount on this page is what the card is charged, in US dollars; the
+// visitor's own currency appears only as a labelled estimate, from live rates.
+import ChargeAmount from "../../../Components/ChargeAmount";
+import { CHARGE_CURRENCY, formatUsd } from "../../../utils/chargeDisplay";
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext";
 import { clearFlightReview, readFlightReview, saveFlightReview } from "../../../utils/flightReviewResume";
 import NoticeDialog from "../../../Components/NoticeDialog";
@@ -595,7 +597,11 @@ function FlightBookingConfirmation() {
         const searched = Number(flightPrice?.amount || flightPrice?.grandTotal || flightPrice?.total || offer?.price?.total || 0);
         setPricedFare({ total, base: Number(price.base) || null, currency: price.currency || null });
         if (Math.abs(total - searched) > 0.01) {
-          setFareNotice(`The airline's current fare for this flight is ${price.currency || ''} ${total.toFixed(2)}, not the ${searched.toFixed(2)} shown in search. The total below uses the current fare.`);
+          // Both figures in the one currency, the one the summary below uses.
+          // This printed "USD 501.75" against a bare search figure, beside a
+          // summary converted to rupees.
+          const fareCurrency = price.currency || CHARGE_CURRENCY;
+          setFareNotice(`The airline's current fare for this flight is ${fareCurrency} ${total.toFixed(2)}, not the ${fareCurrency} ${searched.toFixed(2)} it was when you searched. The total below uses the current fare.`);
         }
       } catch {
         // Not fatal: checkout verifies the fare with the airline regardless.
@@ -1039,6 +1045,10 @@ function FlightBookingConfirmation() {
       </div>
     );
   }
+
+  // What the card will be charged, in US dollars: the summary total, the Pay
+  // buttons and the mobile bar all show this one figure.
+  const amountDue = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
 
   return (
     <div className="booking-confirmation-page">
@@ -1796,7 +1806,7 @@ function FlightBookingConfirmation() {
                       For {calculatedFare.passengers} traveller{calculatedFare.passengers === 1 ? '' : 's'}
                     </div>
                   </div>
-                  <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><Price amount={calculatedFare.baseFare} /></div>
+                  <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><ChargeAmount amount={calculatedFare.baseFare} /></div>
                 </div>
 
                 {/* Taxes and Surcharges (real Amadeus airline taxes = grandTotal − base) */}
@@ -1807,7 +1817,7 @@ function FlightBookingConfirmation() {
                       <div className="text-sm font-bold text-gray-800">Taxes and Surcharges</div>
                       <div className="text-xs text-gray-400 mt-0.5">Airline taxes &amp; surcharges</div>
                     </div>
-                    <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><Price amount={calculatedFare.totalTax} /></div>
+                    <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><ChargeAmount amount={calculatedFare.totalTax} /></div>
                   </div>
                 )}
 
@@ -1819,7 +1829,7 @@ function FlightBookingConfirmation() {
                       <div className="text-sm font-bold text-gray-800">Service Fee</div>
                       <div className="text-xs text-gray-400 mt-0.5">Jetsetters convenience fee</div>
                     </div>
-                    <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><Price amount={calculatedFare.serviceFee} /></div>
+                    <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><ChargeAmount amount={calculatedFare.serviceFee} /></div>
                   </div>
                 )}
 
@@ -1831,7 +1841,7 @@ function FlightBookingConfirmation() {
                       <div className="text-sm font-bold text-gray-800">Discounts</div>
                       <div className="text-xs text-gray-400 mt-0.5">Coupon {appliedCoupon.code}</div>
                     </div>
-                    <div className="text-sm font-semibold text-emerald-600 whitespace-nowrap">- <Price amount={appliedCoupon.discountAmount} /></div>
+                    <div className="text-sm font-semibold text-emerald-600 whitespace-nowrap">- <ChargeAmount amount={appliedCoupon.discountAmount} /></div>
                   </div>
                 )}
 
@@ -1844,6 +1854,7 @@ function FlightBookingConfirmation() {
                     key={calculatedFare.totalAmount}
                     orderTotal={calculatedFare.totalAmount}
                     bookingType="flights"
+                    formatAmount={formatUsd}
                     onApply={(coupon) => { couponBase.current = calculatedFare.totalAmount; setAppliedCoupon(coupon); }}
                     onRemove={() => { couponBase.current = null; setAppliedCoupon(null); }}
                   />
@@ -1851,15 +1862,24 @@ function FlightBookingConfirmation() {
 
                 <div className="fare-row total">
                   <span className="label">Total Amount</span>
-                  <span className="value"><Price amount={appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount} /></span>
+                  <span className="value text-right">
+                    <ChargeAmount amount={amountDue} approximate approximateClassName="block text-xs font-medium text-gray-500" />
+                  </span>
                 </div>
+                {/* The merchant settles only in US dollars. This page used to
+                    show the whole summary in the visitor's currency and never
+                    say the card is charged in dollars, so the bank's bill
+                    matched nothing the customer had been shown. */}
+                <p className="mt-2 text-xs text-gray-500" data-charge-note="">
+                  Your card is charged in US dollars (USD). An amount shown in another currency is an estimate: your bank converts at its own rate and may add a fee.
+                </p>
 
                 <button
                   onClick={handleProceedToPayment}
                   disabled={checkingOut}
                   className="btn-primary mt-4"
                 >
-                  {checkingOut ? 'Checking the fare…' : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
+                  {checkingOut ? 'Checking the fare…' : `Pay ${formatUsd(amountDue)}`} <CheckCircle className="h-5 w-5" />
                 </button>
 
                 {/* Renders into a portal, so it covers both this button and the mobile bar's. */}
@@ -1898,9 +1918,9 @@ function FlightBookingConfirmation() {
       >
         <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-            <span style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Total</span>
+            <span style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Total, charged in USD</span>
             <span style={{ fontSize: 20, fontWeight: 800, color: '#055B75' }}>
-              <Price amount={appliedCoupon ? appliedCoupon.finalTotal : calculatedFare?.totalAmount} />
+              <ChargeAmount amount={amountDue} approximate approximateClassName="block text-[11px] font-medium text-gray-500" />
             </span>
           </div>
           <button

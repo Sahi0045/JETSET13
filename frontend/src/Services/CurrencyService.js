@@ -54,6 +54,9 @@ const DEFAULT_CURRENCY = 'USD';
 class CurrencyService {
   constructor() {
     this.currentCurrency = DEFAULT_CURRENCY;
+    // Whether EXCHANGE_RATES holds rates a live source published. Until one
+    // answers they are the hardcoded table above, which is only a guess.
+    this.ratesLive = false;
     this.detectUserCurrency();
     this.loadLiveRates();
   }
@@ -71,6 +74,10 @@ class CurrencyService {
       const cached = JSON.parse(localStorage.getItem('fxRates') || 'null');
       if (cached && cached.rates && (Date.now() - cached.at) < 6 * 60 * 60 * 1000) {
         Object.assign(EXCHANGE_RATES, cached.rates);
+        // Only a snapshot of live rates counts as live. The cache used to be
+        // written from the server's hardcoded fallback as well, and a snapshot
+        // from before that was fixed does not say which it holds.
+        this.ratesLive = cached.live === true;
       }
     } catch (e) { /* ignore bad cache */ }
 
@@ -78,12 +85,16 @@ class CurrencyService {
     try {
       const res = await fetch('/api/currency/rates');
       const data = await res.json();
-      if (data && data.rates && typeof data.rates.USD === 'number') {
+      // `success: false` is the server's own hardcoded table, sent when no FX
+      // source answered. It used to be applied and cached as if it were live,
+      // and the flight review page quoted a rupee total from it.
+      if (data && data.success === true && data.rates && typeof data.rates.USD === 'number') {
         Object.keys(data.rates).forEach((c) => {
           const v = data.rates[c];
           if (typeof v === 'number' && v > 0) EXCHANGE_RATES[c] = v;
         });
-        localStorage.setItem('fxRates', JSON.stringify({ rates: { ...EXCHANGE_RATES }, at: Date.now() }));
+        this.ratesLive = true;
+        localStorage.setItem('fxRates', JSON.stringify({ rates: { ...EXCHANGE_RATES }, at: Date.now(), live: true }));
         // Tell Price components to re-render with the fresh rates
         window.dispatchEvent(new CustomEvent('currencyChanged', { detail: { currency: this.getCurrency() } }));
       }
@@ -269,6 +280,15 @@ class CurrencyService {
    */
   getExchangeRate(currencyCode) {
     return EXCHANGE_RATES[currencyCode] || 1;
+  }
+
+  /**
+   * Whether conversions use rates a live source published, rather than the
+   * hardcoded table. An amount converted beside a charge is only worth showing
+   * when they do - see utils/chargeDisplay.js.
+   */
+  hasLiveRates() {
+    return this.ratesLive === true;
   }
 }
 
