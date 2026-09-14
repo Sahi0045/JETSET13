@@ -72,23 +72,32 @@ export function ticketState(bookingData) {
 }
 
 /**
- * The ticket belonging to one passenger.
+ * The ticket belonging to one passenger, or null when that cannot be known.
  *
- * Amadeus associates a ticket with a traveller by reference (`travelerId`, the
- * 1-based PNR passenger number). Position is the fallback, not the rule: with
- * several passengers the array order is not guaranteed to match the display
- * order, and handing someone else's ticket number to a traveller is its own
- * kind of wrong.
+ * The booking stores each ticket against the id of the traveller it belongs to
+ * (`travelerId`; the PNR's own passenger reference is kept as `pnrTravelerId`).
+ *
+ * An infant on a lap has no passenger number of its own on a PNR, so its ticket
+ * points at its adult. Tickets saved before that was read carry the adult's
+ * reference on both - and matching the first one found gave the adult either
+ * number, while the infant, matching nothing, was handed whichever ticket sat
+ * at its position: someone else's. So:
+ *
+ *  - two tickets naming one traveller could be either's, and neither is shown;
+ *  - a ticket is taken by position only when no ticket names anybody at all.
  */
 export function ticketForTraveler(tickets, traveler, index) {
   if (!Array.isArray(tickets) || tickets.length === 0) return null;
 
   const ref = traveler?.id ?? traveler?.travelerId ?? String(index + 1);
-  const byRef = tickets.find(
+  const theirs = tickets.filter(
     (t) => t?.travelerId != null && String(t.travelerId) === String(ref),
   );
+  if (theirs.length === 1) return theirs[0];
+  if (theirs.length > 1) return null;
 
-  return byRef ?? tickets[index] ?? null;
+  const anyNamed = tickets.some((t) => t?.travelerId != null || t?.pnrTravelerId != null);
+  return anyNamed ? null : (tickets[index] ?? null);
 }
 
 /**

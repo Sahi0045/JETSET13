@@ -87,7 +87,10 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
     const ticketLabel = (traveler, index) => {
         const match = ticketForTraveler(tickets, traveler, index);
         if (match?.number) return `Ticket #: ${match.number}`;
-        if (state === 'pending') return 'Ticket issued — number pending';
+        // Tickets exist, but none can be tied to this traveller for certain
+        // (see ticketForTraveler). Another traveller's number would be worse
+        // than none, and "not yet issued" would be untrue.
+        if (state === 'pending' || state === 'issued') return 'Ticket issued — number pending';
         return 'Ticket not yet issued';
     };
 

@@ -107,6 +107,53 @@ describe('matching a ticket to its passenger', () => {
   });
 });
 
+/**
+ * An infant on a lap has no passenger number of its own on the PNR, so its
+ * ticket points at its adult. Read as the adult's, the adult was given either
+ * number and the infant, matching nothing, got the ticket at its position.
+ */
+describe('a family with an infant on a lap', () => {
+  const mum = { id: '1', firstName: 'ANN', type: 'ADULT' };
+  const son = { id: '2', firstName: 'TOM', type: 'CHILD' };
+  const baby = { id: '3', firstName: 'MIA', type: 'HELD_INFANT' };
+
+  it("gives every traveller, the infant included, their own ticket", () => {
+    // As the booking stores them now: each ticket against its traveller's id,
+    // the PNR's own reference kept alongside. Deliberately out of order.
+    const tickets = [
+      ticket({ number: '057-3000000003', travelerId: '3', pnrTravelerId: '1-INF' }),
+      ticket({ number: '057-1000000001', travelerId: '1', pnrTravelerId: '1' }),
+      ticket({ number: '057-2000000002', travelerId: '2', pnrTravelerId: '2' }),
+    ];
+
+    expect(ticketForTraveler(tickets, mum, 0).number).toBe('057-1000000001');
+    expect(ticketForTraveler(tickets, son, 1).number).toBe('057-2000000002');
+    expect(ticketForTraveler(tickets, baby, 2).number).toBe('057-3000000003');
+  });
+
+  // Saved before infant tickets were told apart: both carry the adult's reference.
+  it('shows no number, rather than a guess, when two tickets name one traveller', () => {
+    const tickets = [
+      ticket({ number: '057-3000000003', travelerId: '1' }),
+      ticket({ number: '057-1000000001', travelerId: '1' }),
+      ticket({ number: '057-2000000002', travelerId: '2' }),
+    ];
+
+    expect(ticketForTraveler(tickets, mum, 0)).toBeNull();
+    expect(ticketForTraveler(tickets, son, 1).number).toBe('057-2000000002');
+    // Position 2 holds the second of the adult's two tickets. Not the infant's to take.
+    expect(ticketForTraveler(tickets, baby, 2)).toBeNull();
+  });
+
+  it('never hands out a ticket by position once any ticket names a traveller', () => {
+    const tickets = [
+      ticket({ number: '057-1000000001', travelerId: '1' }),
+      ticket({ number: '057-9000000009', travelerId: null, pnrTravelerId: '7' }),
+    ];
+    expect(ticketForTraveler(tickets, { id: '9' }, 1)).toBeNull();
+  });
+});
+
 describe('the issue date', () => {
   // The backend fixed this exact bug: new Date() made every ticket look issued
   // today, which is the question a void decision turns on.
