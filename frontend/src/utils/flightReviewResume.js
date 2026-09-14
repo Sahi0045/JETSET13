@@ -1,7 +1,8 @@
 /**
  * The flight a signed-out visitor was about to book, kept while they log in.
  *
- * Flights are booked from an account (guest checkout is switched off). The
+ * Flights are booked from an account unless an admin has switched guest
+ * booking on (admin panel > Feature Flags). The
  * review page's flight exists only in router state, and the trip through the
  * login page does not carry router state - Google and Apple sign-in leave the
  * site entirely - so a visitor sent to log in would come back to "No flight

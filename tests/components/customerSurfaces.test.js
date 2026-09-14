@@ -377,9 +377,11 @@ describe('search results show what the fare says', () => {
 });
 
 /**
- * Flights are booked from an account: guest checkout was switched off on
- * 2026-09-13. The review page's "LOGIN NOW" set a local flag and logged nobody
- * in, and a visitor sent to log in would have lost the flight they picked.
+ * Flights are booked from an account unless an admin switches guest booking on
+ * (tests/components/guestBookingSwitch.test.js); guest checkout was first
+ * switched off on 2026-09-13. The review page's "LOGIN NOW" set a local flag and
+ * logged nobody in, and a visitor sent to log in would have lost the flight
+ * they picked.
  */
 describe('flights are booked from an account', () => {
   const review = page('FlightBookingConfirmation.jsx');

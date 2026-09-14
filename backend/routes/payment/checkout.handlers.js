@@ -2,6 +2,7 @@ import axios from 'axios';
 import { supabase, ARC_PAY_CONFIG, ARC_SETTLEMENT_CURRENCY } from './arcpay.config.js';
 import { resolveBookingUserId } from '../../utils/bookingOwner.js';
 import { verifyFlightCharge } from '../../services/flightCheckout.service.js';
+import { isGuestFlightBookingEnabled, isUsableEmail } from '../../services/guestBooking.service.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -224,19 +225,28 @@ export async function handleHostedCheckout(req, res) {
         let chargeAmount = amount;
         let verifiedCharge = null;
         if (bookingType === 'flight') {
-            // Flights are booked from an account: guest checkout was switched
-            // off on 2026-09-13. A guest booking has no owner, so it never
-            // appears in My Trips, and the only way back to it was the email
-            // typed at checkout - which the page marks optional. Refused here,
-            // before the fare is priced or a payment session exists. To allow
-            // guests again, remove this and the review page's sign-in redirect.
+            // Flights are booked from an account unless an admin has switched
+            // guest booking on (admin panel > Feature Flags). A guest booking
+            // has no owner, so it never appears in My Trips: the only way back
+            // to it is the email it was made with, which the page used to mark
+            // optional. Both are checked here, before the fare is priced or a
+            // payment session exists. See services/guestBooking.service.js.
             const signedInUserId = resolveBookingUserId(req);
             if (!signedInUserId) {
-                return res.status(401).json({
-                    success: false,
-                    code: 'LOGIN_REQUIRED',
-                    error: 'Please log in to book a flight. Nothing has been charged.',
-                });
+                if (!(await isGuestFlightBookingEnabled(supabase))) {
+                    return res.status(401).json({
+                        success: false,
+                        code: 'LOGIN_REQUIRED',
+                        error: 'Please log in to book a flight. Nothing has been charged.',
+                    });
+                }
+                if (!isUsableEmail(customerEmail)) {
+                    return res.status(400).json({
+                        success: false,
+                        code: 'EMAIL_REQUIRED',
+                        error: 'Please enter an email address. Your ticket is sent there, and it is how you find this booking without an account. Nothing has been charged.',
+                    });
+                }
             }
             const verdict = await verifyFlightCharge({
                 client: supabase,

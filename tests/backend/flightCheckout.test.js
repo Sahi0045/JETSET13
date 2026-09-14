@@ -174,16 +174,55 @@ describe('hosted checkout for a flight', () => {
     expect(sent.order.amount).toBe('402.00');
   });
 
-  // Guest flight booking is switched off (2026-09-13): a booking with no
-  // account behind it never shows in My Trips.
-  it('refuses a signed-out customer before pricing the fare or opening a payment session', async () => {
-    const { res, verifyFlightCharge } = await run({ ok: true, charge: { total: 402 } }, { user: null });
+  // Guest flight booking is an admin switch (Feature Flags), off unless an
+  // admin turns it on: a booking with no account behind it never shows in My
+  // Trips, and the email it was made with is the only way back to it.
+  describe('a signed-out customer', () => {
+    const verified = { ok: true, charge: { total: 402 }, coupon: null, pricedFare: { total: 400, currency: 'USD' } };
+    const guest = { user: null, body: { customerEmail: 'guest@example.com' } };
 
-    expect(res.statusCode).toBe(401);
-    expect(res.body.code).toBe('LOGIN_REQUIRED');
-    expect(verifyFlightCharge).not.toHaveBeenCalled();
-    expect(axios.post).not.toHaveBeenCalled();
+    it('is refused while guest booking has never been switched on, before pricing or a payment session', async () => {
+      const { res, verifyFlightCharge } = await run(verified, guest);
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body.code).toBe('LOGIN_REQUIRED');
+      expect(verifyFlightCharge).not.toHaveBeenCalled();
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('is refused once an admin switches guest booking off', async () => {
+      rows.feature_flags = { enabled: false };
+      const { res, verifyFlightCharge } = await run(verified, guest);
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body.code).toBe('LOGIN_REQUIRED');
+      expect(verifyFlightCharge).not.toHaveBeenCalled();
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('books as a guest while guest booking is on, priced for no account', async () => {
+      rows.feature_flags = { enabled: true };
+      const { res, verifyFlightCharge } = await run(verified, guest);
+
+      expect(res.statusCode).toBe(200);
+      expect(verifyFlightCharge).toHaveBeenCalledWith(expect.objectContaining({ userId: null }));
+      const sent = axios.post.mock.calls.find(([, body]) => body?.apiOperation === 'INITIATE_CHECKOUT')?.[1];
+      expect(sent.order.amount).toBe('402.00');
+    });
+
+    it.each([[undefined], [''], ['not-an-email']])('must give an email to book as a guest (%j)', async (customerEmail) => {
+      rows.feature_flags = { enabled: true };
+      const { res, verifyFlightCharge } = await run(verified, { user: null, body: { customerEmail } });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.code).toBe('EMAIL_REQUIRED');
+      expect(verifyFlightCharge).not.toHaveBeenCalled();
+      expect(axios.post).not.toHaveBeenCalled();
+    });
   });
+
+  // No feature_flags row here: guest booking is off, and a signed-in customer
+  // is not affected by it.
 
   it('prices the fare for the signed-in customer', async () => {
     const { verifyFlightCharge } = await run({ ok: true, charge: { total: 402 }, coupon: null, pricedFare: { total: 400, currency: 'USD' } });

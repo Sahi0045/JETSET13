@@ -1,4 +1,10 @@
 import supabase from '../config/supabase.js';
+import { GUEST_FLIGHT_BOOKING_FLAG, isGuestFlightBookingEnabled } from '../services/guestBooking.service.js';
+
+// A flag is keyed by `flag_name`, the table's own column. These handlers used
+// to ask for `flag_key`, a column feature_flags does not have, so every read
+// answered 500 and every toggle failed: the Feature Flags page only ever showed
+// its built-in defaults, and a change "saved" there was never stored.
 
 // @desc    Get all feature flags
 // @route   GET /api/feature-flags
@@ -8,7 +14,7 @@ export const getAllFeatureFlags = async (req, res) => {
     const { data, error } = await supabase
       .from('feature_flags')
       .select('*')
-      .order('flag_key', { ascending: true });
+      .order('flag_name', { ascending: true });
 
     if (error) throw error;
 
@@ -41,7 +47,7 @@ export const getEnabledFeatureFlags = async (req, res) => {
     // Return as an object map for easier lookup
     const flagsMap = {};
     data?.forEach(flag => {
-      flagsMap[flag.flag_key] = flag.enabled;
+      flagsMap[flag.flag_name] = flag.enabled;
     });
 
     res.status(200).json({
@@ -58,42 +64,64 @@ export const getEnabledFeatureFlags = async (req, res) => {
   }
 };
 
+// @desc    Whether a flight can be booked without an account
+// @route   GET /api/feature-flags/guest-flight-booking
+// @access  Public - the review page asks before sending a signed-out visitor to log in
+//
+// The same reader checkout refuses a guest with, so the page and the server
+// cannot disagree about what "off" means: no row or an unreadable one is off.
+export const getGuestFlightBooking = async (req, res) => {
+  const enabled = await isGuestFlightBookingEnabled(supabase);
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(200).json({
+    success: true,
+    data: { flag: GUEST_FLIGHT_BOOKING_FLAG, enabled }
+  });
+};
+
 // @desc    Create or update a feature flag
 // @route   PUT /api/feature-flags/:key
 // @access  Admin
 export const upsertFeatureFlag = async (req, res) => {
   try {
     const { key } = req.params;
-    const { enabled, flag_name, description } = req.body;
+    const { enabled, description } = req.body || {};
 
-    // First try to update
-    const { data: existingFlag } = await supabase
+    // A flag is on or off. An update without `enabled` used to write nothing
+    // and still answer "disabled successfully".
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: '`enabled` must be true or false'
+      });
+    }
+
+    const { data: existingFlag, error: readError } = await supabase
       .from('feature_flags')
-      .select('*')
-      .eq('flag_key', key)
-      .single();
+      .select('id')
+      .eq('flag_name', key)
+      .maybeSingle();
+
+    if (readError) throw readError;
 
     let result;
     if (existingFlag) {
-      // Update existing flag
       result = await supabase
         .from('feature_flags')
-        .update({ 
+        .update({
           enabled,
-          ...(flag_name && { flag_name }),
-          ...(description && { description })
+          ...(description && { description }),
+          updated_at: new Date().toISOString()
         })
-        .eq('flag_key', key)
+        .eq('flag_name', key)
         .select()
         .single();
     } else {
-      // Create new flag
       result = await supabase
         .from('feature_flags')
         .insert({
-          flag_key: key,
-          flag_name: flag_name || key,
-          enabled: enabled !== undefined ? enabled : true,
+          flag_name: key,
+          enabled,
           description: description || ''
         })
         .select()
@@ -101,6 +129,8 @@ export const upsertFeatureFlag = async (req, res) => {
     }
 
     if (result.error) throw result.error;
+
+    console.log(`🚩 Feature flag ${key} set to ${enabled} by admin ${req.user?.id || 'unknown'}`);
 
     res.status(200).json({
       success: true,
@@ -127,7 +157,7 @@ export const deleteFeatureFlag = async (req, res) => {
     const { error } = await supabase
       .from('feature_flags')
       .delete()
-      .eq('flag_key', key);
+      .eq('flag_name', key);
 
     if (error) throw error;
 
