@@ -4,6 +4,7 @@ import { resolveBookingUserId } from '../../utils/bookingOwner.js';
 import { verifyFlightCharge } from '../../services/flightCheckout.service.js';
 import { isGuestFlightBookingEnabled, isUsableEmail } from '../../services/guestBooking.service.js';
 import { getCaller } from './agents.handlers.js';
+import { safeReturnUrl } from '../../utils/returnUrl.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -170,8 +171,9 @@ export async function handleInitiatePayment(req, res) {
         const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
         const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
-        const finalReturnUrl = return_url || `${frontendBaseUrl}/payment/callback?quote_id=${quote.id}&inquiry_id=${quote.inquiry_id}`;
-        const finalCancelUrl = cancel_url || `${frontendBaseUrl}/inquiry/${quote.inquiry_id}?payment=cancelled`;
+        // The caller's URLs only when they are the site's own (utils/returnUrl.js).
+        const finalReturnUrl = safeReturnUrl(return_url, `${frontendBaseUrl}/payment/callback?quote_id=${quote.id}&inquiry_id=${quote.inquiry_id}`);
+        const finalCancelUrl = safeReturnUrl(cancel_url, `${frontendBaseUrl}/inquiry/${quote.inquiry_id}?payment=cancelled`);
 
         const requestBody = {
             apiOperation: 'INITIATE_CHECKOUT',
@@ -379,9 +381,10 @@ export async function handleHostedCheckout(req, res) {
         const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
         const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
 
-        // Construct URLs
-        const finalReturnUrl = returnUrl || `${frontendBaseUrl}/payment/callback?orderId=${orderId}&bookingType=${bookingType}`;
-        const finalCancelUrl = cancelUrl || `${frontendBaseUrl}/${bookingType}-payment?cancelled=true`;
+        // Where ARC sends the payer afterwards: the caller's URL only when it is
+        // one of ours (utils/returnUrl.js), otherwise the site's default.
+        const finalReturnUrl = safeReturnUrl(returnUrl, `${frontendBaseUrl}/payment/callback?orderId=${orderId}&bookingType=${bookingType}`);
+        const finalCancelUrl = safeReturnUrl(cancelUrl, `${frontendBaseUrl}/${bookingType}-payment?cancelled=true`);
 
         const cleanBaseUrl = arcBaseUrl.replace(/\/$/, '');
         const sessionUrl = `${cleanBaseUrl}/merchant/${arcMerchantId}/session`;
