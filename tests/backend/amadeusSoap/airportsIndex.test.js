@@ -47,6 +47,18 @@ describe('resolution', () => {
     expect(resolveToIata(input)).toBe(expected);
   });
 
+  // Picking a suggestion fills the field with "City (CODE)". Matched as text,
+  // only the first word counted: "New Delhi (DEL)" searched New York, "Mumbai
+  // (BOM)" Navi Mumbai and "London (LHR)" every London airport.
+  it.each([
+    ['New Delhi (DEL)', 'DEL'],
+    ['Mumbai (BOM)', 'BOM'],
+    ['London (LHR)', 'LHR'],
+    ['  Heathrow Airport (lhr) ', 'LHR'],
+  ])('takes the code from the label %s', (input, expected) => {
+    expect(resolveToIata(input)).toBe(expected);
+  });
+
   it('returns null rather than guessing at an unknown place', () => {
     expect(resolveToIata('Nowhere At All')).toBeNull();
   });

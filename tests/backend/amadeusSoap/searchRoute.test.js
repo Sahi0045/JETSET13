@@ -26,6 +26,10 @@ const makeApp = async () => {
 
 const reply = (xml) => ({ status: 200, data: xml, headers: {} });
 
+// A date `n` days from now, in UTC. The route refuses departures that have
+// passed, so a fixed date here would turn every test into a 400 the day after it.
+const inDays = (n) => new Date(Date.now() + n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
 beforeEach(() => {
   vi.stubEnv('AMADEUS_WS_ENDPOINT', 'https://nodeD2.test.webservices.amadeus.com/1ASIWJETJEC');
   vi.stubEnv('AMADEUS_WS_WSAP', '1ASIWJETJEC');
@@ -51,7 +55,7 @@ describe('what a search result does not invent', () => {
 
     const res = await request(app)
       .post('/api/flights/search')
-      .send({ from: 'JFK', to: 'LHR', departDate: '2026-11-15', adults: 1 });
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(60), adults: 1 });
 
     expect(res.body.data.length).toBeGreaterThan(0);
     for (const card of res.body.data) {
@@ -79,7 +83,7 @@ describe('POST /api/flights/search', () => {
 
     const res = await request(app)
       .post('/api/flights/search')
-      .send({ from: 'JFK', to: 'LHR', departDate: '2026-11-15', adults: 1 });
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(60), adults: 1 });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -110,7 +114,7 @@ describe('POST /api/flights/search', () => {
     const app = await makeApp();
 
     const res = await request(app).post('/api/flights/search')
-      .send({ from: 'JFK', to: 'LHR', departDate: '2026-11-15', adults: 1 });
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(60), adults: 1 });
 
     expect(res.body.data[0].duration).toMatch(/^\d+h( \d+m)?$/);
     expect(res.body.data[0].duration).not.toMatch(/^PT/);
@@ -121,7 +125,7 @@ describe('POST /api/flights/search', () => {
     const app = await makeApp();
 
     const res = await request(app).post('/api/flights/search')
-      .send({ from: 'JFK', to: 'LHR', departDate: '2026-11-15', adults: 1 });
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(60), adults: 1 });
 
     const card = res.body.data[0];
     expect(card.airline).not.toBe(card.airlineCode);
@@ -133,7 +137,7 @@ describe('POST /api/flights/search', () => {
     const app = await makeApp();
 
     const res = await request(app).post('/api/flights/search')
-      .send({ from: 'JFK', to: 'LHR', departDate: '2026-11-15', adults: 1 });
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(60), adults: 1 });
 
     const offer = res.body.data[0].originalOffer;
     expect(offer.itineraries).toBeDefined();
@@ -147,7 +151,7 @@ describe('POST /api/flights/search', () => {
     const app = await makeApp();
 
     const res = await request(app).post('/api/flights/search')
-      .send({ from: 'JFK', to: 'LHR', departDate: '2026-11-15', returnDate: '2026-11-22', adults: 1 });
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(60), returnDate: inDays(67), adults: 1 });
 
     expect(res.status).toBe(200);
     expect(res.body.data[0].originalOffer.itineraries).toHaveLength(2);
@@ -160,7 +164,7 @@ describe('POST /api/flights/search', () => {
     const app = await makeApp();
 
     const res = await request(app).post('/api/flights/search')
-      .send({ from: 'JFK', to: 'SCK', departDate: '2026-11-15', adults: 1 });
+      .send({ from: 'JFK', to: 'SCK', departDate: inDays(60), adults: 1 });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -181,10 +185,99 @@ describe('POST /api/flights/search', () => {
     const app = await makeApp();
 
     const res = await request(app).post('/api/flights/search')
-      .send({ from: 'JFK', to: 'LHR', departDate: '2026-11-15', adults: 1 });
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(60), adults: 1 });
 
     expect(JSON.stringify(res.body)).not.toMatch(/mock/i);
     expect(res.body.meta.source).not.toMatch(/mock/i);
+  });
+});
+
+describe('what the search route refuses or resolves before calling Amadeus', () => {
+  // A departure already gone came back as "Flight search failed", which the
+  // results page showed as "No flights found".
+  it('refuses a departure date that has passed, with a message the customer can act on', async () => {
+    const app = await makeApp();
+    const res = await request(app).post('/api/flights/search')
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(-3), adults: 1 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/departure date has already passed/i);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  // The customer's today can still be yesterday in UTC.
+  it('allows yesterday in UTC', async () => {
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+    const res = await request(app).post('/api/flights/search')
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(-1), adults: 1 });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('refuses a return date before the departure date', async () => {
+    const app = await makeApp();
+    const res = await request(app).post('/api/flights/search')
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(30), returnDate: inDays(29), adults: 1 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/return date is before the departure date/i);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('allows a return on the day of departure', async () => {
+    axios.post.mockResolvedValue(reply(fixture('mptbs-roundtrip')));
+    const app = await makeApp();
+    const res = await request(app).post('/api/flights/search')
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(30), returnDate: inDays(30), adults: 1 });
+
+    expect(res.status).toBe(200);
+  });
+
+  // The modify-search form sent its display label, and the first word of
+  // "New Delhi (DEL)" resolved to New York.
+  it('searches the airport a picked suggestion names', async () => {
+    axios.post.mockResolvedValue(reply(fixture('mptbs-family-del-bom')));
+    const app = await makeApp();
+    const res = await request(app).post('/api/flights/search')
+      .send({ from: 'New Delhi (DEL)', to: 'Mumbai (BOM)', departDate: inDays(30), adults: 1 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.meta.searchParams).toMatchObject({ from: 'DEL', to: 'BOM' });
+    const sent = String(axios.post.mock.calls[0][1]);
+    expect(sent).toMatch(/>DEL</);
+    expect(sent).toMatch(/>BOM</);
+    expect(sent).not.toMatch(/>NYC</);
+  });
+});
+
+describe('what a search returns', () => {
+  it('shows every flight combination Amadeus priced, including the cheapest', async () => {
+    axios.post.mockResolvedValue(reply(fixture('mptbs-shared-price-combinations')));
+    const app = await makeApp();
+    const res = await request(app).post('/api/flights/search')
+      .send({ from: 'DEL', to: 'BOM', departDate: inDays(30), adults: 1 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(50);
+    expect(res.body.meta.droppedCount).toBe(0);
+    expect(new Set(res.body.data.map((card) => card.id)).size).toBe(50);
+    expect(res.body.data.map((card) => card.price.total)).toContain('76.00');
+  });
+
+  // The web app's "Fastest" sort needs a number; it parsed "2h 35m" as zero.
+  it('carries the duration in minutes alongside the "Xh Ym" text', async () => {
+    axios.post.mockResolvedValue(reply(fixture('mptbs-oneway-jfk-lhr')));
+    const app = await makeApp();
+    const res = await request(app).post('/api/flights/search')
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(60), adults: 1 });
+
+    for (const card of res.body.data) {
+      const [, hours, minutes] = card.duration.match(/^(\d+)h (\d+)m$/);
+      expect(card.durationMinutes).toBe(Number(hours) * 60 + Number(minutes));
+      expect(card.durationMinutes).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -195,7 +288,7 @@ describe('kill switch', () => {
     const app = await makeApp();
 
     const res = await request(app).post('/api/flights/search')
-      .send({ from: 'JFK', to: 'LHR', departDate: '2026-11-15', adults: 1 });
+      .send({ from: 'JFK', to: 'LHR', departDate: inDays(60), adults: 1 });
 
     expect(res.status).toBeGreaterThanOrEqual(500);
     expect(res.body.success).toBe(false);

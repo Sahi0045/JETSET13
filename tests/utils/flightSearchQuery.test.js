@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildSearchPayload,
   extractIata,
+  fieldCode,
   searchFromQuery,
+  searchKeyOf,
   searchToQuery,
 } from '../../frontend/src/Pages/Common/flights/searchQuery.js';
 
@@ -126,6 +129,55 @@ describe('round trip through the URL', () => {
       infants: 0,
       travelClass: 'BUSINESS',
     });
+  });
+});
+
+describe('buildSearchPayload', () => {
+  // The modify-search form sent its display label, and the server matched the
+  // first word of "New Delhi (DEL)" to New York.
+  it('sends the code of a picked suggestion, not its label', () => {
+    const payload = buildSearchPayload({
+      from: 'New Delhi (DEL)', to: 'Mumbai (BOM)', departDate: '2026-10-01', adults: 2, travelClass: 'BUSINESS',
+    });
+
+    expect(payload).toMatchObject({
+      from: 'DEL', to: 'BOM', departDate: '2026-10-01', adults: 2, children: 0, infants: 0, travelClass: 'BUSINESS',
+    });
+    expect(payload).not.toHaveProperty('returnDate');
+  });
+
+  // The form keeps the code of the last suggestion picked. Typing a new city
+  // over it must search the new city.
+  it('trusts what the field shows over a code left behind by an earlier pick', () => {
+    expect(buildSearchPayload({ from: 'Mumbai', fromCode: 'DEL', to: 'GOI', departDate: '2026-10-01' }).from).toBe('Mumbai');
+    expect(buildSearchPayload({ from: 'Goa (GOI)', fromCode: 'DEL', to: 'BOM', departDate: '2026-10-01' }).from).toBe('GOI');
+    expect(fieldCode('', 'DEL')).toBe('DEL');
+  });
+
+  it('carries a return date when there is one', () => {
+    expect(buildSearchPayload({ from: 'DEL', to: 'BOM', departDate: '2026-10-01', returnDate: '2026-10-05' }).returnDate)
+      .toBe('2026-10-05');
+  });
+});
+
+describe('searchKeyOf', () => {
+  it('is the same for the same search however it is spelled', () => {
+    expect(searchKeyOf({ from: 'New Delhi (DEL)', to: 'BOM', departDate: '2026-10-01' }))
+      .toBe(searchKeyOf({ from: 'DEL', to: 'BOM', departDate: '2026-10-01', adults: '1', travelClass: 'ECONOMY' }));
+  });
+
+  // Fares depend on who travels and in which cabin, so the date strip reloads
+  // on these as well as on the route and date.
+  it('changes with passengers and cabin', () => {
+    const base = { from: 'DEL', to: 'BOM', departDate: '2026-10-01' };
+
+    expect(searchKeyOf({ ...base, adults: 2 })).not.toBe(searchKeyOf(base));
+    expect(searchKeyOf({ ...base, infants: 1 })).not.toBe(searchKeyOf(base));
+    expect(searchKeyOf({ ...base, travelClass: 'BUSINESS' })).not.toBe(searchKeyOf(base));
+  });
+
+  it('is null when there is no search', () => {
+    expect(searchKeyOf(null)).toBeNull();
   });
 });
 

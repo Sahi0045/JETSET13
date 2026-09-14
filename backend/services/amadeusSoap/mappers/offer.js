@@ -21,15 +21,22 @@ const { carriers: AIRLINE_NAMES } = require('../../../data/airports/airlines.min
  */
 
 /**
- * Resolve one recommendation's flights.
+ * Resolve one flight combination's legs.
  *
- * `segmentFlightRef.referencingDetail` holds one entry per leg with
- * refQualifier 'S', in document order: the i-th one indexes
- * flightIndex[i].groupOfFlights[refNumber - 1]. Entries with other qualifiers
- * ('B' and friends) are not segment references and must be skipped, or a round
- * trip resolves to the wrong flights.
+ * A recommendation is one PRICE, and each of its `segmentFlightRef` entries is
+ * one combination of flights sold at that price. Its `referencingDetail` holds
+ * one entry per leg with refQualifier 'S', in document order: the i-th one
+ * indexes flightIndex[i].groupOfFlights[refNumber - 1]. Entries with other
+ * qualifiers ('B' and friends) are not segment references and must be skipped,
+ * or a round trip resolves to the wrong flights.
+ *
+ * This used to read `segmentFlightRef.referencingDetail` off the
+ * recommendation. When a price covers several combinations - most of a real
+ * reply - `segmentFlightRef` is a list, the path read undefined, and the whole
+ * recommendation vanished. Certification search 01 returned 50 combinations and
+ * the site showed 8 of them, without its cheapest fare.
  */
-const resolveLegs = (recommendation, flightIndexes) => arr(at(recommendation, 'segmentFlightRef.referencingDetail'))
+const resolveLegs = (flightRef, flightIndexes) => arr(flightRef?.referencingDetail)
   .filter((d) => txt(d.refQualifier) === 'S')
   .map((d, legIndex) => {
     const groups = arr(at(flightIndexes[legIndex], 'groupOfFlights'));
@@ -37,6 +44,13 @@ const resolveLegs = (recommendation, flightIndexes) => arr(at(recommendation, 's
     return { legIndex, group };
   })
   .filter((l) => l.group);
+
+/**
+ * The combination's baggage reference: refQualifier 'B' numbers the
+ * serviceCoverageInfoGrp that holds its free bag allowance.
+ */
+const baggageRefOf = (flightRef) => txt(arr(flightRef?.referencingDetail)
+  .find((d) => txt(d.refQualifier) === 'B')?.refNumber);
 
 /** Elapsed flight time for a leg, when Amadeus supplies it (unitQualifier EFT). */
 const legElapsedMinutes = (group) => {
@@ -139,9 +153,28 @@ const readPricingMessages = (paxFareProduct) => {
 
   return {
     lastTicketingDate,
-    refundable: penalty ? !/NON-?REFUNDABLE/i.test(penalty) : null,
+    refundable: readRefundable(penalty),
     messages,
   };
+};
+
+/**
+ * What the penalty text says about refunds: true, false, or null when it does
+ * not say.
+ *
+ * Anything that failed to match /NON-?REFUNDABLE/ used to read as refundable,
+ * so "PENALTY APPLIES", "SUBJ TO CANCELLATION/CHANGE PENALTY" and even
+ * "TICKETS ARE NON REFUNDABLE AFTER DEPARTURE" - the space defeated the pattern
+ * - all put a green Refundable badge on the card. A penalty is not a refund, so
+ * only explicit refund wording counts, and any refusal wins over it.
+ */
+const readRefundable = (penalty) => {
+  if (!penalty) return null;
+  if (/NON[\s-]?REFUNDABLE|NOT\s+REFUNDABLE|\bNO\s+REFUNDS?\b|\bREFUNDS?\s+NOT\s+(ALLOWED|PERMITTED)/i.test(penalty)) {
+    return false;
+  }
+  if (/\bREFUNDABLE\b|\bREFUNDS?\s+(ALLOWED|PERMITTED)\b/i.test(penalty)) return true;
+  return null;
 };
 
 /**
@@ -213,13 +246,25 @@ const buildDictionaries = (reply, offers = []) => {
 };
 
 /**
- * Map one recommendation to a REST-shaped flight offer.
+ * Map one recommendation to REST-shaped flight offers: one offer per flight
+ * combination, all sharing the recommendation's price and fares.
+ *
+ * Offer ids are `<recommendation>-<combination>`, so they stay unique once one
+ * price yields several offers. Nothing downstream reads them as recommendation
+ * numbers: pricing and the booking chain work from `_ama.segments`, which each
+ * combination carries for itself, and `_ama.recommendationId` still names the
+ * recommendation.
+ *
  * @param {object} ctx { reply, flightIndexes, currency, config, searchSignature }
  */
-const mapRecommendation = (recommendation, ctx) => {
+const mapRecommendation = (recommendation, ctx) => arr(recommendation.segmentFlightRef)
+  .map((flightRef, index) => mapCombination(recommendation, flightRef, index + 1, ctx))
+  .filter(Boolean);
+
+const mapCombination = (recommendation, flightRef, combination, ctx) => {
   const { reply, flightIndexes, currency, config, searchSignature } = ctx;
   const itemNumber = atTxt(recommendation, 'itemNumber.itemNumberId.number');
-  const legs = resolveLegs(recommendation, flightIndexes);
+  const legs = resolveLegs(flightRef, flightIndexes);
   if (legs.length === 0) return null;
 
   const paxProducts = arr(recommendation.paxFareProduct);
@@ -244,7 +289,10 @@ const mapRecommendation = (recommendation, ctx) => {
 
   const fareByLeg = readFareDetails(first);
   const pricing = readPricingMessages(first);
-  const baggage = readBaggage(reply, itemNumber);
+  // Joined through the combination's own 'B' reference. The recommendation
+  // number was used instead, and the two differ for most combinations, so most
+  // offers came back with no allowance and some with another fare's.
+  const baggage = readBaggage(reply, baggageRefOf(flightRef) || itemNumber);
 
   const amaSegments = [];
   let segmentCounter = 0;
@@ -343,7 +391,7 @@ const mapRecommendation = (recommendation, ctx) => {
 
   return {
     type: 'flight-offer',
-    id: itemNumber,
+    id: `${itemNumber}-${combination}`,
     // The /order route gates on `source` being present alongside itineraries
     // and travelerPricings (flight.routes.js:1051).
     source: 'GDS',
@@ -368,6 +416,7 @@ const mapRecommendation = (recommendation, ctx) => {
       officeId: config.officeId,
       currency,
       recommendationId: itemNumber,
+      combination,
       searchedAt: new Date().toISOString(),
       searchSignature,
       refundable: pricing.refundable,
@@ -386,8 +435,7 @@ export const mapMasterPricerReply = (reply, ctx) => {
   const currency = atTxt(reply, 'conversionRate.conversionRateDetail.currency') || ctx.config.currency;
 
   const offers = arr(reply.recommendation)
-    .map((rec) => mapRecommendation(rec, { ...ctx, reply, flightIndexes, currency }))
-    .filter(Boolean);
+    .flatMap((rec) => mapRecommendation(rec, { ...ctx, reply, flightIndexes, currency }));
 
   return { offers, dictionaries: buildDictionaries(reply, offers), currency };
 };

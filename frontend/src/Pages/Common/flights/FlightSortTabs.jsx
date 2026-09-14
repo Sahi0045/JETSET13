@@ -1,14 +1,11 @@
 import React, { useMemo } from 'react';
 import { ArrowUpDown, ChevronDown, ThumbsUp, TrendingDown, Plane } from 'lucide-react';
 import Price from '../../../Components/Price';
-import { computeBounds, recommendScore, priceOf } from './flightSort';
+import { computeBounds, formatMinutes, legMinutes, maxStops, recommendScore, priceOf } from './flightSort';
 
-const fmtDuration = (durationStr) => {
-  if (!durationStr) return '';
-  const h = durationStr.match(/(\d+)H/);
-  const m = durationStr.match(/(\d+)M/);
-  return `${h ? parseInt(h[1], 10) : 0}h ${String(m ? parseInt(m[1], 10) : 0).padStart(2, '0')}m`;
-};
+// The tabs' durations come from flightSort, which reads both "PT2H35M" and the
+// search card's "2h 35m". A parser here that knew only the first printed
+// "0h 00m" under every tab.
 
 const OTHER_SORTS = [
   { value: 'duration', label: 'Fastest' },
@@ -24,7 +21,7 @@ function FlightSortTabs({ flights = [], sortOrder, onSortChange }) {
     let bestScore = Infinity;
     flights.forEach((f) => {
       if (!cheapest || priceOf(f) < priceOf(cheapest)) cheapest = f;
-      if (f.stops === 0) {
+      if (maxStops(f) === 0) {
         nonstopCount += 1;
         if (!nonstop || priceOf(f) < priceOf(nonstop)) nonstop = f;
       }
@@ -37,9 +34,9 @@ function FlightSortTabs({ flights = [], sortOrder, onSortChange }) {
   const isOtherActive = OTHER_SORTS.some(o => o.value === sortOrder);
 
   const tabs = [
-    { key: 'price', label: 'CHEAPEST', Icon: TrendingDown, flight: cheapest, sub: cheapest ? fmtDuration(cheapest.duration) : '' },
+    { key: 'price', label: 'CHEAPEST', Icon: TrendingDown, flight: cheapest, sub: cheapest ? formatMinutes(legMinutes(cheapest)) : '' },
     { key: 'nonstop_first', label: 'NON STOP FIRST', Icon: Plane, flight: nonstop, sub: nonstopCount > 0 ? `${nonstopCount} available` : 'None' },
-    { key: 'recommended', label: 'YOU MAY PREFER', Icon: ThumbsUp, flight: recommended, sub: recommended ? fmtDuration(recommended.duration) : '' },
+    { key: 'recommended', label: 'YOU MAY PREFER', Icon: ThumbsUp, flight: recommended, sub: recommended ? formatMinutes(legMinutes(recommended)) : '' },
   ];
 
   const otherSelect = (extraClass = '') => (

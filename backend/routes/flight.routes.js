@@ -16,6 +16,34 @@ import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
 import { crossesBorder } from '../utils/itinerary.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Why a search's dates cannot be searched, or null when they can.
+ *
+ * A departure already gone, or a return before the outbound, went to Amadeus
+ * and came back to the customer as "Flight search failed" - or, on the results
+ * page, as "No flights found", which reads as if the route had no flights.
+ *
+ * "Gone" allows a day of slack: the customer's today can still be yesterday in
+ * UTC, so only dates before yesterday UTC are refused. Dates this cannot read
+ * are left to the provider rather than refused on a guess about their format.
+ */
+const searchDateProblem = ({ departDate, returnDate }, now = Date.now()) => {
+  const isoDate = (value) => (/^\d{4}-\d{2}-\d{2}$/.test(String(value ?? '').trim()) ? String(value).trim() : null);
+  const depart = isoDate(departDate);
+  const back = isoDate(returnDate);
+  const yesterday = new Date(now - DAY_MS).toISOString().slice(0, 10);
+
+  if (depart && depart < yesterday) {
+    return { field: 'departDate', message: 'The departure date has already passed. Please choose today or a later date.' };
+  }
+  if (depart && back && back < depart) {
+    return { field: 'returnDate', message: 'The return date is before the departure date. Please choose a return on or after the day you leave.' };
+  }
+  return null;
+};
+
 // Only the fields the handler genuinely requires; passthrough keeps the rest.
 const flightSearchSchema = z
   .object({
@@ -23,7 +51,11 @@ const flightSearchSchema = z
     to: z.string().min(1, 'to is required'),
     departDate: z.string().min(1, 'departDate is required'),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((body, ctx) => {
+    const problem = searchDateProblem(body);
+    if (problem) ctx.addIssue({ code: 'custom', path: [problem.field], message: problem.message });
+  });
 
 const router = express.Router();
 
@@ -879,12 +911,14 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
 
       // Calculate total duration
       let totalDuration = 'Unknown';
+      let durationMinutes = null;
       if (firstItinerary?.duration) {
         const durationMatch = firstItinerary.duration.match(/PT(\d+H)?(\d+M)?/);
         if (durationMatch) {
           const hours = durationMatch[1] ? parseInt(durationMatch[1]) : 0;
           const minutes = durationMatch[2] ? parseInt(durationMatch[2]) : 0;
           totalDuration = `${hours}h ${minutes}m`;
+          durationMinutes = hours * 60 + minutes;
         }
       }
 
@@ -981,6 +1015,10 @@ const transformAmadeusFlightData = (flights, dictionaries = {}) => {
         flightNumber: `${carrierCode}-${firstSegment.number}`,
         price: price,
         duration: totalDuration,
+        // The same duration as a number, for sorting. The web app's "Fastest"
+        // sort parsed `duration` expecting "PT2H35M", read "2h 35m" as zero
+        // for every flight, and sorted nothing.
+        durationMinutes,
         departure: departure,
         arrival: arrival,
         stops: stops,

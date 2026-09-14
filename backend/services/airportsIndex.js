@@ -121,6 +121,13 @@ export const resolveToIata = (value) => {
   const raw = String(value ?? '').trim();
   if (/^[A-Za-z]{3}$/.test(raw)) return raw.toUpperCase();
 
+  // "New Delhi (DEL)" is what picking a suggestion puts in the field, and the
+  // code in brackets is the answer. Searched as text, only its first word
+  // counted, so "New Delhi (DEL)" became NYC, "Mumbai (BOM)" NMI and
+  // "London (LHR)" the whole London metro - a search for another city.
+  const labelled = raw.match(/\(([A-Za-z]{3})\)$/);
+  if (labelled) return labelled[1].toUpperCase();
+
   const { data } = searchLocations(raw, 'CITY,AIRPORT', { limit: 1 });
   return data[0]?.code ?? null;
 };
