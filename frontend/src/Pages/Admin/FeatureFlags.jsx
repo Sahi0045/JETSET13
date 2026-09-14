@@ -3,12 +3,21 @@ import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 import { adminHeaders, getStoredToken } from '../../utils/adminAuth';
 
+// Whether a flight can be booked without an account. Checkout reads it on every
+// guest checkout (backend/services/guestBooking.service.js), and no row is off.
+const GUEST_FLAG = 'guest_flight_booking';
+const GUEST_FLAG_DESCRIPTION = 'Allow flights to be booked and paid for without an account';
+
 const FeatureFlags = () => {
   const [flags, setFlags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(null);
   const [updateSuccess, setUpdateSuccess] = useState(null);
   const [updateError, setUpdateError] = useState(null);
+  // `enabled` is null while unknown: never offer to flip a switch that was not read.
+  const [guestBooking, setGuestBooking] = useState({ enabled: null, updatedAt: null });
+  const [guestSaving, setGuestSaving] = useState(false);
+  const [guestError, setGuestError] = useState(null);
 
   // Enhanced inquiry types with more detailed information
   const inquiryTypes = [
@@ -84,34 +93,29 @@ const FeatureFlags = () => {
 
       const data = await response.json();
 
-      // Initialize flags with defaults if they don't exist
-      const flagsMap = {};
+      // Stored flags are keyed by `flag_name`, the table's own column.
+      const stored = {};
       data.data?.forEach(flag => {
-        flagsMap[flag.flag_key] = flag;
+        stored[flag.flag_name] = flag;
       });
 
-      // Ensure all inquiry types have a flag entry (default enabled)
-      inquiryTypes.forEach(type => {
-        if (!flagsMap[type.key]) {
-          flagsMap[type.key] = {
-            flag_key: type.key,
-            flag_name: type.label,
-            enabled: true,
-            description: type.description,
-            ...type
-          };
-        } else {
-          // Merge with enhanced data
-          flagsMap[type.key] = {
-            ...flagsMap[type.key],
-            ...type
-          };
-        }
-      });
+      // No row means off: the same rule checkout refuses a guest by.
+      const guest = stored[GUEST_FLAG];
+      setGuestBooking({ enabled: guest?.enabled === true, updatedAt: guest?.updated_at || null });
 
-      setFlags(Object.values(flagsMap));
+      // One card per inquiry type, with its stored state or enabled by default.
+      // Other stored flags - the guest switch among them - are not inquiry types.
+      setFlags(inquiryTypes.map(type => ({
+        flag_key: type.key,
+        flag_name: type.label,
+        enabled: stored[type.key] ? stored[type.key].enabled : true,
+        description: type.description,
+        ...type
+      })));
     } catch (err) {
       console.error('Error fetching feature flags:', err);
+      // Unknown, not "off": the switch's button stays disabled until it is read.
+      setGuestBooking({ enabled: null, updatedAt: null });
       setUpdateError('Failed to load feature flags. Using defaults.');
 
       // Initialize with defaults on error
@@ -180,6 +184,39 @@ const FeatureFlags = () => {
     }
   };
 
+  // Unlike the inquiry toggles, this never shows a position the server did not
+  // store: it decides who can pay, and a page claiming "off" while guests still
+  // check out would be worse than an error.
+  const toggleGuestBooking = async () => {
+    if (guestBooking.enabled === null || guestSaving) return;
+    const next = !guestBooking.enabled;
+    setGuestSaving(true);
+    setGuestError(null);
+    setUpdateSuccess(null);
+    try {
+      const response = await fetch(`/api/feature-flags/${GUEST_FLAG}`, {
+        method: 'PUT',
+        headers: adminHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ enabled: next, description: GUEST_FLAG_DESCRIPTION })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body.success) {
+        throw new Error(body.message || `HTTP ${response.status}`);
+      }
+      setGuestBooking({ enabled: body.data?.enabled === true, updatedAt: body.data?.updated_at || null });
+      setUpdateSuccess(body.data?.enabled
+        ? 'Guest flight booking is on. Visitors can book a flight without an account.'
+        : 'Guest flight booking is off. Visitors must log in to book a flight.');
+      setTimeout(() => setUpdateSuccess(null), 5000);
+    } catch (err) {
+      console.error('Error switching guest flight booking:', err);
+      setGuestError('The switch was not changed. Please try again.');
+    } finally {
+      setGuestSaving(false);
+    }
+  };
+
   const getImpactColor = (impact) => {
     switch (impact) {
       case 'High': return 'impact-high';
@@ -228,6 +265,62 @@ const FeatureFlags = () => {
           <span>{updateError}</span>
         </div>
       )}
+
+      {/* Guest flight booking: who can pay for a flight, not an inquiry type */}
+      <div
+        className={`feature-flag-card ${guestBooking.enabled ? 'enabled' : 'disabled'}`}
+        style={{ marginBottom: 24 }}
+      >
+        <div className="card-header">
+          <div className="feature-icon">GB</div>
+          <div className="feature-status">
+            <span className={`status-indicator ${guestBooking.enabled ? 'active' : 'inactive'}`}>
+              {guestBooking.enabled === null ? 'Unknown' : guestBooking.enabled ? 'On' : 'Off'}
+            </span>
+          </div>
+        </div>
+
+        <div className="card-content">
+          <div className="feature-info">
+            <h4 className="feature-title">Guest flight booking</h4>
+            <p className="feature-description">
+              <strong>On:</strong> visitors can book and pay for a flight without an account. They must enter an
+              email: the ticket is sent there, and Manage Booking finds the booking with it. Guest bookings do not
+              appear in My Trips.
+            </p>
+            <p className="feature-description">
+              <strong>Off:</strong> visitors are asked to log in before they enter traveller details. Turning it off
+              stops new guest checkouts straight away; bookings already paid for are not affected, and guests can
+              still open and cancel them with their email.
+            </p>
+            {guestBooking.updatedAt && (
+              <p className="feature-description" style={{ fontSize: '0.8rem' }}>
+                Last changed {new Date(guestBooking.updatedAt).toLocaleString()}
+              </p>
+            )}
+            {guestBooking.enabled === null && (
+              <p className="feature-description" style={{ color: '#b91c1c' }}>
+                The switch could not be read. Refresh the page to try again.
+              </p>
+            )}
+            {guestError && (
+              <p className="feature-description" style={{ color: '#b91c1c' }}>{guestError}</p>
+            )}
+          </div>
+
+          <div className="feature-controls">
+            <div className="feature-actions">
+              <button
+                className={`action-btn ${guestBooking.enabled ? 'disable' : 'enable'}`}
+                onClick={toggleGuestBooking}
+                disabled={guestSaving || guestBooking.enabled === null}
+              >
+                {guestSaving ? 'Saving...' : guestBooking.enabled ? 'Turn off guest booking' : 'Turn on guest booking'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Feature Overview */}
       <div className="feature-overview">

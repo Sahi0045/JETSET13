@@ -14,7 +14,7 @@ import ArcPayService from "../../../Services/ArcPayService";
 import { useLocationContext } from '../../../Context/LocationContext';
 import { allAirports } from './airports';
 import PricingService from '../../../Services/PricingService';
-import { usePriceConfig } from '../../../hooks/queries';
+import { useGuestFlightBooking, usePriceConfig } from '../../../hooks/queries';
 import CouponInput from '../../../components/CouponInput';
 import FlightFareRules from './FlightFareRules';
 import { formatCheckedBag } from '../../../utils/baggage';
@@ -23,6 +23,7 @@ import apiConfig from '@/config/api';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
 import { computeFlightCharge, passengerAgeProblem, PASSENGER_TYPES } from '../../../../../shared/flightCharge';
+import { isUsableEmail } from '../../../../../shared/email';
 import "./booking-confirmation.css";
 
 // Passport / travel-document fields only matter on international routes. Map each
@@ -46,11 +47,16 @@ function FlightBookingConfirmation() {
   const [bookingDetails, setBookingDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  // Flights are booked from an account: guest checkout is switched off, and
-  // checkout refuses a request without a session. The flight lives in router
-  // state, which the trip through login does not carry, so it is kept for this
-  // tab and read back on return - see utils/flightReviewResume.js.
+  // Flights are booked from an account unless an admin has switched guest
+  // booking on (admin panel > Feature Flags); checkout refuses a signed-out
+  // request whenever it is off. The flight lives in router state, which the
+  // trip through login does not carry, so it is kept for this tab and read back
+  // on return - see utils/flightReviewResume.js.
   const { user, loading: authLoading } = useSupabaseAuth();
+  // Asked only for a signed-out visitor. Until it answers "on" - and whenever it
+  // cannot answer - they are sent to log in, exactly as before the switch.
+  const guestSwitch = useGuestFlightBooking({ enabled: !authLoading && !user });
+  const bookingAsGuest = !user && guestSwitch.isSuccess && guestSwitch.data === true;
   const [resumedReview] = useState(() => (routerLocation.state?.flightData ? null : readFlightReview()));
   const reviewState = routerLocation.state?.flightData ? routerLocation.state : resumedReview;
   const [editMode, setEditMode] = useState(true); // Start in edit mode for new bookings
@@ -167,9 +173,19 @@ function FlightBookingConfirmation() {
   const formatBaggage = formatCheckedBag;
 
 
-  // A signed-out visitor logs in before typing anyone's details, and comes back
-  // here with the flight they picked. `replace`, so Back from the login page
-  // returns to the search results rather than into this redirect.
+  // To the login page and back here, with the flight they picked kept.
+  const sendToLogin = ({ replace = false } = {}) => {
+    saveFlightReview(reviewState);
+    navigate('/login', {
+      replace,
+      state: { returnUrl: `${routerLocation.pathname}${routerLocation.search}` },
+    });
+  };
+
+  // A signed-out visitor logs in before typing anyone's details - unless guest
+  // booking is on - and comes back here with the flight they picked. `replace`,
+  // so Back from the login page returns to the search results rather than into
+  // this redirect.
   useEffect(() => {
     if (authLoading) return;
     if (user) {
@@ -177,12 +193,11 @@ function FlightBookingConfirmation() {
       if (routerLocation.state?.flightData) clearFlightReview();
       return;
     }
-    saveFlightReview(reviewState);
-    navigate('/login', {
-      replace: true,
-      state: { returnUrl: `${routerLocation.pathname}${routerLocation.search}` },
-    });
-  }, [authLoading, user]);
+    // Wait for the switch; only a clear "on" keeps a guest on this page.
+    if (guestSwitch.isPending) return;
+    if (bookingAsGuest) return;
+    sendToLogin({ replace: true });
+  }, [authLoading, user, guestSwitch.isPending, bookingAsGuest]);
 
   // A mock-booking fallback used to live here (a bundled fixture, now deleted). Any
   // load without router state - a refresh, back-navigation, a bookmark, a
@@ -642,6 +657,12 @@ function FlightBookingConfirmation() {
       }
       if (!p.gender) add('Select a gender.');
       if (index === 0 && !p.mobile) add('Enter a mobile number for booking updates.');
+      // A guest's ticket goes to this address, and it is their only way back to
+      // the booking - there is no account for it to appear under. Checkout
+      // refuses a guest without one; the same check, before anything is sent.
+      if (index === 0 && bookingAsGuest && !isUsableEmail(bookingDetails?.contact?.email || p.email)) {
+        add('Enter an email address. Your ticket is sent there, and it is how you find this booking without an account.');
+      }
       // A passport was optional on international routes, and an international
       // ticket without one cannot be issued.
       if (international) {
@@ -775,11 +796,22 @@ function FlightBookingConfirmation() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
-      // Checkout found no session although this page has a signed-in user (a
-      // signed-out one is sent to log in on arrival). Sending them to /login
-      // would bounce straight back here, so say what to do instead; the
-      // details they typed stay on the page.
       if (refusal.code === 'LOGIN_REQUIRED') {
+        // A guest: guest booking was switched off while this page was open.
+        if (!user) {
+          setNotice({
+            tone: 'attention',
+            title: 'Please log in to book',
+            message: 'Booking without an account is not available right now. Log in or create an account to continue - the flight you picked is kept.',
+            reassure: true,
+            actionLabel: 'Log in',
+            onAction: () => sendToLogin(),
+          });
+          return;
+        }
+        // Checkout found no session although this page has a signed-in user.
+        // Sending them to /login would bounce straight back here, so say what
+        // to do instead; the details they typed stay on the page.
         setNotice({
           tone: 'error',
           title: 'Please sign in again',
@@ -810,8 +842,9 @@ function FlightBookingConfirmation() {
 
 
 
-  // Nothing to show a signed-out visitor: the effect above is sending them to log in.
-  if (loading || authLoading || !user) {
+  // Nothing to show a signed-out visitor until the switch lets them book as a
+  // guest; otherwise the effect above is sending them to log in.
+  if (loading || authLoading || (!user && !bookingAsGuest)) {
     return (
       <div className="booking-confirmation-page">
         <Navbar forceScrolled={true} />
@@ -1134,6 +1167,24 @@ function FlightBookingConfirmation() {
               </div>
 
               <div className="booking-card-body">
+                {bookingAsGuest && (
+                  <div className="bg-[#f0f9ff] border border-[#bae6fd] p-4 mb-6 rounded-xl flex flex-wrap justify-between items-center gap-3">
+                    <div className="flex items-start text-sm text-[#0369a1]">
+                      <UserCircle className="w-5 h-5 mr-3 flex-shrink-0" />
+                      <span>
+                        You are booking as a guest. Your ticket is sent to the email you enter for the first traveller,
+                        and Manage Booking finds this booking with that email. It will not appear in My Trips.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => sendToLogin()}
+                      className="text-sm font-semibold text-[#055B75] underline whitespace-nowrap"
+                    >
+                      Log in instead
+                    </button>
+                  </div>
+                )}
 
                 {passengerData.map((passenger, index) => {
                   const isExpanded = expandedPassengerId === null ? index === 0 : expandedPassengerId === passenger.id;
@@ -1241,7 +1292,10 @@ function FlightBookingConfirmation() {
                         </div>
                       </div>
                       <div className="form-group">
-                        <label>Email (Optional)</label>
+                        {/* A guest's lead traveller email is where the ticket goes, and how they find the booking again. */}
+                        {index === 0 && bookingAsGuest
+                          ? <label>Email <span className="required">*</span></label>
+                          : <label>Email (Optional)</label>}
                         <input
                           type="email"
                           className="form-input"
@@ -1249,6 +1303,7 @@ function FlightBookingConfirmation() {
                           value={passenger.email}
                           onChange={(e) => handlePassengerChange(passenger.id, 'email', e.target.value)}
                           readOnly={!editMode}
+                          required={index === 0 && bookingAsGuest}
                         />
                       </div>
                       {/* Passport / Travel Document Fields — required on international itineraries */}

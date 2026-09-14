@@ -143,6 +143,12 @@ export const endpoints = {
   // Geo endpoints
   geo: {
     location: createEndpoint('/geo/location')
+  },
+
+  // Admin-controlled switches
+  featureFlags: {
+    // Whether a flight can be booked without an account.
+    guestFlightBooking: createEndpoint('/feature-flags/guest-flight-booking')
   }
 };
 

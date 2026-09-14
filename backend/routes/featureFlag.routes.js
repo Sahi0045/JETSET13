@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getAllFeatureFlags,
   getEnabledFeatureFlags,
+  getGuestFlightBooking,
   upsertFeatureFlag,
   deleteFeatureFlag
 } from '../controllers/featureFlag.controller.js';
@@ -11,6 +12,7 @@ const router = express.Router();
 
 // Public routes
 router.get('/enabled', getEnabledFeatureFlags);
+router.get('/guest-flight-booking', getGuestFlightBooking);
 router.get('/', getAllFeatureFlags);
 
 // Admin only routes
