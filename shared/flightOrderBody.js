@@ -13,6 +13,8 @@
  * caller decides what to do about it.
  */
 
+import { needsDateOfBirth } from './travellerDetails.js';
+
 export const TRAVELLER_TYPES = ['ADULT', 'CHILD', 'HELD_INFANT', 'SEATED_INFANT'];
 
 /**
@@ -48,8 +50,13 @@ export function buildFlightOrderBody(orderData, { userId = null } = {}) {
     documentType: p.documentType || (p.passportNumber ? 'PASSPORT' : ''),
   }));
 
+  // A domestic adult needs no date of birth (shared/travellerDetails.js). The
+  // review page records whether the trip crosses a border; a booking saved
+  // without that record needs one for everybody, as before.
+  const international = orderData?.bookingDetails?.isInternational;
   const incomplete = passengerDetails.length === 0 || passengerDetails.some(
-    (p) => !p.firstName || !p.lastName || !p.dateOfBirth || !p.gender
+    (p) => !p.firstName || !p.lastName || !p.gender
+      || (!p.dateOfBirth && needsDateOfBirth({ type: p.ptc, international }))
   );
   if (incomplete) return { body: null, passengerDetails, problem: 'PASSENGERS_INCOMPLETE' };
 

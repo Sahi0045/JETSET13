@@ -29,8 +29,10 @@ describe('the review page follows the guest booking switch', () => {
   });
 
   it("requires a guest's email before payment, with the check checkout uses", () => {
-    expect(review).toMatch(/import \{ isUsableEmail \} from '(\.\.\/){5}shared\/email'/);
-    expect(review).toMatch(/bookingAsGuest && !isUsableEmail\(/);
+    const checks = read('frontend/src/utils/travellerChecks.js');
+    expect(checks).toMatch(/import \{ isUsableEmail \} from '(\.\.\/){3}shared\/email'/);
+    expect(checks).toMatch(/bookingAsGuest && !isUsableEmail\(/);
+    expect(review).toMatch(/travellerProblems\(traveller, \{[\s\S]*?bookingAsGuest,/);
   });
 
   it('sends a guest to log in when the switch went off while the page was open', () => {

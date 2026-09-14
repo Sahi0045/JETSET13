@@ -227,7 +227,9 @@ describe('the review page charges what checkout verifies', () => {
   it('locks travellers to the fare and checks their ages', () => {
     expect(src).not.toMatch(/Add Another Traveller/);
     expect(src).not.toMatch(/type: "Adult"/);
-    expect(src).toMatch(/passengerAgeProblem\(/);
+    // The checks live in one list shared by payment and the page's progress.
+    expect(src).toMatch(/travellerProblems\(/);
+    expect(readFileSync(path.resolve(process.cwd(), 'frontend/src/utils/travellerChecks.js'), 'utf8')).toMatch(/passengerAgeProblem\(/);
   });
 
   it('checks the fare with the airline and handles a changed price', () => {

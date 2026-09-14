@@ -102,7 +102,9 @@ export const endpoints = {
   // User endpoints
   user: {
     profile: createEndpoint('/users/profile'),
-    update: createEndpoint('/users/update')
+    update: createEndpoint('/users/update'),
+    // The signed-in customer's saved travellers.
+    travellers: createEndpoint('/users/me/travellers')
   },
 
   // Flight endpoints

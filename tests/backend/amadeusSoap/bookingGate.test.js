@@ -777,6 +777,47 @@ describe('traveller details are checked before anything is sold', () => {
     expect(axios.post).not.toHaveBeenCalled();
   });
 
+  // A domestic adult needs no date of birth - the PNR does not carry one - and
+  // "domestic" is decided from the offer's own airports.
+  const domesticOffer = {
+    ...bookableOffer,
+    itineraries: [{
+      ...bookableOffer.itineraries[0],
+      segments: [{
+        ...bookableOffer.itineraries[0].segments[0],
+        departure: { iataCode: 'DEL', at: '2026-11-15T07:00:00' },
+        arrival: { iataCode: 'BOM', at: '2026-11-15T09:10:00' },
+      }],
+    }],
+  };
+
+  it('lets a domestic adult through without a date of birth', async () => {
+    const app = await makeApp(paidRow());
+
+    const res = await request(app).post('/api/flights/order').send({
+      ...orderBody,
+      flightOffer: domesticOffer,
+      travelers: [{ id: '1', firstName: 'Jane', lastName: 'Doe', gender: 'FEMALE' }],
+    });
+
+    expect(res.body.code).not.toBe('PASSENGERS_INCOMPLETE');
+  });
+
+  it('still needs a date of birth for a child on a domestic trip', async () => {
+    const app = await makeApp(paidRow());
+    const childFare = { ...domesticOffer, travelerPricings: [{ ...domesticOffer.travelerPricings[0], travelerType: 'CHILD' }] };
+
+    const res = await request(app).post('/api/flights/order').send({
+      ...orderBody,
+      flightOffer: childFare,
+      travelers: [{ id: '1', firstName: 'Kabir', lastName: 'Doe', gender: 'MALE', ptc: 'CHILD' }],
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('PASSENGERS_INCOMPLETE');
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
   // Extra travellers added on the review page were booked on the fare of the
   // number the search priced.
   it('refuses more travellers than the fare was priced for', async () => {

@@ -13,6 +13,8 @@ import { emailMatchesBooking, isBookingOwner } from '../utils/bookingAccess.js';
 import { reconcileBookingPayment } from './payment/checkout.handlers.js';
 import { reportError } from '../services/monitoring.js';
 import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
+import { crossesBorder } from '../utils/itinerary.js';
+import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 
 // Only the fields the handler genuinely requires; passthrough keeps the rest.
 const flightSearchSchema = z
@@ -1114,10 +1116,12 @@ router.post('/search', validate({ body: flightSearchSchema }), async (req, res) 
     } catch (amadeusError) {
       console.error('❌ Amadeus API error:', amadeusError);
 
-      // Return detailed error information
+      // A refused request (400) says why in words the customer can act on -
+      // "Each infant travels on an adult's lap..." - where every failure used
+      // to read "Flight search failed".
       return res.status(amadeusError.code || 500).json({
         success: false,
-        error: 'Flight search failed',
+        error: amadeusError.code === 400 && amadeusError.error ? amadeusError.error : 'Flight search failed',
         details: amadeusError.error || amadeusError.message || 'Unable to search flights at this time',
         code: amadeusError.code || 500
       });
@@ -1621,8 +1625,15 @@ router.post('/order', optionalProtect, async (req, res) => {
     // travellers added on the review page were booked on the fare of however
     // many the search priced. The review page now refuses to send either, so
     // reaching this means the data was lost or altered after payment.
+    //
+    // A date of birth is needed for a child or an infant, and for everyone on a
+    // trip that crosses a border (shared/travellerDetails.js) - decided from the
+    // offer's own airports, not from anything the page sent.
+    const international = crossesBorder(firstOffer);
+    const typesInFareOrder = (firstOffer.travelerPricings || []).map((t) => t.travelerType);
     const travellerIncomplete = travelersList.length === 0 || travelersList.some(
-      (t) => !String(t?.firstName || '').trim() || !String(t?.lastName || '').trim() || !t?.dateOfBirth || !t?.gender
+      (t, index) => !String(t?.firstName || '').trim() || !String(t?.lastName || '').trim() || !t?.gender
+        || (!t?.dateOfBirth && needsDateOfBirth({ type: t?.ptc || typesInFareOrder[index], international }))
     );
     const pricedTravellers = Array.isArray(firstOffer.travelerPricings) ? firstOffer.travelerPricings.length : 0;
     // And the same mix of passenger types. A child booked on an adult fare, or

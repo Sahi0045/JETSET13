@@ -125,6 +125,12 @@ export const resolveToIata = (value) => {
   return data[0]?.code ?? null;
 };
 
+/** The ISO country code of an airport or city code, or null when it is unknown. */
+export const countryOfAirport = (code) => {
+  load();
+  return byCode.get(String(code || '').toUpperCase())?.countryCode ?? null;
+};
+
 /** True when a code is a metropolitan code, which searches a whole city. */
 export const isCityCode = (code) => {
   load();
