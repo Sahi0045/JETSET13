@@ -45,10 +45,20 @@ const orderBody = {
 const checkoutRow = (details = {}) => ({
   id: 1,
   booking_reference: 'FLTQ1',
+  travel_type: 'flight',
   status: 'pending',
   payment_status: 'paid',
   total_amount: 298.28,
-  booking_details: { success_indicator: 'SI-Q', arc_captured_amount: 298.28, arc_captured_currency: 'USD', ...details },
+  booking_details: {
+    success_indicator: 'SI-Q',
+    arc_captured_amount: 298.28,
+    arc_captured_currency: 'USD',
+    // The offer checkout priced and the charge it verified: what the order
+    // route books, whatever offer a request or a replay carries.
+    pending_booking_data: { bookingData: { originalOffer: bookableOffer } },
+    verified_charge: { total: 298.28, pricedFare: { total: 291, currency: 'USD' }, verifiedAt: new Date().toISOString() },
+    ...details,
+  },
 });
 
 /** Supabase double: every read returns `row`, every write is recorded and succeeds. */

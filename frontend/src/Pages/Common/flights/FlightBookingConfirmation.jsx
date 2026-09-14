@@ -78,7 +78,7 @@ function FlightBookingConfirmation() {
   // ever sent to the airline or to any supplier: the customer paid for a seat
   // nobody requested, a bag never added to the booking, and insurance that did
   // not exist. They stay off the page until each is a real, fulfilled product.
-  const { data: priceConfig, error: priceConfigError } = usePriceConfig('all');
+  const { data: priceConfig, error: priceConfigError, refetch: refetchPriceConfig } = usePriceConfig('all');
   const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
   // The total a coupon's discount was computed on, so a changed total drops it.
   const couponBase = React.useRef(null);
@@ -295,6 +295,12 @@ function FlightBookingConfirmation() {
           fees: match.price?.fees || [],
         },
         numberOfBookableSeats: match.originalOffer.numberOfBookableSeats ?? reviewState.flightData.numberOfBookableSeats,
+        // What the page says about the fare comes from the fare now being sold,
+        // not the one it replaced.
+        refundable: match.refundable ?? reviewState.flightData.refundable,
+        brandedFare: match.brandedFare ?? reviewState.flightData.brandedFare,
+        brandedFareLabel: match.brandedFareLabel ?? reviewState.flightData.brandedFareLabel,
+        cabin: match.cabin ?? reviewState.flightData.cabin,
       };
       setPassengerData((current) => rebuildTravellers(current, match.originalOffer.travelerPricings, blankTraveller));
       setExpandedPassengerId(null);
@@ -915,7 +921,22 @@ function FlightBookingConfirmation() {
         setPricedFare(refusal.pricedFare);
         setAppliedCoupon(null);
         couponBase.current = null;
+        // The fee settings may have changed as well as the fare, and the page's
+        // copy is cached for minutes: without a fresh read it recomputed the old
+        // total, and every retry was refused again "with the total updated".
+        PricingService.clearCache();
+        refetchPriceConfig();
         setFareNotice(`${refusal.error} The total has been updated. Nothing has been charged.`);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      // The coupon no longer applies - used up, expired, or already used by this
+      // customer. Take it off and say why: a generic error left it applied, and
+      // every retry was refused the same way.
+      if (refusal.code === 'COUPON_INVALID') {
+        setAppliedCoupon(null);
+        couponBase.current = null;
+        setFareNotice(`${refusal.error} The coupon has been removed, so please check the total. Nothing has been charged.`);
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }

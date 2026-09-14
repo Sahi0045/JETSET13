@@ -57,6 +57,18 @@ describe('findSameFare', () => {
     const { _ama, ...plain } = offer();
     expect(fareIdentity(plain)).toBe(fareIdentity(offer()));
   });
+
+  // One flight and booking class can be sold as two fares - one refundable,
+  // one not. The cheaper one used to be taken, silently.
+  it('never swaps to another fare basis in the same booking class', () => {
+    const withBasis = (fareBasis, total, types) => ({ ...offer({ total, types }), _ama: { segments: [{ rbd: 'T', fareBasis }] } });
+    const chosen = withBasis('TRFLEX', '104.10', ['ADULT']);
+    const results = [
+      { originalOffer: withBasis('TNRSAVER', '120.00', ['ADULT', 'ADULT']) },
+      { originalOffer: withBasis('TRFLEX', '180.00', ['ADULT', 'ADULT']) },
+    ];
+    expect(findSameFare(chosen, results).originalOffer.price.total).toBe('180.00');
+  });
 });
 
 describe('searchForGroup', () => {

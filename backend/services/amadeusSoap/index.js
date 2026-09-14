@@ -574,6 +574,9 @@ const createFlightOrder = async (orderData, options = {}) => {
     // What ARC actually captured, read server-side from the booking row by the
     // route. Lets the chain refuse to ticket a fare the customer underpaid.
     paidAmount: options.paidAmount,
+    // The total checkout verified and charged for this fare, when there is one:
+    // the payment floor is then exactly that, not a ratio of the fare.
+    verifiedChargeTotal: options.verifiedChargeTotal,
     onCommitted: options.onCommitted,
   });
 

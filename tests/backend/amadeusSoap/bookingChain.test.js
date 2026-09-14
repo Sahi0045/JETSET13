@@ -123,6 +123,30 @@ describe('refusing before anything is sold', () => {
     expect(axios.post).not.toHaveBeenCalled();
   });
 
+  // The abandoned-checkout job books up to hours after checkout, and a customer
+  // can take a while to choose. What matters is when the airline last priced
+  // the fare - the order route re-prices it, or stamps checkout's verification.
+  it('ages a fare from when it was last priced, not from the search', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    const repriced = offer();
+    repriced._ama = { ...repriced._ama, searchedAt: new Date(Date.now() - 60 * 60000).toISOString(), pricedAt: new Date().toISOString() };
+
+    const result = await runBookingChain({ offer: repriced, travelers, expectedTotal: 76 });
+    expect(result.pnr).toBe('ABC123');
+  });
+
+  it('still refuses an old search that nobody has priced since', async () => {
+    const { runBookingChain } = await loadChain();
+    axios.post.mockReset();
+    const stale = offer();
+    stale._ama = { ...stale._ama, searchedAt: new Date(Date.now() - 60 * 60000).toISOString() };
+
+    await expect(runBookingChain({ offer: stale, travelers, expectedTotal: 76 }))
+      .rejects.toMatchObject({ step: 'validate', committed: false, code: 409 });
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
   // A PDT offer refers to inventory that does not exist in production, and the
   // reverse. Selling one against the other books the wrong thing.
   it('rejects an offer found on a different WSAP', async () => {
@@ -208,6 +232,36 @@ describe('failing before the PNR is committed', () => {
     expect(result.pnr).toBe('ABC123');
     expect(result.priced.total).toBe(76);
   });
+
+  // Two adults and a child: 85.85 x 2 + 80.20 is 251.89999999999998 in
+  // floating point, against a quote of 251.90. Compared as floats with zero
+  // tolerance, the booking was refused after the customer had paid.
+  it('compares the fare in whole cents', async () => {
+    vi.stubEnv('AMADEUS_WS_PRICE_TOLERANCE', '0');
+    const { runBookingChain } = await loadChain();
+    const fare = (ref, pax, amount) => '<fareList>'
+      + `<fareReference><uniqueReference>${ref}</uniqueReference></fareReference>`
+      + `<paxSegReference>${pax.map((n) => `<refDetails><refQualifier>PA</refQualifier><refNumber>${n}</refNumber></refDetails>`).join('')}</paxSegReference>`
+      + `<fareDataInformation><fareDataSupInformation><fareDataQualifier>712</fareDataQualifier><fareAmount>${amount}</fareAmount><fareCurrency>USD</fareCurrency></fareDataSupInformation></fareDataInformation>`
+      + '</fareList>';
+    const priceFamily = envelope('Fare_PricePNRWithBookingClassReply', fare(1, [1, 2], '85.85') + fare(2, [3], '80.20'), SESSION);
+    queueReplies(sellOk, addOk, priceFamily, tstOk, fopOk, commitOk);
+
+    const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 251.9 });
+    expect(result.pnr).toBe('ABC123');
+    expect(result.priced.total).toBe(251.9);
+  });
+
+  // A fare that prices lower than the customer paid for costs nobody anything;
+  // refusing it refunded the customer out of a cheaper seat.
+  it('books a fare that came in lower than the customer paid for', async () => {
+    vi.stubEnv('AMADEUS_WS_PRICE_TOLERANCE', '0');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+
+    const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 90 });
+    expect(result.pnr).toBe('ABC123');
+  });
 });
 
 // The fare-drift guard checks the fare is stable; it does NOT check the
@@ -266,6 +320,26 @@ describe('the payment-coverage guard', () => {
 
     const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 76 });
     expect(result.pnr).toBe('ABC123');
+  });
+
+  // The ratio alone refused every coupon over a fifth off - after payment. With
+  // the charge checkout verified, the floor is exactly that charge.
+  it('holds the payment to the verified charge, whatever the coupon took off', async () => {
+    vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+
+    const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 40, verifiedChargeTotal: 40 });
+    expect(result.pnr).toBe('ABC123');
+  });
+
+  it('refuses a payment short of the verified charge, even above the ratio', async () => {
+    vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, priceOk);
+
+    await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 77.5, verifiedChargeTotal: 77.9 }))
+      .rejects.toMatchObject({ step: 'paymentCoverage', committed: false, code: 402 });
   });
 
   // 0 is the explicit off switch - a token payment, or none at all, books.

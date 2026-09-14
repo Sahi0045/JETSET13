@@ -71,10 +71,15 @@ describe('coupon customer paths stay public', () => {
     expect(res.status).toBe(400);
   });
 
-  it('POST /api/coupons/use is reachable without auth (400 on empty body, not 401)', async () => {
+});
+
+// Recording a use is not a customer path. The order route records it once the
+// airline holds the booking; left public, anyone could spend a coupon's uses
+// or fill its usage table without booking anything. No client calls it.
+describe('coupon use is recorded by the server, not a caller', () => {
+  it('POST /api/coupons/use rejects an anonymous caller', async () => {
     const res = await request(app).post('/api/coupons/use').send({});
-    expect(res.status).not.toBe(401);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
   });
 });
 
