@@ -1,5 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import { approximateCharge, CHARGE_CURRENCY, formatUsd } from '../../frontend/src/utils/chargeDisplay.js';
+import { approximateCharge, CHARGE_CURRENCY, describeServiceFee, formatUsd } from '../../frontend/src/utils/chargeDisplay.js';
+import { computeFlightCharge } from '../../shared/flightCharge.js';
+
+/**
+ * Who the service fee is charged for, read from the computation that charges
+ * it. A lap infant pays no fixed fee (owner's decision, 2026-09-15); the page
+ * showed one fee "for 3 travellers" and never said which.
+ */
+describe('describeServiceFee', () => {
+  const config = { flight_taxes_fees: 5, flight_taxes_fees_percentage: 2.5 };
+
+  it('lists the fee by traveller type, the lap infant with none', () => {
+    const charge = computeFlightCharge({ fareTotal: 400, travellerTypes: ['ADULT', 'ADULT', 'HELD_INFANT'], config });
+
+    expect(describeServiceFee(charge)).toEqual([
+      '2 adults × US$5.00',
+      '1 infant (on lap): no service fee',
+      '2.5% of the fare: US$10.00',
+    ]);
+  });
+
+  it('charges a seated child and an infant in its own seat', () => {
+    const charge = computeFlightCharge({ fareTotal: 400, travellerTypes: ['ADULT', 'CHILD', 'SEATED_INFANT'], config: { flight_taxes_fees: 5 } });
+
+    expect(describeServiceFee(charge)).toEqual(['1 adult × US$5.00', '1 child × US$5.00', '1 infant (own seat) × US$5.00']);
+  });
+
+  it('lists no fixed fee when there is none to pay', () => {
+    const charge = computeFlightCharge({ fareTotal: 400, travellerTypes: ['ADULT', 'HELD_INFANT'], config: { flight_taxes_fees: 0, flight_taxes_fees_percentage: 2.5 } });
+
+    expect(describeServiceFee(charge)).toEqual(['2.5% of the fare: US$10.00']);
+  });
+
+  it('has nothing to break down without the traveller types', () => {
+    expect(describeServiceFee(computeFlightCharge({ fareTotal: 400, passengers: 2, config: { flight_taxes_fees: 5 } }))).toEqual([]);
+    expect(describeServiceFee()).toEqual([]);
+  });
+});
 
 /**
  * The review page quoted ₹41,820 for a charge of USD 501.75, from browser rates

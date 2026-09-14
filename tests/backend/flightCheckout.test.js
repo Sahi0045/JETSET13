@@ -153,6 +153,57 @@ describe('verifyFlightCharge', () => {
     expect(result.code).toBe('PASSENGERS_INCOMPLETE');
   });
 
+  // The owner's decision of 2026-09-15: a lap infant pays no fixed service fee.
+  // Checkout and the review page both take it from the offer's own pricings,
+  // so they cannot disagree - and neither reads it from the traveller forms.
+  describe('a lap infant', () => {
+    const withLapInfant = () => {
+      const booking = bookingFor(2);
+      booking.originalOffer.travelerPricings.push({ travelerId: '3', travelerType: 'HELD_INFANT', associatedAdultId: '1' });
+      booking.passengerData.push({ firstName: 'Mia', lastName: 'Doe', gender: 'female', dateOfBirth: '2025-06-01', type: 'HELD_INFANT' });
+      return booking;
+    };
+
+    it('adds no fixed fee: two adults and a lap infant pay two', async () => {
+      const result = await verify({ amount: 402, bookingData: withLapInfant(), priceOffer: pricedAt(400) });
+
+      expect(result.ok).toBe(true);
+      expect(result.charge.fixedFee).toBe(2);
+      expect(result.charge.total).toBe(402);
+    });
+
+    it('refuses the old figure, which charged the infant a fee too', async () => {
+      const result = await verify({ amount: 403, bookingData: withLapInfant(), priceOffer: pricedAt(400) });
+
+      expect(result.code).toBe('PRICE_CHANGED');
+      expect(result.charge.total).toBe(402);
+    });
+
+    it('accepts exactly the total the review page computes for the same offer', async () => {
+      const { computeFlightCharge, travellerTypesOf } = await import('../../shared/flightCharge.js');
+      const booking = withLapInfant();
+      // The page's own call (FlightBookingConfirmation.jsx), on the same settings.
+      const page = computeFlightCharge({
+        fareTotal: 400, travellerTypes: travellerTypesOf(booking.originalOffer), config: rows.price_settings.settings,
+      });
+
+      const result = await verify({ amount: page.total, bookingData: booking, priceOffer: pricedAt(400) });
+
+      expect(result.ok).toBe(true);
+      expect(result.charge.total).toBe(page.total);
+      expect(result.charge.fixedFeeByType).toEqual(page.fixedFeeByType);
+    });
+
+    it('takes a coupon off the total without the infant fee', async () => {
+      rows.coupons = { id: 'c1', code: 'FLY10', discount_type: 'percentage', discount_value: 10, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
+
+      const result = await verify({ amount: 361.8, bookingData: withLapInfant(), couponCode: 'FLY10', priceOffer: pricedAt(400) });
+
+      expect(result.ok).toBe(true);
+      expect(result.charge.discount).toBe(40.2);
+    });
+  });
+
   it('lets domestic adults pay without a date of birth', async () => {
     const booking = bookingFor(2);
     booking.passengerData = booking.passengerData.map(({ dateOfBirth, ...rest }) => rest);

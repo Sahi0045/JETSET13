@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { computeFlightCharge, roundMoney } from '../../shared/flightCharge.js';
+import { computeFlightCharge, roundMoney, travellerTypesOf } from '../../shared/flightCharge.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { DEFAULT_PRICE_SETTINGS } from '../config/priceDefaults.js';
 import { evaluateCoupon } from './coupon.service.js';
@@ -154,10 +154,15 @@ export async function verifyFlightCharge({
     return refuse(503, 'PRICE_CONFIG_UNAVAILABLE', 'Pricing is temporarily unavailable. Please try again shortly.');
   }
 
+  // The fixed fee is per seated traveller; a lap infant pays none of it. Which
+  // traveller is which comes from the offer the airline just priced, as it does
+  // on the review page - never from the traveller forms.
+  const travellerTypes = travellerTypesOf(offer);
+
   let discount = 0;
   let coupon = null;
   if (couponCode) {
-    const beforeDiscount = computeFlightCharge({ fareTotal, passengers: pricedFor, config });
+    const beforeDiscount = computeFlightCharge({ fareTotal, travellerTypes, config });
     const evaluated = await evaluateCoupon(client, {
       code: couponCode,
       orderTotal: beforeDiscount.total,
@@ -172,7 +177,7 @@ export async function verifyFlightCharge({
     coupon = { id: evaluated.coupon.id, code: evaluated.coupon.code, discountAmount: discount };
   }
 
-  const charge = computeFlightCharge({ fareTotal, passengers: pricedFor, config, discount });
+  const charge = computeFlightCharge({ fareTotal, travellerTypes, config, discount });
   const requested = roundMoney(amount);
 
   if (Math.abs(requested - charge.total) > 0.01) {

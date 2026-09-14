@@ -5,7 +5,72 @@ import {
   computeFlightCharge,
   passengerAgeProblem,
   roundMoney,
+  travellerTypesOf,
 } from '../../shared/flightCharge.js';
+
+/**
+ * A lap infant pays no fixed service fee - the owner's decision of 2026-09-15.
+ *
+ * The fee was taken for every traveller the fare was priced for, so two adults
+ * and a baby on a lap paid three fees, and the review page showed one fee line
+ * with no reason for the third.
+ */
+describe('the fixed service fee and lap infants', () => {
+  const config = { flight_taxes_fees: 5, flight_taxes_fees_percentage: 0 };
+
+  it('charges two adults and a lap infant two fixed fees', () => {
+    const charge = computeFlightCharge({ fareTotal: 400, travellerTypes: ['ADULT', 'ADULT', 'HELD_INFANT'], config });
+
+    expect(charge.passengers).toBe(3);
+    expect(charge.seatedPassengers).toBe(2);
+    expect(charge.fixedFee).toBe(10);
+    expect(charge.total).toBe(410);
+  });
+
+  it('still charges a seated child, and an infant in its own seat', () => {
+    expect(computeFlightCharge({ fareTotal: 400, travellerTypes: ['ADULT', 'CHILD'], config }).fixedFee).toBe(10);
+    expect(computeFlightCharge({ fareTotal: 400, travellerTypes: ['ADULT', 'SEATED_INFANT'], config }).fixedFee).toBe(10);
+  });
+
+  it('leaves the percentage of the whole fare exactly as it was', () => {
+    const withPercentage = { flight_taxes_fees: 5, flight_taxes_fees_percentage: 2.5 };
+    const withInfant = computeFlightCharge({ fareTotal: 400, travellerTypes: ['ADULT', 'HELD_INFANT'], config: withPercentage });
+
+    expect(withInfant.percentageFee).toBe(10);
+    expect(withInfant.serviceFee).toBe(15);
+  });
+
+  it('counts every traveller as seated when given only a count, as before', () => {
+    expect(computeFlightCharge({ fareTotal: 400, passengers: 3, config }).fixedFee).toBe(15);
+    expect(computeFlightCharge({ fareTotal: 400, passengers: 3, config }).fixedFeeByType).toBeNull();
+  });
+
+  it('breaks the fee down by traveller type, the infant with nothing to pay', () => {
+    const charge = computeFlightCharge({ fareTotal: 400, travellerTypes: ['HELD_INFANT', 'ADULT', 'CHILD', 'ADULT'], config });
+
+    expect(charge.fixedFeeByType).toEqual([
+      { type: 'ADULT', count: 2, each: 5, amount: 10 },
+      { type: 'CHILD', count: 1, each: 5, amount: 5 },
+      { type: 'HELD_INFANT', count: 1, each: 0, amount: 0 },
+    ]);
+  });
+
+  it('adds the breakdown up to the fee charged, to the cent', () => {
+    for (const fee of [0.004, 0.335, 1.005, 2.675, 7]) {
+      const charge = computeFlightCharge({
+        fareTotal: 250, travellerTypes: ['ADULT', 'CHILD', 'SEATED_INFANT', 'HELD_INFANT'], config: { flight_taxes_fees: fee },
+      });
+      const sum = roundMoney(charge.fixedFeeByType.reduce((total, line) => total + line.amount, 0));
+      expect(sum, `fee ${fee}`).toBe(charge.fixedFee);
+    }
+  });
+
+  it("reads the types from the offer's own pricings, an untyped one as an adult", () => {
+    expect(travellerTypesOf({ travelerPricings: [{ travelerType: 'ADULT' }, { travelerType: 'held_infant' }, {}] }))
+      .toEqual(['ADULT', 'HELD_INFANT', 'ADULT']);
+    expect(travellerTypesOf(null)).toEqual([]);
+  });
+});
 
 /**
  * The one formula the review page shows and checkout charges.

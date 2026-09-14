@@ -8,7 +8,7 @@ import withPageElements from "../PageWrapper";
 // Every amount on this page is what the card is charged, in US dollars; the
 // visitor's own currency appears only as a labelled estimate, from live rates.
 import ChargeAmount from "../../../Components/ChargeAmount";
-import { CHARGE_CURRENCY, formatUsd } from "../../../utils/chargeDisplay";
+import { CHARGE_CURRENCY, describeServiceFee, formatUsd } from "../../../utils/chargeDisplay";
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext";
 import { clearFlightReview, readFlightReview, saveFlightReview } from "../../../utils/flightReviewResume";
 import NoticeDialog from "../../../Components/NoticeDialog";
@@ -25,7 +25,7 @@ import { searchToQuery } from './searchQuery';
 import apiConfig from '@/config/api';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
-import { computeFlightCharge, PASSENGER_TYPES } from '../../../../../shared/flightCharge';
+import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
 import { needsDateOfBirth } from '../../../../../shared/travellerDetails';
 import { findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
@@ -394,9 +394,9 @@ function FlightBookingConfirmation() {
     const airlineTaxes = Math.max(0, fareTotal - baseFareReal);
 
     // The platform fee, from the formula checkout verifies. `fareTotal` is the
-    // offer's all-passenger total, priced for exactly these travellers.
-    const pricedTravellers = flightData.originalOffer?.travelerPricings?.length || 1;
-    const fee = computeFlightCharge({ fareTotal, passengers: pricedTravellers, config });
+    // offer's all-passenger total, priced for exactly these travellers, and the
+    // offer says which of them is a lap infant (no fixed fee).
+    const fee = computeFlightCharge({ fareTotal, travellerTypes: travellerTypesOf(flightData.originalOffer), config });
     const fixedFee = fee.fixedFee;
     const percentageFee = fee.percentageFee;
     const serviceFee = fee.serviceFee;
@@ -644,15 +644,24 @@ function FlightBookingConfirmation() {
     const searched = bookingData.flight.price;
     const fareTotal = pricedFare?.total ?? (Number(searched.base || 0) + Number(searched.airlineTaxes || 0));
     const base = pricedFare?.base ?? Number(searched.base || 0);
-    const passengers = reviewState?.flightData?.originalOffer?.travelerPricings?.length || 1;
-    const charge = computeFlightCharge({ fareTotal, passengers, config: priceConfig });
+    // The offer's own traveller types, exactly as checkout reads them: a lap
+    // infant pays no fixed fee, and the summary shows who pays what.
+    const charge = computeFlightCharge({
+      fareTotal,
+      travellerTypes: travellerTypesOf(reviewState?.flightData?.originalOffer),
+      config: priceConfig,
+    });
 
     setCalculatedFare({
       baseFare: base,
       totalTax: Math.max(0, Math.round((fareTotal - base) * 100) / 100),
       serviceFee: charge.serviceFee,
+      // What the service fee is made of, from the same computation as the charge.
+      fixedFeeByType: charge.fixedFeeByType,
+      percentage: charge.percentage,
+      percentageFee: charge.percentageFee,
       totalAmount: charge.total,
-      passengers,
+      passengers: charge.passengers,
       currency: pricedFare?.currency || searched.currency || 'USD'
     });
   };
@@ -1821,13 +1830,21 @@ function FlightBookingConfirmation() {
                   </div>
                 )}
 
-                {/* Service Fee (Jetsetters convenience fee) */}
+                {/* Service Fee (Jetsetters convenience fee), line by line as it is
+                    charged: the fixed fee per traveller type - none for a lap
+                    infant - and the percentage of the fare. One line "for 3
+                    travellers" never said which of them paid it. */}
                 {calculatedFare.serviceFee > 0 && (
                   <div className="flex items-start gap-3 py-3 border-b border-gray-100">
                     <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[#65B3CF] flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-gray-800">Service Fee</div>
                       <div className="text-xs text-gray-400 mt-0.5">Jetsetters convenience fee</div>
+                      <ul className="mt-1 space-y-0.5 text-xs text-gray-500" data-service-fee-lines="">
+                        {describeServiceFee(calculatedFare).map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                      </ul>
                     </div>
                     <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><ChargeAmount amount={calculatedFare.serviceFee} /></div>
                   </div>
