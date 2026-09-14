@@ -15,6 +15,7 @@ import { reportError } from '../services/monitoring.js';
 import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
 import { crossesBorder } from '../utils/itinerary.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
+import { flightSearchLimiter } from '../middleware/security.js';
 
 // Only the fields the handler genuinely requires; passthrough keeps the rest.
 const flightSearchSchema = z
@@ -26,6 +27,16 @@ const flightSearchSchema = z
   .passthrough();
 
 const router = express.Router();
+
+// The unauthenticated endpoints that go to Amadeus on every call get their own
+// per-IP budget (security.js has the numbers and why). Here rather than in each
+// entry point: all three mount this router, Vercel twice, so it cannot be left
+// out of one. A path matches whole segments only - '/search' is not
+// '/airports/search', and '/price' is not '/price-analysis'.
+router.use(
+  ['/search', '/price', '/upsell', '/fare-rules', '/seatmaps', '/date-prices', '/cheapest-dates', '/calendar-prices'],
+  flightSearchLimiter
+);
 
 // Invoke the single orchestrated cancel handler (Amadeus cancel + ARC Pay refund/void +
 // DB update + email) in-process — no HTTP self-call, so it works on Vercel serverless.
