@@ -78,12 +78,19 @@ export const readPricePnrReply = (reply) => {
         amounts[qualifier] = { amount: num(detail.fareAmount), currency: txt(detail.fareCurrency) };
       }
     }
+    const refs = arr(at(fare, 'paxSegReference.refDetails'));
 
     return {
       reference: atTxt(fare, 'fareReference.uniqueReference'),
-      paxRefs: arr(at(fare, 'paxSegReference.refDetails'))
+      paxRefs: refs
         .filter((d) => txt(d.refQualifier) === 'PA')
         .map((d) => txt(d.refNumber)),
+      // How many passengers this fare is for. Amadeus prices one fare per
+      // passenger TYPE and states its amounts PER PASSENGER: two adults share
+      // one fare whose 712 is one adult's total. PA references an adult or a
+      // child; an infant's fare carries PI - "the infant of" that passenger -
+      // and no PA.
+      passengers: Math.max(1, refs.filter((d) => ['PA', 'PI'].includes(txt(d.refQualifier))).length),
       // ISO, not D/M/YYYY. This is the date after which the airline cancels an
       // unticketed booking, it is stored on the booking and shown to the
       // customer, and "11/9/2026" is 11 September to half the world and 9
@@ -101,9 +108,13 @@ export const readPricePnrReply = (reply) => {
   const currency = fares[0]?.amounts?.['712']?.currency
     ?? fares[0]?.amounts?.B?.currency
     ?? null;
+  // Per passenger, so times the passengers each fare covers. Adding one amount
+  // per fare priced 2 adults, a child and an infant at 171.70 instead of 251.90
+  // (live WSAP, 2026-09-15), and the fare-change guard - zero tolerance - would
+  // have refused every booking for two or more after the customer had paid.
   const total = fares.reduce((sum, fare) => {
     const amount = fare.amounts['712'];
-    return amount && amount.currency === currency ? sum + (amount.amount ?? 0) : sum;
+    return amount && amount.currency === currency ? sum + (amount.amount ?? 0) * fare.passengers : sum;
   }, 0);
 
   return { fares, total: fares.length ? total : null, currency };

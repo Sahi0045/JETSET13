@@ -25,6 +25,9 @@ import apiConfig from '@/config/api';
 // quote a total the server will not accept.
 import { computeFlightCharge, passengerAgeProblem, PASSENGER_TYPES } from '../../../../../shared/flightCharge';
 import { isUsableEmail } from '../../../../../shared/email';
+import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
+import { findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
+import TravellerGroupEditor from './TravellerGroupEditor';
 import "./booking-confirmation.css";
 
 // Passport / travel-document fields only matter on international routes. Map each
@@ -173,6 +176,97 @@ function FlightBookingConfirmation() {
   // own half-right copy of this and disagreed on screen.
   const formatBaggage = formatCheckedBag;
 
+
+  // An empty traveller form of the type the airline priced.
+  const blankTraveller = (type, index) => ({
+    id: index + 1,
+    type,
+    title: "",
+    firstName: "",
+    lastName: "",
+    dateOfBirth: "",
+    meal: "Regular",
+    mobile: "",
+    email: "",
+    // No default gender: a preselected one went onto the ticket unchecked.
+    gender: "",
+    requiresWheelchair: false,
+    nationality: "",
+    passportNumber: "",
+    passportExpiry: "",
+    countryCode: callingCode || '+91'
+  });
+
+  // Adding or removing travellers, the way Amadeus prices them: this same fare
+  // - the same flights in the same booking classes - searched again for the new
+  // group (utils/travellerGroupChange.js). Adding a form without that search
+  // was the old bug: a fare priced for one group, charged to another.
+  const [groupEditorOpen, setGroupEditorOpen] = useState(false);
+  const [groupChange, setGroupChange] = useState({ busy: false, problem: null, unavailable: null });
+  const pricedGroup = groupFromOffer(reviewState?.flightData?.originalOffer);
+
+  const applyTravellerGroup = async (group) => {
+    const offer = reviewState?.flightData?.originalOffer;
+    if (!offer || groupChange.busy) return;
+    const problem = travellerGroupProblem(group);
+    if (problem) {
+      setGroupChange({ busy: false, problem, unavailable: null });
+      return;
+    }
+
+    const search = searchForGroup(reviewState?.searchData, offer, group);
+    setGroupChange({ busy: true, problem: null, unavailable: null });
+    try {
+      const res = await fetch(apiConfig.endpoints.flights.search, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(search),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.success) {
+        setGroupChange({ busy: false, problem: body?.error || 'We could not check this flight for that group. Please try again.', unavailable: null });
+        return;
+      }
+
+      const match = findSameFare(offer, body.data);
+      if (!match?.originalOffer) {
+        setGroupChange({ busy: false, problem: null, unavailable: { group, search } });
+        return;
+      }
+
+      const flightData = {
+        ...reviewState.flightData,
+        originalOffer: match.originalOffer,
+        price: {
+          amount: match.price?.amount,
+          total: match.price?.total,
+          currency: match.price?.currency || 'USD',
+          base: match.price?.base || '0',
+          grandTotal: match.price?.grandTotal || match.price?.total,
+          fees: match.price?.fees || [],
+        },
+        numberOfBookableSeats: match.originalOffer.numberOfBookableSeats ?? reviewState.flightData.numberOfBookableSeats,
+      };
+      setPassengerData((current) => rebuildTravellers(current, match.originalOffer.travelerPricings, blankTraveller));
+      setExpandedPassengerId(null);
+      // The old group's airline price must not stand in for the new group's
+      // while the arrival check runs again for this offer.
+      setPricedFare(null);
+      setAppliedCoupon(null);
+      couponBase.current = null;
+      setFareNotice(`Updated for ${describeGroup(group)} on the same flight and fare. Please check the new total.`);
+      setGroupChange({ busy: false, problem: null, unavailable: null });
+      setGroupEditorOpen(false);
+      // Into router state, like an arrival from search: the page reads the
+      // flight from there, and a refresh or the login round trip keeps it.
+      navigate(`${routerLocation.pathname}${routerLocation.search}`, {
+        replace: true,
+        state: { ...(routerLocation.state || {}), flightData, searchData: { ...(reviewState.searchData || {}), ...search } },
+      });
+    } catch {
+      setGroupChange({ busy: false, problem: 'We could not reach the flight search. Please try again.', unavailable: null });
+    }
+  };
 
   // Back to the results for this same search, with the traveller picker open.
   // The fare was priced for an exact group, so a different group is a new
@@ -398,7 +492,9 @@ function FlightBookingConfirmation() {
           throw new Error("Failed to process flight data");
         }
 
-        setBookingDetails(bookingData);
+        // Keep the contact details already typed when the flight is re-read: a
+        // change of travellers swaps the offer, not the customer.
+        setBookingDetails((previous) => (previous?.contact ? { ...bookingData, contact: previous.contact } : bookingData));
         updateFareSummary(bookingData);
       } catch (error) {
         if (cancelled) return;
@@ -470,24 +566,7 @@ function FlightBookingConfirmation() {
       const types = Array.isArray(pricings) && pricings.length
         ? pricings.map((p) => p.travelerType || 'ADULT')
         : ['ADULT'];
-      setPassengerData(types.map((type, index) => ({
-        id: index + 1,
-        type,
-        title: "",
-        firstName: "",
-        lastName: "",
-        dateOfBirth: "",
-        meal: "Regular",
-        mobile: "",
-        email: "",
-        // No default gender: a preselected one went onto the ticket unchecked.
-        gender: "",
-        requiresWheelchair: false,
-        nationality: "",
-        passportNumber: "",
-        passportExpiry: "",
-        countryCode: callingCode || '+91'
-      })));
+      setPassengerData(types.map((type, index) => blankTraveller(type, index)));
     }
   }, [bookingDetails, passengerData.length]);
 
@@ -647,7 +726,8 @@ function FlightBookingConfirmation() {
 
   // Handle proceeding to payment - DIRECT to ARC Pay (bypass FlightPayment.jsx)
   const handleProceedToPayment = async () => {
-    if (checkingOut) return;
+    // Not while the group is being re-priced: the fare on the page is about to change.
+    if (checkingOut || groupChange.busy) return;
     const travelDate = bookingDetails?.flight?.departureDate;
     const lastDate = bookingDetails?.flight?.segments?.at?.(-1)?.arrival?.at
       || bookingDetails?.flight?.arrivalDate
@@ -1411,18 +1491,40 @@ function FlightBookingConfirmation() {
 
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs text-gray-500">
-                    This fare is priced for {passengerData.length} traveller{passengerData.length === 1 ? '' : 's'}. The airline prices each
-                    traveller, so adding or removing someone needs a new search.
+                    This fare is priced for {pricedGroup.adults
+                      ? describeGroup(pricedGroup)
+                      : `${passengerData.length} traveller${passengerData.length === 1 ? '' : 's'}`}.
                   </p>
-                  <button
-                    type="button"
-                    onClick={changeTravellers}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#055B75] text-[#055B75] text-sm font-semibold hover:bg-[#F0FAFC] transition-colors whitespace-nowrap"
-                  >
-                    <Edit className="h-4 w-4" />
-                    Change travellers
-                  </button>
+                  {!groupEditorOpen && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGroupChange({ busy: false, problem: null, unavailable: null });
+                        setGroupEditorOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#055B75] text-[#055B75] text-sm font-semibold hover:bg-[#F0FAFC] transition-colors whitespace-nowrap"
+                    >
+                      <Edit className="h-4 w-4" />
+                      Add or remove travellers
+                    </button>
+                  )}
                 </div>
+                {groupEditorOpen && (
+                  <TravellerGroupEditor
+                    key={describeGroup(pricedGroup)}
+                    initial={pricedGroup}
+                    busy={groupChange.busy}
+                    problem={groupChange.problem}
+                    unavailable={groupChange.unavailable}
+                    onApply={applyTravellerGroup}
+                    onCancel={() => {
+                      setGroupEditorOpen(false);
+                      setGroupChange({ busy: false, problem: null, unavailable: null });
+                    }}
+                    onSeeOtherFlights={({ search }) => navigate(`/flights/search?${searchToQuery(search)}`, { state: { searchData: search } })}
+                    onSearchAgain={changeTravellers}
+                  />
+                )}
               </div>
             </div>
 
