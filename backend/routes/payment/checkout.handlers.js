@@ -256,11 +256,14 @@ export async function handleInitiatePayment(req, res) {
         });
 
     } catch (error) {
-        console.error('❌ Payment initiation error:', error.response?.data || error.message);
+        // Logged, never returned. The gateway's explanation and the raw error
+        // name the merchant, the ARC endpoint and what it objected to, which is
+        // nothing a customer can act on and a map for anyone probing it.
+        console.error('❌ Payment initiation error:', error.response?.status ?? null,
+            error.response?.data?.error?.explanation || error.message);
         return res.status(500).json({
             success: false,
-            error: 'Payment initiation failed',
-            details: error.response?.data?.error?.explanation || error.message
+            error: 'Payment initiation failed'
         });
     }
 }
@@ -686,11 +689,14 @@ export async function handleHostedCheckout(req, res) {
         });
 
     } catch (error) {
-        console.error('❌ Hosted checkout error:', error);
+        // Logged, never returned - see handleInitiatePayment. And not the error
+        // object itself: an axios error carries the request it made, whose
+        // Authorization header is the merchant's API password.
+        console.error('❌ Hosted checkout error:', error.response?.status ?? null,
+            error.response?.data?.error?.explanation || error.message);
         return res.status(500).json({
             success: false,
-            error: 'Failed to create hosted checkout',
-            details: error.response?.data?.error?.explanation || error.message
+            error: 'Failed to create hosted checkout'
         });
     }
 }
