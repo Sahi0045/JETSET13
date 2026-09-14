@@ -17,7 +17,7 @@ import { getWsConfig } from '../services/amadeusSoap/config.js';
 import { recordCouponUse } from '../services/coupon.service.js';
 import { crossesBorder } from '../utils/itinerary.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
-import { flightSearchLimiter } from '../middleware/security.js';
+import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -2542,8 +2542,9 @@ router.get('/health', (req, res) => {
 // Get a single booking by bookingReference (For Manage Booking page)
 // optionalProtect, not protect: a guest may open their booking with the email
 // it was made with (x-booking-email). Ownership is still enforced in
-// loadOwnedBooking, and anyone else still gets a flat 404.
-router.get('/bookings/:bookingRef', optionalProtect, async (req, res) => {
+// loadOwnedBooking, and anyone else still gets a flat 404. guestBookingLimiter
+// caps wrong emails per reference, so that 404 cannot be asked at volume.
+router.get('/bookings/:bookingRef', optionalProtect, guestBookingLimiter, async (req, res) => {
   try {
     if (!supabase) {
       return res.status(503).json({
