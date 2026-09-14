@@ -80,6 +80,15 @@ async function clearQueuedOrder(bookingReference) {
  * where the refund was refused. Only `refunded: true` means money went back.
  */
 export function failureCopy(result) {
+  // A second payment for a trip that was already booked is held for a human:
+  // not booked, and not refunded automatically either, because a family can
+  // book one flight twice. Say exactly that.
+  if (result?.code === 'DUPLICATE_PAYMENT') {
+    return 'This payment looks like a second payment for a trip you had already booked for the same travellers, '
+      + 'so we did not book it again. Your first booking is not affected. Our team will check it and refund '
+      + 'this payment. If you did mean to book the trip twice, or have not heard from us within 2 business days, '
+      + 'call (877) 538-7380 with your booking reference.';
+  }
   if (result?.refunded === true) {
     return 'We could not confirm your booking with the airline, so your payment has been reversed. '
       + 'It usually reaches your card within 5-10 business days.';

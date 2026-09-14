@@ -5,8 +5,10 @@ import { Check, Printer, Download, Share2, ChevronDown, ChevronUp, CheckCircle, 
 import Navbar from "../Navbar";
 import Footer from "../Footer";
 import withPageElements from "../PageWrapper";
-import Price from "../../../Components/Price";
-import currencyService from "../../../Services/CurrencyService";
+// Every amount on this page is what the card is charged, in US dollars; the
+// visitor's own currency appears only as a labelled estimate, from live rates.
+import ChargeAmount from "../../../Components/ChargeAmount";
+import { CHARGE_CURRENCY, describeServiceFee, formatUsd } from "../../../utils/chargeDisplay";
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext";
 import { clearFlightReview, readFlightReview, saveFlightReview } from "../../../utils/flightReviewResume";
 import NoticeDialog from "../../../Components/NoticeDialog";
@@ -23,7 +25,7 @@ import { searchToQuery } from './searchQuery';
 import apiConfig from '@/config/api';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
-import { computeFlightCharge, PASSENGER_TYPES } from '../../../../../shared/flightCharge';
+import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
 import { needsDateOfBirth } from '../../../../../shared/travellerDetails';
 import { findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
@@ -87,6 +89,29 @@ function FlightBookingConfirmation() {
   const [pricedFare, setPricedFare] = useState(null);
   const [fareNotice, setFareNotice] = useState(null);
   const [checkingOut, setCheckingOut] = useState(false);
+  // One payment page per trip. React state alone let a quick second click in
+  // before Pay re-rendered disabled, and `checkingOut` was cleared as soon as
+  // the redirect began, so Pay was live again while the browser was still on
+  // its way to ARC: a second click opened a second payment page for the same
+  // trip, and paying both booked it twice. The ref is set synchronously and
+  // held through the redirect. Checkout also hands back a payment page already
+  // open for the same trip (checkout.handlers.js), which covers a second tab.
+  const paymentStarting = React.useRef(false);
+  const [openingPayment, setOpeningPayment] = useState(false);
+
+  // Back from the payment page, a page restored from the browser's cache still
+  // holds "opening payment". The customer may try again: checkout gives them
+  // the same payment page for the same trip.
+  useEffect(() => {
+    const onPageShow = (event) => {
+      if (!event.persisted) return;
+      paymentStarting.current = false;
+      setOpeningPayment(false);
+      setCheckingOut(false);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
   // What the page needs to tell the customer, in the site's own dialog.
   const [notice, setNotice] = useState(null);
   const [calculatedFare, setCalculatedFare] = useState({
@@ -392,9 +417,9 @@ function FlightBookingConfirmation() {
     const airlineTaxes = Math.max(0, fareTotal - baseFareReal);
 
     // The platform fee, from the formula checkout verifies. `fareTotal` is the
-    // offer's all-passenger total, priced for exactly these travellers.
-    const pricedTravellers = flightData.originalOffer?.travelerPricings?.length || 1;
-    const fee = computeFlightCharge({ fareTotal, passengers: pricedTravellers, config });
+    // offer's all-passenger total, priced for exactly these travellers, and the
+    // offer says which of them is a lap infant (no fixed fee).
+    const fee = computeFlightCharge({ fareTotal, travellerTypes: travellerTypesOf(flightData.originalOffer), config });
     const fixedFee = fee.fixedFee;
     const percentageFee = fee.percentageFee;
     const serviceFee = fee.serviceFee;
@@ -595,7 +620,11 @@ function FlightBookingConfirmation() {
         const searched = Number(flightPrice?.amount || flightPrice?.grandTotal || flightPrice?.total || offer?.price?.total || 0);
         setPricedFare({ total, base: Number(price.base) || null, currency: price.currency || null });
         if (Math.abs(total - searched) > 0.01) {
-          setFareNotice(`The airline's current fare for this flight is ${price.currency || ''} ${total.toFixed(2)}, not the ${searched.toFixed(2)} shown in search. The total below uses the current fare.`);
+          // Both figures in the one currency, the one the summary below uses.
+          // This printed "USD 501.75" against a bare search figure, beside a
+          // summary converted to rupees.
+          const fareCurrency = price.currency || CHARGE_CURRENCY;
+          setFareNotice(`The airline's current fare for this flight is ${fareCurrency} ${total.toFixed(2)}, not the ${fareCurrency} ${searched.toFixed(2)} it was when you searched. The total below uses the current fare.`);
         }
       } catch {
         // Not fatal: checkout verifies the fare with the airline regardless.
@@ -638,15 +667,24 @@ function FlightBookingConfirmation() {
     const searched = bookingData.flight.price;
     const fareTotal = pricedFare?.total ?? (Number(searched.base || 0) + Number(searched.airlineTaxes || 0));
     const base = pricedFare?.base ?? Number(searched.base || 0);
-    const passengers = reviewState?.flightData?.originalOffer?.travelerPricings?.length || 1;
-    const charge = computeFlightCharge({ fareTotal, passengers, config: priceConfig });
+    // The offer's own traveller types, exactly as checkout reads them: a lap
+    // infant pays no fixed fee, and the summary shows who pays what.
+    const charge = computeFlightCharge({
+      fareTotal,
+      travellerTypes: travellerTypesOf(reviewState?.flightData?.originalOffer),
+      config: priceConfig,
+    });
 
     setCalculatedFare({
       baseFare: base,
       totalTax: Math.max(0, Math.round((fareTotal - base) * 100) / 100),
       serviceFee: charge.serviceFee,
+      // What the service fee is made of, from the same computation as the charge.
+      fixedFeeByType: charge.fixedFeeByType,
+      percentage: charge.percentage,
+      percentageFee: charge.percentageFee,
       totalAmount: charge.total,
-      passengers,
+      passengers: charge.passengers,
       currency: pricedFare?.currency || searched.currency || 'USD'
     });
   };
@@ -788,6 +826,8 @@ function FlightBookingConfirmation() {
   const handleProceedToPayment = async () => {
     // Not while the group is being re-priced: the fare on the page is about to change.
     if (checkingOut || groupChange.busy) return;
+    // Not while a payment page is already opening for this trip.
+    if (paymentStarting.current) return;
     // Everything the airline needs, checked before payment. The server refuses
     // an incomplete traveller too - but only after the charge, and then has to
     // reverse it. Stopping here costs the customer nothing. The same list marks
@@ -818,7 +858,11 @@ function FlightBookingConfirmation() {
       saveTravellersMutation.mutate(passengerData.map(toSavedTraveller));
     }
 
+    paymentStarting.current = true;
     setCheckingOut(true);
+    // Set once the browser is on its way to the payment page: from then on
+    // nothing here lets Pay be pressed again.
+    let redirecting = false;
     try {
       const rawFlightData = reviewState?.flightData;
       const amount = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
@@ -905,10 +949,15 @@ function FlightBookingConfirmation() {
         clearFlightReview();
         localStorage.setItem('pendingPaymentSession', JSON.stringify({
           sessionId: checkoutResponse.sessionId,
-          orderId,
+          // Checkout's reference, which is not always the one made above: for a
+          // trip that already has a payment page open it hands that page back,
+          // under the reference ARC will return the payer with.
+          orderId: checkoutResponse.orderId || orderId,
           bookingType: 'flight',
           amount
         }));
+        redirecting = true;
+        setOpeningPayment(true);
         window.location.href = checkoutResponse.checkoutUrl;
         return;
       }
@@ -981,6 +1030,8 @@ function FlightBookingConfirmation() {
       });
     } finally {
       setCheckingOut(false);
+      // Free for another try, unless the payment page is opening.
+      if (!redirecting) paymentStarting.current = false;
     }
   };
 
@@ -1039,6 +1090,10 @@ function FlightBookingConfirmation() {
       </div>
     );
   }
+
+  // What the card will be charged, in US dollars: the summary total, the Pay
+  // buttons and the mobile bar all show this one figure.
+  const amountDue = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
 
   return (
     <div className="booking-confirmation-page">
@@ -1796,7 +1851,7 @@ function FlightBookingConfirmation() {
                       For {calculatedFare.passengers} traveller{calculatedFare.passengers === 1 ? '' : 's'}
                     </div>
                   </div>
-                  <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><Price amount={calculatedFare.baseFare} /></div>
+                  <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><ChargeAmount amount={calculatedFare.baseFare} /></div>
                 </div>
 
                 {/* Taxes and Surcharges (real Amadeus airline taxes = grandTotal − base) */}
@@ -1807,19 +1862,27 @@ function FlightBookingConfirmation() {
                       <div className="text-sm font-bold text-gray-800">Taxes and Surcharges</div>
                       <div className="text-xs text-gray-400 mt-0.5">Airline taxes &amp; surcharges</div>
                     </div>
-                    <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><Price amount={calculatedFare.totalTax} /></div>
+                    <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><ChargeAmount amount={calculatedFare.totalTax} /></div>
                   </div>
                 )}
 
-                {/* Service Fee (Jetsetters convenience fee) */}
+                {/* Service Fee (Jetsetters convenience fee), line by line as it is
+                    charged: the fixed fee per traveller type - none for a lap
+                    infant - and the percentage of the fare. One line "for 3
+                    travellers" never said which of them paid it. */}
                 {calculatedFare.serviceFee > 0 && (
                   <div className="flex items-start gap-3 py-3 border-b border-gray-100">
                     <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[#65B3CF] flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-gray-800">Service Fee</div>
                       <div className="text-xs text-gray-400 mt-0.5">Jetsetters convenience fee</div>
+                      <ul className="mt-1 space-y-0.5 text-xs text-gray-500" data-service-fee-lines="">
+                        {describeServiceFee(calculatedFare).map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                      </ul>
                     </div>
-                    <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><Price amount={calculatedFare.serviceFee} /></div>
+                    <div className="text-sm font-semibold text-gray-800 whitespace-nowrap"><ChargeAmount amount={calculatedFare.serviceFee} /></div>
                   </div>
                 )}
 
@@ -1831,7 +1894,7 @@ function FlightBookingConfirmation() {
                       <div className="text-sm font-bold text-gray-800">Discounts</div>
                       <div className="text-xs text-gray-400 mt-0.5">Coupon {appliedCoupon.code}</div>
                     </div>
-                    <div className="text-sm font-semibold text-emerald-600 whitespace-nowrap">- <Price amount={appliedCoupon.discountAmount} /></div>
+                    <div className="text-sm font-semibold text-emerald-600 whitespace-nowrap">- <ChargeAmount amount={appliedCoupon.discountAmount} /></div>
                   </div>
                 )}
 
@@ -1844,6 +1907,7 @@ function FlightBookingConfirmation() {
                     key={calculatedFare.totalAmount}
                     orderTotal={calculatedFare.totalAmount}
                     bookingType="flights"
+                    formatAmount={formatUsd}
                     onApply={(coupon) => { couponBase.current = calculatedFare.totalAmount; setAppliedCoupon(coupon); }}
                     onRemove={() => { couponBase.current = null; setAppliedCoupon(null); }}
                   />
@@ -1851,15 +1915,24 @@ function FlightBookingConfirmation() {
 
                 <div className="fare-row total">
                   <span className="label">Total Amount</span>
-                  <span className="value"><Price amount={appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount} /></span>
+                  <span className="value text-right">
+                    <ChargeAmount amount={amountDue} approximate approximateClassName="block text-xs font-medium text-gray-500" />
+                  </span>
                 </div>
+                {/* The merchant settles only in US dollars. This page used to
+                    show the whole summary in the visitor's currency and never
+                    say the card is charged in dollars, so the bank's bill
+                    matched nothing the customer had been shown. */}
+                <p className="mt-2 text-xs text-gray-500" data-charge-note="">
+                  Your card is charged in US dollars (USD). An amount shown in another currency is an estimate: your bank converts at its own rate and may add a fee.
+                </p>
 
                 <button
                   onClick={handleProceedToPayment}
-                  disabled={checkingOut}
+                  disabled={checkingOut || openingPayment}
                   className="btn-primary mt-4"
                 >
-                  {checkingOut ? 'Checking the fare…' : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
+                  {openingPayment ? 'Opening secure payment…' : checkingOut ? 'Checking the fare…' : `Pay ${formatUsd(amountDue)}`} <CheckCircle className="h-5 w-5" />
                 </button>
 
                 {/* Renders into a portal, so it covers both this button and the mobile bar's. */}
@@ -1898,21 +1971,21 @@ function FlightBookingConfirmation() {
       >
         <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-            <span style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Total</span>
+            <span style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Total, charged in USD</span>
             <span style={{ fontSize: 20, fontWeight: 800, color: '#055B75' }}>
-              <Price amount={appliedCoupon ? appliedCoupon.finalTotal : calculatedFare?.totalAmount} />
+              <ChargeAmount amount={amountDue} approximate approximateClassName="block text-[11px] font-medium text-gray-500" />
             </span>
           </div>
           <button
             onClick={handleProceedToPayment}
-            disabled={checkingOut}
+            disabled={checkingOut || openingPayment}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8, background: '#055B75', color: '#fff',
               fontWeight: 700, fontSize: 15, padding: '13px 26px', borderRadius: 10, border: 'none',
               cursor: 'pointer', boxShadow: '0 6px 16px rgba(5,91,117,0.3)', whiteSpace: 'nowrap',
             }}
           >
-            {checkingOut ? 'Checking the fare…' : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
+            {openingPayment ? 'Opening secure payment…' : checkingOut ? 'Checking the fare…' : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
           </button>
         </div>
       </div>

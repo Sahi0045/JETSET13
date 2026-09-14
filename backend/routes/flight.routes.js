@@ -16,6 +16,9 @@ import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
 import { getWsConfig } from '../services/amadeusSoap/config.js';
 import { recordCouponUse } from '../services/coupon.service.js';
 import { crossesBorder } from '../utils/itinerary.js';
+import { CHAIN_CLAIM_TTL_MS } from '../utils/bookingChainClaim.js';
+import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
+import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
@@ -480,7 +483,10 @@ async function claimBookingChain(bookingReference) {
   let update = supabase
     .from('bookings')
     .update({
-      booking_details: { ...details, gds_chain: { state: 'in_progress', startedAt, attempt, ...queueAttempts } },
+      // `claimedAt` stays put while the heartbeat moves `startedAt` on: it is how
+      // two paid checkouts for one trip tell which claimed first
+      // (findDuplicateBooking).
+      booking_details: { ...details, gds_chain: { state: 'in_progress', startedAt, claimedAt: startedAt, attempt, ...queueAttempts } },
       updated_at: startedAt,
     })
     .eq('booking_reference', bookingReference);
@@ -504,7 +510,7 @@ async function claimBookingChain(bookingReference) {
     console.warn('⏳ Lost the chain claim race for', bookingReference);
     return { claimed: false };
   }
-  return { claimed: true, attempt };
+  return { claimed: true, attempt, claimedAt: startedAt };
 }
 
 // A booking that cannot get an Amadeus slot is retried this many times by the
@@ -657,6 +663,316 @@ async function refreshChainClaim(bookingReference) {
     .eq('booking_details->gds_chain->>startedAt', chain.startedAt)
     .select('booking_reference');
   return Boolean(data?.length);
+}
+
+/**
+ * How long a claim on sending a booking's confirmation email holds before a
+ * later request may take it over: far longer than a send takes, short enough
+ * that a process killed mid-send does not stop the email for good.
+ */
+const CONFIRMATION_EMAIL_CLAIM_TTL_MS = 5 * 60_000;
+
+/**
+ * Review flags that describe a booking the success path confirmed, and emailed,
+ * as it stands: the chain's "issued, but the ticket numbers had not surfaced",
+ * and the paid-not-ticketed alarm's label for an ordinary unticketed
+ * reservation it announced. Any other flag is a booking a human is sorting
+ * out, and the success path sends that booking no confirmation.
+ */
+const EMAILED_REVIEW_REASONS = new Set(['ticket_numbers_not_retrieved', UNTICKETED_REVIEW_REASON]);
+
+/**
+ * Does this booking still owe its customer the confirmation email?
+ *
+ * A retried order - a customer's second click, the booking queue, the
+ * abandoned-checkout job - finds the booking done and answers ALREADY_BOOKED.
+ * That answer used to send nothing, so a booking whose first email was skipped
+ * for want of an address, or failed, never got one. It is owed only what the
+ * success path would have sent for the booking as it is now: nothing once it
+ * is cancelled or its money returned, nothing for one flagged for review. The
+ * email itself says reservation or confirmation from the row
+ * (isUnticketedFlight), exactly as it does on the success path.
+ */
+export function confirmationEmailOwed(booking) {
+  const details = booking?.booking_details || {};
+  if (!details.pnr) return false;
+  if (booking.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(booking.payment_status)) return false;
+  if (details.confirmation_email?.state === 'sent') return false;
+  const review = details.needs_review;
+  return !review || EMAILED_REVIEW_REASONS.has(review.reason);
+}
+
+/**
+ * Take the right to send a booking's confirmation email.
+ *
+ * Two retries of one order can arrive together - a double click, the queue and
+ * the customer's own browser - and each would send. As in claimBookingChain, a
+ * conditional UPDATE on the claim stamp just read decides the winner: both
+ * requests write conditioned on the same prior stamp, and the second matches
+ * no rows. The same caveat applies too: PostgREST rejects arrow paths inside
+ * `or` on an UPDATE, so the condition is a single `is` or `eq`.
+ *
+ * `failOpen` is for the booking's first send, which went out unconditionally
+ * before this claim existed: a bookkeeping failure must not cost the customer
+ * that email. A retry fails closed, because a later retry can still send.
+ */
+async function claimConfirmationEmail(bookingReference, { failOpen = false } = {}) {
+  if (!supabase || !bookingReference) return { claimed: failOpen };
+
+  const { data: row, error: readError } = await supabase
+    .from('bookings')
+    .select('status, booking_details')
+    .eq('booking_reference', bookingReference)
+    .single();
+  if (readError || !row) return { claimed: failOpen, unavailable: true };
+
+  const details = row.booking_details || {};
+  const prior = details.confirmation_email || null;
+  if (prior?.state === 'sent') return { claimed: false, alreadySent: true };
+  const priorStamp = prior?.claimed_at ?? null;
+  const heldLive = prior?.state === 'sending' && priorStamp
+    && Date.now() - Date.parse(priorStamp) < CONFIRMATION_EMAIL_CLAIM_TTL_MS;
+  if (heldLive) return { claimed: false };
+
+  const claimedAt = new Date().toISOString();
+  let update = supabase
+    .from('bookings')
+    .update({
+      booking_details: {
+        ...details,
+        // What was done and when, never to whom: no address is kept here.
+        confirmation_email: { state: 'sending', claimed_at: claimedAt, attempt: Number(prior?.attempt || 0) + 1 },
+      },
+    })
+    .eq('booking_reference', bookingReference)
+    // The whole column is written back, so a cancellation that landed since the
+    // read must make this match nothing rather than be overwritten.
+    .eq('status', row.status);
+  update = priorStamp === null
+    ? update.is('booking_details->confirmation_email->>claimed_at', null)
+    : update.eq('booking_details->confirmation_email->>claimed_at', priorStamp);
+
+  const { data, error } = await update.select('booking_reference');
+  if (error) {
+    console.error('⚠️ Could not claim the confirmation email:', error.message);
+    return { claimed: failOpen, unavailable: true };
+  }
+  if (!data?.length) return { claimed: false };
+  return { claimed: true, claimedAt };
+}
+
+/** Write down how a claimed send went, while the claim is still this request's. */
+async function recordConfirmationEmail(bookingReference, claimedAt, outcome) {
+  if (!supabase || !bookingReference || !claimedAt) return;
+  const { data: row } = await supabase
+    .from('bookings')
+    .select('booking_details')
+    .eq('booking_reference', bookingReference)
+    .single();
+  const details = row?.booking_details;
+  if (!details) return;
+  const { error } = await supabase
+    .from('bookings')
+    .update({ booking_details: { ...details, confirmation_email: { ...details.confirmation_email, ...outcome, claimed_at: claimedAt } } })
+    .eq('booking_reference', bookingReference)
+    .eq('booking_details->confirmation_email->>claimed_at', claimedAt);
+  if (error) console.error('⚠️ Could not record the confirmation email:', error.message);
+}
+
+/**
+ * Send a booking's confirmation email unless another request has, or is doing
+ * so now. Never throws: an email is never the reason an order request fails.
+ */
+export async function sendConfirmationOnce(bookingReference, emailData, { failOpen = false } = {}) {
+  try {
+    if (!emailData?.customerEmail) return { sent: false, reason: 'no-address' };
+    const claim = await claimConfirmationEmail(bookingReference, { failOpen });
+    if (!claim.claimed) {
+      return { sent: false, reason: claim.alreadySent ? 'already-sent' : claim.unavailable ? 'unavailable' : 'in-progress' };
+    }
+
+    let sent = false;
+    try {
+      const { sendBookingNotificationEmails } = await import('../services/emailService.js');
+      const result = await sendBookingNotificationEmails(emailData);
+      sent = result?.success === true;
+      if (sent) console.log('✅ Booking confirmation email sent', { bookingReference });
+      else console.warn('⚠️ Booking confirmation email not sent:', result?.error || 'unknown reason');
+    } catch (emailError) {
+      console.error('❌ Failed to send booking confirmation email:', emailError.message);
+    }
+
+    const now = new Date().toISOString();
+    await recordConfirmationEmail(bookingReference, claim.claimedAt,
+      sent ? { state: 'sent', sent_at: now } : { state: 'failed', failed_at: now });
+    return { sent };
+  } catch (error) {
+    console.error('❌ Confirmation email step failed:', error.message);
+    return { sent: false, reason: 'error' };
+  }
+}
+
+/**
+ * How far back another booking counts as the first payment for the same trip.
+ * The second payment page was opened minutes after the first, but the second
+ * payment can reach this route much later - the abandoned-checkout job books
+ * for up to six hours - and a booking made days ago for the same people on the
+ * same flights is no less a duplicate.
+ */
+const DUPLICATE_LOOKBACK_MS = 30 * DAY_MS;
+
+/** What the customer is told when their payment is held as a second payment for one trip. */
+function duplicatePaymentAnswer(bookingReference) {
+  const message = 'This payment looks like a second payment for a trip you have already booked, for the same travellers '
+    + 'on the same flights, so we have not booked it again. Your other booking is not affected. Our support team will '
+    + 'check it and refund this payment. If you did mean to book this trip twice, or have not heard from us within '
+    + `2 business days, call (877) 538-7380 with booking reference ${bookingReference}.`;
+  return {
+    success: false,
+    code: 'DUPLICATE_PAYMENT',
+    duplicatePayment: true,
+    needsReview: true,
+    bookingReference,
+    error: message,
+    message,
+  };
+}
+
+/**
+ * Another booking of this customer's, for the same travellers on the same
+ * flights, that is booked or on its way to being booked.
+ *
+ * "This customer" is the account the checkout was made from, or the email it
+ * was made with. "Booked or on its way" is a PNR, a committed or queued chain,
+ * or a chain in progress that claimed first - the earlier claim, or the lower
+ * reference on a tie. Two paid checkouts racing each other both get here after
+ * taking their own claim, so they see each other, and only the later one is
+ * held. Same names, not just the same flights: a family can book one flight
+ * twice for different people, and nothing here refunds anybody.
+ *
+ * @returns {Promise<{ duplicateOf: string|null } | { unavailable: true }>}
+ */
+async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now = Date.now() }) {
+  const flights = flightsKey(offer);
+  const names = travellerNamesKey(travellers);
+  const details = booking.booking_details || {};
+  const email = String(details.customer_email || '').trim();
+  if (!supabase || !flights || !names || (!booking.user_id && !email)) return { duplicateOf: null };
+
+  const lookups = [
+    ...(booking.user_id ? [['user_id', booking.user_id]] : []),
+    ...(email ? [['booking_details->>customer_email', email]] : []),
+  ];
+  const candidates = new Map();
+  for (const [column, value] of lookups) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('booking_reference, user_id, status, payment_status, created_at, booking_details, passenger_details')
+      .eq('travel_type', 'flight')
+      .eq(column, value)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) {
+      console.error('⚠️ Could not look for a duplicate booking:', error.message);
+      return { unavailable: true };
+    }
+    for (const row of Array.isArray(data) ? data : []) candidates.set(row.booking_reference, row);
+  }
+
+  const mine = Date.parse(claimedAt);
+  for (const row of candidates.values()) {
+    if (row.booking_reference === booking.booking_reference) continue;
+    const other = row.booking_details || {};
+    const sameCustomer = (booking.user_id && row.user_id === booking.user_id)
+      || (email && String(other.customer_email || '').trim().toLowerCase() === email.toLowerCase());
+    if (!sameCustomer) continue;
+    if (row.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(row.payment_status)) continue;
+    // Itself a second payment already held: it is not the booking this one repeats.
+    if (other.needs_review?.duplicate_of) continue;
+    if (now - Date.parse(row.created_at) > DUPLICATE_LOOKBACK_MS) continue;
+
+    const chain = other.gds_chain || {};
+    const booked = Boolean(other.pnr) || Boolean(other.queued_order) || ['committed', 'queued'].includes(chain.state);
+    const theirClaim = Date.parse(chain.claimedAt || chain.startedAt);
+    const bookingFirst = chain.state === 'in_progress'
+      && now - Date.parse(chain.startedAt) < CHAIN_CLAIM_TTL_MS
+      && Number.isFinite(theirClaim)
+      && (theirClaim < mine || (theirClaim === mine && row.booking_reference < booking.booking_reference));
+    if (!booked && !bookingFirst) continue;
+
+    const theirOffer = other.flight_offer || other.pending_booking_data?.bookingData?.originalOffer || other.queued_order?.flightOffer;
+    const theirTravellers = (Array.isArray(row.passenger_details) && row.passenger_details.length > 0 ? row.passenger_details : null)
+      || other.pending_booking_data?.bookingData?.passengerData
+      || other.queued_order?.travelers;
+    if (flightsKey(theirOffer) === flights && travellerNamesKey(theirTravellers) === names) {
+      return { duplicateOf: row.booking_reference };
+    }
+  }
+  return { duplicateOf: null };
+}
+
+/**
+ * Put a second payment for one trip in front of a human, and let go of the
+ * chain claim this request took: nothing was sold. `needs_review` is what the
+ * paid-not-ticketed alarm announces, and what keeps the abandoned-checkout job
+ * and a retry of this order from booking it.
+ */
+async function holdDuplicatePayment(bookingReference, duplicateOf) {
+  const at = new Date().toISOString();
+  return patchBookingDetails(bookingReference, {
+    needs_review: {
+      reason: `possible duplicate payment: the same travellers on the same flights are already booked, or being booked, as ${duplicateOf}. `
+        + 'Held, not booked: refund it, or book it by hand if the customer meant to book twice.',
+      ticketed: false,
+      at,
+      duplicate_of: duplicateOf,
+      source: 'duplicate-payment',
+    },
+    gds_chain: { state: 'failed', failedStep: 'duplicate-payment', finishedAt: at },
+  });
+}
+
+/**
+ * The confirmation email for a booking already saved, rebuilt from its row for
+ * a retry that found it done: the fields the success path sends, in its order
+ * of preference for the address.
+ */
+function confirmationEmailFromRow(booking, body = {}) {
+  const {
+    // Neither the payment secret nor the checkout's copy of the travellers'
+    // documents has any business in an email template.
+    success_indicator: _secret,
+    pending_booking_data: checkout,
+    queued_order: _queued,
+    confirmation_email: _record,
+    ...details
+  } = booking.booking_details || {};
+  const offer = details.flight_offer || checkout?.bookingData?.originalOffer || null;
+  const segments = offer?.itineraries?.[0]?.segments || [];
+  const firstSegment = segments[0] || {};
+  const lastSegment = segments[segments.length - 1] || firstSegment;
+  const travellers = Array.isArray(body?.travelers) && body.travelers.length > 0
+    ? body.travelers
+    : (checkout?.bookingData?.passengerData || []);
+  const lead = travellers[0] || {};
+  const name = `${lead.firstName || lead.name?.firstName || ''} ${lead.lastName || lead.name?.lastName || ''}`.trim();
+
+  return {
+    customerEmail: body?.contactInfo?.email || body?.customerEmail || lead.email || details.customer_email || '',
+    customerName: name || 'Valued Customer',
+    bookingReference: booking.booking_reference,
+    bookingType: 'flight',
+    paymentAmount: booking.total_amount || offer?.price?.total || '0',
+    currency: details.currency || offer?.price?.currency || 'USD',
+    travelDate: details.departure_date_full || firstSegment.departure?.at?.split('T')[0],
+    passengers: travellers.length || 1,
+    bookingDetails: {
+      ...details,
+      origin: details.origin || firstSegment.departure?.iataCode,
+      destination: details.destination || lastSegment.arrival?.iataCode,
+      airline: details.airline_name || offer?.validatingAirlineCodes?.[0],
+    },
+  };
 }
 
 /**
@@ -1547,6 +1863,17 @@ router.post('/order', optionalProtect, async (req, res) => {
       const tickets = Array.isArray(details.tickets) ? details.tickets : [];
       const ticketed = details.gds?.ticketed === true || tickets.length > 0;
       console.log('↩️ Already booked, returning the stored order', details.pnr);
+      // A retry can be the first chance to send a confirmation this booking
+      // never got: its first send was skipped for want of an address, or failed.
+      // Started after the answer and not awaited, so the email can neither hold
+      // up nor fail the customer's retry. Flight routes run on the Lightsail
+      // server (vercel.json forwards /api/flights), where work after the answer
+      // still finishes; the claim's expiry covers a process that dies mid-send.
+      if (confirmationEmailOwed(existing)) {
+        res.on?.('finish', () => {
+          sendConfirmationOnce(existing.booking_reference, confirmationEmailFromRow(existing, req.body));
+        });
+      }
       return res.json({
         success: true,
         data: {
@@ -1565,6 +1892,12 @@ router.post('/order', optionalProtect, async (req, res) => {
         savedToDatabase: true,
         message: ticketed ? 'This booking already exists' : 'This booking already exists; its ticket has not been issued yet'
       });
+    }
+
+    // A payment already held as a second payment for one trip stays held: a
+    // human decides whether to book or refund it (findDuplicateBooking, below).
+    if (existing.booking_details?.needs_review?.duplicate_of) {
+      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference));
     }
 
     // Was this actually paid for? Ask the gateway, not the row. The row's
@@ -1806,6 +2139,58 @@ router.post('/order', optionalProtect, async (req, res) => {
     }
     chainClaimed = true;
 
+    // One trip, one booking. A second paid checkout for the same travellers on
+    // the same flights - a double click, the back button or a second tab could
+    // each open a second payment page - was booked like any other: two PNRs,
+    // two charges. It is held for a human instead, and not refunded
+    // automatically, because a family can book one flight twice. Checked after
+    // the claim, so of two such payments racing each other only the later one
+    // is held (findDuplicateBooking).
+    const duplicate = await findDuplicateBooking(existing, {
+      travellers: travelersList,
+      offer: firstOffer,
+      claimedAt: claim.claimedAt,
+    });
+    if (duplicate.unavailable) {
+      // It cannot be told, so it is not booked now. Nothing was sold: the queue
+      // runs it again, check and all, once the database answers.
+      chainClaimed = false;
+      if (await queueBookingForRetry(req.body.bookingReference, req.body)) {
+        return respondQueued(res, req.body.bookingReference);
+      }
+      await releaseBookingChain(req.body.bookingReference, 'duplicate-check');
+      return res.status(503).json({
+        success: false,
+        error: 'We could not start your booking just now. Your payment is safe - please try again in a minute.',
+        code: 'BOOKING_UNAVAILABLE',
+        retryable: true
+      });
+    }
+    if (duplicate.duplicateOf) {
+      console.warn('⛔ Holding a second payment for a trip already booked', {
+        bookingReference: existing.booking_reference,
+        duplicateOf: duplicate.duplicateOf
+      });
+      chainClaimed = false;
+      if (!(await holdDuplicatePayment(req.body.bookingReference, duplicate.duplicateOf))) {
+        // Not recorded, so nobody would be told about it. Let the claim go and
+        // ask the customer to try again, which runs the check again.
+        reportError(new Error('could not hold a duplicate payment for review'), {
+          service: 'flights',
+          flow: 'booking',
+          bookingReference: req.body.bookingReference,
+          duplicateOf: duplicate.duplicateOf
+        });
+        await releaseBookingChain(req.body.bookingReference, 'duplicate-payment');
+        return res.status(503).json({
+          success: false,
+          error: 'We could not start your booking just now. Your payment is safe - please try again in a minute.',
+          code: 'BOOKING_UNAVAILABLE',
+          retryable: true
+        });
+      }
+      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference));
+    }
 
     // Prepare flight order data for Amadeus (only if we have valid Amadeus format)
     // The travelers from frontend are already in correct format: { id, firstName, lastName, dateOfBirth, gender }
@@ -2260,11 +2645,19 @@ router.post('/order', optionalProtect, async (req, res) => {
           }
         };
 
-        const emailResult = await sendBookingNotificationEmails(bookingEmailData);
-        if (emailResult.success) {
-          console.log('✅ Booking confirmation email sent successfully');
+        if (bookingEmailData.customerEmail) {
+          // Claimed and recorded on the row (booking_details.confirmation_email),
+          // so a retry of this order can tell whether the customer still needs
+          // it - see confirmationEmailOwed. This first send fails open: a
+          // bookkeeping error must not cost the customer their confirmation.
+          await sendConfirmationOnce(dbBooking.booking_reference, bookingEmailData, { failOpen: true });
         } else {
-          console.warn('⚠️ Booking confirmation email sent with issues:', emailResult.error);
+          // Nobody to confirm to. The office is still told about the booking,
+          // and nothing is recorded, so a retry that brings an address sends it.
+          const emailResult = await sendBookingNotificationEmails(bookingEmailData);
+          console.warn('⚠️ Booking confirmation email not sent: no address', {
+            officeNotified: emailResult?.adminNotification?.success === true,
+          });
         }
       } catch (emailError) {
         console.error('❌ Failed to send booking confirmation email:', emailError.message);

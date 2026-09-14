@@ -28,6 +28,14 @@ const FIRST_RUN_DELAY_MS = 60 * 1000;      // let the app finish booting first
 const log = (msg, extra = {}) => console.log(`[NeedsReviewAlert] ${msg}`, extra);
 
 /**
+ * The flag written on an ordinary unticketed reservation this job announces.
+ * It describes the booking as the order route left it, not a new problem, so
+ * the route still owes that booking its confirmation email
+ * (confirmationEmailOwed in routes/flight.routes.js).
+ */
+export const UNTICKETED_REVIEW_REASON = 'PNR committed, never ticketed';
+
+/**
  * Which flagged bookings actually deserve waking someone up.
  *
  * Exported and pure so it can be tested without a database, and so the manual
@@ -79,7 +87,7 @@ export function describeBooking(booking) {
   return [
     `*${booking.booking_reference}* — ${booking.status}/${booking.payment_status}, ${booking.total_amount} USD`,
     `PNR ${details.pnr || 'none'} · ticketed: ${ticketed ? 'yes' : 'NO'}`,
-    `reason: ${review.reason || 'PNR committed, never ticketed'} · flagged ${hours}h ago`,
+    `reason: ${review.reason || UNTICKETED_REVIEW_REASON} · flagged ${hours}h ago`,
     // The GDS's own words, when the chain recorded them. "failed at
     // issueTicket" alone cannot tell a carrier the office may not ticket from
     // missing passenger documents or a code fault.
@@ -106,7 +114,7 @@ async function markAlerted(bookings) {
     // A row announced for the unflagged reason gets a flag written as it is
     // announced, so from here on it is one class: flagged, and stamped.
     const review = details.needs_review
-      || { reason: 'PNR committed, never ticketed', ticketed: false, at: now };
+      || { reason: UNTICKETED_REVIEW_REASON, ticketed: false, at: now };
     const updated = {
       ...details,
       needs_review: { ...review, alerted_at: now },

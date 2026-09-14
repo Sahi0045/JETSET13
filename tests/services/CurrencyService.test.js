@@ -4,7 +4,7 @@
  * (which the backend project otherwise runs under node).
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Reset modules before each test so we get a fresh singleton
 describe('CurrencyService', () => {
@@ -180,6 +180,61 @@ describe('CurrencyService', () => {
     it('returns true after manual setCurrency', () => {
       currencyService.setCurrency('AUD', true);
       expect(currencyService.isManuallySet()).toBe(true);
+    });
+  });
+
+  /**
+   * The flight review page shows a converted estimate beside the dollar charge
+   * only from live rates. The hardcoded table, and the server's copy of it sent
+   * when no FX source answered, used to be applied and cached as if live.
+   */
+  describe('hasLiveRates', () => {
+    const answer = (body) => vi.fn().mockResolvedValue({ json: async () => body });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('is false until a live source answers', () => {
+      expect(currencyService.hasLiveRates()).toBe(false);
+    });
+
+    it('is true once the server sends live rates, and caches them as live', async () => {
+      vi.stubGlobal('fetch', answer({ success: true, base: 'USD', rates: { USD: 1, INR: 88.1 }, source: 'open.er-api.com' }));
+
+      await currencyService.loadLiveRates();
+
+      expect(currencyService.hasLiveRates()).toBe(true);
+      expect(currencyService.getExchangeRate('INR')).toBe(88.1);
+      expect(JSON.parse(localStorage.getItem('fxRates')).live).toBe(true);
+    });
+
+    it("does not count the server's hardcoded fallback as live, or cache it", async () => {
+      vi.stubGlobal('fetch', answer({ success: false, base: 'USD', rates: { USD: 1, INR: 83.35 }, source: 'fallback' }));
+
+      await currencyService.loadLiveRates();
+
+      expect(currencyService.hasLiveRates()).toBe(false);
+      expect(localStorage.getItem('fxRates')).toBeNull();
+    });
+
+    it('does not trust a cached snapshot that does not say it was live', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+      localStorage.setItem('fxRates', JSON.stringify({ rates: { USD: 1, INR: 83.35 }, at: Date.now() }));
+
+      await currencyService.loadLiveRates();
+
+      expect(currencyService.hasLiveRates()).toBe(false);
+    });
+
+    it('trusts a recent snapshot of live rates while offline', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+      localStorage.setItem('fxRates', JSON.stringify({ rates: { USD: 1, INR: 87.9 }, at: Date.now(), live: true }));
+
+      await currencyService.loadLiveRates();
+
+      expect(currencyService.hasLiveRates()).toBe(true);
+      expect(currencyService.getExchangeRate('INR')).toBe(87.9);
     });
   });
 });

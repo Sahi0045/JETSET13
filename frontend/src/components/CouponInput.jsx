@@ -10,8 +10,12 @@ import Price from '../Components/Price';
  *   bookingType (string) - 'flights', 'hotels', 'cruises', 'packages', 'all'
  *   onApply (fn) - callback({ couponId, code, discountAmount, finalTotal })
  *   onRemove (fn) - callback when coupon is removed
+ *   formatAmount (fn, optional) - renders an amount. Defaults to <Price>, the
+ *     visitor's display currency; the flight review page passes US dollars,
+ *     the currency its card is charged in.
  */
-const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove }) => {
+const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove, formatAmount }) => {
+    const showAmount = (amount) => (formatAmount ? formatAmount(amount) : <Price amount={amount} />);
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -74,9 +78,9 @@ const CouponInput = ({ orderTotal, bookingType = 'all', onApply, onRemove }) => 
                         🎉 Coupon <span className="font-mono">{applied.coupon.code}</span> applied!
                     </p>
                     <p className="text-xs text-green-600 mt-0.5">
-                        {/* Through <Price>, like every other figure in the fare
+                        {/* In the same form as every other figure in the fare
                             summary; a bare "$" disagreed with the total beside it. */}
-                        You save <span className="font-semibold"><Price amount={applied.discountAmount} /></span>. New total: <span className="font-semibold"><Price amount={applied.finalTotal} /></span>
+                        You save <span className="font-semibold">{showAmount(applied.discountAmount)}</span>. New total: <span className="font-semibold">{showAmount(applied.finalTotal)}</span>
                     </p>
                 </div>
                 <button
