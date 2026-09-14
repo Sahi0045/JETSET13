@@ -22,6 +22,20 @@ const ENDPOINTS = [
   ['post', '/date-prices'],
   ['get', '/cheapest-dates'],
   ['post', '/calendar-prices'],
+  // Air_FlightInfo. No page calls it today, but it is open and goes to Amadeus.
+  ['get', '/status'],
+];
+
+// On the same router, and none of them reaches Amadeus: the airport lookup reads
+// the bundled index, and the rest are answered by the provider as not entitled.
+// Autocomplete in particular must not spend the search budget as someone types.
+const NOT_AMADEUS = [
+  '/airports/search?keyword=lon',
+  '/analytics/booked?origin=JFK',
+  '/analytics/traveled?origin=JFK',
+  '/analytics/busiest?origin=JFK',
+  '/inspiration?origin=JFK',
+  '/price-analysis?origin=JFK&destination=LHR&departureDate=2030-01-01',
 ];
 
 const makeApp = async (max) => {
@@ -83,6 +97,23 @@ describe('flight search limiter', () => {
 
     const health = await request(app).get('/api/flights/health').set('X-Forwarded-For', '203.0.113.7');
     expect(health.status).toBe(200);
+
+    for (const path of NOT_AMADEUS) {
+      const res = await request(app).get(`/api/flights${path}`).set('X-Forwarded-For', '203.0.113.7');
+      expect(res.status, path).not.toBe(429);
+    }
+    const availability = await request(app).post('/api/flights/availabilities').set('X-Forwarded-For', '203.0.113.7').send({});
+    expect(availability.status).not.toBe(429);
+  });
+
+  // A customer typing "London", then "Frankfurt", in both boxes, many times over.
+  it('never counts airport autocomplete, however fast someone types', async () => {
+    const app = await makeApp(1);
+    for (let i = 0; i < 30; i += 1) {
+      const res = await request(app).get('/api/flights/airports/search?keyword=lon').set('X-Forwarded-For', '203.0.113.7');
+      expect(res.status).not.toBe(429);
+    }
+    expect((await call(app, ['post', '/search'], '203.0.113.7')).status).not.toBe(429);
   });
 
   // A hurried customer's minute, counted from the pages (see security.js):

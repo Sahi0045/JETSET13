@@ -67,8 +67,15 @@ const router = express.Router();
 // entry point: all three mount this router, Vercel twice, so it cannot be left
 // out of one. A path matches whole segments only - '/search' is not
 // '/airports/search', and '/price' is not '/price-analysis'.
+//
+// `/status` sends Air_FlightInfo to Amadeus, and was left off the first list.
+// Deliberately not here: `/airports/search`, which reads the bundled airport
+// index in memory and is called as the customer types, and `/analytics/*`,
+// `/availabilities`, `/inspiration` and `/price-analysis`, which this WSAP is
+// not entitled to - the provider answers them without calling Amadeus. The day
+// one of them gets a real implementation, it belongs on this list.
 router.use(
-  ['/search', '/price', '/upsell', '/fare-rules', '/seatmaps', '/date-prices', '/cheapest-dates', '/calendar-prices'],
+  ['/search', '/price', '/upsell', '/fare-rules', '/seatmaps', '/date-prices', '/cheapest-dates', '/calendar-prices', '/status'],
   flightSearchLimiter
 );
 

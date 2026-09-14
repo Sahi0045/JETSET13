@@ -100,7 +100,8 @@ export const apiLimiter = rateLimit({
 
 /**
  * Per-IP limiter for the flight endpoints that reach Amadeus: search, price,
- * upsell, fare rules, seat maps and the three date-price calendars. They are
+ * upsell, fare rules, seat maps, the three date-price calendars and flight
+ * status. They are
  * unauthenticated and each call spends GDS capacity (and the booking lane's
  * slots), so a scraper under the general 300/min could spend all of it here.
  * Applied inside flight.routes.js, which every entry point mounts - so it
