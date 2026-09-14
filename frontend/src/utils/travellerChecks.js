@@ -33,7 +33,15 @@ export function travellerProblems(traveller, {
     if (needsDateOfBirth({ type: t.type, international })) add('Enter the date of birth.');
   } else {
     const ageProblem = passengerAgeProblem(t.type, t.dateOfBirth, travelDate);
-    if (ageProblem) add(ageProblem);
+    if (ageProblem) {
+      add(ageProblem);
+    } else if (t.type !== 'ADULT' && lastDate) {
+      // An infant who turns 2, or a child who turns 12, before the last flight
+      // is on the wrong fare for the rest of the trip - many airlines then
+      // require a paid seat on the way back.
+      const laterProblem = passengerAgeProblem(t.type, t.dateOfBirth, String(lastDate).slice(0, 10));
+      if (laterProblem) add(laterProblem.replace('on the day of travel', 'on every flight of the trip'));
+    }
   }
   if (!t.gender) add('Select a gender.');
   if (index === 0 && !t.mobile) add('Enter a mobile number for booking updates.');

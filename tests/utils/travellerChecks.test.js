@@ -35,6 +35,13 @@ describe('travellerProblems', () => {
     expect(travellerProblems({ ...complete, dateOfBirth: '2020-01-01' }, domestic)[0]).toMatch(/Adult fares are for travellers aged 12 or over/);
   });
 
+  // An infant who turns 2 before the flight home is on the wrong fare for it.
+  it('checks a child or infant against the last flight of the trip too', () => {
+    const infant = { ...complete, type: 'HELD_INFANT', dateOfBirth: '2024-10-20' };
+    expect(travellerProblems(infant, domestic)).toEqual([]);
+    expect(travellerProblems(infant, { ...domestic, lastDate: '2026-10-25' })[0]).toMatch(/on every flight of the trip/);
+  });
+
   it('asks everyone crossing a border for a date of birth and a passport', () => {
     const problems = travellerProblems(complete, { ...domestic, international: true, lastDate: '2026-10-12' });
     expect(problems).toEqual(expect.arrayContaining([

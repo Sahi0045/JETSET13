@@ -31,7 +31,9 @@ const offerFor = (passengers) => ({
 
 const bookingFor = (passengers) => ({
   originalOffer: offerFor(passengers),
-  passengerData: Array.from({ length: passengers }, (_, i) => ({ firstName: `P${i}`, lastName: 'Doe' })),
+  passengerData: Array.from({ length: passengers }, (_, i) => ({
+    firstName: `P${i}`, lastName: 'Doe', gender: 'female', dateOfBirth: '1990-01-01', type: 'ADULT',
+  })),
 });
 
 const pricedAt = (total, currency = 'USD') => vi.fn().mockResolvedValue({ price: { total: String(total), base: '300.00', currency } });
@@ -126,6 +128,40 @@ describe('verifyFlightCharge', () => {
     const result = await verify({ amount: 361.8, bookingData: bookingFor(2), couponCode: 'NOPE', priceOffer: pricedAt(400) });
     expect(result.code).toBe('COUPON_INVALID');
   });
+
+  // A guest has no account, so the one-per-customer check was skipped for them.
+  it("holds a guest to the coupon's one use by their email", async () => {
+    rows.coupons = { id: 'c1', code: 'FLY10', discount_type: 'percentage', discount_value: 10, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
+    rows.coupon_usage = { id: 'u1' };
+
+    const result = await verify({
+      amount: 361.8, bookingData: bookingFor(2), couponCode: 'FLY10', userId: null, email: 'guest@example.com', priceOffer: pricedAt(400),
+    });
+
+    expect(result.code).toBe('COUPON_INVALID');
+  });
+
+  // The order route refused an incomplete traveller too - after the charge,
+  // and then had to reverse it.
+  it('refuses a traveller the airline would need more from, before payment', async () => {
+    const booking = bookingFor(2);
+    booking.passengerData[1] = { ...booking.passengerData[1], dateOfBirth: '' };
+
+    // Pricing did not say whether the trip crosses a border: that counts as crossing.
+    const result = await verify({ amount: 402, bookingData: booking, priceOffer: pricedAt(400) });
+
+    expect(result.code).toBe('PASSENGERS_INCOMPLETE');
+  });
+
+  it('lets domestic adults pay without a date of birth', async () => {
+    const booking = bookingFor(2);
+    booking.passengerData = booking.passengerData.map(({ dateOfBirth, ...rest }) => rest);
+    const priceOffer = vi.fn().mockResolvedValue({ price: { total: '400.00', base: '300.00', currency: 'USD' }, _ama: { international: false } });
+
+    const result = await verify({ amount: 402, bookingData: booking, priceOffer });
+
+    expect(result.ok).toBe(true);
+  });
 });
 
 describe('hosted checkout for a flight', () => {
@@ -172,6 +208,52 @@ describe('hosted checkout for a flight', () => {
 
     const sent = axios.post.mock.calls.find(([, body]) => body?.apiOperation === 'INITIATE_CHECKOUT')?.[1];
     expect(sent.order.amount).toBe('402.00');
+  });
+
+  // The success indicator is what proves the payer to the order route. ARC gives
+  // it to the paying browser on the way back; this response handed it to
+  // whoever opened the session, before any payment.
+  it('never returns the payment secret to the page that opened the session', async () => {
+    const { res } = await run({ ok: true, charge: { total: 402 }, coupon: null, pricedFare: { total: 400, currency: 'USD' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toHaveProperty('successIndicator');
+    expect(JSON.stringify(res.body)).not.toContain('"SI"');
+  });
+
+  // Checkout upserted on the reference whatever the row held - a paid booking,
+  // a PNR, someone else's checkout - resetting it to unpaid with a new secret.
+  describe('an order reference that is already in use', () => {
+    const verified = { ok: true, charge: { total: 402 }, coupon: null, pricedFare: { total: 400, currency: 'USD' } };
+
+    it("refuses another customer's reference, before pricing or a payment session", async () => {
+      rows.bookings = { user_id: 'someone-else', status: 'pending', payment_status: 'unpaid', booking_details: {} };
+
+      const { res, verifyFlightCharge } = await run(verified);
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body.code).toBe('ORDER_REFERENCE_IN_USE');
+      expect(verifyFlightCharge).not.toHaveBeenCalled();
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it("refuses the customer's own reference once it has been paid", async () => {
+      rows.bookings = { user_id: CUSTOMER.id, status: 'pending', payment_status: 'paid', booking_details: { arc_captured_amount: 402 } };
+
+      const { res } = await run(verified);
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body.code).toBe('ORDER_REFERENCE_IN_USE');
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('lets the same customer start their own unpaid checkout again', async () => {
+      rows.bookings = { user_id: CUSTOMER.id, status: 'pending', payment_status: 'unpaid', booking_details: {} };
+
+      const { res } = await run(verified);
+
+      expect(res.statusCode).toBe(200);
+    });
   });
 
   // Guest flight booking is an admin switch (Feature Flags), off unless an

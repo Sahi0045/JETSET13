@@ -129,12 +129,14 @@ const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, tickete
  * @param {Array}  p.travelers        {firstName, lastName, gender, dateOfBirth}
  * @param {object} p.contact          {email, phone}
  * @param {string} p.bookingReference our reference, filed on the PNR as a remark
- * @param {number} [p.expectedTotal]  the fare total the customer was quoted
+ * @param {number} [p.expectedTotal]  the fare total the customer paid for
+ * @param {number} [p.paidAmount]     what ARC captured
+ * @param {number} [p.verifiedChargeTotal] what checkout verified and charged for this fare
  * @param {Function} [p.onCommitted]  awaited with {pnr, order} the moment a PNR exists
  */
 export const runBookingChain = async (p) => {
   const config = getWsConfig();
-  const { offer, contact = {}, bookingReference, expectedTotal, paidAmount, onCommitted } = p;
+  const { offer, contact = {}, bookingReference, expectedTotal, paidAmount, verifiedChargeTotal, onCommitted } = p;
 
   const ama = offer?._ama;
   if (!ama?.segments?.length) {
@@ -157,7 +159,13 @@ export const runBookingChain = async (p) => {
     });
   }
 
-  const ageMinutes = ama.searchedAt ? (Date.now() - Date.parse(ama.searchedAt)) / 60000 : 0;
+  // Aged from when the airline last priced the fare, not from the search. The
+  // order route prices it again, or stamps checkout's verification: a customer
+  // who took twenty minutes to choose and was booked by the abandoned-checkout
+  // job half an hour after paying was refunded as "expired" on a fare the
+  // airline had confirmed minutes earlier.
+  const agedFrom = ama.pricedAt || ama.searchedAt;
+  const ageMinutes = agedFrom ? (Date.now() - Date.parse(agedFrom)) / 60000 : 0;
   if (ageMinutes > config.offerMaxAgeMin) {
     throw new BookingChainError({
       step: 'validate',
@@ -258,13 +266,21 @@ export const runBookingChain = async (p) => {
     }
 
     // ---- 3b. Fare-change guard --------------------------------------------
-    // Compared against the FARE the customer was quoted, not against what they
+    // Compared against the FARE the customer paid for, not against what they
     // were charged: the charged amount includes the admin-configured service
     // fee, which Amadeus knows nothing about. Tolerance is an env var because
     // the acceptable drift is a business decision, and it defaults to zero.
+    //
+    // In whole cents. The PNR total is a sum of per-passenger amounts and the
+    // quote is rounded to cents; compared as floats, about one family booking in
+    // four was refused over a difference of 0.00000000000003.
+    //
+    // And only a RISE is refused. A fare that prices lower than the customer
+    // paid for costs nobody anything, and refusing it refunded customers out of
+    // a cheaper seat.
     if (expectedTotal != null && priced.total != null) {
-      const drift = Math.abs(priced.total - Number(expectedTotal));
-      if (drift > config.priceTolerance) {
+      const riseCents = Math.round(Number(priced.total) * 100) - Math.round(Number(expectedTotal) * 100);
+      if (riseCents > Math.round(config.priceTolerance * 100)) {
         throw new BookingChainError({
           step: 'priceCheck',
           error: 'The fare changed while we were booking - please search again',
@@ -303,14 +319,23 @@ export const runBookingChain = async (p) => {
         });
       }
     }
-    if (config.minPaymentRatio > 0 && priced.total != null) {
-      const floor = Number(priced.total) * config.minPaymentRatio;
-      if (Number(paidAmount) + 0.01 < floor) {
+    // With a total that checkout verified and charged, the floor is that total:
+    // the customer paid exactly what this fare was priced at - with the service
+    // fee, less any coupon - and the fare guard above has already refused a fare
+    // that rose since. The ratio stays for a booking with no verified charge; on
+    // its own it refused every booking whose coupon took more than a fifth off.
+    if (config.minPaymentRatio > 0 && (verifiedChargeTotal != null || priced.total != null)) {
+      const floor = verifiedChargeTotal != null
+        ? Number(verifiedChargeTotal)
+        : Number(priced.total) * config.minPaymentRatio;
+      if (Math.round(Number(paidAmount) * 100) + 1 < Math.round(floor * 100)) {
         throw new BookingChainError({
           step: 'paymentCoverage',
           error: 'We could not confirm your payment covers this fare - please contact support.',
           code: 402,
-          technicalError: `paid ${paidAmount}, fare ${priced.total} ${priced.currency}, floor ${floor.toFixed(2)} (ratio ${config.minPaymentRatio})`,
+          technicalError: verifiedChargeTotal != null
+            ? `paid ${paidAmount}, verified charge ${verifiedChargeTotal} ${priced.currency}`
+            : `paid ${paidAmount}, fare ${priced.total} ${priced.currency}, floor ${floor.toFixed(2)} (ratio ${config.minPaymentRatio})`,
         });
       }
     }

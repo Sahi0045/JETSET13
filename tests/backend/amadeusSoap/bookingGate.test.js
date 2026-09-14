@@ -62,12 +62,28 @@ const orderBody = {
 };
 
 /**
+ * What hosted checkout keeps for a flight: the offer it priced, and the fare
+ * and charge it verified. The order route books this offer - never the one in
+ * the request body, which `orderBody` deliberately fills with a display card.
+ */
+const verifiedCheckout = (offer, { fare = 291, charge = 291, coupon } = {}) => ({
+  pending_booking_data: { bookingData: { originalOffer: offer } },
+  verified_charge: {
+    total: charge,
+    pricedFare: { total: fare, currency: 'USD' },
+    ...(coupon ? { coupon } : {}),
+    verifiedAt: new Date().toISOString(),
+  },
+});
+
+/**
  * A checkout row holding a real, captured payment whose success indicator
- * matches the one `orderBody` carries.
+ * matches the one `orderBody` carries, for the fare checkout verified.
  */
 const paidRow = (over = {}) => ({
   id: 1,
   booking_reference: 'FLTTEST1',
+  travel_type: 'flight',
   status: 'pending',
   payment_status: 'paid',
   total_amount: 291,
@@ -78,6 +94,7 @@ const paidRow = (over = {}) => ({
     success_indicator: 'SI-TEST-1',
     arc_captured_amount: 291,
     arc_captured_currency: 'USD',
+    ...verifiedCheckout(bookableOffer),
     ...(over.booking_details || {}),
   },
 });
@@ -175,7 +192,7 @@ describe('booking gate', () => {
 });
 
 describe('no fabricated bookings', () => {
-  beforeEach(async () => { await seedRow(paidRow()); });
+  beforeEach(async () => { await seedRow(paidRow({ booking_details: verifiedCheckout(uiShapedOffer) })); });
 
   // Mobile posts the flattened card as flightOffer. That used to fail the
   // Amadeus-shape check and drop into a branch that invented a PNR, saved it
@@ -210,47 +227,59 @@ describe('no fabricated bookings', () => {
   });
 });
 
-describe('accepting the offer the mobile app actually sends', () => {
-  beforeEach(async () => { await seedRow(paidRow()); });
-
-  // Mobile posts the flattened UI card and keeps the bookable offer on
-  // `originalOffer`. Reading only the top level made every mobile booking fail
-  // the shape check - which is how they ended up in the fabricated-PNR branch.
-  it('recovers the bookable offer from originalOffer', async () => {
+/**
+ * The route books the offer checkout priced and charged for.
+ *
+ * It used to book whatever offer the request carried, and the chain checked the
+ * airline's price against that same offer - so a different, dearer fare posted
+ * here was sold against the payment for a cheaper one. Web and mobile clients
+ * post different shapes; neither matters any more.
+ */
+describe('booking the offer checkout verified, not the one posted', () => {
+  beforeEach(() => {
     vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
     vi.resetModules();
-    const app = await makeApp();
-
-    const res = await request(app).post('/api/flights/order').send({
-      ...orderBody,
-      flightOffer: {
-        ...uiShapedOffer,
-        originalOffer: {
-          id: '1',
-          source: 'GDS',
-          price: { total: '291.00', currency: 'USD' },
-          itineraries: [{ segments: [{ id: '1' }] }],
-          travelerPricings: [{ travelerId: '1', travelerType: 'ADULT' }],
-          // No _ama, so the chain still refuses - but for the right reason,
-          // and only after the offer was recognised as bookable at all.
-        },
-      },
-    });
-
-    expect(res.body.code).not.toBe('OFFER_NOT_BOOKABLE');
   });
 
-  it('refuses a card with no bookable offer anywhere on it', async () => {
-    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
-    vi.resetModules();
-    const app = await makeApp();
+  it('books from the row when the request carries only a display card', async () => {
+    const app = await makeApp(paidRow());
 
     const res = await request(app).post('/api/flights/order').send(orderBody);
 
+    expect(res.body.code).not.toBe('OFFER_NOT_BOOKABLE');
+    expect(res.body.code).not.toBe('OFFER_NOT_VERIFIED');
+  });
+
+  it('ignores a bookable offer in the request when checkout kept something else', async () => {
+    const app = await makeApp(paidRow({ booking_details: verifiedCheckout(uiShapedOffer) }));
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('OFFER_NOT_BOOKABLE');
-    // Refused before anything reaches the GDS.
     expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('refuses and reverses a payment checkout never verified a fare for', async () => {
+    const app = await makeApp(paidRow({ booking_details: { verified_charge: null } }));
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('OFFER_NOT_VERIFIED');
+    expect(res.body).toHaveProperty('refundAction');
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  // The refund paths reverse whatever payment is behind the reference.
+  it('never reverses the payment of a booking that is not a flight', async () => {
+    const app = await makeApp(paidRow({ travel_type: 'cruise' }));
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('NOT_A_FLIGHT_BOOKING');
+    expect(res.body.refundAction).toBeUndefined();
   });
 });
 
@@ -290,7 +319,7 @@ describe('post-payment rejections reverse the charge', () => {
   beforeEach(async () => {
     vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
     vi.resetModules();
-    await seedRow(paidRow());
+    await seedRow(paidRow({ booking_details: verifiedCheckout(uiShapedOffer) }));
   });
 
   it('refunds when the offer cannot be sold', async () => {
@@ -311,15 +340,23 @@ describe('post-payment rejections reverse the charge', () => {
     expect(res.body.error).toMatch(/reversed/i);
   });
 
-  it('refunds when the request carries no offers at all', async () => {
-    const app = await makeApp();
+  it('refunds when checkout kept no offer for the payment', async () => {
+    const app = await makeApp(paidRow({ booking_details: { pending_booking_data: null } }));
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('OFFER_NOT_VERIFIED');
+    expect(res.body).toHaveProperty('refundAction');
+  });
+
+  it('needs no offer in the request at all', async () => {
+    const app = await makeApp(paidRow());
 
     const { flightOffer, ...withoutOffer } = orderBody;
     const res = await request(app).post('/api/flights/order').send(withoutOffer);
 
-    expect(res.status).toBe(400);
-    expect(res.body.code).toBe('OFFER_MISSING');
-    expect(res.body).toHaveProperty('refundAction');
+    expect(['OFFER_MISSING', 'OFFER_NOT_BOOKABLE', 'OFFER_NOT_VERIFIED']).not.toContain(res.body.code);
   });
 
   // The stored reason is what a human has to work from when a customer calls
@@ -380,6 +417,7 @@ describe('concurrent booking attempts', () => {
   const inProgressRow = (startedAt) => ({
     id: 1,
     booking_reference: 'FLTTEST1',
+    travel_type: 'flight',
     status: 'pending',
     payment_status: 'paid',
     total_amount: 291,
@@ -387,6 +425,7 @@ describe('concurrent booking attempts', () => {
       success_indicator: 'SI-TEST-1',
       arc_captured_amount: 291,
       arc_captured_currency: 'USD',
+      ...verifiedCheckout(bookableOffer),
       gds_chain: { state: 'in_progress', startedAt, attempt: 1 },
     },
   });
@@ -462,6 +501,52 @@ describe('concurrent booking attempts', () => {
 
     expect(res.body.code).not.toBe('BOOKING_IN_PROGRESS');
   });
+
+  // The claim is a database write; when it errors, nobody knows who holds it.
+  // Two requests that both carried on used to sell two sets of seats.
+  const claimErrors = async ({ queueErrors = false } = {}) => {
+    const supabase = (await import('../../../backend/config/supabase.js')).default;
+    supabase.from.mockImplementation(() => {
+      const chain = {};
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+        chain[m] = vi.fn(() => chain);
+      }
+      chain.single = vi.fn().mockResolvedValue({ data: paidRow(), error: null });
+      chain.maybeSingle = chain.single;
+      const down = (resolve) => resolve({ data: null, error: { message: 'connection reset' } });
+      // Only the claim's compare-and-set asks for rows back from a write.
+      chain.select = vi.fn(() => ({ ...chain, then: down }));
+      if (queueErrors) {
+        const failing = { ...chain, then: down };
+        for (const m of ['eq', 'is', 'select']) failing[m] = vi.fn(() => failing);
+        chain.update = vi.fn(() => failing);
+      }
+      return chain;
+    });
+    return makeApp();
+  };
+
+  it('queues the booking, unsold and unrefunded, when the claim cannot be decided', async () => {
+    const app = await claimErrors();
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.status).toBe(202);
+    expect(res.body.queued).toBe(true);
+    expect(res.body.refundAction).toBeUndefined();
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('asks the customer to retry, without a refund, when it cannot be queued either', async () => {
+    const app = await claimErrors({ queueErrors: true });
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('BOOKING_UNAVAILABLE');
+    expect(res.body.refundAction).toBeUndefined();
+    expect(axios.post).not.toHaveBeenCalled();
+  });
 });
 
 /**
@@ -476,6 +561,7 @@ describe('concurrent booking attempts', () => {
 describe('a booking that already has a PNR', () => {
   const bookedRow = {
     booking_reference: 'FLTTEST1',
+    travel_type: 'flight',
     status: 'confirmed',
     booking_details: { pnr: 'CHOY42', amadeus_order_id: 'CHOY42', success_indicator: 'SI-TEST-1', gds: { ticketed: true } },
   };
@@ -566,6 +652,7 @@ describe('the payment gate', () => {
   const unpaidRow = {
     id: 1,
     booking_reference: 'FLTTEST1',
+    travel_type: 'flight',
     status: 'pending',
     payment_status: 'unpaid',
     total_amount: 5000,           // what the client asked for; proves nothing
@@ -638,7 +725,10 @@ describe('the payment gate', () => {
     const app = await withRow({
       ...unpaidRow,
       payment_status: 'paid',
-      booking_details: { order_id: 'FLTTEST1', success_indicator: 'SI-TEST-1', arc_captured_amount: 291, arc_captured_currency: 'USD' },
+      booking_details: {
+        order_id: 'FLTTEST1', success_indicator: 'SI-TEST-1', arc_captured_amount: 291, arc_captured_currency: 'USD',
+        ...verifiedCheckout(bookableOffer),
+      },
     });
 
     const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
@@ -661,7 +751,11 @@ describe('the payment gate', () => {
       },
     });
     // The checkout asked for 291 and the gateway holds 291.
-    const app = await withRow({ ...unpaidRow, total_amount: 291 });
+    const app = await withRow({
+      ...unpaidRow,
+      total_amount: 291,
+      booking_details: { ...unpaidRow.booking_details, ...verifiedCheckout(bookableOffer) },
+    });
 
     const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
 
@@ -792,6 +886,19 @@ describe('traveller details are checked before anything is sold', () => {
   };
 
   it('lets a domestic adult through without a date of birth', async () => {
+    const app = await makeApp(paidRow({ booking_details: verifiedCheckout(domesticOffer) }));
+
+    const res = await request(app).post('/api/flights/order').send({
+      ...orderBody,
+      travelers: [{ id: '1', firstName: 'Jane', lastName: 'Doe', gender: 'FEMALE' }],
+    });
+
+    expect(res.body.code).not.toBe('PASSENGERS_INCOMPLETE');
+  });
+
+  // Decided from the offer checkout kept: a domestic offer in the request
+  // cannot excuse a date of birth on an international fare.
+  it('decides whether the trip crosses a border from the stored offer', async () => {
     const app = await makeApp(paidRow());
 
     const res = await request(app).post('/api/flights/order').send({
@@ -800,16 +907,15 @@ describe('traveller details are checked before anything is sold', () => {
       travelers: [{ id: '1', firstName: 'Jane', lastName: 'Doe', gender: 'FEMALE' }],
     });
 
-    expect(res.body.code).not.toBe('PASSENGERS_INCOMPLETE');
+    expect(res.body.code).toBe('PASSENGERS_INCOMPLETE');
   });
 
   it('still needs a date of birth for a child on a domestic trip', async () => {
-    const app = await makeApp(paidRow());
     const childFare = { ...domesticOffer, travelerPricings: [{ ...domesticOffer.travelerPricings[0], travelerType: 'CHILD' }] };
+    const app = await makeApp(paidRow({ booking_details: verifiedCheckout(childFare) }));
 
     const res = await request(app).post('/api/flights/order').send({
       ...orderBody,
-      flightOffer: childFare,
       travelers: [{ id: '1', firstName: 'Kabir', lastName: 'Doe', gender: 'MALE', ptc: 'CHILD' }],
     });
 
@@ -877,5 +983,167 @@ describe('an unexpected error after the payment was verified', () => {
     expect(res.body.bookingFailed).toBe(true);
     expect(res.body).toHaveProperty('refundAction');
     expect(res.body.error).not.toMatch(/kaboom/);
+  });
+});
+
+/**
+ * The chain is held to what the customer paid for.
+ *
+ * The fare the chain compared the airline's price with was the one re-read a
+ * moment before booking - so a fare that rose after payment matched itself and
+ * was sold. And a coupon was checked at checkout but never counted as used.
+ */
+describe('the fare the customer paid for', () => {
+  const provider = ({ pricedTotal = null, order } = {}) => {
+    const createFlightOrder = vi.fn(order || (async () => {
+      throw Object.assign(new Error('stop after the call'), { step: 'sell', committed: false });
+    }));
+    vi.doMock('../../../backend/services/flightProvider.js', () => ({
+      default: {
+        priceFlightOffer: vi.fn(async (offer) => (pricedTotal
+          ? { success: true, data: { flightOffers: [{ ...offer, price: { currency: 'USD', total: pricedTotal, grandTotal: pricedTotal, base: '110.00' } }] } }
+          : { success: false })),
+        createFlightOrder,
+      },
+      providerStatus: () => ({ bookingEnabled: true, wsap: '1ASIWTEST' }),
+    }));
+    return createFlightOrder;
+  };
+
+  // A row whose chain claim is free and is won.
+  const claimable = async (row) => {
+    const supabase = (await import('../../../backend/config/supabase.js')).default;
+    supabase.from.mockImplementation(() => {
+      const chain = {};
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+        chain[m] = vi.fn(() => chain);
+      }
+      chain.single = vi.fn().mockResolvedValue({ data: row, error: null });
+      chain.maybeSingle = chain.single;
+      chain.select = vi.fn(() => Object.assign(chain, {
+        then: (resolve) => resolve({ data: [{ booking_reference: 'FLTTEST1' }], error: null }),
+      }));
+      return chain;
+    });
+    return makeApp();
+  };
+
+  beforeEach(() => {
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'true');
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.doUnmock('../../../backend/services/flightProvider.js');
+    vi.doUnmock('../../../backend/services/coupon.service.js');
+    vi.doUnmock('../../../backend/services/emailService.js');
+  });
+
+  it('refunds before selling anything when the fare rose after payment', async () => {
+    const createFlightOrder = provider({ pricedTotal: '340.00' });
+    const app = await claimable(paidRow());
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('PRICE_CHANGED');
+    expect(res.body).toHaveProperty('refundAction');
+    expect(createFlightOrder).not.toHaveBeenCalled();
+  });
+
+  it('books a fare that came in lower, held to the fare and charge checkout verified', async () => {
+    const createFlightOrder = provider({ pricedTotal: '280.00' });
+    const app = await claimable(paidRow({ booking_details: verifiedCheckout(bookableOffer, { fare: 291, charge: 298.28 }) }));
+
+    await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(createFlightOrder).toHaveBeenCalledTimes(1);
+    const [orderData, options] = createFlightOrder.mock.calls[0];
+    expect(orderData.data.flightOffers[0].itineraries[0].segments[0].departure.iataCode).toBe('JFK');
+    expect(options.expectedTotal).toBe(291);
+    expect(options.verifiedChargeTotal).toBe(298.28);
+  });
+
+  it('ages a fare it could not price again from checkout\'s verification', async () => {
+    const createFlightOrder = provider();
+    const row = paidRow();
+    const app = await claimable(row);
+
+    await request(app).post('/api/flights/order').send(orderBody);
+
+    const [orderData] = createFlightOrder.mock.calls[0];
+    expect(orderData.data.flightOffers[0]._ama.pricedAt).toBe(row.booking_details.verified_charge.verifiedAt);
+  });
+
+  it('counts the coupon as used once the booking exists', async () => {
+    const recordCouponUse = vi.fn(async () => ({ recorded: true }));
+    vi.doMock('../../../backend/services/coupon.service.js', () => ({ recordCouponUse }));
+    vi.doMock('../../../backend/services/emailService.js', () => ({
+      sendBookingNotificationEmails: vi.fn(async () => ({ success: true })),
+    }));
+    provider({
+      pricedTotal: '291.00',
+      order: async () => ({ success: true, pnr: 'ABC123', orderId: 'ABC123', ticketed: true, tickets: [], mode: 'LIVE_GDS_BOOKING' }),
+    });
+    const coupon = { id: 'coupon-1', code: 'SAVE10', discountAmount: 29.1 };
+    const app = await claimable(paidRow({
+      user_id: 'user-1',
+      booking_details: { customer_email: 'jane@example.com', ...verifiedCheckout(bookableOffer, { charge: 268.2, coupon }) },
+    }));
+
+    await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(recordCouponUse).toHaveBeenCalledTimes(1);
+    expect(recordCouponUse.mock.calls[0][1]).toEqual({
+      coupon, userId: 'user-1', email: 'jane@example.com', bookingReference: 'FLTTEST1',
+    });
+  });
+
+  // The PNR is recorded the instant it exists, before anything else is saved.
+  // That record alone lacked `gds.ticketed`, so if nothing after it was saved,
+  // the paid-not-ticketed alarm could not see a live reservation.
+  it('records a committed booking the paid-not-ticketed alarm can find', async () => {
+    const { selectUnannounced } = await import('../../../backend/jobs/needsReviewAlert.job.js');
+    provider({
+      pricedTotal: '291.00',
+      order: async (_orderData, options) => {
+        await options.onCommitted({ pnr: 'ABC123', tstRefs: ['1'], priced: { total: 291, currency: 'USD' } });
+        throw Object.assign(new Error('the process went away'), { step: 'issueTicket' });
+      },
+    });
+    const updates = [];
+    const supabase = (await import('../../../backend/config/supabase.js')).default;
+    supabase.from.mockImplementation(() => {
+      const chain = {};
+      for (const m of ['select', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+        chain[m] = vi.fn(() => chain);
+      }
+      chain.update = vi.fn((payload) => { updates.push(payload); return chain; });
+      chain.single = vi.fn().mockResolvedValue({ data: paidRow(), error: null });
+      chain.maybeSingle = chain.single;
+      chain.select = vi.fn(() => Object.assign(chain, {
+        then: (resolve) => resolve({ data: [{ booking_reference: 'FLTTEST1' }], error: null }),
+      }));
+      return chain;
+    });
+    const app = await makeApp();
+
+    await request(app).post('/api/flights/order').send(orderBody);
+
+    const committed = updates.find((u) => u.booking_details?.gds?.committed_at);
+    expect(committed.booking_details).toMatchObject({ pnr: 'ABC123', gds: { ticketed: false } });
+    expect(selectUnannounced([{ status: 'pending', payment_status: 'paid', booking_details: committed.booking_details }])).toHaveLength(1);
+  });
+
+  it('counts nothing when the booking is refused', async () => {
+    const recordCouponUse = vi.fn();
+    vi.doMock('../../../backend/services/coupon.service.js', () => ({ recordCouponUse }));
+    provider({ pricedTotal: '340.00' });
+    const coupon = { id: 'coupon-1', code: 'SAVE10', discountAmount: 29.1 };
+    const app = await claimable(paidRow({ booking_details: verifiedCheckout(bookableOffer, { coupon }) }));
+
+    await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(recordCouponUse).not.toHaveBeenCalled();
   });
 });

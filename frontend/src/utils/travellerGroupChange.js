@@ -23,10 +23,18 @@ export const fareIdentity = (offer) => {
   if (!flights) return null;
 
   const classes = (offer?._ama?.segments ?? []).map((s) => s.rbd).filter(Boolean);
+  const adultFare = (offer?.travelerPricings ?? []).find((t) => t.travelerType === 'ADULT') ?? offer?.travelerPricings?.[0];
   const bookingClasses = classes.length
     ? classes
-    : (offer?.travelerPricings?.[0]?.fareDetailsBySegment ?? []).map((d) => d.class);
-  return `${flights}#${bookingClasses.join('')}#${offer?.validatingAirlineCodes?.[0] ?? ''}`;
+    : (adultFare?.fareDetailsBySegment ?? []).map((d) => d.class);
+  // The fare basis too: one flight and booking class can be sold as a
+  // refundable and a non-refundable fare, and taking the cheaper one silently
+  // changed what the customer had chosen.
+  const fareBases = (offer?._ama?.segments ?? []).map((s) => s.fareBasis).filter(Boolean);
+  const fareBasis = fareBases.length
+    ? fareBases
+    : (adultFare?.fareDetailsBySegment ?? []).map((d) => d.fareBasis).filter(Boolean);
+  return `${flights}#${bookingClasses.join('')}#${fareBasis.join('/')}#${offer?.validatingAirlineCodes?.[0] ?? ''}`;
 };
 
 /**

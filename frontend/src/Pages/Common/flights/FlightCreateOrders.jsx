@@ -23,6 +23,9 @@ const TERMINAL_ERROR_CODES = new Set([
   'BOOKING_DISABLED',     // booking switched off; the charge was reversed
   'OFFER_NOT_BOOKABLE',   // offer expired or failed the shape gate
   'OFFER_MISSING',        // this session lost the offer; nothing to resend
+  'OFFER_NOT_VERIFIED',   // checkout kept no verified fare for the payment; reversed
+  'NOT_A_FLIGHT_BOOKING', // the reference belongs to some other kind of booking
+  'PRICE_CHANGED',        // the airline raised the fare after payment; reversed
   'PASSENGERS_INCOMPLETE', // this session lost passenger details; same
   'PASSENGER_COUNT_MISMATCH', // more travellers than the fare was priced for
   'PAYER_NOT_VERIFIED',   // this browser cannot prove it made the payment

@@ -13,6 +13,8 @@ import { emailMatchesBooking, isBookingOwner } from '../utils/bookingAccess.js';
 import { reconcileBookingPayment } from './payment/checkout.handlers.js';
 import { reportError } from '../services/monitoring.js';
 import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
+import { getWsConfig } from '../services/amadeusSoap/config.js';
+import { recordCouponUse } from '../services/coupon.service.js';
 import { crossesBorder } from '../utils/itinerary.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 
@@ -212,6 +214,11 @@ async function persistCommittedPnr({ bookingReference, pnr, tstRefs, priced }) {
       tst_refs: tstRefs || [],
       priced_total: priced?.total ?? null,
       priced_currency: priced?.currency ?? null,
+      // Not ticketed yet. The paid-not-ticketed alarm looks for exactly this
+      // with a PNR; without it, a booking whose final save failed after the
+      // commit was invisible to it - a live reservation nobody was told about.
+      // The final save overwrites it with what issuance actually did.
+      ticketed: false,
       committed_at: new Date().toISOString()
     },
     gds_chain: { state: 'committed', committedAt: new Date().toISOString() }
@@ -271,7 +278,7 @@ async function findExistingBooking(bookingReference) {
   if (!supabase || !bookingReference) return null;
   const { data } = await supabase
     .from('bookings')
-    .select('id, booking_reference, status, payment_status, booking_details, total_amount, user_id')
+    .select('id, booking_reference, travel_type, status, payment_status, booking_details, total_amount, user_id')
     .eq('booking_reference', bookingReference)
     .single();
   return data || null;
@@ -423,10 +430,13 @@ async function claimBookingChain(bookingReference) {
   const { data, error } = await update.select('booking_reference');
 
   if (error) {
-    // Fails OPEN. Refusing a paid booking because a bookkeeping write failed is
-    // the worse of the two outcomes, and every other guard is still in place.
-    console.error('⚠️ Could not take the chain claim, proceeding:', error.message);
-    return { claimed: true };
+    // Fails CLOSED. It used to proceed, reasoning that refusing a paid booking
+    // over a bookkeeping write was the worse outcome - but two requests that
+    // both hit the error both proceeded, and both sold seats against one
+    // payment. Stopping loses nothing: the route hands the booking to the
+    // durable queue, which runs it again once the database answers.
+    console.error('⚠️ Could not take the chain claim:', error.message);
+    return { claimed: false, unavailable: true };
   }
   if (!data?.length) {
     console.warn('⏳ Lost the chain claim race for', bookingReference);
@@ -1158,6 +1168,10 @@ router.post('/price', async (req, res) => {
     res.json({
       success: true,
       data: pricingResponse.data,
+      // Whether the trip crosses a border, from this server's airport index -
+      // the one the order route decides a date of birth from. Checkout runs on
+      // Vercel, which has no airport index, and asks here instead.
+      meta: { international: crossesBorder(pricingResponse.data?.flightOffers?.[0] ?? flightOffer) },
       message: 'Flight priced successfully'
     });
 
@@ -1444,6 +1458,17 @@ router.post('/order', optionalProtect, async (req, res) => {
       });
     }
 
+    // This route books a flight checkout and nothing else. The refund paths
+    // below reverse whatever payment sits behind the reference, so the payer of
+    // some other kind of booking must be stopped here, before any of them.
+    if (existing.travel_type !== 'flight') {
+      return res.status(409).json({
+        success: false,
+        error: 'This is not a flight booking, so it cannot be confirmed here.',
+        code: 'NOT_A_FLIGHT_BOOKING'
+      });
+    }
+
     // One payment, one booking. A double-clicked confirm button, a client retry
     // or a refreshed callback page all arrive with the same reference; without
     // this the second one sells a second set of seats against a single charge.
@@ -1525,57 +1550,68 @@ router.post('/order', optionalProtect, async (req, res) => {
     console.log('📋 Flight order creation request received');
     console.log('Request body keys:', Object.keys(req.body));
 
-    const { flightOffer, flightOffers, travelers, payments, contactInfo, totalAmount, transactionId, amount, fareBreakdown, passengerDetails } = req.body;
+    const { travelers, contactInfo, totalAmount, amount, fareBreakdown, passengerDetails } = req.body;
 
     // From the session first, the body only as a fallback. Taking it from the
     // body alone is why confirmed bookings ended up with no user_id and never
     // appeared in the customer's My Trips - see utils/bookingOwner.js.
     const userId = resolveBookingUserId(req);
 
-    // Accept both flightOffer (singular) and flightOffers (plural)
-    const offers = flightOffers || (flightOffer ? [flightOffer] : null);
-
     // Ensure travelers is always an array (even if empty) to prevent validation errors
     const travelersList = Array.isArray(travelers) ? travelers : (travelers ? [travelers] : []);
 
+    // ---- Which fare? The one checkout verified. -------------------------------
+    //
+    // Checkout priced the offer with the airline, charged for exactly that, and
+    // kept the offer on this row with the figures (`verified_charge`). This
+    // route used to book whatever offer the request body carried instead, and
+    // the chain then checked the airline's price against that same body offer -
+    // so a different, dearer fare posted here was sold against the payment for
+    // a cheaper one, held back only by the payment-coverage ratio. The body's
+    // offer is no longer read. The queue and abandoned-checkout replays reach
+    // this route too, and read the same row.
+    const verifiedCharge = existing.booking_details?.verified_charge || null;
+    const paidFare = Number(verifiedCharge?.pricedFare?.total);
+    const firstOffer = existing.booking_details?.pending_booking_data?.bookingData?.originalOffer || null;
+    const currency = verifiedCharge?.pricedFare?.currency || firstOffer?.price?.currency || 'USD';
+
     console.log('📋 Validating request:', {
-      hasOffers: !!offers,
-      offersCount: offers?.length || 0,
-      hasTravelers: !!travelers,
+      hasVerifiedOffer: Boolean(firstOffer),
       travelersListCount: travelersList.length,
       hasContactInfo: !!contactInfo,
-      totalAmount: totalAmount || amount,
       userId: userId || 'Not provided'
     });
 
-    if (!offers) {
-      console.error('❌ Missing required fields:', {
-        hasOffers: !!offers,
-        hasTravelers: !!travelers,
-        hasTravelersList: travelersList.length > 0,
-        receivedKeys: Object.keys(req.body)
-      });
+    if (!firstOffer || !Number.isFinite(paidFare) || paidFare <= 0) {
       // Payment already happened - hosted checkout runs before this route - so
-      // a 400 here is a charge with nothing behind it. Reverse it.
+      // refusing is a charge with nothing behind it. Reverse it.
       return await refundOnFulfillmentFailure(res, {
         orderId: req.body.orderId || req.body.bookingReference,
         bookingReference: req.body.bookingReference,
-        amount: req.body.totalAmount || req.body.amount,
-        currency: req.body.currency || 'USD',
-        errorMsg: `no flight offers in request; keys=${Object.keys(req.body).join(',')}`,
+        amount: totalAmount || amount,
+        currency,
+        errorMsg: firstOffer ? 'checkout kept no verified fare for this offer' : 'checkout kept no flight offer for this payment',
         status: 400,
-        code: 'OFFER_MISSING',
-        reason: 'Your flight selection did not reach us, so the booking was not sent to the airline.',
+        code: 'OFFER_NOT_VERIFIED',
+        reason: 'We could not match your payment to the fare checked at checkout, so the booking was not sent to the airline.',
       });
     }
 
-    console.log('✅ Valid request - offers:', offers.length, 'travelers:', travelersList.length);
-
-    // The mobile app posts the flattened UI card and keeps the bookable offer on
-    // `originalOffer`; the web app posts the offer itself. Recovering it here is
-    // what makes the two clients bookable through one path - before this, every
-    // mobile booking failed the shape check below.
-    const firstOffer = offers[0]?.originalOffer ?? offers[0];
+    /** Count the coupon as used, once a booking exists. Never fails the booking. */
+    const noteCouponUse = async () => {
+      if (!verifiedCharge.coupon?.id) return;
+      try {
+        await recordCouponUse(supabase, {
+          coupon: verifiedCharge.coupon,
+          // The same identity checkout checked the per-customer limit against.
+          userId: existing.user_id || null,
+          email: existing.booking_details?.customer_email || null,
+          bookingReference: existing.booking_reference,
+        });
+      } catch (couponError) {
+        console.error('⚠️ Could not record the coupon use:', couponError.message);
+      }
+    };
 
     // A card without itineraries/source/travelerPricings cannot be sold: it is a
     // display object, not an offer. Refuse it rather than sending a request the
@@ -1666,6 +1702,21 @@ router.post('/order', optionalProtect, async (req, res) => {
     }
 
     const claim = await claimBookingChain(req.body.bookingReference);
+    if (!claim.claimed && claim.unavailable) {
+      // The database could not decide who holds the claim. Nothing was sold, so
+      // hand the booking to the durable queue rather than guess. If even that
+      // write fails, the row is untouched and the abandoned-checkout job finds
+      // it - so neither path refunds.
+      if (await queueBookingForRetry(req.body.bookingReference, req.body)) {
+        return respondQueued(res, req.body.bookingReference);
+      }
+      return res.status(503).json({
+        success: false,
+        error: 'We could not start your booking just now. Your payment is safe - please try again in a minute.',
+        code: 'BOOKING_UNAVAILABLE',
+        retryable: true
+      });
+    }
     if (!claim.claimed) {
       return res.status(409).json({
         success: false,
@@ -1724,11 +1775,13 @@ router.post('/order', optionalProtect, async (req, res) => {
 
     // Price the flight offer before creating order (validates offer is still valid)
     let pricedOffer = firstOffer;
+    let repriced = false;
     try {
       console.log('💰 Pricing flight offer before booking...');
       const pricingResult = await withBookingPriority(() => FlightProvider.priceFlightOffer(firstOffer));
       if (pricingResult.success && pricingResult.data?.flightOffers?.[0]) {
         pricedOffer = pricingResult.data.flightOffers[0];
+        repriced = true;
         console.log('✅ Flight offer priced successfully, using priced version');
       } else {
         console.log('⚠️ Pricing failed, proceeding with original offer');
@@ -1741,6 +1794,32 @@ router.post('/order', optionalProtect, async (req, res) => {
         return respondQueued(res, req.body.bookingReference);
       }
       console.log('⚠️ Pricing step failed, proceeding with original offer:', pricingError.message || pricingError.error);
+    }
+
+    // Not priced again just now: the airline last priced it at checkout. The
+    // chain ages a fare from that, not from the search - see its staleness check.
+    if (!repriced && verifiedCharge.verifiedAt) {
+      pricedOffer = { ...firstOffer, _ama: { ...firstOffer._ama, pricedAt: verifiedCharge.verifiedAt } };
+    }
+
+    // The fare went up after the customer paid. The chain would refuse it too,
+    // but only after selling the seats; stop before anything is sold. Both
+    // figures come from the same informative pricing, so they compare like for
+    // like. A fare that came in lower costs the customer nothing and is booked.
+    const repricedFare = Number(pricedOffer?.price?.grandTotal ?? pricedOffer?.price?.total);
+    if (repriced && Number.isFinite(repricedFare)
+      && Math.round(repricedFare * 100) - Math.round(paidFare * 100) > Math.round(getWsConfig().priceTolerance * 100)) {
+      await releaseBookingChain(req.body.bookingReference, 'priceCheck');
+      return await refundOnFulfillmentFailure(res, {
+        orderId: req.body.orderId || req.body.bookingReference,
+        bookingReference: req.body.bookingReference,
+        amount: totalAmount || amount,
+        currency,
+        errorMsg: `fare rose after payment: paid for ${paidFare.toFixed(2)}, airline now ${repricedFare.toFixed(2)} ${currency}`,
+        status: 409,
+        code: 'PRICE_CHANGED',
+        reason: 'The airline raised this fare after you paid, so the booking was not made.',
+      });
     }
 
     const flightOrderData = {
@@ -1786,10 +1865,15 @@ router.post('/order', optionalProtect, async (req, res) => {
       // for an Amadeus slot and may use the slots searches cannot.
       orderResponse = await withBookingPriority(() => FlightProvider.createFlightOrder(flightOrderData, {
         bookingReference: req.body.bookingReference,
-        // The fare the customer was quoted. The chain compares the GDS price
-        // against this - not against what they were charged, which includes the
-        // admin-configured service fee Amadeus knows nothing about.
-        expectedTotal: Number(pricedOffer?.price?.total) || undefined,
+        // The fare the customer paid for, as checkout verified it. The chain
+        // compares the GDS price against this - not against what they were
+        // charged, which includes the admin-configured service fee Amadeus
+        // knows nothing about. It used to be the price just re-read above, so
+        // a fare that rose after payment matched itself and was sold.
+        expectedTotal: paidFare,
+        // What checkout charged for that fare - with the fee, less any coupon.
+        // The payment must cover exactly this.
+        verifiedChargeTotal: Number.isFinite(Number(verifiedCharge.total)) ? Number(verifiedCharge.total) : undefined,
         // What ARC actually captured, read back from the gateway by the
         // reconcile above - NOT from this request body, and NOT from the row's
         // total_amount, which is what the client asked to be charged before
@@ -1838,6 +1922,8 @@ router.post('/order', optionalProtect, async (req, res) => {
             }
             : null
         });
+        // The airline holds the seats the discount paid for.
+        await noteCouponUse();
         reportError(providerError, {
           service: 'amadeus-ws',
           flow: 'booking',
@@ -1933,6 +2019,11 @@ router.post('/order', optionalProtect, async (req, res) => {
       });
     }
 
+    // Counted once the booking exists, not at checkout, where an abandoned
+    // payment would use it up. It was never counted at all: a single-use code
+    // could be used any number of times.
+    await noteCouponUse();
+
     // Extract flight details for database from the first offer
     const firstItinerary = firstOffer?.itineraries?.[0];
     const firstSegment = firstItinerary?.segments?.[0] || {};
@@ -1971,8 +2062,10 @@ router.post('/order', optionalProtect, async (req, res) => {
       // admin-configured service fee. Refunds read `total_amount`
       // (operations.handlers.js:270), so writing the fare alone here refunds
       // less than was taken. The fare itself is kept in price_grand_total.
-      totalAmount: totalAmount || amount || firstOffer?.price?.total || '0',
-      currency: firstOffer?.price?.currency || 'USD',
+      // What the gateway captured, else what checkout verified - never the
+      // request body's figure, which a refund would later read as the truth.
+      totalAmount: Number.isFinite(payment?.capturedAmount) ? payment.capturedAmount : (verifiedCharge.total ?? '0'),
+      currency,
       origin: firstSegment.departure?.iataCode || '',
       destination: lastSegment.arrival?.iataCode || '',
       departureDate: firstSegment.departure?.at?.split('T')[0] || '',

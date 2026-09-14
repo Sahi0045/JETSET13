@@ -222,6 +222,35 @@ export async function handleHostedCheckout(req, res) {
         // A flight is charged what the airline prices it at plus the configured
         // fee, less a coupon the server evaluated itself - never the body's
         // `amount`. See services/flightCheckout.service.js for what that fixes.
+        // An order reference names one booking. Checkout used to upsert on it
+        // whatever the row already held - a paid booking, a PNR, someone else's
+        // checkout - resetting it to unpaid and minting a new payment secret for
+        // whoever asked. Only a fresh reference, or the same customer starting
+        // their own unpaid checkout again, may open a session.
+        const { data: existingRow } = await supabase
+            .from('bookings')
+            .select('user_id, status, payment_status, booking_details')
+            .eq('booking_reference', orderId)
+            .maybeSingle();
+        if (existingRow) {
+            const details = existingRow.booking_details || {};
+            const sessionUserId = resolveBookingUserId(req);
+            const sameCustomer = existingRow.user_id
+                ? existingRow.user_id === sessionUserId
+                : !sessionUserId && Boolean(customerEmail)
+                    && String(details.customer_email || '').trim().toLowerCase() === String(customerEmail).trim().toLowerCase();
+            const untouched = existingRow.status === 'pending' && existingRow.payment_status === 'unpaid'
+                && !details.pnr && !details.gds_chain && !details.queued_order && !details.arc_captured_amount;
+            if (!sameCustomer || !untouched) {
+                console.warn('⛔ Checkout refused: order reference already in use', { orderId });
+                return res.status(409).json({
+                    success: false,
+                    code: 'ORDER_REFERENCE_IN_USE',
+                    error: 'This checkout has already been used. Please start again from the flight. Nothing has been charged.',
+                });
+            }
+        }
+
         let chargeAmount = amount;
         let verifiedCharge = null;
         if (bookingType === 'flight') {
@@ -254,6 +283,8 @@ export async function handleHostedCheckout(req, res) {
                 bookingData,
                 couponCode: req.body.couponCode,
                 userId: signedInUserId,
+                // A guest's coupon limit is kept by email, as they have no account.
+                email: customerEmail,
                 settlementCurrency: currency,
             });
             if (!verdict.ok) {
@@ -266,7 +297,15 @@ export async function handleHostedCheckout(req, res) {
                     ...(verdict.pricedFare ? { pricedFare: verdict.pricedFare } : {}),
                 });
             }
-            verifiedCharge = { ...verdict.charge, coupon: verdict.coupon, pricedFare: verdict.pricedFare };
+            // What was charged, for this fare, and when the airline last confirmed
+            // it. The order route books this fare and nothing else, and holds the
+            // airline's price and the payment to these figures.
+            verifiedCharge = {
+                ...verdict.charge,
+                coupon: verdict.coupon,
+                pricedFare: verdict.pricedFare,
+                verifiedAt: new Date().toISOString(),
+            };
             chargeAmount = verdict.charge.total;
         }
 
@@ -580,10 +619,13 @@ export async function handleHostedCheckout(req, res) {
             // Non-blocking: localStorage still works as fallback
         }
 
+        // No success indicator. It is the secret that proves who paid - the order
+        // route accepts it as the payer's proof - and ARC hands it to the payer's
+        // own browser on the way back. Returning it here handed it to whoever
+        // opened the session, before any payment.
         return res.status(200).json({
             success: true,
             sessionId,
-            successIndicator,
             merchantId: arcMerchantId,
             orderId,
             paymentPageUrl,

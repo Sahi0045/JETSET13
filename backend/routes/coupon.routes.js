@@ -57,11 +57,15 @@ router.post('/validate', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// INTERNAL: Record coupon usage (called after successful booking)
+// STAFF: Record coupon usage by hand
 // POST /api/coupons/use
 // body: { couponId, userId, userEmail, bookingReference, discountAmount }
 // ─────────────────────────────────────────────
-router.post('/use', async (req, res) => {
+// A flight booking records its own coupon usage once the airline holds it
+// (services/coupon.service.js recordCouponUse). Nothing called this route, and
+// it was open to anyone - who could use up any coupon's max_uses - so it stays
+// for staff corrections only.
+router.post('/use', protect, admin, async (req, res) => {
     try {
         const { couponId, userId, userEmail, bookingReference, discountAmount } = req.body;
 

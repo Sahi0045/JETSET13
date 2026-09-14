@@ -117,7 +117,9 @@ export const readPricePnrReply = (reply) => {
     return amount && amount.currency === currency ? sum + (amount.amount ?? 0) * fare.passengers : sum;
   }, 0);
 
-  return { fares, total: fares.length ? total : null, currency };
+  // In cents: a sum of per-passenger amounts is not a price until it is rounded
+  // (85.85 x 2 + 80.20 is 251.89999999999998 in floating point).
+  return { fares, total: fares.length ? Math.round(total * 100) / 100 : null, currency };
 };
 
 /**
