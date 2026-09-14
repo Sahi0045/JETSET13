@@ -221,6 +221,11 @@ never meant to be:
   - AMADEUS_WS_ENABLED turns flights off entirely without a deploy
 
 The limiter's job here is catching a runaway client, which 2000/min still does.
+
+The flight limiter (`flightSearchLimiter`, 120/min elsewhere) follows the raised
+general limit on this host for the same reason: 120 per edge is a budget for a
+whole city's visitors, not for one customer. Set `RATE_LIMIT_FLIGHT_MAX` only if
+you want it different from `RATE_LIMIT_MAX` here.
 If Vercel ever offers stable egress IPs on this plan, set `trusted_proxies` to
 them and drop this back to 300.
 

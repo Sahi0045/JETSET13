@@ -11,7 +11,7 @@
  * for accurate global limits; tracked for a later pass.
  */
 
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import helmet from 'helmet';
 import compression from 'compression';
 
@@ -99,8 +99,22 @@ export const apiLimiter = rateLimit({
 });
 
 /**
+ * The flight limiter's budget per address, per minute.
+ *
+ * An explicit RATE_LIMIT_FLIGHT_MAX wins. Otherwise 120 - unless RATE_LIMIT_MAX
+ * has been raised above its 300 default, which is how a host whose addresses
+ * are shared edges is configured. There, the flight budget is the general one.
+ */
+export function flightSearchMax(env = process.env) {
+  if (env.RATE_LIMIT_FLIGHT_MAX) return Number(env.RATE_LIMIT_FLIGHT_MAX);
+  const general = Number(env.RATE_LIMIT_MAX);
+  return Number.isFinite(general) && general > 300 ? general : 120;
+}
+
+/**
  * Per-IP limiter for the flight endpoints that reach Amadeus: search, price,
- * upsell, fare rules, seat maps and the three date-price calendars. They are
+ * upsell, fare rules, seat maps, the three date-price calendars and flight
+ * status. They are
  * unauthenticated and each call spends GDS capacity (and the booking lane's
  * slots), so a scraper under the general 300/min could spend all of it here.
  * Applied inside flight.routes.js, which every entry point mounts - so it
@@ -118,13 +132,21 @@ export const apiLimiter = rateLimit({
  * calendar stays under forty in a minute. 120 is three times that, with room
  * for a household or office sharing one address. RATE_LIMIT_FLIGHT_MAX tunes it.
  *
+ * Unless the host counts a crowd as one address. On Lightsail every visitor
+ * arrives through a Vercel edge, so `req.ip` is shared by everyone that edge
+ * serves (deploy/README.md, "Why the rate limit is higher here") - which is why
+ * that host raises RATE_LIMIT_MAX to 2000. 120 there was a budget for a whole
+ * city, not for one customer: a busy evening would have refused real searches.
+ * So where the general limit has been raised, this one follows it. See
+ * flightSearchMax.
+ *
  * Same in-memory store as the other limiters (see the note at the top of this
  * file): on Vercel each instance counts separately, so the effective limit
  * there is looser, never stricter.
  */
 export const flightSearchLimiter = rateLimit({
   windowMs: minutes(1),
-  max: Number(process.env.RATE_LIMIT_FLIGHT_MAX || 120),
+  max: flightSearchMax(),
   standardHeaders: true,
   legacyHeaders: false,
   // `error` is what the flight pages show; `message` matches the other limiters.
@@ -133,6 +155,58 @@ export const flightSearchLimiter = rateLimit({
     code: 'RATE_LIMITED',
     error: 'Too many flight searches from your connection. Please wait a minute and try again.',
     message: 'Too many flight searches from your connection. Please wait a minute and try again.',
+  },
+});
+
+/** The email a guest offers as proof: the booking lookup's header, or the cancel's body. */
+const guestProofEmail = (req) => String(req.get?.('x-booking-email') || req.body?.email || '').trim();
+
+/** The booking that email is offered for: the lookup's path, or the cancel's body. */
+const guestProofReference = (req) =>
+  String(req.params?.bookingRef || req.body?.bookingReference || '').trim().toUpperCase().slice(0, 64);
+
+/**
+ * Wrong guesses at a guest booking's email.
+ *
+ * A guest opens their booking with its reference and the email it was made with
+ * (GET /flights/bookings/:ref, `x-booking-email`) and cancels it the same way
+ * (POST /payments?action=cancel-booking, body `email`). Both were bounded only
+ * by the general 300/min, and references sit in URLs and emails, so anyone
+ * holding one could try hundreds of addresses a minute until one opened it.
+ *
+ * What counts, and why:
+ *  - only a request that presents an email. One without cannot open anybody's
+ *    booking, so a signed-in owner, staff, and a guest's first visit to the
+ *    link - which asks without an email and is shown the email form - are free;
+ *  - only a failed one. A guest who reopens their booking all day is never
+ *    throttled, and one who mistypes their address has ten tries in a quarter
+ *    of an hour before being asked to wait;
+ *  - per address AND reference, not per address. /api/flights is served from
+ *    Lightsail behind Vercel's rewrite, where req.ip is a Vercel edge shared by
+ *    many visitors (deploy/README.md). A per-address count there would pool
+ *    every guest on that edge, so one attacker - or a few typists - would lock
+ *    them all out. With the reference in the key a guest shares a count only
+ *    with other attempts at their own booking.
+ *
+ * Refused before the booking is looked up, so a 429 says nothing about whether
+ * the reference exists, and a miss is still the same flat 404.
+ * RATE_LIMIT_GUEST_BOOKING_MAX tunes it. In-memory like the others: on Vercel,
+ * where the cancel runs, each instance counts on its own.
+ */
+export const guestBookingLimiter = rateLimit({
+  windowMs: minutes(15),
+  max: Number(process.env.RATE_LIMIT_GUEST_BOOKING_MAX || 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  skip: (req) => !guestProofEmail(req),
+  keyGenerator: (req) => `${ipKeyGenerator(req.ip || '')}|${guestProofReference(req)}`,
+  // `error` is what Manage Booking and the cancel dialog show.
+  message: {
+    success: false,
+    code: 'RATE_LIMITED',
+    error: 'Too many attempts with the wrong email for this booking. Please wait 15 minutes and try again.',
+    message: 'Too many attempts with the wrong email for this booking. Please wait 15 minutes and try again.',
   },
 });
 

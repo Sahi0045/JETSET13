@@ -1,5 +1,6 @@
 import express from 'express';
 import { optionalProtect } from '../middleware/auth.middleware.js';
+import { guestBookingLimiter } from '../middleware/security.js';
 
 // Domain handler modules (split out from the original monolithic payment.routes.js)
 import {
@@ -90,11 +91,18 @@ const actionHandlers = {
 
 const SUPPORTED_ACTIONS = Object.keys(actionHandlers);
 
+// A guest booking is cancelled with the booker's email, so wrong guesses at it
+// are capped exactly as opening one is (security.js). Only for this action:
+// checkout and payment links carry an `email` too, and a payer whose checkout
+// fails a few times must never be throttled by it.
+const guestCancelLimiter = (req, res, next) =>
+    (req.query.action === 'cancel-booking' ? guestBookingLimiter(req, res, next) : next());
+
 // Main action router - handles ?action= query parameters
 // `optionalProtect` so the signed-in user reaches the handlers: hosted checkout
 // creates the booking row, and a row created without a user is invisible in My
 // Trips forever. It never rejects, so guest checkout is unaffected.
-router.all('/', optionalProtect, async (req, res) => {
+router.all('/', optionalProtect, guestCancelLimiter, async (req, res) => {
     const { action } = req.query;
 
     if (!action) {

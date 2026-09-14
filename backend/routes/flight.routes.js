@@ -17,7 +17,7 @@ import { getWsConfig } from '../services/amadeusSoap/config.js';
 import { recordCouponUse } from '../services/coupon.service.js';
 import { crossesBorder } from '../utils/itinerary.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
-import { flightSearchLimiter } from '../middleware/security.js';
+import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -68,8 +68,15 @@ const router = express.Router();
 // entry point: all three mount this router, Vercel twice, so it cannot be left
 // out of one. A path matches whole segments only - '/search' is not
 // '/airports/search', and '/price' is not '/price-analysis'.
+//
+// `/status` sends Air_FlightInfo to Amadeus, and was left off the first list.
+// Deliberately not here: `/airports/search`, which reads the bundled airport
+// index in memory and is called as the customer types, and `/analytics/*`,
+// `/availabilities`, `/inspiration` and `/price-analysis`, which this WSAP is
+// not entitled to - the provider answers them without calling Amadeus. The day
+// one of them gets a real implementation, it belongs on this list.
 router.use(
-  ['/search', '/price', '/upsell', '/fare-rules', '/seatmaps', '/date-prices', '/cheapest-dates', '/calendar-prices'],
+  ['/search', '/price', '/upsell', '/fare-rules', '/seatmaps', '/date-prices', '/cheapest-dates', '/calendar-prices', '/status'],
   flightSearchLimiter
 );
 
@@ -2560,8 +2567,9 @@ router.get('/health', (req, res) => {
 // Get a single booking by bookingReference (For Manage Booking page)
 // optionalProtect, not protect: a guest may open their booking with the email
 // it was made with (x-booking-email). Ownership is still enforced in
-// loadOwnedBooking, and anyone else still gets a flat 404.
-router.get('/bookings/:bookingRef', optionalProtect, async (req, res) => {
+// loadOwnedBooking, and anyone else still gets a flat 404. guestBookingLimiter
+// caps wrong emails per reference, so that 404 cannot be asked at volume.
+router.get('/bookings/:bookingRef', optionalProtect, guestBookingLimiter, async (req, res) => {
   try {
     if (!supabase) {
       return res.status(503).json({
