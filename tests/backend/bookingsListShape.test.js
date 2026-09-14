@@ -77,4 +77,32 @@ describe('toClientBooking', () => {
   it('survives a row with no booking_details at all', () => {
     expect(() => toClientBooking({ id: 'b3', travel_type: 'flight' })).not.toThrow();
   });
+
+  it('masks passport numbers and drops traveller fields no page reads', () => {
+    const listed = toClientBooking({
+      ...row,
+      passenger_details: [{ firstName: 'A', lastName: 'B', passportNumber: 'X1234567', frequentFlyer: 'FF1' }],
+    });
+    expect(listed.travelers).toEqual([{ firstName: 'A', lastName: 'B', passportNumber: '•••••567' }]);
+  });
+
+  it('shows staff the passport number as stored', () => {
+    const listed = toClientBooking(
+      { ...row, passenger_details: [{ firstName: 'A', lastName: 'B', passportNumber: 'X1234567' }] },
+      { showPassports: true },
+    );
+    expect(listed.travelers[0].passportNumber).toBe('X1234567');
+  });
+
+  it('keeps only the review reason and the ticketed flag, not what the chain recorded', () => {
+    const listed = toClientBooking({
+      ...row,
+      booking_details: {
+        needs_review: { reason: 'charge not reversed after the booking failed', reversal: { error: 'gateway 500' } },
+        gds: { officeId: 'OFFICE1', sessionId: 'SESSION1', ticketed: true },
+      },
+    });
+    expect(listed.needs_review).toEqual({ reason: 'charge not reversed after the booking failed' });
+    expect(listed.gds).toEqual({ ticketed: true });
+  });
 });

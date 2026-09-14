@@ -17,6 +17,7 @@ import { getWsConfig } from '../services/amadeusSoap/config.js';
 import { recordCouponUse } from '../services/coupon.service.js';
 import { crossesBorder } from '../utils/itinerary.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
+import { flightSearchLimiter } from '../middleware/security.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -60,6 +61,16 @@ const flightSearchSchema = z
   });
 
 const router = express.Router();
+
+// The unauthenticated endpoints that go to Amadeus on every call get their own
+// per-IP budget (security.js has the numbers and why). Here rather than in each
+// entry point: all three mount this router, Vercel twice, so it cannot be left
+// out of one. A path matches whole segments only - '/search' is not
+// '/airports/search', and '/price' is not '/price-analysis'.
+router.use(
+  ['/search', '/price', '/upsell', '/fare-rules', '/seatmaps', '/date-prices', '/cheapest-dates', '/calendar-prices'],
+  flightSearchLimiter
+);
 
 // Invoke the single orchestrated cancel handler (Amadeus cancel + ARC Pay refund/void +
 // DB update + email) in-process — no HTTP self-call, so it works on Vercel serverless.
@@ -340,9 +351,19 @@ function sanitizeRef(value) {
   return String(value ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 }
 
-/** Staff may read/cancel any booking; a customer only their own. */
+/**
+ * Staff may read and cancel any booking; a customer only their own.
+ *
+ * Admins only. `agent` used to be here too, and in `users` that is the visa
+ * agents' role - accounts that process visa applications and have nothing to
+ * do with flights. It handed every one of them any customer's booking,
+ * passports and dates of birth included, and let them past the ownership check
+ * on DELETE /order, whose fallback cancelled at the airline with no refund.
+ * Travel agents sign in with a token that never becomes `req.user`, and their
+ * portal reads its own sales through `agent-stats`, not these routes.
+ */
 function isStaff(user) {
-  return !!user && ['admin', 'superadmin', 'agent'].includes(user.role);
+  return !!user && ['admin', 'superadmin'].includes(user.role);
 }
 
 /**
@@ -2328,45 +2349,62 @@ router.delete('/order/:orderId', protect, async (req, res) => {
     // stored amadeus_order_id), refunds/voids via ARC Pay, updates booking status, and
     // persists the full cancellation record. Single source of truth — called in-process
     // (no HTTP self-call) so it also works on Vercel serverless.
+    let orchestrated = null;
     try {
-      const { payload: cancelResult } = await invokeOrchestratedCancel(orderId, 'Customer cancellation via flight order API', req);
-
-      if (cancelResult?.success) {
-        return res.json({
-          success: true,
-          message: cancelResult.message || `Order ${orderId} cancelled`,
-          cancellation: cancelResult.cancellation,
-          booking: cancelResult.booking,
-          amadeusCancelled: cancelResult.cancellation?.amadeusCancelled ?? false,
-          mode: 'ORCHESTRATED_CANCELLATION'
-        });
-      }
-
-      // A `needsReview` answer is a DECISION, not a malfunction: the airline
-      // still holds the booking, so the orchestrator withheld the refund on
-      // purpose. Falling through to the fallback below would overwrite that
-      // with `status: 'cancelled'` and tell the customer it worked - burying
-      // the flag and leaving them believing they have no flight when they do.
-      if (cancelResult?.needsReview) {
-        console.error('⛔ Cancel needs review; not overriding with the fallback', { orderId });
-        return res.status(502).json({
-          success: false,
-          error: cancelResult.error
-            || 'We could not cancel your reservation with the airline. '
-              + 'Our team has been alerted - please call (877) 538-7380 if it is urgent.',
-          bookingReference: cancelResult.bookingReference,
-          needsReview: true,
-          mode: 'ORCHESTRATED_CANCELLATION'
-        });
-      }
-
-      console.warn('⚠️ Orchestrated cancel returned error:', cancelResult?.error);
+      orchestrated = await invokeOrchestratedCancel(orderId, 'Customer cancellation via flight order API', req);
     } catch (invokeError) {
       console.warn('⚠️ Orchestrated cancel failed:', invokeError.message);
     }
+    const cancelResult = orchestrated?.payload;
 
-    // Fallback: only for when the orchestrator was unreachable. It issues no
-    // refund, so it must not claim a cancellation it cannot substantiate.
+    if (cancelResult?.success) {
+      return res.json({
+        success: true,
+        message: cancelResult.message || `Order ${orderId} cancelled`,
+        cancellation: cancelResult.cancellation,
+        booking: cancelResult.booking,
+        amadeusCancelled: cancelResult.cancellation?.amadeusCancelled ?? false,
+        mode: 'ORCHESTRATED_CANCELLATION'
+      });
+    }
+
+    // A `needsReview` answer is a DECISION, not a malfunction: the airline
+    // still holds the booking, so the orchestrator withheld the refund on
+    // purpose. Falling through to the fallback below would overwrite that
+    // with `status: 'cancelled'` and tell the customer it worked - burying
+    // the flag and leaving them believing they have no flight when they do.
+    if (cancelResult?.needsReview) {
+      console.error('⛔ Cancel needs review; not overriding with the fallback', { orderId });
+      return res.status(502).json({
+        success: false,
+        error: cancelResult.error
+          || 'We could not cancel your reservation with the airline. '
+            + 'Our team has been alerted - please call (877) 538-7380 if it is urgent.',
+        bookingReference: cancelResult.bookingReference,
+        needsReview: true,
+        mode: 'ORCHESTRATED_CANCELLATION'
+      });
+    }
+
+    // Every other answer is the orchestrator's decision too, and it stands: a
+    // caller it refused (403), a booking already cancelled (400), a write that
+    // failed (500). All of these used to fall through to the fallback below,
+    // which cancels at the airline and marks the row cancelled with no refund -
+    // so the one caller the orchestrator had just turned away still got the
+    // booking cancelled, and the customer lost the seat and the money.
+    if (cancelResult) {
+      console.warn('⚠️ Orchestrated cancel returned error:', cancelResult.error);
+      return res.status(orchestrated.statusCode >= 400 ? orchestrated.statusCode : 500).json({
+        success: false,
+        error: cancelResult.error || 'Unable to cancel the order',
+        ...(cancelResult.code ? { code: cancelResult.code } : {}),
+        mode: 'ORCHESTRATED_CANCELLATION'
+      });
+    }
+
+    // Fallback: only for when the orchestrator threw or gave no answer at all.
+    // It issues no refund, so it must not claim a cancellation it cannot
+    // substantiate.
     let amadeusCancelled = false;
     let bookingRef = orderId;
     if (supabase) {
@@ -2516,32 +2554,31 @@ router.get('/bookings/:bookingRef', optionalProtect, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Booking not found' });
     }
 
-    // Never hand back the payment secrets. `success_indicator` is what proves
-    // the payer to POST /order, `pending_booking_data` holds every traveller's
-    // passport as posted at checkout, and the session and checkout URL belong
-    // to the gateway. They were all spread into this response.
-    const {
-      success_indicator: _successIndicator,
-      session_id: _sessionId,
-      pending_booking_data: _pendingBookingData,
-      queued_order: _queuedOrder,
-      arc_pay_checkout_url: _checkoutUrl,
-      ...details
-    } = data.booking_details || {};
-
-    // Format for frontend: the stored details, plus the camelCase shape the
-    // bookings list sends. Manage Booking read camelCase fields that this
-    // endpoint never had, so a refreshed page showed "Date N/A" and "--:--".
+    // Built by name from what Manage Booking, the e-ticket and the app read -
+    // never by spreading the row. This spread `booking_details` less five
+    // payment secrets, and `passenger_details` as stored, so every read handed
+    // over passport numbers, the fare and fee workings (`verified_charge`), the
+    // GDS office and session (`gds`), the chain's bookkeeping (`gds_chain`,
+    // `fulfillment_failed`), the owner's account id, the raw Amadeus offer and
+    // the booker's own address - which a traveller who opened a guest booking
+    // with their own address could then use to cancel it. A page that needs
+    // another field gets it added to toClientBooking, by name.
+    //
+    // Passport numbers arrive masked except for staff. The stored number is
+    // for the airline; nobody opening their booking needs it back.
+    const showPassports = isStaff(req.user);
     const formattedBooking = {
-      ...details,
-      ...toClientBooking({ ...data, booking_details: details }),
+      // The camelCase shape the bookings list sends. Manage Booking read
+      // camelCase fields that this endpoint never had, so a refreshed page
+      // showed "Date N/A" and "--:--".
+      ...toClientBooking(data, { showPassports }),
       // The passenger list lives in its own column, not inside booking_details,
       // and was never included here. Manage Booking therefore showed "No
       // passenger information available" whenever it loaded the booking itself
       // — a refresh, or a shared link — and showed it correctly only when My
       // Trips handed the record over through router state.
-      travelers: data.booking_details?.travelers ?? data.passenger_details ?? [],
-      passengerData: data.passenger_details ?? data.booking_details?.travelers ?? [],
+      travelers: clientTravellers(data.booking_details?.travelers ?? data.passenger_details, { showPassports }),
+      passengerData: clientTravellers(data.passenger_details ?? data.booking_details?.travelers, { showPassports }),
       status: data.status,
       payment_status: data.payment_status,
       bookingReference: data.booking_reference,
@@ -2563,6 +2600,38 @@ router.get('/bookings/:bookingRef', optionalProtect, async (req, res) => {
   }
 });
 
+/**
+ * A passport number as a customer-facing response carries it: the last three
+ * characters, the rest masked. Enough to tell which passport a booking was
+ * made on; not enough to use it.
+ */
+function maskPassport(number) {
+  const value = String(number);
+  return value.length > 3 ? `${'•'.repeat(value.length - 3)}${value.slice(-3)}` : '•••';
+}
+
+// What a page renders about a traveller. Anything else on the stored record -
+// frequent-flyer numbers, document issue details, whatever a client posted at
+// checkout - stays in the database.
+const CLIENT_TRAVELLER_FIELDS = [
+  'id', 'travelerId', 'type', 'title', 'firstName', 'lastName', 'gender', 'dateOfBirth',
+  'nationality', 'email', 'mobile', 'passportExpiry', 'seatNumber',
+];
+
+/** Travellers as a response carries them, with passports masked unless `showPassports`. */
+function clientTravellers(list, { showPassports = false } = {}) {
+  if (!Array.isArray(list)) return [];
+  return list.map((traveller) => {
+    const out = Object.fromEntries(
+      CLIENT_TRAVELLER_FIELDS.filter((key) => traveller?.[key] != null).map((key) => [key, traveller[key]])
+    );
+    if (traveller?.passportNumber) {
+      out.passportNumber = showPassports ? traveller.passportNumber : maskPassport(traveller.passportNumber);
+    }
+    return out;
+  });
+}
+
 // Get all bookings from database (for My Trips page)
 /**
  * A bookings row as My Trips and Manage Booking consume it.
@@ -2571,10 +2640,14 @@ router.get('/bookings/:bookingRef', optionalProtect, async (req, res) => {
  * `tickets`, `needs_review`, `gds` and `payment_status`, so Manage Booking
  * had to guess - a cancelled row whose refund the gateway had refused rendered
  * "Processing Refund - In Progress", and the e-ticket helper could not tell a
- * held reservation from an issued ticket. Snake_case on those mirrors the
- * single-booking endpoint, which hands the row over as-is.
+ * held reservation from an issued ticket. Snake_case on those mirrors what the
+ * single-booking endpoint used to send.
+ *
+ * It is also the allow-list for both booking reads: every field is named, and
+ * the nested records (travellers, `needs_review`, `gds`) are cut down to what a
+ * page uses. `showPassports` is for staff only.
  */
-export function toClientBooking(booking) {
+export function toClientBooking(booking, { showPassports = false } = {}) {
   // Get amount from total_amount column or from booking_details or from flight_offer
   const amount = booking.total_amount ||
     booking.booking_details?.amount ||
@@ -2628,8 +2701,8 @@ export function toClientBooking(booking) {
     priceGrandTotal: booking.booking_details?.price_grand_total || null,
     priceFees: booking.booking_details?.price_fees || [],
     fareBreakdown: booking.booking_details?.fare_breakdown || null,
-    // Travelers
-    travelers: booking.passenger_details,
+    // Travelers, cut down to what a page renders; passports masked for all but staff.
+    travelers: clientTravellers(booking.passenger_details, { showPassports }),
     // Cruise-specific fields
     cruiseName: booking.booking_details?.cruise_name || '',
     cruiseImage: booking.booking_details?.cruise_image || '',
@@ -2658,8 +2731,17 @@ export function toClientBooking(booking) {
     payment_status: booking.payment_status,
     cancellation: booking.booking_details?.cancellation || null,
     tickets: booking.booking_details?.tickets || [],
-    needs_review: booking.booking_details?.needs_review || null,
-    gds: booking.booking_details?.gds || null
+    // The reason is what the e-ticket reads ("ticket_numbers_not_retrieved").
+    // The rest of the record is for the support desk: gateway errors, reversal
+    // attempts, the GDS detail.
+    needs_review: booking.booking_details?.needs_review
+      ? { reason: booking.booking_details.needs_review.reason ?? null }
+      : null,
+    // Whether the GDS ticketed. The rest is the office id, the GDS session and
+    // TST references, which no page reads.
+    gds: booking.booking_details?.gds
+      ? { ticketed: booking.booking_details.gds.ticketed ?? null }
+      : null
   };
 }
 

@@ -99,6 +99,44 @@ export const apiLimiter = rateLimit({
 });
 
 /**
+ * Per-IP limiter for the flight endpoints that reach Amadeus: search, price,
+ * upsell, fare rules, seat maps and the three date-price calendars. They are
+ * unauthenticated and each call spends GDS capacity (and the booking lane's
+ * slots), so a scraper under the general 300/min could spend all of it here.
+ * Applied inside flight.routes.js, which every entry point mounts - so it
+ * cannot drift between them, and Vercel's second `/flights` mount has it too.
+ *
+ * What the site itself sends, one request per line, counted from the pages:
+ *  - results page: 1 search; 1 date-prices for the 7-day strip (one request,
+ *    seven dates); 1 cheapest-dates (+1 calendar-prices fallback) when the
+ *    date picker opens; 1 date-prices per month in the fare calendar; 1 upsell
+ *    per "View prices"; 1 search + 1 date-prices per date clicked in the strip.
+ *  - review page: 1 price, 2 fare-rules (cancellation card and rules panel),
+ *    1 seatmaps, and 1 search if the traveller group changes.
+ * A full search-to-review pass is about ten. A hurried customer who clicks
+ * every date in the strip, opens fare options on a dozen flights and pages the
+ * calendar stays under forty in a minute. 120 is three times that, with room
+ * for a household or office sharing one address. RATE_LIMIT_FLIGHT_MAX tunes it.
+ *
+ * Same in-memory store as the other limiters (see the note at the top of this
+ * file): on Vercel each instance counts separately, so the effective limit
+ * there is looser, never stricter.
+ */
+export const flightSearchLimiter = rateLimit({
+  windowMs: minutes(1),
+  max: Number(process.env.RATE_LIMIT_FLIGHT_MAX || 120),
+  standardHeaders: true,
+  legacyHeaders: false,
+  // `error` is what the flight pages show; `message` matches the other limiters.
+  message: {
+    success: false,
+    code: 'RATE_LIMITED',
+    error: 'Too many flight searches from your connection. Please wait a minute and try again.',
+    message: 'Too many flight searches from your connection. Please wait a minute and try again.',
+  },
+});
+
+/**
  * Stricter limiter for credential endpoints (login/register/OTP) where abuse
  * is brute-force. Kept off the payment routes deliberately — a legitimate
  * multi-step checkout can make several calls and must not be throttled.
