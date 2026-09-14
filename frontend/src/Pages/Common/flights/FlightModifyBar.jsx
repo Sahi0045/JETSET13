@@ -30,8 +30,10 @@ const CLASS_LABELS = {
   FIRST: 'First Class',
 };
 
-function FlightModifyBar({ searchParams = {}, cityMap = {}, onSearch }) {
-  const [expanded, setExpanded] = useState(false);
+// `openTravellers`: arrive with the form open on the traveller picker - the
+// review page's "Change travellers" sends the customer here.
+function FlightModifyBar({ searchParams = {}, cityMap = {}, onSearch, openTravellers = false }) {
+  const [expanded, setExpanded] = useState(Boolean(openTravellers));
 
   const fromCode = searchParams.fromCode || extractCode(searchParams.from);
   const toCode = searchParams.toCode || extractCode(searchParams.to);
@@ -105,7 +107,7 @@ function FlightModifyBar({ searchParams = {}, cityMap = {}, onSearch }) {
       {expanded && (
         <div className="border-t border-white/10 bg-gradient-to-r from-[#055B75] to-[#034457]">
           <div className="container mx-auto max-w-6xl px-4 pt-6 pb-12" style={{ overflow: 'visible' }}>
-            <FlightSearchForm initialData={searchParams} onSearch={handleSearch} />
+            <FlightSearchForm initialData={searchParams} onSearch={handleSearch} openTravellers={openTravellers} />
           </div>
         </div>
       )}

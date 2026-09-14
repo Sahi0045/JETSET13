@@ -19,6 +19,7 @@ import CouponInput from '../../../components/CouponInput';
 import FlightFareRules from './FlightFareRules';
 import { formatCheckedBag } from '../../../utils/baggage';
 import FlightCancellationPolicy from './FlightCancellationPolicy';
+import { searchToQuery } from './searchQuery';
 import apiConfig from '@/config/api';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
@@ -172,6 +173,18 @@ function FlightBookingConfirmation() {
   // own half-right copy of this and disagreed on screen.
   const formatBaggage = formatCheckedBag;
 
+
+  // Back to the results for this same search, with the traveller picker open.
+  // The fare was priced for an exact group, so a different group is a new
+  // search. Without the search it came from, start from the search form.
+  const changeTravellers = () => {
+    const search = reviewState?.searchData;
+    if (!search?.from || !search?.to || !search?.departDate) {
+      navigate('/flights');
+      return;
+    }
+    navigate(`/flights/search?${searchToQuery(search)}`, { state: { searchData: search, editTravellers: true } });
+  };
 
   // To the login page and back here, with the flight they picked kept.
   const sendToLogin = ({ replace = false } = {}) => {
@@ -1396,9 +1409,20 @@ function FlightBookingConfirmation() {
                   );
                 })}
 
-                <p className="text-xs text-gray-500 mt-3">
-                  This fare is priced for {passengerData.length} traveller{passengerData.length === 1 ? '' : 's'}. To change who is travelling, please search again.
-                </p>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-gray-500">
+                    This fare is priced for {passengerData.length} traveller{passengerData.length === 1 ? '' : 's'}. The airline prices each
+                    traveller, so adding or removing someone needs a new search.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={changeTravellers}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#055B75] text-[#055B75] text-sm font-semibold hover:bg-[#F0FAFC] transition-colors whitespace-nowrap"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Change travellers
+                  </button>
+                </div>
               </div>
             </div>
 
