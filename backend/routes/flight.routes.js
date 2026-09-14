@@ -19,6 +19,7 @@ import { crossesBorder } from '../utils/itinerary.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { flightSearchLimiter } from '../middleware/security.js';
 import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
+import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -472,7 +473,10 @@ async function claimBookingChain(bookingReference) {
   let update = supabase
     .from('bookings')
     .update({
-      booking_details: { ...details, gds_chain: { state: 'in_progress', startedAt, attempt, ...queueAttempts } },
+      // `claimedAt` stays put while the heartbeat moves `startedAt` on: it is how
+      // two paid checkouts for one trip tell which claimed first
+      // (findDuplicateBooking).
+      booking_details: { ...details, gds_chain: { state: 'in_progress', startedAt, claimedAt: startedAt, attempt, ...queueAttempts } },
       updated_at: startedAt,
     })
     .eq('booking_reference', bookingReference);
@@ -496,7 +500,7 @@ async function claimBookingChain(bookingReference) {
     console.warn('⏳ Lost the chain claim race for', bookingReference);
     return { claimed: false };
   }
-  return { claimed: true, attempt };
+  return { claimed: true, attempt, claimedAt: startedAt };
 }
 
 // A booking that cannot get an Amadeus slot is retried this many times by the
@@ -796,6 +800,126 @@ export async function sendConfirmationOnce(bookingReference, emailData, { failOp
     console.error('❌ Confirmation email step failed:', error.message);
     return { sent: false, reason: 'error' };
   }
+}
+
+/**
+ * How far back another booking counts as the first payment for the same trip.
+ * The second payment page was opened minutes after the first, but the second
+ * payment can reach this route much later - the abandoned-checkout job books
+ * for up to six hours - and a booking made days ago for the same people on the
+ * same flights is no less a duplicate.
+ */
+const DUPLICATE_LOOKBACK_MS = 30 * DAY_MS;
+
+/** What the customer is told when their payment is held as a second payment for one trip. */
+function duplicatePaymentAnswer(bookingReference) {
+  const message = 'This payment looks like a second payment for a trip you have already booked, for the same travellers '
+    + 'on the same flights, so we have not booked it again. Your other booking is not affected. Our support team will '
+    + 'check it and refund this payment. If you did mean to book this trip twice, or have not heard from us within '
+    + `2 business days, call (877) 538-7380 with booking reference ${bookingReference}.`;
+  return {
+    success: false,
+    code: 'DUPLICATE_PAYMENT',
+    duplicatePayment: true,
+    needsReview: true,
+    bookingReference,
+    error: message,
+    message,
+  };
+}
+
+/**
+ * Another booking of this customer's, for the same travellers on the same
+ * flights, that is booked or on its way to being booked.
+ *
+ * "This customer" is the account the checkout was made from, or the email it
+ * was made with. "Booked or on its way" is a PNR, a committed or queued chain,
+ * or a chain in progress that claimed first - the earlier claim, or the lower
+ * reference on a tie. Two paid checkouts racing each other both get here after
+ * taking their own claim, so they see each other, and only the later one is
+ * held. Same names, not just the same flights: a family can book one flight
+ * twice for different people, and nothing here refunds anybody.
+ *
+ * @returns {Promise<{ duplicateOf: string|null } | { unavailable: true }>}
+ */
+async function findDuplicateBooking(booking, { travellers, offer, claimedAt, now = Date.now() }) {
+  const flights = flightsKey(offer);
+  const names = travellerNamesKey(travellers);
+  const details = booking.booking_details || {};
+  const email = String(details.customer_email || '').trim();
+  if (!supabase || !flights || !names || (!booking.user_id && !email)) return { duplicateOf: null };
+
+  const lookups = [
+    ...(booking.user_id ? [['user_id', booking.user_id]] : []),
+    ...(email ? [['booking_details->>customer_email', email]] : []),
+  ];
+  const candidates = new Map();
+  for (const [column, value] of lookups) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('booking_reference, user_id, status, payment_status, created_at, booking_details, passenger_details')
+      .eq('travel_type', 'flight')
+      .eq(column, value)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) {
+      console.error('⚠️ Could not look for a duplicate booking:', error.message);
+      return { unavailable: true };
+    }
+    for (const row of Array.isArray(data) ? data : []) candidates.set(row.booking_reference, row);
+  }
+
+  const mine = Date.parse(claimedAt);
+  for (const row of candidates.values()) {
+    if (row.booking_reference === booking.booking_reference) continue;
+    const other = row.booking_details || {};
+    const sameCustomer = (booking.user_id && row.user_id === booking.user_id)
+      || (email && String(other.customer_email || '').trim().toLowerCase() === email.toLowerCase());
+    if (!sameCustomer) continue;
+    if (row.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(row.payment_status)) continue;
+    // Itself a second payment already held: it is not the booking this one repeats.
+    if (other.needs_review?.duplicate_of) continue;
+    if (now - Date.parse(row.created_at) > DUPLICATE_LOOKBACK_MS) continue;
+
+    const chain = other.gds_chain || {};
+    const booked = Boolean(other.pnr) || Boolean(other.queued_order) || ['committed', 'queued'].includes(chain.state);
+    const theirClaim = Date.parse(chain.claimedAt || chain.startedAt);
+    const bookingFirst = chain.state === 'in_progress'
+      && now - Date.parse(chain.startedAt) < CHAIN_CLAIM_TTL_MS
+      && Number.isFinite(theirClaim)
+      && (theirClaim < mine || (theirClaim === mine && row.booking_reference < booking.booking_reference));
+    if (!booked && !bookingFirst) continue;
+
+    const theirOffer = other.flight_offer || other.pending_booking_data?.bookingData?.originalOffer || other.queued_order?.flightOffer;
+    const theirTravellers = (Array.isArray(row.passenger_details) && row.passenger_details.length > 0 ? row.passenger_details : null)
+      || other.pending_booking_data?.bookingData?.passengerData
+      || other.queued_order?.travelers;
+    if (flightsKey(theirOffer) === flights && travellerNamesKey(theirTravellers) === names) {
+      return { duplicateOf: row.booking_reference };
+    }
+  }
+  return { duplicateOf: null };
+}
+
+/**
+ * Put a second payment for one trip in front of a human, and let go of the
+ * chain claim this request took: nothing was sold. `needs_review` is what the
+ * paid-not-ticketed alarm announces, and what keeps the abandoned-checkout job
+ * and a retry of this order from booking it.
+ */
+async function holdDuplicatePayment(bookingReference, duplicateOf) {
+  const at = new Date().toISOString();
+  return patchBookingDetails(bookingReference, {
+    needs_review: {
+      reason: `possible duplicate payment: the same travellers on the same flights are already booked, or being booked, as ${duplicateOf}. `
+        + 'Held, not booked: refund it, or book it by hand if the customer meant to book twice.',
+      ticketed: false,
+      at,
+      duplicate_of: duplicateOf,
+      source: 'duplicate-payment',
+    },
+    gds_chain: { state: 'failed', failedStep: 'duplicate-payment', finishedAt: at },
+  });
 }
 
 /**
@@ -1760,6 +1884,12 @@ router.post('/order', optionalProtect, async (req, res) => {
       });
     }
 
+    // A payment already held as a second payment for one trip stays held: a
+    // human decides whether to book or refund it (findDuplicateBooking, below).
+    if (existing.booking_details?.needs_review?.duplicate_of) {
+      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference));
+    }
+
     // Was this actually paid for? Ask the gateway, not the row. The row's
     // `total_amount` is what the client asked to be charged, written while the
     // row was still unpaid, and `payment_status` alone can be written by paths
@@ -1987,6 +2117,58 @@ router.post('/order', optionalProtect, async (req, res) => {
     }
     chainClaimed = true;
 
+    // One trip, one booking. A second paid checkout for the same travellers on
+    // the same flights - a double click, the back button or a second tab could
+    // each open a second payment page - was booked like any other: two PNRs,
+    // two charges. It is held for a human instead, and not refunded
+    // automatically, because a family can book one flight twice. Checked after
+    // the claim, so of two such payments racing each other only the later one
+    // is held (findDuplicateBooking).
+    const duplicate = await findDuplicateBooking(existing, {
+      travellers: travelersList,
+      offer: firstOffer,
+      claimedAt: claim.claimedAt,
+    });
+    if (duplicate.unavailable) {
+      // It cannot be told, so it is not booked now. Nothing was sold: the queue
+      // runs it again, check and all, once the database answers.
+      chainClaimed = false;
+      if (await queueBookingForRetry(req.body.bookingReference, req.body)) {
+        return respondQueued(res, req.body.bookingReference);
+      }
+      await releaseBookingChain(req.body.bookingReference, 'duplicate-check');
+      return res.status(503).json({
+        success: false,
+        error: 'We could not start your booking just now. Your payment is safe - please try again in a minute.',
+        code: 'BOOKING_UNAVAILABLE',
+        retryable: true
+      });
+    }
+    if (duplicate.duplicateOf) {
+      console.warn('⛔ Holding a second payment for a trip already booked', {
+        bookingReference: existing.booking_reference,
+        duplicateOf: duplicate.duplicateOf
+      });
+      chainClaimed = false;
+      if (!(await holdDuplicatePayment(req.body.bookingReference, duplicate.duplicateOf))) {
+        // Not recorded, so nobody would be told about it. Let the claim go and
+        // ask the customer to try again, which runs the check again.
+        reportError(new Error('could not hold a duplicate payment for review'), {
+          service: 'flights',
+          flow: 'booking',
+          bookingReference: req.body.bookingReference,
+          duplicateOf: duplicate.duplicateOf
+        });
+        await releaseBookingChain(req.body.bookingReference, 'duplicate-payment');
+        return res.status(503).json({
+          success: false,
+          error: 'We could not start your booking just now. Your payment is safe - please try again in a minute.',
+          code: 'BOOKING_UNAVAILABLE',
+          retryable: true
+        });
+      }
+      return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference));
+    }
 
     // Prepare flight order data for Amadeus (only if we have valid Amadeus format)
     // The travelers from frontend are already in correct format: { id, firstName, lastName, dateOfBirth, gender }

@@ -5,8 +5,92 @@ import { verifyFlightCharge } from '../../services/flightCheckout.service.js';
 import { isGuestFlightBookingEnabled, isUsableEmail } from '../../services/guestBooking.service.js';
 import { getCaller } from './agents.handlers.js';
 import { safeReturnUrl } from '../../utils/returnUrl.js';
+import { checkoutKey } from '../../utils/tripMatch.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
+
+/**
+ * How long an unpaid flight checkout is handed back, rather than a second one
+ * opened for the same trip. A double click, the back button and a second tab
+ * all happen within it. It stays well inside the payment page's own 15 minutes
+ * (`interaction.timeout: 900` below), so a page handed back still has most of
+ * its time left.
+ */
+export const CHECKOUT_REUSE_WINDOW_MS = 5 * 60 * 1000;
+
+// Scheme and host. Not `URL.origin`, which is the string "null" for the mobile
+// app's own schemes (jetsettermobile://), so every app URL would look alike.
+const urlOrigin = (value) => {
+    try {
+        const url = new URL(value);
+        return `${url.protocol}//${url.host}`;
+    } catch {
+        return null;
+    }
+};
+
+/**
+ * This customer's payment page for exactly this trip, opened within the reuse
+ * window and not yet touched, or null.
+ *
+ * "This customer" is the signed-in account, or for a guest the email the
+ * checkout was made with. "Exactly this trip" is checkoutKey: the same
+ * flights, every traveller detail, the contact details, the coupon and the
+ * verified total. Also the same site: local and production share the
+ * database, and a page opened on one returns its payer to that one. Anything
+ * that cannot be read answers null, and checkout opens a page as it always did.
+ */
+async function findReusableCheckout({ userId, customerEmail, key, returnOrigin, frontendBaseUrl, now = Date.now() }) {
+    const email = String(customerEmail || '').trim().toLowerCase();
+    if (!key || !returnOrigin || (!userId && !email)) return null;
+
+    try {
+        let query = supabase
+            .from('bookings')
+            .select('booking_reference, user_id, status, payment_status, created_at, booking_details')
+            .eq('travel_type', 'flight')
+            .eq('status', 'pending')
+            .eq('payment_status', 'unpaid')
+            .gte('created_at', new Date(now - CHECKOUT_REUSE_WINDOW_MS).toISOString());
+        query = userId
+            ? query.eq('user_id', userId)
+            : query.is('user_id', null).ilike('booking_details->>customer_email', email);
+        const { data, error } = await query.order('created_at', { ascending: false }).limit(10);
+        if (error || !Array.isArray(data)) return null;
+
+        for (const row of data) {
+            const details = row.booking_details || {};
+            // Checked here as well as in the query: the filters above are what
+            // keeps anyone else's payment page out, so they are not trusted alone.
+            const sameCustomer = userId
+                ? row.user_id === userId
+                : !row.user_id && String(details.customer_email || '').trim().toLowerCase() === email;
+            if (!sameCustomer || row.status !== 'pending' || row.payment_status !== 'unpaid') continue;
+            if (details.pnr || details.gds_chain || details.queued_order || details.arc_captured_amount || details.needs_review) continue;
+            if (!details.session_id || !details.arc_pay_checkout_url) continue;
+
+            const openedAt = Date.parse(details.checkout_created_at || row.created_at);
+            if (!Number.isFinite(openedAt) || now - openedAt < 0 || now - openedAt >= CHECKOUT_REUSE_WINDOW_MS) continue;
+
+            const storedReturn = details.pending_booking_data?.returnUrl;
+            if (urlOrigin(safeReturnUrl(storedReturn, frontendBaseUrl)) !== returnOrigin) continue;
+
+            const storedKey = checkoutKey({
+                bookingData: details.pending_booking_data?.bookingData,
+                customerEmail: details.customer_email,
+                total: details.verified_charge?.total,
+                couponCode: details.verified_charge?.coupon?.code,
+            });
+            if (storedKey !== key) continue;
+
+            return { orderId: row.booking_reference, sessionId: details.session_id, checkoutUrl: details.arc_pay_checkout_url };
+        }
+        return null;
+    } catch (lookupError) {
+        console.warn('⚠️ Could not look for an open checkout to reuse:', lookupError.message);
+        return null;
+    }
+}
 
 /** `j***@example.com`: enough for a customer to recognise, useless to anyone else. */
 const maskEmail = (email) => {
@@ -427,6 +511,38 @@ export async function handleHostedCheckout(req, res) {
         // one of ours (utils/returnUrl.js), otherwise the site's default.
         const finalReturnUrl = safeReturnUrl(returnUrl, `${frontendBaseUrl}/payment/callback?orderId=${orderId}&bookingType=${bookingType}`);
         const finalCancelUrl = safeReturnUrl(cancelUrl, `${frontendBaseUrl}/${bookingType}-payment?cancelled=true`);
+
+        // One trip, one open payment page. Every Pay click on the review page
+        // opened a new session under a new reference, so a double click, the
+        // back button after the payment page opened, or a second tab gave the
+        // customer two live payment pages - and two paid checkouts were booked
+        // as two PNRs and two charges. The page this customer opened moments ago
+        // for exactly this trip is handed back instead, under its own reference.
+        // Its success indicator is not: whoever opens a checkout is never given
+        // the secret that proves who paid (see the response at the end).
+        if (bookingType === 'flight') {
+            const reusable = await findReusableCheckout({
+                userId: resolveBookingUserId(req),
+                customerEmail,
+                key: checkoutKey({ bookingData, customerEmail, total: chargeAmount, couponCode: verifiedCharge?.coupon?.code }),
+                returnOrigin: urlOrigin(finalReturnUrl),
+                frontendBaseUrl,
+            });
+            if (reusable) {
+                console.log('♻️ Handing back the payment page already open for this trip', { orderId: reusable.orderId, requested: orderId });
+                return res.status(200).json({
+                    success: true,
+                    sessionId: reusable.sessionId,
+                    merchantId: arcMerchantId,
+                    orderId: reusable.orderId,
+                    paymentPageUrl: reusable.checkoutUrl,
+                    checkoutUrl: reusable.checkoutUrl,
+                    redirectMethod: 'GET',
+                    reused: true,
+                    message: 'This trip already has a payment page open, so that one is used.'
+                });
+            }
+        }
 
         const cleanBaseUrl = arcBaseUrl.replace(/\/$/, '');
         const sessionUrl = `${cleanBaseUrl}/merchant/${arcMerchantId}/session`;

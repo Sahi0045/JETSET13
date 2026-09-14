@@ -8,9 +8,16 @@
  * compare-and-set claim really can be lost, and a test can read back what the
  * route wrote.
  *
- * Deliberately small: `or`, `order` and `limit` are accepted and ignored, and
- * `insert` / `upsert` write nothing (routes that insert fall back to updating
- * the row checkout created, which is what these tests exercise).
+ * Deliberately small: `or`, `order`, `limit`, `gte`, `lte` and `ilike` are
+ * accepted and ignored, and `insert` / `upsert` write nothing (routes that
+ * insert fall back to updating the row checkout created, which is what these
+ * tests exercise).
+ *
+ * Options:
+ *  - `tables`: other tables by name, e.g. `{ feature_flags: [...] }`; any
+ *    name not listed reads the bookings table;
+ *  - `fail({ table, filters, patch })`: return true to answer that query with
+ *    a database error.
  */
 
 const clone = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
@@ -30,19 +37,24 @@ const passes = (row, [op, column, expected]) => {
   }
 };
 
-export function fakeBookingsTable(rows = []) {
+export function fakeBookingsTable(rows = [], { tables = {}, fail } = {}) {
   const table = rows.map(clone);
+  const others = Object.fromEntries(Object.entries(tables).map(([name, list]) => [name, list.map(clone)]));
   const writes = [];
 
-  const from = () => {
+  const from = (name = 'bookings') => {
+    const target = Object.prototype.hasOwnProperty.call(others, name) ? others[name] : table;
     const filters = [];
     let patch = null;
 
     const run = () => {
-      const matched = table.filter((row) => filters.every((filter) => passes(row, filter)));
+      if (fail?.({ table: name, filters: [...filters], patch })) {
+        return { data: null, error: { message: 'connection reset' } };
+      }
+      const matched = target.filter((row) => filters.every((filter) => passes(row, filter)));
       if (patch) {
         for (const row of matched) Object.assign(row, clone(patch));
-        writes.push({ patch: clone(patch), filters: [...filters], matched: matched.length });
+        writes.push({ table: name, patch: clone(patch), filters: [...filters], matched: matched.length });
       }
       return { data: matched.map(clone), error: null };
     };
@@ -56,10 +68,14 @@ export function fakeBookingsTable(rows = []) {
     }
     chain.update = (value) => { patch = value; return chain; };
     chain.single = async () => {
-      const { data } = run();
+      const { data, error } = run();
+      if (error) return { data: null, error };
       return data.length ? { data: data[0], error: null } : { data: null, error: { code: 'PGRST116', message: 'no rows' } };
     };
-    chain.maybeSingle = async () => ({ data: run().data[0] ?? null, error: null });
+    chain.maybeSingle = async () => {
+      const { data, error } = run();
+      return error ? { data: null, error } : { data: data[0] ?? null, error: null };
+    };
     chain.then = (resolve, reject) => {
       try {
         resolve(run());

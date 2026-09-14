@@ -89,6 +89,29 @@ function FlightBookingConfirmation() {
   const [pricedFare, setPricedFare] = useState(null);
   const [fareNotice, setFareNotice] = useState(null);
   const [checkingOut, setCheckingOut] = useState(false);
+  // One payment page per trip. React state alone let a quick second click in
+  // before Pay re-rendered disabled, and `checkingOut` was cleared as soon as
+  // the redirect began, so Pay was live again while the browser was still on
+  // its way to ARC: a second click opened a second payment page for the same
+  // trip, and paying both booked it twice. The ref is set synchronously and
+  // held through the redirect. Checkout also hands back a payment page already
+  // open for the same trip (checkout.handlers.js), which covers a second tab.
+  const paymentStarting = React.useRef(false);
+  const [openingPayment, setOpeningPayment] = useState(false);
+
+  // Back from the payment page, a page restored from the browser's cache still
+  // holds "opening payment". The customer may try again: checkout gives them
+  // the same payment page for the same trip.
+  useEffect(() => {
+    const onPageShow = (event) => {
+      if (!event.persisted) return;
+      paymentStarting.current = false;
+      setOpeningPayment(false);
+      setCheckingOut(false);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
   // What the page needs to tell the customer, in the site's own dialog.
   const [notice, setNotice] = useState(null);
   const [calculatedFare, setCalculatedFare] = useState({
@@ -803,6 +826,8 @@ function FlightBookingConfirmation() {
   const handleProceedToPayment = async () => {
     // Not while the group is being re-priced: the fare on the page is about to change.
     if (checkingOut || groupChange.busy) return;
+    // Not while a payment page is already opening for this trip.
+    if (paymentStarting.current) return;
     // Everything the airline needs, checked before payment. The server refuses
     // an incomplete traveller too - but only after the charge, and then has to
     // reverse it. Stopping here costs the customer nothing. The same list marks
@@ -833,7 +858,11 @@ function FlightBookingConfirmation() {
       saveTravellersMutation.mutate(passengerData.map(toSavedTraveller));
     }
 
+    paymentStarting.current = true;
     setCheckingOut(true);
+    // Set once the browser is on its way to the payment page: from then on
+    // nothing here lets Pay be pressed again.
+    let redirecting = false;
     try {
       const rawFlightData = reviewState?.flightData;
       const amount = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
@@ -920,10 +949,15 @@ function FlightBookingConfirmation() {
         clearFlightReview();
         localStorage.setItem('pendingPaymentSession', JSON.stringify({
           sessionId: checkoutResponse.sessionId,
-          orderId,
+          // Checkout's reference, which is not always the one made above: for a
+          // trip that already has a payment page open it hands that page back,
+          // under the reference ARC will return the payer with.
+          orderId: checkoutResponse.orderId || orderId,
           bookingType: 'flight',
           amount
         }));
+        redirecting = true;
+        setOpeningPayment(true);
         window.location.href = checkoutResponse.checkoutUrl;
         return;
       }
@@ -996,6 +1030,8 @@ function FlightBookingConfirmation() {
       });
     } finally {
       setCheckingOut(false);
+      // Free for another try, unless the payment page is opening.
+      if (!redirecting) paymentStarting.current = false;
     }
   };
 
@@ -1893,10 +1929,10 @@ function FlightBookingConfirmation() {
 
                 <button
                   onClick={handleProceedToPayment}
-                  disabled={checkingOut}
+                  disabled={checkingOut || openingPayment}
                   className="btn-primary mt-4"
                 >
-                  {checkingOut ? 'Checking the fare…' : `Pay ${formatUsd(amountDue)}`} <CheckCircle className="h-5 w-5" />
+                  {openingPayment ? 'Opening secure payment…' : checkingOut ? 'Checking the fare…' : `Pay ${formatUsd(amountDue)}`} <CheckCircle className="h-5 w-5" />
                 </button>
 
                 {/* Renders into a portal, so it covers both this button and the mobile bar's. */}
@@ -1942,14 +1978,14 @@ function FlightBookingConfirmation() {
           </div>
           <button
             onClick={handleProceedToPayment}
-            disabled={checkingOut}
+            disabled={checkingOut || openingPayment}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8, background: '#055B75', color: '#fff',
               fontWeight: 700, fontSize: 15, padding: '13px 26px', borderRadius: 10, border: 'none',
               cursor: 'pointer', boxShadow: '0 6px 16px rgba(5,91,117,0.3)', whiteSpace: 'nowrap',
             }}
           >
-            {checkingOut ? 'Checking the fare…' : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
+            {openingPayment ? 'Opening secure payment…' : checkingOut ? 'Checking the fare…' : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
           </button>
         </div>
       </div>

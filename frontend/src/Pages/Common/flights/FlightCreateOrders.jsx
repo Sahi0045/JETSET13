@@ -547,6 +547,28 @@ function FlightCreateOrders() {
                       </p>
                     </div>
                   </div>
+                ) : errorCode === 'DUPLICATE_PAYMENT' ? (
+                  // A second payment for a trip already booked, or being booked,
+                  // for the same travellers. It is held for support, not booked
+                  // and not refunded automatically, so this is not "Booking
+                  // Failed" and there is nothing to try again.
+                  <div className="space-y-4">
+                    <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                      <AlertCircle className="w-8 h-8 text-amber-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">We did not book this trip twice</h2>
+                    <div className="bg-amber-50 text-amber-800 p-4 rounded-lg text-sm">
+                      {error}
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => navigate(authUser ? '/my-trips' : '/flights')}
+                        className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                      >
+                        {authUser ? 'Go to My Trips' : 'Back to flights'}
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <div className="space-y-4">
                     <div className="mx-auto w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
