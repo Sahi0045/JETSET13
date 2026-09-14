@@ -18,6 +18,7 @@ import { recordCouponUse } from '../services/coupon.service.js';
 import { crossesBorder } from '../utils/itinerary.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { flightSearchLimiter } from '../middleware/security.js';
+import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -648,6 +649,196 @@ async function refreshChainClaim(bookingReference) {
     .eq('booking_details->gds_chain->>startedAt', chain.startedAt)
     .select('booking_reference');
   return Boolean(data?.length);
+}
+
+/**
+ * How long a claim on sending a booking's confirmation email holds before a
+ * later request may take it over: far longer than a send takes, short enough
+ * that a process killed mid-send does not stop the email for good.
+ */
+const CONFIRMATION_EMAIL_CLAIM_TTL_MS = 5 * 60_000;
+
+/**
+ * Review flags that describe a booking the success path confirmed, and emailed,
+ * as it stands: the chain's "issued, but the ticket numbers had not surfaced",
+ * and the paid-not-ticketed alarm's label for an ordinary unticketed
+ * reservation it announced. Any other flag is a booking a human is sorting
+ * out, and the success path sends that booking no confirmation.
+ */
+const EMAILED_REVIEW_REASONS = new Set(['ticket_numbers_not_retrieved', UNTICKETED_REVIEW_REASON]);
+
+/**
+ * Does this booking still owe its customer the confirmation email?
+ *
+ * A retried order - a customer's second click, the booking queue, the
+ * abandoned-checkout job - finds the booking done and answers ALREADY_BOOKED.
+ * That answer used to send nothing, so a booking whose first email was skipped
+ * for want of an address, or failed, never got one. It is owed only what the
+ * success path would have sent for the booking as it is now: nothing once it
+ * is cancelled or its money returned, nothing for one flagged for review. The
+ * email itself says reservation or confirmation from the row
+ * (isUnticketedFlight), exactly as it does on the success path.
+ */
+export function confirmationEmailOwed(booking) {
+  const details = booking?.booking_details || {};
+  if (!details.pnr) return false;
+  if (booking.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(booking.payment_status)) return false;
+  if (details.confirmation_email?.state === 'sent') return false;
+  const review = details.needs_review;
+  return !review || EMAILED_REVIEW_REASONS.has(review.reason);
+}
+
+/**
+ * Take the right to send a booking's confirmation email.
+ *
+ * Two retries of one order can arrive together - a double click, the queue and
+ * the customer's own browser - and each would send. As in claimBookingChain, a
+ * conditional UPDATE on the claim stamp just read decides the winner: both
+ * requests write conditioned on the same prior stamp, and the second matches
+ * no rows. The same caveat applies too: PostgREST rejects arrow paths inside
+ * `or` on an UPDATE, so the condition is a single `is` or `eq`.
+ *
+ * `failOpen` is for the booking's first send, which went out unconditionally
+ * before this claim existed: a bookkeeping failure must not cost the customer
+ * that email. A retry fails closed, because a later retry can still send.
+ */
+async function claimConfirmationEmail(bookingReference, { failOpen = false } = {}) {
+  if (!supabase || !bookingReference) return { claimed: failOpen };
+
+  const { data: row, error: readError } = await supabase
+    .from('bookings')
+    .select('status, booking_details')
+    .eq('booking_reference', bookingReference)
+    .single();
+  if (readError || !row) return { claimed: failOpen, unavailable: true };
+
+  const details = row.booking_details || {};
+  const prior = details.confirmation_email || null;
+  if (prior?.state === 'sent') return { claimed: false, alreadySent: true };
+  const priorStamp = prior?.claimed_at ?? null;
+  const heldLive = prior?.state === 'sending' && priorStamp
+    && Date.now() - Date.parse(priorStamp) < CONFIRMATION_EMAIL_CLAIM_TTL_MS;
+  if (heldLive) return { claimed: false };
+
+  const claimedAt = new Date().toISOString();
+  let update = supabase
+    .from('bookings')
+    .update({
+      booking_details: {
+        ...details,
+        // What was done and when, never to whom: no address is kept here.
+        confirmation_email: { state: 'sending', claimed_at: claimedAt, attempt: Number(prior?.attempt || 0) + 1 },
+      },
+    })
+    .eq('booking_reference', bookingReference)
+    // The whole column is written back, so a cancellation that landed since the
+    // read must make this match nothing rather than be overwritten.
+    .eq('status', row.status);
+  update = priorStamp === null
+    ? update.is('booking_details->confirmation_email->>claimed_at', null)
+    : update.eq('booking_details->confirmation_email->>claimed_at', priorStamp);
+
+  const { data, error } = await update.select('booking_reference');
+  if (error) {
+    console.error('⚠️ Could not claim the confirmation email:', error.message);
+    return { claimed: failOpen, unavailable: true };
+  }
+  if (!data?.length) return { claimed: false };
+  return { claimed: true, claimedAt };
+}
+
+/** Write down how a claimed send went, while the claim is still this request's. */
+async function recordConfirmationEmail(bookingReference, claimedAt, outcome) {
+  if (!supabase || !bookingReference || !claimedAt) return;
+  const { data: row } = await supabase
+    .from('bookings')
+    .select('booking_details')
+    .eq('booking_reference', bookingReference)
+    .single();
+  const details = row?.booking_details;
+  if (!details) return;
+  const { error } = await supabase
+    .from('bookings')
+    .update({ booking_details: { ...details, confirmation_email: { ...details.confirmation_email, ...outcome, claimed_at: claimedAt } } })
+    .eq('booking_reference', bookingReference)
+    .eq('booking_details->confirmation_email->>claimed_at', claimedAt);
+  if (error) console.error('⚠️ Could not record the confirmation email:', error.message);
+}
+
+/**
+ * Send a booking's confirmation email unless another request has, or is doing
+ * so now. Never throws: an email is never the reason an order request fails.
+ */
+export async function sendConfirmationOnce(bookingReference, emailData, { failOpen = false } = {}) {
+  try {
+    if (!emailData?.customerEmail) return { sent: false, reason: 'no-address' };
+    const claim = await claimConfirmationEmail(bookingReference, { failOpen });
+    if (!claim.claimed) {
+      return { sent: false, reason: claim.alreadySent ? 'already-sent' : claim.unavailable ? 'unavailable' : 'in-progress' };
+    }
+
+    let sent = false;
+    try {
+      const { sendBookingNotificationEmails } = await import('../services/emailService.js');
+      const result = await sendBookingNotificationEmails(emailData);
+      sent = result?.success === true;
+      if (sent) console.log('✅ Booking confirmation email sent', { bookingReference });
+      else console.warn('⚠️ Booking confirmation email not sent:', result?.error || 'unknown reason');
+    } catch (emailError) {
+      console.error('❌ Failed to send booking confirmation email:', emailError.message);
+    }
+
+    const now = new Date().toISOString();
+    await recordConfirmationEmail(bookingReference, claim.claimedAt,
+      sent ? { state: 'sent', sent_at: now } : { state: 'failed', failed_at: now });
+    return { sent };
+  } catch (error) {
+    console.error('❌ Confirmation email step failed:', error.message);
+    return { sent: false, reason: 'error' };
+  }
+}
+
+/**
+ * The confirmation email for a booking already saved, rebuilt from its row for
+ * a retry that found it done: the fields the success path sends, in its order
+ * of preference for the address.
+ */
+function confirmationEmailFromRow(booking, body = {}) {
+  const {
+    // Neither the payment secret nor the checkout's copy of the travellers'
+    // documents has any business in an email template.
+    success_indicator: _secret,
+    pending_booking_data: checkout,
+    queued_order: _queued,
+    confirmation_email: _record,
+    ...details
+  } = booking.booking_details || {};
+  const offer = details.flight_offer || checkout?.bookingData?.originalOffer || null;
+  const segments = offer?.itineraries?.[0]?.segments || [];
+  const firstSegment = segments[0] || {};
+  const lastSegment = segments[segments.length - 1] || firstSegment;
+  const travellers = Array.isArray(body?.travelers) && body.travelers.length > 0
+    ? body.travelers
+    : (checkout?.bookingData?.passengerData || []);
+  const lead = travellers[0] || {};
+  const name = `${lead.firstName || lead.name?.firstName || ''} ${lead.lastName || lead.name?.lastName || ''}`.trim();
+
+  return {
+    customerEmail: body?.contactInfo?.email || body?.customerEmail || lead.email || details.customer_email || '',
+    customerName: name || 'Valued Customer',
+    bookingReference: booking.booking_reference,
+    bookingType: 'flight',
+    paymentAmount: booking.total_amount || offer?.price?.total || '0',
+    currency: details.currency || offer?.price?.currency || 'USD',
+    travelDate: details.departure_date_full || firstSegment.departure?.at?.split('T')[0],
+    passengers: travellers.length || 1,
+    bookingDetails: {
+      ...details,
+      origin: details.origin || firstSegment.departure?.iataCode,
+      destination: details.destination || lastSegment.arrival?.iataCode,
+      airline: details.airline_name || offer?.validatingAirlineCodes?.[0],
+    },
+  };
 }
 
 /**
@@ -1538,6 +1729,17 @@ router.post('/order', optionalProtect, async (req, res) => {
       const tickets = Array.isArray(details.tickets) ? details.tickets : [];
       const ticketed = details.gds?.ticketed === true || tickets.length > 0;
       console.log('↩️ Already booked, returning the stored order', details.pnr);
+      // A retry can be the first chance to send a confirmation this booking
+      // never got: its first send was skipped for want of an address, or failed.
+      // Started after the answer and not awaited, so the email can neither hold
+      // up nor fail the customer's retry. Flight routes run on the Lightsail
+      // server (vercel.json forwards /api/flights), where work after the answer
+      // still finishes; the claim's expiry covers a process that dies mid-send.
+      if (confirmationEmailOwed(existing)) {
+        res.on?.('finish', () => {
+          sendConfirmationOnce(existing.booking_reference, confirmationEmailFromRow(existing, req.body));
+        });
+      }
       return res.json({
         success: true,
         data: {
@@ -2239,11 +2441,19 @@ router.post('/order', optionalProtect, async (req, res) => {
           }
         };
 
-        const emailResult = await sendBookingNotificationEmails(bookingEmailData);
-        if (emailResult.success) {
-          console.log('✅ Booking confirmation email sent successfully');
+        if (bookingEmailData.customerEmail) {
+          // Claimed and recorded on the row (booking_details.confirmation_email),
+          // so a retry of this order can tell whether the customer still needs
+          // it - see confirmationEmailOwed. This first send fails open: a
+          // bookkeeping error must not cost the customer their confirmation.
+          await sendConfirmationOnce(dbBooking.booking_reference, bookingEmailData, { failOpen: true });
         } else {
-          console.warn('⚠️ Booking confirmation email sent with issues:', emailResult.error);
+          // Nobody to confirm to. The office is still told about the booking,
+          // and nothing is recorded, so a retry that brings an address sends it.
+          const emailResult = await sendBookingNotificationEmails(bookingEmailData);
+          console.warn('⚠️ Booking confirmation email not sent: no address', {
+            officeNotified: emailResult?.adminNotification?.success === true,
+          });
         }
       } catch (emailError) {
         console.error('❌ Failed to send booking confirmation email:', emailError.message);
