@@ -99,6 +99,19 @@ export const apiLimiter = rateLimit({
 });
 
 /**
+ * The flight limiter's budget per address, per minute.
+ *
+ * An explicit RATE_LIMIT_FLIGHT_MAX wins. Otherwise 120 - unless RATE_LIMIT_MAX
+ * has been raised above its 300 default, which is how a host whose addresses
+ * are shared edges is configured. There, the flight budget is the general one.
+ */
+export function flightSearchMax(env = process.env) {
+  if (env.RATE_LIMIT_FLIGHT_MAX) return Number(env.RATE_LIMIT_FLIGHT_MAX);
+  const general = Number(env.RATE_LIMIT_MAX);
+  return Number.isFinite(general) && general > 300 ? general : 120;
+}
+
+/**
  * Per-IP limiter for the flight endpoints that reach Amadeus: search, price,
  * upsell, fare rules, seat maps, the three date-price calendars and flight
  * status. They are
@@ -119,13 +132,21 @@ export const apiLimiter = rateLimit({
  * calendar stays under forty in a minute. 120 is three times that, with room
  * for a household or office sharing one address. RATE_LIMIT_FLIGHT_MAX tunes it.
  *
+ * Unless the host counts a crowd as one address. On Lightsail every visitor
+ * arrives through a Vercel edge, so `req.ip` is shared by everyone that edge
+ * serves (deploy/README.md, "Why the rate limit is higher here") - which is why
+ * that host raises RATE_LIMIT_MAX to 2000. 120 there was a budget for a whole
+ * city, not for one customer: a busy evening would have refused real searches.
+ * So where the general limit has been raised, this one follows it. See
+ * flightSearchMax.
+ *
  * Same in-memory store as the other limiters (see the note at the top of this
  * file): on Vercel each instance counts separately, so the effective limit
  * there is looser, never stricter.
  */
 export const flightSearchLimiter = rateLimit({
   windowMs: minutes(1),
-  max: Number(process.env.RATE_LIMIT_FLIGHT_MAX || 120),
+  max: flightSearchMax(),
   standardHeaders: true,
   legacyHeaders: false,
   // `error` is what the flight pages show; `message` matches the other limiters.
