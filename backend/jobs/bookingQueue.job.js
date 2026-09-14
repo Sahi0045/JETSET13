@@ -19,10 +19,9 @@ import { providerStatus } from '../services/flightProvider.js';
 import { getWsConfig } from '../services/amadeusSoap/config.js';
 import { getSemaphore } from '../services/amadeusSoap/semaphore.js';
 import { sendEmail } from '../services/emailService.js';
-
-// Matches CHAIN_CLAIM_TTL_MS in flight.routes.js: a claim older than this was
-// left by a request that died, and its booking needs running again.
-const CLAIM_TTL_MS = 120_000;
+// The order route's own TTL: a claim older than this was left by a request
+// that died, and its booking needs running again.
+import { CHAIN_CLAIM_TTL_MS as CLAIM_TTL_MS } from '../utils/bookingChainClaim.js';
 const MAX_PER_TICK = 5;
 
 const log = (msg, extra = {}) => console.log(`[BookingQueue] ${msg}`, extra);
@@ -142,6 +141,13 @@ export async function replay(row, { baseUrl, fetchImpl = fetch } = {}) {
 
   if (body?.queued) return 'requeued';               // still no slot; the route re-queued it
   if (status === 409 && body?.code === 'BOOKING_IN_PROGRESS') return 'in-progress';
+  // The customer cancelled between this worker reading the row and replaying
+  // it. That is an outcome, not a failure: emailing "we could not confirm your
+  // booking" to someone who just cancelled it is wrong twice over.
+  if (status === 409 && body?.code === 'BOOKING_CANCELLED') {
+    await clearQueuedOrder(ref);
+    return 'already-finished';
+  }
 
   if (body?.success) {
     log('queued booking confirmed', { bookingReference: ref, pnr: body.pnr || null });

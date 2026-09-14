@@ -1,4 +1,5 @@
 import { arr, at, atTxt, txt } from '../parseXml.js';
+import { sanitizeName } from '../operations/pnr.js';
 
 /**
  * PNR_Reply -> the REST `flight-order` shape.
@@ -117,11 +118,24 @@ export const readTickets = (reply) => {
     const carrier = freetext.match(/\/ET([A-Z0-9]{2})\b/)?.[1] ?? null;
     const issuedOn = fromDDMMMYY(freetext.match(/\b(\d{2}[A-Z]{3}\d{2})\b/)?.[1]);
 
+    // An infant on a lap is not a passenger of its own on a PNR, so its FA
+    // points at its adult's passenger reference and says INF where an adult's
+    // says PAX:
+    //
+    //   FA INF 057-2412345679/ETAI/USD22.00/04SEP26/SCK1S2400/...
+    //
+    // Read as the adult's, the two tickets could not be told apart: a page gave
+    // the adult either number, and the infant somebody else's.
+    const passengerRef = arr(at(element, 'referenceForDataElement.reference'))
+      .filter((r) => txt(r.qualifier) === 'PT')
+      .map((r) => txt(r.number))[0] ?? null;
+    const onLap = /(?:^|\s)INF\s+\d{3}-?\d{10}/.test(freetext);
+
     tickets.push({
       number: `${match[1]}-${match[2]}`,
-      travelerId: arr(at(element, 'referenceForDataElement.reference'))
-        .filter((r) => txt(r.qualifier) === 'PT')
-        .map((r) => txt(r.number))[0] ?? null,
+      // The id readTravelers gives the same infant: `<adult reference>-INF`.
+      travelerId: passengerRef && onLap ? `${passengerRef}-INF` : passengerRef,
+      ...(onLap ? { travelerType: 'HELD_INFANT', associatedAdultId: passengerRef } : {}),
       validatingCarrier: carrier,
       // The date Amadeus says it was issued, not the time we happened to read
       // it: `new Date()` here made every ticket look issued today, which is
@@ -135,6 +149,57 @@ export const readTickets = (reply) => {
 
 /** True once at least one ticket exists - the point past which cancelling is wrong. */
 export const isTicketed = (reply) => readTickets(reply).length > 0;
+
+const isOnLap = (traveler) => ['HELD_INFANT', 'INF'].includes(String(traveler?.ptc ?? traveler?.travelerType ?? '').toUpperCase());
+
+/**
+ * Each ticket against the traveller it belongs to, by that traveller's own id.
+ *
+ * A ticket names its passenger by PNR reference, and that reference is a
+ * TATTOO: Amadeus numbers every element of the PNR in one sequence, and lists
+ * passengers in its own order. The live family booking recorded in
+ * tests/fixtures/amadeus/pnr-add-elements-infant-family.xml came back with
+ * passengers 5, 2 and 4 for the three we sent as 1, 2 and 3, the infant riding
+ * on 2. An infant's ticket names its adult (readTickets marks it `<adult>-INF`).
+ *
+ * The booking, the e-ticket and Manage Booking know travellers by the ids the
+ * review page gave them. So the only honest bridge is the PNR's own passenger
+ * list: the tattoo names a passenger there, and that passenger's name - as it
+ * was written onto the PNR - and whether they ride on a lap name the traveller.
+ * A tattoo the PNR does not list, or a name two travellers share, names nobody:
+ * that ticket gets no traveller rather than a guess, and a page shows its number
+ * as pending. The PNR's own reference is kept as `pnrTravelerId`.
+ *
+ * @param {object[]} tickets     - readTickets output
+ * @param {object[]} pnrTravelers - readTravelers output from the same PNR
+ * @param {object[]} travelers    - the booking's travellers: { id, firstName, lastName, ptc }
+ */
+export const attributeTickets = (tickets, pnrTravelers, travelers) => {
+  if (!Array.isArray(tickets)) return [];
+
+  const keyOf = (firstName, lastName, onLap) => `${sanitizeName(firstName)}|${sanitizeName(lastName)}|${onLap ? 'INF' : ''}`;
+
+  // null marks a name two travellers share: either could be the ticket's.
+  const byName = new Map();
+  for (const person of Array.isArray(travelers) ? travelers : []) {
+    const key = keyOf(person?.firstName ?? person?.name?.firstName, person?.lastName ?? person?.name?.lastName, isOnLap(person));
+    byName.set(key, byName.has(key) ? null : person);
+  }
+
+  const onPnr = new Map((Array.isArray(pnrTravelers) ? pnrTravelers : []).map((t) => [String(t.id), t]));
+
+  return tickets.map((ticket) => {
+    const passenger = ticket?.travelerId != null ? onPnr.get(String(ticket.travelerId)) : undefined;
+    const holder = passenger
+      ? byName.get(keyOf(passenger.name?.firstName, passenger.name?.lastName, isOnLap(passenger)))
+      : undefined;
+    return {
+      ...ticket,
+      travelerId: holder?.id != null ? String(holder.id) : null,
+      pnrTravelerId: ticket?.travelerId ?? null,
+    };
+  });
+};
 
 /**
  * Assemble the order response.

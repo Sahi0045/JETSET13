@@ -43,12 +43,16 @@ const supabaseFor = (row) => {
       update: vi.fn((payload) => { updates.push(payload); return c; }),
       insert: vi.fn(() => c),
       eq: vi.fn(() => c),
+      is: vi.fn(() => c),
+      neq: vi.fn(() => c),
       or: vi.fn(() => c),
       filter: vi.fn(() => c),
       order: vi.fn(() => c),
       limit: vi.fn(() => c),
       single: vi.fn().mockResolvedValue({ data: row, error: null }),
       maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      // Writes match the row: the cancellation claim is won.
+      then: (resolve) => resolve({ data: [row], error: null }),
     };
     return c;
   };
@@ -109,6 +113,11 @@ beforeEach(() => {
   if (!axios.put) axios.put = vi.fn();
   axios.put.mockReset();
   axios.put.mockResolvedValue({ status: 200, data: { result: 'SUCCESS' } });
+  // Reconciled with the gateway before anything is cancelled.
+  axios.get.mockResolvedValue({
+    status: 200,
+    data: { status: 'CAPTURED', amount: 291, currency: 'USD', transaction: [{ result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount: 291, currency: 'USD' } }] },
+  });
 });
 
 describe('a booking made as a guest', () => {

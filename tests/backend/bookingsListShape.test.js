@@ -105,4 +105,19 @@ describe('toClientBooking', () => {
     expect(listed.needs_review).toEqual({ reason: 'charge not reversed after the booking failed' });
     expect(listed.gds).toEqual({ ticketed: true });
   });
+
+  // A queued booking read as "Reservation Held - your seats are reserved" on
+  // View Details: nothing had been sent to the airline.
+  it('says a booking is waiting in the queue, and nothing of the order it holds', () => {
+    const queued = toClientBooking({
+      ...row,
+      status: 'pending',
+      booking_details: { queued_order: { travelers: [{ passportNumber: 'X1234567' }] }, gds_chain: { state: 'queued' } },
+    });
+    expect(queued.queued).toBe(true);
+    expect(JSON.stringify(queued)).not.toMatch(/X1234567|queued_order|gds_chain/);
+
+    expect(toClientBooking(row).queued).toBe(false);
+    expect(toClientBooking({ ...row, booking_details: { pnr: 'ABC123', queued_order: {} } }).queued).toBe(false);
+  });
 });

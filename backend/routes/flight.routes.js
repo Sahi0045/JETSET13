@@ -18,6 +18,7 @@ import { recordCouponUse } from '../services/coupon.service.js';
 import { crossesBorder } from '../utils/itinerary.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
+import { liveChainState } from '../utils/bookingChainClaim.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -407,15 +408,6 @@ async function loadOwnedBooking(ref, user, { email } = {}) {
 }
 
 /**
- * How long a chain may hold its claim before another request may take over.
- *
- * Long enough to cover a slow chain - ten sequential GDS calls, ~8s observed on
- * PDT, with room for a bad day - and short enough that a process killed
- * mid-chain does not lock the reference out forever.
- */
-const CHAIN_CLAIM_TTL_MS = 120_000;
-
-/**
  * Take exclusive ownership of the booking chain for this reference.
  *
  * Checking for an existing PNR is not enough on its own: between two concurrent
@@ -449,14 +441,24 @@ async function claimBookingChain(bookingReference) {
   const chain = details.gds_chain || null;
   const priorStamp = chain?.startedAt ?? null;
 
-  // A claim only blocks while it is live. One left behind by a killed process
-  // must expire, or the reference is locked out forever.
-  const heldLive = chain?.state === 'in_progress'
-    && priorStamp
-    && Date.now() - Date.parse(priorStamp) < CHAIN_CLAIM_TTL_MS;
-  if (heldLive) {
-    console.warn('⏳ Chain already in progress for', bookingReference, 'since', priorStamp);
-    return { claimed: false };
+  // A cancellation takes this same stamp (utils/bookingChainClaim.js). Once it
+  // has finished there is nothing left to book; while it runs, the payment
+  // behind this booking is on its way back to the customer. Selling seats in
+  // either case is a reservation nobody is paying for.
+  if (chain?.state === 'cancelled') {
+    console.warn('⛔ Chain refused: the booking was cancelled', bookingReference);
+    return { claimed: false, cancelled: true };
+  }
+
+  // A claim only blocks while it is live (CHAIN_CLAIM_TTL_MS). One left behind
+  // by a killed process must expire, or the reference is locked out forever. A
+  // queued booking does not block: taking it over from the queue is exactly
+  // what the worker's replay does.
+  const held = liveChainState(chain);
+  if (held === 'in_progress' || held === 'cancelling') {
+    console.warn(held === 'cancelling' ? '⏳ Booking is being cancelled:' : '⏳ Chain already in progress for',
+      bookingReference, 'since', priorStamp);
+    return { claimed: false, ...(held === 'cancelling' ? { cancelling: true } : {}) };
   }
 
   const startedAt = new Date().toISOString();
@@ -1783,10 +1785,22 @@ router.post('/order', optionalProtect, async (req, res) => {
         retryable: true
       });
     }
+    if (!claim.claimed && claim.cancelled) {
+      return res.status(409).json({
+        success: false,
+        error: 'This booking was cancelled and cannot be completed',
+        code: 'BOOKING_CANCELLED'
+      });
+    }
     if (!claim.claimed) {
       return res.status(409).json({
         success: false,
-        error: 'This booking is already being confirmed. Please wait a moment before trying again.',
+        // One code for both, so the queue worker waits and looks again rather
+        // than emailing a failure: a cancellation that does not go through
+        // hands the booking back.
+        error: claim.cancelling
+          ? 'This booking is being cancelled, so it cannot be confirmed.'
+          : 'This booking is already being confirmed. Please wait a moment before trying again.',
         code: 'BOOKING_IN_PROGRESS'
       });
     }
@@ -2425,6 +2439,17 @@ router.delete('/order/:orderId', protect, async (req, res) => {
         // `orderId` may be a record locator rather than our own reference, so
         // keep the row's real reference for the needs_review patch below.
         bookingRef = bk?.booking_reference || bookingRef;
+        // This cancels at the airline outside the orchestrator's claim. While
+        // the chain, the queue or another cancellation holds the booking, that
+        // is the race the claim exists to stop, so it waits like everyone else.
+        if (liveChainState(bk?.booking_details?.gds_chain)) {
+          return res.status(409).json({
+            success: false,
+            error: 'This booking is being confirmed or cancelled right now. Nothing has been changed; please try again in a few minutes.',
+            code: 'BOOKING_BUSY',
+            mode: 'FALLBACK_CANCELLATION'
+          });
+        }
         const amaId = bk?.booking_details?.amadeus_order_id || bk?.booking_details?.order_id || orderId;
         try {
           const r = await FlightProvider.cancelFlightOrder(amaId);
@@ -2737,6 +2762,11 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     pricePerNight: booking.booking_details?.price_per_night || null,
     // Outcome fields - see the doc comment above.
     payment_status: booking.payment_status,
+    // Paid, and waiting in the durable queue for an Amadeus slot: nothing has
+    // been sent to the airline. Without it the confirmation page called this
+    // "Reservation Held - your seats are reserved". Only the fact of it: the
+    // stored order carries passport numbers and stays in the database.
+    queued: Boolean(booking.booking_details?.queued_order) && !booking.booking_details?.pnr,
     cancellation: booking.booking_details?.cancellation || null,
     tickets: booking.booking_details?.tickets || [],
     // The reason is what the e-ticket reads ("ticket_numbers_not_retrieved").
