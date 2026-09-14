@@ -194,6 +194,130 @@ describe('no results', () => {
   });
 });
 
+describe('one price covering several flight combinations', () => {
+  /**
+   * A recommendation is a price; each `segmentFlightRef` inside it is one
+   * combination of flights sold at that price. The mapper read
+   * `segmentFlightRef.referencingDetail` as if there were only ever one, which
+   * is undefined whenever there are several, and the whole recommendation was
+   * dropped.
+   *
+   * The fixture is certification search 01 as Amadeus returned it (headers
+   * already redacted by the recorder; it carries no office id or username):
+   * 19 recommendations holding 50 combinations. The site showed 8 of them, and
+   * not the cheapest - $76.00 - which sat in a recommendation with two.
+   */
+  const FIXTURE = 'mptbs-shared-price-combinations';
+  const rawReply = () => {
+    const xml = readFileSync(new URL(`../../fixtures/amadeus/${FIXTURE}.xml`, import.meta.url), 'utf8');
+    const { body } = unwrapEnvelope(parseSoap(xml));
+    return body[Object.keys(body).find((k) => k !== 'Fault')];
+  };
+  const list = (value) => [].concat(value ?? []);
+
+  it('maps every combination in the reply to an offer', () => {
+    const reply = rawReply();
+    const combinations = list(reply.recommendation)
+      .reduce((n, recommendation) => n + list(recommendation.segmentFlightRef).length, 0);
+
+    expect(list(reply.recommendation)).toHaveLength(19);
+    expect(combinations).toBe(50);
+    expect(load(FIXTURE).offers).toHaveLength(combinations);
+  });
+
+  it('gives every offer an id of its own', () => {
+    const ids = load(FIXTURE).offers.map((offer) => offer.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('shows the cheapest fare in the reply', () => {
+    const totals = load(FIXTURE).offers.map((offer) => offer.price.total);
+
+    expect(totals).toContain('76.00');
+    expect(Math.min(...totals.map(Number))).toBe(76);
+  });
+
+  it('shares the price across a recommendation, but each combination keeps its own flights', () => {
+    const shared = load(FIXTURE).offers.filter((offer) => offer._ama.recommendationId === '1');
+    const flightsOf = (offer) => offer.itineraries
+      .flatMap((itinerary) => itinerary.segments.map((s) => `${s.carrierCode}${s.number}@${s.departure.at}`))
+      .join(' ');
+
+    expect(shared).toHaveLength(2);
+    expect(shared.map((offer) => offer.price.total)).toEqual(['76.00', '76.00']);
+    expect(flightsOf(shared[0])).not.toBe(flightsOf(shared[1]));
+
+    // What the booking chain sells must be the flights this offer shows, not
+    // the other combination's.
+    for (const offer of shared) {
+      expect(offer._ama.segments.map((s) => `${s.marketingCarrier}${s.flightNumber}`))
+        .toEqual(offer.itineraries.flatMap((i) => i.segments.map((s) => `${s.carrierCode}${s.number}`)));
+    }
+  });
+
+  // Baggage is referenced per combination ('B'), and those references differ
+  // from the recommendation number for 48 of the 50. Joining on the
+  // recommendation number left most offers with no allowance at all.
+  it("finds every combination's baggage through its own reference", () => {
+    for (const offer of load(FIXTURE).offers) {
+      const bags = offer.travelerPricings[0].fareDetailsBySegment[0].includedCheckedBags;
+      expect(bags, offer.id).toBeDefined();
+    }
+  });
+});
+
+describe('refundability from the penalty text', () => {
+  /**
+   * Any penalty text that did not match /NON-?REFUNDABLE/ was read as
+   * refundable, so "PENALTY APPLIES" earned a green Refundable badge, and so
+   * did "NON REFUNDABLE" spelled with a space. Only explicit refund wording is
+   * a yes; any refusal is a no; everything else is unknown.
+   *
+   * The recorded reply's penalty message is replaced, so the rest of the offer
+   * stays exactly as Amadeus filed it.
+   */
+  const refundableWhen = (text) => {
+    const xml = readFileSync(new URL('../../fixtures/amadeus/mptbs-oneway-jfk-lhr.xml', import.meta.url), 'utf8');
+    const { body } = unwrapEnvelope(parseSoap(xml));
+    const reply = body[Object.keys(body).find((k) => k !== 'Fault')];
+    const recommendation = [].concat(reply.recommendation)[0];
+    for (const product of [].concat(recommendation.paxFareProduct)) {
+      product.fare = text === null ? [] : [{
+        pricingMessage: { freeTextQualification: { textSubjectQualifier: 'PEN' }, description: text },
+      }];
+    }
+    return mapMasterPricerReply(reply, { config, searchSignature: 'test' }).offers[0]._ama.refundable;
+  };
+
+  it.each([
+    'TICKETS ARE NON-REFUNDABLE',
+    'TICKETS ARE NON REFUNDABLE AFTER DEPARTURE',
+    'NONREFUNDABLE',
+    'TICKETS ARE NOT REFUNDABLE',
+  ])('reads "%s" as not refundable', (text) => {
+    expect(refundableWhen(text)).toBe(false);
+  });
+
+  it.each([
+    'PENALTY APPLIES',
+    'SUBJ TO CANCELLATION/CHANGE PENALTY',
+  ])('reads "%s" as unknown, not refundable', (text) => {
+    expect(refundableWhen(text)).toBeNull();
+  });
+
+  it.each([
+    'TICKETS ARE REFUNDABLE',
+    'FULLY REFUNDABLE',
+    'REFUND ALLOWED',
+  ])('reads "%s" as refundable', (text) => {
+    expect(refundableWhen(text)).toBe(true);
+  });
+
+  it('is unknown when there is no penalty text at all', () => {
+    expect(refundableWhen(null)).toBeNull();
+  });
+});
+
 describe('baggage units', () => {
   /**
    * `quantityCode` says whether the allowance is a weight or a piece count.

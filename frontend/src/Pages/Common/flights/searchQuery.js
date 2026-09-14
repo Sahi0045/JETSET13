@@ -25,6 +25,58 @@ export const extractIata = (str) => {
 };
 
 /**
+ * The code - or failing that the typed text - a search field names.
+ *
+ * What the field shows wins over the `fromCode` the form remembers from the
+ * last suggestion picked: typing a new city over a picked one leaves that code
+ * behind, and trusting it searched the old city.
+ */
+export const fieldCode = (label, code) => String(extractIata(label) || code || '').trim();
+
+/**
+ * The body POST /flights/search receives for a search.
+ *
+ * One builder for every search the results page runs. The modify form's
+ * search built its own and sent the display label, "New Delhi (DEL)", which
+ * the server matched as text - to New York.
+ */
+export const buildSearchPayload = (sd) => {
+  const payload = {
+    from: fieldCode(sd.from, sd.fromCode),
+    to: fieldCode(sd.to, sd.toCode),
+    departDate: sd.departDate,
+    adults: parseInt(sd.adults) || parseInt(sd.travelers) || 1,
+    children: parseInt(sd.children) || 0,
+    infants: parseInt(sd.infants) || 0,
+    travelClass: sd.travelClass || 'ECONOMY',
+    max: 50,
+  };
+  if (sd.returnDate) payload.returnDate = sd.returnDate;
+  if (sd.maxPrice) payload.maxPrice = sd.maxPrice;
+  if (sd.nonStop) payload.nonStop = sd.nonStop;
+  if (sd.includedAirlineCodes) payload.includedAirlineCodes = sd.includedAirlineCodes;
+  if (sd.excludedAirlineCodes) payload.excludedAirlineCodes = sd.excludedAirlineCodes;
+  return payload;
+};
+
+/**
+ * What makes two searches the same search: the criteria, not the identity of
+ * the object carrying them. Router state is a fresh object after every
+ * navigation, so keying on identity re-ran a search whenever the URL was
+ * rewritten with the same criteria.
+ */
+export const searchKeyOf = (sd) => (sd ? JSON.stringify([
+  fieldCode(sd.from, sd.fromCode),
+  fieldCode(sd.to, sd.toCode),
+  sd.departDate,
+  sd.returnDate || '',
+  parseInt(sd.adults) || parseInt(sd.travelers) || 1,
+  parseInt(sd.children) || 0,
+  parseInt(sd.infants) || 0,
+  sd.travelClass || 'ECONOMY',
+]) : null);
+
+/**
  * The query string this page puts on its own URL.
  *
  * Shared with the date strip so the two cannot drift: it used to write only
@@ -33,8 +85,8 @@ export const extractIata = (str) => {
  */
 export const searchToQuery = (sd, isoDate) => {
   const q = new URLSearchParams({
-    from: extractIata(sd.from),
-    to: extractIata(sd.to),
+    from: fieldCode(sd.from, sd.fromCode),
+    to: fieldCode(sd.to, sd.toCode),
     date: isoDate || sd.departDate,
   });
   if (sd.returnDate) q.set('returnDate', sd.returnDate);

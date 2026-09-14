@@ -1,21 +1,48 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from "react"
-import { format, addMonths, startOfMonth, endOfMonth, isSameMonth, isSameDay, startOfWeek, isBefore, isToday, addDays } from "date-fns"
+import { format, addMonths, startOfMonth, isSameDay, isBefore, isToday } from "date-fns"
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
-import FlightAnalyticsService from "../../../Services/FlightAnalyticsService"
 import apiConfig from '@/config/api'
+import Price from '../../../Components/Price'
+import { getTodayDate } from '../../../utils/dateUtils'
+import { stripDates } from './searchResults'
 
+/**
+ * The search form's date picker.
+ *
+ * A fare shown here is a real fare or nothing. This calendar used to invent
+ * them: whenever fewer than two real prices were known it drew an "estimated"
+ * curve around ₹3,500 with a green "Cheapest" day, filled the gaps between
+ * sampled dates by interpolation, and printed real USD totals behind a
+ * hard-coded "₹". Real prices almost never arrived anyway, because it called
+ * /cheapest-dates without the departure date the provider needs.
+ *
+ * It now asks /date-prices - what the results page's date strip uses - for the
+ * seven days around the chosen date, for the passengers and cabin being
+ * searched, and shows each fare through <Price> in the currency it came in.
+ * Asking for the strip's exact dates also means the results page finds those
+ * fares already cached. A day with no fare shows no price.
+ *
+ * `showPrices` is off for the return date: these are one-way fares from the
+ * origin, and printing them on return days would price the wrong journey.
+ */
 export default function CustomFlightCalendar({
     selectedDate,
     onSelect,
     originCode,
     destinationCode,
     onClose,
-    minDate = new Date()
+    minDate = new Date(),
+    adults = 1,
+    children = 0,
+    infants = 0,
+    travelClass = 'ECONOMY',
+    showPrices = true,
 }) {
     const [currentMonth, setCurrentMonth] = useState(new Date())
     const [prices, setPrices] = useState({})
+    const [currency, setCurrency] = useState('USD')
     const [loading, setLoading] = useState(false)
 
     // Draggable state
@@ -25,147 +52,68 @@ export default function CustomFlightCalendar({
 
     const nextMonth = addMonths(currentMonth, 1)
 
-    // Find the minimum price to highlight in green
-    const minPrice = useMemo(() => {
-        const values = Object.values(prices).filter(p => p > 0);
-        return values.length > 0 ? Math.min(...values) : null;
-    }, [prices]);
+    const today = getTodayDate()
+    const centerDate = selectedDate && selectedDate >= today ? selectedDate : today
 
-    // The Amadeus sandbox returns a flat placeholder fare (same value on every
-    // date), which renders as "₹58" everywhere. Detect that lack of variation...
-    const hasPriceVariation = useMemo(() => {
-        const rounded = Object.values(prices).filter(p => p > 0).map(p => Math.round(p));
-        return new Set(rounded).size > 1;
-    }, [prices]);
+    // The lowest fare is marked only when there are at least two to compare.
+    const lowestPrice = useMemo(() => {
+        const values = Object.values(prices)
+        return values.length >= 2 ? Math.min(...values) : null
+    }, [prices])
 
-    // ...and, when real fares don't vary, fall back to a deterministic estimated
-    // curve (weekends pricier) so the calendar still shows useful varied prices.
-    // Live, varying fares from production replace this automatically.
-    const estimatePrice = (date) => {
-        const dow = date.getDay();
-        const weekend = (dow === 0 || dow === 5 || dow === 6) ? 1.3 : 1.0;
-        const seed = date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
-        const wobble = ((seed * 9301 + 49297) % 233280) / 233280; // deterministic 0..1
-        return Math.round((3500 * weekend * (0.8 + wobble * 0.7)) / 50) * 50;
-    };
-
-    const displayPrices = useMemo(() => {
-        if (hasPriceVariation) return prices;
-        const out = {};
-        let d = startOfMonth(currentMonth);
-        const end = endOfMonth(nextMonth);
-        while (!isBefore(end, d)) {
-            out[format(d, 'yyyy-MM-dd')] = estimatePrice(d);
-            d = addDays(d, 1);
-        }
-        return out;
-    }, [prices, hasPriceVariation, currentMonth]);
-
-    const displayMin = useMemo(() => {
-        const vals = Object.values(displayPrices).filter(p => p > 0);
-        return vals.length ? Math.min(...vals) : null;
-    }, [displayPrices]);
-
-    // Fetch prices for visibility range
     useEffect(() => {
-        if (!originCode || !destinationCode) return;
+        if (!showPrices || !originCode || !destinationCode) {
+            setPrices({})
+            return undefined
+        }
 
-        const abortController = new AbortController();
-        let cancelled = false;
+        const controller = new AbortController()
+        let cancelled = false
 
         const fetchPrices = async () => {
-            setLoading(true);
-            console.log(`[Calendar] Fetching prices for ${originCode} -> ${destinationCode}...`);
+            setLoading(true)
             try {
-                // Try cheapest-dates API first
-                const data = await FlightAnalyticsService.getCheapestFlightDates(
-                    originCode,
-                    destinationCode,
-                    { viewBy: 'DATE' }
-                );
-
-                if (cancelled) return;
-
-                if (data && data.length > 0) {
-                    console.log(`[Calendar] Received ${data.length} price points from cheapest-dates API`);
-                    const newPrices = {};
-                    data.forEach(item => {
-                        newPrices[item.departureDate] = parseFloat(item.price.total);
-                    });
-                    setPrices(newPrices);
-                    return;
-                }
-
-                // Fallback: use server-side calendar-prices endpoint (handles caching & rate limiting)
-                console.log(`[Calendar] cheapest-dates returned no data, using calendar-prices fallback`);
-                const baseUrl = apiConfig?.baseUrl || '';
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const m1Start = startOfMonth(currentMonth);
-                const m2End = endOfMonth(nextMonth);
-
-                // Sample ~5 dates spread across both months
-                const sampleDates = [];
-                let d = isBefore(m1Start, today) ? today : m1Start;
-                while (isBefore(d, m2End) || format(d, 'yyyy-MM-dd') === format(m2End, 'yyyy-MM-dd')) {
-                    sampleDates.push(format(d, 'yyyy-MM-dd'));
-                    d = addDays(d, 7);
-                }
-                const datesToFetch = sampleDates.slice(0, 5);
-
-                const response = await fetch(`${baseUrl}/flights/calendar-prices`, {
+                const response = await fetch(apiConfig.endpoints.flights.datePrices, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        origin: originCode,
-                        destination: destinationCode,
-                        dates: datesToFetch
+                        from: originCode,
+                        to: destinationCode,
+                        dates: stripDates(centerDate),
+                        adults: Number(adults) || 1,
+                        children: Number(children) || 0,
+                        infants: Number(infants) || 0,
+                        travelClass: travelClass || 'ECONOMY',
                     }),
-                    signal: abortController.signal
-                });
+                    signal: controller.signal,
+                })
+                const data = await response.json()
+                if (cancelled) return
 
-                if (cancelled) return;
-
-                if (response.ok) {
-                    const result = await response.json();
-                    if (result.success && result.prices && Object.keys(result.prices).length > 0) {
-                        const fetchedPrices = result.prices;
-                        const sortedDates = Object.keys(fetchedPrices).sort();
-                        if (sortedDates.length >= 2) {
-                            for (let i = 0; i < sortedDates.length - 1; i++) {
-                                const startDate = new Date(sortedDates[i]);
-                                const endDate = new Date(sortedDates[i + 1]);
-                                const startPrice = fetchedPrices[sortedDates[i]];
-                                const endPrice = fetchedPrices[sortedDates[i + 1]];
-                                const daysBetween = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
-                                for (let j = 1; j < daysBetween; j++) {
-                                    const interpDate = format(addDays(startDate, j), 'yyyy-MM-dd');
-                                    if (!fetchedPrices[interpDate]) {
-                                        fetchedPrices[interpDate] = Math.round(startPrice + (endPrice - startPrice) * (j / daysBetween));
-                                    }
-                                }
-                            }
-                        }
-                        console.log(`[Calendar] Got ${Object.keys(fetchedPrices).length} price points from calendar-prices`);
-                        setPrices(fetchedPrices);
+                const real = {}
+                if (data?.success && data.dateWisePrices) {
+                    for (const [date, value] of Object.entries(data.dateWisePrices)) {
+                        const amount = Number(value)
+                        if (Number.isFinite(amount) && amount > 0) real[date] = amount
                     }
                 }
+                setPrices(real)
+                setCurrency(data?.currency || 'USD')
             } catch (err) {
-                if (err.name !== 'AbortError') {
-                    console.warn('Failed to fetch calendar prices:', err);
-                }
+                if (cancelled || err.name === 'AbortError') return
+                setPrices({})
             } finally {
-                if (!cancelled) setLoading(false);
+                if (!cancelled) setLoading(false)
             }
-        };
+        }
 
-        fetchPrices();
+        fetchPrices()
 
         return () => {
-            cancelled = true;
-            abortController.abort();
-        };
-    }, [originCode, destinationCode, currentMonth]);
+            cancelled = true
+            controller.abort()
+        }
+    }, [showPrices, originCode, destinationCode, centerDate, adults, children, infants, travelClass])
 
     // Drag handlers
     const handleMouseDown = (e) => {
@@ -218,14 +166,15 @@ export default function CustomFlightCalendar({
         for (let i = 1; i <= daysInMonth; i++) {
             const day = new Date(month.getFullYear(), month.getMonth(), i);
             const dateKey = format(day, 'yyyy-MM-dd');
-            const price = displayPrices[dateKey];
+            const price = prices[dateKey];
             const isPast = isBefore(day, minDate) && !isToday(day);
             const isSelected = selectedDate && isSameDay(day, new Date(selectedDate));
-            const isMinPrice = price && price === displayMin;
+            const isLowest = lowestPrice !== null && price === lowestPrice;
 
             cells.push(
                 <div
                     key={dateKey}
+                    data-date={dateKey}
                     onClick={() => !isPast && onSelect(dateKey)}
                     className={`relative h-11 flex flex-col items-center justify-center transition-all
                         ${isPast ? 'text-gray-300 cursor-not-allowed bg-gray-50/30' : ''}
@@ -236,9 +185,9 @@ export default function CustomFlightCalendar({
                     <span className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : (isPast ? 'text-gray-300' : 'text-gray-700')}`}>
                         {i}
                     </span>
-                    {!isPast && price && (
-                        <span className={`text-[8px] leading-none mt-0.5 ${isSelected ? 'text-white/80' : (isMinPrice ? 'text-green-600 font-bold' : 'text-gray-400')}`}>
-                            ₹{Math.round(price).toLocaleString()}
+                    {!isPast && price !== undefined && (
+                        <span data-testid="calendar-fare" className={`text-[8px] leading-none mt-0.5 ${isSelected ? 'text-white/80' : (isLowest ? 'text-green-600 font-bold' : 'text-gray-400')}`}>
+                            <Price amount={{ amount: price, currency }} />
                         </span>
                     )}
                 </div>
@@ -322,10 +271,12 @@ export default function CustomFlightCalendar({
                         <div className="w-3 h-3 bg-[#055B75] rounded-sm"></div>
                         <span className="text-[10px] font-medium text-gray-500">Selected</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 bg-green-100 border border-green-300 rounded-sm"></div>
-                        <span className="text-[10px] font-medium text-gray-500">Cheapest</span>
-                    </div>
+                    {lowestPrice !== null && (
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 bg-green-100 border border-green-300 rounded-sm"></div>
+                            <span className="text-[10px] font-medium text-gray-500">Lowest fare shown</span>
+                        </div>
+                    )}
                 </div>
                 <button
                     onClick={onClose}
@@ -337,4 +288,3 @@ export default function CustomFlightCalendar({
         </div>
     );
 }
-

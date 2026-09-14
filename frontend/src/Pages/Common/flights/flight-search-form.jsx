@@ -9,7 +9,15 @@ import AirportService from "../../../Services/AirportService";
 import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
 import { useLocationContext } from '../../../Context/LocationContext';
 import CustomFlightCalendar from "./CustomFlightCalendar";
+import { fieldCode } from './searchQuery';
 import { format, parseISO, isValid } from 'date-fns';
+
+// The date picker prices a route only for a real airport code: a half-typed
+// "Mum" would otherwise be priced as whatever it happens to match.
+const calendarCode = (label, code) => {
+  const value = fieldCode(label, code);
+  return /^[A-Z]{3}$/.test(value) ? value : undefined;
+};
 
 // Get this from a config or parent component
 const USE_AMADEUS_API = true;
@@ -144,6 +152,15 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
     // Update the field
     setFormData((prev) => {
       const next = { ...prev, [name]: value };
+
+      // Typing over a picked suggestion replaces it. Its code stayed behind,
+      // and the landing page searches `fromCode` first - so the new city was
+      // shown and the old one searched.
+      if (name === 'from' || name === 'to') {
+        next[`${name}Code`] = undefined;
+        next[`${name}Country`] = undefined;
+        next[`${name}Type`] = undefined;
+      }
 
       // If departDate changes
       if (name === 'departDate') {
@@ -536,8 +553,9 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                 <div onClick={(e) => e.stopPropagation()}>
                   <CustomFlightCalendar
                     selectedDate={formData.departDate} minDate={new Date()}
-                    originCode={formData.fromCode || (formData.from?.match(/\(([A-Z]{3})\)/)?.[1])}
-                    destinationCode={formData.toCode || (formData.to?.match(/\(([A-Z]{3})\)/)?.[1])}
+                    originCode={calendarCode(formData.from, formData.fromCode)}
+                    destinationCode={calendarCode(formData.to, formData.toCode)}
+                    adults={adults} children={children} infants={infants} travelClass={formData.travelClass}
                     onSelect={(date) => { handleInputChange({ target: { name: 'departDate', value: date } }); setShowDepartCalendar(false); }}
                     onClose={() => setShowDepartCalendar(false)} />
                 </div>
@@ -568,8 +586,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                 <div onClick={(e) => e.stopPropagation()}>
                   <CustomFlightCalendar
                     selectedDate={formData.returnDate} minDate={formData.departDate ? parseISO(formData.departDate) : new Date()}
-                    originCode={formData.fromCode || (formData.from?.match(/\(([A-Z]{3})\)/)?.[1])}
-                    destinationCode={formData.toCode || (formData.to?.match(/\(([A-Z]{3})\)/)?.[1])}
+                    showPrices={false}
                     onSelect={(date) => { handleInputChange({ target: { name: 'returnDate', value: date } }); setShowReturnCalendar(false); }}
                     onClose={() => setShowReturnCalendar(false)} />
                 </div>

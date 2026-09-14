@@ -1,7 +1,7 @@
  
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, ArrowUpDown, MapPin, Luggage, Sun, Sunrise, Sunset, Moon, ShieldCheck, RefreshCw, Briefcase } from "lucide-react";
+import { Plane, Calendar, Users, ArrowRight, X, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, ArrowUpDown, MapPin, Luggage, Sun, Sunrise, Sunset, Moon, ShieldCheck, RefreshCw, Briefcase, AlertTriangle } from "lucide-react";
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import withPageElements from '../PageWrapper';
@@ -15,7 +15,7 @@ import {
 } from "./data.js";
 import { allAirports } from "./airports.js";
 import AirportService from "../../../Services/AirportService";
-import { getTodayDate, getSafeDate } from "../../../utils/dateUtils";
+import { getTodayDate } from "../../../utils/dateUtils";
 import { parseCheckedBagLabel } from "../../../utils/baggage";
 
 // Import centralized API configuration
@@ -29,8 +29,9 @@ import FlightMobileSortFilter from './FlightMobileSortFilter';
 import FlightFareOptions from './FlightFareOptions';
 import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
-import { computeBounds, recommendScore } from './flightSort';
-import { extractIata, searchFromQuery, searchToQuery } from './searchQuery';
+import { sortFlights } from './flightSort';
+import { buildSearchPayload, fieldCode, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
+import { buildDateStrip, matchesFilters, searchFailureMessage, shiftDateStrip } from './searchResults';
 
 function FlightSearchPage() {
   const location = useLocation();
@@ -49,22 +50,9 @@ function FlightSearchPage() {
   const searchData = location.state?.searchData ?? searchDataFromUrl;
   const apiResponse = location.state?.apiResponse;
 
-  /**
-   * What the fetch below actually depends on: the search itself, not the
-   * identity of the object carrying it. Router state is a fresh object after
-   * every navigation, so keying on identity re-ran the search whenever the URL
-   * was rewritten with the same criteria.
-   */
-  const searchKey = useMemo(() => (searchData ? JSON.stringify([
-    extractIata(searchData.from),
-    extractIata(searchData.to),
-    searchData.departDate,
-    searchData.returnDate || '',
-    parseInt(searchData.adults) || parseInt(searchData.travelers) || 1,
-    parseInt(searchData.children) || 0,
-    parseInt(searchData.infants) || 0,
-    searchData.travelClass || 'ECONOMY',
-  ]) : null), [searchData]);
+  // What the fetch below depends on: the search itself, not the object
+  // carrying it (see searchKeyOf).
+  const searchKey = useMemo(() => searchKeyOf(searchData), [searchData]);
 
   // const location = useLocation();
   const navigate = useNavigate();
@@ -101,6 +89,7 @@ function FlightSearchPage() {
     destAirports: [] // filter by specific arrival airport(s)
   });
   const [error, setError] = useState(null);
+  const [searchAttempt, setSearchAttempt] = useState(0); // Retry re-runs an unchanged search
   const [fareFlight, setFareFlight] = useState(null); // flight whose fare-options modal is open
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showFareCalendar, setShowFareCalendar] = useState(false);
@@ -118,179 +107,108 @@ function FlightSearchPage() {
     return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
 
-  // Generate date range based on current date
+  /**
+   * The date strip for this search: seven days around its date, and their fares.
+   *
+   * Rebuilt whenever the search changes - route, dates, passengers or cabin -
+   * because a fare is only true for the passengers and cabin it was priced
+   * for. The fares used to reload only when the route or date changed, so a
+   * modified search kept the old passengers' prices on the strip.
+   */
   useEffect(() => {
+    const strip = buildDateStrip(searchData?.departDate || getTodayDate());
+    setDateRange(strip);
+    if (searchData) loadDatePrices(searchData, strip.map((d) => d.isoDate));
+  }, [searchKey]);
+
+  /**
+   * Run the search.
+   *
+   * Every search the page runs comes through here - the first load, a date
+   * picked in the strip or the fare calendar, a modified search and Retry -
+   * because each of those changes the URL, or the attempt count, this is keyed
+   * on. Each run aborts the one before it and ignores anything that arrives
+   * for it afterwards, so only the latest search can fill the results. A date
+   * click used to move the selection and fire its own request with neither,
+   * leaving the previous date's flights under the new date whenever that
+   * request failed or lost the race.
+   *
+   * A failure is shown as one. The error used to be stored and never
+   * rendered, so an outage, a timeout and a refused request all read
+   * "No flights found" beside a "Reset All Filters" button.
+   */
+  useEffect(() => {
+    if (!searchData) {
+      setLoading(false);
+      return undefined;
+    }
+
     const controller = new AbortController();
     let cancelled = false;
 
-    const generateDateRange = (centerDate) => {
-      const dates = [];
-      // Ensure we work with local noon to avoid timezone shifts
-      const baseDate = centerDate instanceof Date ? centerDate : getSafeDate(centerDate);
+    const runSearch = async () => {
+      setLoading(true);
+      setError(null);
 
-      // Generate 3 days before and after the selected date
-      for (let i = -3; i <= 3; i++) {
-        const date = new Date(baseDate);
-        date.setDate(baseDate.getDate() + i);
-
-        const formattedDate = date.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric'
-        });
-
-        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        const isoDate = `${y}-${m}-${d}`;
-
-        dates.push({
-          date: formattedDate,
-          day: dayName,
-          isoDate: isoDate,
-          price: null,
-          selected: i === 0,
-          isWeekend: [0, 6].includes(date.getDay()),
-          isPast: isoDate < getTodayDate()
-        });
-      }
-
-      return dates;
-    };
-
-    const initializeDates = () => {
-      const searchDate = searchData?.departDate;
-      const centerDate = searchDate ? getSafeDate(searchDate) : new Date();
-      const dates = generateDateRange(centerDate);
-      setDateRange(dates);
-    };
-
-    // Initialize dates
-    initializeDates();
-
-    // Fetch flight data if search parameters are available
-    const fetchInitialFlights = async () => {
-      if (searchData) {
-        setLoading(true);
-        setError(null);
-        try {
-          console.log('Fetching flights with search data:', searchData);
-
-          // Ensure all required fields are present
-          const sd = searchData;
-          const payload = {
-            from: extractIata(sd.from),
-            to: extractIata(sd.to),
-            departDate: sd.departDate,
-            returnDate: sd.returnDate,
-            adults: parseInt(sd.adults) || parseInt(sd.travelers) || 1,
-            children: parseInt(sd.children) || 0,
-            infants: parseInt(sd.infants) || 0,
-            travelClass: sd.travelClass || 'ECONOMY',
-            max: 50
-          };
-
-          // Apply initial filters if passed in state (e.g. from a previous search or deep link)
-          if (sd.maxPrice) payload.maxPrice = sd.maxPrice;
-          if (sd.nonStop) payload.nonStop = sd.nonStop;
-          if (sd.includedAirlineCodes) payload.includedAirlineCodes = sd.includedAirlineCodes;
-          if (sd.excludedAirlineCodes) payload.excludedAirlineCodes = sd.excludedAirlineCodes;
-
-          // Validate required fields
-          if (!payload.from || !payload.to || !payload.departDate) {
-            throw new Error('Missing required fields: from, to, and departDate are required');
-          }
-
-          // Remove returnDate if it's empty
-          if (!payload.returnDate) {
-            delete payload.returnDate;
-          }
-
-          // Use API endpoint from centralized config
-          const apiUrl = apiConfig.endpoints.flights.search;
-          console.log('Making API request to:', apiUrl);
-
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify(payload),
-            credentials: 'omit',
-            signal: controller.signal
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-          }
-
-          const data = await response.json();
-          if (cancelled) return;
-          console.log('API response received:', data);
-
-          if (!data.success && !data.data) {
-            throw new Error(data.error || 'Failed to fetch flights');
-          }
-
-          if (data.data && data.data.length === 0) {
-            console.log('No flights found for the given search criteria');
-            setFlights([]);
-          } else {
-            // Transform flight data
-            const flightData = transformFlightData(data.data || []);
-            console.log('Transformed flight data:', flightData);
-            setFlights(flightData);
-
-            // Build dynamic airline/aircraft maps from results
-            const newAirlineMap = {};
-            const newAircraftMap = {};
-            flightData.forEach(f => {
-              if (f.airline?.code && f.airline?.name) newAirlineMap[f.airline.code] = f.airline.name;
-              if (f.operatingCarrier && f.operatingAirlineName) newAirlineMap[f.operatingCarrier] = f.operatingAirlineName;
-              if (f.segments) f.segments.forEach(s => {
-                if (s.airline?.code && s.airline?.name) newAirlineMap[s.airline.code] = s.airline.name;
-                if (s.aircraft && typeof s.aircraft === 'string' && s.aircraft !== 'Unknown Aircraft') {
-                  // aircraft is already a resolved name from backend
-                }
-              });
-            });
-            setDynamicAirlineMap(prev => ({ ...prev, ...newAirlineMap }));
-            setDynamicAircraftMap(prev => ({ ...prev, ...newAircraftMap }));
-
-            // Update prices in the date range
-            if (data.data?.dateWisePrices) {
-              setDateRange(prev =>
-                prev.map(d => ({
-                  ...d,
-                  price: data.data.dateWisePrices?.[d.isoDate] || null,
-                  isLowestPrice: data.data.lowestPrice && data.data.dateWisePrices?.[d.isoDate] === data.data.lowestPrice
-                }))
-              );
-            }
-          }
-        } catch (error) {
-          if (cancelled || error.name === 'AbortError') return;
-          console.error('Error fetching initial flights:', error);
-          setFlights([]);
-          setError(error.message);
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
-      } else {
+      const payload = buildSearchPayload(searchData);
+      if (!payload.from || !payload.to || !payload.departDate) {
+        setFlights([]);
+        setError('Please choose where you are flying from, where to, and the date.');
         setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(apiConfig.endpoints.flights.search, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload),
+          credentials: 'omit',
+          signal: controller.signal
+        });
+        // A gateway timeout answers with an HTML page, not JSON.
+        const body = await response.json().catch(() => null);
+        if (cancelled) return;
+
+        if (!response.ok || !body || body.success === false) {
+          setFlights([]);
+          setError(searchFailureMessage(response.status, body));
+          return;
+        }
+
+        const flightData = transformFlightData(body.data || []);
+        setFlights(flightData);
+
+        // Build dynamic airline map from results
+        const newAirlineMap = {};
+        flightData.forEach(f => {
+          if (f.airline?.code && f.airline?.name) newAirlineMap[f.airline.code] = f.airline.name;
+          if (f.operatingCarrier && f.operatingAirlineName) newAirlineMap[f.operatingCarrier] = f.operatingAirlineName;
+          if (f.segments) f.segments.forEach(s => {
+            if (s.airline?.code && s.airline?.name) newAirlineMap[s.airline.code] = s.airline.name;
+          });
+        });
+        setDynamicAirlineMap(prev => ({ ...prev, ...newAirlineMap }));
+      } catch (err) {
+        if (cancelled || err.name === 'AbortError') return;
+        console.error('Flight search failed:', err);
+        setFlights([]);
+        setError(searchFailureMessage(null, null));
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
 
-    fetchInitialFlights();
+    runSearch();
 
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [searchKey]);
+  }, [searchKey, searchAttempt]);
 
   // Keep the modify bar and filters in step with the resolved search,
   // whether it arrived as router state or in the URL.
@@ -464,6 +382,7 @@ function FlightSearchPage() {
             cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
           },
           duration: flight.duration,
+          durationMinutes: flight.durationMinutes ?? null,
           stops: flight.stops || 0,
           price: {
             amount: flight.price.amount,
@@ -653,6 +572,7 @@ function FlightSearchPage() {
             cityName: cityMap[flight.arrival.airport] || flight.arrival.airport
           },
           duration: flight.duration,
+          durationMinutes: flight.durationMinutes ?? null,
           stops: flight.stops || 0,
           price: {
             amount: flight.price.amount,
@@ -717,93 +637,35 @@ function FlightSearchPage() {
   };
 
 
-  // Handle search form submission
-  const handleSearch = async (formData) => {
-    setLoading(true);
-    setSearchParams(formData);
-    setError(null);
+  /**
+   * A search from the modify bar.
+   *
+   * It goes onto the URL and the keyed fetch above runs it, like every other
+   * search on this page. It used to fetch by itself: it sent the field's label,
+   * "New Delhi (DEL)", which the server matched to New York; it left the URL
+   * naming the previous search, so a refresh ran that one again; and it never
+   * rebuilt the date strip, whose fares stayed the old passengers' and cabin's.
+   */
+  const handleSearch = (formData) => {
+    const from = fieldCode(formData.from, formData.fromCode);
+    const to = fieldCode(formData.to, formData.toCode);
+    const isIata = (code) => /^[A-Z]{3}$/.test(code);
+    const next = {
+      ...formData,
+      from,
+      to,
+      fromCode: isIata(from) ? from : undefined,
+      toCode: isIata(to) ? to : undefined,
+    };
 
-    try {
-      // Use API endpoint from centralized config
-      const apiUrl = apiConfig.endpoints.flights.search;
-
-      // Add filters to payload
-      const payload = {
-        from: formData.from,
-        to: formData.to,
-        departDate: formData.departDate,
-        returnDate: formData.returnDate,
-        adults: parseInt(formData.adults) || parseInt(formData.travelers) || 1,
-        children: parseInt(formData.children) || 0,
-        infants: parseInt(formData.infants) || 0,
-        travelClass: formData.travelClass || 'ECONOMY',
-        max: 50,
-        maxPrice: formData.maxPrice || (filters.price[1] < 50000 ? filters.price[1] : undefined),
-        nonStop: filters.stops === '0',
-        includedAirlineCodes: formData.includedAirlineCodes || undefined,
-        excludedAirlineCodes: formData.excludedAirlineCodes || undefined,
-      };
-
-      // Remove returnDate if it's empty
-      if (!payload.returnDate) {
-        delete payload.returnDate;
-      }
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch flights');
-      }
-
-      const flightData = transformFlightData(data.data);
-      setFlights(flightData);
-
-      // Build dynamic airline map from search results for future reference
-      const newAirlineMap = { ...dynamicAirlineMap };
-      const newAircraftMap = { ...dynamicAircraftMap };
-      flightData.forEach(f => {
-        if (f.airline?.code && f.airline?.name) newAirlineMap[f.airline.code] = f.airline.name;
-        if (f.operatingCarrier && f.operatingAirlineName) newAirlineMap[f.operatingCarrier] = f.operatingAirlineName;
-        if (f.segments) {
-          f.segments.forEach(s => {
-            if (s.airline?.code && s.airline?.name) newAirlineMap[s.airline.code] = s.airline.name;
-          });
-        }
-      });
-      setDynamicAirlineMap(newAirlineMap);
-      setDynamicAircraftMap(newAircraftMap);
-
-      // Update prices in the date range if available
-      if (data.data?.dateWisePrices) {
-        setDateRange(prev =>
-          prev.map(d => ({
-            ...d,
-            price: data.data.dateWisePrices?.[d.isoDate] || d.price,
-            isLowestPrice: data.data.lowestPrice && data.data.dateWisePrices?.[d.isoDate] === data.data.lowestPrice
-          }))
-        );
-      }
-    } catch (error) {
-      console.error('Error fetching flights:', error);
-      setFlights([]);
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
+    // The same search again still searches again. The fetch is keyed on the
+    // criteria, so an unchanged search needs its attempt counted to re-run.
+    const isSameSearch = searchKeyOf(next) === searchKey;
+    if (isSameSearch) setSearchAttempt((n) => n + 1);
+    navigate(`/flights/search?${searchToQuery(next)}`, {
+      replace: isSameSearch,
+      state: { searchData: next },
+    });
   };
 
   // Handle filter changes
@@ -874,137 +736,18 @@ function FlightSearchPage() {
     }
   }, [flights]);
 
-  // Apply filters to flights (memoized — only recomputes when flights/filters/sort actually change)
+  // Apply filters and sort (memoized — only recomputes when flights/filters/sort actually change)
   const filteredFlights = useMemo(() => {
     if (!flights || !Array.isArray(flights)) return [];
+    const filtered = flights.filter((flight) => matchesFilters(flight, filters, getFlightPriceAmount));
+    return sortFlights(filtered, sortOrder);
+  }, [flights, filters, sortOrder]);
 
-    const filtered = flights.filter(flight => {
-      // Filter by price
-      const flightPrice = getFlightPriceAmount(flight);
-      if (flightPrice < filters.price[0] || flightPrice > filters.price[1]) {
-        return false;
-      }
-
-      // Filter by stops
-      if (filters.stops !== "any") {
-        const stops = parseInt(filters.stops);
-        const flightStops = flight.stops;
-
-        if (stops === 2) {
-          if (flightStops < 2) return false;
-        } else if (stops === 1) {
-          if (flightStops > 1) return false;
-        } else {
-          if (flightStops !== stops) return false;
-        }
-      }
-
-      // Filter by airlines
-      if (filters.airlines.length > 0) {
-        const airlineName = flight.airline?.name;
-        if (!filters.airlines.includes(airlineName)) {
-          return false;
-        }
-      }
-
-      // Filter by departure time
-      if (filters.departureTime !== "any") {
-        const depTime = flight.departure?.time;
-        if (depTime) {
-          const hour = parseInt(depTime.split(':')[0]) || parseInt(depTime.match(/(\d+)/)?.[1]) || 0;
-          const isPM = depTime.toLowerCase().includes('pm');
-          const isAM = depTime.toLowerCase().includes('am');
-          let h24 = hour;
-          if (isPM && hour !== 12) h24 = hour + 12;
-          if (isAM && hour === 12) h24 = 0;
-
-          switch (filters.departureTime) {
-            case 'early_morning': if (h24 < 0 || h24 >= 6) return false; break;
-            case 'morning': if (h24 < 6 || h24 >= 12) return false; break;
-            case 'afternoon': if (h24 < 12 || h24 >= 18) return false; break;
-            case 'evening': if (h24 < 18 || h24 >= 21) return false; break;
-            case 'night': if (h24 < 21 && h24 >= 0) return false; break;
-          }
-        }
-      }
-
-      // Filter by baggage
-      if (filters.baggage !== "any") {
-        const checkedWeight = flight.baggage?.checked?.weight || 0;
-        if (filters.baggage === 'included' && checkedWeight <= 0) return false;
-        if (filters.baggage === 'cabin_only' && checkedWeight > 0) return false;
-      }
-
-      // Filter by refundable
-      if (filters.refundable !== "any") {
-        if (filters.refundable === 'yes' && !flight.refundable) return false;
-        if (filters.refundable === 'no' && flight.refundable) return false;
-      }
-
-      // Filter by departure airport
-      if (filters.originAirports?.length > 0) {
-        if (!filters.originAirports.includes(flight.departure?.airport)) return false;
-      }
-
-      // Filter by arrival airport
-      if (filters.destAirports?.length > 0) {
-        if (!filters.destAirports.includes(flight.arrival?.airport)) return false;
-      }
-
-      return true;
-    });
-
-    // Bounds for the heuristic "recommended" score (You May Prefer)
-    const bounds = computeBounds(filtered);
-
-    return filtered.sort((a, b) => {
-      // Sort by selected order
-      const aPrice = a.price?.amount || 0;
-      const bPrice = b.price?.amount || 0;
-
-      if (sortOrder === "price") {
-        return aPrice - bPrice;
-      } else if (sortOrder === "recommended") {
-        // Balanced score of price + duration + stops (lower is better)
-        return recommendScore(a, bounds) - recommendScore(b, bounds);
-      } else if (sortOrder === "nonstop_first") {
-        // Non-stop flights first, then cheapest within each group
-        const aStop = a.stops === 0 ? 0 : 1;
-        const bStop = b.stops === 0 ? 0 : 1;
-        if (aStop !== bStop) return aStop - bStop;
-        return aPrice - bPrice;
-      } else if (sortOrder === "-price") {
-        return bPrice - aPrice;
-      } else if (sortOrder === "duration") {
-        // Parse duration of format PT2H45M
-        const parseDuration = (durationStr) => {
-          if (!durationStr) return 0;
-          let hours = 0;
-          let minutes = 0;
-
-          if (durationStr.includes('H')) {
-            hours = parseInt(durationStr.split('PT')[1].split('H')[0]) || 0;
-            if (durationStr.includes('M')) {
-              minutes = parseInt(durationStr.split('H')[1].split('M')[0]) || 0;
-            }
-          } else if (durationStr.includes('M')) {
-            minutes = parseInt(durationStr.split('PT')[1].split('M')[0]) || 0;
-          }
-
-          return hours * 60 + minutes;
-        };
-
-        const aDuration = parseDuration(a.duration);
-        const bDuration = parseDuration(b.duration);
-        return aDuration - bDuration;
-      } else if (sortOrder === "departure") {
-        return (a.segments?.[0]?.departure?.at || '').localeCompare(b.segments?.[0]?.departure?.at || '');
-      } else if (sortOrder === "arrival") {
-        return (a.segments?.[0]?.arrival?.at || '').localeCompare(b.segments?.[0]?.arrival?.at || '');
-      }
-
-      return 0;
-    });
+  // Back to page 1 whenever the list changes under the pager. It kept its
+  // page, so on page 3, filtering down to 15 flights showed an empty page
+  // reading "No flights found".
+  useEffect(() => {
+    setCurrentPage(1);
   }, [flights, filters, sortOrder]);
 
   // Price distribution across current results — powers the per-card deal badge
@@ -1017,133 +760,31 @@ function FlightSearchPage() {
     return { min: ps[0], median: ps[Math.floor(ps.length / 2)] };
   }, [filteredFlights]);
 
-  // Handle date navigation in the date bar
-  const handleDateNavigate = async (direction) => {
-    const currentSelectedDate = dateRange.find(d => d.selected)?.isoDate;
-    if (!currentSelectedDate) return;
-
-    const newCenterDate = new Date(currentSelectedDate);
-    newCenterDate.setDate(newCenterDate.getDate() + (direction * 7));
-
-    // Generate new date range
-    const newDates = dateRange.map(d => {
-      const date = new Date(d.isoDate);
-      date.setDate(date.getDate() + (direction * 7));
-
-      const formattedDate = date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric'
-      });
-
-      const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-      const isoDate = date.toISOString().split('T')[0];
-
-      return {
-        ...d,
-        date: formattedDate,
-        day: dayName,
-        isoDate: isoDate,
-        price: null,
-        isLowestPrice: false,
-        isWeekend: [0, 6].includes(date.getDay()),
-        isPast: date < new Date().setHours(0, 0, 0, 0)
-      };
-    });
-
+  // Move the date strip a week either way. Nothing is searched until a date is
+  // picked, so no date in the new week is marked as the one searched.
+  const handleDateNavigate = (direction) => {
+    if (dateRange.length === 0) return;
+    const newDates = shiftDateStrip(dateRange, direction * 7, { selectedIso: searchData?.departDate });
     setDateRange(newDates);
     // Refresh lowest fares for the newly visible week
-    loadDatePrices(searchParams, newDates.map(d => d.isoDate));
+    if (searchData) loadDatePrices(searchData, newDates.map(d => d.isoDate));
   };
 
-  // Handle date selection in the date bar
-  const handleDateSelect = async (selectedDate) => {
-    if (!selectedDate || selectedDate.isPast) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Create new search params with updated date AND extracted codes
-      const newSearchParams = {
-        ...searchParams,
-        from: extractIata(searchParams.from),
-        to: extractIata(searchParams.to),
-        departDate: selectedDate.isoDate,
-        travelClass: searchParams.travelClass || 'ECONOMY',
-        adults: parseInt(searchParams.adults) || parseInt(searchParams.travelers) || 1,
-        children: parseInt(searchParams.children) || 0,
-        infants: parseInt(searchParams.infants) || 0,
-        max: 50
-      };
-
-      // Update local state and URL with the new params immediately
-      setSearchParams(newSearchParams);
-
-      // Update date range to show selection
-      setDateRange(prev =>
-        prev.map(d => ({
-          ...d,
-          selected: d.isoDate === selectedDate.isoDate
-        }))
-      );
-
-      // Use API endpoint from centralized config
-      const apiUrl = apiConfig.endpoints.flights.search;
-      console.log('Making API request to:', apiUrl);
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newSearchParams)
-      });
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch flights');
-      }
-
-      // Transform flight data — backend returns { data: [...flights] }, not { data: { flights: [...] } }
-      const flightData = transformFlightData(data.data || []);
-      setFlights(flightData);
-
-      // Build dynamic airline/aircraft maps from date-select results
-      const newAirlineMap = {};
-      flightData.forEach(f => {
-        if (f.airline?.code && f.airline?.name) newAirlineMap[f.airline.code] = f.airline.name;
-        if (f.operatingCarrier && f.operatingAirlineName) newAirlineMap[f.operatingCarrier] = f.operatingAirlineName;
-        if (f.segments) f.segments.forEach(s => {
-          if (s.airline?.code && s.airline?.name) newAirlineMap[s.airline.code] = s.airline.name;
-        });
-      });
-      setDynamicAirlineMap(prev => ({ ...prev, ...newAirlineMap }));
-
-      // Update prices in the date range (only if dateWisePrices is available)
-      const { dateWisePrices, lowestPrice } = data.data || {};
-      if (dateWisePrices) {
-        setDateRange(prev =>
-          prev.map(d => ({
-            ...d,
-            price: dateWisePrices[d.isoDate] ? `$${dateWisePrices[d.isoDate]}` : d.price,
-            isLowestPrice: dateWisePrices[d.isoDate] === lowestPrice
-          }))
-        );
-      }
-
-      // Put the whole search on the URL, not just the route and date, so a
-      // refresh here comes back with the same passengers and cabin.
-      navigate(`/flights/search?${searchToQuery(newSearchParams, selectedDate.isoDate)}`, {
-        replace: true,
-        state: { searchData: newSearchParams }
-      });
-    } catch (error) {
-      console.error('Error fetching flights for date:', error);
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
+  /**
+   * A date picked in the strip or the fare calendar.
+   *
+   * It only changes the URL - the whole search, so a refresh keeps the same
+   * passengers and cabin - and the keyed fetch above runs it. The strip, the
+   * results and the address bar move together, and a slow or failed answer
+   * cannot leave one date's flights under another date.
+   */
+  const handleDateSelect = (selectedDate) => {
+    if (!selectedDate || selectedDate.isPast || !searchData) return;
+    const next = { ...searchData, departDate: selectedDate.isoDate };
+    navigate(`/flights/search?${searchToQuery(next)}`, {
+      replace: true,
+      state: { searchData: next }
+    });
   };
 
   // Toggle an airline in the filter
@@ -1221,54 +862,37 @@ function FlightSearchPage() {
     setFareFlight(flight);
   }, []);
 
-  // Fetch lowest fare per day for the date strip (Amadeus cheapest-per-date)
+  // Fetch lowest fare per day for the date strip. Only the latest request may
+  // write, or paging weeks quickly lets an earlier week's answer land last.
+  const datePricesRequest = useRef(0);
   const loadDatePrices = useCallback(async (sp, isoDates) => {
     if (!sp || !Array.isArray(isoDates) || isoDates.length === 0) return;
-    const fromCode = sp.fromCode || extractIata(sp.from);
-    const toCode = sp.toCode || extractIata(sp.to);
-    if (!fromCode || !toCode) return;
+    const { from, to, adults, children, infants, travelClass } = buildSearchPayload(sp);
+    if (!from || !to) return;
+    const requestId = ++datePricesRequest.current;
     try {
       const res = await fetch(apiConfig.endpoints.flights.datePrices, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: fromCode,
-          to: toCode,
-          dates: isoDates,
-          adults: parseInt(sp.adults) || parseInt(sp.travelers) || 1,
-          children: parseInt(sp.children) || 0,
-          infants: parseInt(sp.infants) || 0,
-          travelClass: sp.travelClass || 'ECONOMY',
-        }),
+        body: JSON.stringify({ from, to, dates: isoDates, adults, children, infants, travelClass }),
       });
       const data = await res.json();
+      if (requestId !== datePricesRequest.current) return;
       if (data.success && data.dateWisePrices) {
-        setDateRange(prev => prev.map(d => ({
-          ...d,
-          price: data.dateWisePrices[d.isoDate] != null ? data.dateWisePrices[d.isoDate] : d.price,
-          isLowestPrice: data.lowestPrice != null && data.dateWisePrices[d.isoDate] === data.lowestPrice,
-        })));
+        setDateRange(prev => prev.map(d => {
+          const price = data.dateWisePrices[d.isoDate];
+          return {
+            ...d,
+            price: price != null ? price : d.price,
+            currency: price != null ? (data.currency || 'USD') : d.currency,
+            isLowestPrice: data.lowestPrice != null && price === data.lowestPrice,
+          };
+        }));
       }
     } catch {
       /* date strip simply shows no prices on failure */
     }
   }, []);
-
-  // Load date-strip prices whenever the route or selected date changes
-  useEffect(() => {
-    if (!searchParams?.from || !searchParams?.to || !searchParams?.departDate) return;
-    const center = getSafeDate(searchParams.departDate);
-    const isoDates = [];
-    for (let i = -3; i <= 3; i++) {
-      const dt = new Date(center);
-      dt.setDate(center.getDate() + i);
-      const y = dt.getFullYear();
-      const m = String(dt.getMonth() + 1).padStart(2, '0');
-      const da = String(dt.getDate()).padStart(2, '0');
-      isoDates.push(`${y}-${m}-${da}`);
-    }
-    loadDatePrices(searchParams, isoDates);
-  }, [searchParams?.from, searchParams?.to, searchParams?.departDate, loadDatePrices]);
 
   const paginatedData = useMemo(() => {
     const totalItems = filteredFlights.length;
@@ -1359,7 +983,7 @@ function FlightSearchPage() {
                   </span>
                   {date.price && (
                     <span className="price text-sm font-medium">
-                      <Price amount={date.price} />
+                      <Price amount={{ amount: date.price, currency: date.currency || 'USD' }} />
                       {date.isLowestPrice && !date.selected && (
                         <span className="ml-1 text-xs">↓</span>
                       )}
@@ -1395,7 +1019,7 @@ function FlightSearchPage() {
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               Flights from {fromCityName} <span className="text-gray-400 font-normal">to</span> {toCityName}
             </h1>
-            {!loading && (
+            {!loading && !error && (
               <p className="text-sm text-gray-500 mt-0.5">
                 <span className="font-semibold text-[#055B75]">{totalItems}</span> flight{totalItems !== 1 ? 's' : ''} found
               </p>
@@ -1411,6 +1035,22 @@ function FlightSearchPage() {
             <div className="flex flex-col justify-center items-center py-20 bg-white rounded-xl shadow-md min-h-[400px]">
               <LoadingSpinner text="Searching for the best flights..." />
               <p className="text-gray-400 text-sm mt-2">Comparing prices from over 500+ airlines</p>
+            </div>
+          ) : error ? (
+            <div role="alert" className="bg-white rounded-xl shadow-md p-10 sm:p-12 text-center">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-amber-50 mb-6">
+                <AlertTriangle className="h-10 w-10 text-amber-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-3">We couldn't search these flights</h3>
+              <p className="text-gray-600 mb-8 max-w-md mx-auto">{error}</p>
+              <button
+                type="button"
+                onClick={() => setSearchAttempt((n) => n + 1)}
+                className="px-6 py-3 bg-[#055B75] text-white rounded-lg font-medium hover:bg-[#034457] transition-colors"
+              >
+                <RefreshCw className="h-4 w-4 mr-2 inline" />
+                Retry
+              </button>
             </div>
           ) : (
             <div className="flex flex-col md:flex-row gap-6">
