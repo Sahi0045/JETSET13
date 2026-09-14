@@ -3,8 +3,98 @@ import { supabase, ARC_PAY_CONFIG, ARC_SETTLEMENT_CURRENCY } from './arcpay.conf
 import { resolveBookingUserId } from '../../utils/bookingOwner.js';
 import { verifyFlightCharge } from '../../services/flightCheckout.service.js';
 import { isGuestFlightBookingEnabled, isUsableEmail } from '../../services/guestBooking.service.js';
+import { getCaller } from './agents.handlers.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
+
+/** `j***@example.com`: enough for a customer to recognise, useless to anyone else. */
+const maskEmail = (email) => {
+    const value = String(email ?? '').trim();
+    const at = value.indexOf('@');
+    if (at < 1) return null;
+    return `${value[0]}***${value.slice(at)}`;
+};
+
+// The travel lines the receipt prints for a payment link. The PNR is left out
+// on purpose: with the traveller's surname it opens the booking at the
+// airline, and the receipt page is reachable by anyone holding its link.
+const RECEIPT_TRAVEL_FIELDS = [
+    'airline', 'flight_number', 'departure_city', 'origin', 'arrival_city', 'destination',
+    'departure_date', 'return_date', 'passengers', 'class', 'hotel_name', 'cruise_name',
+];
+
+/**
+ * A payment as the receipt page shows it, for a caller who is not staff and
+ * does not own it.
+ *
+ * `get-payment-details` is public - the receipt at /payment/success opens it
+ * with nothing but the id in its URL - and it used to return the whole row:
+ * the ARC success indicator and session id, the gateway's order object with
+ * the cardholder's name and billing address in `metadata.transaction`, and the
+ * raw quote and inquiry. The lookup also accepts a payment link's order id,
+ * `PL-<8 characters>-<6 digits>`, which is partly guessable. What remains here
+ * is what PaymentSuccess.jsx renders, less the contact details it can do
+ * without.
+ */
+export function toPublicPayment(payment) {
+    const link = payment.payment_link;
+    const travel = link?.travel_details || {};
+    return {
+        id: payment.id,
+        amount: payment.amount,
+        currency: payment.currency,
+        payment_status: payment.payment_status,
+        payment_method: payment.payment_method ?? null,
+        arc_transaction_id: payment.arc_transaction_id ?? null,
+        created_at: payment.created_at ?? null,
+        completed_at: payment.completed_at ?? null,
+        customer_name: payment.customer_name ?? null,
+        customer_email: maskEmail(payment.customer_email),
+        quote: payment.quote
+            ? { quote_number: payment.quote.quote_number ?? null, title: payment.quote.title ?? null }
+            : null,
+        inquiry: payment.inquiry ? { inquiry_type: payment.inquiry.inquiry_type ?? null } : null,
+        ...(link ? {
+            payment_link: {
+                amount: link.amount,
+                currency: link.currency,
+                description: link.description ?? null,
+                booking_type: link.booking_type ?? null,
+                customer_name: link.customer_name ?? null,
+                customer_email: maskEmail(link.customer_email),
+                travel_details: Object.fromEntries(
+                    RECEIPT_TRAVEL_FIELDS.filter((key) => travel[key] != null).map((key) => [key, travel[key]])
+                ),
+            },
+        } : {}),
+    };
+}
+
+/**
+ * Staff, or the signed-in account that raised the inquiry this payment was
+ * taken for. The payments table has no owner column of its own; the inquiry's
+ * `user_id` is the account link (inquiry.controller.js sets it from the
+ * session). An email match is deliberately not enough: an account's email is
+ * whatever it was registered with.
+ */
+async function canReadFullPayment(req, payment) {
+    const caller = await getCaller(req);
+    if ([caller?.role, req.user?.role].some((role) => ['admin', 'superadmin'].includes(role))) return true;
+
+    const sessionIds = [req.user?.id, req.user?.authUserId].filter(Boolean).map(String);
+    if (sessionIds.length === 0) return false;
+
+    let ownerId = payment.inquiry?.user_id ?? null;
+    if (!ownerId && payment.inquiry_id) {
+        const { data } = await supabase
+            .from('inquiries')
+            .select('user_id')
+            .eq('id', payment.inquiry_id)
+            .maybeSingle();
+        ownerId = data?.user_id ?? null;
+    }
+    return Boolean(ownerId) && sessionIds.includes(String(ownerId));
+}
 
 
 // Initiate Payment - Create ARC Pay Hosted Checkout session
@@ -1024,10 +1114,15 @@ export async function handleGetPaymentDetails(req, res) {
             }
         }
 
-        return res.json({ success: true, payment });
+        // The admin panel reads the full row to refund and void; the payment's
+        // owner may see it too. Anyone else holding the id gets the receipt.
+        if (await canReadFullPayment(req, payment)) {
+            return res.json({ success: true, payment });
+        }
+        return res.json({ success: true, payment: toPublicPayment(payment) });
     } catch (error) {
-        console.error('Get payment details error:', error);
-        return res.status(500).json({ success: false, error: error.message });
+        console.error('Get payment details error:', error.message);
+        return res.status(500).json({ success: false, error: 'Could not load this payment' });
     }
 }
 

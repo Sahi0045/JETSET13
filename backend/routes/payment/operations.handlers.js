@@ -852,6 +852,12 @@ export async function handlePaymentVoid(req, res) {
 }
 
 export async function handlePaymentRetrieve(req, res) {
+    // AUTHORIZATION: staff only, like refund and void above. It answers with
+    // the full payments row and the live gateway order - cardholder name,
+    // billing address, the success indicator - and its only caller is the
+    // admin panel's "Check status" button. It was open to anyone with an id.
+    if (!(await requireAdmin(req, res))) return;
+
     try {
         console.log('🔍 Handling PAYMENT-RETRIEVE operation');
         const { paymentId } = req.query;
