@@ -43,6 +43,11 @@ export const FAILED_PAYMENT_ACTIONS = [
   'VOID_FAILED',             // ARC Pay refused the void
   'VOID_MISSING_TXN_ID',     // nothing to void against; not even attempted
   'MANUAL_PROCESS_REQUIRED', // the handler threw mid-refund
+  // Not attempted, on purpose: a flight whose fare or tickets leave the amount
+  // to a person (payment/operations.handlers.js decideFlightRefund). Nothing
+  // else pages about it - the needs-review watch skips cancelled bookings - so
+  // without this it is money owed that nobody is told about.
+  'REFUND_UNDER_REVIEW',
 ];
 
 /**

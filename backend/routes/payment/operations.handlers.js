@@ -6,6 +6,10 @@ import { getCaller, requireAdmin } from './agents.handlers.js';
 import { arcSucceeded } from './payment.helpers.js';
 import { resolveBookingUserId } from '../../utils/bookingOwner.js';
 import { emailIsBookers, hasBookingOwner, isBookingOwner } from '../../utils/bookingAccess.js';
+import { liveChainState } from '../../utils/bookingChainClaim.js';
+import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
+import { cancellationMessage } from '../../../shared/cancellationOutcome.js';
+import { reconcileBookingPayment } from './checkout.handlers.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -122,411 +126,879 @@ export async function handleCancelBookingAction(req, res) {
 
         console.log('📋 Booking found:', booking.id, 'Status:', booking.status);
 
-        const cancellationResult = {
-            bookingId: booking.id,
-            bookingReference: booking.booking_reference,
-            amadeusCancelled: false,
-            paymentProcessed: false,
-            refundAmount: null,
-            paymentAction: null,
-            cancellationFee: 0
-        };
-
-        // 2. Cancel the reservation at the supplier, before any money moves.
-        //
-        // A flight booking is cancelled by RECORD LOCATOR, and the PNR is the
-        // only identifier the GDS knows: order_id and booking_reference are ours,
-        // and passing one of those cancels nothing.
+        // A row with no travel type predates the column; the supplier cancel has
+        // always treated one as a flight.
         const type = booking.travel_type;
-        const pnr = booking.booking_details?.pnr || booking.booking_details?.amadeus_order_id || null;
-        const orderId = pnr ||
-            booking.booking_details?.order_id ||
-            booking.booking_reference;
+        if (type === 'flight' || type == null) {
+            return await cancelFlightBooking(res, booking, { reason, email });
+        }
+        return await cancelOtherBooking(res, booking, { reason, email });
+    } catch (error) {
+        console.error('❌ Cancel booking error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to cancel booking', details: error.message });
+    }
+}
 
-        // Whether the supplier still holds something that has to be released
-        // before the customer can be refunded. A flight with a real PNR does; a
-        // cruise or package never did, and a booking that never reached the GDS
-        // has nothing to release.
-        const hasLiveFlightReservation = (type === 'flight' || type == null) && Boolean(pnr);
-        let supplierError = null;
+/** A refusal that moved nothing, in the shape both clients read: the site reads `error`, the app `message`. */
+const refuse = (res, status, code, text, extra = {}) => res.status(status).json({
+    success: false,
+    code,
+    error: text,
+    message: text,
+    ...extra,
+});
 
-        if (orderId) {
+const CANCEL_IN_PROGRESS_TEXT = 'This booking is already being cancelled. Refresh in a minute to see what happened to your payment.';
+const STILL_BOOKING_TEXT = 'This booking is still being confirmed with the airline, so it cannot be cancelled yet. '
+    + 'Nothing has been cancelled or refunded. Please try again in a few minutes.';
+
+/** The row's booking_details as they are now, or null when they cannot be read. */
+async function readBookingDetails(id) {
+    try {
+        const { data } = await supabase.from('bookings').select('booking_details').eq('id', id).single();
+        return data?.booking_details || null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * The admin-configured cancellation fee, from a `price_settings.settings` object.
+ *
+ * This was `settings.cancellation_fee || 50`, and zero is falsy: an admin who
+ * set the fee to 0 still had 50 taken from every refund. Only a missing or
+ * unusable value falls back to the default, which is the one the admin panel
+ * shows (config/priceDefaults.js).
+ */
+export function cancellationFeeFrom(settings) {
+    const raw = settings?.cancellation_fee;
+    if (raw === null || raw === undefined || raw === '') return DEFAULT_PRICE_SETTINGS.cancellation_fee;
+    const fee = Number(raw);
+    return Number.isFinite(fee) && fee >= 0 ? fee : DEFAULT_PRICE_SETTINGS.cancellation_fee;
+}
+
+async function readCancellationFee() {
+    try {
+        const { data: priceSettings } = await supabase
+            .from('price_settings')
+            .select('settings')
+            .single();
+        return cancellationFeeFrom(priceSettings?.settings);
+    } catch (error) {
+        console.warn('Could not fetch cancellation fee, using default:', error.message);
+        return DEFAULT_PRICE_SETTINGS.cancellation_fee;
+    }
+}
+
+/**
+ * Take the booking for this cancellation, or learn that someone else has it.
+ *
+ * Two cancel requests for one booking - a double-click, the app and the site at
+ * once, a retry while the first is still waiting on ARC - both read "not
+ * cancelled", and both went on to cancel at the airline and refund. With a fee
+ * withheld, two partial refunds can together return more than was owed, and
+ * the gateway accepts both.
+ *
+ * One conditional UPDATE decides, the same compare-and-set as the booking
+ * chain's claim (flight.routes.js claimBookingChain) and on the same stamp,
+ * `gds_chain.startedAt`, so a cancellation and a chain can never both hold the
+ * booking either. The json paths go in `.eq` / `.is` and never inside `.or()`:
+ * PostgREST rejects arrow paths inside `or` on an UPDATE, and a claim that
+ * errors is a claim nobody holds.
+ */
+async function claimCancellation(booking) {
+    const details = booking.booking_details || {};
+    const prior = details.gds_chain || null;
+    const priorStamp = prior?.startedAt ?? null;
+    const stamp = new Date().toISOString();
+    const claimed = {
+        ...details,
+        gds_chain: { ...(prior || {}), state: 'cancelling', startedAt: stamp, stateBeforeCancel: prior?.state ?? null },
+    };
+
+    let update = supabase
+        .from('bookings')
+        .update({ booking_details: claimed, updated_at: stamp })
+        .eq('id', booking.id);
+    update = priorStamp === null
+        ? update.is('booking_details->gds_chain->>startedAt', null)
+        : update.eq('booking_details->gds_chain->>startedAt', priorStamp);
+
+    const { data, error } = await update.select('id');
+    if (error) {
+        // Fails closed. Nobody knows who holds the booking, and a refund issued
+        // on a guess is the double refund this exists to stop.
+        console.error('⚠️ Could not take the cancellation claim:', error.message);
+        return { claimed: false, error };
+    }
+    if (!data?.length) return { claimed: false };
+    return { claimed: true, stamp, prior, details: claimed };
+}
+
+/**
+ * Hand the booking back after a cancellation that did not happen, restoring
+ * whatever held it before. Conditioned on this cancellation's own stamp, so a
+ * release can never undo a claim someone else took after this one expired.
+ */
+async function releaseCancellation(booking, claim, patch = {}) {
+    const current = (await readBookingDetails(booking.id)) || claim.details;
+    const { gds_chain: _ours, ...rest } = current;
+    const { error } = await supabase
+        .from('bookings')
+        .update({ booking_details: { ...rest, ...(claim.prior ? { gds_chain: claim.prior } : {}), ...patch } })
+        .eq('id', booking.id)
+        .eq('booking_details->gds_chain->>startedAt', claim.stamp);
+    if (error) console.error('⚠️ Could not release the cancellation claim:', error.message);
+}
+
+/**
+ * What a cancelled flight owes the customer, from what can actually be known.
+ *
+ * The fee used to come off every refund. But a reservation that was never
+ * ticketed costs the airline nothing to release, and neither does a booking
+ * that never reached it; the fee is for cancelling a ticket. And a ticket past
+ * its same-day void window was refunded in full less the fee even when the
+ * booking said the fare was non-refundable - money the airline will not give
+ * back. So:
+ *
+ *   - nothing held at the gateway          -> nothing to refund
+ *   - held less than checkout charged      -> review (part already went back)
+ *   - never booked, or a PNR with no ticket -> everything held, no fee
+ *   - tickets, all voided the same day      -> everything held, less the fee
+ *   - tickets past the void window:
+ *       fare recorded refundable           -> everything held, less the fee;
+ *                                             the airline refund is claimed
+ *       non-refundable, or not recorded    -> review
+ *   - the airline and the booking disagree
+ *     about a ticket, or the airline did
+ *     not say                              -> review
+ *
+ * "Review" refunds nothing automatically: a person decides what is due, and the
+ * customer is told so. Pure, so the rules are testable without a gateway.
+ *
+ * @returns {{ action: 'nothing_held'|'review'|'refund_all'|'refund_less_fee'|'fee_covers',
+ *             fee: number, refundAmount: number, reason: string }}
+ */
+export function decideFlightRefund({ heldAmount, paidInFull, everCaptured, hasReservation, gds, rowTicketed, refundable, fee }) {
+    const heldCents = Math.round((Number(heldAmount) || 0) * 100);
+    const review = (reason) => ({ action: 'review', fee: 0, refundAmount: 0, reason });
+
+    if (heldCents <= 0) {
+        return {
+            action: 'nothing_held',
+            fee: 0,
+            refundAmount: 0,
+            reason: everCaptured ? 'the payment had already been returned at the gateway' : 'the gateway holds no payment for this booking',
+        };
+    }
+    if (!paidInFull) return review('the gateway holds less than checkout charged: part of the payment has already gone back');
+
+    let ticketed = false;
+    if (hasReservation) {
+        if (gds?.hadTickets === undefined || gds?.hadTickets === null) {
+            return review('the airline did not say whether a ticket had been issued');
+        }
+        ticketed = Boolean(gds.hadTickets);
+        if (!ticketed && rowTicketed) return review('the booking records a ticket, but the airline showed none when it was cancelled');
+    } else if (rowTicketed) {
+        return review('the booking records a ticket but has no airline reservation');
+    }
+
+    if (!ticketed) {
+        return {
+            action: 'refund_all',
+            fee: 0,
+            refundAmount: heldCents / 100,
+            reason: hasReservation ? 'reservation released before any ticket was issued' : 'never booked with the airline',
+        };
+    }
+
+    const unvoided = Array.isArray(gds.requiresAirlineRefund) && gds.requiresAirlineRefund.length > 0;
+    if (!unvoided && !gds.voided) return review('tickets were issued, but none was voided and none is listed for an airline refund');
+    if (unvoided && refundable !== true) {
+        return review(refundable === false
+            ? 'non-refundable fare with tickets past their void window: what the airline returns depends on its fare rules'
+            : 'tickets past their void window, and the booking does not record whether the fare is refundable');
+    }
+
+    const feeCents = Math.round(Number(fee) * 100);
+    if (!Number.isFinite(feeCents) || feeCents < 0) return review('the cancellation fee could not be read');
+    const basis = unvoided ? 'refundable fare; tickets refunded through the airline' : 'tickets voided the day they were issued';
+    // No fee configured is a whole refund, not a "partial" one of everything:
+    // it goes back as a void where it can, and the row reads refunded.
+    if (feeCents === 0) return { action: 'refund_all', fee: 0, refundAmount: heldCents / 100, reason: `${basis}; no cancellation fee is set` };
+    const refundCents = heldCents - feeCents;
+    if (refundCents <= 0) return { action: 'fee_covers', fee: heldCents / 100, refundAmount: 0, reason: `${basis}; the fee covers the payment` };
+    return { action: 'refund_less_fee', fee: feeCents / 100, refundAmount: refundCents / 100, reason: basis };
+}
+
+/** Carry out a refund decision at ARC. Never moves more than the decision says. */
+async function returnFlightPayment(decision, { arcOrderId, currency, reason }) {
+    switch (decision.action) {
+        case 'nothing_held':
+            return { paymentAction: 'NOTHING_TO_REFUND', refundAmount: 0, cancellationFee: 0 };
+        case 'review':
+            return { paymentAction: 'REFUND_UNDER_REVIEW', refundAmount: 0, cancellationFee: 0 };
+        case 'fee_covers':
+            return { paymentAction: 'NO_REFUND_FEE_COVERS', refundAmount: 0, cancellationFee: decision.fee, paymentProcessed: true };
+        case 'refund_all': {
+            // A void first where the charge has not settled - nothing moves and
+            // nothing is lost to the card network - else a refund of what is left.
+            const reversal = await reverseArcPaymentForOrder(arcOrderId, { currency, reason: `Cancellation: ${reason}` });
+            if (reversal.action === 'VOID') {
+                return { paymentAction: 'VOID', refundAmount: decision.refundAmount, cancellationFee: 0, paymentProcessed: true, refundTransactionId: reversal.transactionId };
+            }
+            if (reversal.action === 'REFUND') {
+                return { paymentAction: 'FULL_REFUND', refundAmount: reversal.amount, cancellationFee: 0, paymentProcessed: true, refundTransactionId: reversal.transactionId };
+            }
+            if (reversal.action === 'FAILED' && reversal.details) {
+                return { paymentAction: 'REFUND_FAILED', refundAmount: 0, cancellationFee: 0, errorDetails: reversal.details };
+            }
+            // The order could not be read, it had been reversed by something else
+            // in the last few seconds, or the request broke mid-flight. Whether
+            // money moved is not known here, so nobody is told either way.
+            return {
+                paymentAction: 'REFUND_UNDER_REVIEW',
+                refundAmount: 0,
+                cancellationFee: 0,
+                reviewReason: `automatic reversal ended ${reversal.action}: ${reversal.error || 'no detail'}`,
+            };
+        }
+        case 'refund_less_fee': {
+            // Per ARC Pay: a REFUND on the same order, a new transaction id, the
+            // amount to return. No separate charge for the fee - less goes back.
+            const authConfig = getArcPayAuthConfig();
+            const refundTxnId = `refund-cancel-${Date.now()}`;
+            const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}/transaction/${refundTxnId}`;
+            console.log('💸 Issuing cancellation REFUND:', decision.refundAmount.toFixed(2), '(fee:', decision.fee, ')');
             try {
-                let amaResult = null;
-                if (type === 'flight' || type == null) {
-                    // Cancel by record locator through the live provider. This
-                    // used to call the Self-Service REST client, whose host has
-                    // had no DNS since August: every flight cancellation threw
-                    // here, was swallowed, and the refund below ran against a
-                    // reservation that was still live.
-                    if (pnr) amaResult = await FlightProvider.cancelFlightOrder(pnr);
+                const refundResponse = await axios.put(refundUrl, {
+                    apiOperation: 'REFUND',
+                    transaction: {
+                        amount: decision.refundAmount.toFixed(2),
+                        currency,
+                        reference: `Cancel refund (fee: ${decision.fee}): ${reason}`.substring(0, 40)
+                    }
+                }, { headers: authConfig.headers, validateStatus: () => true });
+
+                // Status code alone is not an answer: ARC returns 200 with
+                // result FAILURE for a refund it refused.
+                if (arcSucceeded(refundResponse)) {
+                    return { paymentAction: 'PARTIAL_REFUND', refundAmount: decision.refundAmount, cancellationFee: decision.fee, paymentProcessed: true, refundTransactionId: refundTxnId };
                 }
-                // Hotels, cruises and packages have no supplier-side cancel: there
-                // is no hotel supplier behind this API at all (the Enterprise WSAP
-                // is AIR-only), so a hotel booking here was taken through another
-                // channel and exists only in our database. Cancelling it is a
-                // database update and a refund, which is what follows.
-                if (amaResult) {
-                    cancellationResult.amadeusCancelled = !!amaResult.success;
-                    cancellationResult.ticketsVoided = !!amaResult.voided;
-                    cancellationResult.requiresAirlineRefund = amaResult.requiresAirlineRefund || [];
-                    console.log(`🧳 Supplier cancellation (${type || 'flight'}): ${cancellationResult.amadeusCancelled ? 'success' : 'no-op'}`
-                        + (amaResult.voided ? ', tickets voided' : ''));
-                }
+                console.error('❌ ARC Pay REFUND failed:', refundResponse?.status, JSON.stringify(refundResponse?.data));
+                return { paymentAction: 'REFUND_FAILED', refundAmount: 0, cancellationFee: decision.fee, errorDetails: refundResponse?.data ?? null };
             } catch (error) {
-                supplierError = error;
-                console.warn(`⚠️ Supplier (${type || 'flight'}) cancellation error:`, error.error || error.message);
+                console.error('❌ ARC Pay REFUND did not complete:', error.message);
+                return { paymentAction: 'REFUND_UNDER_REVIEW', refundAmount: 0, cancellationFee: decision.fee, reviewReason: `refund request did not complete: ${error.message}` };
             }
         }
+        default:
+            return { paymentAction: 'REFUND_UNDER_REVIEW', refundAmount: 0, cancellationFee: 0, reviewReason: `no refund rule for ${decision.action}` };
+    }
+}
 
-        // A refund without a released seat is money out AND a flight the customer
-        // can still board. The old comment here read "better to refund than to
-        // strand", which was true while no booking was real; now that the GDS
-        // holds actual reservations it is a straight loss. So: if the airline
-        // still has the booking, stop and put it in front of a human rather than
-        // paying out against a live ticket.
-        if (hasLiveFlightReservation && !cancellationResult.amadeusCancelled) {
+/**
+ * Cancel a flight: take the booking, learn what the gateway holds, release the
+ * seats, then return what the tickets and the fare say is owed - in that order,
+ * and once.
+ */
+async function cancelFlightBooking(res, booking, { reason, email }) {
+    const details = booking.booking_details || {};
+    const bookingReference = booking.booking_reference;
+
+    // 1. Nothing else may hold the booking.
+    //
+    // A cancel used to be accepted while the booking chain was still running,
+    // or while the booking waited in the durable queue for an Amadeus slot. It
+    // refunded the customer and marked the row cancelled, and the chain - which
+    // had read the row before that - went on to commit a real PNR: seats held
+    // against a payment that had just been returned. The chain's claim lasts
+    // CHAIN_CLAIM_TTL_MS and is renewed while it runs, so this clears itself.
+    const holder = liveChainState(details.gds_chain);
+    if (holder === 'in_progress' || holder === 'queued') {
+        return refuse(res, 409, 'BOOKING_IN_PROGRESS', STILL_BOOKING_TEXT, { bookingReference });
+    }
+    if (holder === 'cancelling') {
+        return refuse(res, 409, 'CANCEL_IN_PROGRESS', CANCEL_IN_PROGRESS_TEXT, { bookingReference });
+    }
+
+    const claim = await claimCancellation(booking);
+    if (claim.error) {
+        return refuse(res, 503, 'CANCEL_UNAVAILABLE',
+            'We could not start the cancellation just now. Nothing has been cancelled. Please try again in a minute.',
+            { bookingReference, retryable: true });
+    }
+    if (!claim.claimed) {
+        // Lost the race. Say to what: the chain, or another cancellation.
+        const holderNow = liveChainState((await readBookingDetails(booking.id))?.gds_chain);
+        return holderNow === 'in_progress' || holderNow === 'queued'
+            ? refuse(res, 409, 'BOOKING_IN_PROGRESS', STILL_BOOKING_TEXT, { bookingReference })
+            : refuse(res, 409, 'CANCEL_IN_PROGRESS', CANCEL_IN_PROGRESS_TEXT, { bookingReference });
+    }
+
+    // 2. What does the gateway actually hold?
+    //
+    // The refund used to be worked out from the row: `payment_status` decided
+    // whether to refund and `total_amount` how much. That amount is what the
+    // client asked checkout to charge, written before anyone paid, and the row
+    // never hears of a refund made since - an admin's, or an earlier reversal.
+    // Asked before the seats go, so a gateway that cannot be reached leaves the
+    // booking exactly as it was. A payment still `pending` is asked about too,
+    // rather than reversed blind: a REFUND or VOID against an order with nothing
+    // in it only ever failed, and paged the payment alarm about money that was
+    // never taken.
+    let payment;
+    try {
+        payment = await reconcileBookingPayment({ ...booking, booking_details: claim.details }, { fresh: true });
+    } catch (error) {
+        payment = { gatewayUnavailable: true, error: error.message };
+    }
+
+    const pnr = details.pnr || details.amadeus_order_id || null;
+    // An order ARC says it does not have was never paid: the checkout was opened
+    // and left. With no reservation and a row that agrees nothing was paid, that
+    // is an answer, not an outage.
+    const neverPaid = payment.gatewayUnavailable && [400, 404].includes(payment.gatewayStatus)
+        && !pnr && ['unpaid', 'pending', null, undefined].includes(booking.payment_status);
+    if (neverPaid) {
+        payment = { paid: false, heldAmount: 0, everCaptured: false };
+    } else if (payment.gatewayUnavailable) {
+        await releaseCancellation(booking, claim);
+        return refuse(res, 503, 'PAYMENT_GATEWAY_UNAVAILABLE',
+            'We could not reach our payment provider to confirm what was paid, so nothing has been cancelled yet. '
+            + 'Please try again in a few minutes.',
+            { bookingReference, retryable: true });
+    }
+
+    // 3. Release the seats, before any money moves.
+    //
+    // A flight booking is cancelled by RECORD LOCATOR, and the PNR is the only
+    // identifier the GDS knows: order_id and booking_reference are ours, and
+    // passing one of those cancels nothing. This used to call the Self-Service
+    // REST client, whose host has had no DNS since August: every flight
+    // cancellation threw, was swallowed, and the refund ran against a
+    // reservation that was still live.
+    let gds = null;
+    if (pnr) {
+        let supplierError = null;
+        try {
+            gds = await FlightProvider.cancelFlightOrder(pnr);
+        } catch (error) {
+            supplierError = error;
+            console.warn('⚠️ Supplier (flight) cancellation error:', error.error || error.message);
+        }
+
+        // A refund without a released seat is money out AND a flight the
+        // customer can still board. So if the airline still has the booking,
+        // stop and put it in front of a human rather than paying out against a
+        // live ticket - and hand the booking back, so it can be tried again.
+        if (!gds?.success) {
             console.error('❌ Refusing to refund: the airline still holds this booking', {
-                bookingReference: booking.booking_reference,
+                bookingReference,
                 pnr,
                 reason: supplierError?.technicalError || supplierError?.error || supplierError?.message || 'cancel returned no success'
             });
-
-            await supabase.from('bookings').update({
-                booking_details: {
-                    ...booking.booking_details,
-                    needs_review: {
-                        reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
-                        pnr,
-                        detail: supplierError?.technicalError || supplierError?.message || null,
-                        at: new Date().toISOString()
-                    }
+            await releaseCancellation(booking, claim, {
+                needs_review: {
+                    reason: 'GDS cancellation failed; refund withheld to avoid paying out against a live booking',
+                    pnr,
+                    detail: supplierError?.technicalError || supplierError?.message || null,
+                    at: new Date().toISOString()
                 }
-            }).eq('id', booking.id);
-
-            return res.status(502).json({
-                success: false,
-                error: 'We could not cancel your reservation with the airline. '
-                    + 'Our team has been alerted and will complete it - please call (877) 538-7380 if it is urgent.',
-                bookingReference: booking.booking_reference,
-                needsReview: true
             });
+            const text = 'We could not cancel your reservation with the airline. '
+                + 'Our team has been alerted and will complete it - please call (877) 538-7380 if it is urgent.';
+            return res.status(502).json({ success: false, error: text, message: text, bookingReference, needsReview: true });
         }
+        console.log('🧳 Supplier cancellation (flight): success' + (gds.voided ? ', tickets voided' : ''));
+    }
 
-        // 3. Process cancellation fee and refund/void via ARC Pay
-        let cancellationFee = 0;
-        let netRefundAmount = 0;
+    // 4. What is owed, and 5. return it.
+    const tickets = Array.isArray(details.tickets) ? details.tickets : [];
+    const decision = decideFlightRefund({
+        heldAmount: payment.heldAmount,
+        paidInFull: payment.paid === true,
+        everCaptured: payment.everCaptured === true,
+        hasReservation: Boolean(pnr),
+        gds,
+        rowTicketed: details.gds?.ticketed === true || tickets.length > 0
+            || details.needs_review?.reason === 'ticket_numbers_not_retrieved',
+        refundable: details.refundable,
+        fee: await readCancellationFee(),
+    });
+    const currency = payment.capturedCurrency || details.currency || 'USD';
+    const returned = await returnFlightPayment(decision, {
+        arcOrderId: details.order_id || bookingReference,
+        currency,
+        reason,
+    });
+    console.log('💰 Cancellation refund:', returned.paymentAction, returned.refundAmount, '-', decision.reason);
 
-        // Get cancellation fee from price settings
-        try {
-            const { data: priceSettings } = await supabase
-                .from('price_settings')
-                .select('settings')
-                .single();
+    const now = new Date().toISOString();
+    const requiresAirlineRefund = gds?.requiresAirlineRefund || [];
+    const reviewReasons = [
+        decision.action === 'review' ? decision.reason : null,
+        returned.reviewReason || null,
+        decision.action === 'nothing_held' && booking.payment_status === 'paid' && !payment.everCaptured
+            ? 'the booking was marked paid, but the gateway holds no payment for it'
+            : null,
+        // A ticket past its same-day void window still holds value, and that
+        // value is with the airline. It is ours to reclaim under the fare rules;
+        // it does not settle itself by cancelling.
+        requiresAirlineRefund.length ? 'tickets could not be voided; airline refund must be claimed' : null,
+    ].filter(Boolean);
 
-            cancellationFee = priceSettings?.settings?.cancellation_fee || 50.00;
-        } catch (error) {
-            console.warn('Could not fetch cancellation fee, using default:', error.message);
-            cancellationFee = 50.00;
-        }
+    const cancellationResult = {
+        bookingId: booking.id,
+        bookingReference,
+        amadeusCancelled: Boolean(gds?.success),
+        ticketsVoided: Boolean(gds?.voided),
+        requiresAirlineRefund,
+        paymentProcessed: Boolean(returned.paymentProcessed),
+        paymentAction: returned.paymentAction,
+        refundAmount: returned.refundAmount,
+        cancellationFee: returned.cancellationFee,
+        currency,
+        needsReview: reviewReasons.length > 0,
+        ...(returned.refundTransactionId ? { refundTransactionId: returned.refundTransactionId } : {}),
+        ...(returned.errorDetails !== undefined ? { errorDetails: returned.errorDetails } : {}),
+    };
 
-        if (['paid', 'completed', 'authorized', 'pending', 'partial'].includes(booking.payment_status) || booking.payment_id) {
-            try {
-                const { data: payment } = await supabase
-                    .from('payments')
-                    .select('*')
-                    .or(`quote_id.eq.${booking.id},id.eq.${booking.payment_id || 'none'}`)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
+    // The money's state, not the attempt's. A refund the gateway refused, or one
+    // left for review, leaves the charge where it was; money the gateway had
+    // already returned before this cancel is returned money.
+    const paymentStatus = ['VOID', 'FULL_REFUND'].includes(returned.paymentAction) ? 'refunded'
+        : returned.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded'
+            : returned.paymentAction === 'NOTHING_TO_REFUND' && payment.everCaptured ? 'refunded'
+                : payment.paid === true ? 'paid'
+                    : booking.payment_status;
 
-                if (payment) {
-                    const authConfig = getArcPayAuthConfig();
-                    const originalAmount = parseFloat(payment.amount || booking.total_amount || 0);
-                    netRefundAmount = Math.max(0, originalAmount - cancellationFee);
-
-                    // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
-                    const arcPayOrderId = booking.booking_details?.order_id ||
-                        payment.arc_order_id ||
-                        booking.booking_reference ||
-                        payment.id; // Last resort fallback
-                    console.log('🔑 ARC Pay Order ID for refund/void:', arcPayOrderId);
-
-                    if (payment.payment_status === 'completed' || payment.payment_status === 'paid') {
-                        // === COMPLETED PAYMENT: Issue partial REFUND (original - fee) ===
-                        // Per ARC Pay docs: REFUND uses same orderId, new transactionId, amount to refund
-                        // No separate PAY for fee — just refund less than the full amount
-                        if (netRefundAmount > 0) {
-                            const refundTxnId = `refund-${Date.now()}`;
-                            const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}/transaction/${refundTxnId}`;
-
-                            console.log('💸 Issuing partial REFUND:', netRefundAmount.toFixed(2), '(original:', originalAmount, '- fee:', cancellationFee, ')');
-                            const refundResponse = await axios.put(refundUrl, {
-                                apiOperation: 'REFUND',
-                                transaction: {
-                                    amount: netRefundAmount.toFixed(2),
-                                    currency: payment.currency || 'USD',
-                                    reference: `Cancel refund (fee: ${cancellationFee}): ${reason}`.substring(0, 40)
-                                }
-                            }, { headers: authConfig.headers, validateStatus: () => true });
-
-                            // Status code alone is not an answer: ARC returns 200 with
-                            // result FAILURE for a refund it refused.
-                            if (arcSucceeded(refundResponse)) {
-                                const refundData = refundResponse.data;
-                                console.log('✅ ARC Pay REFUND successful:', refundData.result);
-                                cancellationResult.paymentProcessed = true;
-                                cancellationResult.paymentAction = 'PARTIAL_REFUND';
-                                cancellationResult.refundAmount = netRefundAmount;
-                                cancellationResult.cancellationFee = cancellationFee;
-                                // payments.payment_status CHECK allows only pending|processing|completed|failed|refunded.
-                                // Record the partial nature in metadata; status maps to the valid 'refunded'.
-                                const { error: refundDbErr } = await supabase.from('payments').update({
-                                    payment_status: 'refunded',
-                                    metadata: { ...payment.metadata, refund: { transactionId: refundTxnId, amount: netRefundAmount, fee: cancellationFee, partial: true, reason, at: new Date().toISOString() } }
-                                }).eq('id', payment.id);
-                                if (refundDbErr) console.error('⚠️ payments refund-status update failed:', refundDbErr.message);
-                            } else {
-                                console.error('❌ ARC Pay REFUND failed:', refundResponse.status, JSON.stringify(refundResponse.data));
-                                cancellationResult.paymentAction = 'REFUND_FAILED';
-                                cancellationResult.refundAmount = 0;
-                                cancellationResult.cancellationFee = cancellationFee;
-                                cancellationResult.errorDetails = refundResponse.data;
-                            }
-                        } else {
-                            // Cancellation fee >= original amount → no refund due
-                            console.log('💰 No refund due: cancellation fee (', cancellationFee, ') >= amount (', originalAmount, ')');
-                            cancellationResult.paymentProcessed = true;
-                            cancellationResult.paymentAction = 'NO_REFUND_FEE_COVERS';
-                            cancellationResult.refundAmount = 0;
-                            cancellationResult.cancellationFee = Math.min(cancellationFee, originalAmount);
-                            // 'cancelled' is not a valid payments status. The money was kept as the fee,
-                            // so leave payment_status as-is (completed) and record the cancellation in metadata.
-                            const { error: feeDbErr } = await supabase.from('payments').update({
-                                metadata: { ...payment.metadata, cancellation: { paymentAction: 'NO_REFUND_FEE_COVERS', fee: cancellationFee, reason, at: new Date().toISOString() } }
-                            }).eq('id', payment.id);
-                            if (feeDbErr) console.error('⚠️ payments cancellation-metadata update failed:', feeDbErr.message);
-                        }
-                    } else if (payment.payment_status === 'pending' || payment.payment_status === 'authorized') {
-                        // === AUTHORIZED/PENDING: VOID the full transaction ===
-                        // Per ARC Pay docs: VOID requires transaction.targetTransactionId (the original PAY txn ID)
-                        // Partial void is NOT supported — must void the full amount
-                        let targetTxnId = payment.arc_transaction_id;
-
-                        // If we don't have the original transaction ID, try to retrieve the order to find it
-                        if (!targetTxnId) {
-                            try {
-                                const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}`;
-                                const orderResp = await axios.get(orderUrl, { headers: authConfig.headers, validateStatus: () => true });
-                                if (orderResp.status === 200) {
-                                    const orderData = orderResp.data;
-                                    // Find the last successful PAY or AUTHORIZE transaction
-                                    const txns = orderData.transaction || [];
-                                    const payTxn = txns.find(t => t.transaction?.type === 'PAYMENT' || t.transaction?.type === 'AUTHORIZATION');
-                                    targetTxnId = payTxn?.transaction?.id || txns[txns.length - 1]?.transaction?.id;
-                                    console.log('🔍 Retrieved target transaction ID from order:', targetTxnId);
-                                }
-                            } catch (orderErr) {
-                                console.warn('⚠️ Could not retrieve order to find transaction ID:', orderErr.message);
-                            }
-                        }
-
-                        if (targetTxnId) {
-                            const voidTxnId = `void-${Date.now()}`;
-                            const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}/transaction/${voidTxnId}`;
-
-                            console.log('🚫 Issuing VOID for transaction:', targetTxnId);
-                            const voidResp = await axios.put(voidUrl, {
-                                apiOperation: 'VOID',
-                                transaction: {
-                                    targetTransactionId: targetTxnId,
-                                    reference: `Cancellation: ${reason}`.substring(0, 40)
-                                }
-                            }, { headers: authConfig.headers, validateStatus: () => true });
-
-                            if (arcSucceeded(voidResp)) {
-                                const voidData = voidResp.data;
-                                console.log('✅ ARC Pay VOID successful:', voidData.result);
-                                cancellationResult.paymentProcessed = true;
-                                cancellationResult.paymentAction = 'VOID';
-                                cancellationResult.refundAmount = originalAmount; // Full amount returned
-                                cancellationResult.cancellationFee = 0; // No fee on void (not settled yet)
-                                // 'voided' is not a valid payments status; map to 'refunded' (funds fully
-                                // returned) and record paymentAction:'VOID' in metadata to distinguish it.
-                                const { error: voidDbErr } = await supabase.from('payments').update({
-                                    payment_status: 'refunded',
-                                    metadata: { ...payment.metadata, void: { transactionId: voidTxnId, targetTxnId, paymentAction: 'VOID', reason, at: new Date().toISOString() } }
-                                }).eq('id', payment.id);
-                                if (voidDbErr) console.error('⚠️ payments void-status update failed:', voidDbErr.message);
-                            } else {
-                                console.error('❌ ARC Pay VOID failed:', voidResp.status);
-                                cancellationResult.paymentAction = 'VOID_FAILED';
-                                cancellationResult.refundAmount = 0;
-                                cancellationResult.cancellationFee = 0; // Void failed, fee is not strictly determined but typically no fee applies yet
-                            }
-                        } else {
-                            console.error('❌ Cannot void: no target transaction ID found');
-                            cancellationResult.paymentAction = 'VOID_MISSING_TXN_ID';
+    // Read back rather than spread the copy from the start: reconcile has
+    // written the captured amount to the row since.
+    const current = (await readBookingDetails(booking.id)) || claim.details;
+    const { error: updateError } = await supabase
+        .from('bookings')
+        .update({
+            status: 'cancelled',
+            payment_status: paymentStatus,
+            booking_details: {
+                ...current,
+                // Left behind, finished. The order route reads it and refuses to
+                // book even if it read the row before this write.
+                gds_chain: { ...(claim.prior || {}), state: 'cancelled', startedAt: claim.stamp, cancelledAt: now },
+                cancellation: {
+                    cancelledAt: now,
+                    reason,
+                    amadeusCancelled: cancellationResult.amadeusCancelled,
+                    paymentAction: cancellationResult.paymentAction,
+                    refundAmount: cancellationResult.refundAmount,
+                    cancellationFee: cancellationResult.cancellationFee || 0,
+                    netRefund: cancellationResult.refundAmount || 0,
+                    currency,
+                    ticketsVoided: cancellationResult.ticketsVoided,
+                    // Why this amount, for the support desk.
+                    basis: decision.reason,
+                },
+                ...(reviewReasons.length
+                    ? {
+                        needs_review: {
+                            reason: reviewReasons.join('; '),
+                            source: 'cancellation',
+                            at: now,
+                            ...(requiresAirlineRefund.length ? { tickets: requiresAirlineRefund } : {}),
                         }
                     }
-                } else {
-                    // No payment record found — direct booking via hosted checkout
-                    console.log('⚠️ No payment record found, using booking data for refund');
-                    const originalAmount = parseFloat(booking.total_amount || 0);
-                    const netRefundAmount = Math.max(0, originalAmount - cancellationFee);
-                    const orderIdForArc = booking.booking_details?.order_id || booking.booking_reference;
-                    console.log('🔑 ARC Pay Order ID (from booking):', orderIdForArc, 'Amount:', originalAmount, 'Net refund:', netRefundAmount);
+                    : {})
+            },
+            updated_at: now,
+        })
+        .eq('id', booking.id);
 
+    if (updateError) {
+        // The seats are released and the money has done whatever it did; only
+        // the record failed. Trying again would find nothing to cancel, so the
+        // customer is told not to, and what happened travels with the answer.
+        console.error('❌ Cancellation carried out but not recorded', {
+            bookingReference, paymentAction: cancellationResult.paymentAction, error: updateError.message
+        });
+        const text = 'Your cancellation was processed, but we could not save it. Please do not try again - '
+            + 'call (877) 538-7380 and we will confirm what happened to your payment.';
+        return res.status(500).json({ success: false, error: text, message: text, details: updateError.message, cancellation: cancellationResult });
+    }
+
+    await sendCancellationEmail(booking, email, cancellationResult);
+    console.log('✅ Booking cancelled:', booking.id, cancellationResult.paymentAction);
+
+    return res.status(200).json({
+        success: true,
+        message: cancellationMessage({ cancellation: cancellationResult }),
+        cancellation: cancellationResult,
+        booking: {
+            id: booking.id,
+            reference: bookingReference,
+            status: 'cancelled',
+            previousStatus: booking.status,
+            refundAmount: cancellationResult.refundAmount,
+            cancellationFee: cancellationResult.cancellationFee,
+            netRefund: (cancellationResult.refundAmount || 0),
+            paymentAction: cancellationResult.paymentAction
+        }
+    });
+}
+
+/**
+ * Whether ARC holds anything on an order that a refund or a void could return.
+ *
+ * Read-only. A booking or payment still `pending` has usually never been paid -
+ * the checkout was opened and left - and reversing it anyway sent a REFUND or a
+ * VOID at an order with nothing in it. That ended REFUND_FAILED or
+ * VOID_MISSING_TXN_ID, and the payment-failure alarm then paged about a refund
+ * owed on money that was never taken. But `pending` can also be a capture the
+ * row never heard about, so the gateway is asked rather than the row believed.
+ *
+ * @returns {Promise<{ reachable: boolean, holdsPayment?: boolean, orderStatus?: string|null, httpStatus?: number|null }>}
+ */
+export async function inspectArcOrder(orderId) {
+    if (!orderId) return { reachable: false };
+    try {
+        const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderId}`;
+        const resp = await axios.get(orderUrl, { headers: getArcPayAuthConfig().headers, validateStatus: () => true });
+        if (resp?.status !== 200 || !resp.data) return { reachable: false, httpStatus: resp?.status ?? null };
+
+        const txns = Array.isArray(resp.data.transaction) ? resp.data.transaction : [];
+        const succeeded = (t) => t.result === 'SUCCESS' || t.response?.gatewayCode === 'APPROVED';
+        const sumOf = (list) => list.reduce((sum, t) => sum + (Number(t.transaction?.amount) || 0), 0);
+        const taken = txns.filter((t) => succeeded(t) && ['PAYMENT', 'CAPTURE', 'AUTHORIZATION'].includes(t.transaction?.type));
+        const captured = sumOf(txns.filter((t) => succeeded(t) && ['PAYMENT', 'CAPTURE'].includes(t.transaction?.type)));
+        const refunded = sumOf(txns.filter((t) => t.transaction?.type === 'REFUND' && t.result === 'SUCCESS'));
+        const voided = txns.some((t) => t.transaction?.type === 'VOID' && t.result === 'SUCCESS');
+        const fullyRefunded = captured > 0 && refunded + 0.01 >= captured;
+
+        return { reachable: true, orderStatus: resp.data.status || null, holdsPayment: taken.length > 0 && !voided && !fullyRefunded };
+    } catch (error) {
+        return { reachable: false, error: error.message };
+    }
+}
+
+/**
+ * Hotels, cruises and packages. Their cancel is unchanged except where it was
+ * wrong for everyone: the fee setting is honoured when it is 0, and a payment
+ * still `pending` is checked with the gateway before anything is reversed.
+ *
+ * They have no supplier-side cancel: there is no hotel supplier behind this API
+ * at all (the Enterprise WSAP is AIR-only), so a booking here was taken through
+ * another channel and exists only in our database. Cancelling it is a database
+ * update and a refund.
+ */
+async function cancelOtherBooking(res, booking, { reason, email }) {
+    const cancellationResult = {
+        bookingId: booking.id,
+        bookingReference: booking.booking_reference,
+        amadeusCancelled: false,
+        paymentProcessed: false,
+        refundAmount: null,
+        paymentAction: null,
+        cancellationFee: 0
+    };
+
+    // Process cancellation fee and refund/void via ARC Pay
+    const cancellationFee = await readCancellationFee();
+    let netRefundAmount = 0;
+
+    if (['paid', 'completed', 'authorized', 'pending', 'partial'].includes(booking.payment_status) || booking.payment_id) {
+        try {
+            const { data: payment } = await supabase
+                .from('payments')
+                .select('*')
+                .or(`quote_id.eq.${booking.id},id.eq.${booking.payment_id || 'none'}`)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            // CRITICAL: Use the ARC Pay order ID (FLT...), NOT the Supabase UUID
+            const arcPayOrderId = payment
+                ? (booking.booking_details?.order_id || payment.arc_order_id || booking.booking_reference || payment.id)
+                : (booking.booking_details?.order_id || booking.booking_reference);
+
+            // Asked, not reversed blind - see inspectArcOrder. A gateway that
+            // cannot be reached leaves the old path in place: its attempt fails
+            // the same way, and a failure nobody could verify is worth a page.
+            let nothingToReverse = false;
+            if (booking.payment_status === 'pending' || payment?.payment_status === 'pending') {
+                const arcOrder = await inspectArcOrder(arcPayOrderId);
+                nothingToReverse = arcOrder.reachable && !arcOrder.holdsPayment;
+                if (nothingToReverse) console.log('🔍 Pending payment holds nothing at the gateway; no reversal for', arcPayOrderId);
+            }
+
+            if (nothingToReverse) {
+                cancellationResult.paymentAction = 'NOTHING_TO_REFUND';
+                cancellationResult.refundAmount = 0;
+                cancellationResult.cancellationFee = 0;
+            } else if (payment) {
+                const authConfig = getArcPayAuthConfig();
+                const originalAmount = parseFloat(payment.amount || booking.total_amount || 0);
+                netRefundAmount = Math.max(0, originalAmount - cancellationFee);
+                console.log('🔑 ARC Pay Order ID for refund/void:', arcPayOrderId);
+
+                if (payment.payment_status === 'completed' || payment.payment_status === 'paid') {
+                    // === COMPLETED PAYMENT: Issue partial REFUND (original - fee) ===
+                    // Per ARC Pay docs: REFUND uses same orderId, new transactionId, amount to refund
+                    // No separate PAY for fee — just refund less than the full amount
                     if (netRefundAmount > 0) {
-                        const authConfig = getArcPayAuthConfig();
-                        const refundTxnId = `refund-cancel-${Date.now()}`;
-                        const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${orderIdForArc}/transaction/${refundTxnId}`;
-                        console.log('💸 Issuing REFUND (no payment record):', netRefundAmount.toFixed(2));
+                        const refundTxnId = `refund-${Date.now()}`;
+                        const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}/transaction/${refundTxnId}`;
 
-                        const refundResp = await axios.put(refundUrl, {
+                        console.log('💸 Issuing partial REFUND:', netRefundAmount.toFixed(2), '(original:', originalAmount, '- fee:', cancellationFee, ')');
+                        const refundResponse = await axios.put(refundUrl, {
                             apiOperation: 'REFUND',
                             transaction: {
                                 amount: netRefundAmount.toFixed(2),
-                                currency: 'USD',
+                                currency: payment.currency || 'USD',
                                 reference: `Cancel refund (fee: ${cancellationFee}): ${reason}`.substring(0, 40)
                             }
                         }, { headers: authConfig.headers, validateStatus: () => true });
 
-                        if (arcSucceeded(refundResp)) {
-                            console.log('✅ ARC Pay REFUND successful (no payment record)');
+                        // Status code alone is not an answer: ARC returns 200 with
+                        // result FAILURE for a refund it refused.
+                        if (arcSucceeded(refundResponse)) {
+                            const refundData = refundResponse.data;
+                            console.log('✅ ARC Pay REFUND successful:', refundData.result);
                             cancellationResult.paymentProcessed = true;
                             cancellationResult.paymentAction = 'PARTIAL_REFUND';
                             cancellationResult.refundAmount = netRefundAmount;
                             cancellationResult.cancellationFee = cancellationFee;
-                            cancellationResult.refundTransactionId = refundTxnId;
+                            // payments.payment_status CHECK allows only pending|processing|completed|failed|refunded.
+                            // Record the partial nature in metadata; status maps to the valid 'refunded'.
+                            const { error: refundDbErr } = await supabase.from('payments').update({
+                                payment_status: 'refunded',
+                                metadata: { ...payment.metadata, refund: { transactionId: refundTxnId, amount: netRefundAmount, fee: cancellationFee, partial: true, reason, at: new Date().toISOString() } }
+                            }).eq('id', payment.id);
+                            if (refundDbErr) console.error('⚠️ payments refund-status update failed:', refundDbErr.message);
                         } else {
-                            console.error('❌ ARC Pay REFUND failed:', refundResp.status, JSON.stringify(refundResp.data));
+                            console.error('❌ ARC Pay REFUND failed:', refundResponse.status, JSON.stringify(refundResponse.data));
                             cancellationResult.paymentAction = 'REFUND_FAILED';
                             cancellationResult.refundAmount = 0;
                             cancellationResult.cancellationFee = cancellationFee;
-                            cancellationResult.errorDetails = refundResp.data;
+                            cancellationResult.errorDetails = refundResponse.data;
                         }
                     } else {
+                        // Cancellation fee >= original amount → no refund due
+                        console.log('💰 No refund due: cancellation fee (', cancellationFee, ') >= amount (', originalAmount, ')');
                         cancellationResult.paymentProcessed = true;
                         cancellationResult.paymentAction = 'NO_REFUND_FEE_COVERS';
                         cancellationResult.refundAmount = 0;
                         cancellationResult.cancellationFee = Math.min(cancellationFee, originalAmount);
+                        // 'cancelled' is not a valid payments status. The money was kept as the fee,
+                        // so leave payment_status as-is (completed) and record the cancellation in metadata.
+                        const { error: feeDbErr } = await supabase.from('payments').update({
+                            metadata: { ...payment.metadata, cancellation: { paymentAction: 'NO_REFUND_FEE_COVERS', fee: cancellationFee, reason, at: new Date().toISOString() } }
+                        }).eq('id', payment.id);
+                        if (feeDbErr) console.error('⚠️ payments cancellation-metadata update failed:', feeDbErr.message);
+                    }
+                } else if (payment.payment_status === 'pending' || payment.payment_status === 'authorized') {
+                    // === AUTHORIZED/PENDING: VOID the full transaction ===
+                    // Per ARC Pay docs: VOID requires transaction.targetTransactionId (the original PAY txn ID)
+                    // Partial void is NOT supported — must void the full amount
+                    let targetTxnId = payment.arc_transaction_id;
+
+                    // If we don't have the original transaction ID, try to retrieve the order to find it
+                    if (!targetTxnId) {
+                        try {
+                            const orderUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}`;
+                            const orderResp = await axios.get(orderUrl, { headers: authConfig.headers, validateStatus: () => true });
+                            if (orderResp.status === 200) {
+                                const orderData = orderResp.data;
+                                // Find the last successful PAY or AUTHORIZE transaction
+                                const txns = orderData.transaction || [];
+                                const payTxn = txns.find(t => t.transaction?.type === 'PAYMENT' || t.transaction?.type === 'AUTHORIZATION');
+                                targetTxnId = payTxn?.transaction?.id || txns[txns.length - 1]?.transaction?.id;
+                                console.log('🔍 Retrieved target transaction ID from order:', targetTxnId);
+                            }
+                        } catch (orderErr) {
+                            console.warn('⚠️ Could not retrieve order to find transaction ID:', orderErr.message);
+                        }
+                    }
+
+                    if (targetTxnId) {
+                        const voidTxnId = `void-${Date.now()}`;
+                        const voidUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}/transaction/${voidTxnId}`;
+
+                        console.log('🚫 Issuing VOID for transaction:', targetTxnId);
+                        const voidResp = await axios.put(voidUrl, {
+                            apiOperation: 'VOID',
+                            transaction: {
+                                targetTransactionId: targetTxnId,
+                                reference: `Cancellation: ${reason}`.substring(0, 40)
+                            }
+                        }, { headers: authConfig.headers, validateStatus: () => true });
+
+                        if (arcSucceeded(voidResp)) {
+                            const voidData = voidResp.data;
+                            console.log('✅ ARC Pay VOID successful:', voidData.result);
+                            cancellationResult.paymentProcessed = true;
+                            cancellationResult.paymentAction = 'VOID';
+                            cancellationResult.refundAmount = originalAmount; // Full amount returned
+                            cancellationResult.cancellationFee = 0; // No fee on void (not settled yet)
+                            // 'voided' is not a valid payments status; map to 'refunded' (funds fully
+                            // returned) and record paymentAction:'VOID' in metadata to distinguish it.
+                            const { error: voidDbErr } = await supabase.from('payments').update({
+                                payment_status: 'refunded',
+                                metadata: { ...payment.metadata, void: { transactionId: voidTxnId, targetTxnId, paymentAction: 'VOID', reason, at: new Date().toISOString() } }
+                            }).eq('id', payment.id);
+                            if (voidDbErr) console.error('⚠️ payments void-status update failed:', voidDbErr.message);
+                        } else {
+                            console.error('❌ ARC Pay VOID failed:', voidResp.status);
+                            cancellationResult.paymentAction = 'VOID_FAILED';
+                            cancellationResult.refundAmount = 0;
+                            cancellationResult.cancellationFee = 0; // Void failed, fee is not strictly determined but typically no fee applies yet
+                        }
+                    } else {
+                        console.error('❌ Cannot void: no target transaction ID found');
+                        cancellationResult.paymentAction = 'VOID_MISSING_TXN_ID';
                     }
                 }
-            } catch (paymentError) {
-                console.warn('⚠️ Payment refund/void error:', paymentError.message);
-                // Fallback: mark as refund pending with cancellation fee noted
-                cancellationResult.refundAmount = 0;
-                cancellationResult.cancellationFee = cancellationFee;
-                cancellationResult.paymentAction = 'MANUAL_PROCESS_REQUIRED';
-            }
-        }
-
-        // 4. Update booking status
-        // DB constraint: payment_status IN ('unpaid','partial','paid','refunded','partially_refunded')
-        const { error: updateError } = await supabase
-            .from('bookings')
-            .update({
-                status: 'cancelled',
-                // The money's state, not the attempt's. A refund the gateway
-                // refused leaves the charge exactly where it was - `paid` - yet
-                // this used to write `partially_refunded` regardless, so a
-                // customer who was never paid back read as settled in the admin
-                // panel and in My Trips. Only a reversal that actually happened
-                // changes the payment state.
-                payment_status: cancellationResult.paymentProcessed ?
-                    (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded' : 'refunded') :
-                    booking.payment_status,
-                booking_details: {
-                    ...booking.booking_details,
-                    cancellation: {
-                        cancelledAt: new Date().toISOString(),
-                        reason,
-                        amadeusCancelled: cancellationResult.amadeusCancelled,
-                        paymentAction: cancellationResult.paymentAction,
-                        refundAmount: cancellationResult.refundAmount,
-                        cancellationFee: cancellationResult.cancellationFee || 0,
-                        netRefund: (cancellationResult.refundAmount || 0),
-                        ticketsVoided: cancellationResult.ticketsVoided || false
-                    },
-                    // A ticket past its same-day void window still holds value,
-                    // and that value is with the airline. The customer has been
-                    // refunded either way, so this is ours to reclaim under the
-                    // fare rules - it does not settle itself by cancelling.
-                    ...(cancellationResult.requiresAirlineRefund?.length
-                        ? {
-                            needs_review: {
-                                reason: 'tickets could not be voided; airline refund must be claimed',
-                                tickets: cancellationResult.requiresAirlineRefund,
-                                at: new Date().toISOString()
-                            }
-                        }
-                        : {})
-                }
-            })
-            .eq('id', booking.id);
-
-        if (updateError) {
-            return res.status(500).json({ success: false, error: 'Failed to update booking status', details: updateError.message });
-        }
-
-        // --- Send Cancellation Email ---
-        try {
-            const { sendCancellationNotificationEmails } = await import('../../services/emailService.js');
-            console.log('📧 Sending cancellation confirmation email...');
-
-            // Extract email from passenger_details if available
-            let passengerEmail = null;
-            if (Array.isArray(booking.passenger_details) && booking.passenger_details.length > 0) {
-                passengerEmail = booking.passenger_details[0]?.email || booking.passenger_details[0]?.contact?.emailAddress;
-            }
-
-            const cancelEmailData = {
-                customerEmail: booking.customer_email || booking.booking_details?.customer_email || passengerEmail || email || 'test@jetsetterss.com',
-                customerName: booking.customer_name || (Array.isArray(booking.passenger_details) && booking.passenger_details[0]?.firstName ? `${booking.passenger_details[0].firstName} ${booking.passenger_details[0].lastName || ''}`.trim() : 'Valued Customer'),
-                bookingReference: booking.booking_reference,
-                bookingType: booking.travel_type || 'flight',
-                refundAmount: cancellationResult.refundAmount,
-                cancellationFee: cancellationResult.cancellationFee,
-                // What actually happened to the money. Without it the email
-                // promised "refund due ... 5-10 business days" on every
-                // cancellation, including the ones where the gateway refused.
-                paymentAction: cancellationResult.paymentAction,
-                currency: 'USD'
-            };
-
-            const emailResult = await sendCancellationNotificationEmails(cancelEmailData);
-            if (emailResult.success) {
-                console.log('✅ Cancellation email sent successfully');
             } else {
-                console.warn('⚠️ Cancellation email sent with issues:', emailResult.error);
+                // No payment record found — direct booking via hosted checkout
+                console.log('⚠️ No payment record found, using booking data for refund');
+                const originalAmount = parseFloat(booking.total_amount || 0);
+                const netRefundAmount = Math.max(0, originalAmount - cancellationFee);
+                console.log('🔑 ARC Pay Order ID (from booking):', arcPayOrderId, 'Amount:', originalAmount, 'Net refund:', netRefundAmount);
+
+                if (netRefundAmount > 0) {
+                    const authConfig = getArcPayAuthConfig();
+                    const refundTxnId = `refund-cancel-${Date.now()}`;
+                    const refundUrl = `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcPayOrderId}/transaction/${refundTxnId}`;
+                    console.log('💸 Issuing REFUND (no payment record):', netRefundAmount.toFixed(2));
+
+                    const refundResp = await axios.put(refundUrl, {
+                        apiOperation: 'REFUND',
+                        transaction: {
+                            amount: netRefundAmount.toFixed(2),
+                            currency: 'USD',
+                            reference: `Cancel refund (fee: ${cancellationFee}): ${reason}`.substring(0, 40)
+                        }
+                    }, { headers: authConfig.headers, validateStatus: () => true });
+
+                    if (arcSucceeded(refundResp)) {
+                        console.log('✅ ARC Pay REFUND successful (no payment record)');
+                        cancellationResult.paymentProcessed = true;
+                        cancellationResult.paymentAction = 'PARTIAL_REFUND';
+                        cancellationResult.refundAmount = netRefundAmount;
+                        cancellationResult.cancellationFee = cancellationFee;
+                        cancellationResult.refundTransactionId = refundTxnId;
+                    } else {
+                        console.error('❌ ARC Pay REFUND failed:', refundResp.status, JSON.stringify(refundResp.data));
+                        cancellationResult.paymentAction = 'REFUND_FAILED';
+                        cancellationResult.refundAmount = 0;
+                        cancellationResult.cancellationFee = cancellationFee;
+                        cancellationResult.errorDetails = refundResp.data;
+                    }
+                } else {
+                    cancellationResult.paymentProcessed = true;
+                    cancellationResult.paymentAction = 'NO_REFUND_FEE_COVERS';
+                    cancellationResult.refundAmount = 0;
+                    cancellationResult.cancellationFee = Math.min(cancellationFee, originalAmount);
+                }
             }
-        } catch (emailError) {
-            console.error('❌ Failed to send cancellation email:', emailError.message);
+        } catch (paymentError) {
+            console.warn('⚠️ Payment refund/void error:', paymentError.message);
+            // Fallback: mark as refund pending with cancellation fee noted
+            cancellationResult.refundAmount = 0;
+            cancellationResult.cancellationFee = cancellationFee;
+            cancellationResult.paymentAction = 'MANUAL_PROCESS_REQUIRED';
         }
-        // -------------------------------
+    }
 
-        console.log('✅ Booking cancelled successfully:', booking.id);
-
-        return res.status(200).json({
-            success: true,
-            message: 'Booking cancelled successfully',
-            cancellation: cancellationResult,
-            booking: {
-                id: booking.id,
-                reference: booking.booking_reference,
-                status: 'cancelled',
-                previousStatus: booking.status,
-                refundAmount: cancellationResult.refundAmount,
-                cancellationFee: cancellationResult.cancellationFee,
-                netRefund: (cancellationResult.refundAmount || 0),
-                paymentAction: cancellationResult.paymentAction
+    // 4. Update booking status
+    // DB constraint: payment_status IN ('unpaid','partial','paid','refunded','partially_refunded')
+    const { error: updateError } = await supabase
+        .from('bookings')
+        .update({
+            status: 'cancelled',
+            // The money's state, not the attempt's. A refund the gateway
+            // refused leaves the charge exactly where it was - `paid` - yet
+            // this used to write `partially_refunded` regardless, so a
+            // customer who was never paid back read as settled in the admin
+            // panel and in My Trips. Only a reversal that actually happened
+            // changes the payment state.
+            payment_status: cancellationResult.paymentProcessed ?
+                (cancellationResult.paymentAction === 'PARTIAL_REFUND' ? 'partially_refunded' : 'refunded') :
+                booking.payment_status,
+            booking_details: {
+                ...booking.booking_details,
+                cancellation: {
+                    cancelledAt: new Date().toISOString(),
+                    reason,
+                    amadeusCancelled: false,
+                    paymentAction: cancellationResult.paymentAction,
+                    refundAmount: cancellationResult.refundAmount,
+                    cancellationFee: cancellationResult.cancellationFee || 0,
+                    netRefund: (cancellationResult.refundAmount || 0),
+                    ticketsVoided: false
+                }
             }
-        });
+        })
+        .eq('id', booking.id);
 
-    } catch (error) {
-        console.error('❌ Cancel booking error:', error);
-        return res.status(500).json({ success: false, error: 'Failed to cancel booking', details: error.message });
+    if (updateError) {
+        return res.status(500).json({ success: false, error: 'Failed to update booking status', details: updateError.message });
+    }
+
+    await sendCancellationEmail(booking, email, cancellationResult);
+    console.log('✅ Booking cancelled successfully:', booking.id);
+
+    return res.status(200).json({
+        success: true,
+        message: cancellationMessage({ cancellation: cancellationResult }),
+        cancellation: cancellationResult,
+        booking: {
+            id: booking.id,
+            reference: booking.booking_reference,
+            status: 'cancelled',
+            previousStatus: booking.status,
+            refundAmount: cancellationResult.refundAmount,
+            cancellationFee: cancellationResult.cancellationFee,
+            netRefund: (cancellationResult.refundAmount || 0),
+            paymentAction: cancellationResult.paymentAction
+        }
+    });
+}
+
+/** The customer's cancellation email. Never fails the cancellation. */
+async function sendCancellationEmail(booking, email, cancellationResult) {
+    try {
+        const { sendCancellationNotificationEmails } = await import('../../services/emailService.js');
+        console.log('📧 Sending cancellation confirmation email...');
+
+        // Extract email from passenger_details if available
+        let passengerEmail = null;
+        if (Array.isArray(booking.passenger_details) && booking.passenger_details.length > 0) {
+            passengerEmail = booking.passenger_details[0]?.email || booking.passenger_details[0]?.contact?.emailAddress;
+        }
+
+        const cancelEmailData = {
+            customerEmail: booking.customer_email || booking.booking_details?.customer_email || passengerEmail || email || 'test@jetsetterss.com',
+            customerName: booking.customer_name || (Array.isArray(booking.passenger_details) && booking.passenger_details[0]?.firstName ? `${booking.passenger_details[0].firstName} ${booking.passenger_details[0].lastName || ''}`.trim() : 'Valued Customer'),
+            bookingReference: booking.booking_reference,
+            bookingType: booking.travel_type || 'flight',
+            refundAmount: cancellationResult.refundAmount,
+            cancellationFee: cancellationResult.cancellationFee,
+            // What actually happened to the money. Without it the email
+            // promised "refund due ... 5-10 business days" on every
+            // cancellation, including the ones where the gateway refused.
+            paymentAction: cancellationResult.paymentAction,
+            currency: cancellationResult.currency || 'USD'
+        };
+
+        const emailResult = await sendCancellationNotificationEmails(cancelEmailData);
+        if (emailResult.success) {
+            console.log('✅ Cancellation email sent successfully');
+        } else {
+            console.warn('⚠️ Cancellation email sent with issues:', emailResult.error);
+        }
+    } catch (emailError) {
+        console.error('❌ Failed to send cancellation email:', emailError.message);
     }
 }
 
