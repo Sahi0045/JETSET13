@@ -16,12 +16,16 @@ export const exportUserData = async (req, res) => {
     const userId    = req.user.id;
     const userEmail = req.user.email;
 
-    const [userRes, inquiriesRes, paymentsRes, chatRes, draftsRes] = await Promise.all([
+    const [userRes, inquiriesRes, paymentsRes, chatRes, draftsRes, travellersRes] = await Promise.all([
       supabase.from('users').select('id, email, name, first_name, last_name, created_at').eq('id', userId).single(),
       supabase.from('inquiries').select('*').or(`user_id.eq.${userId},customer_email.ilike.${userEmail}`),
       supabase.from('payments').select('id, amount, status, created_at').eq('user_id', userId),
       supabase.from('chat_sessions').select('id, created_at').eq('user_id', userId),
       supabase.from('application_drafts').select('form_type, last_saved').eq('user_id', userId),
+      // The people they book for, passports included: it is their data.
+      supabase.from('saved_travellers')
+        .select('first_name, last_name, gender, date_of_birth, nationality, passport_number, passport_expiry, created_at')
+        .eq('user_id', userId),
     ]);
 
     const exportPackage = {
@@ -31,6 +35,7 @@ export const exportUserData = async (req, res) => {
       payments:      paymentsRes.data || [],
       chat_sessions: chatRes.data || [],
       drafts:        draftsRes.data || [],
+      saved_travellers: travellersRes.data || [],
     };
 
     res.setHeader('Content-Disposition', `attachment; filename="jetset-data-export-${userId.slice(0, 8)}.json"`);
@@ -71,6 +76,8 @@ export const requestAccountDeletion = async (req, res) => {
     await Promise.all([
       supabase.from('application_drafts').delete().eq('user_id', userId),
       supabase.from('chat_sessions').delete().eq('user_id', userId),
+      // The people they booked for, with their passports: nothing to retain.
+      supabase.from('saved_travellers').delete().eq('user_id', userId),
     ]);
 
     // Record deletion request for audit

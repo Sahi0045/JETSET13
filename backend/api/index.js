@@ -34,6 +34,7 @@ import featureFlagRoutes from "../routes/featureFlag.routes.js";
 import airportRoutes from "../routes/airport.routes.js";
 import pushRoutes from "../routes/push.routes.js";
 import gdprRoutes from "../routes/gdpr.routes.js";
+import savedTravellersRoutes from "../routes/savedTravellers.routes.js";
 import chatRoutes from "./chat/index.js";
 
 // Shared stability modules (same behavior across all 3 entry points)
@@ -76,6 +77,8 @@ app.use(["/api/auth", "/auth", "/api/supabase-auth", "/supabase-auth"], authLimi
 
 // Mount API routes - use both /api/* and /* patterns for flexibility
 app.use("/api/auth", authRoutes);
+// Ahead of /api/users, whose routes take the path's next segment as an id.
+app.use("/api/users/me/travellers", savedTravellersRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/flights", flightRoutes);

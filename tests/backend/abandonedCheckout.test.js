@@ -144,6 +144,21 @@ describe('the order it rebuilds', () => {
     noOffer.flightData = undefined;
     expect(buildFlightOrderBody(noOffer).problem).toBe('OFFER_MISSING');
   });
+
+  // A domestic adult needs no date of birth; a child, or anyone on a trip the
+  // review page did not record as domestic, still does.
+  it('asks for a date of birth only where the airline needs one', () => {
+    const domesticAdult = orderDataFromCheckoutRow(checkoutRow());
+    domesticAdult.passengerData = [{ ...domesticAdult.passengerData[0], dateOfBirth: '' }];
+    domesticAdult.bookingDetails = { ...domesticAdult.bookingDetails, isInternational: false };
+    expect(buildFlightOrderBody(domesticAdult).problem).toBeNull();
+
+    const domesticChild = { ...domesticAdult, passengerData: [{ ...domesticAdult.passengerData[0], type: 'CHILD' }] };
+    expect(buildFlightOrderBody(domesticChild).problem).toBe('PASSENGERS_INCOMPLETE');
+
+    const notRecorded = { ...domesticAdult, bookingDetails: { contact: domesticAdult.bookingDetails.contact } };
+    expect(buildFlightOrderBody(notRecorded).problem).toBe('PASSENGERS_INCOMPLETE');
+  });
 });
 
 describe('what it does with a checkout', () => {

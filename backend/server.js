@@ -20,6 +20,7 @@ import couponRoutes from './routes/coupon.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import pushRoutes from './routes/push.routes.js';
 import gdprRoutes from './routes/gdpr.routes.js';
+import savedTravellersRoutes from './routes/savedTravellers.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import currencyRoutes from './routes/currency.routes.js';
 import { checkQuoteExpirationHandler } from './jobs/checkQuoteExpiration.js';
@@ -181,6 +182,9 @@ app.use('/api/visa-requirements', visaRequirementsRoutes);
 // GDPR / data-rights routes. Previously declared inline here without `protect`,
 // which crashed on req.user and never existed in the other two entry points.
 app.use('/api/gdpr', gdprRoutes);
+
+// A customer's saved travellers, mounted in all three entry points.
+app.use('/api/users/me/travellers', savedTravellersRoutes);
 
 
 // Direct send-email endpoint (must match api/index.js implementation)

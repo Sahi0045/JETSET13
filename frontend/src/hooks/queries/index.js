@@ -6,3 +6,4 @@ export * from './useCruises';
 export * from './useFlights';
 export * from './useInquiries';
 export * from './useFeatureFlags';
+export * from './useSavedTravellers';

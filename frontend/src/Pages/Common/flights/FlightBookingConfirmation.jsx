@@ -23,10 +23,13 @@ import { searchToQuery } from './searchQuery';
 import apiConfig from '@/config/api';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
-import { computeFlightCharge, passengerAgeProblem, PASSENGER_TYPES } from '../../../../../shared/flightCharge';
-import { isUsableEmail } from '../../../../../shared/email';
+import { computeFlightCharge, PASSENGER_TYPES } from '../../../../../shared/flightCharge';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
+import { needsDateOfBirth } from '../../../../../shared/travellerDetails';
 import { findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
+import { travellerProblems, travellerProgress } from '../../../utils/travellerChecks';
+import { placeSavedTraveller, removeSavedTraveller, toSavedTraveller } from '../../../utils/savedTravellerSlots';
+import { useSaveTravellers, useSavedTravellers } from '../../../hooks/queries/useSavedTravellers';
 import TravellerGroupEditor from './TravellerGroupEditor';
 import "./booking-confirmation.css";
 
@@ -196,6 +199,52 @@ function FlightBookingConfirmation() {
     passportExpiry: "",
     countryCode: callingCode || '+91'
   });
+
+  // What each traveller form still needs - one list for the payment check and
+  // for the progress on the page (utils/travellerChecks.js).
+  const problemsOf = (traveller, index) => travellerProblems(traveller, {
+    index,
+    international: Boolean(bookingDetails?.isInternational),
+    travelDate: bookingDetails?.flight?.departureDate,
+    lastDate: bookingDetails?.flight?.segments?.at?.(-1)?.arrival?.at
+      || bookingDetails?.flight?.arrivalDate
+      || bookingDetails?.flight?.departureDate,
+    bookingAsGuest,
+    contactEmail: bookingDetails?.contact?.email,
+  });
+  const typeName = (type, count) => ({
+    ADULT: ['Adult', 'Adults'], CHILD: ['Child', 'Children'], HELD_INFANT: ['Infant', 'Infants'], SEATED_INFANT: ['Infant', 'Infants'],
+  }[type] ?? ['Traveller', 'Travellers'])[count === 1 ? 0 : 1];
+
+  // Saved travellers, for a signed-in customer: tap a person to fill the form
+  // their age fits, and save this booking's travellers for next time - the
+  // account holder first, as "You".
+  const savedTravellers = useSavedTravellers({ enabled: Boolean(user) });
+  const saveTravellersMutation = useSaveTravellers();
+  const [saveForNextTime, setSaveForNextTime] = useState(false);
+  const [savedPickNotice, setSavedPickNotice] = useState(null);
+  const savedSelf = savedTravellers.data?.self ?? null;
+  const isSelf = (person) => Boolean(savedSelf)
+    && person.firstName.toLowerCase() === savedSelf.firstName.toLowerCase()
+    && person.lastName.toLowerCase() === savedSelf.lastName.toLowerCase();
+  const savedPeople = [
+    ...(savedSelf ? [{ ...savedSelf, label: 'You' }] : []),
+    ...(savedTravellers.data?.travellers ?? []).filter((person) => !isSelf(person)),
+  ];
+
+  const toggleSavedTraveller = (person) => {
+    setSavedPickNotice(null);
+    if (passengerData.some((t) => t.savedTravellerId === person.id)) {
+      setPassengerData((current) => removeSavedTraveller(current, person.id, blankTraveller));
+      return;
+    }
+    const placed = placeSavedTraveller(passengerData, person, bookingDetails?.flight?.departureDate);
+    if (placed.problem) {
+      setSavedPickNotice(placed.problem);
+      return;
+    }
+    setPassengerData(placed.travellers);
+  };
 
   // Adding or removing travellers, the way Amadeus prices them: this same fare
   // - the same flights in the same booking classes - searched again for the new
@@ -532,7 +581,12 @@ function FlightBookingConfirmation() {
         const price = body?.data?.flightOffers?.[0]?.price;
         const total = Number(price?.grandTotal ?? price?.total);
         if (cancelled || !body?.success || !Number.isFinite(total) || total <= 0) return;
-        const searched = Number(bookingDetails.flight.price.base || 0) + Number(bookingDetails.flight.price.airlineTaxes || 0);
+        // This offer's own search price. bookingDetails can still hold the
+        // previous offer here - after travellers are added this check runs
+        // before the page re-reads the flight - and it compared a 3-adult price
+        // with the 2-adult one.
+        const flightPrice = reviewState?.flightData?.price;
+        const searched = Number(flightPrice?.amount || flightPrice?.grandTotal || flightPrice?.total || offer?.price?.total || 0);
         setPricedFare({ total, base: Number(price.base) || null, currency: price.currency || null });
         if (Math.abs(total - searched) > 0.01) {
           setFareNotice(`The airline's current fare for this flight is ${price.currency || ''} ${total.toFixed(2)}, not the ${searched.toFixed(2)} shown in search. The total below uses the current fare.`);
@@ -728,46 +782,16 @@ function FlightBookingConfirmation() {
   const handleProceedToPayment = async () => {
     // Not while the group is being re-priced: the fare on the page is about to change.
     if (checkingOut || groupChange.busy) return;
-    const travelDate = bookingDetails?.flight?.departureDate;
-    const lastDate = bookingDetails?.flight?.segments?.at?.(-1)?.arrival?.at
-      || bookingDetails?.flight?.arrivalDate
-      || travelDate;
-    const international = Boolean(bookingDetails?.isInternational);
-
     // Everything the airline needs, checked before payment. The server refuses
     // an incomplete traveller too - but only after the charge, and then has to
-    // reverse it. Stopping here costs the customer nothing.
+    // reverse it. Stopping here costs the customer nothing. The same list marks
+    // each traveller done on the page (utils/travellerChecks.js).
     const groups = [];
     passengerData.forEach((p, index) => {
-      const group = { id: p.id, label: `${PASSENGER_TYPES[p.type]?.label || 'Traveller'} ${index + 1}`, items: [] };
-      const add = (text) => group.items.push(text);
-      if (!p.firstName?.trim() || !p.lastName?.trim()) add('Enter the first and last name exactly as on the ID.');
-      if (!p.dateOfBirth) {
-        add('Enter the date of birth.');
-      } else {
-        const ageProblem = passengerAgeProblem(p.type, p.dateOfBirth, travelDate);
-        if (ageProblem) add(ageProblem);
+      const items = problemsOf(p, index);
+      if (items.length) {
+        groups.push({ id: p.id, label: `${PASSENGER_TYPES[p.type]?.label || 'Traveller'} ${index + 1}`, items });
       }
-      if (!p.gender) add('Select a gender.');
-      if (index === 0 && !p.mobile) add('Enter a mobile number for booking updates.');
-      // A guest's ticket goes to this address, and it is their only way back to
-      // the booking - there is no account for it to appear under. Checkout
-      // refuses a guest without one; the same check, before anything is sent.
-      if (index === 0 && bookingAsGuest && !isUsableEmail(bookingDetails?.contact?.email || p.email)) {
-        add('Enter an email address. Your ticket is sent there, and it is how you find this booking without an account.');
-      }
-      // A passport was optional on international routes, and an international
-      // ticket without one cannot be issued.
-      if (international) {
-        if (!p.nationality) add('Select a nationality.');
-        if (!p.passportNumber?.trim()) add('Enter the passport number.');
-        if (!p.passportExpiry) {
-          add('Enter the passport expiry date.');
-        } else if (lastDate && new Date(p.passportExpiry) <= new Date(String(lastDate).slice(0, 10))) {
-          add('The passport expires before the trip ends.');
-        }
-      }
-      if (group.items.length) groups.push(group);
     });
     if (groups.length) {
       setNotice({
@@ -780,6 +804,12 @@ function FlightBookingConfirmation() {
         onAction: () => showTraveller(groups[0].id),
       });
       return;
+    }
+
+    // Saved for next time when the customer asked. Never in the way: whatever
+    // happens to this request, the booking carries on.
+    if (user && saveForNextTime) {
+      saveTravellersMutation.mutate(passengerData.map(toSavedTraveller));
     }
 
     setCheckingOut(true);
@@ -1279,6 +1309,57 @@ function FlightBookingConfirmation() {
                   </div>
                 )}
 
+                {/* How far along each traveller type is: "Adults 1/2 added". */}
+                <div className="flex flex-wrap items-center gap-2 mb-4 text-xs" aria-live="polite">
+                  {travellerProgress(passengerData, problemsOf).map(({ type, done, total }) => (
+                    <span
+                      key={type}
+                      className={`px-2.5 py-1 rounded-full border font-semibold ${done === total ? 'bg-[#f0fdf4] border-[#bbf7d0] text-[#166534]' : 'bg-white border-gray-200 text-gray-600'}`}
+                    >
+                      {typeName(type, total)} {done}/{total} added
+                    </span>
+                  ))}
+                  <span className="text-gray-500">Enter names exactly as on the passport or government ID.</span>
+                </div>
+
+                {user && savedPeople.length > 0 && (
+                  <div className="mb-5 rounded-xl border border-gray-200 p-3">
+                    <p className="text-sm font-semibold text-[#0d3d56]">Saved travellers</p>
+                    <p className="text-xs text-gray-500 mb-2">Tap a person to fill in their details. Tap again to remove them.</p>
+                    <div className="flex flex-wrap gap-2">
+                      {savedPeople.map((person) => {
+                        const chosen = passengerData.some((t) => t.savedTravellerId === person.id);
+                        return (
+                          <button
+                            key={person.id}
+                            type="button"
+                            aria-pressed={chosen}
+                            onClick={() => toggleSavedTraveller(person)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm transition-colors ${chosen ? 'bg-[#055B75] border-[#055B75] text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-[#055B75]'}`}
+                          >
+                            {chosen && <Check className="h-3.5 w-3.5" />}
+                            {person.firstName} {person.lastName}{person.label ? ` (${person.label})` : ''}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {savedPickNotice && <p className="text-xs text-amber-700 mt-2" role="alert">{savedPickNotice}</p>}
+                  </div>
+                )}
+
+                {user && (
+                  <label className="flex items-start gap-2 mb-4 text-sm text-gray-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      style={{ width: '18px', height: '18px', minWidth: '18px', accentColor: '#055B75' }}
+                      checked={saveForNextTime}
+                      onChange={(e) => setSaveForNextTime(e.target.checked)}
+                    />
+                    <span>Save these travellers to my account, so I don't have to type them next time.</span>
+                  </label>
+                )}
+
                 {passengerData.map((passenger, index) => {
                   const isExpanded = expandedPassengerId === null ? index === 0 : expandedPassengerId === passenger.id;
                   return (
@@ -1291,7 +1372,20 @@ function FlightBookingConfirmation() {
                       </div>
                       <div className="flex items-center gap-2 text-sm font-medium text-[#055B75]">
                         {(passenger.firstName || passenger.lastName) ? (
-                          <span className="flex items-center"><CheckCircle className="w-4 h-4 mr-1 text-[#10b981]" />{passenger.firstName} {passenger.lastName}</span>
+                          // A folded card still says whether this traveller is ready -
+                          // the same list payment checks.
+                          problemsOf(passenger, index).length === 0 ? (
+                            <span className="flex items-center">
+                              <CheckCircle className="w-4 h-4 mr-1 text-[#10b981]" />
+                              {passenger.firstName} {passenger.lastName}
+                              {passenger.gender ? ` · ${passenger.gender === 'female' ? 'Female' : 'Male'}` : ''}
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-2">
+                              {passenger.firstName} {passenger.lastName}
+                              <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">Details needed</span>
+                            </span>
+                          )
                         ) : (
                           <span className="text-gray-400">Tap to {isExpanded ? 'collapse' : 'add details'}</span>
                         )}
@@ -1325,14 +1419,18 @@ function FlightBookingConfirmation() {
                         />
                       </div>
                       <div className="form-group">
-                        <label>Date of Birth <span className="required">*</span></label>
+                        {/* Needed for a child or infant, and for anyone crossing a border
+                            (shared/travellerDetails.js); a domestic adult may leave it out. */}
+                        {needsDateOfBirth({ type: passenger.type, international: Boolean(bookingDetails?.isInternational) })
+                          ? <label>Date of Birth <span className="required">*</span></label>
+                          : <label>Date of Birth <span className="text-xs font-normal text-gray-400">(optional)</span></label>}
                         <input
                           type="date"
                           className="form-input"
                           value={passenger.dateOfBirth}
                           onChange={(e) => handlePassengerChange(passenger.id, 'dateOfBirth', e.target.value)}
                           readOnly={!editMode}
-                          required
+                          required={needsDateOfBirth({ type: passenger.type, international: Boolean(bookingDetails?.isInternational) })}
                           max={today}
                           min={minDOB}
                         />
