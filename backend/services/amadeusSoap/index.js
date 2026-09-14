@@ -10,6 +10,7 @@ import { buildInformativePricingBody } from './operations/informativePricing.js'
 import { DEFAULT_RULE_SECTIONS, buildCheckRulesBody, readCheckRulesReply } from './operations/fareRules.js';
 import { buildFlightInfoBody, readFlightInfoError, readFlightInfoReply } from './operations/flightInfo.js';
 import { applyPricingToOffer } from './mappers/pricing.js';
+import { attributeTickets } from './mappers/flightOrder.js';
 import { cancelBooking, retrieveBooking, runBookingChain } from './bookingChain.js';
 import { unwrapEnvelope } from './parseXml.js';
 import { callStateless, withSession } from './session.js';
@@ -589,7 +590,10 @@ const createFlightOrder = async (orderData, options = {}) => {
     // These two values are the only modes this provider can ever return.
     mode: result.ticketed ? 'LIVE_GDS_BOOKING' : 'LIVE_GDS_BOOKING_UNTICKETED',
     ticketed: result.ticketed,
-    tickets: result.tickets,
+    // Against the travellers the booking stores, by their own ids. A ticket
+    // names a PNR tattoo, not a traveller - and an infant's names its adult's -
+    // so it is matched through the PNR's own passenger list (attributeTickets).
+    tickets: attributeTickets(result.tickets, result.order?.travelers, travelers),
     gds: {
       wsap: getWsConfig().wsap,
       officeId: getWsConfig().officeId,

@@ -537,6 +537,52 @@ describe('concurrent booking attempts', () => {
     expect(axios.post).not.toHaveBeenCalled();
   });
 
+  // A cancellation takes the same stamp as the chain. While it runs, the
+  // payment is on its way back; once it has finished there is nothing to book.
+  // The order route used to have read the row before the cancel landed and
+  // sell the seats anyway.
+  const chainStateRow = (gdsChain) => {
+    const r = inProgressRow(new Date().toISOString());
+    return { ...r, booking_details: { ...r.booking_details, gds_chain: gdsChain } };
+  };
+  const seedChain = async (gdsChain) => {
+    const supabase = (await import('../../../backend/config/supabase.js')).default;
+    supabase.from.mockImplementation(() => {
+      const chain = {};
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+        chain[m] = vi.fn(() => chain);
+      }
+      chain.single = vi.fn().mockResolvedValue({ data: chainStateRow(gdsChain), error: null });
+      chain.maybeSingle = chain.single;
+      return chain;
+    });
+    return makeApp();
+  };
+
+  it('does not start a chain on a booking that is being cancelled', async () => {
+    const app = await seedChain({ state: 'cancelling', startedAt: new Date().toISOString() });
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.status).toBe(409);
+    // The queue worker waits on this code rather than emailing a failure.
+    expect(res.body.code).toBe('BOOKING_IN_PROGRESS');
+    expect(res.body.error).toMatch(/being cancelled/);
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(res.body.refundAction).toBeUndefined();
+  });
+
+  it('does not start a chain on a booking whose cancellation finished after the row was read', async () => {
+    const app = await seedChain({ state: 'cancelled', startedAt: new Date(Date.now() - 60_000).toISOString() });
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, flightOffer: bookableOffer });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('BOOKING_CANCELLED');
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(res.body.refundAction).toBeUndefined();
+  });
+
   it('asks the customer to retry, without a refund, when it cannot be queued either', async () => {
     const app = await claimErrors({ queueErrors: true });
 

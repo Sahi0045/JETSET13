@@ -39,17 +39,28 @@ const supabaseFor = (row) => {
       update: vi.fn((payload) => { updates.push(payload); return c; }),
       insert: vi.fn(() => c),
       eq: vi.fn(() => c),
+      is: vi.fn(() => c),
+      neq: vi.fn(() => c),
       or: vi.fn(() => c),
       filter: vi.fn(() => c),
       order: vi.fn(() => c),
       limit: vi.fn(() => c),
       single: vi.fn().mockResolvedValue({ data: row, error: null }),
       maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      // An awaited write matches the row, so the cancellation's claim - a
+      // compare-and-set - is won. cancelClaim.test.js loses it on purpose.
+      then: (resolve) => resolve({ data: [row], error: null }),
     };
     return c;
   };
   return { client: { from: vi.fn(() => chain()) }, updates };
 };
+
+/** ARC's answer for an order holding a captured payment. */
+const captured = (amount = 291) => ({
+  status: 200,
+  data: { status: 'CAPTURED', amount, currency: 'USD', transaction: [{ result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount, currency: 'USD' } }] },
+});
 
 const cancelFlightOrder = vi.fn();
 let supabaseDouble = supabaseFor(booking());
@@ -82,6 +93,8 @@ beforeEach(() => {
   axios.put?.mockReset?.();
   if (!axios.put) axios.put = vi.fn();
   axios.put.mockResolvedValue({ status: 200, data: { result: 'SUCCESS' } });
+  // The cancel asks the gateway what it holds before the seats go.
+  axios.get.mockResolvedValue(captured(291));
 });
 
 describe('a booking the airline still holds', () => {

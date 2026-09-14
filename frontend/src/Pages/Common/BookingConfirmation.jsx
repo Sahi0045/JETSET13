@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Ship, Plane, Calendar, CreditCard, ArrowLeft, Clock, MapPin, Users, XCircle } from 'lucide-react';
 import Navbar from './Navbar';
+import { attentionMessage, refundStatus } from '../../utils/bookingStatus';
+import { isPaid } from '../../utils/eTicket';
+import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 
 // Helper function to calculate days until trip
 const getDaysUntilTrip = (dateStr) => {
@@ -103,11 +106,17 @@ function BookingConfirmation() {
   // Non-flight bookings keep their original copy.
   const statusUpper = String(bookingData.status || '').toUpperCase();
   const hasTickets = Array.isArray(bookingData.tickets) && bookingData.tickets.length > 0;
+  // A flight row still `pending` with no PNR never reached the airline. My
+  // Trips opens this page for those too ("View Details"), and it called every
+  // one of them "Reservation Held - your seats are reserved". What it is
+  // depends on the payment, and on whether it is already in front of a person.
+  const neverBooked = isFlight && !bookingData.pnr && statusUpper === 'PENDING';
   const outcome = statusUpper === 'CANCELLED' ? 'cancelled'
     : (bookingData.queued === true || statusUpper === 'PENDING_CONFIRMATION') ? 'queued'
       : (bookingData.ticketed === true || hasTickets) ? 'ticketed'
-        : isFlight ? 'held'
-          : 'confirmed';
+        : neverBooked ? (bookingData.needs_review ? 'not_completed' : isPaid(bookingData) ? 'not_booked' : 'awaiting_payment')
+          : isFlight ? 'held'
+            : 'confirmed';
 
   // Full class strings on purpose: Tailwind cannot see a class built from a
   // template literal, so a `bg-${tone}-500` would be purged from the build.
@@ -144,9 +153,40 @@ function BookingConfirmation() {
       iconWrap: 'bg-gradient-to-br from-rose-400 to-rose-600',
       badge: 'bg-rose-500',
       title: 'Booking Cancelled',
-      lead: 'This booking has been cancelled.',
+      // What happened to the money, in the words the cancel result and the
+      // email use.
+      lead: bookingData.cancellation?.paymentAction
+        ? cancellationMessage({ cancellation: bookingData.cancellation })
+        : 'This booking has been cancelled.',
       badgeText: 'Cancelled',
       mail: 'See Manage Booking in My Trips for the refund status.',
+    },
+    not_booked: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
+      badge: 'bg-amber-500',
+      title: 'Payment Received',
+      lead: 'Your payment is complete, but this booking has not been sent to the airline yet. We will confirm it or refund you.',
+      badgeText: 'Not booked yet',
+      mail: 'We will email you as soon as it is confirmed, or refunded.',
+    },
+    not_completed: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-amber-400 to-amber-600',
+      badge: 'bg-amber-500',
+      title: 'Booking Not Completed',
+      lead: 'Your booking could not be completed with the airline. Our team is looking after your payment and will email you.',
+      badgeText: 'Needs attention',
+      mail: 'Our team will email you about your payment. You can also call (877) 538-7380 with your booking reference.',
+    },
+    awaiting_payment: {
+      Icon: Clock,
+      iconWrap: 'bg-gradient-to-br from-slate-400 to-slate-600',
+      badge: 'bg-slate-500',
+      title: 'Awaiting Payment',
+      lead: 'This booking has not been paid for, so nothing has been booked with the airline.',
+      badgeText: 'Awaiting payment',
+      mail: 'No confirmation is sent until payment is complete.',
     },
     confirmed: {
       Icon: CheckCircle,
@@ -166,6 +206,15 @@ function BookingConfirmation() {
   const paidAmount = parseFloat(bookingData.amount ?? bookingData.totalAmount);
   const hasAmount = Number.isFinite(paidAmount) && paidAmount > 0;
 
+  // What the money did, not a constant: a cancelled booking said "Payment
+  // received" beside a refund made - or one that failed - and so did one never
+  // paid for.
+  const refund = refundStatus(bookingData);
+  const attention = attentionMessage(bookingData);
+  const paymentNote = outcome === 'cancelled' ? (refund?.label || 'Booking cancelled')
+    : outcome === 'awaiting_payment' ? 'Payment not received'
+      : 'Payment received';
+
   return (
     <>
       <Navbar forceScrolled />
@@ -182,6 +231,11 @@ function BookingConfirmation() {
             <p className="text-gray-600 mb-4">
               {copy.lead}
             </p>
+            {/* A held reservation flagged for a person: say so, rather than
+                only "your ticket is being issued". */}
+            {outcome === 'held' && attention && (
+              <p className="text-amber-800 text-sm mb-4">{attention}</p>
+            )}
 
             {/* Travel Countdown */}
             {daysUntilTrip !== null && daysUntilTrip >= 0 && (
@@ -497,8 +551,8 @@ function BookingConfirmation() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-green-700">
-                    <CheckCircle className="w-5 h-5" />
-                    <span className="font-semibold">Payment received</span>
+                    {outcome === 'awaiting_payment' ? <Clock className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+                    <span className="font-semibold">{paymentNote}</span>
                   </div>
                 </div>
               </div>

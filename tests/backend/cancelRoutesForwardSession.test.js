@@ -32,10 +32,11 @@ const cancelFlightOrder = vi.fn();
 
 const chainFor = (data) => {
   const c = {};
-  for (const m of ['select', 'update', 'insert', 'eq', 'or', 'filter', 'order', 'limit']) c[m] = vi.fn(() => c);
+  for (const m of ['select', 'update', 'insert', 'eq', 'is', 'neq', 'or', 'filter', 'order', 'limit']) c[m] = vi.fn(() => c);
   c.single = vi.fn().mockResolvedValue({ data, error: null });
   c.maybeSingle = vi.fn().mockResolvedValue({ data, error: null });
-  c.then = (resolve) => resolve({ data: null, error: null });
+  // A write matches the row, so the cancellation's claim is won.
+  c.then = (resolve) => resolve({ data: data ? [data] : null, error: null });
   return c;
 };
 
@@ -92,6 +93,10 @@ beforeEach(() => {
   if (!axios.put) axios.put = vi.fn();
   axios.put.mockReset();
   axios.put.mockResolvedValue({ status: 200, data: { result: 'SUCCESS' } });
+  axios.get.mockResolvedValue({
+    status: 200,
+    data: { status: 'CAPTURED', amount: 291, currency: 'USD', transaction: [{ result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount: 291, currency: 'USD' } }] },
+  });
 });
 
 describe('My Trips: DELETE /flights/order/:ref', () => {

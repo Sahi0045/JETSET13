@@ -192,12 +192,14 @@ describe('Manage Booking explains a refused refund honestly', () => {
 
   it('reads the outcome from the list payload', () => {
     expect(src).toMatch(/bookingData\?\.cancellation/);
-    expect(src).toMatch(/'VOID_FAILED', 'VOID_MISSING_TXN_ID'/);
+    // The refund outcome comes from the shared reading of the record, not a
+    // list of actions kept on the page.
+    expect(src).toMatch(/refundStatus\(/);
   });
 
   it('does not label an unknown status as Confirmed', () => {
     expect(src).not.toMatch(/\|\| 'Confirmed'\}/);
-    expect(src).toMatch(/statusLabel\(bookingData\?\.status\)/);
+    expect(src).toMatch(/bookingStatusBadge\(bookingData\)/);
   });
 });
 
@@ -297,6 +299,47 @@ describe('Manage Booking claims nothing it cannot back', () => {
 
   it('cancels with the email the guest proved the booking with', () => {
     expect(src).toMatch(/submittedEmail \|\| bookingData\.email/);
+  });
+});
+
+/**
+ * A cancelled booking, after the cancel and refund audit.
+ *
+ *  - Manage Booking still offered "Download E-Ticket" for it, and the document
+ *    printed the voided tickets' numbers.
+ *  - One cancellation read three ways: a modal promising a fee and 5-7 days, a
+ *    green "Cancelled Successfully" over a refused refund, and My Trips adding
+ *    "the airline cancellation is still being processed" to bookings that never
+ *    had a reservation.
+ */
+describe('a cancelled booking has no usable ticket and one account of its refund', () => {
+  const manage = page('ManageBooking.jsx');
+  const trips = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
+  const confirmation = commonPage('BookingConfirmation.jsx');
+
+  it('Manage Booking offers no download for a cancelled booking', () => {
+    expect(manage).toMatch(/\{bookingData\?\.status\?\.toUpperCase\(\) !== 'CANCELLED' && \(\s*<button\s+onClick=\{downloadETicket\}/);
+  });
+
+  it('Manage Booking promises no fee or timescale the cancellation does not keep', () => {
+    expect(manage).not.toMatch(/A cancellation fee will be deducted/);
+    expect(manage).not.toMatch(/5-7 business days/);
+    expect(manage).not.toMatch(/Booking Cancelled Successfully/);
+    expect(manage).toMatch(/cancellationMessage\(\{ cancellation: cancelResult\.cancellation \}\)/);
+  });
+
+  it('My Trips adds nothing to the outcome, shows no ticket for a cancelled booking, and words attention by case', () => {
+    expect(trips).not.toMatch(/airline cancellation is still being processed/);
+    expect(trips).toMatch(/alert\(cancellationMessage\(result\)\)/);
+    expect(trips).toMatch(/if \(statusUp === 'CANCELLED'\) return 'Cancelled'/);
+    expect(trips).toMatch(/attentionMessage\(booking\)/);
+    expect(trips).toMatch(/refundStatus\(booking\)/);
+  });
+
+  it('View Details says what the payment did', () => {
+    expect(confirmation).toMatch(/refundStatus\(bookingData\)/);
+    expect(confirmation).not.toMatch(/<span className="font-semibold">Payment received<\/span>/);
+    expect(confirmation).toMatch(/'awaiting_payment'/);
   });
 });
 

@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import User from '../models/user.model.js';
 import supabase from '../config/supabase.js';
 import { JWT_SECRET } from '../config/jwt.js';
+import { siteOrigins } from '../utils/returnUrl.js';
 
 // Simple in-memory cache for Google/Firebase JWKS certificates
 let googleCertsCache = { certs: null, fetchedAt: 0 };
@@ -414,14 +415,83 @@ export const visaStaff = (req, res, next) => {
   }
 };
 
+const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS'];
+
+/**
+ * Whether the session cookie on this request may act for the customer it
+ * belongs to.
+ *
+ * `protect` requires the double-submit token on a cookie-authenticated write.
+ * `optionalProtect` checked nothing, and it guards writes that act as the
+ * signed-in user: the payments router (hosted checkout, cancel-booking, and the
+ * admin actions that read the cookie themselves), POST /flights/order,
+ * inquiries, visa applications and the chatbot. All that stopped a form on
+ * another site from riding a customer's session there was the cookie's
+ * SameSite=lax - one loosened cookie setting from gone.
+ *
+ * The token alone cannot be required here: most of the site's own calls to
+ * these routes are plain same-origin fetches that never echo it (the payment
+ * callback's reconcile, payment links, the request form, the visa flow, the
+ * chatbot), and every one of them would lose its customer. So a write is the
+ * site's own when any of these says so:
+ *  - the double-submit token matches, as `protect` checks;
+ *  - Sec-Fetch-Site, which the browser sets and no page can, is same-origin -
+ *    or none, a typed or bookmarked request no page caused;
+ *  - for a browser without Fetch Metadata (Firefox before 90, Safari before
+ *    16.4) or a same-site subdomain, the Origin is one of the site's own
+ *    (utils/returnUrl.js) or this host's.
+ * A request with neither header did not come from a browser: a browser puts
+ * Origin on every cross-site POST, PUT, PATCH and DELETE, and a page cannot
+ * take it off. A native client or a server holding the cookie is unaffected.
+ *
+ * Reads are not checked, as in `protect`. The GET actions behind this that do
+ * write - the payment callback, reconcile, completing a payment link - take
+ * their proof from the gateway and its indicator, never from the session.
+ */
+export function cookieSessionAllowed(req) {
+  if (SAFE_METHODS.includes(req.method)) return true;
+
+  const csrfCookie = req.cookies?.jt_csrf;
+  if (csrfCookie && req.headers['x-csrf-token'] === csrfCookie) return true;
+
+  const site = String(req.headers['sec-fetch-site'] || '').toLowerCase();
+  if (site === 'same-origin' || site === 'none') return true;
+  if (site === 'cross-site') return false;
+
+  const origin = req.headers.origin;
+  if (origin) {
+    // What a sandboxed frame or a no-referrer page sends. Not the site.
+    if (origin === 'null') return false;
+    return origin === `${req.protocol}://${req.headers.host}` || siteOrigins().has(origin);
+  }
+  // Fetch Metadata with no Origin is not something a browser sends on a write.
+  return !site;
+}
+
 // Optional protect - extract user if token exists, but don't fail if not
 export const optionalProtect = async (req, res, next) => {
   let token;
 
   // Prefer the httpOnly session cookie (web); fall back to Authorization: Bearer (mobile).
   if (req.cookies && req.cookies.jt_access) {
-    token = req.cookies.jt_access;
-  } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    if (cookieSessionAllowed(req)) {
+      token = req.cookies.jt_access;
+    } else {
+      // A write another site made the browser send: the cookie is no session,
+      // exactly as an invalid token is none here. Deleted rather than skipped,
+      // because handlers behind this read it themselves (getCaller,
+      // getCallerInfo). Not a 403, because this middleware never refuses: the
+      // request goes on as a guest's, which is all a forged one is.
+      console.warn('Optional auth: session cookie ignored on a cross-site write', {
+        method: req.method,
+        path: req.originalUrl?.split('?')[0],
+        origin: req.headers.origin || null,
+        fetchSite: req.headers['sec-fetch-site'] || null,
+      });
+      delete req.cookies.jt_access;
+    }
+  }
+  if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
   }
 

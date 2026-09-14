@@ -1325,8 +1325,15 @@ export async function handleGetPaymentDetails(req, res) {
  *
  * Idempotent: a refunded or cancelled row answers `paid: false` without a
  * gateway call, because that money is no longer available for a booking.
+ *
+ * `fresh` asks the gateway whatever the row says. A cancellation needs what is
+ * held NOW: an admin refund or an earlier reversal since the row was reconciled
+ * leaves `arc_captured_amount` describing money that has already gone back.
+ * Every answer the gateway gave carries `heldAmount` - captured, less refunded,
+ * nothing once voided - and `everCaptured`; an order it would not return
+ * carries the HTTP status it answered with, as `gatewayStatus`.
  */
-export async function reconcileBookingPayment(booking) {
+export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
     const details = booking.booking_details || {};
     const known = Number(details.arc_captured_amount);
     const hasKnownAmount = Number.isFinite(known) && known > 0;
@@ -1340,7 +1347,7 @@ export async function reconcileBookingPayment(booking) {
         ...extra,
     });
 
-    if (booking.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(booking.payment_status)) {
+    if (!fresh && (booking.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(booking.payment_status))) {
         return fromRow(false, { alreadyReconciled: true });
     }
     // `arc_captured_amount` is written only by this function, after the gateway
@@ -1348,7 +1355,7 @@ export async function reconcileBookingPayment(booking) {
     // 'paid'` alone proves nothing: other code paths write it, and one of them
     // (complete-payment-link) wrote it on an unauthenticated, unverified POST.
     const alreadyPaid = booking.payment_status === 'paid';
-    if (alreadyPaid && hasKnownAmount) {
+    if (!fresh && alreadyPaid && hasKnownAmount) {
         return fromRow(true, { alreadyReconciled: true });
     }
 
@@ -1357,11 +1364,13 @@ export async function reconcileBookingPayment(booking) {
 
     // RETRIEVE_ORDER from ARC to find a captured transaction.
     let orderData = null;
+    let gatewayStatus = null;
     try {
         const orderResp = await axios.get(
             `${ARC_PAY_CONFIG.BASE_URL}/merchant/${ARC_PAY_CONFIG.MERCHANT_ID}/order/${arcOrderId}`,
             { headers: { 'Authorization': authHeader, 'Accept': 'application/json' }, validateStatus: () => true }
         );
+        gatewayStatus = orderResp.status;
         if (orderResp.status === 200) orderData = orderResp.data;
         else console.warn('⚠️ [reconcile] RETRIEVE_ORDER non-200:', orderResp.status);
     } catch (retrieveErr) {
@@ -1375,6 +1384,7 @@ export async function reconcileBookingPayment(booking) {
         return fromRow(false, {
             error: 'Could not retrieve order from gateway',
             gatewayUnavailable: true,
+            ...(gatewayStatus ? { gatewayStatus } : {}),
             ...(alreadyPaid ? { disagreement: 'row marked paid, gateway not reachable to confirm' } : {}),
         });
     }
@@ -1404,6 +1414,8 @@ export async function reconcileBookingPayment(booking) {
         }
         return fromRow(false, {
             orderStatus: orderData.status || null,
+            heldAmount: 0,
+            everCaptured: capturedTotal > 0,
             ...(alreadyPaid ? { error: 'gateway shows no captured transaction for a row marked paid' } : {}),
         });
     }
@@ -1419,6 +1431,8 @@ export async function reconcileBookingPayment(booking) {
         return fromRow(false, {
             orderStatus: orderData.status || null,
             capturedAmount: netCaptured,
+            heldAmount: netCaptured,
+            everCaptured: true,
             error: `gateway holds ${netCaptured.toFixed(2)}, less than the ${sessionAmount.toFixed(2)} charged at checkout`,
         });
     }
@@ -1454,12 +1468,17 @@ export async function reconcileBookingPayment(booking) {
             capturedCurrency,
             arcTransactionId,
             orderStatus: orderData.status || 'CAPTURED',
+            heldAmount: netCaptured,
+            everCaptured: true,
             error: `Failed to record payment on booking: ${updateErr.message}`,
         };
     }
 
     console.log('✅ [reconcile] Booking marked paid from gateway:', booking.booking_reference);
-    return { paid: true, capturedAmount, capturedCurrency, arcTransactionId, orderStatus: orderData.status || 'CAPTURED' };
+    return {
+        paid: true, capturedAmount, capturedCurrency, arcTransactionId, orderStatus: orderData.status || 'CAPTURED',
+        heldAmount: netCaptured, everCaptured: true,
+    };
 }
 
 export async function handleReconcileBookingPayment(req, res) {

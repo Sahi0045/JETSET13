@@ -35,12 +35,16 @@ const supabaseFor = (row) => {
       update: vi.fn((payload) => { updates.push(payload); return c; }),
       insert: vi.fn(() => c),
       eq: vi.fn(() => c),
+      is: vi.fn(() => c),
+      neq: vi.fn(() => c),
       or: vi.fn(() => c),
       filter: vi.fn(() => c),
       order: vi.fn(() => c),
       limit: vi.fn(() => c),
       single: vi.fn().mockResolvedValue({ data: row, error: null }),
       maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      // Writes match the row: the cancellation claim is won.
+      then: (resolve) => resolve({ data: [row], error: null }),
     };
     return c;
   };
@@ -75,9 +79,17 @@ const bookingUpdate = () => supabaseDouble.updates.find((u) => u.status === 'can
 beforeEach(() => {
   vi.resetModules();
   cancelFlightOrder.mockReset();
-  cancelFlightOrder.mockResolvedValue({ success: true });
+  // Ticketed and voided the same day: the fee applies and a partial refund is
+  // due, so the refund leg is what these tests exercise. When no fee applies
+  // the reversal goes through reverseArcPaymentForOrder instead.
+  cancelFlightOrder.mockResolvedValue({ success: true, hadTickets: true, voided: true, requiresAirlineRefund: [] });
   if (!axios.put) axios.put = vi.fn();
   axios.put.mockReset();
+  // The gateway holds the full charge.
+  axios.get.mockResolvedValue({
+    status: 200,
+    data: { status: 'CAPTURED', amount: 291, currency: 'USD', transaction: [{ result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount: 291, currency: 'USD' } }] },
+  });
 });
 
 describe('when the gateway refuses the refund', () => {

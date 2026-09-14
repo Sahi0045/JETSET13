@@ -272,3 +272,90 @@ describe('a row marked paid without a recorded capture', () => {
     expect(result.error).toMatch(/no captured transaction/);
   });
 });
+
+/**
+ * A fresh read, for a cancellation.
+ *
+ * A cancel refunds what the gateway holds NOW. A row reconciled last week still
+ * carries the amount captured then, whatever an admin or an earlier reversal
+ * has returned since, so the cancel asks the gateway regardless of the row.
+ */
+describe('a fresh read', () => {
+  const freshly = async (r) => {
+    const { reconcileBookingPayment } = await import('../../backend/routes/payment/checkout.handlers.js');
+    return reconcileBookingPayment(r, { fresh: true });
+  };
+  const reconciledPaid = () => row({
+    payment_status: 'paid',
+    total_amount: 291,
+    booking_details: { order_id: 'FLTTEST1', arc_captured_amount: 291, arc_captured_currency: 'USD', arc_transaction_id: 'txn-1' },
+  });
+
+  it('asks the gateway even when the row recorded a capture, and reports what is held', async () => {
+    axios.get.mockResolvedValue(captured(291));
+
+    const result = await freshly(reconciledPaid());
+
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(result.paid).toBe(true);
+    expect(result.heldAmount).toBe(291);
+    expect(result.everCaptured).toBe(true);
+  });
+
+  it('sees money that went back after the row was reconciled', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        status: 'REFUNDED',
+        transaction: [
+          { result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount: 291 } },
+          { result: 'SUCCESS', transaction: { id: 'ref-1', type: 'REFUND', amount: 291 } },
+        ],
+      },
+    });
+
+    const result = await freshly(reconciledPaid());
+
+    expect(result.paid).toBe(false);
+    expect(result.heldAmount).toBe(0);
+    expect(result.everCaptured).toBe(true);
+  });
+
+  it('reports what is left when part went back', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        status: 'CAPTURED',
+        transaction: [
+          { result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount: 291 } },
+          { result: 'SUCCESS', transaction: { id: 'ref-1', type: 'REFUND', amount: 100 } },
+        ],
+      },
+    });
+
+    const result = await freshly(reconciledPaid());
+
+    expect(result.paid).toBe(false);
+    expect(result.heldAmount).toBe(191);
+  });
+
+  it('asks about a cancelled or refunded row too', async () => {
+    axios.get.mockResolvedValue({ status: 200, data: { status: 'PENDING', transaction: [] } });
+
+    const result = await freshly(row({ status: 'cancelled', payment_status: 'refunded' }));
+
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(result.alreadyReconciled).toBeUndefined();
+    expect(result.heldAmount).toBe(0);
+    expect(result.everCaptured).toBe(false);
+  });
+
+  it('says what the gateway answered when it would not return the order', async () => {
+    axios.get.mockResolvedValue({ status: 404, data: {} });
+
+    const result = await freshly(row());
+
+    expect(result.gatewayUnavailable).toBe(true);
+    expect(result.gatewayStatus).toBe(404);
+  });
+});

@@ -13,6 +13,7 @@ import {
   figureBlock, routeStrip, statusPill, segmentCard, fareBreakdown, actionRow,
   stepList, stayCard, dataGrid, progressSteps, BRAND,
 } from '../emailTemplate.js';
+import { REFUND_STUCK_ACTIONS, REFUND_DONE_ACTIONS, refundOutcome } from '../../../shared/cancellationOutcome.js';
 
 const money = (amount, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(amount) || 0);
@@ -657,17 +658,11 @@ export function generateAdminBookingNotificationTemplate(data) {
  * (MANUAL_PROCESS_REQUIRED: the refund was never even attempted) read exactly
  * like a bank being slow.
  */
-export const REFUND_STUCK_ACTIONS = ['REFUND_FAILED', 'VOID_FAILED', 'VOID_MISSING_TXN_ID', 'MANUAL_PROCESS_REQUIRED'];
-export const REFUND_DONE_ACTIONS = ['PARTIAL_REFUND', 'FULL_REFUND', 'REFUNDED', 'VOID'];
-
-export function refundOutcome({ paymentAction, refundAmount } = {}) {
-  if (REFUND_STUCK_ACTIONS.includes(paymentAction)) return 'stuck';
-  if (paymentAction === 'NO_REFUND_FEE_COVERS') return 'fee_covers';
-  if (REFUND_DONE_ACTIONS.includes(paymentAction)) return 'refunded';
-  // Callers that predate paymentAction: only a positive amount is evidence of a
-  // refund. Zero with no action is unknown, and unknown must not promise.
-  return Number(refundAmount) > 0 ? 'refunded' : 'unknown';
-}
+//
+// The outcome itself is decided in shared/cancellationOutcome.js, the same place
+// the cancel API, My Trips and Manage Booking read it from, so the email cannot
+// describe a cancellation differently from the page the customer just saw.
+export { REFUND_STUCK_ACTIONS, REFUND_DONE_ACTIONS, refundOutcome };
 
 export function generateCancellationTemplate(data) {
   const { customerName, bookingReference, bookingType = 'travel', refundAmount, cancellationFee, currency = 'USD', paymentAction } = data;
@@ -702,6 +697,22 @@ export function generateCancellationTemplate(data) {
       body: `
       ${highlightBox('We could not process your refund automatically. Our team has been notified and will process it and contact you. <strong>Nothing has been returned to your card yet.</strong> If you have not heard from us within 2 business days, call (877) 538-7380 and quote your booking reference.', {})}`,
     },
+    // Refunded nothing automatically, on purpose: what is due depends on the
+    // fare rules or on something the airline and the booking disagree about.
+    // Promises no amount and no date, and does not say money has not moved -
+    // a refund whose answer never came back is reviewed too.
+    review: {
+      preheader: 'refund being reviewed',
+      figure: { label: 'Refund', value: 'Being reviewed by our team', note: statusPill('Under review', 'warning') },
+      body: `
+      ${highlightBox('Our team needs to review the refund for this booking, for example because the fare rules decide what the airline returns. They will email you within 2 business days to confirm what is returned to your card. If you have not heard from us by then, call (877) 538-7380 and quote your booking reference.', {})}`,
+    },
+    nothing_held: {
+      preheader: 'nothing to refund',
+      figure: { label: 'Refund', value: 'Nothing to refund', note: 'no payment is held for this booking' },
+      body: `
+      ${highlightBox('No payment is being held for this booking, so there is nothing to return to your card. If you believe you were charged, call (877) 538-7380 and quote your booking reference.', {})}`,
+    },
     unknown: {
       preheader: 'cancellation confirmed',
       figure: { label: 'Refund', value: 'If a refund is due, our team will process it' },
@@ -729,7 +740,9 @@ export function generateCancellationTemplate(data) {
 /** Internal cancellation alert. */
 export function generateAdminCancellationTemplate(data) {
   const { customerName, customerEmail, bookingReference, bookingType = 'travel', refundAmount, cancellationFee, currency = 'USD', paymentAction } = data;
-  const stuck = refundOutcome({ paymentAction, refundAmount }) === 'stuck';
+  // A refund left for review needs the desk exactly as much as one that failed:
+  // the customer has been told a person will decide.
+  const stuck = ['stuck', 'review'].includes(refundOutcome({ paymentAction, refundAmount }));
 
   return renderBrandedEmail({
     // A stuck refund is the one line the desk must not skim past: the

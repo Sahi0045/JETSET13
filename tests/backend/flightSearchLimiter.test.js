@@ -1,6 +1,9 @@
 import express from 'express';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { flightSearchMax } from '../../backend/middleware/security.js';
+
+const GENERAL_LIMIT = process.env.RATE_LIMIT_MAX;
 
 /**
  * The flight endpoints that reach Amadeus have their own per-IP limit.
@@ -22,6 +25,20 @@ const ENDPOINTS = [
   ['post', '/date-prices'],
   ['get', '/cheapest-dates'],
   ['post', '/calendar-prices'],
+  // Air_FlightInfo. No page calls it today, but it is open and goes to Amadeus.
+  ['get', '/status'],
+];
+
+// On the same router, and none of them reaches Amadeus: the airport lookup reads
+// the bundled index, and the rest are answered by the provider as not entitled.
+// Autocomplete in particular must not spend the search budget as someone types.
+const NOT_AMADEUS = [
+  '/airports/search?keyword=lon',
+  '/analytics/booked?origin=JFK',
+  '/analytics/traveled?origin=JFK',
+  '/analytics/busiest?origin=JFK',
+  '/inspiration?origin=JFK',
+  '/price-analysis?origin=JFK&destination=LHR&departureDate=2030-01-01',
 ];
 
 const makeApp = async (max) => {
@@ -44,6 +61,8 @@ const call = (app, [method, path], ip, prefix = '/api/flights') =>
 
 afterEach(() => {
   delete process.env.RATE_LIMIT_FLIGHT_MAX;
+  if (GENERAL_LIMIT === undefined) delete process.env.RATE_LIMIT_MAX;
+  else process.env.RATE_LIMIT_MAX = GENERAL_LIMIT;
 });
 
 describe('flight search limiter', () => {
@@ -83,6 +102,23 @@ describe('flight search limiter', () => {
 
     const health = await request(app).get('/api/flights/health').set('X-Forwarded-For', '203.0.113.7');
     expect(health.status).toBe(200);
+
+    for (const path of NOT_AMADEUS) {
+      const res = await request(app).get(`/api/flights${path}`).set('X-Forwarded-For', '203.0.113.7');
+      expect(res.status, path).not.toBe(429);
+    }
+    const availability = await request(app).post('/api/flights/availabilities').set('X-Forwarded-For', '203.0.113.7').send({});
+    expect(availability.status).not.toBe(429);
+  });
+
+  // A customer typing "London", then "Frankfurt", in both boxes, many times over.
+  it('never counts airport autocomplete, however fast someone types', async () => {
+    const app = await makeApp(1);
+    for (let i = 0; i < 30; i += 1) {
+      const res = await request(app).get('/api/flights/airports/search?keyword=lon').set('X-Forwarded-For', '203.0.113.7');
+      expect(res.status).not.toBe(429);
+    }
+    expect((await call(app, ['post', '/search'], '203.0.113.7')).status).not.toBe(429);
   });
 
   // A hurried customer's minute, counted from the pages (see security.js):
@@ -91,6 +127,26 @@ describe('flight search limiter', () => {
     const app = await makeApp(undefined);
     const statuses = [];
     for (let i = 0; i < 40; i += 1) {
+      statuses.push((await call(app, ENDPOINTS[i % ENDPOINTS.length], '203.0.113.7')).status);
+    }
+    expect(statuses).not.toContain(429);
+  });
+
+  // On Lightsail `req.ip` is a Vercel edge shared by a whole city's visitors,
+  // and that host raises the general limit for exactly that reason. 120 per
+  // edge would have refused real customers on a busy evening.
+  it('follows a raised general limit, so a shared edge is not treated as one customer', () => {
+    expect(flightSearchMax({})).toBe(120);
+    expect(flightSearchMax({ RATE_LIMIT_MAX: '300' })).toBe(120);
+    expect(flightSearchMax({ RATE_LIMIT_MAX: '2000' })).toBe(2000);
+    expect(flightSearchMax({ RATE_LIMIT_MAX: '2000', RATE_LIMIT_FLIGHT_MAX: '500' })).toBe(500);
+  });
+
+  it('lets one edge carry many customers on such a host', async () => {
+    process.env.RATE_LIMIT_MAX = '2000';
+    const app = await makeApp(undefined);
+    const statuses = [];
+    for (let i = 0; i < 150; i += 1) {
       statuses.push((await call(app, ENDPOINTS[i % ENDPOINTS.length], '203.0.113.7')).status);
     }
     expect(statuses).not.toContain(429);
