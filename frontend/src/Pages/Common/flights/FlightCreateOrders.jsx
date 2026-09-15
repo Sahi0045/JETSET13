@@ -65,6 +65,8 @@ function FlightCreateOrders() {
   const [errorCode, setErrorCode] = useState(null);
   const [bookingReference, setBookingReference] = useState('');
   const [pnr, setPnr] = useState('');
+  // Held for staff: the airline took the booking, then a later step failed.
+  const [heldForReview, setHeldForReview] = useState(false);
   const [pageLoaded, setPageLoaded] = useState(false);
 
   // Ref guard to prevent duplicate order processing (React StrictMode can cause double renders)
@@ -224,6 +226,7 @@ function FlightCreateOrders() {
         setOrderSuccess(true);
         setBookingReference(reference);
         setPnr(pnrValue);
+        setHeldForReview(needsReview);
 
         const orderDetails = {
           reference,
@@ -276,6 +279,10 @@ function FlightCreateOrders() {
           ticketed: result === 'ticketed',
           tickets: Array.isArray(body.tickets) ? body.tickets : [],
           needsReview,
+          // The name the confirmation page and bookingStatus read. Saving only
+          // `needsReview` meant the "our team is finishing your ticket" line
+          // never showed there.
+          needs_review: needsReview ? { reason: null } : null,
           mode: body.mode || null,
           message: body.message || '',
           // Include formatted travelers
@@ -530,7 +537,12 @@ function FlightCreateOrders() {
                         </div>
                         <h2 className="text-xl font-semibold text-gray-800">Reservation Held</h2>
                         <p className="text-gray-600">
-                          Your seats are reserved with the airline and your ticket is being issued. We'll email your e-ticket as soon as it is ready.
+                          {heldForReview
+                            // A later step failed after the airline took the
+                            // booking. "Your ticket is being issued" was not
+                            // true of it.
+                            ? 'Your seats are reserved with the airline, but your ticket could not be issued automatically. Our team is finishing it and will email you when it is done.'
+                            : 'Your seats are reserved with the airline. Your ticket has not been issued yet; we will email it to you once it is.'}
                         </p>
                       </>
                     )}

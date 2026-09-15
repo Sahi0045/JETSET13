@@ -664,6 +664,68 @@ export function generateBookingConfirmationTemplate(data) {
   });
 }
 
+/**
+ * A reservation the airline holds, with a ticket our team has to finish.
+ *
+ * The order route answers 202 "needs review" when the PNR was committed and a
+ * later step - queueing, ticketing, the final save - failed. Those customers
+ * were emailed nothing, while the page told them a confirmation had been sent.
+ * This says what is true: the seats are held, the ticket is not issued yet, a
+ * person is finishing it, and the customer has nothing to do.
+ */
+export function generateReservationHeldTemplate(data = {}) {
+  const {
+    customerName, bookingReference, paymentAmount, currency = 'USD', bookingDetails, travelDate, passengers = 1,
+  } = data;
+  const details = bookingDetails || {};
+  const pnr = details.pnr || details.PNR || '';
+  const legs = Array.isArray(details.itineraries) && details.itineraries.length > 0
+    ? details.itineraries
+    : itinerariesFromOffer(details.flight_offer || details.flightOffer);
+  const route = legs.length > 0
+    ? legs.map((leg, index) => paragraph(`<strong>${legLabel(leg, index, legs.length)}</strong> &nbsp;·&nbsp; ${line([
+      `${leg.origin} → ${leg.destination}`,
+      shortDate(leg.departureDate),
+      leg.segments.map((segment) => segment.flightNumber).filter(Boolean).join(', '),
+    ], ' &nbsp;·&nbsp; ')}`)).join('')
+    : details.origin && details.destination
+      ? paragraph(line([`<strong>${details.origin} → ${details.destination}</strong>`, travelDate ? longDate(travelDate) : ''], ' &nbsp;·&nbsp; '))
+      : '';
+  const amount = Number(paymentAmount);
+
+  return renderBrandedEmail({
+    preheader: line(['Your seats are reserved', bookingReference, 'and our team is finishing your ticket'], ' '),
+    headerLabel: 'Reservation Held',
+    emoji: '✈️',
+    heading: 'Reservation Held',
+    subheading: 'Our team is finishing your ticket',
+    contentHtml: `
+      ${paragraph(`Hi <strong>${firstNameOf(customerName)}</strong>, your payment went through and the airline is holding your seats. Your ticket could not be issued automatically, so a member of our team is finishing it.`)}
+      ${route}
+      ${figureBlock([
+        { label: 'Booking reference', value: bookingReference || '—', mono: true, small: true, note: statusPill('Ticket pending', 'warning') },
+        pnr
+          ? { label: 'Airline reference', value: pnr, mono: true, small: true }
+          : { label: 'Travellers', value: String(passengers), small: true },
+      ])}
+      ${stepList('What happens next', [
+        ['We finish your ticket', 'Our team is working on it. You do not need to do anything.'],
+        ['We email your e-ticket', 'As soon as it is issued. Until then this is a reservation, not a ticket, so please do not travel on this email.'],
+        ['If anything stops it', `We will contact you before the airline's ticketing deadline. You can also call ${BRAND.supportPhone} with your booking reference.`],
+      ])}
+      ${Number.isFinite(amount) && amount > 0 ? fareBreakdown([], { total: money(amount, currency), currency, label: 'Total paid' }) : ''}
+      ${actionRow([
+        {
+          text: 'Manage booking',
+          url: bookingReference ? `${BRAND.site}/manage-booking/${encodeURIComponent(bookingReference)}` : `${BRAND.site}/my-trips`,
+        },
+        { text: 'My trips', url: `${BRAND.site}/my-trips` },
+      ])}
+    `,
+    cta: { text: 'View My Trips', url: `${process.env.FRONTEND_URL || BRAND.site}/my-trips` },
+  });
+}
+
 /** Internal booking alert. Revenue first, then who and what. */
 export function generateAdminBookingNotificationTemplate(data) {
   const {

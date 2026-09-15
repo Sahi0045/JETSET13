@@ -1,7 +1,7 @@
 import { Resend } from 'resend';
 import dotenv from 'dotenv';
 import { renderBrandedEmail, detailCard, highlightBox, paragraph, BRAND } from './emailTemplate.js';
-import { isUnticketedFlight } from './email/templates.js';
+import { generateReservationHeldTemplate, isUnticketedFlight } from './email/templates.js';
 import {
   generateCruiseCallbackTemplate,
   generatePackageCallbackTemplate,
@@ -462,7 +462,8 @@ export const sendBookingConfirmationEmail = async (bookingData) => {
     currency,
     travelDate,
     passengers,
-    bookingDetails
+    bookingDetails,
+    heldForReview
   } = bookingData;
 
   if (!customerEmail) {
@@ -475,24 +476,39 @@ export const sendBookingConfirmationEmail = async (bookingData) => {
     // ticketed is a reservation, and the subject line is what everyone reads.
     const unticketed = isUnticketedFlight({ bookingType, bookingDetails });
 
-    const html = generateBookingConfirmationTemplate({
-      customerName: customerName || 'Valued Customer',
-      bookingReference,
-      bookingType,
-      paymentAmount,
-      currency,
-      paymentStatus: 'Paid',
-      travelDate,
-      passengers,
-      bookingDetails
-    });
+    // A reservation held for staff after a later booking step failed gets its
+    // own email. It used to get nothing, while the page said a confirmation
+    // had been sent.
+    const html = heldForReview
+      ? generateReservationHeldTemplate({
+        customerName: customerName || 'Valued Customer',
+        bookingReference,
+        paymentAmount,
+        currency,
+        travelDate,
+        passengers,
+        bookingDetails
+      })
+      : generateBookingConfirmationTemplate({
+        customerName: customerName || 'Valued Customer',
+        bookingReference,
+        bookingType,
+        paymentAmount,
+        currency,
+        paymentStatus: 'Paid',
+        travelDate,
+        passengers,
+        bookingDetails
+      });
 
     const response = await getResend().emails.send({
       from: 'Jetsetters <noreply@jetsetterss.com>',
       to: [customerEmail],
-      subject: unticketed
-        ? `Reservation held - ${bookingReference} | Jetsetters`
-        : `✅ Booking Confirmed - ${bookingReference} | Jetsetters`,
+      subject: heldForReview
+        ? `Reservation held - our team is finishing your ticket - ${bookingReference} | Jetsetters`
+        : unticketed
+          ? `Reservation held - ${bookingReference} | Jetsetters`
+          : `✅ Booking Confirmed - ${bookingReference} | Jetsetters`,
       html,
       text: stripHtml(html)
     });
@@ -531,7 +547,9 @@ export const sendBookingNotificationEmails = async (bookingData) => {
     const adminResult = await getResend().emails.send({
       from: 'Jetsetters <noreply@jetsetterss.com>',
       to: [adminEmail],
-      subject: `🎉 New Booking: ${bookingData.bookingReference} - ${bookingData.customerName}`,
+      subject: bookingData.heldForReview
+        ? `⚠️ Booking held for review: ${bookingData.bookingReference} - ${bookingData.customerName}`
+        : `🎉 New Booking: ${bookingData.bookingReference} - ${bookingData.customerName}`,
       html: adminHtml,
       text: stripHtml(adminHtml)
     });

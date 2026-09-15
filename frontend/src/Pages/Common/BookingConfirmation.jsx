@@ -105,6 +105,9 @@ function BookingConfirmation() {
   // before those flags existed carries only `status`; no ticket has ever been
   // issued through this flow, so "held" is the honest reading for it too.
   // Non-flight bookings keep their original copy.
+  // Held for staff after a later booking step failed. The order page saved this
+  // as `needsReview` and this page read `needs_review`, so it never knew.
+  const heldForReview = Boolean(bookingData.needs_review || bookingData.needsReview);
   const statusUpper = String(bookingData.status || '').toUpperCase();
   const hasTickets = Array.isArray(bookingData.tickets) && bookingData.tickets.length > 0;
   // A flight row still `pending` with no PNR never reached the airline. My
@@ -129,7 +132,8 @@ function BookingConfirmation() {
       title: 'Booking Confirmed! 🎉',
       lead: 'Your flight is booked and your ticket has been issued.',
       badgeText: 'Ticketed',
-      mail: 'A confirmation email with your ticket details has been sent.',
+      // Not "has been sent": this page cannot know that an email went out.
+      mail: 'We email your ticket details to the address you booked with.',
     },
     held: {
       Icon: Clock,
@@ -138,7 +142,11 @@ function BookingConfirmation() {
       title: 'Reservation Held',
       lead: 'Your seats are reserved with the airline. Your ticket is being issued and is not ready yet.',
       badgeText: 'Ticket pending',
-      mail: 'A confirmation email has been sent. Your e-ticket will follow by email once it is issued; until then this reference is your proof of booking.',
+      // A booking held for staff was emailed nothing while this said "A
+      // confirmation email has been sent".
+      mail: heldForReview
+        ? 'Our team is finishing your ticket and will email you as soon as it is issued. Until then, this reference is your proof of booking.'
+        : 'We email your e-ticket to the address you booked with once it is issued. Until then, this reference is your proof of booking.',
     },
     queued: {
       Icon: Clock,

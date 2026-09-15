@@ -750,17 +750,48 @@ const EMAILED_REVIEW_REASONS = new Set(['ticket_numbers_not_retrieved', UNTICKET
  * That answer used to send nothing, so a booking whose first email was skipped
  * for want of an address, or failed, never got one. It is owed only what the
  * success path would have sent for the booking as it is now: nothing once it
- * is cancelled or its money returned, nothing for one flagged for review. The
- * email itself says reservation or confirmation from the row
- * (isUnticketedFlight), exactly as it does on the success path.
+ * is cancelled or its money returned, nothing for one a human is sorting out
+ * for some other reason. The email itself says reservation or confirmation
+ * from the row (isUnticketedFlight), exactly as it does on the success path.
+ *
+ * A booking the order route held for staff after its PNR was committed is owed
+ * an email too - the "held" one, see confirmationEmailKind.
  */
 export function confirmationEmailOwed(booking) {
+  return confirmationEmailKind(booking) !== null;
+}
+
+/**
+ * The review flags the order route's two 202 "needs review" answers write: the
+ * airline holds the seats, and a later step - queueing, ticketing, the final
+ * save - failed. Those answers sent no email at all, while the page said one
+ * had been sent.
+ */
+const HELD_REVIEW_REASON_PREFIXES = ['chain failed after commit at ', 'order route failed after commit'];
+
+/**
+ * Which email a booking still owes its customer.
+ *
+ *  - 'confirmation': what the success path sends (reservation or confirmation);
+ *  - 'held': "your reservation is held, our team is finishing your ticket", for
+ *    a booking the order route held for staff after committing its PNR;
+ *  - null: nothing - no booking yet, cancelled, money returned, already sent, or
+ *    flagged for a reason a person is handling (a cancellation, say).
+ *
+ * Both are sent through the one claim in sendConfirmationOnce, so a booking gets
+ * one of them, once.
+ *
+ * @returns {'confirmation'|'held'|null}
+ */
+export function confirmationEmailKind(booking) {
   const details = booking?.booking_details || {};
-  if (!details.pnr) return false;
-  if (booking.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(booking.payment_status)) return false;
-  if (details.confirmation_email?.state === 'sent') return false;
+  if (!details.pnr) return null;
+  if (booking.status === 'cancelled' || ['refunded', 'partially_refunded'].includes(booking.payment_status)) return null;
+  if (details.confirmation_email?.state === 'sent') return null;
   const review = details.needs_review;
-  return !review || EMAILED_REVIEW_REASONS.has(review.reason);
+  if (!review || EMAILED_REVIEW_REASONS.has(review.reason)) return 'confirmation';
+  const reason = String(review.reason || '');
+  return HELD_REVIEW_REASON_PREFIXES.some((prefix) => reason.startsWith(prefix)) ? 'held' : null;
 }
 
 /**
@@ -869,6 +900,25 @@ export async function sendConfirmationOnce(bookingReference, emailData, { failOp
     return { sent };
   } catch (error) {
     console.error('❌ Confirmation email step failed:', error.message);
+    return { sent: false, reason: 'error' };
+  }
+}
+
+/**
+ * Email the customer of a booking the order route has just held for staff.
+ *
+ * Read back from the row, so the email says what was recorded, and sent through
+ * the confirmation's own claim, so a retry or the queue cannot send a second.
+ * It is the booking's first chance to email, so it fails open like the success
+ * path's first send. Never throws.
+ */
+async function sendHeldForReviewEmail(bookingReference, body) {
+  try {
+    const row = await findExistingBooking(bookingReference);
+    if (confirmationEmailKind(row) !== 'held') return { sent: false, reason: 'not-owed' };
+    return await sendConfirmationOnce(row.booking_reference, confirmationEmailFromRow(row, body), { failOpen: true });
+  } catch (error) {
+    console.error('❌ Held-booking email step failed:', error.message);
     return { sent: false, reason: 'error' };
   }
 }
@@ -1025,6 +1075,9 @@ function confirmationEmailFromRow(booking, body = {}) {
     customerName: name || 'Valued Customer',
     bookingReference: booking.booking_reference,
     bookingType: 'flight',
+    // Held for staff: the email says the ticket is being finished by a person,
+    // not that the booking is confirmed.
+    heldForReview: confirmationEmailKind(booking) === 'held',
     paymentAmount: booking.total_amount || offer?.price?.total || '0',
     currency: details.currency || offer?.price?.currency || 'USD',
     travelDate: details.departure_date_full || firstSegment.departure?.at?.split('T')[0],
@@ -2505,6 +2558,8 @@ router.post('/order', optionalProtect, async (req, res) => {
           ticketed: providerError.ticketed,
           bookingReference: req.body.bookingReference
         });
+        // This answer promises an email; it used to send none.
+        await sendHeldForReviewEmail(req.body.bookingReference, req.body);
         return res.status(202).json({
           success: true,
           data: { id: providerError.pnr, pnr: providerError.pnr, status: 'PENDING_CONFIRMATION' },
@@ -2820,6 +2875,8 @@ router.post('/order', optionalProtect, async (req, res) => {
           reason: `order route failed after commit: ${String(error.message || error).slice(0, 200)}`,
           ticketed: row.booking_details?.gds?.ticketed === true
         });
+        // This answer promises an email; it used to send none.
+        await sendHeldForReviewEmail(ref, req.body);
         return res.status(202).json({
           success: true,
           data: { id: pnr, pnr, status: 'PENDING_CONFIRMATION', bookingReference: ref },
