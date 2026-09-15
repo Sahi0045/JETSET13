@@ -15,12 +15,12 @@ import { reportError } from '../services/monitoring.js';
 import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
 import { getWsConfig } from '../services/amadeusSoap/config.js';
 import { recordCouponUse } from '../services/coupon.service.js';
+import { isFareRefusal } from '../services/flightCheckout.service.js';
 import { crossesBorder } from '../utils/itinerary.js';
 import { CHAIN_CLAIM_TTL_MS } from '../utils/bookingChainClaim.js';
 import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
-import { isFareRefusal } from '../services/flightCheckout.service.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
 
