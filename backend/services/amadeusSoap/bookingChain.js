@@ -246,7 +246,22 @@ export const runBookingChain = async (p) => {
       }),
     });
 
-    // ---- 3. Price the PNR --------------------------------------------------
+    // ---- 3. Form of payment ------------------------------------------------
+    // Before pricing, on the whole PNR. Amadeus prices OB fees - the fees an
+    // airline files for a form of payment in a market - from the FOP already on
+    // the PNR, so an FOP added after the TST can leave those fees out of the
+    // fare. Amadeus (15 Sep 2026) allows it afterwards only where no OB fees
+    // apply and recommends it before pricing, as their reference flow does.
+    // No TST exists yet, so nothing to associate: pnrElementAssociation is
+    // optional (FOP_CreateFormOfPayment_19_2_1A.xsd) and the FP element then
+    // covers every passenger and segment in the PNR.
+    await callStep(ctx, {
+      step: 'fop',
+      operation: 'FOP_CreateFormOfPayment',
+      bodyXml: buildFopBody({ fopCode: config.fopCode }),
+    });
+
+    // ---- 4. Price the PNR --------------------------------------------------
     // The authoritative fare. The search quote and the informative price were
     // both indications against live availability; this prices what is held.
     const priceReply = await callStep(ctx, {
@@ -265,7 +280,7 @@ export const runBookingChain = async (p) => {
       });
     }
 
-    // ---- 3b. Fare-change guard --------------------------------------------
+    // ---- 4b. Fare-change guard --------------------------------------------
     // Compared against the FARE the customer paid for, not against what they
     // were charged: the charged amount includes the admin-configured service
     // fee, which Amadeus knows nothing about. Tolerance is an env var because
@@ -290,7 +305,7 @@ export const runBookingChain = async (p) => {
       }
     }
 
-    // ---- 3c. Payment-coverage guard ---------------------------------------
+    // ---- 4c. Payment-coverage guard ---------------------------------------
     // The fare-drift guard above checks the fare is stable; it does NOT check
     // the customer actually PAID enough to cover it. The ARC charge amount is
     // client-supplied at hosted checkout and never re-validated, so a tampered
@@ -340,7 +355,7 @@ export const runBookingChain = async (p) => {
       }
     }
 
-    // ---- 4. TST ------------------------------------------------------------
+    // ---- 5. TST ------------------------------------------------------------
     const tstReply = await callStep(ctx, {
       step: 'createTst',
       operation: 'Ticket_CreateTSTFromPricing',
@@ -348,16 +363,6 @@ export const runBookingChain = async (p) => {
       bodyXml: buildCreateTstBody(priced.fares.map((f) => f.reference)),
     });
     const tstRefs = readCreateTstReply(tstReply);
-
-    // ---- 5. Form of payment ------------------------------------------------
-    await callStep(ctx, {
-      step: 'fop',
-      operation: 'FOP_CreateFormOfPayment',
-      // Associate the payment with the TSTs it pays for, per Amadeus's own
-      // "form of payment associated to a TST" example. Without it the FP
-      // element is not linked to anything.
-      bodyXml: buildFopBody({ fopCode: config.fopCode, tstRefs }),
-    });
 
     // Last chance to stop without selling anything. The caller confirms this
     // request still holds the booking. A chain slower than its claim's life, or

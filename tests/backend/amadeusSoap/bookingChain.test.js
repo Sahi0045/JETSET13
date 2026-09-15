@@ -128,7 +128,7 @@ describe('refusing before anything is sold', () => {
   // the fare - the order route re-prices it, or stamps checkout's verification.
   it('ages a fare from when it was last priced, not from the search', async () => {
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
     const repriced = offer();
     repriced._ama = { ...repriced._ama, searchedAt: new Date(Date.now() - 60 * 60000).toISOString(), pricedAt: new Date().toISOString() };
 
@@ -206,7 +206,7 @@ describe('failing before the PNR is committed', () => {
   it('aborts when the priced fare drifts beyond tolerance', async () => {
     vi.stubEnv('AMADEUS_WS_PRICE_TOLERANCE', '0');
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceDrifted);
+    queueReplies(sellOk, addOk, fopOk, priceDrifted);
 
     await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76 }))
       .rejects.toMatchObject({ step: 'priceCheck', committed: false, code: 409 });
@@ -215,7 +215,7 @@ describe('failing before the PNR is committed', () => {
   it('accepts drift inside the configured tolerance', async () => {
     vi.stubEnv('AMADEUS_WS_PRICE_TOLERANCE', '60');
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceDrifted, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceDrifted, tstOk,commitOk);
 
     const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76 });
     expect(result.pnr).toBe('ABC123');
@@ -226,7 +226,7 @@ describe('failing before the PNR is committed', () => {
   it('does not compare against a charged total it was never given', async () => {
     vi.stubEnv('AMADEUS_WS_PRICE_TOLERANCE', '0');
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
 
     const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76 });
     expect(result.pnr).toBe('ABC123');
@@ -245,7 +245,7 @@ describe('failing before the PNR is committed', () => {
       + `<fareDataInformation><fareDataSupInformation><fareDataQualifier>712</fareDataQualifier><fareAmount>${amount}</fareAmount><fareCurrency>USD</fareCurrency></fareDataSupInformation></fareDataInformation>`
       + '</fareList>';
     const priceFamily = envelope('Fare_PricePNRWithBookingClassReply', fare(1, [1, 2], '85.85') + fare(2, [3], '80.20'), SESSION);
-    queueReplies(sellOk, addOk, priceFamily, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceFamily, tstOk, commitOk);
 
     const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 251.9 });
     expect(result.pnr).toBe('ABC123');
@@ -257,7 +257,7 @@ describe('failing before the PNR is committed', () => {
   it('books a fare that came in lower than the customer paid for', async () => {
     vi.stubEnv('AMADEUS_WS_PRICE_TOLERANCE', '0');
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
 
     const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 90 });
     expect(result.pnr).toBe('ABC123');
@@ -276,7 +276,7 @@ describe('a chain that no longer holds its booking', () => {
   // payment. The route is asked just before the commit.
   it('stops before committing when the claim was taken over', async () => {
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
     const beforeCommit = vi.fn().mockResolvedValue('lost');
 
     await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76, beforeCommit }))
@@ -288,7 +288,7 @@ describe('a chain that no longer holds its booking', () => {
 
   it('stops too when the database cannot say who holds it', async () => {
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
 
     await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76, beforeCommit: async () => 'unavailable' }))
       .rejects.toMatchObject({ step: 'claim', committed: false, claimUnavailable: true });
@@ -296,7 +296,7 @@ describe('a chain that no longer holds its booking', () => {
 
   it('commits as before while the claim is held', async () => {
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
 
     const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76, beforeCommit: async () => 'held' });
     expect(result.pnr).toBe('ABC123');
@@ -309,7 +309,7 @@ describe('the payment-coverage guard', () => {
   it('refuses a token payment with the ratio unset', async () => {
     vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '');
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk);
 
     await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 1 }))
       .rejects.toMatchObject({ step: 'paymentCoverage', committed: false, code: 402 });
@@ -320,7 +320,7 @@ describe('the payment-coverage guard', () => {
   it('lets a 20%-off coupon through at the default', async () => {
     vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '');
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
 
     const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 62.32 });
     expect(result.pnr).toBe('ABC123');
@@ -331,7 +331,7 @@ describe('the payment-coverage guard', () => {
   it('refuses when there is no payment on record at all', async () => {
     vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '');
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk);
 
     await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76, bookingReference: 'MADE-UP' }))
       .rejects.toMatchObject({ step: 'paymentCoverage', committed: false, code: 402 });
@@ -340,7 +340,7 @@ describe('the payment-coverage guard', () => {
   it('aborts before ticketing when the captured payment is below the fare floor', async () => {
     vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '0.5'); // floor = 76 * 0.5 = 38.00
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk);
 
     await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 1 }))
       .rejects.toMatchObject({ step: 'paymentCoverage', committed: false, code: 402 });
@@ -349,7 +349,7 @@ describe('the payment-coverage guard', () => {
   it('proceeds when the captured payment clears the floor', async () => {
     vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '0.5');
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
 
     const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 76 });
     expect(result.pnr).toBe('ABC123');
@@ -360,7 +360,7 @@ describe('the payment-coverage guard', () => {
   it('holds the payment to the verified charge, whatever the coupon took off', async () => {
     vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '');
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
 
     const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 40, verifiedChargeTotal: 40 });
     expect(result.pnr).toBe('ABC123');
@@ -369,7 +369,7 @@ describe('the payment-coverage guard', () => {
   it('refuses a payment short of the verified charge, even above the ratio', async () => {
     vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '');
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk);
 
     await expect(runBookingChain({ offer: offer(), travelers, expectedTotal: 76, paidAmount: 77.5, verifiedChargeTotal: 77.9 }))
       .rejects.toMatchObject({ step: 'paymentCoverage', committed: false, code: 402 });
@@ -379,7 +379,7 @@ describe('the payment-coverage guard', () => {
   it('is disabled only when the ratio is explicitly 0', async () => {
     vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '0');
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
 
     const result = await runBookingChain({ offer: offer(), travelers, expectedTotal: 76 });
     expect(result.pnr).toBe('ABC123');
@@ -409,7 +409,7 @@ describe('waiting for an Amadeus slot', () => {
 describe('committing', () => {
   it('returns the record locator and what was priced', async () => {
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
 
     const result = await runBookingChain({ offer: offer(), travelers, bookingReference: 'ARC1' });
 
@@ -424,7 +424,7 @@ describe('committing', () => {
   // that can be found, a crash before it leaves one only Amadeus knows about.
   it('hands the PNR over before queueing or ticketing is attempted', async () => {
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
 
     const callsAtCommit = { value: null };
     await runBookingChain({
@@ -436,13 +436,31 @@ describe('committing', () => {
       },
     });
 
-    // Six calls in: sell, add, price, TST, FOP, commit - and nothing after.
+    // Six calls in: sell, add, FOP, price, TST, commit - and nothing after.
     expect(callsAtCommit.value).toBe(6);
+  });
+
+  // Amadeus prices OB fees from the form of payment already on the PNR, so the
+  // FOP goes on before pricing - on the whole PNR, since no TST exists yet.
+  it('adds the form of payment before pricing, not tied to a TST', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk);
+
+    await runBookingChain({ offer: offer(), travelers });
+
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    const fopAt = sent.findIndex((body) => body.includes('<FOP_CreateFormOfPayment'));
+    const priceAt = sent.findIndex((body) => body.includes('<Fare_PricePNRWithBookingClass'));
+    const tstAt = sent.findIndex((body) => body.includes('<Ticket_CreateTSTFromPricing'));
+    expect(fopAt).toBeGreaterThan(-1);
+    expect(fopAt).toBeLessThan(priceAt);
+    expect(priceAt).toBeLessThan(tstAt);
+    expect(sent[fopAt]).not.toContain('pnrElementAssociation');
   });
 
   it('still returns the booking when persisting the PNR throws', async () => {
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
 
     const result = await runBookingChain({
       offer: offer(),
@@ -456,7 +474,7 @@ describe('committing', () => {
 
   it('treats a commit that returns no locator as a failure', async () => {
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, envelope('PNR_Reply', '<dummy/>', SESSION));
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,envelope('PNR_Reply', '<dummy/>', SESSION));
 
     await expect(runBookingChain({ offer: offer(), travelers }))
       .rejects.toMatchObject({ step: 'commit', committed: false });
@@ -468,7 +486,7 @@ describe('after the PNR exists', () => {
   // filing error would be far worse than leaving it for the desk to find.
   it('keeps the booking when queueing fails', async () => {
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk, errorReply('QUEUE UNAVAILABLE'));
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk, errorReply('QUEUE UNAVAILABLE'));
 
     const result = await runBookingChain({ offer: offer(), travelers });
     expect(result.pnr).toBe('ABC123');
@@ -481,7 +499,7 @@ describe('after the PNR exists', () => {
   it('marks a post-commit failure as committed so no refund is issued', async () => {
     vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk, fopOk, errorReply('TICKETING FAILED'));
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk, fopOk, errorReply('TICKETING FAILED'));
 
     await expect(runBookingChain({ offer: offer(), travelers }))
       .rejects.toMatchObject({ step: 'issueTicket', committed: true, pnr: 'ABC123' });
@@ -496,7 +514,7 @@ describe('after the PNR exists', () => {
     vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_RETRIES', '3')
     const { runBookingChain } = await loadChain()
     // after commit: queue, issue, retrieve#1 (no number yet), retrieve#2 (number present)
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk, fopOk, issueOk, retrieveNoTicket, retrieveWithTicket)
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk, fopOk, issueOk, retrieveNoTicket, retrieveWithTicket)
 
     const result = await runBookingChain({ offer: offer(), travelers })
     expect(result.ticketed).toBe(true)
@@ -512,7 +530,7 @@ describe('after the PNR exists', () => {
     vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_DELAY_MS', '0')
     vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_RETRIES', '2') // 3 attempts total
     const { runBookingChain } = await loadChain()
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk, fopOk, issueOk, retrieveNoTicket, retrieveNoTicket, retrieveNoTicket)
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk, fopOk, issueOk, retrieveNoTicket, retrieveNoTicket, retrieveNoTicket)
 
     const result = await runBookingChain({ offer: offer(), travelers })
     expect(result.ticketed).toBe(true)
@@ -534,7 +552,7 @@ describe('session hygiene', () => {
 
   it('opens exactly one session for the whole chain', async () => {
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, priceOk, tstOk, fopOk, commitOk);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk,commitOk);
 
     await runBookingChain({ offer: offer(), travelers });
 
