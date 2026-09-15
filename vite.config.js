@@ -144,6 +144,22 @@ export default defineConfig(({ mode }) => {
                             id.includes('/frontend/src/utils/apiHelper') ||
                             id.includes('/frontend/src/utils/axiosShim') ||
                             id.includes('/frontend/src/utils/dateUtils') ||
+                            // Imported by the Navbar (logout clears stored bookings) and
+                            // by ArcPayService (signed-in calls). Left unpinned they
+                            // landed in booking-flights, so common-shell imported
+                            // booking-flights while booking-flights imported the page
+                            // wrapper from common-shell: a cycle, and production threw
+                            // "Cannot access '_t' before initialization" on every
+                            // flights page. scripts/check-chunk-cycles.mjs now fails
+                            // the build on any such cycle.
+                            id.includes('/frontend/src/utils/bookingStorage') ||
+                            // Vite's dynamic-import helper. The shell's route prefetch uses
+                            // import(), and unpinned the helper was folded into
+                            // booking-cruise, so common-shell imported booking-cruise while
+                            // booking-cruise imported the shell - the same kind of cycle.
+                            id.includes('vite/preload-helper') ||
+                            id.includes('/frontend/src/Components/Breadcrumbs') ||
+                            id.includes('/frontend/src/utils/authHeaders') ||
                             id.includes('/frontend/src/config/api') ||
                             id.endsWith('/frontend/src/api.js') ||
                             id.includes('/frontend/src/Services/GeoService') ||
