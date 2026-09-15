@@ -95,14 +95,23 @@ const expectWentAhead = (res) => {
   expect(cancelFlightOrder).toHaveBeenCalledWith('ABC123');
 };
 
-const expectRefused = (res, code) => {
-  expect(res.statusCode).toBe(403);
+const expectRefused = (res, code, status = 403) => {
+  expect(res.statusCode).toBe(status);
   expect(res.body.success).toBe(false);
   if (code) expect(res.body.code).toBe(code);
   // Nothing moved: no seat released, no money, no write.
   expect(cancelFlightOrder).not.toHaveBeenCalled();
   expect(axios.put).not.toHaveBeenCalled();
   expect(supabaseDouble.updates).toEqual([]);
+};
+
+// A signed-out caller who may not cancel gets one answer, whatever the reason:
+// no such booking, a guest booking with another email, or a booking that
+// belongs to an account. Three different answers told a stranger, from a
+// reference alone, whether a booking existed and whether it was a guest's.
+const expectHidden = (res) => {
+  expectRefused(res, 'BOOKING_NOT_FOUND', 404);
+  expect(res.body.error).toMatch(/reference and email/i);
 };
 
 beforeEach(() => {
@@ -132,18 +141,30 @@ describe('a booking made as a guest', () => {
   // A traveller's address opens the booking in Manage Booking. It is whatever
   // the booker typed for them, and a cancel releases every seat and refunds
   // the booker's card, so it does not cancel.
-  it("is refused with a traveller's email, and says which email it needs", async () => {
-    const res = await cancel(guestBooking(), { email: 'ann.traveller@example.com' });
-    expectRefused(res, 'NOT_AUTHORIZED');
-    expect(res.body.error).toMatch(/email address it was booked with/i);
+  it("is refused with a traveller's email, the same way as a booking that does not exist", async () => {
+    expectHidden(await cancel(guestBooking(), { email: 'ann.traveller@example.com' }));
   });
 
   it('is refused with another email', async () => {
-    expectRefused(await cancel(guestBooking(), { email: 'someone.else@example.com' }), 'NOT_AUTHORIZED');
+    expectHidden(await cancel(guestBooking(), { email: 'someone.else@example.com' }));
   });
 
   it('is refused with no email', async () => {
-    expectRefused(await cancel(guestBooking()));
+    expectHidden(await cancel(guestBooking()));
+  });
+
+  it('answers a wrong email exactly as it answers a reference that does not exist', async () => {
+    const wrongEmail = await cancel(guestBooking(), { email: 'someone.else@example.com' });
+    const noBooking = await cancel(null, { email: 'someone.else@example.com' });
+    expect(noBooking.statusCode).toBe(wrongEmail.statusCode);
+    expect(noBooking.body).toEqual(wrongEmail.body);
+  });
+
+  // A signed-in account is told why: its own session proves who is asking.
+  it('tells a signed-in account which email it needs', async () => {
+    const res = await cancel(guestBooking(), { user: { id: STRANGER }, email: 'ann.traveller@example.com' });
+    expectRefused(res, 'NOT_AUTHORIZED');
+    expect(res.body.error).toMatch(/email address it was booked with/i);
   });
 });
 
@@ -161,7 +182,7 @@ describe('a booking that belongs to an account', () => {
   // open the booking, but cancelling someone's trip takes their account.
   it('asks a signed-out visitor to log in, even with the right email', async () => {
     const res = await cancel(ownedBooking(), { email: 'checkout@example.com' });
-    expectRefused(res, 'LOGIN_REQUIRED');
+    expectHidden(res);
     expect(res.body.error).toMatch(/log in/i);
   });
 
@@ -170,7 +191,7 @@ describe('a booking that belongs to an account', () => {
   });
 
   it('takes the owner from the session, never from the request body', async () => {
-    expectRefused(await cancel(ownedBooking(), { body: { userId: OWNER, user_id: OWNER } }), 'LOGIN_REQUIRED');
+    expectHidden(await cancel(ownedBooking(), { body: { userId: OWNER, user_id: OWNER } }));
   });
 });
 
@@ -187,13 +208,13 @@ describe('staff', () => {
 
   it('an agent is not staff for cancelling', async () => {
     callerFromToken = { id: STRANGER, role: 'agent' };
-    expectRefused(await cancel(ownedBooking()));
+    expectHidden(await cancel(ownedBooking()));
   });
 });
 
 it('tells a stranger nothing about the booking, not even that it is already cancelled', async () => {
   const res = await cancel(ownedBooking({ status: 'cancelled' }));
-  expect(res.statusCode).toBe(403);
+  expect(res.statusCode).toBe(404);
   expect(JSON.stringify(res.body)).not.toMatch(/already cancelled/i);
 });
 

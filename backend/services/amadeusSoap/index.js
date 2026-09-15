@@ -578,6 +578,9 @@ const createFlightOrder = async (orderData, options = {}) => {
     // The total checkout verified and charged for this fare, when there is one:
     // the payment floor is then exactly that, not a ratio of the fare.
     verifiedChargeTotal: options.verifiedChargeTotal,
+    // Asked just before the PNR is committed: does this request still hold the
+    // booking? See holdChainClaim in the order route.
+    beforeCommit: options.beforeCommit,
     onCommitted: options.onCommitted,
   });
 

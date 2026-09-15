@@ -103,7 +103,7 @@ const seedRow = async (row) => {
   const supabase = (await import('../../../backend/config/supabase.js')).default;
   supabase.from.mockImplementation(() => {
     const chain = {};
-    for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+    for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'ilike', 'order', 'limit']) {
       chain[m] = vi.fn(() => chain);
     }
     chain.single = vi.fn().mockResolvedValue({ data: row, error: null });
@@ -439,7 +439,7 @@ describe('concurrent booking attempts', () => {
     const supabase = (await import('../../../backend/config/supabase.js')).default;
     supabase.from.mockImplementation(() => {
       const chain = {};
-      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'ilike', 'order', 'limit']) {
         chain[m] = vi.fn(() => chain);
       }
       chain.single = vi.fn().mockResolvedValue({ data: inProgressRow(new Date().toISOString()), error: null });
@@ -462,7 +462,7 @@ describe('concurrent booking attempts', () => {
     const supabase = (await import('../../../backend/config/supabase.js')).default;
     supabase.from.mockImplementation(() => {
       const chain = {};
-      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'ilike', 'order', 'limit']) {
         chain[m] = vi.fn(() => chain);
       }
       chain.single = vi.fn().mockResolvedValue({ data: inProgressRow(new Date().toISOString()), error: null });
@@ -484,7 +484,7 @@ describe('concurrent booking attempts', () => {
     const stale = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     supabase.from.mockImplementation(() => {
       const chain = {};
-      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'ilike', 'order', 'limit']) {
         chain[m] = vi.fn(() => chain);
       }
       chain.single = vi.fn().mockResolvedValue({ data: inProgressRow(stale), error: null });
@@ -508,7 +508,7 @@ describe('concurrent booking attempts', () => {
     const supabase = (await import('../../../backend/config/supabase.js')).default;
     supabase.from.mockImplementation(() => {
       const chain = {};
-      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'ilike', 'order', 'limit']) {
         chain[m] = vi.fn(() => chain);
       }
       chain.single = vi.fn().mockResolvedValue({ data: paidRow(), error: null });
@@ -549,7 +549,7 @@ describe('concurrent booking attempts', () => {
     const supabase = (await import('../../../backend/config/supabase.js')).default;
     supabase.from.mockImplementation(() => {
       const chain = {};
-      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'ilike', 'order', 'limit']) {
         chain[m] = vi.fn(() => chain);
       }
       chain.single = vi.fn().mockResolvedValue({ data: chainStateRow(gdsChain), error: null });
@@ -616,7 +616,7 @@ describe('a booking that already has a PNR', () => {
     const supabase = (await import('../../../backend/config/supabase.js')).default;
     supabase.from.mockImplementation(() => {
       const chain = {};
-      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'ilike', 'order', 'limit']) {
         chain[m] = vi.fn(() => chain);
       }
       chain.single = vi.fn().mockResolvedValue({ data: bookedRow, error: null });
@@ -681,7 +681,7 @@ describe('a booking that already has a PNR', () => {
 describe('the payment gate', () => {
   const chainWith = (row) => {
     const chain = {};
-    for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+    for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'ilike', 'order', 'limit']) {
       chain[m] = vi.fn(() => chain);
     }
     chain.single = vi.fn().mockResolvedValue({ data: row, error: null });
@@ -1061,7 +1061,7 @@ describe('the fare the customer paid for', () => {
     const supabase = (await import('../../../backend/config/supabase.js')).default;
     supabase.from.mockImplementation(() => {
       const chain = {};
-      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+      for (const m of ['select', 'update', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'ilike', 'order', 'limit']) {
         chain[m] = vi.fn(() => chain);
       }
       chain.single = vi.fn().mockResolvedValue({ data: row, error: null });
@@ -1161,7 +1161,7 @@ describe('the fare the customer paid for', () => {
     const supabase = (await import('../../../backend/config/supabase.js')).default;
     supabase.from.mockImplementation(() => {
       const chain = {};
-      for (const m of ['select', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'order', 'limit']) {
+      for (const m of ['select', 'insert', 'delete', 'upsert', 'eq', 'is', 'or', 'neq', 'ilike', 'order', 'limit']) {
         chain[m] = vi.fn(() => chain);
       }
       chain.update = vi.fn((payload) => { updates.push(payload); return chain; });
@@ -1179,6 +1179,37 @@ describe('the fare the customer paid for', () => {
     const committed = updates.find((u) => u.booking_details?.gds?.committed_at);
     expect(committed.booking_details).toMatchObject({ pnr: 'ABC123', gds: { ticketed: false } });
     expect(selectUnannounced([{ status: 'pending', payment_status: 'paid', booking_details: committed.booking_details }])).toHaveLength(1);
+  });
+
+  // The chain stopped before its commit: this request no longer holds the
+  // booking. Nothing was sold and someone else may be booking it.
+  it('neither refunds nor books when the chain lost its claim before commit', async () => {
+    provider({
+      pricedTotal: '291.00',
+      order: async () => { throw Object.assign(new Error('claim lost'), { step: 'claim', committed: false, claimLost: true }); },
+    });
+    const app = await claimable(paidRow());
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('BOOKING_IN_PROGRESS');
+    expect(res.body.refundAction).toBeUndefined();
+    expect(res.body.bookingFailed).toBeUndefined();
+  });
+
+  it('queues the booking when the claim could not be confirmed before commit', async () => {
+    provider({
+      pricedTotal: '291.00',
+      order: async () => { throw Object.assign(new Error('claim unknown'), { step: 'claim', committed: false, claimUnavailable: true }); },
+    });
+    const app = await claimable(paidRow());
+
+    const res = await request(app).post('/api/flights/order').send(orderBody);
+
+    expect(res.status).toBe(202);
+    expect(res.body.queued).toBe(true);
+    expect(res.body.refundAction).toBeUndefined();
   });
 
   it('counts nothing when the booking is refused', async () => {

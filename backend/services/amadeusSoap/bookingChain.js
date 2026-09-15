@@ -136,7 +136,7 @@ const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, tickete
  */
 export const runBookingChain = async (p) => {
   const config = getWsConfig();
-  const { offer, contact = {}, bookingReference, expectedTotal, paidAmount, verifiedChargeTotal, onCommitted } = p;
+  const { offer, contact = {}, bookingReference, expectedTotal, paidAmount, verifiedChargeTotal, onCommitted, beforeCommit } = p;
 
   const ama = offer?._ama;
   if (!ama?.segments?.length) {
@@ -358,6 +358,28 @@ export const runBookingChain = async (p) => {
       // element is not linked to anything.
       bodyXml: buildFopBody({ fopCode: config.fopCode, tstRefs }),
     });
+
+    // Last chance to stop without selling anything. The caller confirms this
+    // request still holds the booking. A chain slower than its claim's life, or
+    // one whose heartbeat could not reach the database, can have been taken over
+    // by a retry, the queue or a cancel - and committing then sold a second PNR
+    // against one payment. Answers 'held', 'lost' or 'unavailable'.
+    if (beforeCommit) {
+      const hold = await beforeCommit();
+      if (hold !== 'held') {
+        const stopped = new BookingChainError({
+          step: 'claim',
+          error: 'This booking is already being confirmed. Please wait a moment before trying again.',
+          code: 409,
+          technicalError: hold === 'lost'
+            ? 'the booking claim was taken over before commit'
+            : 'the booking claim could not be confirmed before commit',
+        });
+        stopped.claimLost = hold === 'lost';
+        stopped.claimUnavailable = hold !== 'lost';
+        throw stopped;
+      }
+    }
 
     // ---- 6. Commit. Everything changes here. -------------------------------
     const commitReply = await callStep(ctx, {

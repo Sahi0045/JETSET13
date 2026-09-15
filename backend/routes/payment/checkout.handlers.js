@@ -905,7 +905,7 @@ export async function handleGetPendingBooking(req, res) {
         });
     } catch (error) {
         console.error('Get pending booking error:', error);
-        return res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({ success: false, error: 'Could not load this booking. Please try again.' });
     }
 }
 
@@ -945,8 +945,7 @@ export async function handleSessionCreate(req, res) {
         console.error('❌ Session create error:', error);
         return res.status(500).json({
             success: false,
-            error: 'Failed to create session',
-            details: error.response?.data?.error?.explanation || error.message
+            error: 'Failed to create session'
         });
     }
 }
@@ -1317,11 +1316,12 @@ export async function handleGetPaymentDetails(req, res) {
  * the row's `total_amount`, which is what the client asked to be charged before
  * anyone paid. It is persisted as `arc_captured_amount` so later callers need
  * no gateway round trip. A row reconciled before that field existed is paid
- * but has no amount on record; one RETRIEVE_ORDER fills it in, and if the
- * gateway cannot be reached the session amount stands in for it - that row
- * was already verified against ARC once, so the session amount is what was
- * captured. Refusing a paid customer over a missing number would be the
- * mirror image of the bug this closes.
+ * but has no amount on record; one RETRIEVE_ORDER fills it in. If the gateway
+ * cannot be reached, that row answers `paid: false` with `gatewayUnavailable`,
+ * like any other: a row's own word is not a capture, and the caller can retry.
+ * (This used to promise that the session amount would stand in for the
+ * missing figure. Nothing ever implemented that, and not trusting the row is
+ * the safe direction.)
  *
  * Idempotent: a refunded or cancelled row answers `paid: false` without a
  * gateway call, because that money is no longer available for a booking.
@@ -1517,7 +1517,8 @@ export async function handleReconcileBookingPayment(req, res) {
                 : res.json({ success: true, paid: false, orderStatus: result.orderStatus });
         }
         if (result.error) {
-            return res.status(500).json({ success: false, error: 'Failed to record payment on booking', details: result.error });
+            console.error('❌ [reconcile] could not record the payment:', result.error);
+            return res.status(500).json({ success: false, error: 'Failed to record payment on booking' });
         }
         return res.json({
             success: true,
@@ -1527,6 +1528,6 @@ export async function handleReconcileBookingPayment(req, res) {
         });
     } catch (error) {
         console.error('❌ [reconcile] error:', error);
-        return res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({ success: false, error: 'Could not confirm this payment. Please try again.' });
     }
 }

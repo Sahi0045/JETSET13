@@ -130,8 +130,7 @@ router.all('/', optionalProtect, guestCancelLimiter, async (req, res) => {
         console.error('❌ Action handler error:', error);
         return res.status(500).json({
             success: false,
-            error: 'Internal server error',
-            details: error.message
+            error: 'Internal server error'
         });
     }
 });

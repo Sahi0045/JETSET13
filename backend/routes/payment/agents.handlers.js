@@ -149,7 +149,7 @@ export async function handleAgentLogin(req, res) {
         });
     } catch (error) {
         console.error('❌ Agent login error:', error);
-        return res.status(500).json({ success: false, error: 'Login failed', details: error.message });
+        return res.status(500).json({ success: false, error: 'Login failed' });
     }
 }
 
