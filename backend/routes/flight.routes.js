@@ -8,7 +8,7 @@ import { validate } from '../middleware/validate.js';
 import { z } from 'zod';
 import { protect, admin, optionalProtect } from '../middleware/auth.middleware.js';
 import { resolveBookingUserId } from '../utils/bookingOwner.js';
-import { handleCancelBookingAction, reverseArcPaymentForOrder } from './payment/operations.handlers.js';
+import { handleCancelBookingAction, reverseArcPaymentForOrder, settleManualFlightRefund } from './payment/operations.handlers.js';
 import { emailMatchesBooking, isBookingOwner } from '../utils/bookingAccess.js';
 import { reconcileBookingPayment } from './payment/checkout.handlers.js';
 import { reportError } from '../services/monitoring.js';
@@ -4009,6 +4009,30 @@ router.post('/admin-bookings/:id/cancel', protect, admin, async (req, res) => {
   } catch (error) {
     console.error('❌ Admin booking cancel error:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Finish the refund of a cancelled flight by hand - after a refund that failed
+// or was held for review - and record what ARC Pay shows. `mode: 'sync'` reads
+// a refund made in the ARC portal; `mode: 'refund'` makes one. See
+// settleManualFlightRefund.
+router.post('/admin-bookings/:id/refund', protect, admin, async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+    const { data: booking } = await supabase.from('bookings').select('*').eq('id', req.params.id).single();
+    const { mode, amount, reason } = req.body || {};
+    const { status, body } = await settleManualFlightRefund(booking || null, {
+      mode: mode === 'refund' ? 'refund' : 'sync',
+      amount,
+      reason: reason || 'Admin refund',
+      adminId: req.user?.id || null,
+    });
+    return res.status(status).json(body);
+  } catch (error) {
+    console.error('❌ Admin manual refund error:', error);
+    return res.status(500).json({ success: false, error: 'Could not finish the refund' });
   }
 });
 

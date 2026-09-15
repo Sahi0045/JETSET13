@@ -5,6 +5,7 @@ import { downloadCSV } from '../../utils/csv';
 import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
+import { needsManualRefund } from '../../utils/bookingStatus';
 
 const BookingsList = () => {
     const [searchParams] = useSearchParams();
@@ -35,13 +36,19 @@ const BookingsList = () => {
     const [voidModal, setVoidModal] = useState(null);
     const [voidReason, setVoidReason] = useState('');
     const [voidProcessing, setVoidProcessing] = useState(false);
+    // Finish a cancelled flight's refund by hand (failed, or under review)
+    const [refundModal, setRefundModal] = useState(null);
+    const [refundAmount, setRefundAmount] = useState('');
+    const [refundProcessing, setRefundProcessing] = useState(false);
 
     // Success/Error messages
     const [actionMessage, setActionMessage] = useState(null);
     // Refund result after cancel
     const [cancelResult, setCancelResult] = useState(null);
     // Dynamic cancellation fee from price settings
-    const [cancellationFeeConfig, setCancellationFeeConfig] = useState(50.00);
+    // Unknown until read. It defaulted to 50, and a configured 0 was ignored as
+    // falsy, so the pop-up quoted a $50 fee the cancel would not charge.
+    const [cancellationFeeConfig, setCancellationFeeConfig] = useState(null);
 
     // Fetch cancellation fee from price settings
     useEffect(() => {
@@ -53,7 +60,7 @@ const BookingsList = () => {
                     credentials: 'include'
                 });
                 const data = await response.json();
-                if (data.success && data.data?.cancellation_fee) {
+                if (data.success && data.data?.cancellation_fee != null) {
                     setCancellationFeeConfig(data.data.cancellation_fee);
                 }
             } catch (e) {
@@ -240,6 +247,41 @@ const BookingsList = () => {
             setVoidProcessing(false);
             setVoidModal(null);
             setVoidReason('');
+            setTimeout(() => setActionMessage(null), 10000);
+        }
+    };
+
+    // Finish the refund of a cancelled flight whose automatic refund failed or is
+    // under review. "sync" records a refund already made in the ARC portal;
+    // "refund" makes one. The server records what ARC Pay shows, never what is
+    // typed here.
+    const handleManualRefund = async (mode) => {
+        if (!refundModal) return;
+        setRefundProcessing(true);
+        try {
+            const response = await adminFetch(getApiUrl(`flights/admin-bookings/${refundModal.id}/refund`), {
+                method: 'POST',
+                body: JSON.stringify(mode === 'refund'
+                    ? { mode, amount: Number(refundAmount), reason: 'Admin refund after a cancellation' }
+                    : { mode })
+            });
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result.success) {
+                setActionMessage({ type: 'success', text: `${refundModal.bookingReference}: ${result.message}` });
+                setRefundModal(null);
+                setRefundAmount('');
+                fetchBookings();
+            } else {
+                setActionMessage({ type: 'error', text: result.error || 'Could not finish the refund.' });
+            }
+        } catch (error) {
+            if (error?.sessionExpired) {
+                handleAdminError(error);
+            } else {
+                setActionMessage({ type: 'error', text: 'Could not finish the refund.' });
+            }
+        } finally {
+            setRefundProcessing(false);
             setTimeout(() => setActionMessage(null), 10000);
         }
     };
@@ -584,6 +626,13 @@ const BookingsList = () => {
                                                             style={{ ...actionBtnStyle('#7c3aed'), textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                                                         >📄</a>
                                                     )}
+                                                    {!booking.isPackage && needsManualRefund(booking) && (
+                                                        <button
+                                                            onClick={() => { setRefundModal(booking); setRefundAmount(''); }}
+                                                            title="Finish refund (failed or under review)"
+                                                            style={actionBtnStyle('#059669')}
+                                                        >💵</button>
+                                                    )}
                                                     {!booking.isPackage && booking.status !== 'cancelled' && (
                                                         <>
                                                             <button
@@ -726,6 +775,64 @@ const BookingsList = () => {
                 )}
             </div>
 
+            {/* Finish Refund Modal */}
+            {refundModal && (
+                <div style={modalOverlayStyle}>
+                    <div style={{ ...modalStyle, maxWidth: '500px' }}>
+                        <h3 style={{ margin: '0 0 4px', fontSize: '18px', color: '#1e293b' }}>
+                            💵 Finish Refund
+                        </h3>
+                        <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 16px' }}>
+                            {refundModal.bookingReference} was cancelled, but its refund {refundModal.bookingDetails?.cancellation?.paymentAction === 'REFUND_UNDER_REVIEW' ? 'is under review' : 'did not go through'}.
+                            The booking is updated from what ARC Pay shows, so the customer sees the real refund.
+                        </p>
+                        <div style={{
+                            backgroundColor: '#f8fafc', borderRadius: '8px', padding: '12px 16px',
+                            marginBottom: '16px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#334155'
+                        }}>
+                            <div><strong>Already refunded in the ARC portal?</strong> Use Sync from ARC: nothing is moved, and the booking records the refund ARC shows.</div>
+                            <div style={{ marginTop: '8px' }}><strong>Not refunded yet?</strong> Enter the amount and choose Refund now. It cannot be more than ARC still holds (paid {formatCurrency(refundModal.totalAmount)}).</div>
+                        </div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                            Amount to refund (USD)
+                        </label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={refundAmount}
+                            onChange={(e) => setRefundAmount(e.target.value)}
+                            placeholder="e.g. 241.00"
+                            style={{
+                                width: '100%', padding: '10px', borderRadius: '8px',
+                                border: '1px solid #e2e8f0', fontSize: '13px',
+                                marginBottom: '16px', boxSizing: 'border-box'
+                            }}
+                        />
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                            <button
+                                onClick={() => { setRefundModal(null); setRefundAmount(''); }}
+                                disabled={refundProcessing}
+                                style={{ padding: '10px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', color: '#475569', cursor: 'pointer' }}
+                            >Close</button>
+                            <button
+                                onClick={() => handleManualRefund('sync')}
+                                disabled={refundProcessing}
+                                style={{ padding: '10px 16px', borderRadius: '8px', border: '1px solid #059669', background: '#fff', color: '#059669', fontWeight: 600, cursor: 'pointer' }}
+                            >{refundProcessing ? 'Working…' : 'Sync from ARC'}</button>
+                            <button
+                                onClick={() => handleManualRefund('refund')}
+                                disabled={refundProcessing || !(Number(refundAmount) > 0)}
+                                style={{
+                                    padding: '10px 16px', borderRadius: '8px', border: 'none', background: '#059669', color: '#fff',
+                                    fontWeight: 600, cursor: 'pointer', opacity: (refundProcessing || !(Number(refundAmount) > 0)) ? 0.6 : 1
+                                }}
+                            >Refund now</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Cancel Modal */}
             {cancelModal && (
                 <div style={modalOverlayStyle}>
@@ -767,20 +874,18 @@ const BookingsList = () => {
                         </div>
 
                         {/* Cancellation Fee Warning */}
-                        {cancelModal.paymentStatus === 'paid' && (
+                        {/* What the cancel will refund is decided when it runs, from what ARC Pay
+                            holds and what happened with the airline. This used to promise the same
+                            $50 fee and net refund for every paid booking - wrong for an unticketed
+                            booking (no fee) and for a non-refundable ticket (held for review). */}
+                        {['paid', 'pending', 'completed'].includes(cancelModal.paymentStatus) && (
                             <div style={{
                                 backgroundColor: '#fef3c7', borderRadius: '8px', padding: '10px 14px',
                                 marginBottom: '16px', border: '1px solid #fbbf24', fontSize: '13px', color: '#92400e'
                             }}>
-                                💰 <strong>Refund will be processed automatically.</strong> A cancellation fee of {formatCurrency(cancellationFeeConfig)} will be deducted. Net refund: <strong>{formatCurrency(Math.max(0, cancelModal.totalAmount - cancellationFeeConfig))}</strong>
-                            </div>
-                        )}
-                        {cancelModal.paymentStatus === 'pending' && (
-                            <div style={{
-                                backgroundColor: '#fef3c7', borderRadius: '8px', padding: '10px 14px',
-                                marginBottom: '16px', border: '1px solid #fbbf24', fontSize: '13px', color: '#92400e'
-                            }}>
-                                🔄 <strong>Payment will be voided and cancellation fee charged.</strong> Customer will be charged a {formatCurrency(cancellationFeeConfig)} cancellation fee.
+                                💰 <strong>The refund is worked out when the booking is cancelled.</strong> ARC Pay is asked what it holds, and that is what can go back:
+                                in full if no ticket was issued; less the {cancellationFeeConfig != null ? formatCurrency(cancellationFeeConfig) : 'configured'} cancellation fee if tickets were voided or the fare is refundable.
+                                A non-refundable ticket, or one the airline and the booking disagree about, goes to review instead. The result is shown after cancelling.
                             </div>
                         )}
 

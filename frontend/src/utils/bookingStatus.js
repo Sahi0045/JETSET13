@@ -76,6 +76,17 @@ export function refundStatus(booking) {
   return null;
 }
 
+/**
+ * A cancelled flight whose refund the desk has to finish by hand: it failed, is
+ * under review, or was never made. The admin panel offers "Finish refund" for
+ * exactly these.
+ */
+export function needsManualRefund(booking) {
+  const type = String(booking?.type ?? booking?.travel_type ?? '').toLowerCase();
+  if (type && type !== 'flight') return false;
+  return ['failed', 'review', 'pending'].includes(refundStatus(booking)?.key);
+}
+
 /** Does someone need to act on this booking? */
 export function needsAttention(booking) {
   const status = String(booking?.status || '').toUpperCase();
