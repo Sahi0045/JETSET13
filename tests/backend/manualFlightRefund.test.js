@@ -44,7 +44,8 @@ const cancelledFlight = (over = {}) => ({
 
 const payment = { result: 'SUCCESS', transaction: { id: 'txn-1', type: 'PAYMENT', amount: 291, currency: 'USD' } };
 const refundOf = (amount) => ({ result: 'SUCCESS', transaction: { id: `r-${amount}`, type: 'REFUND', amount, currency: 'USD' } });
-const order = (...refunds) => ({ status: 200, data: { status: 'CAPTURED', amount: 291, currency: 'USD', transaction: [payment, ...refunds] } });
+const voidOf = () => ({ result: 'SUCCESS', transaction: { id: 'v-1', type: 'VOID', targetTransactionId: 'txn-1', currency: 'USD' } });
+const order = (...later) => ({ status: 200, data: { status: 'CAPTURED', amount: 291, currency: 'USD', transaction: [payment, ...later] } });
 
 const settle = async (row, options) => {
   table = fakeBookingsTable([row]);
@@ -74,11 +75,40 @@ describe('settleManualFlightRefund', () => {
     const row = table.row('FLTR1');
     expect(row.payment_status).toBe('partially_refunded');
     expect(row.booking_details.cancellation).toMatchObject({
-      paymentAction: 'PARTIAL_REFUND', refundAmount: 241, cancellationFee: 50,
+      paymentAction: 'PARTIAL_REFUND', refundAmount: 241,
       manualRefund: { mode: 'refund', amount: 241, by: 'admin-1', previousPaymentAction: 'REFUND_FAILED' },
     });
-    expect(row.booking_details.needs_review.resolved_at).toBeTruthy();
+    expect(row.booking_details.cancellation.manual_refund_claim).toBeUndefined();
     expect(body.message).toMatch(/refund of \$241\.00/);
+  });
+
+  // The cancel set no fee, so the 50 ARC still holds is owed, not kept. It was
+  // recorded as "a cancellation fee was kept", and Finish refund disappeared.
+  it('records money still held apart from any fee, and leaves the review open', async () => {
+    axios.get.mockResolvedValueOnce(order()).mockResolvedValueOnce(order(refundOf(241)));
+    axios.put.mockResolvedValue({ status: 200, data: { result: 'SUCCESS' } });
+
+    const { status, body } = await settle(cancelledFlight(), { mode: 'refund', amount: 241 });
+
+    expect(status).toBe(200);
+    const cancellation = table.row('FLTR1').booking_details.cancellation;
+    expect(cancellation).toMatchObject({ cancellationFee: 0, stillHeld: 50 });
+    expect(table.row('FLTR1').booking_details.needs_review.resolved_at).toBeUndefined();
+    expect(body.message).not.toMatch(/fee was kept/);
+  });
+
+  it('records the rest as the fee when that is what the cancel decided to keep', async () => {
+    axios.get.mockResolvedValueOnce(order()).mockResolvedValueOnce(order(refundOf(241)));
+    axios.put.mockResolvedValue({ status: 200, data: { result: 'SUCCESS' } });
+    const feeDecided = cancelledFlight({ booking_details: { cancellation: { paymentAction: 'REFUND_FAILED', refundAmount: 0, cancellationFee: 50 } } });
+
+    const { status } = await settle(feeDecided, { mode: 'refund', amount: 241 });
+
+    expect(status).toBe(200);
+    const row = table.row('FLTR1');
+    expect(row.booking_details.cancellation).toMatchObject({ paymentAction: 'PARTIAL_REFUND', refundAmount: 241, cancellationFee: 50 });
+    expect(row.booking_details.cancellation.stillHeld).toBeUndefined();
+    expect(row.booking_details.needs_review.resolved_at).toBeTruthy();
   });
 
   it('records a refund made in the ARC portal without moving any money', async () => {
@@ -91,6 +121,20 @@ describe('settleManualFlightRefund', () => {
     const row = table.row('FLTR1');
     expect(row.payment_status).toBe('refunded');
     expect(row.booking_details.cancellation).toMatchObject({ paymentAction: 'FULL_REFUND', refundAmount: 291, cancellationFee: 0 });
+    expect(row.booking_details.needs_review.resolved_at).toBeTruthy();
+  });
+
+  // A VOID returns the whole capture and records no REFUND. It read as "ARC Pay
+  // shows no refund", so a voided payment could never be recorded.
+  it('records a payment voided at ARC as returned in full', async () => {
+    axios.get.mockResolvedValue(order(voidOf()));
+
+    const { status } = await settle(cancelledFlight(), { mode: 'sync' });
+
+    expect(status).toBe(200);
+    const row = table.row('FLTR1');
+    expect(row.payment_status).toBe('refunded');
+    expect(row.booking_details.cancellation).toMatchObject({ paymentAction: 'VOID', refundAmount: 291, cancellationFee: 0 });
   });
 
   it('changes nothing when ARC shows no refund yet', async () => {
@@ -100,7 +144,9 @@ describe('settleManualFlightRefund', () => {
 
     expect(status).toBe(409);
     expect(body.code).toBe('NO_REFUND_FOUND');
-    expect(table.row('FLTR1').booking_details.cancellation.paymentAction).toBe('REFUND_FAILED');
+    const cancellation = table.row('FLTR1').booking_details.cancellation;
+    expect(cancellation.paymentAction).toBe('REFUND_FAILED');
+    expect(cancellation.manual_refund_claim).toBeUndefined();
   });
 
   it('refuses a refund larger than ARC still holds', async () => {
@@ -138,5 +184,72 @@ describe('settleManualFlightRefund', () => {
     expect(status).toBe(503);
     expect(body.code).toBe('GATEWAY_UNAVAILABLE');
     expect(axios.put).not.toHaveBeenCalled();
+    expect(table.row('FLTR1').booking_details.cancellation.manual_refund_claim).toBeUndefined();
+  });
+
+  // A 5xx is ARC failing, not ARC saying there is no payment.
+  it('treats an ARC server error as unavailable, not as "no payment"', async () => {
+    axios.get.mockResolvedValue({ status: 502, data: { error: 'bad gateway' } });
+
+    const { status, body } = await settle(cancelledFlight(), { mode: 'sync' });
+
+    expect(status).toBe(503);
+    expect(body.code).toBe('GATEWAY_UNAVAILABLE');
+  });
+});
+
+describe('before any money moves', () => {
+  it('will not refund a booking the airline never confirmed cancelled', async () => {
+    const stillLive = cancelledFlight({ booking_details: { pnr: 'ABC123', cancellation: { paymentAction: 'REFUND_FAILED', refundAmount: 0, amadeusCancelled: false } } });
+
+    const { status, body } = await settle(stillLive, { mode: 'refund', amount: 241 });
+
+    expect(status).toBe(409);
+    expect(body.code).toBe('AIRLINE_NOT_CANCELLED');
+    expect(axios.get).not.toHaveBeenCalled();
+    expect(axios.put).not.toHaveBeenCalled();
+    expect(table.writes).toEqual([]);
+  });
+
+  it('refunds one the airline released', async () => {
+    axios.get.mockResolvedValueOnce(order()).mockResolvedValueOnce(order(refundOf(291)));
+    axios.put.mockResolvedValue({ status: 200, data: { result: 'SUCCESS' } });
+    const released = cancelledFlight({ booking_details: { pnr: 'ABC123', cancellation: { paymentAction: 'REFUND_FAILED', refundAmount: 0, amadeusCancelled: true } } });
+
+    const { status } = await settle(released, { mode: 'refund', amount: 291 });
+
+    expect(status).toBe(200);
+    expect(table.row('FLTR1').payment_status).toBe('refunded');
+  });
+
+  it('lets one desk member refund at a time', async () => {
+    axios.get.mockResolvedValue(order());
+    axios.put.mockResolvedValue({ status: 200, data: { result: 'SUCCESS' } });
+    table = fakeBookingsTable([cancelledFlight()]);
+    const { settleManualFlightRefund } = await import('../../backend/routes/payment/operations.handlers.js');
+    const row = table.row('FLTR1');
+
+    const results = await Promise.all([
+      settleManualFlightRefund(JSON.parse(JSON.stringify(row)), { mode: 'refund', amount: 291, adminId: 'a' }),
+      settleManualFlightRefund(JSON.parse(JSON.stringify(row)), { mode: 'refund', amount: 291, adminId: 'b' }),
+    ]);
+
+    const codes = results.map((r) => r.body.code || r.status).sort();
+    expect(codes).toContain('REFUND_IN_PROGRESS');
+    expect(axios.put).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not held up by a claim a closed tab left behind', async () => {
+    axios.get.mockResolvedValue(order(refundOf(291)));
+    const leftBehind = cancelledFlight({
+      booking_details: {
+        cancellation: { paymentAction: 'REFUND_FAILED', refundAmount: 0, manual_refund_claim: { claimedAt: new Date(Date.now() - 10 * 60_000).toISOString(), by: 'a' } },
+      },
+    });
+
+    const { status } = await settle(leftBehind, { mode: 'sync' });
+
+    expect(status).toBe(200);
+    expect(table.row('FLTR1').booking_details.cancellation.manual_refund_claim).toBeUndefined();
   });
 });

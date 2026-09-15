@@ -68,7 +68,10 @@ export function fakeBookingsTable(rows = [], { tables = {}, fail } = {}) {
     for (const op of ['eq', 'neq', 'is', 'ilike']) {
       chain[op] = (column, value) => { filters.push([op, column, value]); return chain; };
     }
-    for (const ignored of ['select', 'or', 'order', 'limit', 'insert', 'upsert', 'delete', 'gte', 'lte']) {
+    // `.filter(column, 'eq', value)` is the long form of `.eq`, which the cancel
+    // handler uses to find a booking by its order id or PNR.
+    chain.filter = (column, op, value) => { filters.push([op, column, value]); return chain; };
+    for (const ignored of ['select', 'or', 'not', 'order', 'limit', 'insert', 'upsert', 'delete', 'gte', 'lte']) {
       chain[ignored] = () => chain;
     }
     chain.update = (value) => { patch = value; return chain; };

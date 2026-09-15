@@ -6,6 +6,7 @@ import { useRegisterRefresh } from './shell/RefreshContext';
 import './AdminPanel.css';
 import { adminFetch, readAdminResponse } from '../../utils/adminAuth';
 import { needsManualRefund } from '../../utils/bookingStatus';
+import { canVoidPayment, statusOptionsFor } from '../../utils/adminBookingActions';
 
 const BookingsList = () => {
     const [searchParams] = useSearchParams();
@@ -640,7 +641,7 @@ const BookingsList = () => {
                                                                 title="Cancel & Refund"
                                                                 style={actionBtnStyle('#dc2626')}
                                                             >❌</button>
-                                                            {booking.paymentStatus === 'paid' && (
+                                                            {canVoidPayment(booking) && (
                                                                 <button
                                                                     onClick={() => setVoidModal(booking)}
                                                                     title="Void Payment (reverse before settlement)"
@@ -1143,20 +1144,27 @@ const BookingsList = () => {
                         <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 16px' }}>
                             Update status for <strong>{statusModal.bookingReference}</strong>
                         </p>
+                        {/* Only statuses that still describe the booking. Any
+                            status used to be offered and written, so "Cancelled"
+                            on a paid flight with a PNR released and refunded
+                            nothing, and "Confirmed" called a reservation with
+                            no ticket ticketed. */}
                         <select
                             value={newStatus}
                             onChange={(e) => setNewStatus(e.target.value)}
                             style={{
                                 width: '100%', padding: '10px', borderRadius: '8px',
                                 border: '1px solid #e2e8f0', fontSize: '14px',
-                                marginBottom: '16px', cursor: 'pointer'
+                                marginBottom: '8px', cursor: 'pointer'
                             }}
                         >
-                            <option value="confirmed">✅ Confirmed</option>
-                            <option value="pending">⏳ Pending</option>
-                            <option value="completed">🎉 Completed</option>
-                            <option value="cancelled">❌ Cancelled</option>
+                            {statusOptionsFor(statusModal).map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
                         </select>
+                        <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 16px' }}>
+                            Only statuses that still describe this booking are offered. To cancel a booking that holds seats or a payment, use Cancel &amp; Refund.
+                        </p>
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                             <button
                                 onClick={() => { setStatusModal(null); setNewStatus(''); }}

@@ -33,6 +33,7 @@
 import supabase from '../config/supabase.js';
 import { reconcileBookingPayment } from '../routes/payment/checkout.handlers.js';
 import { replay } from './bookingQueue.job.js';
+import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { buildFlightOrderBody, orderDataFromCheckoutRow } from '../../shared/flightOrderBody.js';
 
 const MINUTE = 60_000;
@@ -226,13 +227,18 @@ export function startAbandonedCheckoutJob({ port, intervalMs = DEFAULT_INTERVAL_
   // Production settles the public site's checkouts. Anywhere else it is
   // opt-in: a laptop booting against the shared database should not start
   // booking, or flagging, a week of abandoned test checkouts.
-  if (env.NODE_ENV !== 'production' && env.ABANDONED_CHECKOUT_JOB !== 'true') {
+  //
+  // "Production" is the stack that names itself so (utils/queueEnvironment.js),
+  // not NODE_ENV: `npm start` sets NODE_ENV=production, and a laptop started
+  // that way booked the public site's paid checkouts through its own server.
+  const production = queueEnvironment(env) === 'production';
+  if (!production && env.ABANDONED_CHECKOUT_JOB !== 'true') {
     log('asleep: set ABANDONED_CHECKOUT_JOB=true to run it outside production');
     return { stop: () => {} };
   }
 
   const baseUrl = `http://127.0.0.1:${port}`;
-  const site = siteForEnv(env.NODE_ENV);
+  const site = production ? 'site' : 'local';
   let running = false;
   const tick = async () => {
     if (running) return;

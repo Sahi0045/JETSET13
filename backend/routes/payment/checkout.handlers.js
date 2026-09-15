@@ -1417,6 +1417,11 @@ export async function reconcileBookingPayment(booking, { fresh = false } = {}) {
             heldAmount: 0,
             everCaptured: capturedTotal > 0,
             refundedTotal: Math.round(refundedTotal * 100) / 100,
+            // A successful VOID returns the whole capture and leaves no REFUND
+            // behind, so a caller adding up refunds needs to know it happened
+            // and what it returned (settleManualFlightRefund).
+            voided,
+            capturedTotal: Math.round(capturedTotal * 100) / 100,
             ...(alreadyPaid ? { error: 'gateway shows no captured transaction for a row marked paid' } : {}),
         });
     }

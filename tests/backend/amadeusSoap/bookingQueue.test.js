@@ -129,7 +129,9 @@ describe('POST /order when no Amadeus slot comes free', () => {
     const queued = updates.at(-1).booking_details;
     expect(queued.gds_chain).toMatchObject({ state: 'queued', queueAttempts: 1 });
     expect(queued.queued_order.bookingReference).toBe('FLTQ1');
-    expect(queued.queued_env).toBe(process.env.NODE_ENV);
+    // Labelled with the queue environment, which is production only when named
+    // (utils/queueEnvironment.js), never with NODE_ENV.
+    expect(queued.queued_env).toBe('development');
   });
 
   // Pricing already waited the full booking wait. Waiting again for the chain
@@ -151,7 +153,7 @@ describe('POST /order when no Amadeus slot comes free', () => {
   // other booking that could not be completed.
   it('refunds once the booking has been queued too many times', async () => {
     mockProvider(vi.fn().mockRejectedValue(new SlotTimeoutError(true)));
-    await useRow(checkoutRow({ gds_chain: { state: 'in_progress', startedAt: '2020-01-01T00:00:00Z', queueAttempts: 10 } }));
+    const updates = await useRow(checkoutRow({ gds_chain: { state: 'in_progress', startedAt: '2020-01-01T00:00:00Z', queueAttempts: 10 } }));
     const app = await makeApp();
 
     const res = await request(app).post('/api/flights/order').send(orderBody);
@@ -159,6 +161,9 @@ describe('POST /order when no Amadeus slot comes free', () => {
     expect(res.status).toBe(502);
     expect(res.body.bookingFailed).toBe(true);
     expect(res.body.queued).toBeUndefined();
+    // Released with its count, so a booking sent back again still meets the cap.
+    const release = updates.find((u) => u.booking_details?.gds_chain?.state === 'failed');
+    expect(release.booking_details.gds_chain.queueAttempts).toBe(10);
   });
 
   // A direct POST with no checkout row has nothing to queue against - and, now

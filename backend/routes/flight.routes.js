@@ -16,10 +16,13 @@ import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
 import { getWsConfig } from '../services/amadeusSoap/config.js';
 import { recordCouponUse } from '../services/coupon.service.js';
 import { crossesBorder } from '../utils/itinerary.js';
-import { CHAIN_CLAIM_TTL_MS } from '../utils/bookingChainClaim.js';
+import { CHAIN_CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS } from '../utils/bookingChainClaim.js';
+import { queueEnvironment } from '../utils/queueEnvironment.js';
+import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
+import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
 
@@ -90,7 +93,10 @@ router.use(
 // `req` is the caller's own request, because the handler decides who may cancel
 // from the session. Called with only a body it saw nobody, so every My Trips and
 // admin panel cancel failed there.
-async function invokeOrchestratedCancel(bookingReference, reason, req) {
+//
+// `email` is a guest's proof: the address the booking was made with. Only the
+// Manage Booking cancel passes one; the handler checks it.
+async function invokeOrchestratedCancel(bookingReference, reason, req, { email } = {}) {
   let payload = null;
   let statusCode = 200;
   const fakeRes = {
@@ -99,7 +105,7 @@ async function invokeOrchestratedCancel(bookingReference, reason, req) {
   };
   await handleCancelBookingAction({
     method: 'POST',
-    body: { bookingReference, reason },
+    body: { bookingReference, reason, ...(email ? { email } : {}) },
     user: req?.user,
     headers: req?.headers || {},
     cookies: req?.cookies || {},
@@ -116,7 +122,12 @@ async function invokeOrchestratedCancel(bookingReference, reason, req) {
 // value by convention in both clients, and `reverseArcPaymentForOrder` gives up
 // immediately on a falsy one - so a client that omitted `orderId` produced a
 // charge with no booking and no automatic reversal.
-async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, reason, code }) {
+//
+// `code` is always answered. The calls that passed none - a chain that failed,
+// an unsuccessful provider answer, a MOCK booking - answered with no code at
+// all, and a client that offers "Try again" unless it sees a terminal code
+// offered it for a booking that had just been refunded, or failed to be.
+async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, reason, code = 'BOOKING_FAILED' }) {
   console.warn('🚑 Ticket not booked after payment — reversing charge. order:', orderId, '| reason:', errorMsg);
   const reversal = await reverseArcPaymentForOrder(orderId, {
     amount,
@@ -513,12 +524,9 @@ async function claimBookingChain(bookingReference) {
   return { claimed: true, attempt, claimedAt: startedAt };
 }
 
-// A booking that cannot get an Amadeus slot is retried this many times by the
-// queue worker before it is refunded like any other failure. Each retry only
-// runs when a slot is free, so reaching this means Amadeus is saturated for
-// minutes, not seconds - and the 30-minute offer staleness limit refunds it
-// before then anyway.
-const MAX_QUEUE_ATTEMPTS = 10;
+// A booking that cannot get an Amadeus slot is retried MAX_QUEUE_ATTEMPTS times
+// by the queue worker before it is refunded like any other failure
+// (utils/bookingChainClaim.js, shared with the worker's own retries).
 
 /**
  * Hand a paid booking that never got an Amadeus slot to the durable queue.
@@ -575,7 +583,9 @@ async function queueBookingForRetry(bookingReference, orderBody) {
         // Local dev and production share one database. Only a worker in the
         // environment that queued a booking may run it - a laptop must never
         // replay a customer's booking, and production must never book a test.
-        queued_env: process.env.NODE_ENV || 'development',
+        // Named explicitly, not NODE_ENV, which `npm start` sets to production
+        // on any machine (utils/queueEnvironment.js).
+        queued_env: queueEnvironment(),
         // `startedAt` is what the next claim compares-and-sets on.
         gds_chain: { state: 'queued', startedAt: queuedAt, queuedAt, attempt: details.gds_chain?.attempt, queueAttempts },
       },
@@ -610,11 +620,26 @@ function respondQueued(res, bookingReference) {
 
 /** Release the claim so a later attempt is not blocked by a dead one. */
 async function releaseBookingChain(bookingReference, failedStep) {
+  // The queue count survives the release, as it survives a new claim
+  // (claimBookingChain). Dropping it here reset the count every time a queued
+  // booking was sent back from a step before the chain, so a booking that kept
+  // failing that step was queued again without end instead of reaching
+  // MAX_QUEUE_ATTEMPTS.
+  let queueAttempts = null;
+  if (supabase && bookingReference) {
+    const { data: row } = await supabase
+      .from('bookings')
+      .select('booking_details')
+      .eq('booking_reference', bookingReference)
+      .single();
+    queueAttempts = row?.booking_details?.gds_chain?.queueAttempts ?? null;
+  }
   return patchBookingDetails(bookingReference, {
     gds_chain: {
       state: 'failed',
       failedStep: failedStep || null,
       finishedAt: new Date().toISOString(),
+      ...(queueAttempts ? { queueAttempts } : {}),
     },
   });
 }
@@ -644,6 +669,40 @@ export function provesPayer(req, booking) {
   const expected = details.success_indicator;
   const presented = req?.body?.resultIndicator || req?.body?.transactionId;
   return Boolean(expected) && Boolean(presented) && String(presented) === String(expected);
+}
+
+/**
+ * Is this request the booking queue's own replay (jobs/bookingQueue.job.js)?
+ *
+ * The worker posts to this process on the loopback address and says so in a
+ * header. The header alone is anyone's to send, so it counts only from this
+ * machine: on Lightsail every outside request reaches the app from Caddy, never
+ * from 127.0.0.1.
+ */
+export function isQueueReplay(req) {
+  const header = typeof req?.get === 'function' ? req.get('x-booking-queue-replay') : req?.headers?.['x-booking-queue-replay'];
+  if (header !== '1') return false;
+  return ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(String(req?.socket?.remoteAddress || ''));
+}
+
+/**
+ * What holds this booking right now, read fresh, or null when nothing does.
+ *
+ * A booking waiting in the queue is not held from the queue's own replay: that
+ * replay is the run the queue was waiting for.
+ *
+ * @returns {Promise<'in_progress'|'queued'|'cancelling'|'committed'|'unavailable'|null>}
+ */
+async function bookingHolder(req, bookingReference) {
+  if (!supabase || !bookingReference) return null;
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('booking_details')
+    .eq('booking_reference', bookingReference)
+    .single();
+  if (error && error.code !== 'PGRST116') return 'unavailable';
+  const holder = liveChainState(data?.booking_details?.gds_chain);
+  return holder === 'queued' && isQueueReplay(req) ? null : holder;
 }
 
 /**
@@ -698,7 +757,7 @@ async function refreshChainClaim(bookingReference) {
  *
  * @returns {Promise<'held'|'lost'|'unavailable'>}
  */
-export async function holdChainClaim(bookingReference, attempt) {
+export async function holdChainClaim(bookingReference, attempt, claimedAt) {
   if (!supabase || !bookingReference) return 'held';
   const { data: row, error: readError } = await supabase
     .from('bookings')
@@ -712,6 +771,12 @@ export async function holdChainClaim(bookingReference, attempt) {
   const chain = details.gds_chain;
   if (chain?.state !== 'in_progress' || !chain.startedAt) return 'lost';
   if (attempt != null && Number(chain.attempt) !== Number(attempt)) return 'lost';
+  // The attempt number alone cannot tell two claimants apart. A write that
+  // spread a copy of the row read before this claim - a payment reconcile, say -
+  // put the chain back as it was, the next claimant counted from there, and both
+  // held "attempt 1": both were told they still held the booking. The claim's
+  // own stamp is unique to it, and the heartbeat never moves it.
+  if (claimedAt != null && chain.claimedAt !== claimedAt) return 'lost';
 
   const renewedAt = new Date().toISOString();
   const { data, error } = await supabase
@@ -1128,63 +1193,79 @@ export function buildBookingRow(bookingData, userId) {
 }
 
 // Helper to handle duplicate booking_reference
+const MERGE_TRIES = 3;
+
 export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
   console.log('🔄 Booking reference already exists, merging into the checkout row...');
 
-  const { data: existingBooking } = await supabase
-    .from('bookings')
-    .select('status, user_id, payment_status, total_amount, booking_details')
-    .eq('booking_reference', bookingData.bookingReference)
-    .single();
+  for (let tries = 0; tries < MERGE_TRIES; tries += 1) {
+    const { data: existingBooking } = await supabase
+      .from('bookings')
+      .select('status, user_id, payment_status, total_amount, booking_details')
+      .eq('booking_reference', bookingData.bookingReference)
+      .single();
 
-  // Every save lands here: hosted checkout creates the row before the customer
-  // pays, so the insert always collides. The merge used to overwrite that row
-  // with the template, keeping only four session fields. That set user_id to
-  // null on a queue replay (no session), so the booking vanished from My
-  // Trips; forced a cancelled or refunded row back to a live status; replaced
-  // total_amount with the order request's figure; and dropped the payment
-  // evidence (arc_transaction_id, arc_captured_amount, payment_reconciled_at),
-  // the chain claim, any cancellation record and the customer's email.
-  //
-  // Now what checkout and the gateway established is kept, and what the chain
-  // just learned is laid on top of it.
-  const existingDetails = existingBooking?.booking_details || {};
-  const mergedDetails = {
-    ...existingDetails,
-    ...rowTemplate.booking_details,
-    original_user_id: rowTemplate.booking_details.original_user_id || existingDetails.original_user_id || null,
-  };
+    // Every save lands here: hosted checkout creates the row before the customer
+    // pays, so the insert always collides. The merge used to overwrite that row
+    // with the template, keeping only four session fields. That set user_id to
+    // null on a queue replay (no session), so the booking vanished from My
+    // Trips; forced a cancelled or refunded row back to a live status; replaced
+    // total_amount with the order request's figure; and dropped the payment
+    // evidence (arc_transaction_id, arc_captured_amount, payment_reconciled_at),
+    // the chain claim, any cancellation record and the customer's email.
+    //
+    // Now what checkout and the gateway established is kept, and what the chain
+    // just learned is laid on top of it.
+    const existingDetails = existingBooking?.booking_details || {};
+    const mergedDetails = {
+      ...existingDetails,
+      ...rowTemplate.booking_details,
+      original_user_id: rowTemplate.booking_details.original_user_id || existingDetails.original_user_id || null,
+    };
 
-  const update = {
-    ...rowTemplate,
-    booking_details: mergedDetails,
-    user_id: existingBooking?.user_id || rowTemplate.user_id || null,
-  };
-  // Never resurrect a cancelled booking, or re-mark returned money as paid.
-  if (existingBooking?.status === 'cancelled') update.status = 'cancelled';
-  if (['refunded', 'partially_refunded'].includes(existingBooking?.payment_status)) {
-    update.payment_status = existingBooking.payment_status;
+    const update = {
+      ...rowTemplate,
+      booking_details: mergedDetails,
+      user_id: existingBooking?.user_id || rowTemplate.user_id || null,
+    };
+    // Never resurrect a cancelled booking, or re-mark returned money as paid.
+    if (existingBooking?.status === 'cancelled') update.status = 'cancelled';
+    if (['refunded', 'partially_refunded'].includes(existingBooking?.payment_status)) {
+      update.payment_status = existingBooking.payment_status;
+    }
+    // What checkout asked the gateway to charge, not the order request's figure.
+    if (Number(existingBooking?.total_amount) > 0) update.total_amount = existingBooking.total_amount;
+
+    // Written only onto the row it was merged from. The merge used to be
+    // written whatever had landed since the read, so a cancellation that
+    // finished in between was overwritten: its record gone, and the cancelled
+    // booking back as pending_ticketing. A race this loses is read and merged
+    // again (utils/bookingDetailsGuard.js).
+    let write = supabase
+      .from('bookings')
+      .update(update)
+      .eq('booking_reference', bookingData.bookingReference);
+    if (existingBooking) write = unchangedSince(write, existingBooking);
+    const { data: updatedData, error: updateError } = await write.select().single();
+
+    if (updateError?.code === 'PGRST116' && existingBooking) {
+      console.warn('↻ The booking changed while it was being saved; merging again', { bookingReference: bookingData.bookingReference });
+      continue;
+    }
+    if (updateError) {
+      console.error('❌ Update with merged data failed:', updateError.message);
+      return null;
+    }
+
+    console.log('✅ SUCCESS (merged)! Booking updated with ARC Pay data preserved:');
+    console.log('   Database ID:', updatedData.id);
+    console.log('   Session ID preserved:', mergedDetails.session_id || 'NONE');
+    console.log('   Booking Reference:', updatedData.booking_reference);
+    return updatedData;
   }
-  // What checkout asked the gateway to charge, not the order request's figure.
-  if (Number(existingBooking?.total_amount) > 0) update.total_amount = existingBooking.total_amount;
 
-  const { data: updatedData, error: updateError } = await supabase
-    .from('bookings')
-    .update(update)
-    .eq('booking_reference', bookingData.bookingReference)
-    .select()
-    .single();
-
-  if (updateError) {
-    console.error('❌ Update with merged data failed:', updateError.message);
-    return null;
-  }
-
-  console.log('✅ SUCCESS (merged)! Booking updated with ARC Pay data preserved:');
-  console.log('   Database ID:', updatedData.id);
-  console.log('   Session ID preserved:', mergedDetails.session_id || 'NONE');
-  console.log('   Booking Reference:', updatedData.booking_reference);
-  return updatedData;
+  console.error('❌ Booking not saved: it kept changing while it was being merged', { bookingReference: bookingData.bookingReference });
+  return null;
 }
 
 // Helper function to save booking to database
@@ -1970,6 +2051,30 @@ router.post('/order', optionalProtect, async (req, res) => {
       return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference));
     }
 
+    // A booking whose fulfilment already failed, or that a human is sorting
+    // out, is never sent to the airline again. After a failure whose reversal
+    // also failed, the row keeps its status and is flagged "charge not
+    // reversed" - and a retry of this order (the customer's "Try again")
+    // checked only the flag above, so it booked the trip on a payment a person
+    // was about to refund. The review flags the success path writes itself
+    // (EMAILED_REVIEW_REASONS) describe a booking with a PNR, answered above.
+    // Refused before the gateway is asked, and nothing is refunded here.
+    const failedBefore = existing.booking_details?.fulfillment_failed;
+    const review = existing.booking_details?.needs_review;
+    if (failedBefore || (review && !EMAILED_REVIEW_REASONS.has(review.reason))) {
+      const message = 'This booking could not be completed and our team is reviewing it, so it was not sent to the airline again. '
+        + 'Nothing more has been charged. If you have not heard from us within 2 business days, '
+        + `call (877) 538-7380 with booking reference ${existing.booking_reference}.`;
+      return res.status(409).json({
+        success: false,
+        code: failedBefore ? 'BOOKING_FAILED' : 'BOOKING_NEEDS_REVIEW',
+        needsReview: true,
+        bookingReference: existing.booking_reference,
+        error: message,
+        message,
+      });
+    }
+
     // Was this actually paid for? Ask the gateway, not the row. The row's
     // `total_amount` is what the client asked to be charged, written while the
     // row was still unpaid, and `payment_status` alone can be written by paths
@@ -1990,6 +2095,33 @@ router.post('/order', optionalProtect, async (req, res) => {
         code: 'PAYMENT_NOT_CAPTURED',
         ...(payment.gatewayUnavailable ? { retryable: true } : {}),
         ...(payment.orderStatus ? { orderStatus: payment.orderStatus } : {})
+      });
+    }
+
+    // Every refusal from here to the chain claim reverses the payment, and none
+    // asked whether another request held the booking. A retry that failed one
+    // of them - a lost traveller, booking switched off - refunded a payment
+    // that a running chain went on to commit a PNR against, or that the queue
+    // was about to book, or refunded in full what a cancellation was returning
+    // less its fee. While anything holds the booking, this request neither
+    // refunds nor books; read fresh, because the reconcile above can take a
+    // while and the row read at the top can be old by now.
+    const heldBy = await bookingHolder(req, existing.booking_reference);
+    if (heldBy === 'unavailable') {
+      return res.status(503).json({
+        success: false,
+        error: 'We could not start your booking just now. Your payment is safe - please try again in a minute.',
+        code: 'BOOKING_UNAVAILABLE',
+        retryable: true
+      });
+    }
+    if (heldBy) {
+      return res.status(409).json({
+        success: false,
+        error: heldBy === 'cancelling'
+          ? 'This booking is being cancelled, so it cannot be confirmed.'
+          : 'This booking is already being confirmed. Please wait a moment before trying again.',
+        code: 'BOOKING_IN_PROGRESS'
       });
     }
 
@@ -2415,7 +2547,7 @@ router.post('/order', optionalProtect, async (req, res) => {
         verifiedChargeTotal: Number.isFinite(Number(verifiedCharge.total)) ? Number(verifiedCharge.total) : undefined,
         // Asked just before the PNR is committed, so a chain that lost its
         // claim stops without selling a second PNR - see holdChainClaim.
-        beforeCommit: () => holdChainClaim(req.body.bookingReference, claim.attempt),
+        beforeCommit: () => holdChainClaim(req.body.bookingReference, claim.attempt, claim.claimedAt),
         // What ARC actually captured, read back from the gateway by the
         // reconcile above - NOT from this request body, and NOT from the row's
         // total_amount, which is what the client asked to be charged before
@@ -3004,6 +3136,38 @@ router.delete('/order/:orderId', protect, async (req, res) => {
       success: false,
       error: 'Failed to cancel flight order'
     });
+  }
+});
+
+// Cancel a booking from Manage Booking: a signed-in owner by session, a guest by
+// the email the booking was made with.
+//
+// Manage Booking used to cancel through POST /api/payments?action=cancel-booking.
+// That router runs on Vercel, which Amadeus does not allow-list, so every cancel
+// of a booking with a PNR failed at the airline step, flagged the booking for
+// review and paged Slack - and for a guest it was the only way to cancel. This
+// path is under /api/flights, which vercel.json forwards to Lightsail, and it
+// runs the same orchestrated handler: the same authorization, the same one
+// answer for a signed-out caller who may not cancel, and the same response.
+//
+// optionalProtect, so a signed-in owner is seen; guestBookingLimiter, so wrong
+// emails for one reference are capped exactly as on the payments router.
+router.post('/order/:bookingRef/cancel', optionalProtect, guestBookingLimiter, async (req, res) => {
+  try {
+    const { email, reason } = req.body || {};
+    const { statusCode, payload } = await invokeOrchestratedCancel(
+      req.params.bookingRef,
+      String(reason || '').trim().slice(0, 200) || 'Customer request',
+      req,
+      { email }
+    );
+    if (!payload) {
+      return res.status(500).json({ success: false, error: 'Failed to cancel booking', message: 'Failed to cancel booking' });
+    }
+    return res.status(statusCode).json(payload);
+  } catch (error) {
+    console.error('❌ Manage Booking cancel error:', error.message);
+    return res.status(500).json({ success: false, error: 'Failed to cancel booking', message: 'Failed to cancel booking' });
   }
 });
 
@@ -3758,6 +3922,10 @@ function normalizeBookingRow(b) {
     service,
     bookingDetails: d, passengerDetails: b.passenger_details, isPackage: false,
     arcOrderId: d.arc_order_id || d.order_id || b.booking_reference,
+    // Being booked, waiting in the queue, or being cancelled right now
+    // (utils/bookingChainClaim.js). The panel hides Void for such a booking, as
+    // the server refuses it; worked out here, where the claim's lifetime is known.
+    bookingBusy: Boolean(liveChainState(d.gds_chain)) || Boolean(d.queued_order && !d.pnr),
   };
 }
 
@@ -3933,6 +4101,13 @@ router.get('/admin-customers', protect, admin, async (req, res) => {
 });
 
 // PUT update booking status (admin)
+//
+// This wrote whatever status it was sent. Marking a paid flight with a PNR
+// cancelled released nothing, refunded nothing, and then hid it from Cancel &
+// Refund, from Void and from both alarms; marking an unticketed reservation
+// confirmed told the customer it was ticketed. A status set by hand now has to
+// describe the booking (shared/bookingStatusChange.js), and cancelling anything
+// that holds seats or money goes through Cancel & Refund.
 router.put('/admin-bookings/:id', protect, admin, async (req, res) => {
   try {
     if (!supabase) {
@@ -3940,21 +4115,58 @@ router.put('/admin-bookings/:id', protect, admin, async (req, res) => {
     }
 
     const { id } = req.params;
-    const { status, payment_status, notes } = req.body;
+    const { status, payment_status, notes } = req.body || {};
+
+    // What happened to the money is written by whatever moved it - Cancel &
+    // Refund, Void, Finish refund, the gateway reconcile. A typed `refunded`
+    // silenced the failed-refund alarm with nothing returned.
+    if (payment_status !== undefined) {
+      const text = 'The payment status follows what the payment gateway did, so it cannot be set by hand. '
+        + 'Use Cancel & Refund, Void or Finish refund.';
+      return res.status(400).json({ success: false, code: 'PAYMENT_STATUS_READ_ONLY', error: text, message: text });
+    }
+
+    const { data: booking, error: readError } = await supabase.from('bookings').select('*').eq('id', id).single();
+    if (readError && readError.code !== 'PGRST116') {
+      return res.status(500).json({ success: false, error: 'Could not read the booking' });
+    }
+    if (!booking) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+
+    const changesStatus = Boolean(status) && status !== booking.status;
+    if (changesStatus) {
+      const details = booking.booking_details || {};
+      const problem = statusChangeRefusal({
+        type: booking.travel_type,
+        status: booking.status,
+        paymentStatus: booking.payment_status,
+        details,
+        busy: Boolean(liveChainState(details.gds_chain)) || Boolean(details.queued_order && !details.pnr),
+      }, status);
+      if (problem) {
+        return res.status(problem.httpStatus).json({ success: false, code: problem.code, error: problem.message, message: problem.message });
+      }
+    }
 
     const updateData = {};
-    if (status) updateData.status = status;
-    if (payment_status) updateData.payment_status = payment_status;
+    if (changesStatus) updateData.status = status;
     if (notes) updateData.admin_notes = notes;
     updateData.updated_at = new Date().toISOString();
 
-    const { data, error } = await supabase
+    let update = supabase
       .from('bookings')
       .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
+      .eq('id', id);
+    // Conditioned on the status the decision was made from, so a cancellation
+    // or a booking chain that lands in between is not overwritten.
+    if (changesStatus) update = update.eq('status', booking.status);
+    const { data, error } = await update.select().single();
 
+    if (error?.code === 'PGRST116') {
+      const text = 'This booking changed while you were editing it. Nothing has been changed; refresh it and try again.';
+      return res.status(409).json({ success: false, code: 'BOOKING_CHANGED', error: text, message: text });
+    }
     if (error) {
       return res.status(500).json({ success: false, error: error.message });
     }

@@ -21,6 +21,7 @@
  */
 import supabase from '../config/supabase.js';
 import { postToSlack } from './slackAlert.js';
+import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 const FIRST_RUN_DELAY_MS = 60 * 1000;      // let the app finish booting first
@@ -52,6 +53,10 @@ export function selectUnannounced(rows = []) {
     const details = booking.booking_details || {};
     const review = details.needs_review;
     if (review?.alerted_at) return false;         // already announced once
+
+    // A cancellation with a refund still to claim from the airline. It is
+    // cancelled and ticketed, so both checks below would skip it - and did.
+    if (needsAirlineRefundClaim(booking)) return true;
 
     // The ticket turned up later, by retry or by hand.
     if (details.gds?.ticketed === true) return false;
@@ -97,33 +102,108 @@ export function describeBooking(booking) {
   ].join('\n');
 }
 
-export function buildMessage(bookings) {
-  return [
-    `:rotating_light: *${bookings.length} booking${bookings.length > 1 ? 's' : ''} paid but not ticketed*`,
-    'The customer has paid and no ticket was issued. Each one needs a human: ticket it, or refund it.',
-    '',
-    ...bookings.map(describeBooking),
-  ].join('\n\n');
+/**
+ * A cancelled booking whose tickets still hold value with the airline.
+ *
+ * Tickets past their same-day void window are not voided by the cancel; their
+ * value stays with the airline until it is claimed under the fare rules
+ * (payment/operations.handlers.js cancelFlightBooking, which lists them on
+ * `needs_review.tickets`). That flag was written and never read: this job
+ * skipped cancelled rows, and the failed-refund alarm lists only refunds that
+ * failed, so the claim reached nobody.
+ */
+export function needsAirlineRefundClaim(booking) {
+  const review = booking?.booking_details?.needs_review;
+  return review?.source === 'cancellation' && Array.isArray(review.tickets) && review.tickets.length > 0;
 }
 
-/** Stamp the bookings so the next run stays quiet about them. */
+/** One line per airline claim. Ticket numbers, never passenger names. */
+export function describeAirlineClaim(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review || {};
+  const cancellation = details.cancellation || {};
+  const hours = Math.round((Date.now() - Date.parse(review.at || cancellation.cancelledAt || booking.created_at)) / 36e5);
+  const tickets = review.tickets || [];
+  return [
+    `*${booking.booking_reference}* — cancelled, ${booking.payment_status}; customer refund: ${cancellation.paymentAction || 'none recorded'}`,
+    `PNR ${details.pnr || 'none'} · ${tickets.length} ticket${tickets.length > 1 ? 's' : ''} to claim: ${tickets.join(', ')}`,
+    `flagged ${hours}h ago`,
+  ].join('\n');
+}
+
+export function buildMessage(bookings) {
+  const claims = bookings.filter(needsAirlineRefundClaim);
+  const unticketed = bookings.filter((booking) => !needsAirlineRefundClaim(booking));
+  const sections = [];
+  if (unticketed.length) {
+    sections.push(
+      `:rotating_light: *${unticketed.length} booking${unticketed.length > 1 ? 's' : ''} paid but not ticketed*`,
+      'The customer has paid and no ticket was issued. Each one needs a human: ticket it, or refund it.',
+      '',
+      ...unticketed.map(describeBooking),
+    );
+  }
+  if (claims.length) {
+    sections.push(
+      `:airplane_departure: *${claims.length} cancelled booking${claims.length > 1 ? 's' : ''} with a refund to claim from the airline*`,
+      'These tickets were past their void window when the booking was cancelled, so the airline still holds their value. '
+        + 'Claim each refund under the fare rules.',
+      '',
+      ...claims.map(describeAirlineClaim),
+    );
+  }
+  return sections.join('\n\n');
+}
+
+/**
+ * Stamp the bookings so the next run stays quiet about them.
+ *
+ * This wrote back the copy of each row read before the Slack post, whole, so
+ * anything written in between - a running chain's final save, a cancellation
+ * record - was undone by an alarm. Each booking is read again, and the stamp
+ * written only if nothing that matters has moved since
+ * (utils/bookingDetailsGuard.js); a race it loses is read and tried again.
+ */
+const MARK_TRIES = 3;
+
 async function markAlerted(bookings) {
   for (const booking of bookings) {
-    const details = booking.booking_details || {};
-    const now = new Date().toISOString();
-    // A row announced for the unflagged reason gets a flag written as it is
-    // announced, so from here on it is one class: flagged, and stamped.
-    const review = details.needs_review
-      || { reason: UNTICKETED_REVIEW_REASON, ticketed: false, at: now };
-    const updated = {
-      ...details,
-      needs_review: { ...review, alerted_at: now },
-    };
-    const { error } = await supabase
-      .from('bookings')
-      .update({ booking_details: updated })
-      .eq('booking_reference', booking.booking_reference);
-    if (error) log('announced but could not mark', { booking: booking.booking_reference, error: error.message });
+    let marked = false;
+    let lastError = null;
+    for (let tries = 0; tries < MARK_TRIES && !marked; tries += 1) {
+      const { data: fresh, error: readError } = await supabase
+        .from('bookings')
+        .select('status, payment_status, booking_details')
+        .eq('booking_reference', booking.booking_reference)
+        .single();
+      if (readError || !fresh) {
+        lastError = readError;
+        break;
+      }
+      const details = fresh.booking_details || {};
+      if (details.needs_review?.alerted_at) {
+        marked = true;
+        break;
+      }
+      const now = new Date().toISOString();
+      // A row announced for the unflagged reason gets a flag written as it is
+      // announced, so from here on it is one class: flagged, and stamped.
+      const review = details.needs_review
+        || { reason: UNTICKETED_REVIEW_REASON, ticketed: false, at: now };
+      const { data, error } = await unchangedSince(
+        supabase
+          .from('bookings')
+          .update({ booking_details: { ...details, needs_review: { ...review, alerted_at: now } } })
+          .eq('booking_reference', booking.booking_reference),
+        fresh,
+      ).select('booking_reference');
+      if (error) {
+        lastError = error;
+        break;
+      }
+      marked = Boolean(data?.length);
+    }
+    if (!marked) log('announced but could not mark', { booking: booking.booking_reference, error: lastError?.message || 'the booking kept changing' });
   }
 }
 

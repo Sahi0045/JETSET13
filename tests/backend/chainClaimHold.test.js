@@ -47,6 +47,20 @@ describe('holdChainClaim', () => {
     expect(table.row('FLT1').booking_details.gds_chain.startedAt).toBe(OLD);
   });
 
+  // A write spreading a copy of the row read before the claim put the chain
+  // back, and the next claimant counted from there: both held attempt 1, and
+  // both were told they still held the booking.
+  it('has lost a claim another request took with the same attempt number', async () => {
+    const theirs = '2026-09-15T09:00:02.000Z';
+    const { table, holdChainClaim } = await load([rowWith({ state: 'in_progress', startedAt: OLD, attempt: 1, claimedAt: theirs })]);
+
+    expect(await holdChainClaim('FLT1', 1, '2026-09-15T09:00:01.000Z')).toBe('lost');
+    expect(table.row('FLT1').booking_details.gds_chain.startedAt).toBe(OLD);
+
+    expect(await holdChainClaim('FLT1', 1, theirs)).toBe('held');
+    expect(table.row('FLT1').booking_details.gds_chain.claimedAt).toBe(theirs);
+  });
+
   it('has lost a booking that is being cancelled, queued or already committed', async () => {
     for (const state of ['cancelling', 'queued', 'committed', 'failed']) {
       const { holdChainClaim } = await load([rowWith({ state, startedAt: OLD, attempt: 1 })]);

@@ -23,6 +23,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: "5004"
+      # This stack runs production's booking queue, and nothing else does. A
+      # process without it runs only 'development' bookings whatever NODE_ENV
+      # says (backend/utils/queueEnvironment.js), so a laptop started with
+      # `npm start` against the shared database never replays a customer's
+      # booking. Queued rows are labelled with it, so it must stay `production`.
+      BOOKING_QUEUE_ENV: production
       # redis runs in this network, not on the host.
       REDIS_URL: redis://redis:6379
     depends_on:

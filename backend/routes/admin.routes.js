@@ -78,7 +78,7 @@ router.get('/price-settings', async (req, res) => {
 // Update price settings
 router.put('/price-settings', protect, admin, async (req, res) => {
   try {
-    const newSettings = req.body;
+    const newSettings = req.body || {};
 
     console.log('💾 Updating price settings:', newSettings);
 
@@ -90,19 +90,38 @@ router.put('/price-settings', protect, admin, async (req, res) => {
       });
     }
 
-    // Validate the settings
+    // Every value a number, zero or more. `parseFloat(value) || 0` saved a
+    // negative fee as it was - a -25 flight fee took 25 off every charge - and
+    // saved anything unreadable as 0, so a typo removed a fee without a word.
     const validatedSettings = {};
+    const invalid = [];
     for (const [key, value] of Object.entries(newSettings)) {
-      if (DEFAULT_SETTINGS.hasOwnProperty(key)) {
-        validatedSettings[key] = parseFloat(value) || 0;
-      }
+      if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) continue;
+      const number = typeof value === 'number'
+        ? value
+        : (typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN);
+      if (!Number.isFinite(number) || number < 0) invalid.push(key);
+      else validatedSettings[key] = number;
+    }
+    if (invalid.length) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_PRICE_SETTINGS',
+        error: `Each setting must be a number of zero or more. Check: ${invalid.join(', ')}. Nothing was saved.`,
+        fields: invalid
+      });
     }
 
     // Check if settings record exists
     const { data: existingSettings } = await supabase
       .from('price_settings')
-      .select('id')
+      .select('id, settings')
       .single();
+
+    // Merged into what is stored. The save replaced the whole object, so every
+    // setting a request left out fell back to its default on the next read -
+    // a different fee for whatever the page did not happen to send.
+    const mergedSettings = { ...(existingSettings?.settings || {}), ...validatedSettings };
 
     let result;
     if (existingSettings) {
@@ -110,7 +129,7 @@ router.put('/price-settings', protect, admin, async (req, res) => {
       result = await supabase
         .from('price_settings')
         .update({
-          settings: validatedSettings,
+          settings: mergedSettings,
           updated_at: new Date().toISOString()
         })
         .eq('id', existingSettings.id)
@@ -120,7 +139,7 @@ router.put('/price-settings', protect, admin, async (req, res) => {
       result = await supabase
         .from('price_settings')
         .insert({
-          settings: validatedSettings,
+          settings: mergedSettings,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
@@ -140,7 +159,8 @@ router.put('/price-settings', protect, admin, async (req, res) => {
     res.json({
       success: true,
       message: 'Price settings updated successfully',
-      data: validatedSettings
+      // What is stored now, not only what this request sent.
+      data: mergedSettings
     });
 
   } catch (error) {

@@ -84,6 +84,11 @@ export function refundStatus(booking) {
 export function needsManualRefund(booking) {
   const type = String(booking?.type ?? booking?.travel_type ?? '').toLowerCase();
   if (type && type !== 'flight') return false;
+  // A partial refund that left money with the gateway which the cancel did not
+  // keep as its fee. It reads "Refunded", but the desk still owes the rest, so
+  // the button stays until it is returned (`stillHeld`, recorded by the manual
+  // refund).
+  if (String(booking?.status || '').toLowerCase() === 'cancelled' && Number(cancellationOf(booking)?.stillHeld) > 0) return true;
   return ['failed', 'review', 'pending'].includes(refundStatus(booking)?.key);
 }
 

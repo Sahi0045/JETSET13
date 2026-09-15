@@ -131,6 +131,9 @@ describe('running the check once', () => {
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+      // The stamp reads the booking again, and writes onto it only if nothing moved.
+      is: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: rows[0] ?? null, error: null }),
     };
     supabaseMock.from.mockReturnValue(chain);
     return chain;
@@ -220,6 +223,9 @@ describe('a paid PNR that issuance never touched', () => {
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+      // The stamp reads the booking again, and writes onto it only if nothing moved.
+      is: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: rows[0] ?? null, error: null }),
     };
     supabaseMock.from.mockReturnValue(chain);
     return chain;
