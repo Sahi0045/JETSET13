@@ -250,6 +250,94 @@ describe('verifyFlightCharge', () => {
     });
   });
 
+  // Checkout checked only that names, a gender and a needed date of birth were
+  // there. The order route then refused - after payment - a child on an adult's
+  // fare, and the airline would not ticket a trip abroad without a passport.
+  describe('travellers, checked as the review page checks them', () => {
+    const roundTrip = (passengerData, travelerPricings) => ({
+      originalOffer: {
+        id: '1',
+        price: { total: '400.00', currency: 'USD' },
+        itineraries: [
+          { segments: [{ departure: { iataCode: 'JFK', at: '2026-10-04T18:00:00' }, arrival: { iataCode: 'LHR', at: '2026-10-05T06:00:00' } }] },
+          { segments: [{ departure: { iataCode: 'LHR', at: '2026-10-25T10:00:00' }, arrival: { iataCode: 'JFK', at: '2026-10-25T13:00:00' } }] },
+        ],
+        travelerPricings,
+      },
+      passengerData,
+    });
+    const adult = { firstName: 'Jane', lastName: 'Doe', gender: 'female', dateOfBirth: '1990-01-01', type: 'ADULT', nationality: 'US', passportNumber: 'X1234567', passportExpiry: '2030-01-01' };
+    const abroad = () => vi.fn().mockResolvedValue({ price: { total: '400.00', base: '300.00', currency: 'USD' }, _ama: { international: true } });
+
+    it("refuses a child booked on an adult's fare, before pricing", async () => {
+      const priceOffer = abroad();
+      const booking = roundTrip(
+        [adult, { ...adult, firstName: 'Tom', dateOfBirth: '2018-05-05', type: 'CHILD' }],
+        [{ travelerType: 'ADULT' }, { travelerType: 'ADULT' }],
+      );
+
+      const result = await verify({ amount: 402, bookingData: booking, priceOffer });
+
+      expect(result.code).toBe('PASSENGER_COUNT_MISMATCH');
+      expect(result.message).toMatch(/for 2 adults/);
+      expect(priceOffer).not.toHaveBeenCalled();
+    });
+
+    it('refuses an infant who turns 2 before the flight home', async () => {
+      const infant = { ...adult, firstName: 'Mia', dateOfBirth: '2024-10-20', type: 'HELD_INFANT' };
+      const booking = roundTrip([adult, infant], [{ travelerType: 'ADULT' }, { travelerType: 'HELD_INFANT' }]);
+
+      const result = await verify({ amount: 401, bookingData: booking, priceOffer: abroad() });
+
+      expect(result.code).toBe('PASSENGERS_INCOMPLETE');
+      expect(result.message).toMatch(/^Traveller 2: Infant fares are for travellers under 2 on every flight of the trip\./);
+    });
+
+    it('refuses a trip abroad without a passport', async () => {
+      const booking = roundTrip([{ ...adult, passportNumber: '' }], [{ travelerType: 'ADULT' }]);
+
+      const result = await verify({ amount: 401, bookingData: booking, priceOffer: abroad() });
+
+      expect(result.code).toBe('PASSENGERS_INCOMPLETE');
+      expect(result.message).toMatch(/Enter the passport number\./);
+    });
+
+    it('refuses a passport that expires before the flight home', async () => {
+      const booking = roundTrip([{ ...adult, passportExpiry: '2026-10-15' }], [{ travelerType: 'ADULT' }]);
+
+      const result = await verify({ amount: 401, bookingData: booking, priceOffer: abroad() });
+
+      expect(result.message).toMatch(/The passport expires before the trip ends\./);
+    });
+
+    it('asks for no passport when the airport index does not know the trip crosses a border', async () => {
+      const booking = roundTrip([{ ...adult, passportNumber: '' }], [{ travelerType: 'ADULT' }]);
+
+      const result = await verify({ amount: 401, bookingData: booking, priceOffer: pricedAt(400) });
+
+      expect(result.ok).toBe(true);
+    });
+
+    it('says what the review page says a traveller still needs', async () => {
+      const { travellerProblems } = await import('../../frontend/src/utils/travellerChecks.js');
+      const { tripDates } = await import('../../shared/travellerDetails.js');
+      const traveller = { ...adult, passportExpiry: '2026-10-15' };
+      const booking = roundTrip([traveller], [{ travelerType: 'ADULT' }]);
+      const { firstDate, lastDate } = tripDates(booking.originalOffer);
+      const page = travellerProblems(traveller, { index: 1, international: true, travelDate: firstDate, lastDate });
+
+      const result = await verify({ amount: 401, bookingData: booking, priceOffer: abroad() });
+
+      expect(page).toHaveLength(1);
+      expect(result.message).toBe(`Traveller 1: ${page[0]} Nothing has been charged.`);
+    });
+
+    it('passes a complete traveller', async () => {
+      const result = await verify({ amount: 401, bookingData: roundTrip([adult], [{ travelerType: 'ADULT' }]), priceOffer: abroad() });
+      expect(result.ok).toBe(true);
+    });
+  });
+
   it('lets domestic adults pay without a date of birth', async () => {
     const booking = bookingFor(2);
     booking.passengerData = booking.passengerData.map(({ dateOfBirth, ...rest }) => rest);

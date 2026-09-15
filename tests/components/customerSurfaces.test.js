@@ -231,7 +231,10 @@ describe('the review page charges what checkout verifies', () => {
     expect(src).not.toMatch(/type: "Adult"/);
     // The checks live in one list shared by payment and the page's progress.
     expect(src).toMatch(/travellerProblems\(/);
-    expect(readFileSync(path.resolve(process.cwd(), 'frontend/src/utils/travellerChecks.js'), 'utf8')).toMatch(/passengerAgeProblem\(/);
+    // The age rules are shared with checkout, which refuses the same travellers
+    // before payment (shared/travellerDetails.js).
+    expect(readFileSync(path.resolve(process.cwd(), 'frontend/src/utils/travellerChecks.js'), 'utf8')).toMatch(/bookingTravellerProblems\(/);
+    expect(readFileSync(path.resolve(process.cwd(), 'shared/travellerDetails.js'), 'utf8')).toMatch(/passengerAgeProblem\(/);
   });
 
   it('checks the fare with the airline and handles a changed price', () => {
