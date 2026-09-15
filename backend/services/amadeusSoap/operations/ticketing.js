@@ -338,15 +338,26 @@ export const readVoidTicketReply = (reply) => {
   // adults, or an adult and the infant on their lap - is answered with a list,
   // and reading that as a single result found no responseType: Amadeus had
   // voided both tickets while cancelBooking reported the void as failed and
-  // left the itinerary in place (PDT, 15 Sep 2026). Voided only when every
-  // document says X.
-  const results = arr(at(reply, 'transactionResults'));
-  const types = results.map((result) => atTxt(result, 'responseDetails.responseType'));
-  const statuses = results.map((result) => atTxt(result, 'responseDetails.statusCode'));
+  // left the itinerary in place (PDT, 15 Sep 2026).
+  //
+  // X is not success on its own. Captured on PDT the same day: a void answers
+  // X with status O; voiding that ticket again answers X with status N and
+  // 6150 REJECTED - DOCUMENT ALREADY CANCELLED. Reading every X as voided
+  // would take any other rejection sent as X/N for a void, and the itinerary
+  // would be cancelled over a live ticket. A document is voided when it says
+  // X and O, or X and 6150 - voided already, by an earlier attempt.
+  const documents = arr(at(reply, 'transactionResults')).map((result) => {
+    const type = atTxt(result, 'responseDetails.responseType');
+    const status = atTxt(result, 'responseDetails.statusCode');
+    const errorCode = atTxt(result, 'errorGroup.errorOrWarningCodeDetails.errorDetails.errorCode');
+    const alreadyVoided = errorCode === '6150';
+    return { type, status, errorCode, alreadyVoided, voided: /^X$/i.test(type) && (/^O$/i.test(status) || alreadyVoided) };
+  });
   return {
-    voided: types.length > 0 && types.every((type) => /^X$/i.test(type)),
-    responseType: types.join(','),
-    status: statuses.join(','),
+    voided: documents.length > 0 && documents.every((document) => document.voided),
+    responseType: documents.map((document) => document.type).join(','),
+    status: documents.map((document) => document.status).join(','),
+    documents,
   };
 };
 

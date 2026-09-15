@@ -120,14 +120,30 @@ const buildSegment = (flight, index) => {
   };
 };
 
+/**
+ * The cabin product a fare is sold in.
+ *
+ * Most carriers send one cabinProduct per flight. Some send two: the fare's own
+ * booking class, then another carrying a bookingModifier. On PDT (15 Sep 2026)
+ * Virgin Atlantic, Delta and JetBlue did - VS26 JFK-LHR came as T, then O with
+ * modifier T. The one without the modifier is the fare: VS26 priced in T at the
+ * search's $294.50, and in O at $394.50. Read as a single object, the pair gave
+ * no class at all, and 35 of 100 JFK-LHR offers failed to price or sell (477
+ * Booking Class not specified).
+ */
+const fareCabinProduct = (group) => {
+  const products = arr(at(group, 'productInformation.cabinProduct'));
+  return products.find((product) => !atTxt(product, 'bookingModifier')) ?? products[0] ?? {};
+};
+
 /** Per-segment fare data, keyed by leg then position within the leg. */
 const readFareDetails = (paxFareProduct) => arr(at(paxFareProduct, 'fareDetails')).map((leg) => ({
   segRef: atTxt(leg, 'segmentRef.segRef'),
   designator: atTxt(leg, 'majCabin.bookingClassDetails.designator'),
   fares: arr(leg.groupOfFares).map((g) => ({
-    rbd: atTxt(g, 'productInformation.cabinProduct.rbd'),
-    cabinDesignator: atTxt(g, 'productInformation.cabinProduct.cabin'),
-    avlStatus: atTxt(g, 'productInformation.cabinProduct.avlStatus'),
+    rbd: atTxt(fareCabinProduct(g), 'rbd'),
+    cabinDesignator: atTxt(fareCabinProduct(g), 'cabin'),
+    avlStatus: atTxt(fareCabinProduct(g), 'avlStatus'),
     fareBasis: atTxt(g, 'productInformation.fareProductDetail.fareBasis'),
     passengerType: atTxt(g, 'productInformation.fareProductDetail.passengerType'),
     breakPoint: atTxt(g, 'productInformation.breakPoint'),

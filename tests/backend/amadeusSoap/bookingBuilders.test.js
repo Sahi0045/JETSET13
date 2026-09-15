@@ -553,5 +553,36 @@ describe('readVoidTicketReply', () => {
     }).voided).toBe(false);
     expect(readVoidTicketReply({}).voided).toBe(false);
   });
+
+  // Captured on PDT (15 Sep 2026): a void answers X/O; voiding the same ticket
+  // again answers X/N with 6150 DOCUMENT ALREADY CANCELLED. X alone is not a void.
+  it('counts a document an earlier attempt voided (X, N, 6150) as voided', () => {
+    const already = readVoidTicketReply({
+      transactionResults: {
+        responseDetails: { responseType: 'X', statusCode: 'N' },
+        errorGroup: { errorOrWarningCodeDetails: { errorDetails: { errorCode: '6150' } }, errorWarningDescription: { freeText: 'REJECTED - DOCUMENT ALREADY CANCELLED' } },
+      },
+    });
+    expect(already.voided).toBe(true);
+    expect(already.documents[0].alreadyVoided).toBe(true);
+  });
+
+  it('does not count any other X answer as voided', () => {
+    expect(readVoidTicketReply({
+      transactionResults: {
+        responseDetails: { responseType: 'X', statusCode: 'N' },
+        errorGroup: { errorOrWarningCodeDetails: { errorDetails: { errorCode: '1234' } } },
+      },
+    }).voided).toBe(false);
+    expect(readVoidTicketReply({ transactionResults: { responseDetails: { responseType: 'X', statusCode: 'N' } } }).voided).toBe(false);
+  });
+
+  it('needs every document voided, now or before', () => {
+    const voidedNow = { responseDetails: { responseType: 'X', statusCode: 'O' } };
+    const voidedBefore = { responseDetails: { responseType: 'X', statusCode: 'N' }, errorGroup: { errorOrWarningCodeDetails: { errorDetails: { errorCode: '6150' } } } };
+    const refused = { responseDetails: { responseType: 'X', statusCode: 'N' } };
+    expect(readVoidTicketReply({ transactionResults: [voidedNow, voidedBefore] }).voided).toBe(true);
+    expect(readVoidTicketReply({ transactionResults: [voidedNow, refused] }).voided).toBe(false);
+  });
 });
 
