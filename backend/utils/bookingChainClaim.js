@@ -34,6 +34,16 @@ export const CHAIN_CLAIM_TTL_MS = 120_000;
 export const QUEUED_CHAIN_TTL_MS = 30 * 60 * 1000;
 
 /**
+ * How many times a paid booking may go back to the durable queue before it is
+ * treated as a failure: for want of an Amadeus slot (flight.routes.js
+ * queueBookingForRetry), or after an answer that said "not now"
+ * (jobs/bookingQueue.job.js). Each retry waits for a free slot or a retry
+ * delay, so reaching this means minutes of trouble, not seconds - and the
+ * 30-minute offer staleness limit refunds it before then anyway.
+ */
+export const MAX_QUEUE_ATTEMPTS = 10;
+
+/**
  * What currently holds the booking, or null when nothing does.
  *
  * A claim without a readable stamp cannot be aged, and is treated as released,

@@ -16,7 +16,8 @@ import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
 import { getWsConfig } from '../services/amadeusSoap/config.js';
 import { recordCouponUse } from '../services/coupon.service.js';
 import { crossesBorder } from '../utils/itinerary.js';
-import { CHAIN_CLAIM_TTL_MS } from '../utils/bookingChainClaim.js';
+import { CHAIN_CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS } from '../utils/bookingChainClaim.js';
+import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
@@ -517,12 +518,9 @@ async function claimBookingChain(bookingReference) {
   return { claimed: true, attempt, claimedAt: startedAt };
 }
 
-// A booking that cannot get an Amadeus slot is retried this many times by the
-// queue worker before it is refunded like any other failure. Each retry only
-// runs when a slot is free, so reaching this means Amadeus is saturated for
-// minutes, not seconds - and the 30-minute offer staleness limit refunds it
-// before then anyway.
-const MAX_QUEUE_ATTEMPTS = 10;
+// A booking that cannot get an Amadeus slot is retried MAX_QUEUE_ATTEMPTS times
+// by the queue worker before it is refunded like any other failure
+// (utils/bookingChainClaim.js, shared with the worker's own retries).
 
 /**
  * Hand a paid booking that never got an Amadeus slot to the durable queue.
@@ -579,7 +577,9 @@ async function queueBookingForRetry(bookingReference, orderBody) {
         // Local dev and production share one database. Only a worker in the
         // environment that queued a booking may run it - a laptop must never
         // replay a customer's booking, and production must never book a test.
-        queued_env: process.env.NODE_ENV || 'development',
+        // Named explicitly, not NODE_ENV, which `npm start` sets to production
+        // on any machine (utils/queueEnvironment.js).
+        queued_env: queueEnvironment(),
         // `startedAt` is what the next claim compares-and-sets on.
         gds_chain: { state: 'queued', startedAt: queuedAt, queuedAt, attempt: details.gds_chain?.attempt, queueAttempts },
       },
@@ -614,11 +614,26 @@ function respondQueued(res, bookingReference) {
 
 /** Release the claim so a later attempt is not blocked by a dead one. */
 async function releaseBookingChain(bookingReference, failedStep) {
+  // The queue count survives the release, as it survives a new claim
+  // (claimBookingChain). Dropping it here reset the count every time a queued
+  // booking was sent back from a step before the chain, so a booking that kept
+  // failing that step was queued again without end instead of reaching
+  // MAX_QUEUE_ATTEMPTS.
+  let queueAttempts = null;
+  if (supabase && bookingReference) {
+    const { data: row } = await supabase
+      .from('bookings')
+      .select('booking_details')
+      .eq('booking_reference', bookingReference)
+      .single();
+    queueAttempts = row?.booking_details?.gds_chain?.queueAttempts ?? null;
+  }
   return patchBookingDetails(bookingReference, {
     gds_chain: {
       state: 'failed',
       failedStep: failedStep || null,
       finishedAt: new Date().toISOString(),
+      ...(queueAttempts ? { queueAttempts } : {}),
     },
   });
 }
