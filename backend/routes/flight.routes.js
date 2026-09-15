@@ -122,7 +122,12 @@ async function invokeOrchestratedCancel(bookingReference, reason, req, { email }
 // value by convention in both clients, and `reverseArcPaymentForOrder` gives up
 // immediately on a falsy one - so a client that omitted `orderId` produced a
 // charge with no booking and no automatic reversal.
-async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, reason, code }) {
+//
+// `code` is always answered. The calls that passed none - a chain that failed,
+// an unsuccessful provider answer, a MOCK booking - answered with no code at
+// all, and a client that offers "Try again" unless it sees a terminal code
+// offered it for a booking that had just been refunded, or failed to be.
+async function refundOnFulfillmentFailure(res, { orderId, bookingReference, amount, currency = 'USD', errorMsg, status = 502, customerMessage, reason, code = 'BOOKING_FAILED' }) {
   console.warn('🚑 Ticket not booked after payment — reversing charge. order:', orderId, '| reason:', errorMsg);
   const reversal = await reverseArcPaymentForOrder(orderId, {
     amount,
@@ -2036,6 +2041,30 @@ router.post('/order', optionalProtect, async (req, res) => {
     // human decides whether to book or refund it (findDuplicateBooking, below).
     if (existing.booking_details?.needs_review?.duplicate_of) {
       return res.status(409).json(duplicatePaymentAnswer(existing.booking_reference));
+    }
+
+    // A booking whose fulfilment already failed, or that a human is sorting
+    // out, is never sent to the airline again. After a failure whose reversal
+    // also failed, the row keeps its status and is flagged "charge not
+    // reversed" - and a retry of this order (the customer's "Try again")
+    // checked only the flag above, so it booked the trip on a payment a person
+    // was about to refund. The review flags the success path writes itself
+    // (EMAILED_REVIEW_REASONS) describe a booking with a PNR, answered above.
+    // Refused before the gateway is asked, and nothing is refunded here.
+    const failedBefore = existing.booking_details?.fulfillment_failed;
+    const review = existing.booking_details?.needs_review;
+    if (failedBefore || (review && !EMAILED_REVIEW_REASONS.has(review.reason))) {
+      const message = 'This booking could not be completed and our team is reviewing it, so it was not sent to the airline again. '
+        + 'Nothing more has been charged. If you have not heard from us within 2 business days, '
+        + `call (877) 538-7380 with booking reference ${existing.booking_reference}.`;
+      return res.status(409).json({
+        success: false,
+        code: failedBefore ? 'BOOKING_FAILED' : 'BOOKING_NEEDS_REVIEW',
+        needsReview: true,
+        bookingReference: existing.booking_reference,
+        error: message,
+        message,
+      });
     }
 
     // Was this actually paid for? Ask the gateway, not the row. The row's
