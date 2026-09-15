@@ -11,8 +11,9 @@ import { readTickets } from '../../../backend/services/amadeusSoap/mappers/fligh
  * fare rules. Cancelling the segments without voiding a same-day ticket throws
  * that window away.
  *
- * This path cannot be exercised against PDT, which has no ticketing stock
- * configured, so it is covered here rather than by the live smoke test.
+ * Proved on PDT since: single tickets void cleanly, and on 15 Sep 2026 an adult
+ * and a lap infant's two tickets voided in one call - which is what showed the
+ * reply carries one transactionResults per document.
  */
 
 const envelope = (name, inner, session) => `<?xml version="1.0" encoding="UTF-8"?>
@@ -69,6 +70,21 @@ beforeEach(() => {
 const voided = () => envelope('Ticket_CancelDocumentReply',
   '<transactionResults><responseDetails><responseType>X</responseType>'
   + '<statusCode>O</statusCode></responseDetails></transactionResults>', true);
+
+/** An adult and the infant on their lap: two tickets, both issued on `issuedOn`. */
+const retrievedWithTwoTickets = (issuedOn) => envelope('PNR_Reply',
+  '<pnrHeader><reservationInfo><reservation><controlNumber>ABC123</controlNumber></reservation></reservationInfo></pnrHeader>'
+  + '<dataElementsMaster>'
+  + '<dataElementsIndiv><elementManagementData><segmentName>FA</segmentName></elementManagementData>'
+  + `<otherDataFreetext><longFreetext>PAX 220-7491174932/ETLH/USD626.30/${issuedOn}/SCK1S2400/12345678</longFreetext></otherDataFreetext></dataElementsIndiv>`
+  + '<dataElementsIndiv><elementManagementData><segmentName>FA</segmentName></elementManagementData>'
+  + `<otherDataFreetext><longFreetext>INF 220-7491174933/ETLH/USD62.63/${issuedOn}/SCK1S2400/12345678</longFreetext></otherDataFreetext></dataElementsIndiv>`
+  + '</dataElementsMaster>', true);
+
+/** Ticket_CancelDocument answers once per document, as a list, when it voids several. */
+const voidedEach = (...types) => envelope('Ticket_CancelDocumentReply',
+  types.map((type) => `<transactionResults><responseDetails><responseType>${type}</responseType>`
+    + '<statusCode>O</statusCode></responseDetails></transactionResults>').join(''), true);
 
 describe('reading a ticket element', () => {
   // `issuedOn` used to be new Date() at read time, which made every ticket look
@@ -154,6 +170,37 @@ describe('cancelling', () => {
     axios.post
       .mockResolvedValueOnce(reply(retrievedWithTicket(todayDDMMMYY())))
       .mockResolvedValueOnce(reply(errorReply))
+      .mockResolvedValue(reply(ok('Security_SignOutReply')));
+
+    await expect(cancelBooking('ABC123')).rejects.toMatchObject({ step: 'voidTicket' });
+    expect(didCancel()).toBe(false);
+  });
+
+  // Two tickets are answered with two transactionResults. Read as one result,
+  // the reply had no responseType: Amadeus voided both, and the chain reported
+  // the void as failed and left the itinerary in place.
+  it('voids both tickets of a two-ticket booking, then cancels', async () => {
+    const { cancelBooking } = await loadChain();
+    axios.post
+      .mockResolvedValueOnce(reply(retrievedWithTwoTickets(todayDDMMMYY())))
+      .mockResolvedValueOnce(reply(voidedEach('X', 'X')))
+      .mockResolvedValueOnce(reply(ok('PNR_Reply')))
+      .mockResolvedValue(reply(ok('Security_SignOutReply')));
+
+    const result = await cancelBooking('ABC123');
+
+    expect(didVoid()).toBe(true);
+    expect(didCancel()).toBe(true);
+    expect(result.voided).toBe(true);
+    expect(result.tickets).toHaveLength(2);
+    expect(result.requiresAirlineRefund).toEqual([]);
+  });
+
+  it('does not cancel when only one of two tickets was voided', async () => {
+    const { cancelBooking } = await loadChain();
+    axios.post
+      .mockResolvedValueOnce(reply(retrievedWithTwoTickets(todayDDMMMYY())))
+      .mockResolvedValueOnce(reply(voidedEach('X', 'E')))
       .mockResolvedValue(reply(ok('Security_SignOutReply')));
 
     await expect(cancelBooking('ABC123')).rejects.toMatchObject({ step: 'voidTicket' });

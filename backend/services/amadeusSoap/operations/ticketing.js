@@ -333,8 +333,19 @@ export const buildVoidTicketBody = ({ documentNumbers, marketIataCode, targetOff
  * void from a reply that merely parsed.
  */
 export const readVoidTicketReply = (reply) => {
-  const type = atTxt(reply, 'transactionResults.responseDetails.responseType');
-  const status = atTxt(reply, 'transactionResults.responseDetails.statusCode');
-  return { voided: /^X$/i.test(type), responseType: type, status };
+  // One transactionResults per document. A booking with two tickets - two
+  // adults, or an adult and the infant on their lap - is answered with a list,
+  // and reading that as a single result found no responseType: Amadeus had
+  // voided both tickets while cancelBooking reported the void as failed and
+  // left the itinerary in place (PDT, 15 Sep 2026). Voided only when every
+  // document says X.
+  const results = arr(at(reply, 'transactionResults'));
+  const types = results.map((result) => atTxt(result, 'responseDetails.responseType'));
+  const statuses = results.map((result) => atTxt(result, 'responseDetails.statusCode'));
+  return {
+    voided: types.length > 0 && types.every((type) => /^X$/i.test(type)),
+    responseType: types.join(','),
+    status: statuses.join(','),
+  };
 };
 
