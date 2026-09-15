@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canVoidPayment } from '../../frontend/src/utils/adminBookingActions';
+import { canVoidPayment, statusOptionsFor } from '../../frontend/src/utils/adminBookingActions';
 
 /**
  * The admin bookings list offers Void only where the server would do it.
@@ -35,5 +35,40 @@ describe('canVoidPayment', () => {
   it('stays offered for a paid hotel or cruise, which have no airline reservation', () => {
     expect(canVoidPayment({ type: 'hotel', status: 'confirmed', paymentStatus: 'paid' })).toBe(true);
     expect(canVoidPayment({ type: 'cruise', status: 'confirmed', paymentStatus: 'paid', bookingDetails: { pnr: 'X' } })).toBe(true);
+  });
+});
+
+/**
+ * Modify Status offers only a status that still describes the booking - the
+ * rules the server enforces (shared/bookingStatusChange.js).
+ */
+describe('statusOptionsFor', () => {
+  const values = (booking) => statusOptionsFor(booking).map((option) => option.value);
+
+  it('leaves a paid reservation with no ticket only as it is', () => {
+    expect(values({ type: 'flight', status: 'pending_ticketing', paymentStatus: 'paid', bookingDetails: { pnr: 'ABC123', gds: { ticketed: false } } }))
+      .toEqual(['pending_ticketing']);
+  });
+
+  it('lets a ticketed flight be confirmed or completed, never cancelled by hand', () => {
+    expect(values({ type: 'flight', status: 'pending_ticketing', paymentStatus: 'paid', bookingDetails: { pnr: 'ABC123', tickets: [{ number: '1' }] } }))
+      .toEqual(['pending_ticketing', 'confirmed', 'completed']);
+  });
+
+  it('lets an unpaid checkout that never reached the airline be cancelled', () => {
+    expect(values({ type: 'flight', status: 'pending', paymentStatus: 'unpaid', bookingDetails: {} })).toEqual(['pending', 'cancelled']);
+  });
+
+  it('offers no change while the booking is busy', () => {
+    expect(values({ type: 'flight', status: 'pending', paymentStatus: 'unpaid', bookingDetails: {}, bookingBusy: true })).toEqual(['pending']);
+  });
+
+  it('keeps a paid hotel away from a hand-typed cancel, and from waiting for a ticket', () => {
+    expect(values({ type: 'hotel', status: 'pending', paymentStatus: 'paid' })).toEqual(['pending', 'confirmed', 'completed']);
+  });
+
+  it('labels each option', () => {
+    expect(statusOptionsFor({ type: 'flight', status: 'pending_ticketing', bookingDetails: { pnr: 'A' } })[0])
+      .toEqual({ value: 'pending_ticketing', label: 'Ticket pending' });
   });
 });

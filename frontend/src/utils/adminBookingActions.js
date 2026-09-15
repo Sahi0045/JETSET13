@@ -1,3 +1,5 @@
+import { ADMIN_STATUS_LABELS, allowedStatuses } from '../../../shared/bookingStatusChange';
+
 /**
  * Which actions the admin bookings list offers for a booking.
  *
@@ -26,4 +28,21 @@ export function canVoidPayment(booking) {
   const details = detailsOf(booking);
   if (booking.pnr || details.pnr || details.amadeus_order_id) return false;
   return !booking.bookingBusy;
+}
+
+/**
+ * The statuses Modify Status offers: the booking's own, then each change that
+ * still describes it (shared/bookingStatusChange.js, which the server enforces).
+ *
+ * @returns {Array<{ value: string, label: string }>}
+ */
+export function statusOptionsFor(booking) {
+  const statuses = allowedStatuses({
+    type: typeOf(booking),
+    status: booking?.status,
+    paymentStatus: booking?.paymentStatus ?? booking?.payment_status,
+    details: detailsOf(booking),
+    busy: Boolean(booking?.bookingBusy),
+  });
+  return statuses.map((value) => ({ value, label: ADMIN_STATUS_LABELS[value] || value.replace(/_/g, ' ') }));
 }

@@ -20,6 +20,7 @@ import { CHAIN_CLAIM_TTL_MS } from '../utils/bookingChainClaim.js';
 import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
+import { statusChangeRefusal } from '../../shared/bookingStatusChange.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
 
@@ -3964,6 +3965,13 @@ router.get('/admin-customers', protect, admin, async (req, res) => {
 });
 
 // PUT update booking status (admin)
+//
+// This wrote whatever status it was sent. Marking a paid flight with a PNR
+// cancelled released nothing, refunded nothing, and then hid it from Cancel &
+// Refund, from Void and from both alarms; marking an unticketed reservation
+// confirmed told the customer it was ticketed. A status set by hand now has to
+// describe the booking (shared/bookingStatusChange.js), and cancelling anything
+// that holds seats or money goes through Cancel & Refund.
 router.put('/admin-bookings/:id', protect, admin, async (req, res) => {
   try {
     if (!supabase) {
@@ -3971,21 +3979,58 @@ router.put('/admin-bookings/:id', protect, admin, async (req, res) => {
     }
 
     const { id } = req.params;
-    const { status, payment_status, notes } = req.body;
+    const { status, payment_status, notes } = req.body || {};
+
+    // What happened to the money is written by whatever moved it - Cancel &
+    // Refund, Void, Finish refund, the gateway reconcile. A typed `refunded`
+    // silenced the failed-refund alarm with nothing returned.
+    if (payment_status !== undefined) {
+      const text = 'The payment status follows what the payment gateway did, so it cannot be set by hand. '
+        + 'Use Cancel & Refund, Void or Finish refund.';
+      return res.status(400).json({ success: false, code: 'PAYMENT_STATUS_READ_ONLY', error: text, message: text });
+    }
+
+    const { data: booking, error: readError } = await supabase.from('bookings').select('*').eq('id', id).single();
+    if (readError && readError.code !== 'PGRST116') {
+      return res.status(500).json({ success: false, error: 'Could not read the booking' });
+    }
+    if (!booking) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+
+    const changesStatus = Boolean(status) && status !== booking.status;
+    if (changesStatus) {
+      const details = booking.booking_details || {};
+      const problem = statusChangeRefusal({
+        type: booking.travel_type,
+        status: booking.status,
+        paymentStatus: booking.payment_status,
+        details,
+        busy: Boolean(liveChainState(details.gds_chain)) || Boolean(details.queued_order && !details.pnr),
+      }, status);
+      if (problem) {
+        return res.status(problem.httpStatus).json({ success: false, code: problem.code, error: problem.message, message: problem.message });
+      }
+    }
 
     const updateData = {};
-    if (status) updateData.status = status;
-    if (payment_status) updateData.payment_status = payment_status;
+    if (changesStatus) updateData.status = status;
     if (notes) updateData.admin_notes = notes;
     updateData.updated_at = new Date().toISOString();
 
-    const { data, error } = await supabase
+    let update = supabase
       .from('bookings')
       .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
+      .eq('id', id);
+    // Conditioned on the status the decision was made from, so a cancellation
+    // or a booking chain that lands in between is not overwritten.
+    if (changesStatus) update = update.eq('status', booking.status);
+    const { data, error } = await update.select().single();
 
+    if (error?.code === 'PGRST116') {
+      const text = 'This booking changed while you were editing it. Nothing has been changed; refresh it and try again.';
+      return res.status(409).json({ success: false, code: 'BOOKING_CHANGED', error: text, message: text });
+    }
     if (error) {
       return res.status(500).json({ success: false, error: error.message });
     }
