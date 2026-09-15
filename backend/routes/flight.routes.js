@@ -667,6 +667,40 @@ export function provesPayer(req, booking) {
 }
 
 /**
+ * Is this request the booking queue's own replay (jobs/bookingQueue.job.js)?
+ *
+ * The worker posts to this process on the loopback address and says so in a
+ * header. The header alone is anyone's to send, so it counts only from this
+ * machine: on Lightsail every outside request reaches the app from Caddy, never
+ * from 127.0.0.1.
+ */
+export function isQueueReplay(req) {
+  const header = typeof req?.get === 'function' ? req.get('x-booking-queue-replay') : req?.headers?.['x-booking-queue-replay'];
+  if (header !== '1') return false;
+  return ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(String(req?.socket?.remoteAddress || ''));
+}
+
+/**
+ * What holds this booking right now, read fresh, or null when nothing does.
+ *
+ * A booking waiting in the queue is not held from the queue's own replay: that
+ * replay is the run the queue was waiting for.
+ *
+ * @returns {Promise<'in_progress'|'queued'|'cancelling'|'committed'|'unavailable'|null>}
+ */
+async function bookingHolder(req, bookingReference) {
+  if (!supabase || !bookingReference) return null;
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('booking_details')
+    .eq('booking_reference', bookingReference)
+    .single();
+  if (error && error.code !== 'PGRST116') return 'unavailable';
+  const holder = liveChainState(data?.booking_details?.gds_chain);
+  return holder === 'queued' && isQueueReplay(req) ? null : holder;
+}
+
+/**
  * How often a running chain renews its claim. Well inside CHAIN_CLAIM_TTL_MS,
  * so a live chain never looks abandoned.
  */
@@ -2024,6 +2058,33 @@ router.post('/order', optionalProtect, async (req, res) => {
         code: 'PAYMENT_NOT_CAPTURED',
         ...(payment.gatewayUnavailable ? { retryable: true } : {}),
         ...(payment.orderStatus ? { orderStatus: payment.orderStatus } : {})
+      });
+    }
+
+    // Every refusal from here to the chain claim reverses the payment, and none
+    // asked whether another request held the booking. A retry that failed one
+    // of them - a lost traveller, booking switched off - refunded a payment
+    // that a running chain went on to commit a PNR against, or that the queue
+    // was about to book, or refunded in full what a cancellation was returning
+    // less its fee. While anything holds the booking, this request neither
+    // refunds nor books; read fresh, because the reconcile above can take a
+    // while and the row read at the top can be old by now.
+    const heldBy = await bookingHolder(req, existing.booking_reference);
+    if (heldBy === 'unavailable') {
+      return res.status(503).json({
+        success: false,
+        error: 'We could not start your booking just now. Your payment is safe - please try again in a minute.',
+        code: 'BOOKING_UNAVAILABLE',
+        retryable: true
+      });
+    }
+    if (heldBy) {
+      return res.status(409).json({
+        success: false,
+        error: heldBy === 'cancelling'
+          ? 'This booking is being cancelled, so it cannot be confirmed.'
+          : 'This booking is already being confirmed. Please wait a moment before trying again.',
+        code: 'BOOKING_IN_PROGRESS'
       });
     }
 
