@@ -71,7 +71,15 @@ export async function priceOfferForCheckout(offer) {
       throw new Error(`pricing answered ${resp?.status}: ${resp?.data?.error || 'no priced offer'}`);
     }
     const international = resp?.data?.meta?.international;
-    return typeof international === 'boolean' ? { ...priced, _ama: { ...priced._ama, international } } : priced;
+    const secureFlight = resp?.data?.meta?.secureFlight;
+    return {
+      ...priced,
+      _ama: {
+        ...priced._ama,
+        ...(typeof international === 'boolean' ? { international } : {}),
+        ...(typeof secureFlight === 'boolean' ? { secureFlight } : {}),
+      },
+    };
   }
 
   const { default: FlightProvider } = await import('./flightProvider.js');
@@ -93,8 +101,8 @@ export async function priceOfferForCheckout(offer) {
       throw error;
     }
   }
-  const { crossesBorder } = await import('../utils/itinerary.js');
-  return { ...priced, _ama: { ...priced._ama, international: crossesBorder(priced) } };
+  const { crossesBorder, touchesUnitedStates } = await import('../utils/itinerary.js');
+  return { ...priced, _ama: { ...priced._ama, international: crossesBorder(priced), secureFlight: touchesUnitedStates(priced) } };
 }
 
 /** The configured price settings, merged over the defaults exactly as the page receives them. */
@@ -199,6 +207,7 @@ export async function verifyFlightCharge({
     const problems = bookingTravellerProblems(traveller, {
       type: TRAVELLER_TYPES.includes(traveller?.type) ? traveller.type : pricedTypes[index],
       international,
+      secureFlight: priced?._ama?.secureFlight === true,
       passportRequired: priced?._ama?.international === true,
       travelDate: firstDate,
       lastDate,

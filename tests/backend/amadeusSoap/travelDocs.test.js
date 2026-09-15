@@ -106,8 +106,8 @@ describe('the SSR element on the request', () => {
     bookingReference: 'REF1', officeId: 'SCK1S2400',
   });
 
-  it('emits one SSR per traveller who has a usable document', () => {
-    expect((xml.match(/<segmentName>SSR<\/segmentName>/g) || [])).toHaveLength(1);
+  it('emits one DOCS per traveller who has a usable document', () => {
+    expect((xml.match(/<type>DOCS<\/type>/g) || [])).toHaveLength(1);
   });
 
   it('follows the XSD element order for the ssr sequence', () => {

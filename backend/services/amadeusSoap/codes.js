@@ -103,6 +103,11 @@ export const ERROR_CATALOGUE = Object.freeze([
   { match: /(session|conversation).*(limit|exceed|maximum)|too many/i, code: 503, error: 'Too many concurrent requests, please retry', retryAfter: 2 },
   { match: /unable to (confirm|sell)|segment.*(closed|waitlist)|class.*not.*available/i, code: 409, error: 'That flight is no longer available at this price' },
   { match: /price.*(changed|differ)|fare.*(changed|no longer)/i, code: 409, error: 'The fare changed while booking - please search again' },
+  // 911 NO FARE FOR BOOKING CODE-TRY OTHER PRICING OPTIONS: the class search
+  // offered cannot be priced any more. On PDT (15 Sep 2026) Alaska, JetBlue and
+  // Delta fares answered it where no class reproduced the search price. A reason
+  // to search again, not an outage: checkout refuses it before the charge.
+  { match: /\b911\b|no fare for booking code/i, code: 409, error: 'This fare can no longer be sold - please search again' },
   // Amadeus says "NO MATCH FOR RECORD LOCATOR" (code 1931) rather than anything
   // containing "not found", so the obvious wording alone never matches and an
   // unknown PNR came back as a 502 "temporarily unavailable" - which reads as

@@ -16,7 +16,7 @@ import { withBookingPriority } from '../services/amadeusSoap/semaphore.js';
 import { getWsConfig } from '../services/amadeusSoap/config.js';
 import { recordCouponUse } from '../services/coupon.service.js';
 import { isFareRefusal } from '../services/flightCheckout.service.js';
-import { crossesBorder } from '../utils/itinerary.js';
+import { crossesBorder, touchesUnitedStates } from '../utils/itinerary.js';
 import { CHAIN_CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS } from '../utils/bookingChainClaim.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
 import { unchangedSince } from '../utils/bookingDetailsGuard.js';
@@ -1776,6 +1776,8 @@ router.post('/price', async (req, res) => {
       // Vercel, which has no airport index, and asks here instead.
       meta: {
         international: crossesBorder(pricingResponse.data?.flightOffers?.[0] ?? flightOffer),
+        // Whether a date of birth is needed for everyone, domestic or not (Secure Flight).
+        secureFlight: touchesUnitedStates(pricingResponse.data?.flightOffers?.[0] ?? flightOffer),
         seatsConfirmed: seatsChecked,
       },
       message: 'Flight priced successfully'
@@ -2353,10 +2355,12 @@ router.post('/order', optionalProtect, async (req, res) => {
     // trip that crosses a border (shared/travellerDetails.js) - decided from the
     // offer's own airports, not from anything the page sent.
     const international = crossesBorder(firstOffer);
+    // A US itinerary needs every traveller's date of birth (Secure Flight).
+    const secureFlight = touchesUnitedStates(firstOffer);
     const typesInFareOrder = (firstOffer.travelerPricings || []).map((t) => t.travelerType);
     const travellerIncomplete = travelersList.length === 0 || travelersList.some(
       (t, index) => !String(t?.firstName || '').trim() || !String(t?.lastName || '').trim() || !t?.gender
-        || (!t?.dateOfBirth && needsDateOfBirth({ type: t?.ptc || typesInFareOrder[index], international }))
+        || (!t?.dateOfBirth && needsDateOfBirth({ type: t?.ptc || typesInFareOrder[index], international, secureFlight }))
     );
     const pricedTravellers = Array.isArray(firstOffer.travelerPricings) ? firstOffer.travelerPricings.length : 0;
     // And the same mix of passenger types. A child booked on an adult fare, or
@@ -2630,6 +2634,7 @@ router.post('/order', optionalProtect, async (req, res) => {
         // knows nothing about. It used to be the price just re-read above, so
         // a fare that rose after payment matched itself and was sold.
         expectedTotal: paidFare,
+        secureFlight,
         // What checkout charged for that fare - with the fee, less any coupon.
         // The payment must cover exactly this.
         verifiedChargeTotal: Number.isFinite(Number(verifiedCharge.total)) ? Number(verifiedCharge.total) : undefined,

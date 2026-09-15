@@ -202,9 +202,12 @@ describe('PNR_AddMultiElements', () => {
     expect(xml).toContain('<indicator>TL</indicator><date>250926</date><time>2359</time>');
   });
 
-  it('omits the time limit entirely when it is not', () => {
+  // A PNR with no ticketing arrangement does not commit (NEED TICKETING
+  // ARRANGEMENT, PDT 15 Sep 2026): without a time limit the arrangement is OK.
+  it('sets the ticketing arrangement to OK when the fare gives no time limit', () => {
     const xml = buildAddElementsBody({ travelers, officeId: 'SCK1S2400' });
-    expect(xml).not.toContain('<segmentName>TK</segmentName>');
+    expect(xml).toContain('<segmentName>TK</segmentName></elementManagementData><ticketElement><ticket><indicator>OK</indicator></ticket></ticketElement>');
+    expect(xml).not.toContain('<indicator>TL</indicator>');
   });
 
   // A child booked on an adult fare is a fare the airline can reject at

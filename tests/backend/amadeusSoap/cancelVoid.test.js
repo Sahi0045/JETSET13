@@ -268,6 +268,10 @@ describe('cancelling', () => {
 
       expect(result.cancelled).toBe(true);
       expect(cancelCalls()).toBe(2);
+      // The refused cancel is still pending: it is ignored (optionCode 21) before
+      // the retry, because a plain retrieve answers 31 FINISH OR IGNORE.
+      const bodies = axios.post.mock.calls.map(([, body]) => String(body));
+      expect(bodies.some((body) => body.includes('<PNR_AddMultiElements') && body.includes('<optionCode>21</optionCode>'))).toBe(true);
     });
 
     it('gives up after three attempts', async () => {

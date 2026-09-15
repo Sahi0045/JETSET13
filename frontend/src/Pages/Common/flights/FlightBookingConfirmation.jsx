@@ -51,6 +51,9 @@ const isInternationalRoute = (depCode, arrCode) => {
   return dep !== arr;
 };
 
+/** A US airport, where Secure Flight needs every traveller's date of birth (shared/travellerDetails.js). */
+const isUnitedStatesAirport = (code) => IATA_TO_COUNTRY.get((code || '').toUpperCase()) === 'United States';
+
 
 function FlightBookingConfirmation() {
   const routerLocation = useLocation();
@@ -236,6 +239,7 @@ function FlightBookingConfirmation() {
   const problemsOf = (traveller, index) => travellerProblems(traveller, {
     index,
     international: Boolean(bookingDetails?.isInternational),
+    secureFlight: Boolean(bookingDetails?.secureFlight),
     travelDate: trip.firstDate || bookingDetails?.flight?.departureDate,
     lastDate: trip.lastDate
       || bookingDetails?.flight?.segments?.at?.(-1)?.arrival?.at
@@ -554,7 +558,11 @@ function FlightBookingConfirmation() {
       // codes, so every flight with different ends - all of them - counted.
       isInternational: (flightData.segments || []).some((seg) =>
         isInternationalRoute(seg.departure?.airport, seg.arrival?.airport))
-        || isInternationalRoute(flightData.departure.airport, flightData.arrival.airport)
+        || isInternationalRoute(flightData.departure.airport, flightData.arrival.airport),
+      // Any flight in or out of the US: everyone needs a date of birth.
+      secureFlight: (flightData.segments || []).some((seg) =>
+        isUnitedStatesAirport(seg.departure?.airport) || isUnitedStatesAirport(seg.arrival?.airport))
+        || isUnitedStatesAirport(flightData.departure.airport) || isUnitedStatesAirport(flightData.arrival.airport)
     };
   };
 
@@ -679,6 +687,13 @@ function FlightBookingConfirmation() {
         if (typeof serverInternational === 'boolean') {
           setBookingDetails((details) => (details && details.isInternational !== serverInternational
             ? { ...details, isInternational: serverInternational }
+            : details));
+        }
+        // And whether it touches the US, from the same index (it knows the territories).
+        const serverSecureFlight = body?.meta?.secureFlight;
+        if (typeof serverSecureFlight === 'boolean') {
+          setBookingDetails((details) => (details && details.secureFlight !== serverSecureFlight
+            ? { ...details, secureFlight: serverSecureFlight }
             : details));
         }
         if (Math.abs(total - searched) > 0.01) {
@@ -1647,7 +1662,7 @@ function FlightBookingConfirmation() {
                       <div className="form-group">
                         {/* Needed for a child or infant, and for anyone crossing a border
                             (shared/travellerDetails.js); a domestic adult may leave it out. */}
-                        {needsDateOfBirth({ type: passenger.type, international: Boolean(bookingDetails?.isInternational) })
+                        {needsDateOfBirth({ type: passenger.type, international: Boolean(bookingDetails?.isInternational), secureFlight: Boolean(bookingDetails?.secureFlight) })
                           ? <label htmlFor={`traveller-${passenger.id}-dateOfBirth`}>Date of Birth <span className="required">*</span></label>
                           : <label htmlFor={`traveller-${passenger.id}-dateOfBirth`}>Date of Birth <span className="text-xs font-normal text-gray-400">(optional)</span></label>}
                         <input
@@ -1657,7 +1672,7 @@ function FlightBookingConfirmation() {
                           value={passenger.dateOfBirth}
                           onChange={(e) => handlePassengerChange(passenger.id, 'dateOfBirth', e.target.value)}
                           readOnly={!editMode}
-                          required={needsDateOfBirth({ type: passenger.type, international: Boolean(bookingDetails?.isInternational) })}
+                          required={needsDateOfBirth({ type: passenger.type, international: Boolean(bookingDetails?.isInternational), secureFlight: Boolean(bookingDetails?.secureFlight) })}
                           max={today}
                           min={minDOB}
                         />

@@ -1,7 +1,9 @@
 import { toPnrName } from '../../../../shared/passengerName.js';
 import { OPERATIONS } from '../codes.js';
 import { each, el, wrap } from '../xml.js';
-import { buildDocsFreetext, toDDMMMYY } from './travelDocs.js';
+import {
+  buildContactEmailFreetext, buildContactPhoneFreetext, buildDocsFreetext, buildFoidFreetext, toDDMMMYY,
+} from './travelDocs.js';
 
 /**
  * PNR_AddMultiElements, PNR_Retrieve and PNR_Cancel.
@@ -19,6 +21,8 @@ import { buildDocsFreetext, toDDMMMYY } from './travelDocs.js';
 const OPTION_NO_COMMIT = '0';
 /** ER - end and retrieve. ET (10) commits but returns no body, so the PNR would be lost. */
 const OPTION_END_AND_RETRIEVE = '11';
+/** IR - ignore the changes pending in this session and retrieve the PNR again. */
+const OPTION_IGNORE_AND_RETRIEVE = '21';
 
 const PTC_TO_CODE = Object.freeze({ ADULT: 'ADT', CHILD: 'CHD', HELD_INFANT: 'INF', SEATED_INFANT: 'INS' });
 
@@ -185,13 +189,13 @@ const remarkElement = ({ number, text }) => wrap('dataElementsIndiv', [
  * association Amadeus cannot tell whose document it is, and the error names a
  * passenger number: "SSR DOCS MISSING FOR P1".
  */
-const docsElement = ({ number, paxNumber, freetext }) => wrap('dataElementsIndiv', [
+const ssrElement = ({ number, paxNumber, type, freetext }) => wrap('dataElementsIndiv', [
   wrap('elementManagementData', [
     wrap('reference', [el('qualifier', 'OT'), el('number', String(number))]),
     el('segmentName', 'SSR'),
   ]),
   wrap('serviceRequest', wrap('ssr', [
-    el('type', 'DOCS'),
+    el('type', type),
     el('status', 'HK'),
     el('quantity', '1'),
     el('companyId', 'YY'),
@@ -212,6 +216,9 @@ const docsElement = ({ number, paxNumber, freetext }) => wrap('dataElementsIndiv
     el('number', String(paxNumber)),
   ])),
 ]);
+
+/** SSR DOCS - see ssrElement. */
+const docsElement = (element) => ssrElement({ ...element, type: 'DOCS' });
 
 /**
  * FM - the commission element.
@@ -261,6 +268,19 @@ const ticketingElement = ({ number, date, time, queueOffice }) => wrap('dataElem
 ]);
 
 /**
+ * TK OK - ticketed straight away, the arrangement when the fare gave no last
+ * ticketing date. Without any TK the PNR does not commit: NEED TICKETING
+ * ARRANGEMENT at end of transaction (PDT, 15 Sep 2026).
+ */
+const ticketOkElement = ({ number }) => wrap('dataElementsIndiv', [
+  wrap('elementManagementData', [
+    wrap('reference', [el('qualifier', 'OT'), el('number', String(number))]),
+    el('segmentName', 'TK'),
+  ]),
+  wrap('ticketElement', wrap('ticket', el('indicator', 'OK'))),
+]);
+
+/**
  * Attach names and contact elements. Does not commit - no PNR exists yet.
  *
  * @param {object} p
@@ -268,9 +288,11 @@ const ticketingElement = ({ number, date, time, queueOffice }) => wrap('dataElem
  * @param {object} p.contact   {email, phone}
  * @param {object} [p.ticketing] {date:'DDMMYY', time:'HHMM'}
  * @param {string} [p.bookingReference] filed on the PNR as an RM remark
+ * @param {boolean} [p.secureFlight] the itinerary touches the United States: send
+ *   DOCS with name, date of birth and gender even without a passport
  */
 export const buildAddElementsBody = (p) => {
-  const { travelers, contact = {}, ticketing, bookingReference, officeId, commissionPercent = 0 } = p;
+  const { travelers, contact = {}, ticketing, bookingReference, officeId, commissionPercent = 0, secureFlight = false } = p;
   if (!travelers?.length) throw new Error('travelers are required to create a PNR');
 
   let number = 0;
@@ -283,9 +305,11 @@ export const buildAddElementsBody = (p) => {
     contact.email ? freetextElement({
       number: ++number, segmentName: 'AP', subjectQualifier: '3', type: 'P02', text: contact.email,
     }) : '',
+    // TK - the ticketing arrangement: a time limit when the fare gave a last
+    // ticketing date, otherwise OK. A PNR with neither does not commit.
     ticketing ? ticketingElement({
       number: ++number, date: ticketing.date, time: ticketing.time, queueOffice: officeId,
-    }) : '',
+    }) : ticketOkElement({ number: ++number }),
     // RF - received from. Mandatory in most offices before a PNR will commit.
     freetextElement({ number: ++number, segmentName: 'RF', subjectQualifier: '3', text: 'JETSETTERS' }),
     // RM - a remark carrying our booking reference, so a PNR found on a queue
@@ -307,9 +331,20 @@ export const buildAddElementsBody = (p) => {
     ...assignPassengers(travelers).flatMap(({ traveler, paxNumber, infant }) => [traveler, infant]
       .filter(Boolean)
       .map((person) => {
-        const freetext = buildDocsFreetext(person);
+        const freetext = buildDocsFreetext(person, { withoutDocument: secureFlight });
         return freetext ? docsElement({ number: ++number, paxNumber, freetext }) : '';
       })),
+    // Per passenger with a seat: SSR CTCE and CTCM, the passenger's email and
+    // mobile (IATA passenger contact), and SSR FOID, the passport as the form of
+    // identification. Tested on PDT (15 Sep 2026): Arajet refused the ticket with
+    // "MISSING SSR CTCM MOBILE OR SSR CTCE EMAIL" and 10609 MANDATORY SSRFOID
+    // MISSING FOR CARRIER, and Sky Airline with the latter; both issued once these
+    // were on the PNR.
+    ...assignPassengers(travelers).flatMap(({ traveler, paxNumber }) => [
+      ['CTCE', buildContactEmailFreetext(contact.email)],
+      ['CTCM', buildContactPhoneFreetext(contact.phone)],
+      ['FOID', buildFoidFreetext(traveler)],
+    ].map(([type, freetext]) => (freetext ? ssrElement({ number: ++number, paxNumber, type, freetext }) : ''))),
   ].filter(Boolean).join('');
 
   const body = [
@@ -332,6 +367,20 @@ export const buildAddElementsBody = (p) => {
 export const buildCommitBody = () => {
   const ns = OPERATIONS.PNR_AddMultiElements.namespace;
   const body = wrap('pnrActions', el('optionCode', OPTION_END_AND_RETRIEVE));
+  return `    <PNR_AddMultiElements xmlns="${ns}">${body}</PNR_AddMultiElements>`;
+};
+
+/**
+ * Ignore the changes pending on the PNR in this session, and retrieve it again.
+ *
+ * A PNR_Cancel refused at end of transaction (8111 SIMULTANEOUS CHANGES) leaves
+ * the cancel pending, and the next PNR_Retrieve then answers 31 FINISH OR IGNORE.
+ * Tested on PDT (15 Sep 2026): after optionCode 21 the retrieve succeeded and the
+ * pending change was gone.
+ */
+export const buildIgnoreBody = () => {
+  const ns = OPERATIONS.PNR_AddMultiElements.namespace;
+  const body = wrap('pnrActions', el('optionCode', OPTION_IGNORE_AND_RETRIEVE));
   return `    <PNR_AddMultiElements xmlns="${ns}">${body}</PNR_AddMultiElements>`;
 };
 

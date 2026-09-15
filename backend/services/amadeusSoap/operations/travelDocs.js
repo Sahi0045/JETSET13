@@ -52,6 +52,22 @@ const genderCode = (gender, ptc) => {
 const DOC_TYPE = Object.freeze({ PASSPORT: 'P', IDENTITY_CARD: 'I', ID_CARD: 'I', VISA: 'V' });
 
 /**
+ * DOCS with no document: surname, given name, date of birth and gender only.
+ *
+ * A flight to, from or within the United States needs these (Secure Flight)
+ * even when nobody gave a passport. American Airlines JFK-LAX refused the ticket
+ * with 27791 TICKETING INHIBITED-SSR DOCS MISSING FOR P1, and issued once
+ * `////15JAN90/M//DOMESTIC/PROOF` was on the PNR (PDT, 15 Sep 2026).
+ */
+const secureFlightDocs = (traveler) => {
+  const birth = toDDMMMYY(traveler.dateOfBirth);
+  const surname = String(traveler.lastName ?? '').trim().toUpperCase();
+  const given = String(traveler.firstName ?? '').trim().toUpperCase();
+  if (!birth || !surname || !given) return null;
+  return `////${birth}/${genderCode(traveler.gender, traveler.ptc)}//${surname}/${given}`;
+};
+
+/**
  * Build the DOCS free text for one traveller, or null when the data is not
  * complete enough to be worth sending.
  *
@@ -62,9 +78,9 @@ const DOC_TYPE = Object.freeze({ PASSPORT: 'P', IDENTITY_CARD: 'I', ID_CARD: 'I'
  * at commit, which would fail the whole booking rather than only the ticket —
  * so an incomplete document is skipped and the booking still succeeds.
  */
-export const buildDocsFreetext = (traveler = {}) => {
+export const buildDocsFreetext = (traveler = {}, { withoutDocument = false } = {}) => {
   const doc = Array.isArray(traveler.documents) ? traveler.documents[0] : traveler.documents;
-  if (!doc?.number) return null;
+  if (!doc?.number) return withoutDocument ? secureFlightDocs(traveler) : null;
 
   const type = DOC_TYPE[String(doc.documentType ?? '').toUpperCase()] ?? 'P';
   const nationality = toAlpha3(doc.nationality ?? doc.issuanceCountry);
@@ -81,4 +97,33 @@ export const buildDocsFreetext = (traveler = {}) => {
   const holder = doc.holder === false ? '' : '/H';
 
   return `${type}/${issuing}/${number}/${nationality}/${birth}/${gender}/${expiry}/${surname}/${given}${holder}`;
+};
+
+/**
+ * SSR CTCE free text: the passenger's email in IATA's encoding, upper case, with
+ * @ written // , _ written .. and - written ./ . Accepted on PDT (15 Sep 2026):
+ * proof_test-x@example.com as PROOF..TEST./X//EXAMPLE.COM.
+ */
+export const buildContactEmailFreetext = (email) => {
+  const value = String(email ?? '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return null;
+  return value.toUpperCase().replace(/_/g, '..').replace(/-/g, './').replace('@', '//');
+};
+
+/** SSR CTCM free text: the mobile number as digits with its country code, e.g. 12125550100. */
+export const buildContactPhoneFreetext = (phone) => {
+  const digits = String(phone ?? '').replace(/\D/g, '');
+  return digits.length >= 7 && digits.length <= 15 ? digits : null;
+};
+
+/**
+ * SSR FOID free text: the passport as the form of identification, PP and the
+ * number (PPX3300055). Only a passport is sent; other documents have no tested
+ * FOID form.
+ */
+export const buildFoidFreetext = (traveler = {}) => {
+  const doc = Array.isArray(traveler.documents) ? traveler.documents[0] : traveler.documents;
+  const number = String(doc?.number ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!number) return null;
+  return (DOC_TYPE[String(doc?.documentType ?? '').toUpperCase()] ?? 'P') === 'P' ? `PP${number}` : null;
 };

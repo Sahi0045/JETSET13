@@ -148,7 +148,9 @@ const readWsConfig = (env = process.env) => {
     // airline's own record locator, and how often to look. Airlines Amadeus
     // hosts (LH, QR, AF) have it at commit; others send it moments later - DL
     // after about 12 s on PDT - and refuse the ticket until then.
-    airlineLocatorWaitMs: asInt(env.AMADEUS_WS_AIRLINE_LOCATOR_WAIT_MS, 20000),
+    // Royal Brunei's locator took about 56 s on PDT; the owner chose to wait
+    // up to 90 s in the booking rather than ticket in the background.
+    airlineLocatorWaitMs: asInt(env.AMADEUS_WS_AIRLINE_LOCATOR_WAIT_MS, 90000),
     airlineLocatorPollMs: asInt(env.AMADEUS_WS_AIRLINE_LOCATOR_POLL_MS, 2000),
     // Issuance refused because the airline's side is not ready yet is retried.
     issueRetries: asInt(env.AMADEUS_WS_ISSUE_RETRIES, 2),
