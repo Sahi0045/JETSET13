@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { Calendar, Users, MapPin, Search, ChevronDown, Plane, Ship, Package, Hotel, ArrowLeftRight } from "lucide-react"
-import { defaultSearchData, specialFares, sourceCities, allDestinations } from "./data.js"
+import { defaultSearchData, sourceCities, allDestinations } from "./data.js"
 import { allAirports } from "./airports.js";
 import AirportService from "../../../Services/AirportService";
 import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
@@ -36,7 +36,6 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
   const [showToSuggestions, setShowToSuggestions] = useState(false);
   const [fromSuggestions, setFromSuggestions] = useState([]);
   const [toSuggestions, setToSuggestions] = useState([]);
-  const [selectedFare, setSelectedFare] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [showDepartCalendar, setShowDepartCalendar] = useState(false);
   const [showReturnCalendar, setShowReturnCalendar] = useState(false);
@@ -356,7 +355,6 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
   const returnParts = getDateParts(formData.returnDate);
   const fromSubtitle = formData.fromCode ? `${formData.fromCode}${formData.fromCountry ? ', ' + formData.fromCountry : ''}` : '';
   const toSubtitle = formData.toCode ? `${formData.toCode}${formData.toCountry ? ', ' + formData.toCountry : ''}` : '';
-  const activeFare = selectedFare || 'regular';
   const anyCalendarOpen = showDepartCalendar || showReturnCalendar || showTravellers;
   // Make custom (non-native) controls operable via keyboard (Enter / Space)
   const onKeyActivate = (fn) => (e) => {
@@ -417,15 +415,6 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
     { key: 'flight', label: 'Flight', Icon: Plane, to: '/flights', active: true },
     { key: 'packages', label: 'Packages', Icon: Package, to: '/packages' },
     { key: 'hotels', label: 'Hotels', Icon: Hotel, to: '/hotels' },
-  ];
-
-  const fareOptions = [
-    { key: 'regular', title: 'Regular', sub: 'Regular fares' },
-    { key: 'student', title: 'Student', sub: 'Extra discounts / baggage' },
-    { key: 'armed', title: 'Armed Forces', sub: 'Up to ₹600 off' },
-    { key: 'gst', title: 'Have a GST number?', sub: 'Up to 10% extra savings' },
-    { key: 'senior', title: 'Senior Citizen', sub: 'Up to ₹600 off' },
-    { key: 'doctor', title: 'Doctor & Nurses', sub: 'Up to ₹600 off' },
   ];
 
   return (
@@ -647,24 +636,10 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
             </div>
           </div>
 
-          {/* Special fares */}
-          <div className="mt-5 flex flex-col sm:flex-row sm:items-stretch gap-x-4 gap-y-3">
-            <div className="flex items-center shrink-0">
-              <span className="text-xs font-extrabold tracking-wide text-gray-800 uppercase leading-tight">Special Fares</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {fareOptions.map(({ key, title, sub }) => {
-                const on = activeFare === key;
-                return (
-                  <button key={key} type="button" onClick={() => setSelectedFare(key)}
-                    className={`text-left rounded-md border px-3 py-1.5 min-w-[118px] transition-colors ${on ? 'border-[#055B75] bg-[#055B75]/[0.06]' : 'border-gray-200 hover:border-gray-300 bg-white'}`}>
-                    <div className={`text-[13px] font-bold ${on ? 'text-[#055B75]' : 'text-gray-700'}`}>{title}</div>
-                    <div className="text-[11px] text-gray-400">{sub}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* A selector of discounted fares for students, the military, seniors,
+              medical staff and tax-registered businesses sat here, most
+              promising up to 600 rupees off. The choice was never sent with the
+              search or the booking, so the discounts it promised never applied. */}
         </div>
 
         {/* Search button */}

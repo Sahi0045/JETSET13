@@ -195,9 +195,9 @@ function FlightLanding() {
           <span className="hidden sm:inline">Call <span className="font-semibold text-white">(877) 538-7380</span></span>
           <span className="hidden md:inline text-white/25">·</span>
           <a href="mailto:support@jetsetterss.com" className="hidden md:inline text-white underline decoration-white/30 underline-offset-2 hover:decoration-white">support@jetsetterss.com</a>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-300/40 bg-yellow-300/10 px-2.5 py-0.5 text-yellow-200">
-            <Ticket className="h-3.5 w-3.5" /> <span className="font-semibold tracking-wider">$50 OFF</span> · today only
-          </span>
+          {/* A pill promising a fifty-dollar discount for one day sat here every
+              day. No coupon or price rule stood behind it, so nobody who booked
+              ever got it. */}
         </div>
       </div>
 
