@@ -43,6 +43,14 @@ const IN_PROGRESS_RETRIES = 4;
 const IN_PROGRESS_RETRY_MS = 8000;
 
 /**
+ * PAYMENT_NOT_CAPTURED with `retryable: true` means the server could not reach
+ * the payment gateway to check, not that the payment failed. The page asks
+ * again this many times, this far apart, before offering to check again.
+ */
+const PAYMENT_CHECK_RETRIES = 3;
+const PAYMENT_CHECK_RETRY_MS = 15000;
+
+/**
  * What the server actually did with the order. Drives every word on this
  * screen and on /booking-confirmation. Before this existed the page said
  * "Booking Confirmed!" for a 202 that meant "we have not even tried yet".
@@ -84,6 +92,10 @@ function FlightCreateOrders() {
   // { gaveUp, cancelling }. The same order is sent again, which the server
   // answers once whichever request gets there first.
   const [stillConfirming, setStillConfirming] = useState(null);
+  // Set when the server found no captured payment (PAYMENT_NOT_CAPTURED or
+  // PAYMENT_NOT_FOUND): { retryable, gaveUp }.
+  const [paymentProblem, setPaymentProblem] = useState(null);
+  const paymentCheckAttempts = useRef(0);
   const orderDataRef = useRef(null);
   const inProgressAttempts = useRef(0);
   const retryTimer = useRef(null);
@@ -257,6 +269,8 @@ function FlightCreateOrders() {
         setHeldForReview(needsReview);
         setStillConfirming(null);
         inProgressAttempts.current = 0;
+        setPaymentProblem(null);
+        paymentCheckAttempts.current = 0;
 
         const orderDetails = {
           reference,
@@ -407,6 +421,29 @@ function FlightCreateOrders() {
       }
       setStillConfirming(null);
 
+      const failureCode = error.response?.data?.code;
+      if (failureCode === 'PAYMENT_NOT_CAPTURED' || failureCode === 'PAYMENT_NOT_FOUND') {
+        // Nothing was booked because no captured payment was found. That is not
+        // a failed booking, and "Try again" reloaded the same refusal for ever.
+        // When the gateway could not be reached (`retryable`), ask again after
+        // a short wait; otherwise the payment did not complete.
+        const retryable = error.response.data.retryable === true;
+        setErrorCode(failureCode);
+        setError(error.response.data.error || null);
+        if (retryable) {
+          paymentCheckAttempts.current += 1;
+          const gaveUp = paymentCheckAttempts.current > PAYMENT_CHECK_RETRIES;
+          setPaymentProblem({ retryable: true, gaveUp });
+          if (!gaveUp) {
+            retryTimer.current = setTimeout(() => processFlightOrder(orderDataRef.current), PAYMENT_CHECK_RETRY_MS);
+          }
+        } else {
+          setPaymentProblem({ retryable: false, gaveUp: true });
+        }
+        return;
+      }
+      setPaymentProblem(null);
+
       // Extract more detailed error message with priority order
       let errorMessage = 'Failed to process order';
 
@@ -539,7 +576,7 @@ function FlightCreateOrders() {
           <div className="max-w-2xl mx-auto">
             <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 sm:p-8">
               <div className="text-center">
-                {processingOrder && !stillConfirming ? (
+                {processingOrder && !stillConfirming && !paymentProblem ? (
                   <div className="space-y-4">
                     <div className="mx-auto w-16 h-16 rounded-full border-4 border-blue-50 flex items-center justify-center">
                       <Loader className="w-8 h-8 text-blue-600 animate-spin" />
@@ -652,6 +689,67 @@ function FlightCreateOrders() {
                           {authUser ? 'Go to My Trips' : 'Back to home'}
                         </button>
                         <p className="text-sm text-gray-500 mt-3">Questions? Call (877) 538-7380.</p>
+                      </div>
+                    )}
+                  </div>
+                ) : paymentProblem ? (
+                  // No captured payment was found, so nothing was booked. This
+                  // was "Booking Failed" with a "Try again" that reloaded the
+                  // same refusal for ever.
+                  <div className="space-y-4" role="status">
+                    <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                      {paymentProblem.retryable && !paymentProblem.gaveUp
+                        ? <Loader className="w-8 h-8 text-amber-600 animate-spin" />
+                        : <AlertCircle className="w-8 h-8 text-amber-600" />}
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">
+                      {!paymentProblem.retryable ? 'Payment not completed'
+                        : paymentProblem.gaveUp ? 'We could not check your payment'
+                          : 'Checking your payment'}
+                    </h2>
+                    <p className="text-gray-600">
+                      {!paymentProblem.retryable
+                        ? 'Your payment did not go through, so nothing has been booked. You can go back to your trip and pay again, or start a new search.'
+                        : paymentProblem.gaveUp
+                          ? 'The payment gateway is not answering right now, so we could not confirm your payment or book your flight. If your card was charged, we will confirm your booking or refund you by email. You can also check again in a few minutes.'
+                          : 'We could not reach the payment gateway to confirm your payment. We will check again in a few seconds; please keep this page open.'}
+                    </p>
+                    {orderReference && (
+                      <p className="text-sm text-gray-500">
+                        Payment reference: <span className="font-semibold text-gray-800">{orderReference}</span>
+                      </p>
+                    )}
+                    {paymentProblem.gaveUp && (
+                      <div className="pt-2 space-y-3">
+                        {paymentProblem.retryable ? (
+                          <button
+                            onClick={() => {
+                              paymentCheckAttempts.current = 0;
+                              setPaymentProblem(null);
+                              processFlightOrder(orderDataRef.current);
+                            }}
+                            className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                          >
+                            Check again
+                          </button>
+                        ) : (orderDataRef.current?.selectedFlight || orderDataRef.current?.flightData) && (
+                          // The review page, with the flight they were paying
+                          // for: checkout prices it again and takes a new payment.
+                          <button
+                            onClick={() => navigate('/flights/booking-confirmation', {
+                              state: { flightData: orderDataRef.current.selectedFlight || orderDataRef.current.flightData },
+                            })}
+                            className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                          >
+                            Back to your trip
+                          </button>
+                        )}
+                        <button
+                          onClick={() => navigate('/flights')}
+                          className="w-full py-3 bg-white text-blue-700 border border-blue-200 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
+                        >
+                          Search flights
+                        </button>
                       </div>
                     )}
                   </div>

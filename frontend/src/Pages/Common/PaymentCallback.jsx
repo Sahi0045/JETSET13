@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getApiUrl } from '../../utils/apiHelper';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
@@ -6,7 +6,7 @@ import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 export default function PaymentCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [status, setStatus] = useState('Processing payment...');
+  const [status, setStatus] = useState('Checking your payment...');
   const [error, setError] = useState(null);
   const { user } = useSupabaseAuth();
 
@@ -81,7 +81,7 @@ export default function PaymentCallback() {
         // Check if this is a direct booking (flight, hotel, cruise, package)
         if (bookingType && orderId) {
           console.log(`🎫 Processing ${bookingType} booking callback for order:`, orderId);
-          setStatus(`Verifying ${bookingType} payment...`);
+          setStatus(`Checking your ${bookingType} payment...`);
 
           // Retrieve booking data: DB first, localStorage fallback
           let bookingData = {};
@@ -137,6 +137,9 @@ export default function PaymentCallback() {
           // order-creation step. If that step never completes (tab closed / order-create error),
           // the booking is still marked paid from the gateway and is recoverable. Best-effort:
           // never block the redirect on this.
+          // What the gateway said about the payment: true, false, or null when
+          // the check did not answer. Only `true` lets this page say "received".
+          let paymentConfirmed = null;
           if (orderId) {
             try {
               const reconcileRes = await fetch(getApiUrl('payments?action=reconcile-booking-payment'), {
@@ -146,6 +149,7 @@ export default function PaymentCallback() {
               });
               const reconcileData = await reconcileRes.json().catch(() => null);
               console.log('🧾 Booking payment reconciled:', reconcileData);
+              if (typeof reconcileData?.paid === 'boolean') paymentConfirmed = reconcileData.paid;
             } catch (reconcileErr) {
               console.warn('⚠️ Booking payment reconcile failed (non-blocking):', reconcileErr?.message);
             }
@@ -165,7 +169,12 @@ export default function PaymentCallback() {
               amount: bookingData?.amount
             });
 
-            setStatus('Payment verified! Creating your flight booking...');
+            // Only what was checked. This said "Payment verified!" before
+            // anything had been; the order page has the server ask the gateway,
+            // and says what it answered.
+            setStatus(paymentConfirmed
+              ? 'Payment received. Creating your flight booking...'
+              : 'Confirming your payment and creating your booking...');
 
             // ⚠️ DO NOT clean up localStorage here - keep it until order is created successfully
             // The FlightCreateOrders component will clean it up after successful order creation
@@ -181,8 +190,6 @@ export default function PaymentCallback() {
                 transactionId: resultIndicator || sessionData?.sessionId || null,
                 orderId: orderId,
                 amount: bookingData?.amount || sessionData?.amount || 0,
-                paymentVerified: true,
-
                 // Flight and passenger data from localStorage
                 selectedFlight: bookingData?.selectedFlight || bookingData?.flightData,
                 flightData: bookingData?.flightData || bookingData?.selectedFlight,
@@ -394,7 +401,7 @@ export default function PaymentCallback() {
         ) : (
           <>
             <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-6"></div>
-            <h1 className="text-2xl font-semibold text-gray-800 mb-2">Verifying Payment...</h1>
+            <h1 className="text-2xl font-semibold text-gray-800 mb-2">Checking Your Payment</h1>
             <p className="text-gray-600">{status}</p>
             <p className="text-sm text-gray-500 mt-4">Please wait while we confirm your payment with ARC Pay Gateway.</p>
           </>

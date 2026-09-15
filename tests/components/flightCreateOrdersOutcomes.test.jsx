@@ -1,6 +1,6 @@
 import React from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../frontend/src/Pages/Common/Navbar', () => ({ default: () => null }));
@@ -165,5 +165,84 @@ describe('a booking another request is already confirming', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(container.textContent).toMatch(/This booking is being cancelled/);
+  });
+});
+
+/**
+ * No captured payment behind the reference (PAYMENT_NOT_CAPTURED or
+ * PAYMENT_NOT_FOUND). The page said "Booking Failed" and offered "Try again",
+ * which reloaded the same 402 for ever.
+ */
+describe('a payment the server found no capture for', () => {
+  const flush = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  const notCaptured = (extra = {}) => reply(402, {
+    success: false, code: 'PAYMENT_NOT_CAPTURED',
+    error: 'Payment for this booking has not been captured. Please complete payment before confirming.', ...extra,
+  });
+
+  it('says the payment did not complete and offers the trip or a search, not "Try again"', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => notCaptured()));
+    const { container } = renderOrderPage();
+
+    await waitFor(() => expect(container.textContent).toMatch(/Payment not completed/));
+    expect(container.textContent).toMatch(/nothing has been booked/);
+    expect(screen.getByRole('button', { name: /Back to your trip/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Search flights/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Try again/ })).toBeNull();
+    expect(container.textContent).not.toMatch(/Booking Failed/);
+  });
+
+  it('takes the customer back to the review page with the flight they were paying for', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => reply(402, { success: false, code: 'PAYMENT_NOT_FOUND', error: 'No payment was found for this booking.' })));
+    const ReviewPage = () => <p>review of {useLocation().state?.flightData?.originalOffer?.itineraries?.[0]?.segments?.[0]?.number}</p>;
+    const { container } = render(
+      <MemoryRouter initialEntries={[{ pathname: '/flight-create-orders', state: orderData }]}>
+        <Routes>
+          <Route path="/flight-create-orders" element={<FlightCreateOrders />} />
+          <Route path="/flights/booking-confirmation" element={<ReviewPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /Back to your trip/ }));
+
+    expect(container.textContent).toMatch(/review of 614/);
+  });
+
+  it('checks again after a short wait when the gateway could not be reached, and books once it answers', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(notCaptured({ retryable: true, error: 'We could not reach the payment gateway to confirm your payment.' }))
+      .mockResolvedValueOnce(reply(200, { success: true, pnr: 'ABC123', bookingReference: 'FLT1', ticketed: false }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = renderOrderPage();
+
+    await flush();
+    await flush();
+    expect(container.textContent).toMatch(/Checking your payment/);
+    expect(container.textContent).not.toMatch(/Booking Failed|Payment not completed/);
+
+    await flush(15000);
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toMatch(/Reservation Held/);
+  });
+
+  it('stops checking after a few tries and offers to check again', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const fetchMock = vi.fn(async () => notCaptured({ retryable: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = renderOrderPage();
+
+    await flush();
+    for (let i = 0; i < 3; i += 1) await flush(15000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(container.textContent).toMatch(/We could not check your payment/);
+    expect(container.textContent).toMatch(/we will confirm your booking or refund you by email/);
+    expect(screen.getByRole('button', { name: /Check again/ })).toBeTruthy();
+
+    await flush(60000);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });
