@@ -1,4 +1,6 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -293,5 +295,51 @@ describe('the order page with nothing to book', () => {
 
     await waitFor(() => expect(container.textContent).toMatch(/No booking in progress on this page/));
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Travellers' documents in localStorage.
+ *
+ * The review page's `pendingFlightBooking` (names, dates of birth, passport
+ * numbers) was never removed, and this page wrote two more copies of the same
+ * details that no page read.
+ */
+describe('what the order page leaves in the browser', () => {
+  const draft = JSON.stringify({ passengerData: [{ firstName: 'Jane', passportNumber: 'X1234567', dateOfBirth: '1990-01-01' }] });
+
+  it('removes the draft once the booking is made, and keeps no copy of it', async () => {
+    localStorage.setItem('pendingFlightBooking', draft);
+    localStorage.setItem('completedFlightBookings', JSON.stringify([{ passengerData: [{ passportNumber: 'OLD1234' }] }]));
+    vi.stubGlobal('fetch', vi.fn(async () => reply(200, { success: true, pnr: 'ABC123', bookingReference: 'FLT1', ticketed: false })));
+    const { container } = renderOrderPage();
+
+    await waitFor(() => expect(container.textContent).toMatch(/Reservation Held/));
+    expect(localStorage.getItem('pendingFlightBooking')).toBeNull();
+    expect(localStorage.getItem('completedFlightBookings')).toBeNull();
+    expect(localStorage.getItem('completedFlightBooking')).toBeNull();
+  });
+
+  it('removes it when the server refuses the order too', async () => {
+    localStorage.setItem('pendingFlightBooking', draft);
+    vi.stubGlobal('fetch', vi.fn(async () => reply(402, { success: false, code: 'PAYMENT_NOT_CAPTURED', error: 'Payment for this booking has not been captured.' })));
+    const { container } = renderOrderPage();
+
+    await waitFor(() => expect(container.textContent).toMatch(/Payment not completed/));
+    expect(localStorage.getItem('pendingFlightBooking')).toBeNull();
+  });
+
+  it('keeps it when no answer came, so reloading can still book', async () => {
+    localStorage.setItem('pendingFlightBooking', draft);
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    renderOrderPage();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Try again/ })).toBeTruthy());
+    expect(localStorage.getItem('pendingFlightBooking')).toBe(draft);
+  });
+
+  it('writes no booking copies at all', () => {
+    const src = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/flights/FlightCreateOrders.jsx'), 'utf8');
+    expect(src).not.toMatch(/setItem\('completedFlightBooking/);
   });
 });

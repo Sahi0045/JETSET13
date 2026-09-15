@@ -5,6 +5,7 @@ import './Navbar.css';
 import CurrencySelector from '../../Components/CurrencySelector';
 import Breadcrumbs from '../../Components/Breadcrumbs';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
+import { clearStoredBookings } from '../../utils/bookingStorage';
 
 const Navbar = ({ forceScrolled }) => {
   const location = useLocation();
@@ -99,6 +100,10 @@ const Navbar = ({ forceScrolled }) => {
       localStorage.removeItem('adminToken');
       localStorage.removeItem('supabase_token');
       localStorage.removeItem('userData');
+      // Travellers' names, dates of birth and passport numbers from a booking
+      // made in this browser. They stayed after logout, for whoever used the
+      // browser next.
+      clearStoredBookings();
 
       // Update local state
       setIsAuthenticated(false);

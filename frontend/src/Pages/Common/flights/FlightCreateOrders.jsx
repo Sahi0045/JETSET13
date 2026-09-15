@@ -11,6 +11,7 @@ import { endpoints } from '@/config/api';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { buildFlightOrderBody } from '../../../../../shared/flightOrderBody';
 import { itinerariesFromOffer, returnDateOf } from '../../../../../shared/bookingItineraries';
+import { clearStoredBookings } from '../../../utils/bookingStorage';
 
 /**
  * Failures where the reference the user is holding can never be completed: the
@@ -371,40 +372,12 @@ function FlightCreateOrders() {
           returnDate: returnDateOf(legs)
         };
 
-        console.log('📝 Saving completed flight booking:', completedFlightBooking);
-        // Store as array so previous bookings are not overwritten
-        let existingBookings = [];
-        try {
-          const raw = localStorage.getItem('completedFlightBookings');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            existingBookings = Array.isArray(parsed) ? parsed : [parsed];
-          } else {
-            // Migrate legacy single-booking key if it exists
-            const legacy = localStorage.getItem('completedFlightBooking');
-            if (legacy) {
-              const legacyParsed = JSON.parse(legacy);
-              existingBookings = Array.isArray(legacyParsed) ? legacyParsed : [legacyParsed];
-            }
-          }
-        } catch (e) { /* ignore parse errors */ }
-        // Avoid duplicates by booking reference
-        // A queued booking has no PNR yet; null === null must not make two
-        // different queued bookings look like one.
-        const isDuplicate = existingBookings.some(b =>
-          b.bookingReference === completedFlightBooking.bookingReference ||
-          (completedFlightBooking.pnr && b.pnr === completedFlightBooking.pnr)
-        );
-        if (!isDuplicate) {
-          existingBookings.push(completedFlightBooking);
-        }
-        // Keep last 50 bookings max to avoid localStorage bloat
-        if (existingBookings.length > 50) {
-          existingBookings = existingBookings.slice(-50);
-        }
-        localStorage.setItem('completedFlightBookings', JSON.stringify(existingBookings));
-        // Also keep legacy key for backward compat (latest booking)
-        localStorage.setItem('completedFlightBooking', JSON.stringify(completedFlightBooking));
+        // Nothing is kept in this browser. `completedFlightBookings` and
+        // `completedFlightBooking` held every traveller's passport number and
+        // date of birth, for every booking, and no page read them. The review
+        // page's draft is removed too, now the order has an answer; the
+        // booking itself is on the server and in router state below.
+        clearStoredBookings();
 
         // Hand the booking over in router state. The confirmation page used
         // to re-read localStorage, which is shared across tabs and could
@@ -419,6 +392,12 @@ function FlightCreateOrders() {
       console.error('Order processing error:', error);
       console.error('Error response data:', error.response?.data);
       console.error('Error status:', error.response?.status);
+
+      // The server answered, so the draft with the travellers' documents has
+      // done its job: any retry from here resends what this page holds in
+      // memory. Kept only when no answer came, as a dropped connection is
+      // retried by reloading this page.
+      if (error.response) clearStoredBookings();
 
       if (error.response?.data?.code === 'BOOKING_IN_PROGRESS') {
         // Not a failure: the request holding this booking is confirming it.
