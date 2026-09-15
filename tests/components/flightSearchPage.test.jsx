@@ -1,7 +1,8 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import currencyService from '../../frontend/src/Services/CurrencyService.js';
 import { formatDateToISO, getSafeDate } from '../../frontend/src/utils/dateUtils.js';
 import FlightSearchPage from '../../frontend/src/Pages/Common/flights/flightsearchpage.jsx';
 
@@ -21,8 +22,12 @@ vi.mock('../../frontend/src/Pages/Common/flights/FlightCard', () => ({
   default: ({ flight }) => <div data-testid="flight-card">{flight.id}</div>,
 }));
 vi.mock('../../frontend/src/Pages/Common/flights/FlightFilterSidebar', () => ({
-  default: ({ onFilterChange, variant }) => (variant === 'mobile' ? null : (
-    <button type="button" onClick={() => onFilterChange('stops', '0')}>Only non-stop</button>
+  default: ({ onFilterChange, onResetAll, variant }) => (variant === 'mobile' ? null : (
+    <>
+      <button type="button" onClick={() => onFilterChange('stops', '0')}>Only non-stop</button>
+      <button type="button" onClick={() => onFilterChange('price', [0, 1])}>Cheap only</button>
+      <button type="button" onClick={onResetAll}>Reset filters</button>
+    </>
   )),
 }));
 vi.mock('../../frontend/src/Pages/Common/flights/FlightModifyBar', () => ({
@@ -221,6 +226,56 @@ describe('pages of results', () => {
     await waitFor(() => expect(screen.getAllByTestId('flight-card')).toHaveLength(10));
     expect(screen.getAllByTestId('flight-card')[0].textContent).toBe('f0');
     expect(screen.queryByText('No flights found')).toBeNull();
+  });
+});
+
+/**
+ * Clearing the filters brings every flight back.
+ *
+ * Both reset paths set the price to a fixed 0-50,000 in the display currency,
+ * so a fare above it - any fare past USD 600 when prices are shown in rupees -
+ * stayed hidden after "Reset all filters". And a currency switch left the
+ * bounds in the old currency, hiding every fare whose converted price was
+ * above the old maximum.
+ */
+describe('resetting the filters and switching currency', () => {
+  afterEach(() => {
+    currencyService.setCurrency('USD');
+  });
+
+  it('shows every flight again after either reset, whatever the fares cost', async () => {
+    searchAnswer = () => answer(200, { success: true, data: [card('costly', { price: 60000 }), card('cheap', { price: 100 })] });
+    renderPage();
+    await waitFor(() => expect(screen.getAllByTestId('flight-card')).toHaveLength(2));
+
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: 'Cheap only' }));
+    await screen.findByText('No flights found');
+
+    // The empty results' own button.
+    fireEvent.click(screen.getByRole('button', { name: /Reset All Filters/i }));
+    await waitFor(() => expect(screen.getAllByTestId('flight-card')).toHaveLength(2));
+
+    // The sidebar's.
+    fireEvent.click(screen.getByRole('button', { name: 'Cheap only' }));
+    await screen.findByText('No flights found');
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    await waitFor(() => expect(screen.getAllByTestId('flight-card')).toHaveLength(2));
+  });
+
+  it('keeps every flight on screen when the currency changes', async () => {
+    searchAnswer = () => answer(200, { success: true, data: [card('priced-in-dollars', { price: 1000 })] });
+    renderPage();
+    await screen.findByText('priced-in-dollars');
+
+    // USD 1,000 is about INR 83,000: far above the dollar bounds it was filtered by.
+    await act(async () => { currencyService.setCurrency('INR'); });
+    // The old bounds showed only once the list was filtered again, so filter it
+    // again - by a filter this flight passes.
+    fireEvent.click(screen.getByRole('button', { name: 'Only non-stop' }));
+
+    await waitFor(() => expect(screen.queryByText('No flights found')).toBeNull());
+    expect(screen.getByText('priced-in-dollars')).toBeTruthy();
   });
 });
 

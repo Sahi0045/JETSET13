@@ -31,7 +31,7 @@ import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
 import { sortFlights } from './flightSort';
 import { buildSearchPayload, fieldCode, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
-import { buildDateStrip, matchesFilters, searchFailureMessage, shiftDateStrip } from './searchResults';
+import { buildDateStrip, filtersWithin, matchesFilters, searchFailureMessage, shiftDateStrip } from './searchResults';
 
 function FlightSearchPage() {
   const location = useLocation();
@@ -78,16 +78,18 @@ function FlightSearchPage() {
   const [loading, setLoading] = useState(true);
   const [sortOrder, setSortOrder] = useState("price");
   const [dateRange, setDateRange] = useState([]);
-  const [filters, setFilters] = useState({
-    price: [0, 50000],
-    stops: "any",
-    airlines: [],
-    departureTime: "any", // any, early_morning, morning, afternoon, evening, night
-    baggage: "any", // any, included, cabin_only
-    refundable: "any", // any, yes, no
-    originAirports: [], // filter by specific departure airport(s)
-    destAirports: [] // filter by specific arrival airport(s)
-  });
+  // Until results arrive; the price range is then set from them (below).
+  const [filters, setFilters] = useState(() => filtersWithin({ min: 0, max: 50000 }));
+  // The currency prices are shown in. The price filter and its bounds are in
+  // this currency, so they are worked out again whenever it changes: the bounds
+  // stayed in the old currency and hid every flight whose converted fare was
+  // above the old maximum.
+  const [displayCurrency, setDisplayCurrency] = useState(() => currencyService.getCurrency());
+  useEffect(() => {
+    const onCurrencyChanged = (event) => setDisplayCurrency(event?.detail?.currency || currencyService.getCurrency());
+    window.addEventListener('currencyChanged', onCurrencyChanged);
+    return () => window.removeEventListener('currencyChanged', onCurrencyChanged);
+  }, []);
   const [error, setError] = useState(null);
   const [searchAttempt, setSearchAttempt] = useState(0); // Retry re-runs an unchanged search
   const [fareFlight, setFareFlight] = useState(null); // flight whose fare-options modal is open
@@ -676,18 +678,6 @@ function FlightSearchPage() {
     }));
   }, []);
 
-  const handleResetAllFilters = useCallback(() => {
-    setFilters({
-      price: [0, 50000],
-      stops: "any",
-      airlines: [],
-      departureTime: "any",
-      baggage: "any",
-      refundable: "any",
-      originAirports: [],
-      destAirports: []
-    });
-  }, []);
 
   // Helper to get a reliable numeric price for filtering
   // Returns the price converted to the user's display currency so filters match what the user sees
@@ -726,6 +716,9 @@ function FlightSearchPage() {
   // it landed one render later, and that second filter change set off the
   // back-to-page-1 reset below: whoever reached page 2 or 3 in that moment was
   // thrown back to page 1. CI's slower runner hit it every time.
+  //
+  // Again when the display currency changes: the prices the filter compares
+  // are converted into it.
   useLayoutEffect(() => {
     if (flights && flights.length > 0) {
       const prices = flights.map(f => getFlightPriceAmount(f)).filter(p => p > 0);
@@ -739,14 +732,20 @@ function FlightSearchPage() {
         }));
       }
     }
-  }, [flights]);
+  }, [flights, displayCurrency]);
+
+  // Every filter cleared, and the price back to the whole range of these
+  // results - never a fixed figure in some currency (searchResults.js).
+  const handleResetAllFilters = useCallback(() => {
+    setFilters(filtersWithin(priceRangeBounds));
+  }, [priceRangeBounds]);
 
   // Apply filters and sort (memoized — only recomputes when flights/filters/sort actually change)
   const filteredFlights = useMemo(() => {
     if (!flights || !Array.isArray(flights)) return [];
     const filtered = flights.filter((flight) => matchesFilters(flight, filters, getFlightPriceAmount));
     return sortFlights(filtered, sortOrder);
-  }, [flights, filters, sortOrder]);
+  }, [flights, filters, sortOrder, displayCurrency]);
 
   // Back to page 1 whenever the list changes under the pager. It kept its
   // page, so on page 3, filtering down to 15 flights showed an empty page
@@ -1123,18 +1122,7 @@ function FlightSearchPage() {
                     <h3 className="text-xl font-bold text-gray-800 mb-4">No flights found</h3>
                     <p className="text-gray-600 mb-8 max-w-md mx-auto">We couldn't find any flights matching your criteria. Try adjusting your search filters or dates.</p>
                     <button
-                      onClick={() => {
-                        setFilters({
-                          price: [0, 50000],
-                          stops: "any",
-                          airlines: [],
-                          departureTime: "any",
-                          baggage: "any",
-                          refundable: "any",
-                          originAirports: [],
-                          destAirports: []
-                        });
-                      }}
+                      onClick={handleResetAllFilters}
                       className="px-6 py-3 bg-[#055B75] text-white rounded-lg font-medium hover:bg-[#034457] transition-colors"
                     >
                       <X className="h-4 w-4 mr-2 inline" />

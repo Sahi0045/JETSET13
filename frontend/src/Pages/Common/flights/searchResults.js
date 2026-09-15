@@ -72,6 +72,27 @@ export const searchFailureMessage = (status, body) => {
   return "We couldn't load flights just now. Please try again.";
 };
 
+/**
+ * The sidebar filters with nothing narrowed: every price from the lowest to
+ * the highest of these results, in the currency they are shown in.
+ *
+ * Both reset buttons set the price to a fixed 0-50,000, in whatever currency
+ * the visitor was browsing in. In rupees a USD 700 fare is past 50,000, so
+ * "Reset all filters" hid the very flights it was meant to bring back.
+ *
+ * @param {{ min: number, max: number }} bounds the results' price range
+ */
+export const filtersWithin = (bounds) => ({
+  price: [bounds.min, bounds.max],
+  stops: 'any',
+  airlines: [],
+  departureTime: 'any',
+  baggage: 'any',
+  refundable: 'any',
+  originAirports: [],
+  destAirports: [],
+});
+
 const DEPARTURE_WINDOWS = {
   early_morning: [0, 6],
   morning: [6, 12],
