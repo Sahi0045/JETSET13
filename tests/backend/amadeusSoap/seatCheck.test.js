@@ -9,6 +9,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * customer had paid. confirmSeats sells once and signs out without naming or
  * committing anything, so the airline's answer is known before payment and no
  * booking is left behind.
+ *
+ * In the same session it prices what it sold. JetBlue B6 3982/L JFK-LAX on PDT
+ * was quoted $193.40 by search and informative pricing, and PNR pricing answered
+ * NO FARE FOR BOOKING CODE - found by the booking chain, after payment.
  */
 
 const envelope = (name, inner, session) => `<?xml version="1.0" encoding="UTF-8"?>
@@ -28,11 +32,24 @@ const refused = envelope('Air_SellFromRecommendationReply',
 const noStatus = envelope('Air_SellFromRecommendationReply', '<dummy/>', true);
 const signOut = envelope('Security_SignOutReply', '<dummy/>');
 
-const offer = (types = ['ADULT']) => ({
+// Without names PDT prices one adult: one fare, PA1, per-passenger amounts.
+const priced = (amount) => envelope('Fare_PricePNRWithBookingClassReply',
+  '<fareList><paxSegReference><refDetails><refQualifier>PA</refQualifier><refNumber>1</refNumber></refDetails></paxSegReference>'
+  + `<fareDataInformation><fareDataSupInformation><fareDataQualifier>712</fareDataQualifier><fareAmount>${amount}</fareAmount><fareCurrency>USD</fareCurrency></fareDataSupInformation></fareDataInformation></fareList>`, true);
+const pricingError = (code, text) => envelope('Fare_PricePNRWithBookingClassReply',
+  `<applicationError><errorOrWarningCodeDetails><errorDetails><errorCode>${code}</errorCode><errorCategory>EC</errorCategory></errorDetails></errorOrWarningCodeDetails>`
+  + `<errorWarningDescription><freeTextDetails><textSubjectQualifier>3</textSubjectQualifier></freeTextDetails><freeText>${text}</freeText></errorWarningDescription></applicationError>`, true);
+const noFare = pricingError('0', 'NO FARE FOR BOOKING CODE-TRY OTHER PRICING OPTIONS');
+
+const offer = (types = ['ADULT'], totals = []) => ({
   id: '1',
   price: { total: '276.76', currency: 'USD' },
   validatingAirlineCodes: ['GF'],
-  travelerPricings: types.map((travelerType, i) => ({ travelerId: String(i + 1), travelerType })),
+  travelerPricings: types.map((travelerType, i) => ({
+    travelerId: String(i + 1),
+    travelerType,
+    ...(totals[i] ? { price: { currency: 'USD', total: totals[i] } } : {}),
+  })),
   _ama: {
     wsap: '1ASIWJETJEC',
     segments: [
@@ -49,7 +66,9 @@ const replies = (...xmls) => {
 };
 const bodiesSent = () => axios.post.mock.calls.map(([, body]) => String(body));
 const actionsSent = () => axios.post.mock.calls.map(([, , cfg]) => cfg?.headers?.SOAPAction ?? '');
+const sent = (operation) => bodiesSent().filter((body) => body.includes(`<${operation}`));
 const load = async () => (await import('../../../backend/services/amadeusSoap/bookingChain.js')).confirmSeats;
+const refusal = async () => (await import('../../../backend/services/flightCheckout.service.js')).isFareRefusal;
 
 beforeEach(() => {
   vi.unstubAllEnvs();
@@ -62,15 +81,21 @@ beforeEach(() => {
 });
 
 describe('confirming the seats before payment', () => {
-  it('sells once, signs out, and books nothing', async () => {
+  it('sells once, prices what it sold, signs out, and books nothing', async () => {
     const confirmSeats = await load();
-    replies(sold);
+    replies(sold, priced('276.76'));
 
-    await expect(confirmSeats(offer())).resolves.toMatchObject({ available: true, statuses: ['OK', 'OK'] });
+    await expect(confirmSeats(offer(['ADULT'], ['276.76']))).resolves.toMatchObject({
+      available: true,
+      statuses: ['OK', 'OK'],
+      fare: { adultTotal: 276.76, currency: 'USD' },
+    });
 
-    expect(bodiesSent().filter((body) => body.includes('<Air_SellFromRecommendation'))).toHaveLength(1);
-    // No names, no commit: the session ends with no PNR.
-    expect(bodiesSent().some((body) => body.includes('<PNR_AddMultiElements'))).toBe(false);
+    expect(sent('Air_SellFromRecommendation')).toHaveLength(1);
+    expect(sent('Fare_PricePNRWithBookingClass')).toHaveLength(1);
+    // No names, no TST, no commit: the session ends with no PNR.
+    expect(sent('PNR_AddMultiElements')).toHaveLength(0);
+    expect(sent('Ticket_CreateTSTFromPricing')).toHaveLength(0);
     expect(actionsSent().some((action) => action.includes('VLSSOQ'))).toBe(true);
   });
 
@@ -86,7 +111,7 @@ describe('confirming the seats before payment', () => {
 
   it('refuses with a 409 the checkout reads as a fare that cannot be sold', async () => {
     const confirmSeats = await load();
-    const { isFareRefusal } = await import('../../../backend/services/flightCheckout.service.js');
+    const isFareRefusal = await refusal();
     replies(refused);
 
     const error = await confirmSeats(offer()).catch((e) => e);
@@ -94,13 +119,15 @@ describe('confirming the seats before payment', () => {
     expect(error).toMatchObject({ name: 'AmadeusSoapError', code: 409, operation: 'Air_SellFromRecommendation' });
     expect(error.technicalError).toContain('UNS');
     expect(isFareRefusal(error)).toBe(true);
-    expect(bodiesSent().some((body) => body.includes('<PNR_AddMultiElements'))).toBe(false);
+    // Seats the airline refused are not priced.
+    expect(sent('Fare_PricePNRWithBookingClass')).toHaveLength(0);
+    expect(sent('PNR_AddMultiElements')).toHaveLength(0);
     expect(actionsSent().some((action) => action.includes('VLSSOQ'))).toBe(true);
   });
 
   it('does not call a reply without a seat status a refusal', async () => {
     const confirmSeats = await load();
-    const { isFareRefusal } = await import('../../../backend/services/flightCheckout.service.js');
+    const isFareRefusal = await refusal();
     replies(noStatus);
 
     const error = await confirmSeats(offer()).catch((e) => e);
@@ -115,5 +142,88 @@ describe('confirming the seats before payment', () => {
 
     await expect(confirmSeats({ id: '1', price: {} })).rejects.toMatchObject({ code: 409 });
     expect(axios.post).not.toHaveBeenCalled();
+  });
+});
+
+describe('pricing what the seat check sold, before payment', () => {
+  it('refuses a fare the airline will not price for the booked class', async () => {
+    const confirmSeats = await load();
+    const isFareRefusal = await refusal();
+    replies(sold, noFare);
+
+    const error = await confirmSeats(offer(['ADULT'], ['193.40'])).catch((e) => e);
+
+    expect(error).toMatchObject({ name: 'AmadeusSoapError', code: 409, operation: 'Fare_PricePNRWithBookingClass' });
+    expect(error.technicalError).toContain('NO FARE FOR BOOKING CODE');
+    expect(isFareRefusal(error)).toBe(true);
+    expect(sent('PNR_AddMultiElements')).toHaveLength(0);
+    expect(actionsSent().some((action) => action.includes('VLSSOQ'))).toBe(true);
+  });
+
+  it('refuses an adult fare that prices higher than quoted', async () => {
+    const confirmSeats = await load();
+    const isFareRefusal = await refusal();
+    replies(sold, priced('1743.50'));
+
+    const error = await confirmSeats(offer(['ADULT'], ['294.50'])).catch((e) => e);
+
+    expect(error).toMatchObject({ name: 'AmadeusSoapError', code: 409, operation: 'Fare_PricePNRWithBookingClass' });
+    expect(error.technicalError).toContain('1743.5');
+    expect(error.technicalError).toContain('294.50');
+    expect(isFareRefusal(error)).toBe(true);
+  });
+
+  it('lets a fare through that prices lower than quoted', async () => {
+    const confirmSeats = await load();
+    replies(sold, priced('180.00'));
+
+    await expect(confirmSeats(offer(['ADULT'], ['193.40']))).resolves.toMatchObject({ fare: { adultTotal: 180 } });
+  });
+
+  it('allows a rise within the configured tolerance', async () => {
+    vi.stubEnv('AMADEUS_WS_PRICE_TOLERANCE', '1');
+    const confirmSeats = await load();
+    replies(sold, priced('194.00'));
+
+    await expect(confirmSeats(offer(['ADULT'], ['193.40']))).resolves.toMatchObject({ available: true });
+  });
+
+  it('compares the adult fare, not the party total', async () => {
+    const confirmSeats = await load();
+    // Two adults, a child and a lap infant: priced without names, PDT answers
+    // one adult fare, which matches the adult total quoted.
+    replies(sold, priced('193.40'));
+
+    await expect(confirmSeats(offer(['ADULT', 'ADULT', 'CHILD', 'HELD_INFANT'], ['193.40', '193.40', '150.00', '20.00'])))
+      .resolves.toMatchObject({ fare: { adultTotal: 193.4 } });
+
+    const sell = sent('Air_SellFromRecommendation')[0];
+    expect(sell.match(/<quantity>(\d+)<\/quantity>/g)).toEqual(['<quantity>3</quantity>', '<quantity>3</quantity>']);
+  });
+
+  it('does not stop checkout when pricing fails for another reason', async () => {
+    const confirmSeats = await load();
+    replies(sold, pricingError('1', 'UNABLE TO PROCESS - SYSTEM ERROR'));
+
+    await expect(confirmSeats(offer(['ADULT'], ['193.40']))).resolves.toMatchObject({ available: true, fare: null });
+  });
+
+  it('does not stop checkout when the pricing call itself fails', async () => {
+    const confirmSeats = await load();
+    axios.post.mockReset();
+    axios.post.mockResolvedValueOnce(reply(sold));
+    axios.post.mockRejectedValueOnce(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }));
+    axios.post.mockResolvedValue(reply(signOut));
+
+    await expect(confirmSeats(offer(['ADULT'], ['193.40']))).resolves.toMatchObject({ available: true, fare: null });
+  });
+
+  it('can be switched off without a deploy', async () => {
+    vi.stubEnv('AMADEUS_WS_PRICE_CHECK_BEFORE_PAYMENT', 'false');
+    const confirmSeats = await load();
+    replies(sold, noFare);
+
+    await expect(confirmSeats(offer(['ADULT'], ['193.40']))).resolves.toMatchObject({ available: true, fare: null });
+    expect(sent('Fare_PricePNRWithBookingClass')).toHaveLength(0);
   });
 });
