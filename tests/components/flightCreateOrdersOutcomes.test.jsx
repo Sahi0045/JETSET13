@@ -94,10 +94,7 @@ describe('a failed booking whose payment the server tried to reverse', () => {
   });
 
   it('still offers "Try again" for a failure that moved no money', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => reply(503, {
-      success: false, code: 'BOOKING_UNAVAILABLE', retryable: true,
-      error: 'We could not start your booking just now. Your payment is safe - please try again in a minute.',
-    })));
+    vi.stubGlobal('fetch', vi.fn(async () => reply(500, { success: false, error: 'Something went wrong on our side.' })));
     renderOrderPage();
 
     await waitFor(() => expect(screen.getByRole('button', { name: /Try again/ })).toBeTruthy());
@@ -341,5 +338,58 @@ describe('what the order page leaves in the browser', () => {
   it('writes no booking copies at all', () => {
     const src = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/flights/FlightCreateOrders.jsx'), 'utf8');
     expect(src).not.toMatch(/setItem\('completedFlightBooking/);
+  });
+});
+
+/**
+ * The order route's codes, as the backend now sends them: BOOKING_FAILED is its
+ * default failure after payment and BOOKING_NEEDS_REVIEW a failure our team
+ * handles by hand - neither can be tried again - and BOOKING_UNAVAILABLE with
+ * `retryable` is worth asking again after a short wait.
+ */
+describe('the order route codes', () => {
+  const flush = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+  it.each(['BOOKING_FAILED', 'BOOKING_NEEDS_REVIEW'])('offers no "Try again" for %s, even without bookingFailed', async (code) => {
+    vi.stubGlobal('fetch', vi.fn(async () => reply(502, { success: false, code, error: 'We could not confirm your flight booking.' })));
+    renderOrderPage();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Start a new search/ })).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /Try again/ })).toBeNull();
+  });
+
+  it('tries a BOOKING_UNAVAILABLE order again after a short wait, and books once it can', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const unavailable = reply(503, { success: false, code: 'BOOKING_UNAVAILABLE', retryable: true, error: 'We could not start your booking just now. Your payment is safe - please try again in a minute.' });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(unavailable)
+      .mockResolvedValueOnce(reply(200, { success: true, pnr: 'ABC123', bookingReference: 'FLT1', ticketed: false }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = renderOrderPage();
+
+    await flush();
+    await flush();
+    expect(container.textContent).toMatch(/Starting your booking/);
+    expect(screen.queryByRole('button', { name: /Try again/ })).toBeNull();
+
+    await flush(15000);
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toMatch(/Reservation Held/);
+  });
+
+  it('offers "Try again" once the short waits run out', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const fetchMock = vi.fn(async () => reply(503, { success: false, code: 'BOOKING_UNAVAILABLE', retryable: true, error: 'We could not start your booking just now.' }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderOrderPage();
+
+    await flush();
+    for (let i = 0; i < 3; i += 1) await flush(15000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(screen.getByRole('button', { name: /Try again/ })).toBeTruthy();
+    await flush(60000);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });

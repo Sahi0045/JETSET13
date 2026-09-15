@@ -31,6 +31,8 @@ const TERMINAL_ERROR_CODES = new Set([
   'PASSENGER_COUNT_MISMATCH', // more travellers than the fare was priced for
   'PAYER_NOT_VERIFIED',   // this browser cannot prove it made the payment
   'ORDER_FAILED',         // an unexpected error; the payment was reversed or flagged
+  'BOOKING_FAILED',       // the booking failed after payment; the payment was reversed or is being refunded
+  'BOOKING_NEEDS_REVIEW', // the booking failed and our team is sorting out the payment by hand
 ]);
 
 /**
@@ -49,6 +51,14 @@ const IN_PROGRESS_RETRY_MS = 8000;
  */
 const PAYMENT_CHECK_RETRIES = 3;
 const PAYMENT_CHECK_RETRY_MS = 15000;
+
+/**
+ * BOOKING_UNAVAILABLE with `retryable: true`: the booking could not be started
+ * just then - the database or the queue did not answer - and nothing was sold.
+ * Asked again this many times, this far apart, before offering "Try again".
+ */
+const UNAVAILABLE_RETRIES = 3;
+const UNAVAILABLE_RETRY_MS = 15000;
 
 /**
  * What the server actually did with the order. Drives every word on this
@@ -108,6 +118,9 @@ function FlightCreateOrders() {
   // Set when this page has nothing to book: { reference } - the payment
   // reference, when one survived.
   const [missingOrder, setMissingOrder] = useState(null);
+  // Waiting to try a BOOKING_UNAVAILABLE order again.
+  const [retryingUnavailable, setRetryingUnavailable] = useState(false);
+  const unavailableAttempts = useRef(0);
   const orderDataRef = useRef(null);
   const inProgressAttempts = useRef(0);
   const retryTimer = useRef(null);
@@ -288,6 +301,8 @@ function FlightCreateOrders() {
         inProgressAttempts.current = 0;
         setPaymentProblem(null);
         paymentCheckAttempts.current = 0;
+        setRetryingUnavailable(false);
+        unavailableAttempts.current = 0;
 
         const orderDetails = {
           reference,
@@ -439,6 +454,21 @@ function FlightCreateOrders() {
       }
       setPaymentProblem(null);
 
+      if (failureCode === 'BOOKING_UNAVAILABLE' && error.response.data.retryable === true) {
+        // Nothing was sold and nothing is wrong with the payment: the booking
+        // could not be started just then. Try again shortly, a few times,
+        // before leaving it to the customer's own "Try again".
+        unavailableAttempts.current += 1;
+        if (unavailableAttempts.current <= UNAVAILABLE_RETRIES) {
+          setErrorCode(failureCode);
+          setError(error.response.data.error || null);
+          setRetryingUnavailable(true);
+          retryTimer.current = setTimeout(() => processFlightOrder(orderDataRef.current), UNAVAILABLE_RETRY_MS);
+          return;
+        }
+      }
+      setRetryingUnavailable(false);
+
       // Extract more detailed error message with priority order
       let errorMessage = 'Failed to process order';
 
@@ -571,7 +601,7 @@ function FlightCreateOrders() {
           <div className="max-w-2xl mx-auto">
             <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 sm:p-8">
               <div className="text-center">
-                {processingOrder && !stillConfirming && !paymentProblem ? (
+                {processingOrder && !stillConfirming && !paymentProblem && !retryingUnavailable ? (
                   <div className="space-y-4">
                     <div className="mx-auto w-16 h-16 rounded-full border-4 border-blue-50 flex items-center justify-center">
                       <Loader className="w-8 h-8 text-blue-600 animate-spin" />
@@ -746,6 +776,22 @@ function FlightCreateOrders() {
                           Search flights
                         </button>
                       </div>
+                    )}
+                  </div>
+                ) : retryingUnavailable ? (
+                  // BOOKING_UNAVAILABLE: nothing sold, payment safe; trying again.
+                  <div className="space-y-4" role="status">
+                    <div className="mx-auto w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center">
+                      <Loader className="w-8 h-8 text-blue-600 animate-spin" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">Starting your booking</h2>
+                    <p className="text-gray-600">
+                      We could not start your booking just now. Your payment is safe, and we will try again in a few seconds; please keep this page open.
+                    </p>
+                    {orderReference && (
+                      <p className="text-sm text-gray-500">
+                        Booking reference: <span className="font-semibold text-gray-800">{orderReference}</span>
+                      </p>
                     )}
                   </div>
                 ) : missingOrder ? (
