@@ -18,6 +18,7 @@ import { recordCouponUse } from '../services/coupon.service.js';
 import { crossesBorder } from '../utils/itinerary.js';
 import { CHAIN_CLAIM_TTL_MS, MAX_QUEUE_ATTEMPTS } from '../utils/bookingChainClaim.js';
 import { queueEnvironment } from '../utils/queueEnvironment.js';
+import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
@@ -717,7 +718,7 @@ async function refreshChainClaim(bookingReference) {
  *
  * @returns {Promise<'held'|'lost'|'unavailable'>}
  */
-export async function holdChainClaim(bookingReference, attempt) {
+export async function holdChainClaim(bookingReference, attempt, claimedAt) {
   if (!supabase || !bookingReference) return 'held';
   const { data: row, error: readError } = await supabase
     .from('bookings')
@@ -731,6 +732,12 @@ export async function holdChainClaim(bookingReference, attempt) {
   const chain = details.gds_chain;
   if (chain?.state !== 'in_progress' || !chain.startedAt) return 'lost';
   if (attempt != null && Number(chain.attempt) !== Number(attempt)) return 'lost';
+  // The attempt number alone cannot tell two claimants apart. A write that
+  // spread a copy of the row read before this claim - a payment reconcile, say -
+  // put the chain back as it was, the next claimant counted from there, and both
+  // held "attempt 1": both were told they still held the booking. The claim's
+  // own stamp is unique to it, and the heartbeat never moves it.
+  if (claimedAt != null && chain.claimedAt !== claimedAt) return 'lost';
 
   const renewedAt = new Date().toISOString();
   const { data, error } = await supabase
@@ -1147,63 +1154,79 @@ export function buildBookingRow(bookingData, userId) {
 }
 
 // Helper to handle duplicate booking_reference
+const MERGE_TRIES = 3;
+
 export async function handleDuplicateBookingMerge(bookingData, rowTemplate) {
   console.log('🔄 Booking reference already exists, merging into the checkout row...');
 
-  const { data: existingBooking } = await supabase
-    .from('bookings')
-    .select('status, user_id, payment_status, total_amount, booking_details')
-    .eq('booking_reference', bookingData.bookingReference)
-    .single();
+  for (let tries = 0; tries < MERGE_TRIES; tries += 1) {
+    const { data: existingBooking } = await supabase
+      .from('bookings')
+      .select('status, user_id, payment_status, total_amount, booking_details')
+      .eq('booking_reference', bookingData.bookingReference)
+      .single();
 
-  // Every save lands here: hosted checkout creates the row before the customer
-  // pays, so the insert always collides. The merge used to overwrite that row
-  // with the template, keeping only four session fields. That set user_id to
-  // null on a queue replay (no session), so the booking vanished from My
-  // Trips; forced a cancelled or refunded row back to a live status; replaced
-  // total_amount with the order request's figure; and dropped the payment
-  // evidence (arc_transaction_id, arc_captured_amount, payment_reconciled_at),
-  // the chain claim, any cancellation record and the customer's email.
-  //
-  // Now what checkout and the gateway established is kept, and what the chain
-  // just learned is laid on top of it.
-  const existingDetails = existingBooking?.booking_details || {};
-  const mergedDetails = {
-    ...existingDetails,
-    ...rowTemplate.booking_details,
-    original_user_id: rowTemplate.booking_details.original_user_id || existingDetails.original_user_id || null,
-  };
+    // Every save lands here: hosted checkout creates the row before the customer
+    // pays, so the insert always collides. The merge used to overwrite that row
+    // with the template, keeping only four session fields. That set user_id to
+    // null on a queue replay (no session), so the booking vanished from My
+    // Trips; forced a cancelled or refunded row back to a live status; replaced
+    // total_amount with the order request's figure; and dropped the payment
+    // evidence (arc_transaction_id, arc_captured_amount, payment_reconciled_at),
+    // the chain claim, any cancellation record and the customer's email.
+    //
+    // Now what checkout and the gateway established is kept, and what the chain
+    // just learned is laid on top of it.
+    const existingDetails = existingBooking?.booking_details || {};
+    const mergedDetails = {
+      ...existingDetails,
+      ...rowTemplate.booking_details,
+      original_user_id: rowTemplate.booking_details.original_user_id || existingDetails.original_user_id || null,
+    };
 
-  const update = {
-    ...rowTemplate,
-    booking_details: mergedDetails,
-    user_id: existingBooking?.user_id || rowTemplate.user_id || null,
-  };
-  // Never resurrect a cancelled booking, or re-mark returned money as paid.
-  if (existingBooking?.status === 'cancelled') update.status = 'cancelled';
-  if (['refunded', 'partially_refunded'].includes(existingBooking?.payment_status)) {
-    update.payment_status = existingBooking.payment_status;
+    const update = {
+      ...rowTemplate,
+      booking_details: mergedDetails,
+      user_id: existingBooking?.user_id || rowTemplate.user_id || null,
+    };
+    // Never resurrect a cancelled booking, or re-mark returned money as paid.
+    if (existingBooking?.status === 'cancelled') update.status = 'cancelled';
+    if (['refunded', 'partially_refunded'].includes(existingBooking?.payment_status)) {
+      update.payment_status = existingBooking.payment_status;
+    }
+    // What checkout asked the gateway to charge, not the order request's figure.
+    if (Number(existingBooking?.total_amount) > 0) update.total_amount = existingBooking.total_amount;
+
+    // Written only onto the row it was merged from. The merge used to be
+    // written whatever had landed since the read, so a cancellation that
+    // finished in between was overwritten: its record gone, and the cancelled
+    // booking back as pending_ticketing. A race this loses is read and merged
+    // again (utils/bookingDetailsGuard.js).
+    let write = supabase
+      .from('bookings')
+      .update(update)
+      .eq('booking_reference', bookingData.bookingReference);
+    if (existingBooking) write = unchangedSince(write, existingBooking);
+    const { data: updatedData, error: updateError } = await write.select().single();
+
+    if (updateError?.code === 'PGRST116' && existingBooking) {
+      console.warn('↻ The booking changed while it was being saved; merging again', { bookingReference: bookingData.bookingReference });
+      continue;
+    }
+    if (updateError) {
+      console.error('❌ Update with merged data failed:', updateError.message);
+      return null;
+    }
+
+    console.log('✅ SUCCESS (merged)! Booking updated with ARC Pay data preserved:');
+    console.log('   Database ID:', updatedData.id);
+    console.log('   Session ID preserved:', mergedDetails.session_id || 'NONE');
+    console.log('   Booking Reference:', updatedData.booking_reference);
+    return updatedData;
   }
-  // What checkout asked the gateway to charge, not the order request's figure.
-  if (Number(existingBooking?.total_amount) > 0) update.total_amount = existingBooking.total_amount;
 
-  const { data: updatedData, error: updateError } = await supabase
-    .from('bookings')
-    .update(update)
-    .eq('booking_reference', bookingData.bookingReference)
-    .select()
-    .single();
-
-  if (updateError) {
-    console.error('❌ Update with merged data failed:', updateError.message);
-    return null;
-  }
-
-  console.log('✅ SUCCESS (merged)! Booking updated with ARC Pay data preserved:');
-  console.log('   Database ID:', updatedData.id);
-  console.log('   Session ID preserved:', mergedDetails.session_id || 'NONE');
-  console.log('   Booking Reference:', updatedData.booking_reference);
-  return updatedData;
+  console.error('❌ Booking not saved: it kept changing while it was being merged', { bookingReference: bookingData.bookingReference });
+  return null;
 }
 
 // Helper function to save booking to database
@@ -2426,7 +2449,7 @@ router.post('/order', optionalProtect, async (req, res) => {
         verifiedChargeTotal: Number.isFinite(Number(verifiedCharge.total)) ? Number(verifiedCharge.total) : undefined,
         // Asked just before the PNR is committed, so a chain that lost its
         // claim stops without selling a second PNR - see holdChainClaim.
-        beforeCommit: () => holdChainClaim(req.body.bookingReference, claim.attempt),
+        beforeCommit: () => holdChainClaim(req.body.bookingReference, claim.attempt, claim.claimedAt),
         // What ARC actually captured, read back from the gateway by the
         // reconcile above - NOT from this request body, and NOT from the row's
         // total_amount, which is what the client asked to be charged before

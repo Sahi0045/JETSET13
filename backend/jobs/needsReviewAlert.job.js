@@ -21,6 +21,7 @@
  */
 import supabase from '../config/supabase.js';
 import { postToSlack } from './slackAlert.js';
+import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 const FIRST_RUN_DELAY_MS = 60 * 1000;      // let the app finish booting first
@@ -154,24 +155,55 @@ export function buildMessage(bookings) {
   return sections.join('\n\n');
 }
 
-/** Stamp the bookings so the next run stays quiet about them. */
+/**
+ * Stamp the bookings so the next run stays quiet about them.
+ *
+ * This wrote back the copy of each row read before the Slack post, whole, so
+ * anything written in between - a running chain's final save, a cancellation
+ * record - was undone by an alarm. Each booking is read again, and the stamp
+ * written only if nothing that matters has moved since
+ * (utils/bookingDetailsGuard.js); a race it loses is read and tried again.
+ */
+const MARK_TRIES = 3;
+
 async function markAlerted(bookings) {
   for (const booking of bookings) {
-    const details = booking.booking_details || {};
-    const now = new Date().toISOString();
-    // A row announced for the unflagged reason gets a flag written as it is
-    // announced, so from here on it is one class: flagged, and stamped.
-    const review = details.needs_review
-      || { reason: UNTICKETED_REVIEW_REASON, ticketed: false, at: now };
-    const updated = {
-      ...details,
-      needs_review: { ...review, alerted_at: now },
-    };
-    const { error } = await supabase
-      .from('bookings')
-      .update({ booking_details: updated })
-      .eq('booking_reference', booking.booking_reference);
-    if (error) log('announced but could not mark', { booking: booking.booking_reference, error: error.message });
+    let marked = false;
+    let lastError = null;
+    for (let tries = 0; tries < MARK_TRIES && !marked; tries += 1) {
+      const { data: fresh, error: readError } = await supabase
+        .from('bookings')
+        .select('status, payment_status, booking_details')
+        .eq('booking_reference', booking.booking_reference)
+        .single();
+      if (readError || !fresh) {
+        lastError = readError;
+        break;
+      }
+      const details = fresh.booking_details || {};
+      if (details.needs_review?.alerted_at) {
+        marked = true;
+        break;
+      }
+      const now = new Date().toISOString();
+      // A row announced for the unflagged reason gets a flag written as it is
+      // announced, so from here on it is one class: flagged, and stamped.
+      const review = details.needs_review
+        || { reason: UNTICKETED_REVIEW_REASON, ticketed: false, at: now };
+      const { data, error } = await unchangedSince(
+        supabase
+          .from('bookings')
+          .update({ booking_details: { ...details, needs_review: { ...review, alerted_at: now } } })
+          .eq('booking_reference', booking.booking_reference),
+        fresh,
+      ).select('booking_reference');
+      if (error) {
+        lastError = error;
+        break;
+      }
+      marked = Boolean(data?.length);
+    }
+    if (!marked) log('announced but could not mark', { booking: booking.booking_reference, error: lastError?.message || 'the booking kept changing' });
   }
 }
 

@@ -447,8 +447,11 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
     // had read the row before that - went on to commit a real PNR: seats held
     // against a payment that had just been returned. The chain's claim lasts
     // CHAIN_CLAIM_TTL_MS and is renewed while it runs, so this clears itself.
+    //
+    // A committed chain is still issuing the ticket and saving the booking
+    // (utils/bookingChainClaim.js), so a cancel waits for it too.
     const holder = liveChainState(details.gds_chain);
-    if (holder === 'in_progress' || holder === 'queued') {
+    if (holder === 'in_progress' || holder === 'queued' || holder === 'committed') {
         return refuse(res, 409, 'BOOKING_IN_PROGRESS', STILL_BOOKING_TEXT, { bookingReference });
     }
     if (holder === 'cancelling') {
@@ -464,7 +467,7 @@ async function cancelFlightBooking(res, booking, { reason, email }) {
     if (!claim.claimed) {
         // Lost the race. Say to what: the chain, or another cancellation.
         const holderNow = liveChainState((await readBookingDetails(booking.id))?.gds_chain);
-        return holderNow === 'in_progress' || holderNow === 'queued'
+        return holderNow === 'in_progress' || holderNow === 'queued' || holderNow === 'committed'
             ? refuse(res, 409, 'BOOKING_IN_PROGRESS', STILL_BOOKING_TEXT, { bookingReference })
             : refuse(res, 409, 'CANCEL_IN_PROGRESS', CANCEL_IN_PROGRESS_TEXT, { bookingReference });
     }

@@ -50,10 +50,22 @@ export const MAX_QUEUE_ATTEMPTS = 10;
  * the same way claimBookingChain treats one: a lock nobody can expire is a
  * booking nobody can ever cancel or complete.
  *
- * @returns {'in_progress'|'queued'|'cancelling'|null}
+ * @returns {'in_progress'|'queued'|'cancelling'|'committed'|null}
  */
 export function liveChainState(chain, now = Date.now()) {
   if (!chain?.state) return null;
+
+  // A committed chain has not finished: after the PNR exists it still queues
+  // the booking, issues the ticket and saves the outcome. This used to count as
+  // free, so a cancel could release the seats while a ticket was being issued
+  // on them, and the chain's final save could then overwrite the cancellation.
+  // It holds the booking for a claim's lifetime from the commit. The commit
+  // renews no claim, so a booking that finished long ago is free again.
+  if (chain.state === 'committed') {
+    const committed = Date.parse(chain.committedAt ?? '');
+    return Number.isFinite(committed) && now - committed < CHAIN_CLAIM_TTL_MS ? 'committed' : null;
+  }
+
   const since = Date.parse(chain.startedAt ?? '');
   if (!Number.isFinite(since)) return null;
   const age = now - since;

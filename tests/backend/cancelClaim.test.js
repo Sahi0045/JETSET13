@@ -152,6 +152,17 @@ describe('a booking that is still being made', () => {
     expect(supabaseDouble.updates).toEqual([]);
   });
 
+  // After the PNR exists the chain still issues the ticket and saves the
+  // booking; a cancel then released seats under a ticket being issued.
+  it('is not cancelled while a committed chain is still finishing, and nothing moves', async () => {
+    const res = await cancel(booking({ gds_chain: { state: 'committed', committedAt: NOW() } }));
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.code).toBe('BOOKING_IN_PROGRESS');
+    expectNothingMoved();
+    expect(supabaseDouble.updates).toEqual([]);
+  });
+
   // A process killed mid-chain leaves its claim behind. It expires, as it does
   // for the chain's own retries, or the booking could never be cancelled.
   it('is cancelled once a dead chain has let its claim expire', async () => {
@@ -278,8 +289,15 @@ describe('liveChainState', () => {
     expect(liveChainState({ state: 'queued', startedAt: at(QUEUED_CHAIN_TTL_MS + 1000) })).toBeNull();
   });
 
+  // After the PNR exists the chain still queues, tickets and saves the booking.
+  // A cancel then released seats under a ticket being issued.
+  it('holds a committed chain while it finishes, for the claim TTL from the commit', () => {
+    expect(liveChainState({ state: 'committed', committedAt: at(1000) })).toBe('committed');
+    expect(liveChainState({ state: 'committed', committedAt: at(CHAIN_CLAIM_TTL_MS + 1000) })).toBeNull();
+    expect(liveChainState({ state: 'committed' })).toBeNull();
+  });
+
   it('holds nothing for a finished, failed or unstamped chain', () => {
-    expect(liveChainState({ state: 'committed', committedAt: at(1000) })).toBeNull();
     expect(liveChainState({ state: 'failed', finishedAt: at(1000) })).toBeNull();
     expect(liveChainState({ state: 'cancelled', startedAt: at(1000) })).toBeNull();
     expect(liveChainState({ state: 'in_progress' })).toBeNull();
