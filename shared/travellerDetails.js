@@ -23,9 +23,12 @@ import { travellerNameProblem } from './passengerName.js';
  * @param {boolean} [p.international] whether the trip crosses a border; unknown
  *   counts as yes, because a missing document costs a ticket and an extra field
  *   costs a few seconds
+ * @param {boolean} [p.secureFlight] whether a flight touches the United States,
+ *   where Secure Flight needs everyone's date of birth even on a domestic trip -
+ *   an American Airlines JFK-LAX ticket was refused without it (PDT, 15 Sep 2026)
  */
-export function needsDateOfBirth({ type, international } = {}) {
-  return international !== false || type !== 'ADULT';
+export function needsDateOfBirth({ type, international, secureFlight } = {}) {
+  return secureFlight === true || international !== false || type !== 'ADULT';
 }
 
 const dayOf = (value) => (/^\d{4}-\d{2}-\d{2}/.test(String(value ?? '')) ? String(value).slice(0, 10) : null);
@@ -66,13 +69,14 @@ export function tripDates(offer) {
  * @param {object} ctx
  * @param {string}  [ctx.type]             the fare's type for this traveller; defaults to traveller.type
  * @param {boolean} [ctx.international]    whether the trip crosses a border; unknown counts as yes
+ * @param {boolean} [ctx.secureFlight]     whether a flight touches the United States (needsDateOfBirth)
  * @param {boolean} [ctx.passportRequired] whether to ask for the passport; defaults to `international`
  * @param {string}  [ctx.travelDate]       YYYY-MM-DD of the first flight, for the age a fare depends on
  * @param {string}  [ctx.lastDate]         YYYY-MM-DD of the last flight, for later ages and passport expiry
  * @returns {string[]}
  */
 export function bookingTravellerProblems(traveller, {
-  type, international = true, passportRequired = international, travelDate, lastDate,
+  type, international = true, secureFlight = false, passportRequired = international, travelDate, lastDate,
 } = {}) {
   const t = traveller || {};
   const fareType = type || t.type;
@@ -84,7 +88,7 @@ export function bookingTravellerProblems(traveller, {
   if (nameProblem) add(nameProblem);
 
   if (!t.dateOfBirth) {
-    if (needsDateOfBirth({ type: fareType, international })) add('Enter the date of birth.');
+    if (needsDateOfBirth({ type: fareType, international, secureFlight })) add('Enter the date of birth.');
   } else if (travelDate) {
     const ageProblem = passengerAgeProblem(fareType, t.dateOfBirth, travelDate);
     if (ageProblem) {

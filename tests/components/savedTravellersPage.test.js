@@ -37,7 +37,10 @@ describe('checking travellers', () => {
     expect(review).toMatch(/problemsOf\(passenger, index\)\.length === 0/);
   });
 
-  it('asks a domestic adult for no date of birth', () => {
-    expect(review).toMatch(/needsDateOfBirth\(\{ type: passenger\.type, international: Boolean\(bookingDetails\?\.isInternational\) \}\)/);
+  // Outside the US a domestic adult gives no date of birth; on a US flight
+  // everyone does (Secure Flight) - so both flags reach the rule.
+  it('asks a domestic adult for no date of birth unless the flight touches the US', () => {
+    expect(review).toMatch(/needsDateOfBirth\(\{ type: passenger\.type, international: Boolean\(bookingDetails\?\.isInternational\), secureFlight: Boolean\(bookingDetails\?\.secureFlight\) \}\)/);
+    expect(review).toMatch(/secureFlight: Boolean\(bookingDetails\?\.secureFlight\),/);
   });
 });

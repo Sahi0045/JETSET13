@@ -18,3 +18,16 @@ export const crossesBorder = (offer) => {
   if (countries.some((country) => !country)) return true;
   return new Set(countries).size > 1;
 };
+
+/** The United States and the territories Secure Flight covers. */
+const SECURE_FLIGHT_COUNTRIES = new Set(['US', 'PR', 'VI', 'GU', 'MP', 'AS']);
+
+/**
+ * Whether any flight of an itinerary lands in or leaves the United States or a
+ * US territory - where Secure Flight needs every traveller's name, date of birth
+ * and gender, passport or not. An American Airlines JFK-LAX ticket was refused
+ * without them (PDT, 15 Sep 2026).
+ */
+export const touchesUnitedStates = (offer) => (offer?.itineraries ?? [])
+  .flatMap((itinerary) => (itinerary?.segments ?? []).flatMap((segment) => [segment?.departure?.iataCode, segment?.arrival?.iataCode]))
+  .some((code) => SECURE_FLIGHT_COUNTRIES.has(countryOfAirport(code)));

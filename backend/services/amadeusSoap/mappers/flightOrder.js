@@ -27,13 +27,26 @@ import { sanitizeName } from '../operations/pnr.js';
  * booking, and saying so lets the chain take its compensation path instead of
  * inventing a reference.
  */
+/**
+ * Amadeus's own reservation in the PNR header.
+ *
+ * pnrHeader repeats when the airline sends its record locator back with the
+ * commit: Asiana answered [{1A BA67KD}, {OZ 0243-3166}] (PDT, 15 Sep 2026). Read
+ * as a single object, the pair gave no locator at all, and a PNR that existed was
+ * treated as a failed commit. Amadeus's record (1A) is the one we hold.
+ */
+const amadeusReservation = (reply) => {
+  const reservations = arr(at(reply, 'pnrHeader')).flatMap((header) => arr(at(header, 'reservationInfo.reservation')));
+  return reservations.find((reservation) => atTxt(reservation, 'companyId') === '1A') ?? reservations[0] ?? null;
+};
+
 export const readRecordLocator = (reply) => {
-  const value = atTxt(reply, 'pnrHeader.reservationInfo.reservation.controlNumber') || '';
+  const value = atTxt(amadeusReservation(reply), 'controlNumber') || '';
   return /^[A-Z0-9]{6}$/i.test(value.trim()) ? value.trim() : '';
 };
 
 /** Creation date, when the reply carries one (DDMMYY). */
-const readCreationDate = (reply) => atTxt(reply, 'pnrHeader.reservationInfo.reservation.date') || '';
+const readCreationDate = (reply) => atTxt(amadeusReservation(reply), 'date') || '';
 
 /**
  * Passengers as the clients expect them: {id, name:{firstName, lastName}}.
@@ -216,7 +229,7 @@ export const buildFlightOrder = (reply, { flightOffers = [], bookingReference } 
   return {
     type: 'flight-order',
     id: pnr,
-    queuingOfficeId: atTxt(reply, 'pnrHeader.reservationInfo.reservation.companyId') || undefined,
+    queuingOfficeId: atTxt(amadeusReservation(reply), 'companyId') || undefined,
     associatedRecords: pnr
       ? [{ reference: pnr, creationDate: readCreationDate(reply), originSystemCode: 'GDS' }]
       : [],

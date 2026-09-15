@@ -582,6 +582,8 @@ const createFlightOrder = async (orderData, options = {}) => {
     // booking? See holdChainClaim in the order route.
     beforeCommit: options.beforeCommit,
     onCommitted: options.onCommitted,
+    // The itinerary touches the United States (Secure Flight): see buildDocsFreetext.
+    secureFlight: options.secureFlight === true,
   });
 
   return {

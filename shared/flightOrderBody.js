@@ -55,9 +55,10 @@ export function buildFlightOrderBody(orderData, { userId = null } = {}) {
   // review page records whether the trip crosses a border; a booking saved
   // without that record needs one for everybody, as before.
   const international = orderData?.bookingDetails?.isInternational;
+  const secureFlight = orderData?.bookingDetails?.secureFlight === true;
   const incomplete = passengerDetails.length === 0 || passengerDetails.some(
     (p) => !p.firstName || !p.lastName || !p.gender
-      || (!p.dateOfBirth && needsDateOfBirth({ type: p.ptc, international }))
+      || (!p.dateOfBirth && needsDateOfBirth({ type: p.ptc, international, secureFlight }))
   );
   if (incomplete) return { body: null, passengerDetails, problem: 'PASSENGERS_INCOMPLETE' };
 

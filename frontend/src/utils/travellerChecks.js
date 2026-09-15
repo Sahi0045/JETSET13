@@ -23,10 +23,10 @@ import { bookingTravellerProblems } from '../../../shared/travellerDetails';
  * @returns {string[]}
  */
 export function travellerProblems(traveller, {
-  index = 0, international = true, travelDate, lastDate, bookingAsGuest = false, contactEmail = '',
+  index = 0, international = true, secureFlight = false, travelDate, lastDate, bookingAsGuest = false, contactEmail = '',
 } = {}) {
   const t = traveller || {};
-  const problems = bookingTravellerProblems(t, { international, travelDate, lastDate });
+  const problems = bookingTravellerProblems(t, { international, secureFlight, travelDate, lastDate });
   const add = (text) => problems.push(text);
 
   if (index === 0 && !t.mobile) add('Enter a mobile number for booking updates.');

@@ -5,7 +5,7 @@ import { buildFlightOrder, isTicketed, readRecordLocator, readTickets } from './
 import { toDDMMYY } from './mappers/datetime.js';
 import { arr, atTxt } from './parseXml.js';
 import { buildAirSellBody, readAirSellReply } from './operations/airSell.js';
-import { buildAddElementsBody, buildCancelBody, buildCommitBody, buildRetrieveBody } from './operations/pnr.js';
+import { buildAddElementsBody, buildCancelBody, buildCommitBody, buildIgnoreBody, buildRetrieveBody } from './operations/pnr.js';
 import {
   buildCreateTstBody,
   buildFopBody,
@@ -278,6 +278,8 @@ export const runBookingChain = async (p) => {
         // Without a last-ticketing date the office default applies, which is
         // safer than inventing one that might already be in the past.
         ticketing: ticketingDate ? { date: ticketingDate, time: '2359' } : null,
+        // A US itinerary: DOCS with date of birth and gender, passport or not.
+        secureFlight: p.secureFlight === true,
       }),
     });
 
@@ -743,7 +745,7 @@ export const cancelBooking = async (recordLocator) => {
     // after ticketing the airline's own updates are still landing on the PNR,
     // and a cancel then is refused - on PDT an Etihad and an Air Canada booking
     // were both left live this way. It is not a refusal to cancel: Amadeus says
-    // to redisplay the PNR and try again, which is what this does, twice.
+    // to ignore it, redisplay the PNR and try again, which is what this does, twice.
     for (let attempt = 1; ; attempt += 1) {
       try {
         await callStep(ctx, {
@@ -759,9 +761,13 @@ export const cancelBooking = async (recordLocator) => {
         const simultaneous = String(cause?.amadeusCode ?? '') === '8111'
           || /SIMULTANEOUS CHANGES/i.test(String(cause?.technicalError ?? ''));
         if (!simultaneous || attempt >= 3) throw cause;
-        log.warn({ pnr: recordLocator, attempt }, 'PNR_Cancel met simultaneous changes; redisplaying and retrying');
+        log.warn({ pnr: recordLocator, attempt }, 'PNR_Cancel met simultaneous changes; ignoring it and retrying');
         await sleep(config.cancelRetryDelayMs);
-        await callStep(ctx, { step: 'retrieve', operation: 'PNR_Retrieve', bodyXml: buildRetrieveBody(recordLocator), pnr: recordLocator, committed: true });
+        // Ignore the refused cancel before looking again. A plain retrieve here
+        // answered 31 FINISH OR IGNORE, because the failed change was still
+        // pending in the session - which is what left most cancels in the
+        // 15 Sep airline test unfinished.
+        await callStep(ctx, { step: 'ignore', operation: 'PNR_AddMultiElements', bodyXml: buildIgnoreBody(), pnr: recordLocator, committed: true });
       }
     }
 
