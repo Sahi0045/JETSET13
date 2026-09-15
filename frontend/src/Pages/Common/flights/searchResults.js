@@ -56,6 +56,21 @@ export const shiftDateStrip = (strip, days, { selectedIso, today = getTodayDate(
   strip.map((day) => stripDay(addDays(day.isoDate, days), selectedIso, today));
 
 /**
+ * A search moved to a new departure date, with its return moved by the same
+ * number of days.
+ *
+ * A date picked on the strip or the fare calendar changed only the departure,
+ * so a day after the return searched a trip that came home before it left.
+ * The trip keeps its length instead.
+ */
+export const withDepartureDate = (search, isoDate) => {
+  if (!search?.returnDate || !search?.departDate) return { ...search, departDate: isoDate };
+  // Both at local noon, so a daylight-saving change still rounds to whole days.
+  const days = Math.round((getSafeDate(isoDate) - getSafeDate(search.departDate)) / 86400000);
+  return { ...search, departDate: isoDate, returnDate: addDays(search.returnDate, days) };
+};
+
+/**
  * What to tell the customer when a search fails.
  *
  * A refused request (4xx) says why in words the customer can act on - "Each

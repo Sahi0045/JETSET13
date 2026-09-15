@@ -31,7 +31,7 @@ import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
 import { sortFlights } from './flightSort';
 import { buildSearchPayload, fieldCode, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
-import { buildDateStrip, filtersWithin, matchesFilters, searchFailureMessage, shiftDateStrip } from './searchResults';
+import { buildDateStrip, filtersWithin, matchesFilters, searchFailureMessage, shiftDateStrip, withDepartureDate } from './searchResults';
 
 function FlightSearchPage() {
   const location = useLocation();
@@ -784,7 +784,9 @@ function FlightSearchPage() {
    */
   const handleDateSelect = (selectedDate) => {
     if (!selectedDate || selectedDate.isPast || !searchData) return;
-    const next = { ...searchData, departDate: selectedDate.isoDate };
+    // On a round trip the return moves with the departure, so a date past the
+    // return cannot search a trip that comes home before it leaves.
+    const next = withDepartureDate(searchData, selectedDate.isoDate);
     navigate(`/flights/search?${searchToQuery(next)}`, {
       replace: true,
       state: { searchData: next }

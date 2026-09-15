@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import currencyService from '../../frontend/src/Services/CurrencyService.js';
 import { formatDateToISO, getSafeDate } from '../../frontend/src/utils/dateUtils.js';
 import FlightSearchPage from '../../frontend/src/Pages/Common/flights/flightsearchpage.jsx';
+import { withDepartureDate } from '../../frontend/src/Pages/Common/flights/searchResults.js';
 
 /**
  * The flight results page, driven through its own fetches.
@@ -186,6 +187,27 @@ describe('picking dates', () => {
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.queryByText('first-date')).toBeNull();
     expect(stripButton(D2).className).toMatch(/\bselected\b/);
+  });
+
+  // The strip changed only the departure, so a day after the return searched a
+  // trip that came home before it left.
+  it('moves the return with the departure on a round trip', async () => {
+    const back = addDays(D1, 1);
+    searchAnswer = () => answer(200, { success: true, data: [card('round-trip')] });
+    renderPage(`from=DEL&to=BOM&date=${D1}&returnDate=${back}`);
+    await screen.findByText('round-trip');
+
+    fireEvent.click(stripButton(D3));
+
+    await waitFor(() => expect(searchBodies().at(-1)).toMatchObject({ departDate: D3, returnDate: addDays(back, 2) }));
+    expect(currentLocation.search).toContain(`returnDate=${addDays(back, 2)}`);
+  });
+
+  it('keeps the trip length across months and daylight-saving changes', () => {
+    expect(withDepartureDate({ departDate: '2026-10-30', returnDate: '2026-11-02' }, '2026-11-01'))
+      .toMatchObject({ departDate: '2026-11-01', returnDate: '2026-11-04' });
+    expect(withDepartureDate({ departDate: '2026-10-10', returnDate: '' }, '2026-10-12'))
+      .toEqual({ departDate: '2026-10-12', returnDate: '' });
   });
 
   it('moves the strip a week without searching, and marks no date in it as searched', async () => {
