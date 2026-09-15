@@ -69,6 +69,10 @@ const readWsConfig = (env = process.env) => {
     marketIataCode: (env.AMADEUS_WS_MARKET_IATA_CODE || 'US').trim().toUpperCase(),
     queueNumber: (env.AMADEUS_WS_QUEUE_NUMBER || '50').trim(),
     queueOffice: (env.AMADEUS_WS_QUEUE_OFFICE || env.AMADEUS_WS_OFFICE_ID).trim(),
+    // The category within that queue - the "C0" in queue 90 C0, which Amadeus
+    // created for PDT testing. A production queue can use another category, so
+    // it is set here with the number rather than fixed in the request builder.
+    queueCategory: String(asInt(env.AMADEUS_WS_QUEUE_CATEGORY, 0)),
     // No FOP free-text setting: fopDetails accepts only fopCode, fopMapTable,
     // fopBillingCode and fopStatus, so there is nowhere to put the ARC
     // transaction id. It lives in booking_details.transaction_id instead.

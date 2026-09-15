@@ -493,6 +493,33 @@ describe('after the PNR exists', () => {
     expect(result.queued).toBe(false);
   });
 
+  // Both the queue and its category are settings: 90 C0 on PDT, whatever
+  // Amadeus assigns in production.
+  it('files the PNR on the queue and category the environment names', async () => {
+    vi.stubEnv('AMADEUS_WS_QUEUE_NUMBER', '90');
+    vi.stubEnv('AMADEUS_WS_QUEUE_CATEGORY', '3');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk);
+
+    const result = await runBookingChain({ offer: offer(), travelers });
+
+    const queued = axios.post.mock.calls.map(([, body]) => String(body)).find((body) => body.includes('<Queue_PlacePNR'));
+    expect(result.queued).toBe(true);
+    expect(queued).toContain('<queueDetails><number>90</number></queueDetails>');
+    expect(queued).toContain('<identificationType>C</identificationType><itemNumber>3</itemNumber>');
+  });
+
+  it('uses queue 50 in category 0 when neither is set', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk);
+
+    await runBookingChain({ offer: offer(), travelers });
+
+    const queued = axios.post.mock.calls.map(([, body]) => String(body)).find((body) => body.includes('<Queue_PlacePNR'));
+    expect(queued).toContain('<queueDetails><number>50</number></queueDetails>');
+    expect(queued).toContain('<identificationType>C</identificationType><itemNumber>0</itemNumber>');
+  });
+
   // The route reads `committed` to decide whether refunding is safe. A ticketed
   // booking that gets refunded leaves the customer flying for free and the
   // airline billing us.
