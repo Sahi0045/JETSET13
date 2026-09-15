@@ -20,6 +20,7 @@ import { CHAIN_CLAIM_TTL_MS } from '../utils/bookingChainClaim.js';
 import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
+import { isFareRefusal } from '../services/flightCheckout.service.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
 import { liveChainState } from '../utils/bookingChainClaim.js';
 
@@ -1623,9 +1624,14 @@ router.post('/price', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Flight pricing error:', error);
-    res.status(500).json({
+    // The airline refusing this fare is not an outage, and a retry cannot fix
+    // it. Both used to answer 500, so checkout - which prices through this
+    // route on Vercel - told the customer to try again in a moment for ever.
+    const fareRefused = isFareRefusal(error);
+    res.status(fareRefused ? 409 : 500).json({
       success: false,
-      error: error.message || 'Failed to price flight'
+      error: error.message || 'Failed to price flight',
+      ...(fareRefused ? { code: 'FARE_UNAVAILABLE' } : {}),
     });
   }
 });

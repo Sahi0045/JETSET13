@@ -20,6 +20,20 @@ import { evaluateCoupon } from './coupon.service.js';
  * that figure to the cent.
  */
 
+/**
+ * Whether a pricing failure is the airline refusing this fare - gone, changed,
+ * or not sellable as described - rather than a failure to reach the airline.
+ *
+ * The SOAP client answers a refusal with a 409 (or a 400 for a request it
+ * cannot sell at all) and an outage with a 5xx. Checkout used to turn both into
+ * "try again in a moment", and dropped the provider's "please search again":
+ * a customer on a fare that could no longer be sold retried for ever.
+ */
+export const isFareRefusal = (error) => error?.name === 'AmadeusSoapError' && [400, 409].includes(Number(error?.code));
+
+/** A pricing failure checkout answers with "search again", not "try again". */
+const fareRefused = (reason) => Object.assign(new Error(`the airline refused to price the fare: ${reason}`), { fareUnavailable: true });
+
 /** Where pricing runs. Vercel cannot reach Amadeus (it allow-lists Lightsail's IP). */
 const pricingBase = () => process.env.FLIGHTS_API_BASE
   || (process.env.VERCEL ? 'https://api.jetsetterss.com' : '');
@@ -44,6 +58,9 @@ export async function priceOfferForCheckout(offer) {
       { timeout: 25000, validateStatus: () => true },
     );
     const priced = resp?.data?.data?.flightOffers?.[0];
+    if (resp?.data?.code === 'FARE_UNAVAILABLE') {
+      throw fareRefused(resp?.data?.error || `pricing answered ${resp?.status}`);
+    }
     if (resp?.status !== 200 || !resp?.data?.success || !priced?.price) {
       throw new Error(`pricing answered ${resp?.status}: ${resp?.data?.error || 'no priced offer'}`);
     }
@@ -52,7 +69,13 @@ export async function priceOfferForCheckout(offer) {
   }
 
   const { default: FlightProvider } = await import('./flightProvider.js');
-  const result = await FlightProvider.priceFlightOffer(offer);
+  let result;
+  try {
+    result = await FlightProvider.priceFlightOffer(offer);
+  } catch (error) {
+    if (isFareRefusal(error)) throw fareRefused(error.technicalError || error.message);
+    throw error;
+  }
   const priced = result?.data?.flightOffers?.[0];
   if (!result?.success || !priced?.price) throw new Error(result?.error || 'pricing returned no offer');
   const { crossesBorder } = await import('../utils/itinerary.js');
@@ -126,6 +149,12 @@ export async function verifyFlightCharge({
     priced = await priceOffer(offer);
   } catch (error) {
     console.warn('⚠️ Checkout pricing failed:', error?.message || error);
+    // The airline will not sell this fare any more: say so, and that a new
+    // search is the way on. A retry of the same fare cannot succeed.
+    if (error?.fareUnavailable) {
+      return refuse(409, 'FARE_UNAVAILABLE',
+        'The airline can no longer sell this fare. Please search again to see the fares available now. Nothing has been charged.');
+    }
     return refuse(503, 'PRICE_UNAVAILABLE', 'We could not confirm the current fare with the airline. Please try again in a moment.');
   }
 

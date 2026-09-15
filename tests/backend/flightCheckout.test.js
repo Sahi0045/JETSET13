@@ -125,6 +125,17 @@ describe('verifyFlightCharge', () => {
     expect(result.code).toBe('PRICE_UNAVAILABLE');
   });
 
+  // Every pricing failure read "try again in a moment", so a fare the airline
+  // would no longer sell was retried for ever.
+  it('says a fare the airline refuses to price is gone, and to search again', async () => {
+    const refused = Object.assign(new Error('the airline refused to price the fare'), { fareUnavailable: true });
+    const result = await verify({ amount: 401, bookingData: bookingFor(1), priceOffer: vi.fn().mockRejectedValue(refused) });
+
+    expect(result.status).toBe(409);
+    expect(result.code).toBe('FARE_UNAVAILABLE');
+    expect(result.message).toMatch(/search again/i);
+  });
+
   it('refuses a fare the merchant cannot settle', async () => {
     const result = await verify({ amount: 401, bookingData: bookingFor(1), priceOffer: pricedAt(400, 'EUR') });
     expect(result.code).toBe('CURRENCY_UNSUPPORTED');
@@ -235,6 +246,57 @@ describe('verifyFlightCharge', () => {
     const result = await verify({ amount: 402, bookingData: booking, priceOffer });
 
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('priceOfferForCheckout tells a refused fare from an outage', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.doUnmock('../../backend/services/flightProvider.js');
+  });
+
+  const price = async () => {
+    const { priceOfferForCheckout } = await import('../../backend/services/flightCheckout.service.js');
+    return priceOfferForCheckout({ id: '1' }).then(() => null, (error) => error);
+  };
+
+  describe('through the pricing route (Vercel)', () => {
+    beforeEach(() => {
+      vi.stubEnv('FLIGHTS_API_BASE', 'https://api.test');
+      axios.post.mockReset();
+    });
+
+    it("flags the route's FARE_UNAVAILABLE", async () => {
+      axios.post.mockResolvedValue({ status: 409, data: { success: false, code: 'FARE_UNAVAILABLE', error: 'This flight can no longer be priced - please search again' } });
+      expect((await price()).fareUnavailable).toBe(true);
+    });
+
+    it('does not flag a failure to price', async () => {
+      axios.post.mockResolvedValue({ status: 500, data: { success: false, error: 'Flight service is not responding' } });
+      const error = await price();
+      expect(error).toBeInstanceOf(Error);
+      expect(error.fareUnavailable).toBeUndefined();
+    });
+  });
+
+  describe('directly (Lightsail)', () => {
+    const withProvider = (priceFlightOffer) => {
+      vi.stubEnv('FLIGHTS_API_BASE', '');
+      vi.stubEnv('VERCEL', '');
+      vi.doMock('../../backend/services/flightProvider.js', () => ({ default: { priceFlightOffer } }));
+    };
+
+    it("flags the airline's refusal", async () => {
+      const { AmadeusSoapError } = await import('../../backend/services/amadeusSoap/errors.js');
+      withProvider(vi.fn().mockRejectedValue(new AmadeusSoapError({ error: 'That flight is no longer available at this price', code: 409 })));
+      expect((await price()).fareUnavailable).toBe(true);
+    });
+
+    it('does not flag an airline that did not answer', async () => {
+      const { AmadeusSoapError } = await import('../../backend/services/amadeusSoap/errors.js');
+      withProvider(vi.fn().mockRejectedValue(new AmadeusSoapError({ error: 'Flight service is not responding', code: 504 })));
+      expect((await price()).fareUnavailable).toBeUndefined();
+    });
   });
 });
 

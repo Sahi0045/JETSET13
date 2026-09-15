@@ -90,6 +90,8 @@ function FlightBookingConfirmation() {
   // server at checkout. Null until the check answers; the search price stands.
   const [pricedFare, setPricedFare] = useState(null);
   const [fareNotice, setFareNotice] = useState(null);
+  // The airline refused to price this fare: the way on is a new search.
+  const [fareGone, setFareGone] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   // One payment page per trip. React state alone let a quick second click in
   // before Pay re-rendered disabled, and `checkingOut` was cleared as soon as
@@ -322,6 +324,17 @@ function FlightBookingConfirmation() {
       return;
     }
     navigate(`/flights/search?${searchToQuery(search)}`, { state: { searchData: search, editTravellers: true } });
+  };
+
+  // Back to the results for this same search, for the fares on sale now - the
+  // way on from a fare the airline no longer sells.
+  const searchAgain = () => {
+    const search = reviewState?.searchData;
+    if (!search?.from || !search?.to || !search?.departDate) {
+      navigate('/flights');
+      return;
+    }
+    navigate(`/flights/search?${searchToQuery(search)}`, { state: { searchData: search } });
   };
 
   // To the login page and back here, with the flight they picked kept.
@@ -581,6 +594,13 @@ function FlightBookingConfirmation() {
     const offer = reviewState?.flightData?.originalOffer;
     if (!bookingDetails || !offer) return undefined;
     let cancelled = false;
+    setFareGone(false);
+    // A check that fails is said, not swallowed: the page used to go on
+    // quoting the search price as if the airline had confirmed it.
+    const couldNotCheck = () => {
+      if (cancelled) return;
+      setFareNotice((notice) => notice || "We couldn't check this fare with the airline just now. The total below is from your search. It is checked again before you pay, and nothing is charged if it has changed.");
+    };
     (async () => {
       try {
         const res = await fetch(apiConfig.endpoints.flights.price, {
@@ -588,10 +608,19 @@ function FlightBookingConfirmation() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ flightOffer: offer }),
         });
-        const body = await res.json();
+        const body = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (body?.code === 'FARE_UNAVAILABLE') {
+          setFareGone(true);
+          setFareNotice('The airline can no longer sell this fare. Please search again to see the fares available now.');
+          return;
+        }
         const price = body?.data?.flightOffers?.[0]?.price;
         const total = Number(price?.grandTotal ?? price?.total);
-        if (cancelled || !body?.success || !Number.isFinite(total) || total <= 0) return;
+        if (!res.ok || !body?.success || !Number.isFinite(total) || total <= 0) {
+          couldNotCheck();
+          return;
+        }
         // This offer's own search price. bookingDetails can still hold the
         // previous offer here - after travellers are added this check runs
         // before the page re-reads the flight - and it compared a 3-adult price
@@ -607,7 +636,9 @@ function FlightBookingConfirmation() {
           setFareNotice(`The airline's current fare for this flight is ${fareCurrency} ${total.toFixed(2)}, not the ${fareCurrency} ${searched.toFixed(2)} it was when you searched. The total below uses the current fare.`);
         }
       } catch {
-        // Not fatal: checkout verifies the fare with the airline regardless.
+        // Not fatal - checkout verifies the fare with the airline regardless -
+        // but not silent either.
+        couldNotCheck();
       }
     })();
     return () => { cancelled = true; };
@@ -973,6 +1004,21 @@ function FlightBookingConfirmation() {
         couponBase.current = null;
         setFareNotice(`${refusal.error} The coupon has been removed, so please check the total. Nothing has been charged.`);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      // The airline will not price this fare any more. Trying again cannot
+      // help, and "try again in a moment" is what this said, every time.
+      if (refusal.code === 'FARE_UNAVAILABLE') {
+        setFareGone(true);
+        setFareNotice('The airline can no longer sell this fare. Please search again to see the fares available now.');
+        setNotice({
+          tone: 'error',
+          title: 'This fare is no longer available',
+          message: String(refusal.error || 'The airline can no longer sell this fare. Please search again.').replace(/\s*Nothing has been charged\.?/i, ''),
+          reassure: true,
+          actionLabel: 'Search again',
+          onAction: searchAgain,
+        });
         return;
       }
       if (refusal.code === 'LOGIN_REQUIRED') {
@@ -1818,6 +1864,11 @@ function FlightBookingConfirmation() {
                 {fareNotice && (
                   <div className="mb-3 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800" role="status">
                     {fareNotice}
+                    {fareGone && (
+                      <button type="button" onClick={searchAgain} className="mt-2 block font-semibold text-[#055B75] underline">
+                        Search again
+                      </button>
+                    )}
                   </div>
                 )}
                 {/* Base Fare */}
