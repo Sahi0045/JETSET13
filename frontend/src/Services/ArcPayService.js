@@ -71,6 +71,12 @@ class ArcPayService {
                 cancelUrl: checkoutData.cancelUrl,
                 bookingData: checkoutData.bookingData,
                 flightData: checkoutData.flightData
+            }, {
+                // Checkout prices the fare with the airline (up to 25 seconds)
+                // and then opens the ARC payment session (up to 30). The 10
+                // seconds the other calls here allow gave up on it while it was
+                // still working, and the customer's retry started over.
+                timeout: 60000
             });
 
             return {

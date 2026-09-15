@@ -431,6 +431,31 @@ export async function handleHostedCheckout(req, res) {
             }
         }
 
+        const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
+        // Where ARC sends the payer afterwards: the caller's URL only when it is
+        // one of ours (utils/returnUrl.js), otherwise the site's default.
+        const finalReturnUrl = safeReturnUrl(returnUrl, `${frontendBaseUrl}/payment/callback?orderId=${orderId}&bookingType=${bookingType}`);
+        const finalCancelUrl = safeReturnUrl(cancelUrl, `${frontendBaseUrl}/${bookingType}-payment?cancelled=true`);
+
+        // A payment page this customer already opened for exactly this trip,
+        // handed back under its own reference. Never with its success
+        // indicator: whoever opens a checkout is never given the secret that
+        // proves who paid (see the response at the end).
+        const handBack = (reusable) => {
+            console.log('♻️ Handing back the payment page already open for this trip', { orderId: reusable.orderId, requested: orderId });
+            return res.status(200).json({
+                success: true,
+                sessionId: reusable.sessionId,
+                merchantId: ARC_PAY_CONFIG.MERCHANT_ID,
+                orderId: reusable.orderId,
+                paymentPageUrl: reusable.checkoutUrl,
+                checkoutUrl: reusable.checkoutUrl,
+                redirectMethod: 'GET',
+                reused: true,
+                message: 'This trip already has a payment page open, so that one is used.'
+            });
+        };
+
         let chargeAmount = amount;
         let verifiedCharge = null;
         if (bookingType === 'flight') {
@@ -457,6 +482,23 @@ export async function handleHostedCheckout(req, res) {
                     });
                 }
             }
+            // The page this customer opened moments ago for exactly this trip,
+            // looked for before the fare is priced again. A retry priced the
+            // fare again - up to 25 seconds - before it found the payment page
+            // it had already opened, and the review page had given up after 10.
+            // The open page was made for a total the airline's price verified;
+            // it is handed back only when this request asks for that same total
+            // with the same coupon, as well as the same flights, travellers and
+            // contact details (utils/tripMatch.js). Anything else is priced.
+            const openPage = await findReusableCheckout({
+                userId: signedInUserId,
+                customerEmail,
+                key: checkoutKey({ bookingData, customerEmail, total: amount, couponCode: req.body.couponCode }),
+                returnOrigin: urlOrigin(finalReturnUrl),
+                frontendBaseUrl,
+            });
+            if (openPage) return handBack(openPage);
+
             const verdict = await verifyFlightCharge({
                 client: supabase,
                 amount,
@@ -505,13 +547,7 @@ export async function handleHostedCheckout(req, res) {
         }
         arcBaseUrl = arcBaseUrl || 'https://api.arcpay.travel/api/rest/version/77';
 
-        const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
         const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
-
-        // Where ARC sends the payer afterwards: the caller's URL only when it is
-        // one of ours (utils/returnUrl.js), otherwise the site's default.
-        const finalReturnUrl = safeReturnUrl(returnUrl, `${frontendBaseUrl}/payment/callback?orderId=${orderId}&bookingType=${bookingType}`);
-        const finalCancelUrl = safeReturnUrl(cancelUrl, `${frontendBaseUrl}/${bookingType}-payment?cancelled=true`);
 
         // One trip, one open payment page. Every Pay click on the review page
         // opened a new session under a new reference, so a double click, the
@@ -521,6 +557,10 @@ export async function handleHostedCheckout(req, res) {
         // for exactly this trip is handed back instead, under its own reference.
         // Its success indicator is not: whoever opens a checkout is never given
         // the secret that proves who paid (see the response at the end).
+        //
+        // Looked for again at the verified total: the page may have asked for a
+        // figure the open page was not made for, or another request may have
+        // opened one while this one was pricing.
         if (bookingType === 'flight') {
             const reusable = await findReusableCheckout({
                 userId: resolveBookingUserId(req),
@@ -529,20 +569,7 @@ export async function handleHostedCheckout(req, res) {
                 returnOrigin: urlOrigin(finalReturnUrl),
                 frontendBaseUrl,
             });
-            if (reusable) {
-                console.log('♻️ Handing back the payment page already open for this trip', { orderId: reusable.orderId, requested: orderId });
-                return res.status(200).json({
-                    success: true,
-                    sessionId: reusable.sessionId,
-                    merchantId: arcMerchantId,
-                    orderId: reusable.orderId,
-                    paymentPageUrl: reusable.checkoutUrl,
-                    checkoutUrl: reusable.checkoutUrl,
-                    redirectMethod: 'GET',
-                    reused: true,
-                    message: 'This trip already has a payment page open, so that one is used.'
-                });
-            }
+            if (reusable) return handBack(reusable);
         }
 
         const cleanBaseUrl = arcBaseUrl.replace(/\/$/, '');

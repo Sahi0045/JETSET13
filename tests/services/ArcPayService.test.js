@@ -122,11 +122,13 @@ describe('ArcPayService', () => {
       expect(result.success).toBe(true);
       expect(result.checkoutUrl).toBe('https://pay.example.com/checkout');
       expect(result.orderId).toBe('ORD-001');
+      // A minute for this call: checkout prices the fare (up to 25 seconds)
+      // and opens the ARC session (up to 30); 10 seconds gave up on it.
       expect(mockAxiosInstance.post).toHaveBeenCalledWith('?action=hosted-checkout', expect.objectContaining({
         amount: 500,
         currency: 'USD',
         orderId: 'ORD-001'
-      }));
+      }), expect.objectContaining({ timeout: 60000 }));
     });
 
     it('handles checkout failure', async () => {

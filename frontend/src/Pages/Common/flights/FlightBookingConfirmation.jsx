@@ -102,6 +102,18 @@ function FlightBookingConfirmation() {
   // open for the same trip (checkout.handlers.js), which covers a second tab.
   const paymentStarting = React.useRef(false);
   const [openingPayment, setOpeningPayment] = useState(false);
+  // Checkout can take up to a minute: the airline prices the fare, then the
+  // payment page is opened. Past a few seconds the page says it is still
+  // working, so the wait does not read as a page that has hung.
+  const [slowCheckout, setSlowCheckout] = useState(false);
+  useEffect(() => {
+    if (!checkingOut) {
+      setSlowCheckout(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setSlowCheckout(true), 8000);
+    return () => clearTimeout(timer);
+  }, [checkingOut]);
 
   // Back from the payment page, a page restored from the browser's cache still
   // holds "opening payment". The customer may try again: checkout gives them
@@ -1961,8 +1973,13 @@ function FlightBookingConfirmation() {
                   disabled={checkingOut || openingPayment}
                   className="btn-primary mt-4"
                 >
-                  {openingPayment ? 'Opening secure payment…' : checkingOut ? 'Checking the fare…' : `Pay ${formatUsd(amountDue)}`} <CheckCircle className="h-5 w-5" />
+                  {openingPayment ? 'Opening secure payment…' : checkingOut ? (slowCheckout ? 'Still checking the fare…' : 'Checking the fare…') : `Pay ${formatUsd(amountDue)}`} <CheckCircle className="h-5 w-5" />
                 </button>
+                {slowCheckout && (
+                  <p className="mt-2 text-xs text-gray-600" role="status">
+                    The airline is taking longer than usual to confirm the fare. Please keep this page open.
+                  </p>
+                )}
 
                 {/* Renders into a portal, so it covers both this button and the mobile bar's. */}
                 <NoticeDialog
@@ -2014,7 +2031,7 @@ function FlightBookingConfirmation() {
               cursor: 'pointer', boxShadow: '0 6px 16px rgba(5,91,117,0.3)', whiteSpace: 'nowrap',
             }}
           >
-            {openingPayment ? 'Opening secure payment…' : checkingOut ? 'Checking the fare…' : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
+            {openingPayment ? 'Opening secure payment…' : checkingOut ? (slowCheckout ? 'Still checking…' : 'Checking the fare…') : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
           </button>
         </div>
       </div>
