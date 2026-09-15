@@ -902,7 +902,7 @@ function FlightCreateOrders() {
       <Footer />
 
       {/* Add CSS for the animate-progress-indeterminate class */}
-      <style jsx>{`
+      <style>{`
         @keyframes progress-indeterminate {
           0% {
             transform: translateX(-100%);

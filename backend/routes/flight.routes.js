@@ -2471,7 +2471,11 @@ router.post('/order', optionalProtect, async (req, res) => {
     // No invented phone number. A made-up one is the number the airline would
     // call about a schedule change.
     const contactPhones = contactInfo?.phoneNumber
-      ? [{ deviceType: 'MOBILE', countryCallingCode: contactInfo.countryCode || '1', number: String(contactInfo.phoneNumber) }]
+      // The calling code as the customer chose it. It fell back to '1', so a
+      // phone sent without one became a US number on the PNR - the one the
+      // airline calls about a schedule change. Without a code the number goes
+      // as typed.
+      ? [{ deviceType: 'MOBILE', ...(contactInfo.countryCode ? { countryCallingCode: String(contactInfo.countryCode).replace(/\D/g, '') } : {}), number: String(contactInfo.phoneNumber) }]
       : [];
 
     const amadeusTravelers = travelersList.map((traveler, idx) => {
@@ -3187,6 +3191,25 @@ router.delete('/order/:orderId', protect, async (req, res) => {
           mode: 'FALLBACK_CANCELLATION'
         });
       }
+
+      // A cancellation record, as the orchestrated cancel writes one. The row
+      // used to be marked cancelled with nothing else: My Trips could not say
+      // what happened to the money, the payment-failure alert never saw a
+      // refund owed, and Finish refund refused it as not cancelled with the
+      // airline. The airline did cancel; no refund was attempted, so the desk
+      // is told to finish it.
+      const cancelledAt = new Date().toISOString();
+      await patchBookingDetails(bookingRef, {
+        cancellation: {
+          paymentAction: 'REFUND_UNDER_REVIEW',
+          refundAmount: 0,
+          cancellationFee: 0,
+          amadeusCancelled: true,
+          cancelledAt,
+          reason: 'fallback cancel: the orchestrated cancel gave no answer, so no refund was attempted',
+          source: 'fallback',
+        },
+      });
 
       const { error } = await supabase
         .from('bookings')

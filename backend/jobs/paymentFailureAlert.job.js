@@ -22,6 +22,7 @@
  * delivers through the same webhook. Asleep without one.
  */
 import supabase from '../config/supabase.js';
+import { unchangedSince } from '../utils/bookingDetailsGuard.js';
 import { postToSlack } from './slackAlert.js';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
@@ -102,19 +103,30 @@ export function buildMessage(bookings) {
   ].join('\n\n');
 }
 
-/** Stamp the bookings so the next run stays quiet about them. */
-async function markAlerted(bookings) {
+/**
+ * Stamp the bookings so the next run stays quiet about them.
+ *
+ * The stamp is written onto the whole booking_details column, so it is pinned
+ * to the row this run read (unchangedSince). Unpinned, a stamp built from that
+ * copy could undo whatever landed while Slack was being posted to - a refund
+ * the desk finished, a review flag, a cancellation record. A stamp that loses
+ * the race is simply not written: the next run reads the booking again, and
+ * says nothing if the refund has since been made.
+ */
+export async function markAlerted(bookings) {
   for (const booking of bookings) {
     const details = booking.booking_details || {};
     const updated = {
       ...details,
       cancellation: { ...(details.cancellation || {}), alerted_at: new Date().toISOString() },
     };
-    const { error } = await supabase
+    const query = supabase
       .from('bookings')
       .update({ booking_details: updated })
       .eq('booking_reference', booking.booking_reference);
+    const { data, error } = await unchangedSince(query, booking).select('booking_reference');
     if (error) log('announced but could not mark', { booking: booking.booking_reference, error: error.message });
+    else if (!data?.length) log('booking changed while announcing; not marked', { booking: booking.booking_reference });
   }
 }
 

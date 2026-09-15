@@ -21,6 +21,7 @@ import Navbar from '../Navbar'
 import Footer from '../Footer'
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext'
 import ArcPayService from '../../../Services/ArcPayService'
+import CancelOutcomeDialog from './CancelOutcomeDialog'
 
 // ----- Icon helpers (react-icons replace emoji) -----
 /**
@@ -141,6 +142,8 @@ export default function TravelDashboard() {
   const [isLoadingBookings, setIsLoadingBookings] = useState(false)
   const [cancellingBookingId, setCancellingBookingId] = useState(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(null)
+  // What a cancel from this page did, shown in a dialog rather than a browser alert box
+  const [cancelOutcome, setCancelOutcome] = useState(null)
 
   useEffect(() => {
     // Wait for the Supabase session (cookie/in-memory) to resolve before deciding.
@@ -1022,7 +1025,7 @@ export default function TravelDashboard() {
                     onClick={async () => {
                       const ref = booking.bookingReference || booking.booking_reference || booking.orderId
                       if (!ref) {
-                        alert('No booking reference found')
+                        setCancelOutcome({ tone: 'error', text: 'This booking has no reference, so it cannot be cancelled here. Please contact support at (877) 538-7380.' })
                         setShowCancelConfirm(null)
                         return
                       }
@@ -1049,18 +1052,18 @@ export default function TravelDashboard() {
                           // being processed" went on bookings that never had a
                           // reservation, and a cancel the airline refused is not
                           // a success at all.
-                          alert(cancellationMessage(result))
+                          setCancelOutcome({ tone: 'success', text: cancellationMessage(result) })
                           // Reload bookings to reflect the cancellation
                           loadBookings()
                         } else {
-                          alert(result.error || result.message || 'Failed to cancel booking. Please try again.')
+                          setCancelOutcome({ tone: 'error', text: result.error || result.message || 'Failed to cancel booking. Please try again.' })
                           // No answer in time: the cancel may have gone through.
                           // The list shows what the booking says now.
                           if (result.timedOut) loadBookings()
                         }
                       } catch (err) {
                         console.error('Cancel error:', err)
-                        alert('An error occurred while cancelling. Please contact support.')
+                        setCancelOutcome({ tone: 'error', text: 'Something went wrong while cancelling. Nothing may have changed - please check the booking again, or contact support at (877) 538-7380.' })
                       } finally {
                         setCancellingBookingId(null)
                         setShowCancelConfirm(null)
@@ -1568,6 +1571,9 @@ export default function TravelDashboard() {
         </div>
       </div>
 
+      {cancelOutcome && (
+        <CancelOutcomeDialog outcome={cancelOutcome} onClose={() => setCancelOutcome(null)} />
+      )}
       <Footer />
 
       {/* Login Popup */}

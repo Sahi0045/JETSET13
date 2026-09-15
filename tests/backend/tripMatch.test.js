@@ -75,3 +75,22 @@ describe('checkoutKey', () => {
     expect(travellerDetailsKey([{ lastName: 'Doe' }])).toBeNull();
   });
 });
+
+describe('checkoutKey and the phone country code', () => {
+  // A customer who corrects +1 to +91 must get a new payment page carrying the
+  // corrected number, not the one opened with the wrong code.
+  it('differs when only the calling code changed', () => {
+    const checkout = (countryCode) => ({
+      bookingData: {
+        originalOffer: offer(),
+        passengerData: [{ firstName: 'Jane', lastName: 'Doe', dateOfBirth: '1990-01-01', gender: 'female' }],
+        bookingDetails: { contact: { email: 'jane@example.com', phone: '9876543210', countryCode } },
+      },
+      customerEmail: 'jane@example.com',
+      total: 291,
+    });
+    expect(checkoutKey(checkout('1'))).not.toBeNull();
+    expect(checkoutKey(checkout('91'))).not.toBe(checkoutKey(checkout('1')));
+    expect(checkoutKey(checkout('+91'))).toBe(checkoutKey(checkout('91')));
+  });
+});

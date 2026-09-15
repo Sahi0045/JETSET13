@@ -94,6 +94,10 @@ export function checkoutKey({ bookingData, customerEmail, total, couponCode } = 
     text(customerEmail).toLowerCase(),
     text(contact.email).toLowerCase(),
     text(contact.phone),
+    // The calling code travels with the phone: a customer who corrects +1 to
+    // +91 must get a new payment page carrying the corrected number, not the
+    // one opened with the wrong code.
+    text(contact.countryCode).replace(/\D/g, ''),
     upper(couponCode),
     cents,
   ]);

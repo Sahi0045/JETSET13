@@ -142,7 +142,7 @@ const SupabaseAuthDebug = () => {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .auth-debug-container {
           max-width: 1200px;
           margin: 0 auto;
