@@ -3225,6 +3225,30 @@ function clientTravellers(list, { showPassports = false } = {}) {
   });
 }
 
+/**
+ * What checkout charged for a flight, as a receipt shows it: the airline's
+ * fare, the service fee, any coupon discount, and the total, in USD (ARC Pay
+ * settles only in USD). Null when checkout recorded no verified charge.
+ *
+ * The confirmation page printed "Base Fare" as the total less taxes, which
+ * folded the fee and the discount into the fare. The rest of `verified_charge`
+ * - the fee workings per traveller type, the coupon record, when the fare was
+ * priced - stays in the database.
+ */
+function chargeBreakdownOf(charge) {
+  const total = Number(charge?.total);
+  if (!charge || !Number.isFinite(total)) return null;
+  const figure = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+  return {
+    fare: figure(charge.fare ?? charge.pricedFare?.total),
+    serviceFee: figure(charge.serviceFee),
+    discount: figure(charge.discount),
+    total,
+    currency: 'USD',
+    couponCode: charge.coupon?.code || null,
+  };
+}
+
 // Get all bookings from database (for My Trips page)
 /**
  * A bookings row as My Trips and Manage Booking consume it.
@@ -3303,6 +3327,8 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     priceGrandTotal: booking.booking_details?.price_grand_total || null,
     priceFees: booking.booking_details?.price_fees || [],
     fareBreakdown: booking.booking_details?.fare_breakdown || null,
+    // What checkout verified and charged, by name - see chargeBreakdownOf.
+    chargeBreakdown: chargeBreakdownOf(booking.booking_details?.verified_charge),
     // Every leg and flight - see `legs` above. The flat fields describe the
     // first leg only and stay for the clients that read them.
     itineraries: legs,

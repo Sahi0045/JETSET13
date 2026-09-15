@@ -8,6 +8,7 @@ import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
 import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
 import BookingItinerary from './flights/BookingItinerary';
+import { bookingChargeLines, formatUsd } from '../../utils/bookingCharge';
 
 // Days until the trip, from the calendar day the booking names. Parsing
 // "2026-11-15" with `new Date` made it UTC midnight - the evening before, in
@@ -214,6 +215,8 @@ function BookingConfirmation() {
   // as "Total Paid USD 0.00" beside a green success tick.
   const paidAmount = parseFloat(bookingData.amount ?? bookingData.totalAmount);
   const hasAmount = Number.isFinite(paidAmount) && paidAmount > 0;
+  // Fare, service fee, discount: what checkout charged, line by line.
+  const charge = isFlight ? bookingChargeLines(bookingData) : null;
 
   // What the money did, not a constant: a cancelled booking said "Payment
   // received" beside a refund made - or one that failed - and so did one never
@@ -507,43 +510,19 @@ function BookingConfirmation() {
                   Payment Summary
                 </h4>
                 <div className="mb-4">
-                  {bookingData.fareBreakdown && (
+                  {/* What checkout charged, line by line. "Base Fare" was the
+                      total less taxes, which folded the service fee and any
+                      coupon discount into the fare. */}
+                  {charge && (
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-sm">
-                      <div className="flex justify-between text-gray-600 mb-2">
-                        <span>Base Fare</span>
-                        <span>{bookingData.currency || 'USD'} {(() => {
-                          const fb = bookingData.fareBreakdown || {};
-                          const total = parseFloat(bookingData.amount || bookingData.totalAmount || 0);
-                          const taxes = parseFloat(fb.totalTax || 0);
-                          const addons = parseFloat(fb.addonsTotal || 0);
-                          const vip = parseFloat(fb.vipServiceFee || 0);
-                          const storedBase = parseFloat(fb.baseFare || 0);
-                          // Keep the breakdown consistent with the amount actually charged:
-                          // if base + taxes (+ extras) doesn't equal the total, derive base from the total.
-                          let base = storedBase;
-                          if (total > 0 && Math.abs((storedBase + taxes + addons + vip) - total) > 0.01) {
-                            const derived = total - taxes - addons - vip;
-                            if (derived >= 0) base = derived;
-                          }
-                          return base.toFixed(2);
-                        })()}</span>
-                      </div>
-                      <div className="flex justify-between text-gray-600 mb-2">
-                        <span>Taxes & Fees</span>
-                        <span>{bookingData.currency || 'USD'} {parseFloat(bookingData.fareBreakdown.totalTax || 0).toFixed(2)}</span>
-                      </div>
-                      {bookingData.fareBreakdown.addonsTotal > 0 && (
-                        <div className="flex justify-between text-gray-600 mb-2">
-                          <span>Add-ons</span>
-                          <span>{bookingData.currency || 'USD'} {parseFloat(bookingData.fareBreakdown.addonsTotal).toFixed(2)}</span>
+                      {charge.lines.map((line) => (
+                        <div key={line.label} className="flex justify-between gap-3 text-gray-600 mb-2">
+                          <span>{line.label}</span>
+                          <span className={line.amount < 0 ? 'text-emerald-700 whitespace-nowrap' : 'whitespace-nowrap'}>
+                            {line.amount < 0 ? `- ${formatUsd(-line.amount)}` : formatUsd(line.amount)}
+                          </span>
                         </div>
-                      )}
-                      {bookingData.fareBreakdown.vipServiceFee > 0 && (
-                        <div className="flex justify-between text-gray-600 mb-2">
-                          <span>VIP Services</span>
-                          <span>{bookingData.currency || 'USD'} {parseFloat(bookingData.fareBreakdown.vipServiceFee).toFixed(2)}</span>
-                        </div>
-                      )}
+                      ))}
                       <div className="border-t border-gray-300 my-2"></div>
                     </div>
                   )}
