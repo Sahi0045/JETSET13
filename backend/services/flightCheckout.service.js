@@ -50,13 +50,17 @@ const pricingBase = () => process.env.FLIGHTS_API_BASE
  * The border answer comes from the same place the order route decides it (the
  * Lightsail airport index), so checkout and booking can never disagree about
  * whether a traveller needs a date of birth. It rides on `_ama.international`.
+ *
+ * It also asks for the seats to be confirmed with the airline, since this runs
+ * just before the charge: a fare search offered but the airline would not sell
+ * used to be found only by the booking chain, after payment, and refunded.
  */
 export async function priceOfferForCheckout(offer) {
   const base = pricingBase();
   if (base) {
     const resp = await axios.post(
       `${base.replace(/\/$/, '')}/api/flights/price`,
-      { flightOffer: offer },
+      { flightOffer: offer, confirmSeats: true },
       { timeout: 25000, validateStatus: () => true },
     );
     const priced = resp?.data?.data?.flightOffers?.[0];
@@ -80,6 +84,15 @@ export async function priceOfferForCheckout(offer) {
   }
   const priced = result?.data?.flightOffers?.[0];
   if (!result?.success || !priced?.price) throw new Error(result?.error || 'pricing returned no offer');
+  const { describeWsConfig } = await import('./amadeusSoap/config.js');
+  if (describeWsConfig().seatCheckBeforePayment) {
+    try {
+      await FlightProvider.confirmSeats(priced);
+    } catch (error) {
+      if (isFareRefusal(error)) throw fareRefused(error.technicalError || error.message);
+      throw error;
+    }
+  }
   const { crossesBorder } = await import('../utils/itinerary.js');
   return { ...priced, _ama: { ...priced._ama, international: crossesBorder(priced) } };
 }

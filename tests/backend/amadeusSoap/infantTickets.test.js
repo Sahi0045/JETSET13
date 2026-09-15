@@ -22,6 +22,7 @@ const runBookingChain = vi.fn();
 vi.mock('../../../backend/services/amadeusSoap/bookingChain.js', () => ({
   runBookingChain: (...args) => runBookingChain(...args),
   cancelBooking: vi.fn(),
+  confirmSeats: vi.fn(),
   retrieveBooking: vi.fn(),
 }));
 

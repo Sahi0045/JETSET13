@@ -377,6 +377,14 @@ describe('priceOfferForCheckout tells a refused fare from an outage', () => {
       expect(error).toBeInstanceOf(Error);
       expect(error.fareUnavailable).toBeUndefined();
     });
+
+    // Checkout runs just before the charge, so it asks the route to confirm the
+    // seats with the airline as well as the price.
+    it('asks the pricing route to confirm the seats', async () => {
+      axios.post.mockResolvedValue({ status: 200, data: { success: true, data: { flightOffers: [{ price: { total: '400.00' } }] }, meta: { international: true } } });
+      await price();
+      expect(axios.post).toHaveBeenCalledWith('https://api.test/api/flights/price', { flightOffer: { id: '1' }, confirmSeats: true }, expect.any(Object));
+    });
   });
 
   describe('directly (Lightsail)', () => {
@@ -396,6 +404,31 @@ describe('priceOfferForCheckout tells a refused fare from an outage', () => {
       const { AmadeusSoapError } = await import('../../backend/services/amadeusSoap/errors.js');
       withProvider(vi.fn().mockRejectedValue(new AmadeusSoapError({ error: 'Flight service is not responding', code: 504 })));
       expect((await price()).fareUnavailable).toBeUndefined();
+    });
+
+    const pricedOk = () => vi.fn().mockResolvedValue({ success: true, data: { flightOffers: [{ price: { total: '400.00' } }] } });
+    const withSeatCheck = (confirmSeats, seatCheckBeforePayment = true) => {
+      vi.stubEnv('FLIGHTS_API_BASE', '');
+      vi.stubEnv('VERCEL', '');
+      vi.stubEnv('AMADEUS_WS_SEAT_CHECK_BEFORE_PAYMENT', String(seatCheckBeforePayment));
+      vi.doMock('../../backend/services/flightProvider.js', () => ({
+        default: { priceFlightOffer: pricedOk(), confirmSeats },
+      }));
+    };
+
+    it('flags seats the airline will not sell, after pricing', async () => {
+      const { AmadeusSoapError } = await import('../../backend/services/amadeusSoap/errors.js');
+      const confirmSeats = vi.fn().mockRejectedValue(new AmadeusSoapError({ error: 'That flight is no longer available at this price', code: 409 }));
+      withSeatCheck(confirmSeats);
+      expect((await price()).fareUnavailable).toBe(true);
+      expect(confirmSeats).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not confirm the seats when the check is switched off', async () => {
+      const confirmSeats = vi.fn();
+      withSeatCheck(confirmSeats, false);
+      expect(await price()).toBeNull();
+      expect(confirmSeats).not.toHaveBeenCalled();
     });
   });
 });

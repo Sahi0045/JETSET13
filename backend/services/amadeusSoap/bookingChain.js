@@ -511,6 +511,82 @@ export const runBookingChain = async (p) => {
 };
 
 /**
+ * Confirm the airline will sell these seats, without booking them.
+ *
+ * Search availability is a copy, and for a polled carrier it can say a class is
+ * open when the airline will not sell it: Gulf Air GF131 DEL-BAH on 22 Sep 2026
+ * was offered in W with 7 seats and every Air_SellFromRecommendation answered
+ * UNS / 288 - after the customer had paid, so the booking was refunded. Checkout
+ * calls this before the charge instead.
+ *
+ * One sell, then sign out. Nothing is named and nothing is committed, so the
+ * session ends with no PNR and the seats go back - the same as a booking chain
+ * that fails before commit. It is never run after payment: the booking chain's
+ * own sell is the real one.
+ *
+ * @param {object} flightOffer an offer carrying `_ama`, as priced
+ * @returns {Promise<{available: true, statuses: string[]}>}
+ * @throws {AmadeusSoapError} code 409 when the airline refuses the seats, which
+ *   checkout reads as FARE_UNAVAILABLE; any other failure keeps its own code
+ */
+export const confirmSeats = async (flightOffer) => {
+  const config = getWsConfig();
+  const offer = flightOffer?.originalOffer ?? flightOffer;
+  const ama = offer?._ama;
+
+  if (!ama?.segments?.length) {
+    throw new AmadeusSoapError({
+      error: 'This flight can no longer be booked - please search again',
+      code: 409,
+      technicalError: 'seat check: offer is missing _ama; it did not come from this provider',
+      operation: 'Air_SellFromRecommendation',
+    });
+  }
+  if (ama.wsap && ama.wsap !== config.wsap) {
+    throw new AmadeusSoapError({
+      error: 'This fare has expired - please search again',
+      code: 409,
+      technicalError: `seat check: offer was found on WSAP ${ama.wsap}, this server is ${config.wsap}`,
+      operation: 'Air_SellFromRecommendation',
+    });
+  }
+
+  // Seats held, from the fare's own passenger types: a lap infant holds none.
+  const seats = seatCount((offer.travelerPricings ?? []).map((t) => ({ ptc: t.travelerType }))) || 1;
+  const flights = ama.segments.map((s) => `${s.marketingCarrier}${s.flightNumber}/${s.rbd}`);
+
+  return withSession(async (ctx) => {
+    const reply = replyOf(await ctx.call('Air_SellFromRecommendation', buildAirSellBody({ segments: ama.segments, seats })));
+    const sold = readAirSellReply(reply);
+    if (sold.sold) {
+      log.info({ flights, seats, statuses: sold.statuses }, 'seat check: the airline will sell these seats');
+      return { available: true, statuses: sold.statuses };
+    }
+
+    const inspected = inspectReply(reply, 'Air_SellFromRecommendation');
+    if (sold.refused.length > 0) {
+      const amadeusCode = inspected.error?.amadeusCode ?? null;
+      log.warn({ flights, seats, statuses: sold.statuses, amadeusCode }, 'seat check: the airline refused these seats');
+      throw new AmadeusSoapError({
+        error: 'That flight is no longer available at this price - please search again',
+        code: 409,
+        technicalError: `seat check: segment status ${sold.statuses.join(',')}${amadeusCode ? ` (${amadeusCode})` : ''}`,
+        operation: 'Air_SellFromRecommendation',
+        amadeusCode,
+      });
+    }
+    // No seat status at all: not an answer about the seats, so not reported as
+    // one. The customer is asked to try again rather than to search again.
+    throw inspected.error ?? new AmadeusSoapError({
+      error: 'We could not confirm the seats with the airline',
+      code: 502,
+      technicalError: 'seat check: Air_SellFromRecommendation returned no segment status',
+      operation: 'Air_SellFromRecommendation',
+    });
+  }, { config });
+};
+
+/**
  * Cancel a booking.
  *
  * Retrieve first, because what is safe to do depends on whether a ticket was

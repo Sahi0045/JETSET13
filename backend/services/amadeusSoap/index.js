@@ -11,7 +11,7 @@ import { DEFAULT_RULE_SECTIONS, buildCheckRulesBody, readCheckRulesReply } from 
 import { buildFlightInfoBody, readFlightInfoError, readFlightInfoReply } from './operations/flightInfo.js';
 import { applyPricingToOffer } from './mappers/pricing.js';
 import { attributeTickets } from './mappers/flightOrder.js';
-import { cancelBooking, retrieveBooking, runBookingChain } from './bookingChain.js';
+import { cancelBooking, confirmSeats, retrieveBooking, runBookingChain } from './bookingChain.js';
 import { unwrapEnvelope } from './parseXml.js';
 import { callStateless, withSession } from './session.js';
 import { travellerGroupProblem } from '../../../shared/travellerGroup.js';
@@ -709,6 +709,7 @@ export default {
   getBusiestTravelPeriod,
 
   priceFlightOffer,
+  confirmSeats,
   getFiledFareRules,
   getCalendarPrices,
   getCheapestFlightDates,

@@ -62,6 +62,10 @@ const readWsConfig = (env = process.env) => {
 
     bookingEnabled: isTrue(env.AMADEUS_WS_BOOKING_ENABLED, false),
     autoTicket: isTrue(env.AMADEUS_WS_AUTO_TICKET, false),
+    // Checkout confirms the seats with the airline before the card is charged
+    // (confirmSeats in bookingChain.js). On by default; false turns it off
+    // without a deploy if Amadeus asks us not to sell-and-release at checkout.
+    seatCheckBeforePayment: isTrue(env.AMADEUS_WS_SEAT_CHECK_BEFORE_PAYMENT, true),
     // The office's market (country) code, required by Ticket_CancelDocument to
     // identify whose ticket stock is being voided. US because settlement is
     // through ARC; confirm against the production office at cutover, as with
@@ -159,4 +163,5 @@ export const describeWsConfig = (env = process.env) => ({
   officeId: env.AMADEUS_WS_OFFICE_ID || null,
   bookingEnabled: isTrue(env.AMADEUS_WS_BOOKING_ENABLED, false),
   autoTicket: isTrue(env.AMADEUS_WS_AUTO_TICKET, false),
+  seatCheckBeforePayment: isTrue(env.AMADEUS_WS_SEAT_CHECK_BEFORE_PAYMENT, true),
 });
