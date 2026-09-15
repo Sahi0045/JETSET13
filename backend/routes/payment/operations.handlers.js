@@ -8,6 +8,7 @@ import { resolveBookingUserId } from '../../utils/bookingOwner.js';
 import { emailIsBookers, hasBookingOwner, isBookingOwner } from '../../utils/bookingAccess.js';
 import { liveChainState } from '../../utils/bookingChainClaim.js';
 import { canReachAmadeus } from '../../utils/amadeusReach.js';
+import { unchangedSince } from '../../utils/bookingDetailsGuard.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
@@ -1544,6 +1545,65 @@ async function refundArcAmount(orderId, { amount, currency = 'USD', reason = 'Ad
  *
  * @returns {Promise<{ status: number, body: object }>}
  */
+/**
+ * How long one desk member's hold on finishing a booking's refund lasts: far
+ * longer than a refund and two gateway reads take, short enough that a closed
+ * tab does not lock the booking for good.
+ */
+const MANUAL_REFUND_CLAIM_TTL_MS = 5 * 60_000;
+const MANUAL_REFUND_CLAIM = 'booking_details->cancellation->manual_refund_claim->>claimedAt';
+
+/**
+ * Take the booking's refund for one desk member, or learn that someone else has
+ * it. Two admins pressing Finish refund both read "ARC holds 291" and both
+ * refunded it. A compare-and-set on the claim stamp decides, as the booking
+ * chain's claim does; the write is pinned to the row it read
+ * (utils/bookingDetailsGuard.js), so it undoes nothing written since.
+ */
+async function claimManualRefund(booking, adminId) {
+    const { data: row, error: readError } = await supabase
+        .from('bookings')
+        .select('status, payment_status, booking_details')
+        .eq('id', booking.id)
+        .single();
+    if (readError || !row) return { claimed: false, error: readError || new Error('booking not found') };
+
+    const details = row.booking_details || {};
+    const cancellation = details.cancellation || {};
+    const prior = cancellation.manual_refund_claim?.claimedAt ?? null;
+    if (prior && Date.now() - Date.parse(prior) < MANUAL_REFUND_CLAIM_TTL_MS) return { claimed: false };
+
+    const stamp = new Date().toISOString();
+    const claimedDetails = { ...details, cancellation: { ...cancellation, manual_refund_claim: { claimedAt: stamp, by: adminId } } };
+    let update = supabase.from('bookings').update({ booking_details: claimedDetails }).eq('id', booking.id);
+    update = unchangedSince(update, row);
+    update = prior === null ? update.is(MANUAL_REFUND_CLAIM, null) : update.eq(MANUAL_REFUND_CLAIM, prior);
+    const { data, error } = await update.select('id');
+    if (error) return { claimed: false, error };
+    if (!data?.length) return { claimed: false };
+    return { claimed: true, stamp, details: claimedDetails };
+}
+
+/** Let go of a refund claim that recorded nothing. Conditioned on its own stamp. */
+async function releaseManualRefund(booking, claim) {
+    const details = await readBookingDetails(booking.id);
+    if (!details?.cancellation?.manual_refund_claim) return;
+    const { manual_refund_claim: _mine, ...cancellation } = details.cancellation;
+    const { error } = await supabase
+        .from('bookings')
+        .update({ booking_details: { ...details, cancellation } })
+        .eq('id', booking.id)
+        .eq(MANUAL_REFUND_CLAIM, claim.stamp);
+    if (error) console.error('⚠️ Could not release the manual refund claim:', error.message);
+}
+
+/**
+ * ARC could not be asked. A 400 or a 404 is ARC saying it has no such order -
+ * an answer. Anything else, a 5xx included, is an outage, and used to read as
+ * "ARC Pay shows no payment for this booking".
+ */
+const gatewayDown = (result) => Boolean(result?.gatewayUnavailable) && ![400, 404].includes(result.gatewayStatus);
+
 export async function settleManualFlightRefund(booking, { mode = 'sync', amount, reason = 'Admin refund', adminId = null } = {}) {
     const answer = (status, body) => ({ status, body });
     if (!booking) return answer(404, { success: false, error: 'Booking not found' });
@@ -1555,48 +1615,89 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
         });
     }
 
-    const before = await reconcileBookingPayment(booking, { fresh: true });
-    if (before.gatewayUnavailable && !before.gatewayStatus) {
-        return answer(503, { success: false, code: 'GATEWAY_UNAVAILABLE', error: 'Could not reach ARC Pay. Nothing was refunded or changed.' });
-    }
-    if (!before.everCaptured) {
-        return answer(409, { success: false, code: 'NOTHING_CAPTURED', error: 'ARC Pay shows no payment for this booking, so there is nothing to refund.' });
+    // A refund pays out against the airline booking, so only once the airline
+    // has released it. A PNR the cancel never confirmed cancelled - a fallback
+    // cancel, a status set by hand, an old void - may still be a flight the
+    // customer can board. A sync records a refund already made elsewhere, so it
+    // is still recorded; it just does not close the review.
+    const initialDetails = booking.booking_details || {};
+    const reservation = initialDetails.pnr || initialDetails.amadeus_order_id || null;
+    const airlineReleased = !reservation || initialDetails.cancellation?.amadeusCancelled === true;
+    if (mode === 'refund' && !airlineReleased) {
+        return answer(409, {
+            success: false,
+            code: 'AIRLINE_NOT_CANCELLED',
+            error: `The airline reservation (${reservation}) was never confirmed cancelled, so a refund now could pay out against a flight `
+                + 'that is still live. Cancel it with the airline first. Nothing was refunded or changed.',
+        });
     }
 
-    const details = booking.booking_details || {};
-    const currency = details.arc_captured_currency || details.currency || 'USD';
+    const claim = await claimManualRefund(booking, adminId);
+    if (claim.error) {
+        return answer(503, { success: false, code: 'REFUND_UNAVAILABLE', error: 'Could not start the refund just now. Nothing was refunded or changed; try again.' });
+    }
+    if (!claim.claimed) {
+        return answer(409, {
+            success: false,
+            code: 'REFUND_IN_PROGRESS',
+            error: 'Someone is finishing this booking\'s refund right now. Nothing was refunded or changed; refresh in a few minutes to see what they recorded.',
+        });
+    }
+    const giveUp = async (status, body) => {
+        await releaseManualRefund(booking, claim);
+        return answer(status, body);
+    };
+    // Reconcile writes the row from what it is handed: hand it the claimed copy,
+    // so the claim is not written away.
+    const claimedBooking = { ...booking, booking_details: claim.details };
+
+    const before = await reconcileBookingPayment(claimedBooking, { fresh: true });
+    if (gatewayDown(before)) {
+        return giveUp(503, { success: false, code: 'GATEWAY_UNAVAILABLE', error: 'Could not reach ARC Pay. Nothing was refunded or changed.' });
+    }
+    if (!before.everCaptured) {
+        return giveUp(409, { success: false, code: 'NOTHING_CAPTURED', error: 'ARC Pay shows no payment for this booking, so there is nothing to refund.' });
+    }
+
+    const currency = initialDetails.arc_captured_currency || initialDetails.currency || 'USD';
     let manual = { mode, reason, by: adminId, at: new Date().toISOString() };
 
     if (mode === 'refund') {
         const wanted = roundCents(amount);
         const held = roundCents(before.heldAmount ?? 0);
         if (!Number.isFinite(wanted) || wanted <= 0) {
-            return answer(400, { success: false, code: 'INVALID_AMOUNT', error: 'Enter the amount to refund.' });
+            return giveUp(400, { success: false, code: 'INVALID_AMOUNT', error: 'Enter the amount to refund.' });
         }
         if (wanted > held + 0.001) {
-            return answer(400, {
+            return giveUp(400, {
                 success: false,
                 code: 'AMOUNT_OVER_HELD',
                 error: `ARC Pay holds ${held.toFixed(2)} ${currency} for this booking; a refund cannot be more than that.`,
             });
         }
-        const orderId = details.order_id || booking.booking_reference;
+        const orderId = initialDetails.order_id || booking.booking_reference;
         const refund = await refundArcAmount(orderId, { amount: wanted, currency, reason });
         if (!refund.ok) {
-            return answer(502, { success: false, code: 'REFUND_REFUSED', error: 'ARC Pay did not accept the refund. Nothing was recorded; try again or refund in the ARC portal and then sync.' });
+            return giveUp(502, { success: false, code: 'REFUND_REFUSED', error: 'ARC Pay did not accept the refund. Nothing was recorded; try again or refund in the ARC portal and then sync.' });
         }
         manual = { ...manual, amount: wanted, transactionId: refund.transactionId };
     }
 
-    // What the gateway shows now is what gets recorded.
-    const after = await reconcileBookingPayment(booking, { fresh: true });
-    const confirmed = Number.isFinite(Number(after.refundedTotal));
-    const refundedTotal = roundCents(confirmed ? after.refundedTotal : (before.refundedTotal ?? 0) + (manual.amount ?? 0));
-    const held = roundCents(confirmed ? (after.heldAmount ?? 0) : Math.max(0, (before.heldAmount ?? 0) - (manual.amount ?? 0)));
+    // What the gateway shows now is what gets recorded. A successful VOID
+    // returns the whole capture and records no REFUND, so a voided payment used
+    // to read as "no refund found" and could never be recorded.
+    const after = await reconcileBookingPayment(claimedBooking, { fresh: true });
+    const confirmed = !gatewayDown(after) && Number.isFinite(Number(after.refundedTotal));
+    const source = confirmed ? after : before;
+    const voided = source.voided === true;
+    const returnedTotal = roundCents(voided
+        ? source.capturedTotal
+        : confirmed ? after.refundedTotal : (before.refundedTotal ?? 0) + (manual.amount ?? 0));
+    const held = roundCents(voided ? 0 : confirmed ? (after.heldAmount ?? 0) : Math.max(0, (before.heldAmount ?? 0) - (manual.amount ?? 0)));
     if (!confirmed) manual = { ...manual, unconfirmed: 'ARC Pay could not be asked again after the refund; recorded from the refund it accepted' };
 
-    if (refundedTotal <= 0) {
-        return answer(409, {
+    if (!(returnedTotal > 0)) {
+        return giveUp(409, {
             success: false,
             code: 'NO_REFUND_FOUND',
             error: 'ARC Pay shows no refund for this booking yet. Refund it first, here or in the ARC portal.',
@@ -1604,30 +1705,40 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
     }
 
     // Re-read: reconcile writes the row too, and this must not undo that.
-    const { data: latest } = await supabase.from('bookings').select('*').eq('id', booking.id).single();
-    const currentDetails = (latest || booking).booking_details || {};
-    const previous = currentDetails.cancellation || {};
+    const currentDetails = (await readBookingDetails(booking.id)) || claim.details;
+    const { manual_refund_claim: _claim, stillHeld: _before, ...previous } = currentDetails.cancellation || {};
     const fullyReturned = held <= 0.009;
+    // What ARC still holds is a fee only when the cancel decided to keep one and
+    // what is held is no more than that fee. Everything held was recorded as
+    // "a cancellation fee was kept" - and the Finish refund button went away
+    // with money still owed. Now the rest is recorded as still held, and the
+    // desk is offered the refund again until it is returned.
+    const intendedFee = roundCents(Number(previous.cancellationFee) || 0);
+    const feeKept = !fullyReturned && intendedFee > 0 && held <= intendedFee + 0.009;
+    const stillHeld = fullyReturned || feeKept ? 0 : held;
     const cancellation = {
         ...previous,
-        paymentAction: fullyReturned ? 'FULL_REFUND' : 'PARTIAL_REFUND',
-        refundAmount: refundedTotal,
-        cancellationFee: fullyReturned ? 0 : held,
+        paymentAction: voided ? 'VOID' : fullyReturned ? 'FULL_REFUND' : 'PARTIAL_REFUND',
+        refundAmount: returnedTotal,
+        cancellationFee: feeKept ? held : 0,
+        ...(stillHeld > 0 ? { stillHeld } : {}),
         currency,
         manualRefund: { ...manual, previousPaymentAction: previous.paymentAction ?? null },
     };
-    const review = currentDetails.needs_review
+    // Closed only when nothing more is owed and the airline let the booking go.
+    const settled = stillHeld === 0 && airlineReleased;
+    const review = currentDetails.needs_review && settled
         ? { ...currentDetails.needs_review, resolved_at: manual.at, resolution: 'refund finished by the desk' }
-        : undefined;
+        : currentDetails.needs_review;
     const paymentStatus = fullyReturned ? 'refunded' : 'partially_refunded';
 
-    const { error: updateError } = await supabase.from('bookings').update({
+    const { data: written, error: updateError } = await supabase.from('bookings').update({
         payment_status: paymentStatus,
         booking_details: { ...currentDetails, cancellation, ...(review ? { needs_review: review } : {}) },
         updated_at: manual.at,
-    }).eq('id', booking.id);
-    if (updateError) {
-        console.error('❌ Could not record the manual refund:', updateError.message);
+    }).eq('id', booking.id).eq(MANUAL_REFUND_CLAIM, claim.stamp).select('id');
+    if (updateError || !written?.length) {
+        console.error('❌ Could not record the manual refund:', updateError?.message || 'the claim was lost');
         return answer(500, {
             success: false,
             code: 'RECORD_FAILED',
@@ -1637,7 +1748,7 @@ export async function settleManualFlightRefund(booking, { mode = 'sync', amount,
         });
     }
 
-    console.log('💵 Manual refund recorded', { bookingReference: booking.booking_reference, mode, refundedTotal, held });
+    console.log('💵 Manual refund recorded', { bookingReference: booking.booking_reference, mode, returnedTotal, held, stillHeld });
     return answer(200, {
         success: true,
         message: cancellationMessage({ cancellation }),
