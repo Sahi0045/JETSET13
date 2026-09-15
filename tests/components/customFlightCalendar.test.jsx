@@ -83,7 +83,10 @@ describe('CustomFlightCalendar', () => {
     });
     renderCalendar();
 
-    await waitFor(() => expect(screen.getAllByTestId('calendar-fare')).toHaveLength(2));
+    // Wait for the fares themselves, not just for two fare slots to exist. On
+    // CI's slower runner the slots rendered before their prices had finished
+    // formatting, no slot read '$95.50' yet, and the test failed on main.
+    await waitFor(() => expect(screen.getAllByTestId('calendar-fare').map((el) => el.textContent)).toEqual(expect.arrayContaining(['$120.00', '$95.50'])));
     const lowest = screen.getAllByTestId('calendar-fare').find((el) => el.textContent === '$95.50');
     expect(lowest.className).toMatch(/text-green-600/);
     expect(screen.getByText('Lowest fare shown')).toBeTruthy();
