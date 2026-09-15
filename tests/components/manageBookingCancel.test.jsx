@@ -16,7 +16,7 @@ vi.mock('../../frontend/src/hooks/queries', () => ({
   useFlightBooking: (...args) => mockUseFlightBooking(...args),
 }));
 vi.mock('../../frontend/src/Services/ArcPayService', () => ({
-  default: { cancelBooking: (...args) => mockCancelBooking(...args) },
+  default: { cancelFlightBooking: (...args) => mockCancelBooking(...args) },
 }));
 
 const { default: ManageBooking } = await import('../../frontend/src/Pages/Common/flights/ManageBooking.jsx');
@@ -82,5 +82,27 @@ describe('a cancel that times out', () => {
     expect(document.activeElement.textContent).toMatch(/Cancellation Not Confirmed/);
     expect(document.activeElement.textContent).toMatch(/still shows as active/);
     expect(container.textContent).not.toMatch(/timeout of|exceeded/);
+  });
+});
+
+describe('where a flight is cancelled', () => {
+  it('cancels on the flights host, with the reference and the email the guest proved', async () => {
+    mockUseFlightBooking.mockReturnValue({ data: booking, isLoading: false, error: null, refetch: vi.fn() });
+    mockCancelBooking.mockResolvedValue({ success: true, cancellation: { paymentAction: 'VOID' } });
+    renderPage();
+
+    cancelThroughThePopUp();
+
+    await waitFor(() => expect(mockCancelBooking).toHaveBeenCalledTimes(1));
+    expect(mockCancelBooking.mock.calls[0][0]).toBe('FLT1');
+    expect(mockCancelBooking.mock.calls[0][2]).toBe('Change of plans');
+  });
+
+  it('My Trips cancels a flight through the same call', async () => {
+    const { readFileSync } = await import('node:fs');
+    const path = await import('node:path');
+    const trips = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/login/mytrips.jsx'), 'utf8');
+    expect(trips).toMatch(/result = await ArcPayService\.cancelFlightBooking\(ref, userEmail, 'Customer request'\)/);
+    expect(trips).not.toMatch(/method: 'DELETE'/);
   });
 });

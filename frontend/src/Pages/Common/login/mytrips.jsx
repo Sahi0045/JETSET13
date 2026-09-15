@@ -1032,13 +1032,10 @@ export default function TravelDashboard() {
                         const isFlight = (booking.type || '').toLowerCase() === 'flight'
                         let result
                         if (isFlight) {
-                          // Flight: cancel the real Amadeus order + ARC Pay refund + DB status
-                          const resp = await fetch(getApiUrl(`flights/order/${encodeURIComponent(ref)}`), {
-                            method: 'DELETE',
-                            headers: await authHeaders({ 'Content-Type': 'application/json' }),
-                            credentials: 'include'
-                          })
-                          result = await resp.json()
+                          // The same cancel Manage Booking makes, on the flights host
+                          // that reaches the airline: a minute to answer, and
+                          // plain-language errors instead of a raw response.
+                          result = await ArcPayService.cancelFlightBooking(ref, userEmail, 'Customer request')
                         } else {
                           // Non-flight: existing ARC Pay refund + DB status flow
                           result = await ArcPayService.cancelBooking(ref, userEmail, 'Customer request')
@@ -1057,6 +1054,9 @@ export default function TravelDashboard() {
                           loadBookings()
                         } else {
                           alert(result.error || result.message || 'Failed to cancel booking. Please try again.')
+                          // No answer in time: the cancel may have gone through.
+                          // The list shows what the booking says now.
+                          if (result.timedOut) loadBookings()
                         }
                       } catch (err) {
                         console.error('Cancel error:', err)

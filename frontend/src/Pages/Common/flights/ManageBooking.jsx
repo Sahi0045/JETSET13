@@ -115,10 +115,11 @@ function ManageBooking() {
 
     setCancelling(true);
     try {
-      const bookingRef = bookingData.orderId || bookingData.bookingReference || bookingData.bookingDetails?.bookingId;
+      const bookingRef = bookingData.bookingReference || bookingData.orderId || bookingData.bookingDetails?.bookingId;
 
-      // Call the cancel-booking API
-      const result = await ArcPayService.cancelBooking(
+      // On the flights host, which can reach the airline (flightCancelPath).
+      // The payments endpoint this used cannot, and refuses a flight with a PNR.
+      const result = await ArcPayService.cancelFlightBooking(
         bookingRef,
         // The email the guest proved the booking with, first. A signed-in owner
         // needs none: the server takes them from the session.
