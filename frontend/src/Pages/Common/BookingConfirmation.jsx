@@ -6,6 +6,8 @@ import { attentionMessage, refundStatus } from '../../utils/bookingStatus';
 import { isPaid } from '../../utils/eTicket';
 import { daysUntilDate, formatCalendarDate } from '../../utils/dateUtils';
 import { cancellationMessage } from '../../../../shared/cancellationOutcome';
+import { bookingItineraries, returnDateOf } from '../../../../shared/bookingItineraries';
+import BookingItinerary from './flights/BookingItinerary';
 
 // Days until the trip, from the calendar day the booking names. Parsing
 // "2026-11-15" with `new Date` made it UTC midnight - the evening before, in
@@ -75,6 +77,11 @@ function BookingConfirmation() {
   const isHotel = bookingData.type === 'hotel';
   const isFlight = bookingData.type === 'flight';
   const isPackage = bookingData.type === 'package';
+
+  // Every leg and flight. This page read a `returnDate` nothing set and the
+  // first leg's flat fields, so a round trip's return flight was nowhere on it.
+  const legs = isFlight ? bookingItineraries(bookingData) : [];
+  const endDate = bookingData.returnDate || (isFlight ? returnDateOf(legs) : '') || bookingData.checkoutDate || bookingData.packageEndDate;
 
   // Get travel date for countdown
   const getTravelDate = () => {
@@ -346,13 +353,13 @@ function BookingConfirmation() {
                 )}
 
                 {/* Return/End Date */}
-                {(bookingData.returnDate || bookingData.checkoutDate || bookingData.packageEndDate) && (
+                {endDate && (
                   <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
                     <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-1">
                       {isFlight ? 'Return' : isHotel ? 'Check-out' : 'End Date'}
                     </p>
                     <p className="text-sm font-bold text-gray-900">
-                      {formatCalendarDate(bookingData.returnDate || bookingData.checkoutDate || bookingData.packageEndDate)}
+                      {formatCalendarDate(endDate)}
                     </p>
                   </div>
                 )}
@@ -399,6 +406,17 @@ function BookingConfirmation() {
                   </div>
                 )}
               </div>
+
+              {/* Every leg and flight, with flight numbers, times and terminals. */}
+              {isFlight && legs.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-md font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <Plane className="w-4 h-4 text-blue-600" />
+                    Your Flights
+                  </h4>
+                  <BookingItinerary legs={legs} />
+                </div>
+              )}
 
               {/* Booking Reference Section */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-6 p-5 bg-gray-50 rounded-xl">

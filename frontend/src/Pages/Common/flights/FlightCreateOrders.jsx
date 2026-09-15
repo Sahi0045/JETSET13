@@ -11,6 +11,7 @@ import withPageElements from '../PageWrapper';
 import { endpoints } from '@/config/api';
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext';
 import { buildFlightOrderBody } from '../../../../../shared/flightOrderBody';
+import { itinerariesFromOffer, returnDateOf } from '../../../../../shared/bookingItineraries';
 
 /**
  * Failures where the reference the user is holding can never be completed: the
@@ -241,6 +242,12 @@ function FlightCreateOrders() {
         const firstSegment = itinerary.segments?.[0] || {};
         const lastSegment = itinerary.segments?.[itinerary.segments?.length - 1] || firstSegment;
 
+        // Every leg and flight of the offer booked. The fields below read only
+        // `itineraries[0]`, so the confirmation page never showed a round
+        // trip's return flight, and showed a connection as its first flight
+        // number beside its last arrival.
+        const legs = itinerariesFromOffer(orderData.originalOffer || flightData.originalOffer || flightData);
+
         // Format travelers properly for display
         const formattedTravelers = (orderDetails.travelers || orderData.passengerData || []).map(traveler => {
           if (typeof traveler === 'object') {
@@ -292,7 +299,9 @@ function FlightCreateOrders() {
           passengers: formattedTravelers.length || 1,
           passengerData: passengerDetails, // Store full passenger details
           fareBreakdown: fareBreakdown,    // Store fare breakdown for confirmation page
-          contact: orderData.bookingDetails?.contact // Store contact info
+          contact: orderData.bookingDetails?.contact, // Store contact info
+          itineraries: legs,
+          returnDate: returnDateOf(legs)
         };
 
         console.log('📝 Saving completed flight booking:', completedFlightBooking);

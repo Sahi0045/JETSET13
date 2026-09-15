@@ -9,6 +9,8 @@ import {
     isPaid,
 } from '../../../utils/eTicket';
 import { formatCalendarDate } from '../../../utils/dateUtils';
+import { bookingItineraries } from '../../../../../shared/bookingItineraries';
+import BookingItinerary from './BookingItinerary';
 
 /**
  * The travel document a customer downloads and may carry to an airport.
@@ -36,6 +38,10 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
 
     // What the booking can actually prove about ticketing.
     const tickets = resolveTickets(bookingData);
+    // Every leg and flight. The document printed the first leg only, as one
+    // flight from its first departure to its last arrival - no return flight,
+    // and a connection drawn as a non-stop.
+    const legs = bookingItineraries(bookingData);
     const state = ticketState(bookingData);
     const issuedOn = issueDate(tickets);
     const paid = isPaid(bookingData) || isPaid(bookingDetails);
@@ -190,6 +196,9 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                             </div>
 
                             {/* Route Visual */}
+                            {legs.length > 0 ? (
+                                <BookingItinerary legs={legs} dateOptions={{ weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }} />
+                            ) : (
                             <div className="flex justify-between items-start relative">
                                 {/* Departure */}
                                 <div className="flex-1">
@@ -218,6 +227,7 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                     {flight.arrivalTerminal && <div className="text-xs text-[#055B75] mt-1 font-medium">Terminal {flight.arrivalTerminal}</div>}
                                 </div>
                             </div>
+                            )}
                         </div>
                     </div>
 

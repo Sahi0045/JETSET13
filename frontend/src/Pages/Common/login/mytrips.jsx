@@ -5,6 +5,8 @@ import { useNavigate } from "react-router-dom"
 import { daysUntilDate, formatCalendarDate, formatIsoDuration } from "../../../utils/dateUtils"
 import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, attentionMessage } from "../../../utils/bookingStatus"
 import { resolveTickets, ticketState } from "../../../utils/eTicket"
+import { bookingItineraries } from "../../../../../shared/bookingItineraries"
+import BookingItinerary from "../flights/BookingItinerary"
 import { authHeaders } from "../../../utils/authHeaders"
 import {
   FaPlane, FaShip, FaHotel, FaSuitcaseRolling, FaClipboardList,
@@ -654,6 +656,8 @@ export default function TravelDashboard() {
     const isCruiseBooking = booking.type === 'cruise'
     const isHotelBooking = booking.type === 'hotel'
     const isPackageBooking = booking.type === 'package'
+    // Every leg and flight: a round trip's return flight was not on the card.
+    const legs = isFlightBooking ? bookingItineraries(booking) : []
 
     const getBookingTitle = () => {
       if (booking.title) return booking.title
@@ -772,7 +776,7 @@ export default function TravelDashboard() {
               <>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   {(booking.origin || booking.destination) && (
-                    <DetailCell label="Route">{booking.origin || 'N/A'} → {booking.destination || 'N/A'}</DetailCell>
+                    <DetailCell label="Route">{booking.origin || 'N/A'} {legs.length === 2 ? '⇄' : '→'} {booking.destination || 'N/A'}</DetailCell>
                   )}
                   {booking.departureDate && <DetailCell label="Departure">{fmtDate(booking.departureDate)}</DetailCell>}
                   {booking.returnDate && <DetailCell label="Return">{fmtDate(booking.returnDate)}</DetailCell>}
@@ -785,8 +789,13 @@ export default function TravelDashboard() {
                   )}
                 </div>
 
-                {/* Enriched Flight Details */}
-                {(booking.airlineName || booking.flightNumber || booking.departureTime || booking.duration || booking.pnr) && (
+                {/* Every flight, leg by leg, with its number, times and terminals.
+                    The grid below is for a booking that recorded none: it shows
+                    the first flight number beside the last arrival, which read
+                    as one non-stop flight. */}
+                {legs.length > 0 ? (
+                  <BookingItinerary legs={legs} variant="compact" className="mt-3" />
+                ) : (booking.airlineName || booking.flightNumber || booking.departureTime || booking.duration || booking.pnr) && (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                     {(booking.airlineName || booking.flightNumber) && (
                       <DetailCell label="Airline / Flight">

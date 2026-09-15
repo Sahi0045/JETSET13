@@ -18,6 +18,7 @@ import { recordCouponUse } from '../services/coupon.service.js';
 import { crossesBorder } from '../utils/itinerary.js';
 import { CHAIN_CLAIM_TTL_MS } from '../utils/bookingChainClaim.js';
 import { UNTICKETED_REVIEW_REASON } from '../jobs/needsReviewAlert.job.js';
+import { itinerariesFromOffer, returnDateOf } from '../../shared/bookingItineraries.js';
 import { flightsKey, travellerNamesKey } from '../utils/tripMatch.js';
 import { needsDateOfBirth } from '../../shared/travellerDetails.js';
 import { flightSearchLimiter, guestBookingLimiter } from '../middleware/security.js';
@@ -1033,6 +1034,12 @@ function confirmationEmailFromRow(booking, body = {}) {
       origin: details.origin || firstSegment.departure?.iataCode,
       destination: details.destination || lastSegment.arrival?.iataCode,
       airline: details.airline_name || offer?.validatingAirlineCodes?.[0],
+      // Every leg and flight, so the email shows the return flight and each
+      // connection. A booking saved before legs were kept has them rebuilt
+      // from its offer.
+      itineraries: Array.isArray(details.itineraries) && details.itineraries.length > 0
+        ? details.itineraries
+        : itinerariesFromOffer(offer),
     },
   };
 }
@@ -1108,6 +1115,11 @@ export function buildBookingRow(bookingData, userId) {
       origin_city: bookingData.originCity || cityNameFor(bookingData.origin),
       destination_city: bookingData.destinationCity || cityNameFor(bookingData.destination),
       departure_date_full: bookingData.departureDateFull || '',
+      // Every leg and every flight (shared/bookingItineraries.js). The flat
+      // fields above describe the first leg only, so a round trip's return
+      // flight was saved nowhere, and a connection only as its first flight
+      // number and its last arrival. They stay for the clients that read them.
+      itineraries: Array.isArray(bookingData.itineraries) ? bookingData.itineraries : [],
       arrival_date: bookingData.arrivalDate || '',
       price_base: bookingData.priceBase || null,
       price_grand_total: bookingData.priceGrandTotal || null,
@@ -2668,6 +2680,9 @@ router.post('/order', optionalProtect, async (req, res) => {
         gender: t.gender
       })),
       flightOffer: firstOffer,
+      // Every leg and flight of the offer booked, return and connections
+      // included - the fields above read only the first leg.
+      itineraries: itinerariesFromOffer(firstOffer),
       // What the GDS actually did, for reconciliation and for the ticket
       // numbers the customer's document prints.
       gds: orderResponse.gds || null,
@@ -3175,6 +3190,15 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     booking.booking_details?.flight_offer?.price?.total ||
     0;
 
+  // Every leg and flight of a flight booking. One saved before legs were kept
+  // has them rebuilt from its stored offer - the airline's segments only, no
+  // traveller data - so its return flight shows too.
+  const savedLegs = booking.booking_details?.itineraries;
+  const legs = booking.travel_type !== 'flight' ? []
+    : Array.isArray(savedLegs) && savedLegs.length > 0 ? savedLegs
+      : itinerariesFromOffer(booking.booking_details?.flight_offer
+        || booking.booking_details?.pending_booking_data?.bookingData?.originalOffer);
+
   return {
     id: booking.id,
     type: booking.travel_type,
@@ -3222,6 +3246,10 @@ export function toClientBooking(booking, { showPassports = false } = {}) {
     priceGrandTotal: booking.booking_details?.price_grand_total || null,
     priceFees: booking.booking_details?.price_fees || [],
     fareBreakdown: booking.booking_details?.fare_breakdown || null,
+    // Every leg and flight - see `legs` above. The flat fields describe the
+    // first leg only and stay for the clients that read them.
+    itineraries: legs,
+    returnDate: returnDateOf(legs) || null,
     // Travelers, cut down to what a page renders; passports masked for all but staff.
     travelers: clientTravellers(booking.passenger_details, { showPassports }),
     // Cruise-specific fields

@@ -9,6 +9,8 @@ import {
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
+import BookingItinerary from './BookingItinerary';
+import { bookingItineraries } from '../../../../../shared/bookingItineraries';
 import { isPaid, ticketState } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
 import { refundOutcome } from '../../../../../shared/cancellationOutcome';
@@ -118,6 +120,10 @@ function ManageBooking() {
   };
 
   const ticketRef = React.useRef(null);
+
+  // Every leg and flight. The route card below shows the first leg's ends
+  // only; a round trip's return flight and each connection were nowhere here.
+  const itineraryLegs = bookingItineraries(bookingData);
 
   const downloadETicket = async () => {
     // A cancelled booking has no document to hand out.
@@ -647,6 +653,8 @@ function ManageBooking() {
                       </div>
                     )}
                   </div>
+
+                  <BookingItinerary legs={itineraryLegs} />
                 </div>
               </div>
             )}

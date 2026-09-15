@@ -11,9 +11,10 @@
 import {
   renderBrandedEmail, detailCard, highlightBox, paragraph,
   figureBlock, routeStrip, statusPill, segmentCard, fareBreakdown, actionRow,
-  stepList, stayCard, dataGrid, progressSteps, BRAND,
+  stepList, stayCard, dataGrid, progressSteps, humanDuration, BRAND,
 } from '../emailTemplate.js';
 import { REFUND_STUCK_ACTIONS, REFUND_DONE_ACTIONS, refundOutcome } from '../../../shared/cancellationOutcome.js';
+import { clockTime, itinerariesFromOffer, layoverBetween, legLabel } from '../../../shared/bookingItineraries.js';
 
 const money = (amount, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(amount) || 0);
@@ -546,7 +547,37 @@ export function generateBookingConfirmationTemplate(data) {
   //
   // A flight gets the itinerary treatment every traveller already knows;
   // a hotel gets the stay card; anything else falls back to the route strip.
-  const journey = kind === 'flight' && d.origin && d.destination
+  // Every leg and flight of a flight booking. The card below draws one flight
+  // from the first leg's flat fields: no return flight, and a connection shown
+  // as its first flight number beside its last arrival. Legs are saved on the
+  // booking by the order route, or rebuilt from the offer stored on it.
+  const legs = kind === 'flight'
+    ? (Array.isArray(d.itineraries) && d.itineraries.length > 0 ? d.itineraries : itinerariesFromOffer(d.flightOffer))
+    : [];
+  const itineraryHtml = legs.map((leg, index) => {
+    const stopText = leg.stops === 0 ? 'Non-stop' : `${leg.stops} stop${leg.stops === 1 ? '' : 's'}`;
+    const heading = paragraph(`<strong>${legLabel(leg, index, legs.length)}</strong> &nbsp;·&nbsp; ${line([
+      `${leg.origin} → ${leg.destination}`, shortDate(leg.departureDate), humanDuration(leg.duration), stopText,
+    ], ' &nbsp;·&nbsp; ')}`);
+    const flights = leg.segments.map((segment, i) => {
+      const wait = i > 0 ? layoverBetween(leg.segments[i - 1], segment) : '';
+      const connection = i > 0
+        ? paragraph(line([`Connection in ${segment.origin}`, wait ? `${wait} between flights` : ''], ' · '))
+        : '';
+      return connection + segmentCard({
+        airline: segment.flightNumber,
+        flightNumber: segment.operatingCarrier ? `operated by ${segment.operatingCarrier}` : '',
+        cabin: segment.cabin ? segment.cabin.replace(/_/g, ' ').toLowerCase() : '',
+        depTime: clockTime(segment.departureTime), depCode: segment.origin, depDate: shortDate(segment.departureDate), depTerminal: segment.departureTerminal,
+        arrTime: clockTime(segment.arrivalTime), arrCode: segment.destination, arrDate: shortDate(segment.arrivalDate), arrTerminal: segment.arrivalTerminal,
+        // Amadeus gives a leg's elapsed time, not each flight's.
+        duration: leg.segments.length === 1 ? leg.duration : '',
+      });
+    }).join('');
+    return heading + flights;
+  }).join('');
+
+  const journey = itineraryHtml ? itineraryHtml : kind === 'flight' && d.origin && d.destination
     ? segmentCard({
       airline: d.Airline || d.airlineName || d.airline,
       flightNumber: d.Flight || d.flightNumber,
