@@ -53,6 +53,10 @@ export function selectUnannounced(rows = []) {
     const review = details.needs_review;
     if (review?.alerted_at) return false;         // already announced once
 
+    // A cancellation with a refund still to claim from the airline. It is
+    // cancelled and ticketed, so both checks below would skip it - and did.
+    if (needsAirlineRefundClaim(booking)) return true;
+
     // The ticket turned up later, by retry or by hand.
     if (details.gds?.ticketed === true) return false;
     if (Array.isArray(details.tickets) && details.tickets.length > 0) return false;
@@ -97,13 +101,57 @@ export function describeBooking(booking) {
   ].join('\n');
 }
 
-export function buildMessage(bookings) {
+/**
+ * A cancelled booking whose tickets still hold value with the airline.
+ *
+ * Tickets past their same-day void window are not voided by the cancel; their
+ * value stays with the airline until it is claimed under the fare rules
+ * (payment/operations.handlers.js cancelFlightBooking, which lists them on
+ * `needs_review.tickets`). That flag was written and never read: this job
+ * skipped cancelled rows, and the failed-refund alarm lists only refunds that
+ * failed, so the claim reached nobody.
+ */
+export function needsAirlineRefundClaim(booking) {
+  const review = booking?.booking_details?.needs_review;
+  return review?.source === 'cancellation' && Array.isArray(review.tickets) && review.tickets.length > 0;
+}
+
+/** One line per airline claim. Ticket numbers, never passenger names. */
+export function describeAirlineClaim(booking) {
+  const details = booking.booking_details || {};
+  const review = details.needs_review || {};
+  const cancellation = details.cancellation || {};
+  const hours = Math.round((Date.now() - Date.parse(review.at || cancellation.cancelledAt || booking.created_at)) / 36e5);
+  const tickets = review.tickets || [];
   return [
-    `:rotating_light: *${bookings.length} booking${bookings.length > 1 ? 's' : ''} paid but not ticketed*`,
-    'The customer has paid and no ticket was issued. Each one needs a human: ticket it, or refund it.',
-    '',
-    ...bookings.map(describeBooking),
-  ].join('\n\n');
+    `*${booking.booking_reference}* — cancelled, ${booking.payment_status}; customer refund: ${cancellation.paymentAction || 'none recorded'}`,
+    `PNR ${details.pnr || 'none'} · ${tickets.length} ticket${tickets.length > 1 ? 's' : ''} to claim: ${tickets.join(', ')}`,
+    `flagged ${hours}h ago`,
+  ].join('\n');
+}
+
+export function buildMessage(bookings) {
+  const claims = bookings.filter(needsAirlineRefundClaim);
+  const unticketed = bookings.filter((booking) => !needsAirlineRefundClaim(booking));
+  const sections = [];
+  if (unticketed.length) {
+    sections.push(
+      `:rotating_light: *${unticketed.length} booking${unticketed.length > 1 ? 's' : ''} paid but not ticketed*`,
+      'The customer has paid and no ticket was issued. Each one needs a human: ticket it, or refund it.',
+      '',
+      ...unticketed.map(describeBooking),
+    );
+  }
+  if (claims.length) {
+    sections.push(
+      `:airplane_departure: *${claims.length} cancelled booking${claims.length > 1 ? 's' : ''} with a refund to claim from the airline*`,
+      'These tickets were past their void window when the booking was cancelled, so the airline still holds their value. '
+        + 'Claim each refund under the fare rules.',
+      '',
+      ...claims.map(describeAirlineClaim),
+    );
+  }
+  return sections.join('\n\n');
 }
 
 /** Stamp the bookings so the next run stays quiet about them. */
