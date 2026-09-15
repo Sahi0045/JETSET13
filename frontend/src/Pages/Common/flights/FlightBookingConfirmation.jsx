@@ -11,6 +11,7 @@ import ChargeAmount from "../../../Components/ChargeAmount";
 import { CHARGE_CURRENCY, describeServiceFee, formatUsd } from "../../../utils/chargeDisplay";
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext";
 import { clearFlightReview, readFlightReview, saveFlightReview } from "../../../utils/flightReviewResume";
+import { cancelUrlFor, isCancelledReturn, readCancelledCheckout } from "../../../utils/cancelledCheckout";
 import NoticeDialog from "../../../Components/NoticeDialog";
 import ArcPayService from "../../../Services/ArcPayService";
 import { useLocationContext } from '../../../Context/LocationContext';
@@ -68,8 +69,31 @@ function FlightBookingConfirmation() {
   // cannot answer - they are sent to log in, exactly as before the switch.
   const guestSwitch = useGuestFlightBooking({ enabled: !authLoading && !user });
   const bookingAsGuest = !user && guestSwitch.isSuccess && guestSwitch.data === true;
-  const [resumedReview] = useState(() => (routerLocation.state?.flightData ? null : readFlightReview()));
+  // Back from cancelling on the payment page. The cancel link went to the
+  // flights landing page, which ignored it, after this page had cleared the
+  // flight: everything chosen and typed was lost, and nothing said whether
+  // anything was charged. The flight, travellers and contact details saved
+  // before the payment page opened come back - only on that return, never on
+  // an ordinary visit (utils/cancelledCheckout.js).
+  const [paymentCancelled] = useState(() => isCancelledReturn(routerLocation.search));
+  const [cancelledCheckout] = useState(() => (!routerLocation.state?.flightData && isCancelledReturn(routerLocation.search)
+    ? readCancelledCheckout()
+    : null));
+  const [cancelNotice, setCancelNotice] = useState(() => (cancelledCheckout
+    ? 'Payment was cancelled - nothing was charged. Your flight and traveller details are as you left them.'
+    : null));
+  const [resumedReview] = useState(() => (routerLocation.state?.flightData
+    ? null
+    : (cancelledCheckout?.reviewState ?? readFlightReview())));
   const reviewState = routerLocation.state?.flightData ? routerLocation.state : resumedReview;
+
+  // The restored flight goes into router state, like an arrival from search,
+  // and the "cancelled" mark comes off the URL: a refresh keeps the booking,
+  // and does not restore it again.
+  useEffect(() => {
+    if (!cancelledCheckout) return;
+    navigate(routerLocation.pathname, { replace: true, state: cancelledCheckout.reviewState });
+  }, []);
   const [editMode, setEditMode] = useState(true); // Start in edit mode for new bookings
   // Collapsible passenger cards: null → first card open by default; '' → all
   // collapsed; otherwise the id of the one open card. Keeps a long multi-pax
@@ -579,7 +603,9 @@ function FlightBookingConfirmation() {
 
         // Keep the contact details already typed when the flight is re-read: a
         // change of travellers swaps the offer, not the customer.
-        setBookingDetails((previous) => (previous?.contact ? { ...bookingData, contact: previous.contact } : bookingData));
+        // Back from a cancelled payment, the contact details come back too.
+        setBookingDetails((previous) => (previous?.contact ? { ...bookingData, contact: previous.contact }
+          : cancelledCheckout?.contact ? { ...bookingData, contact: cancelledCheckout.contact } : bookingData));
         updateFareSummary(bookingData);
       } catch (error) {
         if (cancelled) return;
@@ -678,6 +704,13 @@ function FlightBookingConfirmation() {
       const types = Array.isArray(pricings) && pricings.length
         ? pricings.map((p) => p.travelerType || 'ADULT')
         : ['ADULT'];
+      // Back from a cancelled payment: the travellers as they were typed, when
+      // they are still the travellers this fare was priced for.
+      const restored = cancelledCheckout?.travellers ?? [];
+      if (restored.length === types.length && restored.every((t, index) => t?.type === types[index])) {
+        setPassengerData(restored);
+        return;
+      }
       setPassengerData(types.map((type, index) => blankTraveller(type, index)));
     }
   }, [bookingDetails, passengerData.length]);
@@ -943,7 +976,9 @@ function FlightBookingConfirmation() {
         calculatedFare,
         amount,
         couponCode: appliedCoupon?.code || null,
-        flightData: flightDataForArcPay
+        flightData: flightDataForArcPay,
+        // So a cancelled payment can come back to this search's results too.
+        searchData: reviewState?.searchData ?? null
       };
 
       // Not logged: it carries names, dates of birth and passport numbers.
@@ -969,7 +1004,8 @@ function FlightBookingConfirmation() {
         customerPhone: passengerData?.[0]?.mobile,
         description,
         returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=flight`,
-        cancelUrl: `${window.location.origin}/flights?cancelled=true`,
+        // Back to this page, which restores the booking (utils/cancelledCheckout.js).
+        cancelUrl: cancelUrlFor(window.location.origin),
         flightData: flightDataForArcPay,
         bookingData: bookingDataForStorage,
       });
@@ -1108,6 +1144,9 @@ function FlightBookingConfirmation() {
         <Navbar forceScrolled={true} />
         <div className="booking-confirmation-container flex justify-center items-center min-h-[60vh] pt-24">
           <div className="max-w-md text-center">
+            {paymentCancelled && (
+              <p className="font-medium text-[#0d3d56] mb-2" role="status">Payment was cancelled - nothing was charged.</p>
+            )}
             <h2 className="text-xl font-semibold text-[#0d3d56] mb-2">We can't show this booking</h2>
             <p className="text-[#626363] mb-6">
               {error || "No flight data available. Please return to the search page and try again."}
@@ -1260,6 +1299,15 @@ function FlightBookingConfirmation() {
             <span className="step"><span className="step-num">4</span> Confirmation</span>
           </div>
         </div>
+
+        {cancelNotice && (
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+            <span className="min-w-0 flex-1">{cancelNotice}</span>
+            <button type="button" onClick={() => setCancelNotice(null)} className="text-xs font-semibold underline whitespace-nowrap">
+              Dismiss
+            </button>
+          </div>
+        )}
 
         <div className="booking-layout grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Left Column - Flight & Passenger Details */}
