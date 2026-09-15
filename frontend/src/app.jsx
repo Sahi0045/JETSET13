@@ -359,11 +359,6 @@ const FlightBookingConfirmation = React.lazy(() =>
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Confirming Booking..." /> }))
 );
 
-const FlightPayment = React.lazy(() =>
-  import('./Pages/Common/flights/FlightPayment')
-    .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Processing Payment..." /> }))
-);
-
 const FlightCreateOrders = React.lazy(() =>
   import('./Pages/Common/flights/FlightCreateOrders')
     .catch(() => ({ default: () => <LoadingSpinner fullScreen={true} text="Creating Orders..." /> }))
@@ -697,7 +692,6 @@ const App = () => {
           <Route path="/flights/search" element={<FlightSearchPage />} />
           <Route path="/flights/booking/:bookingId" element={<FlightBookingConfirmation />} />
           <Route path="/flights/booking-confirmation" element={<FlightBookingConfirmation />} />
-          <Route path="/flight-payment" element={<FlightPayment />} />
           <Route path="/flight-create-orders" element={<FlightCreateOrders />} />
           <Route path="/packages" element={<Packages />} />
 

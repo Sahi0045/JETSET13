@@ -523,6 +523,39 @@ describe('after the PNR exists', () => {
     expect(queued).toContain('<identificationType>C</identificationType><itemNumber>0</itemNumber>');
   });
 
+  // IB4001 MAD-JFK (operated by AA) came back from commit with status TK, and
+  // issuance answered 1969 VERIFY ITINERARY. Amadeus: end with change advice.
+  const withSegmentStatus = (status) => envelope('PNR_Reply', pnrHeaderXml
+    + '<originDestinationDetails><itineraryInfo><elementManagementItinerary><segmentName>AIR</segmentName></elementManagementItinerary>'
+    + `<relatedProduct><quantity>1</quantity><status>${status}</status></relatedProduct>`
+    + '<itineraryReservationInfo><reservation><companyId>AA</companyId><controlNumber>XYZ123</controlNumber></reservation></itineraryReservationInfo>'
+    + '</itineraryInfo></originDestinationDetails>', SESSION);
+  const commitOptions = () => axios.post.mock.calls.map(([, body]) => String(body))
+    .filter((body) => body.includes('<PNR_AddMultiElements'))
+    .map((body) => body.match(/<optionCode>(\d+)<\/optionCode>/)?.[1]);
+
+  it('accepts a segment the airline changed, with change advice, before queueing', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, withSegmentStatus('TK'), withSegmentStatus('HK'), fopOk);
+
+    const result = await runBookingChain({ offer: offer(), travelers });
+
+    expect(commitOptions()).toEqual(['0', '11', '13']);
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    expect(sent.findIndex((body) => body.includes('<optionCode>13</optionCode>')))
+      .toBeLessThan(sent.findIndex((body) => body.includes('<Queue_PlacePNR')));
+    expect(result.pnr).toBe('ABC123');
+  });
+
+  it('sends no change advice when no segment was changed', async () => {
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, withSegmentStatus('HK'), fopOk);
+
+    await runBookingChain({ offer: offer(), travelers });
+
+    expect(commitOptions()).toEqual(['0', '11']);
+  });
+
   // The route reads `committed` to decide whether refunding is safe. A ticketed
   // booking that gets refunded leaves the customer flying for free and the
   // airline billing us.
@@ -552,44 +585,100 @@ describe('after the PNR exists', () => {
     expect(result.order.needsReview).toBeUndefined()
   })
 
-  // An airline Amadeus does not host refuses the ticket until its own record
-  // locator is on the PNR (DL on PDT: about 12 s). The chain waits for it.
-  it('waits for the airline record locator before issuing', async () => {
+  // An airline Amadeus does not host sends its record locator after commit and
+  // refuses the ticket until then. A retrieve in the session that committed
+  // never showed it (Royal Brunei on PDT, 90-117 s); a new session did, after
+  // 12 s - which is Amadeus's own advice. So the chain signs out first.
+  it('waits for the airline record locator in new sessions, then issues', async () => {
     vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
     vi.stubEnv('AMADEUS_WS_AIRLINE_LOCATOR_WAIT_MS', '5000');
     vi.stubEnv('AMADEUS_WS_AIRLINE_LOCATOR_POLL_MS', '0');
     vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
     const segment = (locator) => '<originDestinationDetails><itineraryInfo><elementManagementItinerary><segmentName>AIR</segmentName></elementManagementItinerary>'
-      + (locator ? `<itineraryReservationInfo><reservation><companyId>DL</companyId><controlNumber>${locator}</controlNumber></reservation></itineraryReservationInfo>` : '')
+      + (locator ? `<itineraryReservationInfo><reservation><companyId>BI</companyId><controlNumber>${locator}</controlNumber></reservation></itineraryReservationInfo>` : '')
       + '</itineraryInfo></originDestinationDetails>';
+    const commitWithoutLocator = envelope('PNR_Reply', pnrHeaderXml + segment(''), SESSION);
     const withoutLocator = envelope('PNR_Reply', pnrHeaderXml + segment(''), SESSION);
-    const withLocator = envelope('PNR_Reply', pnrHeaderXml + segment('F78NW3'), SESSION);
+    const withLocator = envelope('PNR_Reply', pnrHeaderXml + segment('13Z0L2'), SESSION);
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, withoutLocator, withLocator, issueOk, retrieveWithTicket);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitWithoutLocator, fopOk, signOutOk,
+      withoutLocator, signOutOk,
+      withLocator, issueOk, retrieveWithTicket);
 
     const result = await runBookingChain({ offer: offer(), travelers });
 
     const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    const firstSignOut = sent.findIndex((body) => body.includes('Security_SignOut'));
     const issuedAt = sent.findIndex((body) => body.includes('<DocIssuance_IssueTicket'));
-    const retrievesBeforeIssue = sent.slice(0, issuedAt).filter((body) => body.includes('<PNR_Retrieve')).length;
-    expect(retrievesBeforeIssue).toBe(2);
+    // Nothing is retrieved or issued in the session that committed.
+    expect(firstSignOut).toBeGreaterThan(0);
+    expect(sent.slice(0, firstSignOut).some((body) => body.includes('<PNR_Retrieve') || body.includes('<DocIssuance_IssueTicket'))).toBe(false);
+    // The booking session, one look without the locator, one with it.
+    expect(sent.filter((body) => body.includes('TransactionStatusCode="Start"'))).toHaveLength(3);
+    expect(sent.slice(firstSignOut, issuedAt).filter((body) => body.includes('<PNR_Retrieve'))).toHaveLength(2);
+    expect(result.pnr).toBe('ABC123');
     expect(result.ticketed).toBe(true);
+    expect(result.tickets.length).toBeGreaterThan(0);
   });
 
-  it('retries issuance the airline refused because it was not ready', async () => {
+  it('issues in the booking session when the airline locator is already there', async () => {
     vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
     vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
-    const notReady = envelope('DocIssuance_IssueTicketReply',
-      '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>9125</errorCode></errorDetails></errorOrWarningCodeDetails>'
-      + '<errorWarningDescription><freeText>ETKT DISALLOWED - NEED AIRLINE R/LOC-RETRY</freeText></errorWarningDescription></errorGroup>', SESSION);
+    const hosted = envelope('PNR_Reply', pnrHeaderXml
+      + '<originDestinationDetails><itineraryInfo><elementManagementItinerary><segmentName>AIR</segmentName></elementManagementItinerary>'
+      + '<itineraryReservationInfo><reservation><companyId>LH</companyId><controlNumber>LHABC1</controlNumber></reservation></itineraryReservationInfo>'
+      + '</itineraryInfo></originDestinationDetails>', SESSION);
     const { runBookingChain } = await loadChain();
-    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, notReady, retrieveNoTicket, issueOk, retrieveWithTicket);
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, hosted, fopOk, issueOk, retrieveWithTicket);
 
     const result = await runBookingChain({ offer: offer(), travelers });
 
-    const issues = axios.post.mock.calls.filter(([, body]) => String(body).includes('<DocIssuance_IssueTicket'));
-    expect(issues).toHaveLength(2);
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    expect(sent.filter((body) => body.includes('TransactionStatusCode="Start"'))).toHaveLength(1);
     expect(result.ticketed).toBe(true);
+  });
+
+  const notReadyReply = () => envelope('DocIssuance_IssueTicketReply',
+    '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>9125</errorCode></errorDetails></errorOrWarningCodeDetails>'
+    + '<errorWarningDescription><freeText>ETKT DISALLOWED - NEED AIRLINE R/LOC-RETRY</freeText></errorWarningDescription></errorGroup>', SESSION);
+
+  it('retries issuance the airline refused because it was not ready, in a new session', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, notReadyReply(), signOutOk,
+      retrieveNoTicket, issueOk, retrieveWithTicket);
+
+    const result = await runBookingChain({ offer: offer(), travelers });
+
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    expect(sent.filter((body) => body.includes('<DocIssuance_IssueTicket'))).toHaveLength(2);
+    expect(sent.filter((body) => body.includes('TransactionStatusCode="Start"'))).toHaveLength(2);
+    expect(result.ticketed).toBe(true);
+  });
+
+  it('never issues again when the new session finds a ticket already on the PNR', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, notReadyReply(), signOutOk, retrieveWithTicket);
+
+    const result = await runBookingChain({ offer: offer(), travelers });
+
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    expect(sent.filter((body) => body.includes('<DocIssuance_IssueTicket'))).toHaveLength(1);
+    expect(result.ticketed).toBe(true);
+    expect(result.tickets.length).toBeGreaterThan(0);
+  });
+
+  it('stops after the configured not-ready refusals and keeps the booking', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    vi.stubEnv('AMADEUS_WS_ISSUE_RETRIES', '1');
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, notReadyReply(), signOutOk,
+      retrieveNoTicket, notReadyReply());
+
+    await expect(runBookingChain({ offer: offer(), travelers }))
+      .rejects.toMatchObject({ step: 'issueTicket', committed: true, pnr: 'ABC123' });
   });
 
   // If the number never surfaces, the ticket still exists — leave the PNR for

@@ -21,6 +21,11 @@ import {
 const OPTION_NO_COMMIT = '0';
 /** ER - end and retrieve. ET (10) commits but returns no body, so the PNR would be lost. */
 const OPTION_END_AND_RETRIEVE = '11';
+/**
+ * ERK - end and retrieve with change advice: the airline's schedule changes to
+ * segments on this PNR are accepted as the transaction ends (TK reads HK).
+ */
+const OPTION_END_AND_RETRIEVE_CHANGE_ADVICE = '13';
 /** IR - ignore the changes pending in this session and retrieve the PNR again. */
 const OPTION_IGNORE_AND_RETRIEVE = '21';
 
@@ -363,10 +368,14 @@ export const buildAddElementsBody = (p) => {
  * This is the call that creates the record locator. Everything before it can be
  * abandoned by signing out; after it, a booking exists in the airline's system
  * whether or not the rest of the chain succeeds.
+ *
+ * `changeAdvice` ends with optionCode 13 instead of 11, which accepts a schedule
+ * change the airline made to a segment (status TK). Amadeus's answer for IB4001,
+ * whose TK segment made issuance refuse with 1969 VERIFY ITINERARY.
  */
-export const buildCommitBody = () => {
+export const buildCommitBody = ({ changeAdvice = false } = {}) => {
   const ns = OPERATIONS.PNR_AddMultiElements.namespace;
-  const body = wrap('pnrActions', el('optionCode', OPTION_END_AND_RETRIEVE));
+  const body = wrap('pnrActions', el('optionCode', changeAdvice ? OPTION_END_AND_RETRIEVE_CHANGE_ADVICE : OPTION_END_AND_RETRIEVE));
   return `    <PNR_AddMultiElements xmlns="${ns}">${body}</PNR_AddMultiElements>`;
 };
 

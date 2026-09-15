@@ -1,0 +1,1442 @@
+[
+  {
+    "carrier": "AD",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "VCP-CNF 2026-10-28: 45 offers, 45 plated AD",
+    "route": "VCP-CNF 2026-10-28",
+    "flights": "AD4043/S",
+    "price": 118.5,
+    "pnr": "B9ZX62",
+    "queued": true,
+    "tickets": "577-7491174968",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "AC",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "YYZ-LHR 2026-10-27: 58 offers, 58 plated AC",
+    "route": "YYZ-LHR 2026-10-27",
+    "flights": "AC856/V",
+    "price": 709,
+    "pnr": "BA34I2",
+    "queued": true,
+    "tickets": "014-7491174967",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "AG",
+    "outcome": "NOT_FOUND",
+    "detail": "AUA-MIA 2026-10-30: 0 offers, 0 plated AG",
+    "searched": "AUA-MIA 2026-10-30: 0 offers, 0 plated AG"
+  },
+  {
+    "carrier": "AA",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "JFK-LHR 2026-10-26: 60 offers, 60 plated AA",
+    "route": "JFK-LHR 2026-10-26",
+    "flights": "AA142/O",
+    "price": 404.5,
+    "pnr": "BA3D7G",
+    "queued": true,
+    "tickets": "001-7491174969",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "AN",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "AH",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "ALG-CDG 2026-10-31: 3 offers, 3 plated AH",
+    "route": "ALG-CDG 2026-10-31",
+    "flights": "AH1002/H",
+    "price": 284.1,
+    "pnr": "BA2NLN",
+    "queued": true,
+    "tickets": "124-7491174970",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "AF",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "CDG-JFK 2026-10-29: 60 offers, 60 plated AF",
+    "route": "CDG-JFK 2026-10-29",
+    "flights": "AF2/M",
+    "price": 1585.63,
+    "pnr": "BA2IGA",
+    "queued": true,
+    "tickets": "057-7491174971",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "AS",
+    "outcome": "FAILED_UNKNOWN",
+    "detail": "911 911 NO FARE FOR BOOKING CODE-TRY OTHER PRICING OPTIONS",
+    "searched": "SEA-LAX 2026-11-03: 24 offers, 24 plated AS",
+    "route": "SEA-LAX 2026-11-03",
+    "flights": "AS1300/X",
+    "pnr": null
+  },
+  {
+    "carrier": "AU",
+    "outcome": "NOT_FOUND",
+    "detail": "AEP-COR 2026-11-05: 0 offers, 0 plated AU",
+    "searched": "AEP-COR 2026-11-05: 0 offers, 0 plated AU"
+  },
+  {
+    "carrier": "AR",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "EZE-MIA 2026-11-02: 2 offers, 2 plated AR",
+    "route": "EZE-MIA 2026-11-02",
+    "flights": "AR1304/V",
+    "price": 392.93,
+    "pnr": "BA3D4P",
+    "queued": true,
+    "tickets": "044-7491174972",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "AW",
+    "outcome": "NOT_SELLABLE",
+    "detail": "288 seat check: segment status UNS (288)",
+    "searched": "ACC-LOS 2026-11-07: 4 offers, 4 plated AW",
+    "route": "ACC-LOS 2026-11-07",
+    "flights": "AW210/T",
+    "price": 191.5
+  },
+  {
+    "carrier": "AT",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "CMN-CDG 2026-11-04: 1 offers, 1 plated AT",
+    "route": "CMN-CDG 2026-11-04",
+    "flights": "AT788/R",
+    "price": 169.8,
+    "pnr": "BA2S9I",
+    "queued": true,
+    "tickets": "147-7491174973",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "AV",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "BOG-MIA 2026-11-06: 37 offers, 37 plated AV",
+    "route": "BOG-MIA 2026-11-06",
+    "flights": "AV126/S",
+    "price": 418.53,
+    "pnr": "BA34EL",
+    "queued": true,
+    "tickets": "134-7491174974",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "A9",
+    "outcome": "NOT_FOUND",
+    "detail": "TBS-VIE 2026-11-10: 0 offers, 0 plated A9; TBS-TLV 2026-11-10: 0 offers, 0 plated A9",
+    "searched": "TBS-VIE 2026-11-10: 0 offers, 0 plated A9; TBS-TLV 2026-11-10: 0 offers, 0 plated A9"
+  },
+  {
+    "carrier": "BE",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "AY",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "HEL-LHR 2026-11-08: 8 offers, 8 plated AY",
+    "route": "HEL-LHR 2026-11-08",
+    "flights": "AY1331/O",
+    "price": 197,
+    "pnr": "BA2AMG",
+    "queued": true,
+    "tickets": "105-7491174975",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "BG",
+    "outcome": "NOT_FOUND",
+    "detail": "DAC-LHR 2026-11-13: 0 offers, 0 plated BG; DAC-CGP 2026-11-13: 0 offers, 0 plated BG",
+    "searched": "DAC-LHR 2026-11-13: 0 offers, 0 plated BG; DAC-CGP 2026-11-13: 0 offers, 0 plated BG"
+  },
+  {
+    "carrier": "A3",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "ATH-LHR 2026-11-09: 4 offers, 4 plated A3",
+    "route": "ATH-LHR 2026-11-09",
+    "flights": "A3600/T",
+    "price": 177.1,
+    "pnr": "BA3A7R",
+    "queued": true,
+    "tickets": "390-7491174976",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "BF",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "0 0 BF ETKT: SYSTEM UNABLE TO PROCESS",
+    "searched": "ORY-EWR 2026-11-12: 0 offers, 0 plated BF; ORY-RUN 2026-11-12: 1 offers, 1 plated BF",
+    "route": "ORY-RUN 2026-11-12",
+    "flights": "BF700/X",
+    "price": 563.1,
+    "pnr": "BA3QBE",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "BP",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "GBE-JNB 2026-10-26: 4 offers, 4 plated BP",
+    "route": "GBE-JNB 2026-10-26",
+    "flights": "BP203/X",
+    "price": 134,
+    "pnr": "BA3BUI",
+    "queued": true,
+    "tickets": "636-7491174979",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "BT",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "RIX-FRA 2026-10-28: 1 offers, 1 plated BT",
+    "route": "RIX-FRA 2026-10-28",
+    "flights": "BT243/L",
+    "price": 108.3,
+    "pnr": "BA2DE3",
+    "queued": true,
+    "tickets": "657-7491174982",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "BR",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "TPE-LAX 2026-10-27: 3 offers, 3 plated BR",
+    "route": "TPE-LAX 2026-10-27",
+    "flights": "BR6/V",
+    "price": 644.83,
+    "pnr": "BA2WU2",
+    "queued": true,
+    "tickets": "695-7491174981",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "BW",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "POS-JFK 2026-10-29: 5 offers, 5 plated BW",
+    "route": "POS-JFK 2026-10-29",
+    "flights": "BW550/G",
+    "price": 446.83,
+    "pnr": "BA4338",
+    "queued": true,
+    "tickets": "106-7491174983",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "B6",
+    "outcome": "FAILED_PRICECHECK",
+    "detail": "priced 1743.5 USD, expected 294.5",
+    "searched": "JFK-LHR 2026-10-31: 7 offers, 7 plated B6",
+    "route": "JFK-LHR 2026-10-31",
+    "flights": "B63917/L",
+    "price": 294.5,
+    "pnr": null
+  },
+  {
+    "carrier": "BI",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "9125 9125 ETKT DISALLOWED - NEED AIRLINE R/LOC-RETRY",
+    "searched": "BWN-SIN 2026-11-14: 2 offers, 2 plated BI",
+    "route": "BWN-SIN 2026-11-14",
+    "flights": "BI423/U",
+    "price": 285.5,
+    "pnr": "BA3OK6",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "B0",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "ORY-EWR 2026-10-30: 1 offers, 1 plated B0",
+    "route": "ORY-EWR 2026-10-30",
+    "flights": "B0100/K",
+    "price": 2887.63,
+    "pnr": "BA2UFU",
+    "queued": true,
+    "tickets": "002-7491174984",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "CG",
+    "outcome": "NOT_SELLABLE",
+    "detail": "timeout of 25000ms exceeded",
+    "searched": "POM-LAE 2026-11-02: 19 offers, 19 plated CG",
+    "route": "POM-LAE 2026-11-02",
+    "flights": "CG1500/W",
+    "price": 67.3
+  },
+  {
+    "carrier": "CY",
+    "outcome": "NOT_FOUND",
+    "detail": "LCA-ATH 2026-11-04: 0 offers, 0 plated CY; LCA-LHR 2026-11-04: 0 offers, 0 plated CY",
+    "searched": "LCA-ATH 2026-11-04: 0 offers, 0 plated CY; LCA-LHR 2026-11-04: 0 offers, 0 plated CY"
+  },
+  {
+    "carrier": "CI",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "TPE-LAX 2026-11-03: 4 offers, 4 plated CI",
+    "route": "TPE-LAX 2026-11-03",
+    "flights": "CI8/H",
+    "price": 703.83,
+    "pnr": "BA3NEE",
+    "queued": true,
+    "tickets": "297-7491174985",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "CZ",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "0 0 CZ ETKT: COMMUNICATIONS LINE UNAVAILABLE",
+    "searched": "CAN-LHR 2026-11-05: 3 offers, 3 plated CZ",
+    "route": "CAN-LHR 2026-11-05",
+    "flights": "CZ303/V",
+    "price": 581.1,
+    "pnr": "BA39I8",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "DE",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "FRA-JFK 2026-11-06: 1 offers, 1 plated DE",
+    "route": "FRA-JFK 2026-11-06",
+    "flights": "DE2016/E",
+    "price": 767.53,
+    "pnr": "BA34SU",
+    "queued": true,
+    "tickets": "881-7491174986",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "DM",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "10609 10609 MANDATORY SSRFOID MISSING FOR CARRIER",
+    "searched": "SDQ-JFK 2026-11-08: 0 offers, 0 plated DM; SDQ-MIA 2026-11-08: 1 offers, 1 plated DM",
+    "route": "SDQ-MIA 2026-11-08",
+    "flights": "DM2104/A",
+    "price": 153.35,
+    "pnr": "BA2WW8",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "DO",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "DT",
+    "outcome": "NOT_FOUND",
+    "detail": "LAD-LIS 2026-11-10: 0 offers, 0 plated DT; LAD-JNB 2026-11-10: 0 offers, 0 plated DT",
+    "searched": "LAD-LIS 2026-11-10: 0 offers, 0 plated DT; LAD-JNB 2026-11-10: 0 offers, 0 plated DT"
+  },
+  {
+    "carrier": "CA",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "PEK-LHR 2026-11-01: 39 offers, 39 plated CA",
+    "route": "PEK-LHR 2026-11-01",
+    "flights": "CA937/L",
+    "price": 729,
+    "pnr": "BA47QJ",
+    "queued": true,
+    "tickets": "999-7491174987",
+    "cleanup": "CLEANUP FAILED voidTicket timeout of 25000ms exceeded"
+  },
+  {
+    "carrier": "D9",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "EB",
+    "outcome": "NOT_FOUND",
+    "detail": "MAD-CUN 2026-11-13: 0 offers, 0 plated EB",
+    "searched": "MAD-CUN 2026-11-13: 0 offers, 0 plated EB"
+  },
+  {
+    "carrier": "DL",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "JFK-LHR 2026-11-07: 60 offers, 60 plated DL",
+    "route": "JFK-LHR 2026-11-07",
+    "flights": "DL5996/E",
+    "price": 294.5,
+    "pnr": "BA3TXL",
+    "queued": true,
+    "tickets": "006-7491174989",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "DY",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "OSL-LHR 2026-11-11: 0 offers, 0 plated DY; OSL-BGO 2026-11-11: 11 offers, 11 plated DY",
+    "route": "OSL-BGO 2026-11-11",
+    "flights": "DY602/Q",
+    "price": 58.6,
+    "pnr": "BA45HR",
+    "queued": true,
+    "tickets": "328-7491174990",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "EI",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "DUB-JFK 2026-11-14: 28 offers, 28 plated EI",
+    "route": "DUB-JFK 2026-11-14",
+    "flights": "EI107/N",
+    "price": 577.43,
+    "pnr": "BA3JR2",
+    "queued": true,
+    "tickets": "053-7491174991",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "EN",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "0 0 EN ETKT: NOT AUTHORISED",
+    "searched": "MUC-VRN 2026-10-26: 2 offers, 2 plated EN",
+    "route": "MUC-VRN 2026-10-26",
+    "flights": "EN2158/S",
+    "price": 358.3,
+    "pnr": "BA32UO",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "E9",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "FB",
+    "outcome": "NOT_SELLABLE",
+    "detail": "288 seat check: segment status UNS (288)",
+    "searched": "SOF-LHR 2026-10-30: 1 offers, 1 plated FB",
+    "route": "SOF-LHR 2026-10-30",
+    "flights": "FB851/F",
+    "price": 115.3
+  },
+  {
+    "carrier": "ET",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "ADD-LHR 2026-10-27: 1 offers, 1 plated ET",
+    "route": "ADD-LHR 2026-10-27",
+    "flights": "ET700/V",
+    "price": 691.5,
+    "pnr": "BA3NBO",
+    "queued": true,
+    "tickets": "071-7491174993",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "EY",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "AUH-LHR 2026-10-28: 43 offers, 43 plated EY",
+    "route": "AUH-LHR 2026-10-28",
+    "flights": "EY61/Q",
+    "price": 637.8,
+    "pnr": "BA2NKY",
+    "queued": true,
+    "tickets": "607-7491174994",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "FN",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "FI",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "KEF-JFK 2026-10-31: 1 offers, 1 plated FI",
+    "route": "KEF-JFK 2026-10-31",
+    "flights": "FI615/V",
+    "price": 464.53,
+    "pnr": "BA2YPS",
+    "queued": true,
+    "tickets": "108-7491174995",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "FZ",
+    "outcome": "NOT_FOUND",
+    "detail": "DXB-BOM: 977 977 No available flight found for the requested segment 1; DXB-KWI: 977 977 No available flight found for the requested segment 1",
+    "searched": "DXB-BOM: 977 977 No available flight found for the requested segment 1; DXB-KWI: 977 977 No available flight found for the requested segment 1"
+  },
+  {
+    "carrier": "GE",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "GF",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "8100 8100 ETKT THIS CARRIER NOT VALID THIS MARKET",
+    "searched": "BAH-LHR 2026-11-06: 2 offers, 2 plated GF",
+    "route": "BAH-LHR 2026-11-06",
+    "flights": "GF7/S",
+    "price": 501.3,
+    "pnr": "BA3OOV",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "GL",
+    "outcome": "NOT_FOUND",
+    "detail": "CPH-SFJ 2026-11-07: 0 offers, 0 plated GL",
+    "searched": "CPH-SFJ 2026-11-07: 0 offers, 0 plated GL"
+  },
+  {
+    "carrier": "GP",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "FJ",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "NAN-LAX 2026-11-01: 3 offers, 3 plated FJ",
+    "route": "NAN-LAX 2026-11-01",
+    "flights": "FJ810/Q",
+    "price": 871.23,
+    "pnr": "BA2SC8",
+    "queued": true,
+    "tickets": "260-7491174996",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "GA",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "CGK-SIN 2026-11-04: 13 offers, 13 plated GA",
+    "route": "CGK-SIN 2026-11-04",
+    "flights": "GA824/V",
+    "price": 132.1,
+    "pnr": "BA3EEU",
+    "queued": true,
+    "tickets": "126-7491174997",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "GZ",
+    "outcome": "NOT_SELLABLE",
+    "detail": "288 seat check: segment status UNS (288)",
+    "searched": "RAR-AIT 2026-11-10: 4 offers, 4 plated GZ",
+    "route": "RAR-AIT 2026-11-10",
+    "flights": "GZ612/T",
+    "price": 217.6
+  },
+  {
+    "carrier": "GQ",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "ATH-HER 2026-11-09: 14 offers, 14 plated GQ",
+    "route": "ATH-HER 2026-11-09",
+    "flights": "GQ210/S",
+    "price": 89.4,
+    "pnr": "BA2V5U",
+    "queued": true,
+    "tickets": "633-7491174999",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "HC",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "DSS-CDG 2026-11-12: 1 offers, 1 plated HC",
+    "route": "DSS-CDG 2026-11-12",
+    "flights": "HC403/N",
+    "price": 469.8,
+    "pnr": "BA43NE",
+    "queued": true,
+    "tickets": "490-7491174998",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "HM",
+    "outcome": "NOT_FOUND",
+    "detail": "SEZ-JNB 2026-11-14: 0 offers, 0 plated HM",
+    "searched": "SEZ-JNB 2026-11-14: 0 offers, 0 plated HM"
+  },
+  {
+    "carrier": "G3",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "GRU-GIG 2026-11-11: 7 offers, 7 plated G3",
+    "route": "GRU-GIG 2026-11-11",
+    "flights": "G31374/B",
+    "price": 130.9,
+    "pnr": "BA48P9",
+    "queued": true,
+    "tickets": "127-7491175000",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "HU",
+    "outcome": "NOT_FOUND",
+    "detail": "PEK-HAK 2026-10-27: 0 offers, 0 plated HU; PEK-BRU 2026-10-27: 0 offers, 0 plated HU",
+    "searched": "PEK-HAK 2026-10-27: 0 offers, 0 plated HU; PEK-BRU 2026-10-27: 0 offers, 0 plated HU"
+  },
+  {
+    "carrier": "HX",
+    "outcome": "NOT_FOUND",
+    "detail": "HKG-BKK 2026-10-28: 0 offers, 0 plated HX",
+    "searched": "HKG-BKK 2026-10-28: 0 offers, 0 plated HX"
+  },
+  {
+    "carrier": "HY",
+    "outcome": "NOT_FOUND",
+    "detail": "TAS-IST 2026-10-29: 0 offers, 0 plated HY; TAS-JFK 2026-10-29: 0 offers, 0 plated HY",
+    "searched": "TAS-IST 2026-10-29: 0 offers, 0 plated HY; TAS-JFK 2026-10-29: 0 offers, 0 plated HY"
+  },
+  {
+    "carrier": "HF",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "0 0 HF ETKT: NOT AUTHORISED",
+    "searched": "ABJ-DSS 2026-11-13: 2 offers, 2 plated HF",
+    "route": "ABJ-DSS 2026-11-13",
+    "flights": "HF706/Q",
+    "price": 370.7,
+    "pnr": "BA399W",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "H5",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "H2",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "10609 10609 MANDATORY SSRFOID MISSING FOR CARRIER",
+    "searched": "SCL-LIM: 977 977 No available flight found for the requested segment 1; SCL-PMC 2026-10-30: 2 offers, 2 plated H2",
+    "route": "SCL-PMC 2026-10-30",
+    "flights": "H21621/X",
+    "price": 63.5,
+    "pnr": "BA2QJX",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "IB",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "1969 1969 VERIFY ITINERARY",
+    "searched": "MAD-JFK 2026-11-01: 36 offers, 36 plated IB",
+    "route": "MAD-JFK 2026-11-01",
+    "flights": "IB4001/V",
+    "price": 817.83,
+    "pnr": "BA3E2M",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "IZ",
+    "outcome": "NOT_FOUND",
+    "detail": "TLV-ATH 2026-11-03: 0 offers, 0 plated IZ",
+    "searched": "TLV-ATH 2026-11-03: 0 offers, 0 plated IZ"
+  },
+  {
+    "carrier": "I6",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "JA",
+    "outcome": "NOT_SELLABLE",
+    "detail": "288 seat check: segment status UNS (288)",
+    "searched": "SCL-LIM 2026-11-05: 9 offers, 9 plated JA",
+    "route": "SCL-LIM 2026-11-05",
+    "flights": "JA7730/U",
+    "price": 119.85
+  },
+  {
+    "carrier": "JD",
+    "outcome": "NOT_FOUND",
+    "detail": "PEK-SYX 2026-11-06: 0 offers, 0 plated JD",
+    "searched": "PEK-SYX 2026-11-06: 0 offers, 0 plated JD"
+  },
+  {
+    "carrier": "IE",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "HIR-BNE 2026-11-02: 1 offers, 1 plated IE",
+    "route": "HIR-BNE 2026-11-02",
+    "flights": "IE700/S",
+    "price": 352.9,
+    "pnr": "BA3SRG",
+    "queued": true,
+    "tickets": "193-7491175003",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "JL",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "HND-LHR 2026-11-07: 10 offers, 10 plated JL",
+    "route": "HND-LHR 2026-11-07",
+    "flights": "JL41/M",
+    "price": 1834.4,
+    "pnr": "BA2OMD",
+    "queued": true,
+    "tickets": "131-7491175004",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "HO",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "PVG-CAN 2026-10-26: 1 offers, 1 plated HO",
+    "route": "PVG-CAN 2026-10-26",
+    "flights": "HO1855/Y",
+    "price": 336.9,
+    "pnr": "BA3HO8",
+    "queued": true,
+    "tickets": "018-7491175002",
+    "cleanup": "CLEANUP FAILED voidTicket timeout of 25000ms exceeded"
+  },
+  {
+    "carrier": "JX",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "0 0 JX ETKT: NOT AUTHORISED",
+    "searched": "TPE-LAX 2026-11-09: 3 offers, 3 plated JX",
+    "route": "TPE-LAX 2026-11-09",
+    "flights": "JX1002/N",
+    "price": 535.83,
+    "pnr": "BA3RWA",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "J2",
+    "outcome": "NOT_FOUND",
+    "detail": "GYD-IST 2026-11-11: 0 offers, 0 plated J2; GYD-LHR 2026-11-11: 0 offers, 0 plated J2",
+    "searched": "GYD-IST 2026-11-11: 0 offers, 0 plated J2; GYD-LHR 2026-11-11: 0 offers, 0 plated J2"
+  },
+  {
+    "carrier": "JU",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "BEG-LHR 2026-11-08: 1 offers, 1 plated JU",
+    "route": "BEG-LHR 2026-11-08",
+    "flights": "JU210/U",
+    "price": 168.2,
+    "pnr": "BA3QP9",
+    "queued": true,
+    "tickets": "115-7491175005",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "KC",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "0 0 KC ETKT: NOT AUTHORISED",
+    "searched": "ALA-FRA 2026-11-12: 1 offers, 1 plated KC",
+    "route": "ALA-FRA 2026-11-12",
+    "flights": "KC221/E",
+    "price": 390.3,
+    "pnr": "BA2XOI",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "KF",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "KG",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "KE",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "ICN-LAX 2026-11-13: 15 offers, 15 plated KE",
+    "route": "ICN-LAX 2026-11-13",
+    "flights": "KE17/L",
+    "price": 884.23,
+    "pnr": "BA2WVF",
+    "queued": true,
+    "tickets": "180-7491175009",
+    "cleanup": "CLEANUP FAILED voidTicket 5458 NOT AUTHORISED"
+  },
+  {
+    "carrier": "JY",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "PLS-SDQ 2026-11-10: 2 offers, 2 plated JY",
+    "route": "PLS-SDQ 2026-11-10",
+    "flights": "JY233/T",
+    "price": 313.79,
+    "pnr": "BA38BU",
+    "queued": true,
+    "tickets": "653-7491175007",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "KL",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "AMS-JFK 2026-10-27: 60 offers, 60 plated KL",
+    "route": "AMS-JFK 2026-10-27",
+    "flights": "KL6020/M",
+    "price": 1709.83,
+    "pnr": "BA2SDS",
+    "queued": true,
+    "tickets": "074-7491175010",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "KP",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "LFW-LOS 2026-10-29: 2 offers, 2 plated KP",
+    "route": "LFW-LOS 2026-10-29",
+    "flights": "KP62/T",
+    "price": 386.8,
+    "pnr": "BA3Q4O",
+    "queued": true,
+    "tickets": "032-7491175011",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "KM",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "MLA-LHR 2026-10-28: 2 offers, 2 plated KM",
+    "route": "MLA-LHR 2026-10-28",
+    "flights": "KM100/R",
+    "price": 184,
+    "pnr": "BA3YEW",
+    "queued": true,
+    "tickets": "643-7491175012",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "KU",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "0 0 KU ETKT: NOT AUTHORISED",
+    "searched": "KWI-LHR 2026-10-31: 1 offers, 1 plated KU",
+    "route": "KWI-LHR 2026-10-31",
+    "flights": "KU101/V",
+    "price": 269.3,
+    "pnr": "BA3Q6I",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "K6",
+    "outcome": "NOT_FOUND",
+    "detail": "PNH-REP 2026-11-02: 0 offers, 0 plated K6",
+    "searched": "PNH-REP 2026-11-02: 0 offers, 0 plated K6"
+  },
+  {
+    "carrier": "KQ",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "NBO-LHR 2026-10-30: 3 offers, 3 plated KQ",
+    "route": "NBO-LHR 2026-10-30",
+    "flights": "KQ100/T",
+    "price": 703.95,
+    "pnr": "BA3A5X",
+    "queued": true,
+    "tickets": "706-7491175013",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "LE",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "LF",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "LG",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "0 0 LG ETKT: NOT AUTHORISED",
+    "searched": "LUX-LCY 2026-11-06: 5 offers, 5 plated LG",
+    "route": "LUX-LCY 2026-11-06",
+    "flights": "LG4601/G",
+    "price": 171.5,
+    "pnr": "BA35VS",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "KX",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "GCM-MIA 2026-11-01: 2 offers, 2 plated KX",
+    "route": "GCM-MIA 2026-11-01",
+    "flights": "KX102/N",
+    "price": 247.55,
+    "pnr": "BA3Y8Y",
+    "queued": true,
+    "tickets": "378-7491175015",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "LM",
+    "outcome": "NOT_FOUND",
+    "detail": "GLA-KOI 2026-11-08: 0 offers, 0 plated LM; ABZ-KOI 2026-11-08: 0 offers, 0 plated LM",
+    "searched": "GLA-KOI 2026-11-08: 0 offers, 0 plated LM; ABZ-KOI 2026-11-08: 0 offers, 0 plated LM"
+  },
+  {
+    "carrier": "LA",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "GRU-MIA 2026-11-03: 13 offers, 13 plated LA",
+    "route": "GRU-MIA 2026-11-03",
+    "flights": "LA8194/V",
+    "price": 828.56,
+    "pnr": "BA34VX",
+    "queued": true,
+    "tickets": "045-7491175017",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "LQ",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "LX",
+    "outcome": "NOT_SELLABLE",
+    "detail": "288 seat check: segment status UNS (288)",
+    "searched": "ZRH-JFK 2026-11-11: 4 offers, 4 plated LX",
+    "route": "ZRH-JFK 2026-11-11",
+    "flights": "LX16/U",
+    "price": 1541.93
+  },
+  {
+    "carrier": "LO",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "WAW-JFK 2026-11-09: 1 offers, 1 plated LO",
+    "route": "WAW-JFK 2026-11-09",
+    "flights": "LO26/T",
+    "price": 806.93,
+    "pnr": "BA2W5C",
+    "queued": true,
+    "tickets": "080-7491175018",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "MD",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "LH",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "FRA-JFK 2026-11-07: 60 offers, 60 plated LH",
+    "route": "FRA-JFK 2026-11-07",
+    "flights": "LH4829/B",
+    "price": 2405.43,
+    "pnr": "BA3XHI",
+    "queued": true,
+    "tickets": "220-7491175019",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "MF",
+    "outcome": "NOT_FOUND",
+    "detail": "XMN-PEK 2026-10-26: 0 offers, 0 plated MF",
+    "searched": "XMN-PEK 2026-10-26: 0 offers, 0 plated MF"
+  },
+  {
+    "carrier": "ME",
+    "outcome": "NOT_SELLABLE",
+    "detail": "288 seat check: segment status UNS (288)",
+    "searched": "BEY-CDG 2026-11-14: 2 offers, 2 plated ME",
+    "route": "BEY-CDG 2026-11-14",
+    "flights": "ME229/N",
+    "price": 260.77
+  },
+  {
+    "carrier": "LY",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "TLV-JFK 2026-11-12: 9 offers, 9 plated LY",
+    "route": "TLV-JFK 2026-11-12",
+    "flights": "LY7/H",
+    "price": 880.5,
+    "pnr": "BA3TFM",
+    "queued": true,
+    "tickets": "114-7491175020",
+    "cleanup": "CLEANUP FAILED voidTicket 5245 MESSAGE FUNCTION NOT SUPPORTED"
+  },
+  {
+    "carrier": "MR",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "MK",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "MRU-CDG 2026-10-28: 2 offers, 2 plated MK",
+    "route": "MRU-CDG 2026-10-28",
+    "flights": "MK14/L",
+    "price": 979.8,
+    "pnr": "BA2Q5A",
+    "queued": true,
+    "tickets": "239-7491175022",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "MH",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "KUL-LHR 2026-10-27: 2 offers, 2 plated MH",
+    "route": "KUL-LHR 2026-10-27",
+    "flights": "MH4/N",
+    "price": 651.6,
+    "pnr": "BA2RER",
+    "queued": true,
+    "tickets": "232-7491175021",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "MX",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "NE",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "NF",
+    "outcome": "NOT_FOUND",
+    "detail": "VLI-BNE 2026-11-03: 0 offers, 0 plated NF",
+    "searched": "VLI-BNE 2026-11-03: 0 offers, 0 plated NF"
+  },
+  {
+    "carrier": "NM",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "MS",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "CAI-LHR 2026-10-30: 3 offers, 3 plated MS",
+    "route": "CAI-LHR 2026-10-30",
+    "flights": "MS783/T",
+    "price": 322.09,
+    "pnr": "BA39IS",
+    "queued": true,
+    "tickets": "077-7491175023",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "NP",
+    "outcome": "NOT_FOUND",
+    "detail": "CAI-JED 2026-11-06: 0 offers, 0 plated NP",
+    "searched": "CAI-JED 2026-11-06: 0 offers, 0 plated NP"
+  },
+  {
+    "carrier": "NT",
+    "outcome": "FAILED_ISSUETICKET",
+    "detail": "10609 10609 MANDATORY SSRFOID MISSING FOR CARRIER",
+    "searched": "LPA-TFN 2026-11-07: 19 offers, 19 plated NT",
+    "route": "LPA-TFN 2026-11-07",
+    "flights": "NT101/Y",
+    "price": 107.2,
+    "pnr": "BA3ZPH",
+    "cleanup": "cancelled"
+  },
+  {
+    "carrier": "NO",
+    "outcome": "NOT_SELLABLE",
+    "detail": "288 seat check: segment status UNS (288)",
+    "searched": "MXP-JFK 2026-11-05: 0 offers, 0 plated NO; MXP-CUN 2026-11-05: 1 offers, 1 plated NO",
+    "route": "MXP-CUN 2026-11-05",
+    "flights": "NO430/R",
+    "price": 489.18
+  },
+  {
+    "carrier": "NZ",
+    "outcome": "NOT_SELLABLE",
+    "detail": "288 seat check: segment status UNS (288)",
+    "searched": "AKL-LAX 2026-11-09: 2 offers, 2 plated NZ",
+    "route": "AKL-LAX 2026-11-09",
+    "flights": "NZ4/S",
+    "price": 625.43
+  },
+  {
+    "carrier": "N4",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "N8",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "OA",
+    "outcome": "NOT_FOUND",
+    "detail": "ATH-SKG 2026-11-12: 0 offers, 0 plated OA",
+    "searched": "ATH-SKG 2026-11-12: 0 offers, 0 plated OA"
+  },
+  {
+    "carrier": "MU",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "PVG-LHR 2026-10-31: 5 offers, 5 plated MU",
+    "route": "PVG-LHR 2026-10-31",
+    "flights": "MU551/Y",
+    "price": 3877.1,
+    "pnr": "BA43CU",
+    "queued": true,
+    "tickets": "781-7491175024",
+    "cleanup": "CLEANUP FAILED voidTicket timeout of 25000ms exceeded"
+  },
+  {
+    "carrier": "OD",
+    "outcome": "NOT_FOUND",
+    "detail": "KUL-PEN 2026-11-14: 0 offers, 0 plated OD",
+    "searched": "KUL-PEN 2026-11-14: 0 offers, 0 plated OD"
+  },
+  {
+    "carrier": "OK",
+    "outcome": "NOT_FOUND",
+    "detail": "PRG-LCA 2026-10-26: 0 offers, 0 plated OK",
+    "searched": "PRG-LCA 2026-10-26: 0 offers, 0 plated OK"
+  },
+  {
+    "carrier": "OL",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "OM",
+    "outcome": "NOT_FOUND",
+    "detail": "ULN-ICN 2026-10-28: 0 offers, 0 plated OM",
+    "searched": "ULN-ICN 2026-10-28: 0 offers, 0 plated OM"
+  },
+  {
+    "carrier": "OB",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "VVI-LPB 2026-11-13: 16 offers, 16 plated OB",
+    "route": "VVI-LPB 2026-11-13",
+    "flights": "OB661/X",
+    "price": 83,
+    "pnr": "BA37H8",
+    "queued": true,
+    "tickets": "930-7491175026",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "OU",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "ZAG-FRA 2026-10-30: 11 offers, 11 plated OU",
+    "route": "ZAG-FRA 2026-10-30",
+    "flights": "OU410/L",
+    "price": 199.6,
+    "pnr": "BA39Y8",
+    "queued": true,
+    "tickets": "831-7491175027",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "OY",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "OS",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "VIE-JFK 2026-10-29: 2 offers, 2 plated OS",
+    "route": "VIE-JFK 2026-10-29",
+    "flights": "OS87/U",
+    "price": 1298.93,
+    "pnr": "BA38OZ",
+    "queued": true,
+    "tickets": "257-7491175028",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "PC",
+    "outcome": "NOT_FOUND",
+    "detail": "SAW-AMS 2026-11-02: 0 offers, 0 plated PC; SAW-ADB 2026-11-02: 0 offers, 0 plated PC",
+    "searched": "SAW-AMS 2026-11-02: 0 offers, 0 plated PC; SAW-ADB 2026-11-02: 0 offers, 0 plated PC"
+  },
+  {
+    "carrier": "NX",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "MFM-TPE 2026-11-08: 5 offers, 5 plated NX",
+    "route": "MFM-TPE 2026-11-08",
+    "flights": "NX632/L",
+    "price": 115.7,
+    "pnr": "BA3OBN",
+    "queued": true,
+    "tickets": "675-7491175025",
+    "cleanup": "CLEANUP FAILED voidTicket timeout of 25000ms exceeded"
+  },
+  {
+    "carrier": "OZ",
+    "outcome": "FAILED_COMMIT",
+    "detail": "PNR_AddMultiElements committed without returning a record locator",
+    "searched": "ICN-LAX 2026-11-01: 2 offers, 2 plated OZ",
+    "route": "ICN-LAX 2026-11-01",
+    "flights": "OZ202/K",
+    "price": 924.83,
+    "pnr": null
+  },
+  {
+    "carrier": "PG",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "BKK-USM 2026-11-04: 31 offers, 31 plated PG",
+    "route": "BKK-USM 2026-11-04",
+    "flights": "PG101/H",
+    "price": 142.9,
+    "pnr": "BA4626",
+    "queued": true,
+    "tickets": "829-7491175029",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "PD",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "YTZ-YUL 2026-11-03: 2 offers, 2 plated PD",
+    "route": "YTZ-YUL 2026-11-03",
+    "flights": "PD2471/W",
+    "price": 153.5,
+    "pnr": "BA37BB",
+    "queued": true,
+    "tickets": "451-7491175030",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "PS",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "PU",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "PW",
+    "outcome": "NOT_SELLABLE",
+    "detail": "288 seat check: segment status UNS (288)",
+    "searched": "DAR-ZNZ 2026-11-09: 12 offers, 12 plated PW",
+    "route": "DAR-ZNZ 2026-11-09",
+    "flights": "PW510/G",
+    "price": 37
+  },
+  {
+    "carrier": "PK",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "KHI-ISB 2026-11-05: 4 offers, 4 plated PK",
+    "route": "KHI-ISB 2026-11-05",
+    "flights": "PK300/Y",
+    "price": 277.2,
+    "pnr": "BA3P98",
+    "queued": true,
+    "tickets": "214-7491175031",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "PR",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "MNL-LAX 2026-11-06: 4 offers, 4 plated PR",
+    "route": "MNL-LAX 2026-11-06",
+    "flights": "PR102/U",
+    "price": 645.83,
+    "pnr": "BA3333",
+    "queued": true,
+    "tickets": "079-7491175032",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "P0",
+    "outcome": "NOT_SELLABLE",
+    "detail": "288 seat check: segment status UNS (288)",
+    "searched": "LUN-JNB 2026-11-12: 2 offers, 2 plated P0",
+    "route": "LUN-JNB 2026-11-12",
+    "flights": "P022/V",
+    "price": 235.88
+  },
+  {
+    "carrier": "PX",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "POM-BNE 2026-11-10: 1 offers, 1 plated PX",
+    "route": "POM-BNE 2026-11-10",
+    "flights": "PX3/V",
+    "price": 203.4,
+    "pnr": "BA3H77",
+    "queued": true,
+    "tickets": "656-7491175033",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "QS",
+    "outcome": "NOT_FOUND",
+    "detail": "PRG-HER 2026-11-14: 0 offers, 0 plated QS",
+    "searched": "PRG-HER 2026-11-14: 0 offers, 0 plated QS"
+  },
+  {
+    "carrier": "QV",
+    "outcome": "NOT_FOUND",
+    "detail": "VTE-BKK 2026-10-26: 0 offers, 0 plated QV",
+    "searched": "VTE-BKK 2026-10-26: 0 offers, 0 plated QV"
+  },
+  {
+    "carrier": "Q4",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "RA",
+    "outcome": "NOT_FOUND",
+    "detail": "KTM-DEL 2026-10-28: 0 offers, 0 plated RA",
+    "searched": "KTM-DEL 2026-10-28: 0 offers, 0 plated RA"
+  },
+  {
+    "carrier": "RC",
+    "outcome": "NOT_SELLABLE",
+    "detail": "288 seat check: segment status UNS (288)",
+    "searched": "FAE-CPH 2026-10-29: 2 offers, 2 plated RC",
+    "route": "FAE-CPH 2026-10-29",
+    "flights": "RC450/T",
+    "price": 139.8
+  },
+  {
+    "carrier": "PY",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "PBM-AMS 2026-11-11: 1 offers, 1 plated PY",
+    "route": "PBM-AMS 2026-11-11",
+    "flights": "PY994/R",
+    "price": 723.9,
+    "pnr": "BA32UY",
+    "queued": true,
+    "tickets": "192-7491175034",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "QR",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "DOH-LHR 2026-11-13: 60 offers, 60 plated QR",
+    "route": "DOH-LHR 2026-11-13",
+    "flights": "QR107/N",
+    "price": 561.95,
+    "pnr": "BA32CV",
+    "queued": true,
+    "tickets": "157-7491175035",
+    "cleanup": "cancelled+voided"
+  },
+  {
+    "carrier": "RQ",
+    "outcome": "NOT_FOUND",
+    "detail": "KBL-DXB 2026-11-01: 0 offers, 0 plated RQ",
+    "searched": "KBL-DXB 2026-11-01: 0 offers, 0 plated RQ"
+  },
+  {
+    "carrier": "RW",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "RZ",
+    "outcome": "NOT_FOUND",
+    "detail": "SJO-LIR 2026-11-03: 0 offers, 0 plated RZ",
+    "searched": "SJO-LIR 2026-11-03: 0 offers, 0 plated RZ"
+  },
+  {
+    "carrier": "R3",
+    "outcome": "NO_ROUTE",
+    "detail": "no route known to try"
+  },
+  {
+    "carrier": "RJ",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "AMM-LHR 2026-10-30: 1 offers, 1 plated RJ",
+    "route": "AMM-LHR 2026-10-30",
+    "flights": "RJ111/Q",
+    "price": 429,
+    "pnr": "BA3DZV",
+    "queued": true,
+    "tickets": "512-7491175036",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "SB",
+    "outcome": "NOT_FOUND",
+    "detail": "NOU-SYD 2026-11-06: 0 offers, 0 plated SB",
+    "searched": "NOU-SYD 2026-11-06: 0 offers, 0 plated SB"
+  },
+  {
+    "carrier": "SC",
+    "outcome": "NOT_FOUND",
+    "detail": "TNA-PEK 2026-11-07: 0 offers, 0 plated SC; TNA-PVG 2026-11-07: 0 offers, 0 plated SC",
+    "searched": "TNA-PEK 2026-11-07: 0 offers, 0 plated SC; TNA-PVG 2026-11-07: 0 offers, 0 plated SC"
+  },
+  {
+    "carrier": "RO",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "OTP-LHR 2026-10-31: 0 offers, 0 plated RO; OTP-CDG 2026-10-31: 4 offers, 4 plated RO",
+    "route": "OTP-CDG 2026-10-31",
+    "flights": "RO381/E",
+    "price": 136,
+    "pnr": "BA349U",
+    "queued": true,
+    "tickets": "281-7491175037",
+    "cleanup": "CLEANUP FAILED retrieve 31|Application|FINISH OR IGNORE"
+  },
+  {
+    "carrier": "SA",
+    "outcome": "TICKETED",
+    "detail": "",
+    "searched": "JNB-CPT 2026-11-05: 9 offers, 9 plated SA",
+    "route": "JNB-CPT 2026-11-05",
+    "flights": "SA303/V",
+    "price": 171.4,
+    "pnr": "BA3ZFZ",
+    "queued": true,
+    "tickets": "083-7491175038",
+    "cleanup": "cancelled+voided"
+  }
+]

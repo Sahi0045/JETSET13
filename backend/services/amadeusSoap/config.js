@@ -11,6 +11,8 @@
  * what is wrong instead of failing later inside a SOAP call.
  */
 
+import { DEFAULT_UNTICKETABLE_CARRIERS, parseCarrierList } from './ticketingCarriers.js';
+
 const REQUIRED = Object.freeze({
   AMADEUS_WS_ENDPOINT: 'endpoint',
   AMADEUS_WS_USERNAME: 'username',
@@ -31,6 +33,13 @@ const asFloat = (value, fallback) => {
 const isTrue = (value, fallback = false) => (
   value === undefined || value === '' ? fallback : String(value).toLowerCase() === 'true'
 );
+
+// Unset means the carriers issuance refused on PDT; set but empty means none.
+const unticketableCarriers = (env) => Object.freeze(parseCarrierList(
+  env.AMADEUS_WS_UNTICKETABLE_CARRIERS === undefined
+    ? DEFAULT_UNTICKETABLE_CARRIERS.join(',')
+    : env.AMADEUS_WS_UNTICKETABLE_CARRIERS,
+));
 
 let cached = null;
 
@@ -72,6 +81,9 @@ const readWsConfig = (env = process.env) => {
     // (confirmFare in bookingChain.js). Runs only with the seat check. On by
     // default; false turns it off without a deploy.
     priceCheckBeforePayment: isTrue(env.AMADEUS_WS_PRICE_CHECK_BEFORE_PAYMENT, true),
+    // Carriers this office cannot ticket: their fares are left out of search
+    // and refused at pricing and booking (ticketingCarriers.js).
+    unticketableCarriers: unticketableCarriers(env),
     // The office's market (country) code, required by Ticket_CancelDocument to
     // identify whose ticket stock is being voided. US because settlement is
     // through ARC; confirm against the production office at cutover, as with
@@ -157,7 +169,9 @@ const readWsConfig = (env = process.env) => {
     // Royal Brunei's locator took about 56 s on PDT; the owner chose to wait
     // up to 90 s in the booking rather than ticket in the background.
     airlineLocatorWaitMs: asInt(env.AMADEUS_WS_AIRLINE_LOCATOR_WAIT_MS, 90000),
-    airlineLocatorPollMs: asInt(env.AMADEUS_WS_AIRLINE_LOCATOR_POLL_MS, 2000),
+    // Each look is a new Amadeus session (issueInFreshSessions: the session that
+    // committed never saw BI's locator), so looks are 5 s apart rather than 2.
+    airlineLocatorPollMs: asInt(env.AMADEUS_WS_AIRLINE_LOCATOR_POLL_MS, 5000),
     // Issuance refused because the airline's side is not ready yet is retried.
     issueRetries: asInt(env.AMADEUS_WS_ISSUE_RETRIES, 2),
     issueRetryDelayMs: asInt(env.AMADEUS_WS_ISSUE_RETRY_DELAY_MS, 4000),
@@ -185,4 +199,5 @@ export const describeWsConfig = (env = process.env) => ({
   autoTicket: isTrue(env.AMADEUS_WS_AUTO_TICKET, false),
   seatCheckBeforePayment: isTrue(env.AMADEUS_WS_SEAT_CHECK_BEFORE_PAYMENT, true),
   priceCheckBeforePayment: isTrue(env.AMADEUS_WS_PRICE_CHECK_BEFORE_PAYMENT, true),
+  unticketableCarriers: unticketableCarriers(env),
 });
