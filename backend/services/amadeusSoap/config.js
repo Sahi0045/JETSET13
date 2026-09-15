@@ -144,6 +144,15 @@ const readWsConfig = (env = process.env) => {
     // PNR_Cancel answering 8111 SIMULTANEOUS CHANGES TO PNR is retried after
     // redisplaying the PNR; this is the pause before each retry.
     cancelRetryDelayMs: asInt(env.AMADEUS_WS_CANCEL_RETRY_DELAY_MS, 1500),
+    // Before issuing, how long to wait for every air segment to carry the
+    // airline's own record locator, and how often to look. Airlines Amadeus
+    // hosts (LH, QR, AF) have it at commit; others send it moments later - DL
+    // after about 12 s on PDT - and refuse the ticket until then.
+    airlineLocatorWaitMs: asInt(env.AMADEUS_WS_AIRLINE_LOCATOR_WAIT_MS, 20000),
+    airlineLocatorPollMs: asInt(env.AMADEUS_WS_AIRLINE_LOCATOR_POLL_MS, 2000),
+    // Issuance refused because the airline's side is not ready yet is retried.
+    issueRetries: asInt(env.AMADEUS_WS_ISSUE_RETRIES, 2),
+    issueRetryDelayMs: asInt(env.AMADEUS_WS_ISSUE_RETRY_DELAY_MS, 4000),
     logEnvelopes: isTrue(env.AMADEUS_WS_LOG_ENVELOPES, false) && env.NODE_ENV !== 'production',
   });
 };

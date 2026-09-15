@@ -3,6 +3,7 @@ import { getWsConfig } from './config.js';
 import { AmadeusSoapError, inspectReply } from './errors.js';
 import { buildFlightOrder, isTicketed, readRecordLocator, readTickets } from './mappers/flightOrder.js';
 import { toDDMMYY } from './mappers/datetime.js';
+import { arr, atTxt } from './parseXml.js';
 import { buildAirSellBody, readAirSellReply } from './operations/airSell.js';
 import { buildAddElementsBody, buildCancelBody, buildCommitBody, buildRetrieveBody } from './operations/pnr.js';
 import {
@@ -69,6 +70,40 @@ const replyOf = (result) => {
   const key = Object.keys(result.body ?? {}).find((k) => k !== 'Fault');
   return key ? result.body[key] : {};
 };
+
+/**
+ * The airline record locator on each air segment of a PNR reply, '' where the
+ * airline has not sent one yet (itineraryInfo/itineraryReservationInfo).
+ */
+const airSegmentLocators = (pnrReply) => {
+  const found = [];
+  const visit = (node, depth = 0) => {
+    if (!node || typeof node !== 'object' || depth > 8) return;
+    for (const [key, value] of Object.entries(node)) {
+      if (key === 'itineraryInfo') {
+        for (const item of arr(value)) {
+          if (atTxt(item, 'elementManagementItinerary.segmentName') === 'AIR') {
+            found.push(atTxt(item, 'itineraryReservationInfo.reservation.controlNumber'));
+          }
+        }
+      } else if (typeof value === 'object') {
+        visit(value, depth + 1);
+      }
+    }
+  };
+  visit(pnrReply);
+  return found;
+};
+
+/**
+ * Issuance the airline refused only because its side is not ready yet. Seen on
+ * PDT (15 Sep 2026) right after commit: B6 "9125 ETKT DISALLOWED - NEED AIRLINE
+ * R/LOC-RETRY", DL "ETKT: SYSTEM UNABLE TO PROCESS", AA "ETKT: ITEM/DATA NOT
+ * FOUND OR DATA NOT EXISTING" - each issued once the airline's locator was on
+ * the PNR.
+ */
+const issuanceNotReady = (cause) => String(cause?.amadeusCode ?? '') === '9125'
+  || /NEED AIRLINE R\/?LOC|ETKT: SYSTEM UNABLE TO PROCESS|ETKT: ITEM\/DATA NOT FOUND/i.test(String(cause?.technicalError ?? ''));
 
 /** Seats are held per passenger; an infant travels on a lap and holds none. */
 const seatCount = (travelers) => travelers.filter((t) => t.ptc !== 'INF' && t.ptc !== 'HELD_INFANT').length;
@@ -442,14 +477,50 @@ export const runBookingChain = async (p) => {
 
     // ---- 8. Issue ----------------------------------------------------------
     if (config.autoTicket) {
-      const issueReply = await callStep(ctx, {
-        step: 'issueTicket',
-        operation: 'DocIssuance_IssueTicket',
-        bodyXml: buildIssueTicketBody(),
-        pnr,
-        committed,
-      });
-      ticketed = readIssueTicketReply(issueReply).issued;
+      // An airline Amadeus does not host confirms the booking in its own
+      // system a moment after commit, and refuses the ticket until then: B6,
+      // VS, AA and DL were all refused when issued at once, and all issued once
+      // their record locator was on the PNR (DL after about 12 s). Hosted
+      // airlines carry it at commit, so for them this costs nothing. A
+      // timeout does not stop the booking: issuance is tried regardless.
+      const waitStarted = Date.now();
+      let pnrReply = commitReply;
+      for (;;) {
+        const locators = airSegmentLocators(pnrReply);
+        if (locators.length > 0 && locators.every(Boolean)) break;
+        if (Date.now() - waitStarted >= config.airlineLocatorWaitMs) {
+          log.warn({ pnr, locators, waitedMs: Date.now() - waitStarted }, 'airline record locator not on every segment yet; issuing anyway');
+          break;
+        }
+        await sleep(config.airlineLocatorPollMs);
+        pnrReply = await callStep(ctx, { step: 'retrieve', operation: 'PNR_Retrieve', bodyXml: buildRetrieveBody(pnr), pnr, committed });
+      }
+
+      let issueReply;
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          issueReply = await callStep(ctx, {
+            step: 'issueTicket',
+            operation: 'DocIssuance_IssueTicket',
+            bodyXml: buildIssueTicketBody(),
+            pnr,
+            committed,
+          });
+          break;
+        } catch (cause) {
+          if (!issuanceNotReady(cause) || attempt > config.issueRetries) throw cause;
+          log.warn({ pnr, attempt, reason: cause?.technicalError }, 'the airline is not ready to ticket yet; retrying issuance');
+          await sleep(config.issueRetryDelayMs);
+          // Never issue twice: a refusal means no ticket, but look first.
+          const current = await callStep(ctx, { step: 'retrieve', operation: 'PNR_Retrieve', bodyXml: buildRetrieveBody(pnr), pnr, committed });
+          if (readTickets(current).length > 0) {
+            issueReply = null;
+            ticketed = true;
+            break;
+          }
+        }
+      }
+      if (issueReply) ticketed = readIssueTicketReply(issueReply).issued;
     }
 
     // ---- 9. Read the ticket numbers back (with retries) --------------------

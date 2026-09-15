@@ -98,6 +98,9 @@ beforeEach(() => {
   // here. It is on by default in the app, and 'the payment-coverage guard'
   // below exercises it at that default.
   vi.stubEnv('AMADEUS_WS_MIN_PAYMENT_RATIO', '0');
+  // No waiting for the airline's record locator unless a test is about it.
+  vi.stubEnv('AMADEUS_WS_AIRLINE_LOCATOR_WAIT_MS', '0');
+  vi.stubEnv('AMADEUS_WS_ISSUE_RETRY_DELAY_MS', '0');
   vi.resetModules();
 });
 
@@ -548,6 +551,46 @@ describe('after the PNR exists', () => {
     expect(result.tickets.length).toBeGreaterThan(0)
     expect(result.order.needsReview).toBeUndefined()
   })
+
+  // An airline Amadeus does not host refuses the ticket until its own record
+  // locator is on the PNR (DL on PDT: about 12 s). The chain waits for it.
+  it('waits for the airline record locator before issuing', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    vi.stubEnv('AMADEUS_WS_AIRLINE_LOCATOR_WAIT_MS', '5000');
+    vi.stubEnv('AMADEUS_WS_AIRLINE_LOCATOR_POLL_MS', '0');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
+    const segment = (locator) => '<originDestinationDetails><itineraryInfo><elementManagementItinerary><segmentName>AIR</segmentName></elementManagementItinerary>'
+      + (locator ? `<itineraryReservationInfo><reservation><companyId>DL</companyId><controlNumber>${locator}</controlNumber></reservation></itineraryReservationInfo>` : '')
+      + '</itineraryInfo></originDestinationDetails>';
+    const withoutLocator = envelope('PNR_Reply', pnrHeaderXml + segment(''), SESSION);
+    const withLocator = envelope('PNR_Reply', pnrHeaderXml + segment('F78NW3'), SESSION);
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, withoutLocator, withLocator, issueOk, retrieveWithTicket);
+
+    const result = await runBookingChain({ offer: offer(), travelers });
+
+    const sent = axios.post.mock.calls.map(([, body]) => String(body));
+    const issuedAt = sent.findIndex((body) => body.includes('<DocIssuance_IssueTicket'));
+    const retrievesBeforeIssue = sent.slice(0, issuedAt).filter((body) => body.includes('<PNR_Retrieve')).length;
+    expect(retrievesBeforeIssue).toBe(2);
+    expect(result.ticketed).toBe(true);
+  });
+
+  it('retries issuance the airline refused because it was not ready', async () => {
+    vi.stubEnv('AMADEUS_WS_AUTO_TICKET', 'true');
+    vi.stubEnv('AMADEUS_WS_TICKET_RETRIEVE_INITIAL_MS', '0');
+    const notReady = envelope('DocIssuance_IssueTicketReply',
+      '<processingStatus><statusCode>X</statusCode></processingStatus><errorGroup><errorOrWarningCodeDetails><errorDetails><errorCode>9125</errorCode></errorDetails></errorOrWarningCodeDetails>'
+      + '<errorWarningDescription><freeText>ETKT DISALLOWED - NEED AIRLINE R/LOC-RETRY</freeText></errorWarningDescription></errorGroup>', SESSION);
+    const { runBookingChain } = await loadChain();
+    queueReplies(sellOk, addOk, fopOk, priceOk, tstOk, commitOk, fopOk, notReady, retrieveNoTicket, issueOk, retrieveWithTicket);
+
+    const result = await runBookingChain({ offer: offer(), travelers });
+
+    const issues = axios.post.mock.calls.filter(([, body]) => String(body).includes('<DocIssuance_IssueTicket'));
+    expect(issues).toHaveLength(2);
+    expect(result.ticketed).toBe(true);
+  });
 
   // If the number never surfaces, the ticket still exists — leave the PNR for
   // manual follow-up rather than silently confirm a booking with no number.
