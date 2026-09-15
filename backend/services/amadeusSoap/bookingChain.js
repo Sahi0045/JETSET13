@@ -428,6 +428,7 @@ export const runBookingChain = async (p) => {
           recordLocator: pnr,
           queueOffice: config.queueOffice,
           queueNumber: config.queueNumber,
+          queueCategory: config.queueCategory,
         }),
         pnr,
         committed,

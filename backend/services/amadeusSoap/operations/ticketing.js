@@ -259,7 +259,7 @@ export const readIssueTicketReply = (reply) => {
  * bookkeeping: a failure here leaves a perfectly good booking, so the chain
  * warns and carries on rather than compensating.
  */
-export const buildQueuePlaceBody = ({ recordLocator, queueOffice, queueNumber = '50' }) => {
+export const buildQueuePlaceBody = ({ recordLocator, queueOffice, queueNumber = '50', queueCategory = '0' }) => {
   if (!recordLocator) throw new Error('a record locator is required to queue a PNR');
 
   const body = [
@@ -280,8 +280,9 @@ export const buildQueuePlaceBody = ({ recordLocator, queueOffice, queueNumber = 
       ]),
       wrap('queueNumber', wrap('queueDetails', el('number', String(queueNumber)))),
       wrap('categoryDetails', wrap('subQueueInfoDetails', [
+        // C = category; the number is AMADEUS_WS_QUEUE_CATEGORY (default 0).
         el('identificationType', 'C'),
-        el('itemNumber', '0'),
+        el('itemNumber', String(queueCategory)),
       ])),
     ]),
     wrap('recordLocator', wrap('reservation', el('controlNumber', recordLocator))),

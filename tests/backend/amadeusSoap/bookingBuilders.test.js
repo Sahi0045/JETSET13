@@ -451,6 +451,17 @@ describe('Queue_PlacePNR', () => {
     expect(xml).toContain('<inHouseIdentification1>SCK1S2400</inHouseIdentification1>');
     expect(xml).toContain('<queueDetails><number>50</number></queueDetails>');
   });
+
+  // Queue 90 C0 is the PDT test queue Amadeus created; a production queue can
+  // sit in another category, so the category is a setting, not a constant.
+  it('files the PNR in the category it is given, and category 0 by default', () => {
+    const named = buildQueuePlaceBody({ recordLocator: 'ABC123', queueOffice: 'SCK1S2400', queueNumber: '8', queueCategory: '2' });
+    expect(named).toContain('<queueDetails><number>8</number></queueDetails>');
+    expect(named).toContain('<subQueueInfoDetails><identificationType>C</identificationType><itemNumber>2</itemNumber></subQueueInfoDetails>');
+
+    const unnamed = buildQueuePlaceBody({ recordLocator: 'ABC123', queueOffice: 'SCK1S2400', queueNumber: '90' });
+    expect(unnamed).toContain('<subQueueInfoDetails><identificationType>C</identificationType><itemNumber>0</itemNumber></subQueueInfoDetails>');
+  });
 });
 
 describe('PNR_Cancel and PNR_Retrieve', () => {
