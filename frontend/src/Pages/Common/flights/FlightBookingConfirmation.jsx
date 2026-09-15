@@ -28,6 +28,7 @@ import apiConfig from '@/config/api';
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
 import { needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
+import { COUNTRIES } from '../../../../../shared/countries';
 import { arcItineraries, returnLegOf } from '../../../utils/reviewTrip';
 import { findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
 import { travellerProblems, travellerProgress } from '../../../utils/travellerChecks';
@@ -150,38 +151,6 @@ function FlightBookingConfirmation() {
     { code: '+62', country: 'Indonesia' },
     // Add more as needed
   ]);
-
-  // Nationality countries list
-  const countries = [
-    { code: 'IN', name: 'India', dial: '+91' }, { code: 'US', name: 'United States', dial: '+1' },
-    { code: 'GB', name: 'United Kingdom', dial: '+44' }, { code: 'CA', name: 'Canada', dial: '+1' },
-    { code: 'AU', name: 'Australia', dial: '+61' }, { code: 'DE', name: 'Germany', dial: '+49' },
-    { code: 'FR', name: 'France', dial: '+33' }, { code: 'JP', name: 'Japan', dial: '+81' },
-    { code: 'AE', name: 'UAE', dial: '+971' }, { code: 'SG', name: 'Singapore', dial: '+65' },
-    { code: 'MY', name: 'Malaysia', dial: '+60' }, { code: 'TH', name: 'Thailand', dial: '+66' },
-    { code: 'VN', name: 'Vietnam', dial: '+84' }, { code: 'ID', name: 'Indonesia', dial: '+62' },
-    { code: 'CN', name: 'China', dial: '+86' }, { code: 'KR', name: 'South Korea', dial: '+82' },
-    { code: 'IT', name: 'Italy', dial: '+39' }, { code: 'ES', name: 'Spain', dial: '+34' },
-    { code: 'BR', name: 'Brazil', dial: '+55' }, { code: 'MX', name: 'Mexico', dial: '+52' },
-    { code: 'RU', name: 'Russia', dial: '+7' }, { code: 'ZA', name: 'South Africa', dial: '+27' },
-    { code: 'NZ', name: 'New Zealand', dial: '+64' }, { code: 'PH', name: 'Philippines', dial: '+63' },
-    { code: 'PK', name: 'Pakistan', dial: '+92' }, { code: 'BD', name: 'Bangladesh', dial: '+880' },
-    { code: 'LK', name: 'Sri Lanka', dial: '+94' }, { code: 'NP', name: 'Nepal', dial: '+977' },
-    { code: 'SA', name: 'Saudi Arabia', dial: '+966' }, { code: 'QA', name: 'Qatar', dial: '+974' },
-    { code: 'KW', name: 'Kuwait', dial: '+965' }, { code: 'BH', name: 'Bahrain', dial: '+973' },
-    { code: 'OM', name: 'Oman', dial: '+968' }, { code: 'EG', name: 'Egypt', dial: '+20' },
-    { code: 'KE', name: 'Kenya', dial: '+254' }, { code: 'NG', name: 'Nigeria', dial: '+234' },
-    { code: 'TR', name: 'Turkey', dial: '+90' }, { code: 'PT', name: 'Portugal', dial: '+351' },
-    { code: 'NL', name: 'Netherlands', dial: '+31' }, { code: 'SE', name: 'Sweden', dial: '+46' },
-    { code: 'CH', name: 'Switzerland', dial: '+41' }, { code: 'AT', name: 'Austria', dial: '+43' },
-    { code: 'BE', name: 'Belgium', dial: '+32' }, { code: 'IE', name: 'Ireland', dial: '+353' },
-    { code: 'FI', name: 'Finland', dial: '+358' }, { code: 'NO', name: 'Norway', dial: '+47' },
-    { code: 'DK', name: 'Denmark', dial: '+45' }, { code: 'PL', name: 'Poland', dial: '+48' },
-    { code: 'HK', name: 'Hong Kong', dial: '+852' }, { code: 'TW', name: 'Taiwan', dial: '+886' },
-  ];
-
-  const [nationalityDropdown, setNationalityDropdown] = useState({ open: false, passengerId: null });
-  const [nationalitySearch, setNationalitySearch] = useState({});
 
   // Date restrictions for DOB
   const today = new Date().toISOString().split('T')[0];
@@ -1601,8 +1570,8 @@ function FlightBookingConfirmation() {
                             onChange={(e) => handlePassengerChange(passenger.id, 'countryCode', e.target.value)}
                             disabled={!editMode}
                           >
-                            {countries.map(c => (
-                              <option key={c.code + c.dial} value={c.dial}>{c.dial} {c.code}</option>
+                            {COUNTRIES.map(c => (
+                              <option key={c.code} value={`+${c.dial}`}>+{c.dial} {c.code}</option>
                             ))}
                           </select>
                           <input
@@ -1634,54 +1603,25 @@ function FlightBookingConfirmation() {
                       </div>
                       {/* Passport / Travel Document Fields — required on international itineraries */}
                       {bookingDetails?.isInternational && (<>
-                      <div className="form-group" style={{ position: 'relative' }}>
-                        <label>Nationality <span className="required">*</span></label>
-                        <input
-                          type="text"
+                      <div className="form-group">
+                        {/* Every country, in a native select: typed letters jump
+                            to a country and the arrow keys choose one, on every
+                            device. The list it replaces held 50 countries and
+                            chose only on a mouse press, so a traveller from
+                            anywhere else - or on a keyboard - could not pay. */}
+                        <label htmlFor={`traveller-${passenger.id}-nationality`}>Nationality <span className="required">*</span></label>
+                        <select
+                          id={`traveller-${passenger.id}-nationality`}
                           className="form-input"
-                          placeholder="Search country..."
-                          value={nationalitySearch[passenger.id] !== undefined ? nationalitySearch[passenger.id] : (
-                            countries.find(c => c.code === passenger.nationality)?.name || passenger.nationality || ''
-                          )}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setNationalitySearch(prev => ({ ...prev, [passenger.id]: val }));
-                            setNationalityDropdown({ open: true, passengerId: passenger.id });
-                            if (!val) handlePassengerChange(passenger.id, 'nationality', '');
-                          }}
-                          onFocus={() => setNationalityDropdown({ open: true, passengerId: passenger.id })}
-                          onBlur={() => setTimeout(() => setNationalityDropdown({ open: false, passengerId: null }), 200)}
-                          readOnly={!editMode}
-                        />
-                        {nationalityDropdown.open && nationalityDropdown.passengerId === passenger.id && (
-                          <div style={{
-                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-                            background: '#fff', border: '1px solid #ddd', borderRadius: '6px',
-                            maxHeight: '180px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                          }}>
-                            {countries
-                              .filter(c => {
-                                const search = (nationalitySearch[passenger.id] || '').toLowerCase();
-                                return !search || c.name.toLowerCase().includes(search) || c.code.toLowerCase().includes(search);
-                              })
-                              .map(c => (
-                                <div
-                                  key={c.code}
-                                  style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '14px', borderBottom: '1px solid #f0f0f0' }}
-                                  onMouseDown={() => {
-                                    handlePassengerChange(passenger.id, 'nationality', c.code);
-                                    setNationalitySearch(prev => ({ ...prev, [passenger.id]: c.name }));
-                                    setNationalityDropdown({ open: false, passengerId: null });
-                                  }}
-                                  onMouseEnter={(e) => e.target.style.background = '#f0f9ff'}
-                                  onMouseLeave={(e) => e.target.style.background = '#fff'}
-                                >
-                                  <span style={{ fontWeight: 500 }}>{c.name}</span>{' '}
-                                  <span style={{ color: '#888', fontSize: '12px' }}>({c.code})</span>
-                                </div>
-                              ))}
-                          </div>
-                        )}
+                          value={passenger.nationality || ''}
+                          onChange={(e) => handlePassengerChange(passenger.id, 'nationality', e.target.value)}
+                          disabled={!editMode}
+                        >
+                          <option value="">Select nationality</option>
+                          {COUNTRIES.map((c) => (
+                            <option key={c.code} value={c.code}>{c.name}</option>
+                          ))}
+                        </select>
                       </div>
                       <div className="form-group">
                         <label>Passport Number <span className="required">*</span></label>

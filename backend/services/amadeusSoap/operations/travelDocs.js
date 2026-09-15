@@ -11,19 +11,16 @@
  * — DEL-BOM never asked.
  */
 
-/** ISO 3166 alpha-2 -> alpha-3. DOCS is a 3-letter field; the UI collects 2. */
-const ALPHA3 = Object.freeze({
-  IN: 'IND', US: 'USA', GB: 'GBR', CA: 'CAN', AU: 'AUS', DE: 'DEU', FR: 'FRA',
-  JP: 'JPN', AE: 'ARE', SG: 'SGP', MY: 'MYS', TH: 'THA', VN: 'VNM', ID: 'IDN',
-  CN: 'CHN', KR: 'KOR', IT: 'ITA', ES: 'ESP', BR: 'BRA', MX: 'MEX', RU: 'RUS',
-  ZA: 'ZAF', NZ: 'NZL', PH: 'PHL', PK: 'PAK', BD: 'BGD', LK: 'LKA', NP: 'NPL',
-  SA: 'SAU', QA: 'QAT', KW: 'KWT', BH: 'BHR', OM: 'OMN', EG: 'EGY', KE: 'KEN',
-  NG: 'NGA', TR: 'TUR', PT: 'PRT', NL: 'NLD', SE: 'SWE', CH: 'CHE', AT: 'AUT',
-  BE: 'BEL', IE: 'IRL', FI: 'FIN', NO: 'NOR', DK: 'DNK', PL: 'POL', HK: 'HKG',
-  TW: 'TWN',
-});
+import { toAlpha3 as countryAlpha3 } from '../../../../shared/countries.js';
 
 /**
+ * ISO 3166 alpha-2 -> alpha-3. DOCS is a 3-letter field; the UI collects 2.
+ *
+ * The table here knew 50 countries, the same 50 the review page offered. The
+ * page now offers every country (shared/countries.js), so the chain reads the
+ * same list: a traveller from a country outside the old 50 would otherwise have
+ * no passport element and no ticket.
+ *
  * @returns {string|null} a 3-letter country code, or null if we cannot be sure.
  *   Guessing here is worse than omitting: a wrong nationality on an APIS record
  *   is a border problem, not a formatting one.
@@ -31,7 +28,7 @@ const ALPHA3 = Object.freeze({
 export const toAlpha3 = (value) => {
   const raw = String(value ?? '').trim().toUpperCase();
   if (/^[A-Z]{3}$/.test(raw)) return raw;
-  return ALPHA3[raw] ?? null;
+  return countryAlpha3(raw);
 };
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
