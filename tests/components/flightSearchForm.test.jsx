@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import FlightSearchForm from '../../frontend/src/Pages/Common/flights/flight-search-form.jsx';
@@ -53,6 +53,21 @@ describe('the calendar from the keyboard', () => {
     fireEvent.keyDown(firstDay, { key: 'Enter' });
 
     expect(screen.getByRole('dialog', { name: 'Choose a date' })).toBeTruthy();
+  });
+});
+
+// Each infant travels on an adult's lap. Lowering adults left more infants than
+// laps, a search the airline refuses.
+describe('the traveller counts', () => {
+  it('take infants down with the adults', () => {
+    renderForm({ initialData: { from: '', to: '', departDate: '2026-10-01', tripType: 'oneWay', returnDate: '', adults: 2, infants: 2 } });
+    fireEvent.click(screen.getByRole('button', { name: 'Select travellers and class' }));
+
+    const counter = (label) => within(screen.getByText(label).parentElement);
+    fireEvent.click(counter('ADULTS (12y +)').getByRole('button', { name: '1' }));
+
+    expect(counter('INFANTS (below 2y)').getByRole('button', { name: '1' }).className).toMatch(/bg-\[#055B75\]/);
+    expect(counter('INFANTS (below 2y)').getByRole('button', { name: '2' }).className).not.toMatch(/bg-\[#055B75\] text-white/);
   });
 });
 

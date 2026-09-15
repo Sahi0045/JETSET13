@@ -31,7 +31,7 @@ import FlightAppliedFilters from './FlightAppliedFilters';
 import FlightFareCalendar from './FlightFareCalendar';
 import { sortFlights } from './flightSort';
 import { buildSearchPayload, fieldCode, searchFromQuery, searchKeyOf, searchToQuery } from './searchQuery';
-import { buildDateStrip, filtersWithin, matchesFilters, searchFailureMessage, shiftDateStrip, withDepartureDate } from './searchResults';
+import { buildDateStrip, filtersWithin, matchesFilters, priceStep, searchFailureMessage, shiftDateStrip, withDepartureDate } from './searchResults';
 
 function FlightSearchPage() {
   const location = useLocation();
@@ -122,6 +122,16 @@ function FlightSearchPage() {
     setDateRange(strip);
     if (searchData) loadDatePrices(searchData, strip.map((d) => d.isoDate));
   }, [searchKey]);
+
+  // At phone width the strip is wider than the screen: bring the searched date
+  // into view. (Not every browser, nor the test DOM, has scrollIntoView.)
+  const dateStripRef = useRef(null);
+  useEffect(() => {
+    const selected = dateStripRef.current?.querySelector('.date-button.selected');
+    if (typeof selected?.scrollIntoView === 'function') {
+      selected.scrollIntoView({ inline: 'center', block: 'nearest' });
+    }
+  }, [searchData?.departDate, dateRange.length]);
 
   /**
    * Run the search.
@@ -723,7 +733,9 @@ function FlightSearchPage() {
     if (flights && flights.length > 0) {
       const prices = flights.map(f => getFlightPriceAmount(f)).filter(p => p > 0);
       if (prices.length > 0) {
-        const maxPrice = Math.ceil(Math.max(...prices) / 500) * 500;  // round up to nearest 500
+        // Rounded up to the slider's own step, which follows the fares.
+        const step = priceStep(Math.max(...prices));
+        const maxPrice = Math.ceil(Math.max(...prices) / step) * step;
         setPriceRangeBounds({ min: 0, max: maxPrice });
         // Auto-set filter: 0 to max so all flights show initially
         setFilters(prev => ({
@@ -975,7 +987,10 @@ function FlightSearchPage() {
               <ChevronLeft className="h-6 w-6" />
             </button>
 
-            <div className="flex items-center justify-center space-x-2 overflow-x-auto hide-scrollbar mx-4">
+            {/* Centred only where it fits. At phone width a centred row wider
+                than the screen starts off its left edge, where no scroll can
+                reach: the first two dates could not be tapped. */}
+            <div ref={dateStripRef} className="flex flex-1 min-w-0 items-center justify-start md:justify-center space-x-2 overflow-x-auto hide-scrollbar mx-2 sm:mx-4">
               {dateRange.map((date, index) => (
                 <button
                   key={index}

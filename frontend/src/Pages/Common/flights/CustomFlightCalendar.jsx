@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from "react"
-import { format, addMonths, startOfMonth, isSameDay, isBefore, isToday } from "date-fns"
+import { format, addMonths, startOfMonth, isBefore, isToday } from "date-fns"
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import apiConfig from '@/config/api'
 import Price from '../../../Components/Price'
@@ -176,7 +176,10 @@ export default function CustomFlightCalendar({
             const dateKey = format(day, 'yyyy-MM-dd');
             const price = prices[dateKey];
             const isPast = isBefore(day, minDate) && !isToday(day);
-            const isSelected = selectedDate && isSameDay(day, new Date(selectedDate));
+            // The chosen day by its date, not by `new Date("2026-10-04")`, which
+            // is midnight UTC: west of UTC that is the evening before, so the
+            // calendar highlighted the day before the one chosen.
+            const isSelected = dateKey === selectedDate;
             const isLowest = lowestPrice !== null && price === lowestPrice;
 
             // A button: Enter and Space choose it, the arrow keys move between

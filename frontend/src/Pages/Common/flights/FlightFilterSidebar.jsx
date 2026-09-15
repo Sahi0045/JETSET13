@@ -2,6 +2,7 @@ import React from 'react';
 import { Filter, Moon, Sunrise, Sun, Sunset, Briefcase, ShieldCheck } from 'lucide-react';
 import currencyService from '../../../Services/CurrencyService';
 import Price from '../../../Components/Price';
+import { priceStep } from './searchResults';
 
 const DEPARTURE_TIMES = [
   { value: 'early_morning', label: 'Before 6 AM', sublabel: 'Early Morning', Icon: Moon },
@@ -42,6 +43,8 @@ function FlightFilterSidebar({
 }) {
   const currencySymbol = currencyService.getCurrencySymbol();
   const isMobile = variant === 'mobile';
+  // The price controls move in steps that follow the fares (searchResults.js).
+  const step = priceStep(priceRangeBounds.max);
 
   const popularFilters = [
     { label: 'Non-Stop', action: () => onFilterChange('stops', filters.stops === '0' ? 'any' : '0'), active: filters.stops === '0' },
@@ -99,7 +102,7 @@ function FlightFilterSidebar({
                     type="number"
                     min={0}
                     max={priceRangeBounds.max}
-                    step="500"
+                    step={step}
                     value={filters.price[0]}
                     onChange={(e) => {
                       const val = parseInt(e.target.value);
@@ -118,7 +121,7 @@ function FlightFilterSidebar({
                     type="number"
                     min={0}
                     max={priceRangeBounds.max}
-                    step="500"
+                    step={step}
                     value={filters.price[1]}
                     onChange={(e) => {
                       const val = parseInt(e.target.value);
@@ -142,9 +145,9 @@ function FlightFilterSidebar({
                 type="range"
                 min={priceRangeBounds.min}
                 max={priceRangeBounds.max}
-                step="500"
+                step={step}
                 value={filters.price[0]}
-                onChange={(e) => onFilterChange('price', [Math.min(parseInt(e.target.value) || priceRangeBounds.min, filters.price[1] - 500), filters.price[1]])}
+                onChange={(e) => onFilterChange('price', [Math.min(parseInt(e.target.value) || priceRangeBounds.min, filters.price[1] - step), filters.price[1]])}
                 className="absolute top-0 left-0 w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#055B75] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-30 [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#055B75] [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:cursor-pointer"
                 style={{ zIndex: filters.price[0] > 25000 ? 20 : 10 }}
               />
@@ -152,9 +155,9 @@ function FlightFilterSidebar({
                 type="range"
                 min={priceRangeBounds.min}
                 max={priceRangeBounds.max}
-                step="500"
+                step={step}
                 value={filters.price[1]}
-                onChange={(e) => onFilterChange('price', [filters.price[0], Math.max(parseInt(e.target.value) || priceRangeBounds.max, filters.price[0] + 500)])}
+                onChange={(e) => onFilterChange('price', [filters.price[0], Math.max(parseInt(e.target.value) || priceRangeBounds.max, filters.price[0] + step)])}
                 className="absolute top-0 left-0 w-full h-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#055B75] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-30 [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#055B75] [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:cursor-pointer"
                 style={{ zIndex: filters.price[1] < 25000 ? 20 : 10 }}
               />

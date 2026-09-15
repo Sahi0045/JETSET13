@@ -23,6 +23,7 @@ import FlightFareRules from './FlightFareRules';
 import { formatCheckedBag } from '../../../utils/baggage';
 import FlightCancellationPolicy from './FlightCancellationPolicy';
 import { searchToQuery } from './searchQuery';
+import { seatsLeftLabel } from './searchResults';
 import apiConfig from '@/config/api';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
@@ -1448,8 +1449,11 @@ function FlightBookingConfirmation() {
                   </div>
                   <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-semibold text-[#055B75]">
                     <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" />{bookingDetails?.flight?.refundable === true ? 'Refundable (fees may apply)' : bookingDetails?.flight?.refundable === false ? 'Non-refundable' : 'Refunds: see fare rules'}</span>
-                    {bookingDetails?.flight?.numberOfBookableSeats && bookingDetails.flight.numberOfBookableSeats <= 9 && (
-                      <span className="text-red-600">· {bookingDetails.flight.numberOfBookableSeats} seats left</span>
+                    {/* Amadeus reports at most 9 seats, so 9 is "9+" (searchResults.js). */}
+                    {seatsLeftLabel(bookingDetails?.flight?.numberOfBookableSeats) && (
+                      <span className={seatsLeftLabel(bookingDetails.flight.numberOfBookableSeats).urgent ? 'text-red-600' : 'text-gray-500 font-normal'}>
+                        · {seatsLeftLabel(bookingDetails.flight.numberOfBookableSeats).text}
+                      </span>
                     )}
                     {bookingDetails?.flight?.lastTicketingDate && (
                       <span className="text-gray-500 font-normal">· Book by {formatShortDate(bookingDetails.flight.lastTicketingDate)}</span>

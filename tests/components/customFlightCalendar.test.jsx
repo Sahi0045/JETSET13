@@ -119,6 +119,19 @@ describe('CustomFlightCalendar', () => {
     expect(onSelect).toHaveBeenCalledWith(inDays(18));
   });
 
+  // `new Date("2026-10-04")` is midnight UTC - the evening before, west of
+  // UTC - so the calendar highlighted the day before the one chosen there.
+  it('highlights the chosen day by its date, in any time zone', () => {
+    const { container } = renderCalendar({ selectedDate: inDays(12) });
+
+    const pressed = container.querySelectorAll('[aria-pressed="true"]');
+    expect(pressed).toHaveLength(1);
+    expect(pressed[0].getAttribute('data-date')).toBe(inDays(12));
+
+    const source = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/flights/CustomFlightCalendar.jsx'), 'utf8');
+    expect(source).not.toMatch(/new Date\(selectedDate\)/);
+  });
+
   it('names its month buttons', () => {
     renderCalendar();
     expect(screen.getByRole('button', { name: 'Previous month' })).toBeTruthy();

@@ -108,6 +108,28 @@ export const filtersWithin = (bounds) => ({
   destAirports: [],
 });
 
+/**
+ * The price slider's step for a range: about fifty steps across it, on a round
+ * number. It moved in 500s whatever the fares, so under $500 the slider had
+ * two positions - nothing and everything.
+ */
+export const priceStep = (max) => [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+  .find((step) => step >= (Number(max) || 0) / 50) ?? 5000;
+
+/**
+ * What to say about the seats left on a fare, or null. Amadeus reports at most
+ * 9 bookable seats, so 9 means "9 or more" - it read "9 seats left", in red, on
+ * flights with plenty of room.
+ *
+ * @returns {{ text: string, urgent: boolean }|null}
+ */
+export const seatsLeftLabel = (seats) => {
+  const n = Number(seats);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  if (n >= 9) return { text: '9+ seats', urgent: false };
+  return { text: `${n} seat${n === 1 ? '' : 's'} left`, urgent: true };
+};
+
 const DEPARTURE_WINDOWS = {
   early_morning: [0, 6],
   morning: [6, 12],

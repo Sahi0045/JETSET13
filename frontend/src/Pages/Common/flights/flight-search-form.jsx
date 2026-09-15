@@ -609,7 +609,10 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               {showTravellers && (
                 <div onClick={(e) => e.stopPropagation()}
                   className="absolute right-0 top-full mt-2 w-[560px] max-w-[88vw] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 z-[100] text-left cursor-default">
-                  {renderCounter('ADULTS (12y +)', 'on the day of travel', adults, setAdults, adultOptions, (opt) => opt.over || (opt.val + children > MAX_SEATED))}
+                  {/* Fewer adults take infants down with them: each infant
+                      travels on an adult's lap, and lowering adults used to
+                      leave more infants than laps - a search that fails. */}
+                  {renderCounter('ADULTS (12y +)', 'on the day of travel', adults, (n) => { setAdults(n); setInfants((current) => Math.min(current, n)); }, adultOptions, (opt) => opt.over || (opt.val + children > MAX_SEATED))}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 mt-4">
                     {renderCounter('CHILDREN (2y - 12y)', 'on the day of travel', children, setChildren, childOptions, (opt) => opt.over || (adults + opt.val > MAX_SEATED))}
                     {renderCounter('INFANTS (below 2y)', 'on the day of travel', infants, setInfants, childOptions, (opt) => opt.over || (opt.val > adults))}
