@@ -1014,8 +1014,18 @@ async function sendCancellationEmail(booking, email, cancellationResult) {
             passengerEmail = booking.passenger_details[0]?.email || booking.passenger_details[0]?.contact?.emailAddress;
         }
 
+        // No placeholder recipient. This fell back to test@jetsetterss.com, so a
+        // booking with no address on file had its "customer" confirmation sent to
+        // an inbox nobody reads, and reported as sent. With no address the send
+        // is skipped, and the log says so.
+        const customerEmail = booking.customer_email || booking.booking_details?.customer_email || passengerEmail || email || '';
+        if (!customerEmail) {
+            console.warn('⚠️ Cancellation email not sent: the booking has no customer address', { bookingReference: booking.booking_reference });
+            return;
+        }
+
         const cancelEmailData = {
-            customerEmail: booking.customer_email || booking.booking_details?.customer_email || passengerEmail || email || 'test@jetsetterss.com',
+            customerEmail,
             customerName: booking.customer_name || (Array.isArray(booking.passenger_details) && booking.passenger_details[0]?.firstName ? `${booking.passenger_details[0].firstName} ${booking.passenger_details[0].lastName || ''}`.trim() : 'Valued Customer'),
             bookingReference: booking.booking_reference,
             bookingType: booking.travel_type || 'flight',
