@@ -1,6 +1,7 @@
 import React, { forwardRef } from 'react';
 import { Plane, User } from 'lucide-react';
-import Price from '../../../Components/Price';
+import { formatUsd } from '../../../utils/bookingCharge';
+import { bookingStatusBadge } from '../../../utils/bookingStatus';
 import {
     resolveTickets,
     ticketState,
@@ -171,7 +172,9 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                 : hasPnr ? 'Ticket not yet issued' : 'Not yet confirmed with the airline'}
                     </span>
                     <span className={`font-bold uppercase px-3 py-1 rounded text-xs ${isCancelled ? 'bg-red-600' : isTicketed ? 'bg-green-500' : 'bg-amber-500'}`}>
-                        {safeBookingDetails.status}
+                        {/* The status in words. The raw database value
+                            ("pending_ticketing") was printed here. */}
+                        {bookingStatusBadge(bookingData).label}
                     </span>
                 </div>
 
@@ -212,7 +215,10 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                     <div>
                                         <h3 className="text-xl font-bold text-gray-900">{flight.airline}</h3>
                                         <p className="text-gray-500">{flight.flightNumber} • {flight.stops === 0 ? 'Non-stop' : `${flight.stops} Stop(s)`}</p>
-                                        <p className="text-xs text-gray-400 mt-1">{flight.cabin} Class</p>
+                                        {/* " Class" with nothing before it when the fare named no cabin. */}
+                                        <p className="text-xs text-gray-400 mt-1 capitalize">
+                                            {flight.cabin ? `${String(flight.cabin).toLowerCase().replace(/_/g, ' ')} class` : 'Cabin not recorded'}
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="text-right">
@@ -283,7 +289,11 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                                         </div>
                                         <div className="text-right">
                                             <span className="block text-xs text-gray-400 uppercase">Baggage</span>
-                                            <span className="font-medium text-gray-800">{safeBookingDetails.baggage?.checkIn || 'As per fare rules'}</span>
+                                            {/* The booking stores baggage as text ("23kg"); reading
+                                                `.checkIn` off it always fell back. */}
+                                            <span className="font-medium text-gray-800">
+                                                {(typeof safeBookingDetails.baggage === 'string' ? safeBookingDetails.baggage : safeBookingDetails.baggage?.checkIn) || 'As per fare rules'}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -307,7 +317,9 @@ const FlightETicket = forwardRef(({ bookingData }, ref) => {
                         <div className="text-right">
                             <div className="inline-block text-left">
                                 <p className="text-xs text-gray-400 uppercase mb-1">Total Amount</p>
-                                <p className="text-3xl font-bold text-[#055B75]"><Price amount={calculatedFare.totalAmount} /></p>
+                                {/* What was charged, in USD. <Price> converted it into the
+                                    visitor's currency, which is not what the card paid. */}
+                                <p className="text-3xl font-bold text-[#055B75]">{formatUsd(calculatedFare.totalAmount)}</p>
                                 {/* Only claimed when the booking says so. */}
                                 {paid && !isCancelled && <p className="text-xs text-green-600 mt-1 font-medium">Payment Confirmed ✅</p>}
                             </div>

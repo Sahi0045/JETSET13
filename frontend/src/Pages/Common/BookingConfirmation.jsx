@@ -406,13 +406,14 @@ function BookingConfirmation() {
                 )}
 
                 {/* Class/Cabin Type */}
-                {(bookingData.travelClass || bookingData.cabinType || bookingData.roomType) && (
+                {/* The flight flow records `cabinClass`; only the other names were read. */}
+                {(bookingData.cabinClass || bookingData.travelClass || bookingData.cabinType || bookingData.roomType) && (
                   <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
                     <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-1">
                       {isFlight ? 'Class' : isHotel ? 'Room Type' : 'Cabin'}
                     </p>
                     <p className="text-sm font-bold text-gray-900 capitalize">
-                      {(bookingData.travelClass || bookingData.cabinType || bookingData.roomType || 'Standard').replace('_', ' ')}
+                      {String(bookingData.cabinClass || bookingData.travelClass || bookingData.cabinType || bookingData.roomType).toLowerCase().replace(/_/g, ' ')}
                     </p>
                   </div>
                 )}

@@ -7,6 +7,7 @@ import { bookingStatusBadge, needsAttention, cancellationMessage, refundStatus, 
 import { resolveTickets, ticketState } from "../../../utils/eTicket"
 import { bookingItineraries } from "../../../../../shared/bookingItineraries"
 import BookingItinerary from "../flights/BookingItinerary"
+import { formatUsd } from "../../../utils/bookingCharge"
 import { authHeaders } from "../../../utils/authHeaders"
 import {
   FaPlane, FaShip, FaHotel, FaSuitcaseRolling, FaClipboardList,
@@ -20,7 +21,6 @@ import Navbar from '../Navbar'
 import Footer from '../Footer'
 import { useSupabaseAuth } from '../../../contexts/SupabaseAuthContext'
 import ArcPayService from '../../../Services/ArcPayService'
-import Price from '../../../Components/Price'
 
 // ----- Icon helpers (react-icons replace emoji) -----
 /**
@@ -916,7 +916,9 @@ export default function TravelDashboard() {
             <p className="text-base font-bold text-[#055B75]">
               {(() => {
                 const amt = parseFloat(booking.totalAmount || booking.total_amount || booking.amount || 0);
-                return amt > 0 ? <Price amount={amt} /> : <span className="text-gray-400 font-semibold text-sm">On request</span>;
+                // What was charged, in USD. <Price> converted it into the
+                // visitor's chosen currency, which is not what the card paid.
+                return amt > 0 ? formatUsd(amt) : <span className="text-gray-400 font-semibold text-sm">On request</span>;
               })()}
             </p>
           </div>

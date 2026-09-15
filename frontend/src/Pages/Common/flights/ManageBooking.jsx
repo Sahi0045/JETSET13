@@ -11,6 +11,7 @@ import Footer from '../Footer';
 import FlightETicket from './FlightETicket';
 import BookingItinerary from './BookingItinerary';
 import { bookingItineraries } from '../../../../../shared/bookingItineraries';
+import { formatUsd } from '../../../utils/bookingCharge';
 import { canDownloadDocument, isPaid, ticketState } from '../../../utils/eTicket';
 import { attentionMessage, bookingStatusBadge, cancellationMessage, refundStatus } from '../../../utils/bookingStatus';
 import { refundOutcome } from '../../../../../shared/cancellationOutcome';
@@ -69,8 +70,44 @@ function ManageBooking() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('Change of plans');
 
+  // The cancel pop-up is a dialog: announced as one, focus kept inside it while
+  // open, Escape closes it, and focus goes back to the button that opened it.
+  // It was a plain overlay a keyboard or screen-reader user could tab straight
+  // out of.
+  const cancelDialogRef = React.useRef(null);
+  const cancelTriggerRef = React.useRef(null);
+
   const handleCancelBooking = () => {
+    cancelTriggerRef.current = document.activeElement;
     setShowCancelModal(true);
+  };
+
+  const closeCancelDialog = () => {
+    if (cancelling) return;
+    setShowCancelModal(false);
+    cancelTriggerRef.current?.focus?.();
+  };
+
+  const handleCancelDialogKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeCancelDialog();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(
+      cancelDialogRef.current?.querySelectorAll('button:not([disabled]), select:not([disabled]), a[href]') || []
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
 
   const confirmCancelBooking = async () => {
@@ -161,6 +198,11 @@ function ManageBooking() {
     cancelResultRef.current?.focus();
     cancelResultRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }, [cancelResult]);
+
+  // Opening the dialog puts focus on its safe choice, "Keep Booking".
+  useEffect(() => {
+    if (showCancelModal) cancelDialogRef.current?.querySelector('[data-autofocus]')?.focus();
+  }, [showCancelModal]);
 
   // Every leg and flight. The route card below shows the first leg's ends
   // only; a round trip's return flight and each connection were nowhere here.
@@ -643,7 +685,8 @@ function ManageBooking() {
                     </div>
                     <div className="border-r-0 md:border-r border-gray-200 pr-0 md:pr-4">
                       <label className="text-sm font-medium text-gray-500 block mb-1">Amount Paid</label>
-                      <p className="text-lg font-semibold">{bookingData?.currency || 'USD'} {bookingData?.amount || 'N/A'}</p>
+                      {/* "USD 512.4" was the raw number beside a currency code. */}
+                      <p className="text-lg font-semibold">{Number(bookingData?.amount) > 0 ? formatUsd(bookingData.amount) : 'Not recorded'}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500 block mb-1">Transaction ID</label>
@@ -831,7 +874,7 @@ function ManageBooking() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium text-gray-500">Total Amount</label>
-                      <p className="text-xl font-bold text-green-600">{bookingData?.currency || 'USD'} {bookingData?.amount || 'N/A'}</p>
+                      <p className="text-xl font-bold text-green-600">{Number(bookingData?.amount) > 0 ? formatUsd(bookingData.amount) : 'Not recorded'}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Payment Status</label>
@@ -893,9 +936,20 @@ function ManageBooking() {
 
       {/* Cancel Booking Modal */}
       {showCancelModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Cancel Booking</h3>
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) closeCancelDialog(); }}
+        >
+          <div
+            ref={cancelDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-booking-title"
+            aria-describedby="cancel-booking-description"
+            onKeyDown={handleCancelDialogKeyDown}
+            className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"
+          >
+            <h3 id="cancel-booking-title" className="text-lg font-semibold mb-4">Cancel Booking</h3>
 
             {/* Cancellation Fee Warning */}
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
@@ -920,14 +974,15 @@ function ManageBooking() {
               </div>
             </div>
 
-            <p className="text-gray-600 mb-4">
+            <p id="cancel-booking-description" className="text-gray-600 mb-4">
               Are you sure you want to cancel this booking? This action cannot be undone.
             </p>
 
             {/* Cancel Reason */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Reason for cancellation</label>
+              <label htmlFor="cancel-booking-reason" className="block text-sm font-medium text-gray-700 mb-2">Reason for cancellation</label>
               <select
+                id="cancel-booking-reason"
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0890BC] focus:border-[#0890BC]"
@@ -943,7 +998,8 @@ function ManageBooking() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setShowCancelModal(false)}
+                data-autofocus
+                onClick={closeCancelDialog}
                 disabled={cancelling}
                 className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition disabled:opacity-50"
               >
