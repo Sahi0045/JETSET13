@@ -32,7 +32,11 @@ function ManageBooking() {
   // "Failed to cancel booking. Please contact support."
   const [cancelledLocally, setCancelledLocally] = useState(false);
 
-  // If live data was passed from My Trips routing, use it; otherwise fetch via hook.
+  // What My Trips handed over is a snapshot from when its list loaded, and only
+  // a placeholder: the booking is always fetched by reference, and the fetched
+  // record replaces it. This page used to prefer the snapshot and not fetch at
+  // all, so a booking cancelled, ticketed or refunded since showed what it had
+  // been, even after a reload.
   const passedData = (location.state?.bookingData?.source !== 'localStorage') ? location.state?.bookingData : null;
   // A guest has no account to own the booking. They prove it is theirs with
   // the email it was made with - the reference alone is not enough. Without
@@ -40,13 +44,14 @@ function ManageBooking() {
   const [lookupEmail, setLookupEmail] = useState('');
   const [submittedEmail, setSubmittedEmail] = useState(null);
   const { data: fetchedBooking, isLoading: queryLoading, error: queryError, refetch } = useFlightBooking(bookingId, {
-    enabled: !passedData && !!bookingId,
+    enabled: !!bookingId,
     email: submittedEmail,
+    placeholderData: passedData || undefined,
   });
   // What the cancel API said happened, once it has answered.
   const [cancelResult, setCancelResult] = useState(null);
   const bookingData = useMemo(() => {
-    const base = passedData || fetchedBooking || null;
+    const base = fetchedBooking || passedData || null;
     // The page's copy takes the cancellation record the server just returned,
     // so the tracker reads the same outcome as the banner - not an older
     // record, or none.
@@ -56,6 +61,8 @@ function ManageBooking() {
   }, [passedData, fetchedBooking, cancelledLocally, cancelResult]);
   const loading = !passedData && queryLoading;
   const error = !passedData && queryError ? queryError.message : (!bookingId && !passedData ? 'No booking ID provided' : null);
+  // The fetch failed but there is a snapshot to show: say it may be out of date.
+  const refreshFailed = Boolean(queryError && passedData);
 
   const [activeTab, setActiveTab] = useState('details');
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -531,6 +538,12 @@ function ManageBooking() {
               <p className="text-gray-600">Booking Reference: {bookingData?.orderId || bookingData?.bookingReference}</p>
             </div>
           </div>
+
+          {refreshFailed && (
+            <p className="mb-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              We could not refresh this booking, so what you see may be out of date. Reload the page to try again.
+            </p>
+          )}
 
           {/* What the cancel did, first thing on the page. */}
           {renderCancelResult()}
