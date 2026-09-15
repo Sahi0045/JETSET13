@@ -383,6 +383,25 @@ describe('hosted checkout for a flight', () => {
       expect(initiated().airline.ticket.issue.travelAgentCode).toBe('12345678');
     });
 
+    // Only the first itinerary was read, so a round trip went to the card
+    // network as one way.
+    it('sends the legs home of a round trip, and names the outbound destination', async () => {
+      vi.stubEnv('ARC_TRAVEL_AGENT_CODE', '12345678');
+      const roundTrip = {
+        flightData: {
+          itineraries: [
+            withLegs.flightData.itineraries[0],
+            { segments: [{ carrierCode: 'LH', number: '400', departure: { iataCode: 'FRA', at: '2026-10-20T10:00:00' }, arrival: { iataCode: 'JFK' } }] },
+          ],
+        },
+      };
+      await run(verified, { body: roundTrip });
+
+      const legs = initiated().airline.itinerary.leg;
+      expect(legs.map((leg) => `${leg.departureAirport}-${leg.destinationAirport}`)).toEqual(['JFK-FRA', 'FRA-JFK']);
+      expect(legs[1]).toMatchObject({ flightNumber: 'LH400', departureDate: '2026-10-20' });
+    });
+
     // Unset, it was derived from the merchant id: the live merchant sent part of
     // its merchant id to the card network as an agency code.
     it('sends no airline data rather than an invented agency code, and still opens the checkout', async () => {

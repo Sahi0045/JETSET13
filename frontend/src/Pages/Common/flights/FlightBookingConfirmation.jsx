@@ -27,7 +27,8 @@ import apiConfig from '@/config/api';
 // quote a total the server will not accept.
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
-import { needsDateOfBirth } from '../../../../../shared/travellerDetails';
+import { needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
+import { arcItineraries, returnLegOf } from '../../../utils/reviewTrip';
 import { findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
 import { travellerProblems, travellerProgress } from '../../../utils/travellerChecks';
 import { placeSavedTraveller, removeSavedTraveller, toSavedTraveller } from '../../../utils/savedTravellerSlots';
@@ -227,11 +228,17 @@ function FlightBookingConfirmation() {
 
   // What each traveller form still needs - one list for the payment check and
   // for the progress on the page (utils/travellerChecks.js).
+  //
+  // The trip's days come from every itinerary on the offer. The last day was
+  // read from the outbound segments, so on a round trip an infant turning 2,
+  // or a passport running out, before the flight home passed the checks.
+  const trip = tripDates(reviewState?.flightData?.originalOffer);
   const problemsOf = (traveller, index) => travellerProblems(traveller, {
     index,
     international: Boolean(bookingDetails?.isInternational),
-    travelDate: bookingDetails?.flight?.departureDate,
-    lastDate: bookingDetails?.flight?.segments?.at?.(-1)?.arrival?.at
+    travelDate: trip.firstDate || bookingDetails?.flight?.departureDate,
+    lastDate: trip.lastDate
+      || bookingDetails?.flight?.segments?.at?.(-1)?.arrival?.at
       || bookingDetails?.flight?.arrivalDate
       || bookingDetails?.flight?.departureDate,
     bookingAsGuest,
@@ -424,6 +431,38 @@ function FlightBookingConfirmation() {
     const percentageFee = fee.percentageFee;
     const serviceFee = fee.serviceFee;
 
+    // One segment as the page draws it, for the flights out and the flights home.
+    const toReviewSegment = (segment) => ({
+      departure: {
+        airport: segment.departure.airport,
+        terminal: segment.departure.terminal,
+        time: segment.departure.time,
+        at: segment.departure.at || null,
+        cityName: segment.departure.cityName || getCityName(segment.departure.airport) || segment.departure.airport
+      },
+      arrival: {
+        airport: segment.arrival.airport,
+        terminal: segment.arrival.terminal,
+        time: segment.arrival.time,
+        at: segment.arrival.at || null,
+        cityName: segment.arrival.cityName || getCityName(segment.arrival.airport) || segment.arrival.airport
+      },
+      duration: segment.duration,
+      aircraft: segment.aircraft || 'Unknown',
+      carrier: segment.airline?.code || flightData.airline.code,
+      carrierName: segment.airline?.name || flightData.airline.name,
+      carrierLogo: segment.airline?.logo || flightData.airline.logo,
+      operatingCarrier: segment.operatingCarrier || null,
+      operatingAirlineName: segment.operatingAirlineName || null,
+      number: segment.flightNumber
+    });
+
+    // A round trip's flights home. The page only ever read `segments`, the
+    // outbound, so the flight a customer was paying to come back on was never
+    // on the page they confirmed.
+    const returnLeg = returnLegOf(flightData);
+    const returnSegments = returnLeg ? returnLeg.segments.map(toReviewSegment) : [];
+
     return {
       bookingId: bookingId || null,
       flight: {
@@ -471,30 +510,14 @@ function FlightBookingConfirmation() {
           : flightData.arrival.airport,
         departureTerminal: flightData.departure.terminal || '',
         arrivalTerminal: flightData.arrival.terminal || '',
-        segments: flightData.segments.map(segment => ({
-          departure: {
-            airport: segment.departure.airport,
-            terminal: segment.departure.terminal,
-            time: segment.departure.time,
-            at: segment.departure.at || null,
-            cityName: segment.departure.cityName || getCityName(segment.departure.airport) || segment.departure.airport
-          },
-          arrival: {
-            airport: segment.arrival.airport,
-            terminal: segment.arrival.terminal,
-            time: segment.arrival.time,
-            at: segment.arrival.at || null,
-            cityName: segment.arrival.cityName || getCityName(segment.arrival.airport) || segment.arrival.airport
-          },
-          duration: segment.duration,
-          aircraft: segment.aircraft || 'Unknown',
-          carrier: segment.airline?.code || flightData.airline.code,
-          carrierName: segment.airline?.name || flightData.airline.name,
-          carrierLogo: segment.airline?.logo || flightData.airline.logo,
-          operatingCarrier: segment.operatingCarrier || null,
-          operatingAirlineName: segment.operatingAirlineName || null,
-          number: segment.flightNumber
-        })),
+        segments: flightData.segments.map(toReviewSegment),
+        returnLeg: returnSegments.length > 0 ? {
+          segments: returnSegments,
+          duration: returnLeg.duration,
+          stops: returnSegments.length - 1,
+          departureCity: returnSegments[0].departure.cityName,
+          arrivalCity: returnSegments[returnSegments.length - 1].arrival.cityName,
+        } : null,
         price: {
           base: baseFareReal,           // real Amadeus base fare
           airlineTaxes: airlineTaxes,   // real airline taxes & surcharges (total - base)
@@ -891,14 +914,17 @@ function FlightBookingConfirmation() {
           arrival: { iataCode: seg.arrival?.airport || arrivalAirport, at: seg.arrival?.at || seg.arrival?.time || '' }
         })),
         originalOffer: rawFlightData?.originalOffer || rawFlightData,
-        itineraries: rawFlightData?.itineraries || [{
+        // Every leg, the flights home included, from the offer the airline
+        // priced. This carried the outbound segments only, so the card network
+        // was told a round trip was one way.
+        itineraries: arcItineraries(rawFlightData?.originalOffer, [{
           segments: segments.map(seg => ({
             carrierCode: segmentCarrier(seg),
             number: segmentNumber(seg),
             departure: { iataCode: seg.departure?.airport || departureAirport, at: seg.departure?.at || seg.departure?.time || departureDate },
             arrival: { iataCode: seg.arrival?.airport || arrivalAirport, at: seg.arrival?.at || seg.arrival?.time || '' }
           }))
-        }]
+        }])
       };
 
       const finalContact = {
@@ -1095,6 +1121,108 @@ function FlightBookingConfirmation() {
   // buttons and the mobile bar all show this one figure.
   const amountDue = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
 
+  // A leg's flights one after another, with the change of planes between them.
+  // Drawn the same way for the flights out and, on a round trip, the flights
+  // home.
+  const renderSegmentList = (segments) => (
+    <div className="space-y-0">
+      {segments.map((seg, idx) => {
+        const depDate = seg.departure.at ? formatFullDate(seg.departure.at) : formatShortDate(bookingDetails?.flight?.departureDate);
+        const arrDate = seg.arrival.at ? formatFullDate(seg.arrival.at) : '';
+        const depTime = seg.departure.at ? formatTimeFromISO(seg.departure.at) : seg.departure.time;
+        const arrTime = seg.arrival.at ? formatTimeFromISO(seg.arrival.at) : seg.arrival.time;
+        const nextSeg = segments[idx + 1];
+        const layover = nextSeg ? calcLayover(seg.arrival.at, nextSeg.departure.at) : '';
+
+        return (
+          <React.Fragment key={idx}>
+            {/* Segment Card */}
+            <div className="itinerary-segment flex gap-4 py-4 px-2 border-b border-gray-100 last:border-b-0">
+              {/* Left - Airline Info */}
+              <div className="segment-airline flex flex-col items-center min-w-[90px] text-center">
+                <img loading="lazy" decoding="async"
+                  src={seg.carrierLogo || `https://pics.avs.io/200/200/${(seg.carrier || 'XX').toUpperCase()}.png`}
+                  alt={seg.carrierName || seg.carrier}
+                  className="w-10 h-10 rounded-full object-contain border border-gray-200 mb-1"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+                <div className="text-xs font-semibold text-gray-700">{seg.carrierName || seg.carrier}</div>
+                <div className="text-[10px] text-gray-500">{seg.number}</div>
+                <div className="text-[10px] text-gray-400">{seg.aircraft !== 'Unknown' ? seg.aircraft : ''}</div>
+              </div>
+
+              {/* Center - Route */}
+              <div className="segment-route flex-1 flex items-stretch gap-3">
+                {/* Departure */}
+                <div className="route-endpoint departure flex flex-col items-start min-w-[100px] md:min-w-[120px]">
+                  <div className="text-xs text-gray-500">{seg.departure.cityName || getCityName(seg.departure.airport)}</div>
+                  <div className="text-2xl font-bold text-[#055B75]">{depTime}</div>
+                  <div className="text-xs text-gray-500">{depDate}</div>
+                  <div className="text-[11px] text-gray-400 mt-0.5">
+                    {getCityName(seg.departure.airport)} Airport{seg.departure.terminal ? `, T${seg.departure.terminal}` : ''}
+                  </div>
+                </div>
+
+                {/* Duration Arrow */}
+                <div className="route-connector flex flex-col items-center justify-center flex-1 min-w-[60px] md:min-w-[80px]">
+                  {/* Per-segment elapsed time is deliberately not
+                      carried on the offer: MasterPricer gives
+                      LOCAL airport times with no timezone, so
+                      subtracting them is wrong for any flight
+                      crossing zones. Rendering it anyway printed
+                      "Unknown Duration" on every leg of every
+                      connection. Show nothing rather than a
+                      placeholder or, worse, a computed wrong
+                      number — the itinerary total above is
+                      Amadeus's own elapsed time and is correct. */}
+                  {seg.duration ? (
+                    <div className="text-xs text-gray-500 font-medium">{formatDuration(seg.duration)}</div>
+                  ) : null}
+                  <div className="relative w-full flex items-center my-1">
+                    <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
+                    <div className="mx-1 text-gray-400 text-sm">&#9992;</div>
+                    <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
+                  </div>
+                  {bookingDetails?.flight?.cabin && (
+                    <div className="text-[10px] font-medium px-2 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1]">
+                      {bookingDetails.flight.cabin}
+                    </div>
+                  )}
+                </div>
+
+                {/* Arrival */}
+                <div className="route-endpoint arrival flex flex-col items-end min-w-[100px] md:min-w-[120px] text-right">
+                  <div className="text-xs text-gray-500">{seg.arrival.cityName || getCityName(seg.arrival.airport)}</div>
+                  <div className="text-2xl font-bold text-[#055B75]">{arrTime}</div>
+                  <div className="text-xs text-gray-500">{arrDate}</div>
+                  <div className="text-[11px] text-gray-400 mt-0.5">
+                    {getCityName(seg.arrival.airport)} Airport{seg.arrival.terminal ? `, T${seg.arrival.terminal}` : ''}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Layover Banner between segments */}
+            {nextSeg && (
+              <div className="flex items-center justify-center gap-2 py-2.5 px-4 mx-2 my-1 bg-amber-50 border border-amber-200 rounded-lg">
+                <span className="text-amber-600 text-sm">&#9201;</span>
+                <span className="text-sm font-medium text-amber-800">
+                  Change planes at <strong>{getCityName(seg.arrival.airport)} ({seg.arrival.airport})</strong>
+                </span>
+                {layover && (
+                  <>
+                    <span className="text-amber-400 mx-1">|</span>
+                    <span className="text-sm text-amber-700">Connecting Time: <strong>{layover}</strong></span>
+                  </>
+                )}
+              </div>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="booking-confirmation-page">
       <div className="booking-background-decor"></div>
@@ -1149,6 +1277,9 @@ function FlightBookingConfirmation() {
                 {/* Route Summary Header */}
                 <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between mb-4 px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-200">
                   <span className="font-semibold text-[#055B75]">
+                    {bookingDetails?.flight?.returnLeg && (
+                      <span className="mr-2 text-[10px] font-bold uppercase tracking-wide text-gray-500">Onward</span>
+                    )}
                     {bookingDetails?.flight?.departureCity} &rarr; {bookingDetails?.flight?.arrivalCity}
                   </span>
                   <div className="flex items-center gap-3 text-sm text-gray-600 whitespace-nowrap flex-shrink-0">
@@ -1160,102 +1291,7 @@ function FlightBookingConfirmation() {
 
                 {/* Segment-by-segment breakdown */}
                 {bookingDetails?.flight?.segments && bookingDetails.flight.segments.length > 1 ? (
-                  <div className="space-y-0">
-                    {bookingDetails.flight.segments.map((seg, idx) => {
-                      const depDate = seg.departure.at ? formatFullDate(seg.departure.at) : formatShortDate(bookingDetails?.flight?.departureDate);
-                      const arrDate = seg.arrival.at ? formatFullDate(seg.arrival.at) : '';
-                      const depTime = seg.departure.at ? formatTimeFromISO(seg.departure.at) : seg.departure.time;
-                      const arrTime = seg.arrival.at ? formatTimeFromISO(seg.arrival.at) : seg.arrival.time;
-                      const nextSeg = bookingDetails.flight.segments[idx + 1];
-                      const layover = nextSeg ? calcLayover(seg.arrival.at, nextSeg.departure.at) : '';
-
-                      return (
-                        <React.Fragment key={idx}>
-                          {/* Segment Card */}
-                          <div className="itinerary-segment flex gap-4 py-4 px-2 border-b border-gray-100 last:border-b-0">
-                            {/* Left - Airline Info */}
-                            <div className="segment-airline flex flex-col items-center min-w-[90px] text-center">
-                              <img loading="lazy" decoding="async"
-                                src={seg.carrierLogo || `https://pics.avs.io/200/200/${(seg.carrier || 'XX').toUpperCase()}.png`}
-                                alt={seg.carrierName || seg.carrier}
-                                className="w-10 h-10 rounded-full object-contain border border-gray-200 mb-1"
-                                onError={(e) => { e.target.style.display = 'none'; }}
-                              />
-                              <div className="text-xs font-semibold text-gray-700">{seg.carrierName || seg.carrier}</div>
-                              <div className="text-[10px] text-gray-500">{seg.number}</div>
-                              <div className="text-[10px] text-gray-400">{seg.aircraft !== 'Unknown' ? seg.aircraft : ''}</div>
-                            </div>
-
-                            {/* Center - Route */}
-                            <div className="segment-route flex-1 flex items-stretch gap-3">
-                              {/* Departure */}
-                              <div className="route-endpoint departure flex flex-col items-start min-w-[100px] md:min-w-[120px]">
-                                <div className="text-xs text-gray-500">{seg.departure.cityName || getCityName(seg.departure.airport)}</div>
-                                <div className="text-2xl font-bold text-[#055B75]">{depTime}</div>
-                                <div className="text-xs text-gray-500">{depDate}</div>
-                                <div className="text-[11px] text-gray-400 mt-0.5">
-                                  {getCityName(seg.departure.airport)} Airport{seg.departure.terminal ? `, T${seg.departure.terminal}` : ''}
-                                </div>
-                              </div>
-
-                              {/* Duration Arrow */}
-                              <div className="route-connector flex flex-col items-center justify-center flex-1 min-w-[60px] md:min-w-[80px]">
-                                {/* Per-segment elapsed time is deliberately not
-                                    carried on the offer: MasterPricer gives
-                                    LOCAL airport times with no timezone, so
-                                    subtracting them is wrong for any flight
-                                    crossing zones. Rendering it anyway printed
-                                    "Unknown Duration" on every leg of every
-                                    connection. Show nothing rather than a
-                                    placeholder or, worse, a computed wrong
-                                    number — the itinerary total above is
-                                    Amadeus's own elapsed time and is correct. */}
-                                {seg.duration ? (
-                                  <div className="text-xs text-gray-500 font-medium">{formatDuration(seg.duration)}</div>
-                                ) : null}
-                                <div className="relative w-full flex items-center my-1">
-                                  <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
-                                  <div className="mx-1 text-gray-400 text-sm">&#9992;</div>
-                                  <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
-                                </div>
-                                {bookingDetails?.flight?.cabin && (
-                                  <div className="text-[10px] font-medium px-2 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1]">
-                                    {bookingDetails.flight.cabin}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Arrival */}
-                              <div className="route-endpoint arrival flex flex-col items-end min-w-[100px] md:min-w-[120px] text-right">
-                                <div className="text-xs text-gray-500">{seg.arrival.cityName || getCityName(seg.arrival.airport)}</div>
-                                <div className="text-2xl font-bold text-[#055B75]">{arrTime}</div>
-                                <div className="text-xs text-gray-500">{arrDate}</div>
-                                <div className="text-[11px] text-gray-400 mt-0.5">
-                                  {getCityName(seg.arrival.airport)} Airport{seg.arrival.terminal ? `, T${seg.arrival.terminal}` : ''}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Layover Banner between segments */}
-                          {nextSeg && (
-                            <div className="flex items-center justify-center gap-2 py-2.5 px-4 mx-2 my-1 bg-amber-50 border border-amber-200 rounded-lg">
-                              <span className="text-amber-600 text-sm">&#9201;</span>
-                              <span className="text-sm font-medium text-amber-800">
-                                Change planes at <strong>{getCityName(seg.arrival.airport)} ({seg.arrival.airport})</strong>
-                              </span>
-                              {layover && (
-                                <>
-                                  <span className="text-amber-400 mx-1">|</span>
-                                  <span className="text-sm text-amber-700">Connecting Time: <strong>{layover}</strong></span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
+                  renderSegmentList(bookingDetails.flight.segments)
                 ) : (
                   /* Single segment / direct flight - original layout with dates */
                   <div className="flight-route">
@@ -1290,6 +1326,29 @@ function FlightBookingConfirmation() {
                         {getCityName(bookingDetails?.flight?.arrivalCode)} Airport{bookingDetails?.flight?.arrivalTerminal ? `, T${bookingDetails.flight.arrivalTerminal}` : ''}
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* The flights home, on the page the customer confirms and pays
+                    on. A round trip showed its outbound only. */}
+                {bookingDetails?.flight?.returnLeg && (
+                  <div className="mt-5" data-return-leg="">
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between mb-2 px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-200">
+                      <span className="font-semibold text-[#055B75]">
+                        <span className="mr-2 text-[10px] font-bold uppercase tracking-wide text-gray-500">Return</span>
+                        {bookingDetails.flight.returnLeg.departureCity} &rarr; {bookingDetails.flight.returnLeg.arrivalCity}
+                      </span>
+                      <div className="flex items-center gap-3 text-sm text-gray-600 whitespace-nowrap flex-shrink-0">
+                        <span>{bookingDetails.flight.returnLeg.stops === 0 ? 'Direct' : `${bookingDetails.flight.returnLeg.stops} Stop${bookingDetails.flight.returnLeg.stops > 1 ? 's' : ''}`}</span>
+                        {bookingDetails.flight.returnLeg.duration && (
+                          <>
+                            <span className="text-gray-300">|</span>
+                            <span className="whitespace-nowrap">Total: {formatDuration(bookingDetails.flight.returnLeg.duration)}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {renderSegmentList(bookingDetails.flight.returnLeg.segments)}
                   </div>
                 )}
 

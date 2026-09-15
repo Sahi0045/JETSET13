@@ -584,12 +584,21 @@ export async function handleHostedCheckout(req, res) {
                 console.log('🔍 Processing airline data for ARC Pay...');
 
                 const flight = flightData || bookingData?.selectedFlight || bookingData?.flightData || {};
-                const itinerary = flight?.itineraries?.[0] || flight?.itinerary || {};
-                const segments = Array.isArray(itinerary?.segments) ? itinerary.segments :
+                // Every itinerary: a round trip's return is the second one.
+                // Only the first was read, so the legs home were never sent and
+                // the card network was told the trip was one way.
+                const itineraries = Array.isArray(flight?.itineraries) ? flight.itineraries
+                    : flight?.itinerary ? [flight.itinerary] : [];
+                const itinerarySegments = itineraries.flatMap((itinerary) => (Array.isArray(itinerary?.segments) ? itinerary.segments : []));
+                const segments = itinerarySegments.length > 0 ? itinerarySegments :
                     Array.isArray(flight?.segments) ? flight.segments : [];
+                // Where the trip goes is the end of the outbound, not the last
+                // leg, which on a round trip lands back where it started.
+                const outbound = Array.isArray(itineraries[0]?.segments) && itineraries[0].segments.length > 0
+                    ? itineraries[0].segments : segments;
 
                 const origin = flight?.origin || flight?.departureAirport || segments?.[0]?.departure?.iataCode || 'XXX';
-                const destination = flight?.destination || flight?.arrivalAirport || segments?.[segments.length - 1]?.arrival?.iataCode || 'XXX';
+                const destination = flight?.destination || flight?.arrivalAirport || outbound?.[outbound.length - 1]?.arrival?.iataCode || 'XXX';
 
                 const actualCarrierCode = (flight?.carrierCode || segments?.[0]?.carrierCode || segments?.[0]?.carrier || 'XX').substring(0, 2).toUpperCase();
                 // Acquirer may reject if carrierName doesn't match a real airline when airline data is present

@@ -24,3 +24,25 @@
 export function needsDateOfBirth({ type, international } = {}) {
   return international !== false || type !== 'ADULT';
 }
+
+const dayOf = (value) => (/^\d{4}-\d{2}-\d{2}/.test(String(value ?? '')) ? String(value).slice(0, 10) : null);
+
+/**
+ * The first and last days of a trip, from every flight the offer sells.
+ *
+ * A round trip's return is the offer's second itinerary. The review page read
+ * the last day from the outbound flights alone, so an infant who turns 2
+ * before the flight home, or a passport that runs out before it, passed every
+ * check and was found at the airport.
+ *
+ * @param {object} offer an offer with `itineraries[].segments[]`
+ * @returns {{ firstDate: string|null, lastDate: string|null }} YYYY-MM-DD
+ */
+export function tripDates(offer) {
+  const segments = (Array.isArray(offer?.itineraries) ? offer.itineraries : [])
+    .flatMap((itinerary) => (Array.isArray(itinerary?.segments) ? itinerary.segments : []));
+  const firstDate = dayOf(segments[0]?.departure?.at);
+  const last = segments[segments.length - 1];
+  const lastDate = dayOf(last?.arrival?.at) || dayOf(last?.departure?.at) || firstDate;
+  return { firstDate, lastDate };
+}
