@@ -7,6 +7,7 @@ import { arcSucceeded } from './payment.helpers.js';
 import { resolveBookingUserId } from '../../utils/bookingOwner.js';
 import { emailIsBookers, hasBookingOwner, isBookingOwner } from '../../utils/bookingAccess.js';
 import { liveChainState } from '../../utils/bookingChainClaim.js';
+import { canReachAmadeus } from '../../utils/amadeusReach.js';
 import { DEFAULT_PRICE_SETTINGS } from '../../config/priceDefaults.js';
 import { cancellationMessage, refundOutcome } from '../../../shared/cancellationOutcome.js';
 import { reconcileBookingPayment } from './checkout.handlers.js';
@@ -138,6 +139,24 @@ export async function handleCancelBookingAction(req, res) {
         // always treated one as a flight.
         const type = booking.travel_type;
         if (type === 'flight' || type == null) {
+            // A reservation is released at the airline, and only Lightsail can
+            // reach Amadeus. Manage Booking's cancel came here through the
+            // payments router, which runs on Vercel: every cancel of a booking
+            // with a PNR ended "could not cancel with the airline", flagged the
+            // booking for review and paged Slack, and a guest had no other way
+            // to cancel. It is refused here before anything is claimed or
+            // written; the flights API (POST /api/flights/order/:ref/cancel)
+            // runs this same handler where the airline answers. Asked after the
+            // authorization above, so a stranger learns nothing new.
+            const reservation = booking.booking_details?.pnr || booking.booking_details?.amadeus_order_id;
+            if (reservation && !canReachAmadeus()) {
+                const text = 'We could not start the cancellation from here. Nothing has been cancelled or refunded. '
+                    + 'Please call (877) 538-7380 and we will cancel it for you.';
+                return refuse(res, 409, 'CANCEL_VIA_FLIGHTS_API', text, {
+                    bookingReference: booking.booking_reference,
+                    cancelEndpoint: `/api/flights/order/${encodeURIComponent(booking.booking_reference)}/cancel`,
+                });
+            }
             return await cancelFlightBooking(res, booking, { reason, email });
         }
         return await cancelOtherBooking(res, booking, { reason, email });

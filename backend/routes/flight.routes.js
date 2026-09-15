@@ -90,7 +90,10 @@ router.use(
 // `req` is the caller's own request, because the handler decides who may cancel
 // from the session. Called with only a body it saw nobody, so every My Trips and
 // admin panel cancel failed there.
-async function invokeOrchestratedCancel(bookingReference, reason, req) {
+//
+// `email` is a guest's proof: the address the booking was made with. Only the
+// Manage Booking cancel passes one; the handler checks it.
+async function invokeOrchestratedCancel(bookingReference, reason, req, { email } = {}) {
   let payload = null;
   let statusCode = 200;
   const fakeRes = {
@@ -99,7 +102,7 @@ async function invokeOrchestratedCancel(bookingReference, reason, req) {
   };
   await handleCancelBookingAction({
     method: 'POST',
-    body: { bookingReference, reason },
+    body: { bookingReference, reason, ...(email ? { email } : {}) },
     user: req?.user,
     headers: req?.headers || {},
     cookies: req?.cookies || {},
@@ -2996,6 +2999,38 @@ router.delete('/order/:orderId', protect, async (req, res) => {
       success: false,
       error: 'Failed to cancel flight order'
     });
+  }
+});
+
+// Cancel a booking from Manage Booking: a signed-in owner by session, a guest by
+// the email the booking was made with.
+//
+// Manage Booking used to cancel through POST /api/payments?action=cancel-booking.
+// That router runs on Vercel, which Amadeus does not allow-list, so every cancel
+// of a booking with a PNR failed at the airline step, flagged the booking for
+// review and paged Slack - and for a guest it was the only way to cancel. This
+// path is under /api/flights, which vercel.json forwards to Lightsail, and it
+// runs the same orchestrated handler: the same authorization, the same one
+// answer for a signed-out caller who may not cancel, and the same response.
+//
+// optionalProtect, so a signed-in owner is seen; guestBookingLimiter, so wrong
+// emails for one reference are capped exactly as on the payments router.
+router.post('/order/:bookingRef/cancel', optionalProtect, guestBookingLimiter, async (req, res) => {
+  try {
+    const { email, reason } = req.body || {};
+    const { statusCode, payload } = await invokeOrchestratedCancel(
+      req.params.bookingRef,
+      String(reason || '').trim().slice(0, 200) || 'Customer request',
+      req,
+      { email }
+    );
+    if (!payload) {
+      return res.status(500).json({ success: false, error: 'Failed to cancel booking', message: 'Failed to cancel booking' });
+    }
+    return res.status(statusCode).json(payload);
+  } catch (error) {
+    console.error('❌ Manage Booking cancel error:', error.message);
+    return res.status(500).json({ success: false, error: 'Failed to cancel booking', message: 'Failed to cancel booking' });
   }
 });
 
