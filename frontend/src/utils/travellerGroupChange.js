@@ -74,7 +74,9 @@ export const searchForGroup = (searchData, offer, group) => {
     to: searchData?.to || outbound[outbound.length - 1]?.arrival?.iataCode,
     departDate: searchData?.departDate || isoDate(outbound[0]?.departure?.at),
     returnDate,
-    tripType: returnDate ? 'round-trip' : 'one-way',
+    // The search form's spelling (searchQuery.js normalizeTripType): Modify
+    // read 'round-trip' as one way.
+    tripType: returnDate ? 'roundTrip' : 'oneWay',
     ...(searchData?.travelClass ? { travelClass: searchData.travelClass } : {}),
     adults: group.adults,
     children: group.children,

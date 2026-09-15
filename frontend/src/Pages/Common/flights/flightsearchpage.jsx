@@ -72,7 +72,7 @@ function FlightSearchPage() {
     departDate: getTodayDate(),
     returnDate: '',
     travelers: 1,
-    tripType: 'one-way'
+    tripType: 'oneWay'
   });
   const [flights, setFlights] = useState(apiResponse?.data || []);
   const [loading, setLoading] = useState(true);

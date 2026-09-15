@@ -9,7 +9,7 @@ import AirportService from "../../../Services/AirportService";
 import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
 import { useLocationContext } from '../../../Context/LocationContext';
 import CustomFlightCalendar from "./CustomFlightCalendar";
-import { fieldCode } from './searchQuery';
+import { fieldCode, normalizeTripType } from './searchQuery';
 import { format, parseISO, isValid } from 'date-fns';
 
 // The date picker prices a route only for a real airport code: a half-typed
@@ -22,10 +22,15 @@ const calendarCode = (label, code) => {
 // Get this from a config or parent component
 const USE_AMADEUS_API = true;
 
+// A search handed in - from the URL after a refresh, or router state - in the
+// form's own spelling of the trip type. The URL's 'round-trip' matched none of
+// the form's checks, so Modify lost the round trip (searchQuery.js).
+const withTripType = (data) => (data ? { ...data, tripType: normalizeTripType(data.tripType, data.returnDate) } : data);
+
 export default function FlightSearchForm({ initialData, onSearch, openTravellers = false }) {
   const { city, loaded, country: userCountry } = useLocationContext();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState(initialData || defaultSearchData)
+  const [formData, setFormData] = useState(withTripType(initialData) || defaultSearchData)
   const [formErrors, setFormErrors] = useState({})
   const [showFromSuggestions, setShowFromSuggestions] = useState(false);
   const [showToSuggestions, setShowToSuggestions] = useState(false);
@@ -66,7 +71,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
 
   useEffect(() => {
     if (initialData) {
-      setFormData(initialData);
+      setFormData(withTripType(initialData));
     }
   }, [initialData]);
 

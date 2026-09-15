@@ -98,6 +98,21 @@ export const searchToQuery = (sd, isoDate) => {
   return q.toString();
 };
 
+/**
+ * The trip type in the search form's spelling: 'roundTrip' or 'oneWay'.
+ *
+ * Searches read from the URL were written as 'round-trip' and 'one-way', and
+ * the form checks for 'roundTrip': after a refresh, Modify showed a round trip
+ * as one way. The old spelling is still read, from tabs and state saved before.
+ * With no type at all, a return date makes it a round trip.
+ */
+export const normalizeTripType = (tripType, returnDate) => {
+  const type = String(tripType ?? '').replace(/[^a-z]/gi, '').toLowerCase();
+  if (type === 'roundtrip') return 'roundTrip';
+  if (type === 'oneway') return 'oneWay';
+  return returnDate ? 'roundTrip' : 'oneWay';
+};
+
 /** Reverse of the above. Returns null unless the URL describes a whole search. */
 export const searchFromQuery = (search) => {
   const q = new URLSearchParams(search);
@@ -113,7 +128,7 @@ export const searchFromQuery = (search) => {
     to,
     departDate,
     returnDate,
-    tripType: returnDate ? 'round-trip' : 'one-way',
+    tripType: normalizeTripType(null, returnDate),
     adults,
     travelers: adults,
     children: parseInt(q.get('children')) || 0,
