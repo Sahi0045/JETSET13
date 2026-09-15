@@ -73,6 +73,21 @@ describe('POST /api/flights/price', () => {
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.body.success).toBe(false);
     expect(axios.post).not.toHaveBeenCalled();
+    // A fare the airline cannot price is not an outage: checkout on Vercel
+    // reads this code to say "search again" rather than "try again".
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('FARE_UNAVAILABLE');
+  });
+
+  it('answers an outage as one, without the refused-fare code', async () => {
+    axios.post.mockRejectedValue(new Error('network down'));
+    const app = await makeApp();
+
+    const res = await request(app).post('/api/flights/price')
+      .send({ flightOffer: await offerFrom('mptbs-oneway-jfk-lhr') });
+
+    expect(res.status).toBe(500);
+    expect(res.body.code).toBeUndefined();
   });
 
   it('requires a flightOffer', async () => {

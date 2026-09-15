@@ -11,6 +11,7 @@ import ChargeAmount from "../../../Components/ChargeAmount";
 import { CHARGE_CURRENCY, describeServiceFee, formatUsd } from "../../../utils/chargeDisplay";
 import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext";
 import { clearFlightReview, readFlightReview, saveFlightReview } from "../../../utils/flightReviewResume";
+import { cancelUrlFor, isCancelledReturn, readCancelledCheckout } from "../../../utils/cancelledCheckout";
 import NoticeDialog from "../../../Components/NoticeDialog";
 import ArcPayService from "../../../Services/ArcPayService";
 import { useLocationContext } from '../../../Context/LocationContext';
@@ -22,12 +23,15 @@ import FlightFareRules from './FlightFareRules';
 import { formatCheckedBag } from '../../../utils/baggage';
 import FlightCancellationPolicy from './FlightCancellationPolicy';
 import { searchToQuery } from './searchQuery';
+import { seatsLeftLabel } from './searchResults';
 import apiConfig from '@/config/api';
 // The same formula checkout verifies the charge with, so this page can never
 // quote a total the server will not accept.
 import { computeFlightCharge, PASSENGER_TYPES, travellerTypesOf } from '../../../../../shared/flightCharge';
 import { describeGroup, groupFromOffer, travellerGroupProblem } from '../../../../../shared/travellerGroup';
-import { needsDateOfBirth } from '../../../../../shared/travellerDetails';
+import { needsDateOfBirth, tripDates } from '../../../../../shared/travellerDetails';
+import { CALLING_CODES, COUNTRIES, callingCodeDigits } from '../../../../../shared/countries';
+import { arcItineraries, returnLegOf } from '../../../utils/reviewTrip';
 import { findSameFare, rebuildTravellers, searchForGroup } from '../../../utils/travellerGroupChange';
 import { travellerProblems, travellerProgress } from '../../../utils/travellerChecks';
 import { placeSavedTraveller, removeSavedTraveller, toSavedTraveller } from '../../../utils/savedTravellerSlots';
@@ -66,8 +70,31 @@ function FlightBookingConfirmation() {
   // cannot answer - they are sent to log in, exactly as before the switch.
   const guestSwitch = useGuestFlightBooking({ enabled: !authLoading && !user });
   const bookingAsGuest = !user && guestSwitch.isSuccess && guestSwitch.data === true;
-  const [resumedReview] = useState(() => (routerLocation.state?.flightData ? null : readFlightReview()));
+  // Back from cancelling on the payment page. The cancel link went to the
+  // flights landing page, which ignored it, after this page had cleared the
+  // flight: everything chosen and typed was lost, and nothing said whether
+  // anything was charged. The flight, travellers and contact details saved
+  // before the payment page opened come back - only on that return, never on
+  // an ordinary visit (utils/cancelledCheckout.js).
+  const [paymentCancelled] = useState(() => isCancelledReturn(routerLocation.search));
+  const [cancelledCheckout] = useState(() => (!routerLocation.state?.flightData && isCancelledReturn(routerLocation.search)
+    ? readCancelledCheckout()
+    : null));
+  const [cancelNotice, setCancelNotice] = useState(() => (cancelledCheckout
+    ? 'Payment was cancelled - nothing was charged. Your flight and traveller details are as you left them.'
+    : null));
+  const [resumedReview] = useState(() => (routerLocation.state?.flightData
+    ? null
+    : (cancelledCheckout?.reviewState ?? readFlightReview())));
   const reviewState = routerLocation.state?.flightData ? routerLocation.state : resumedReview;
+
+  // The restored flight goes into router state, like an arrival from search,
+  // and the "cancelled" mark comes off the URL: a refresh keeps the booking,
+  // and does not restore it again.
+  useEffect(() => {
+    if (!cancelledCheckout) return;
+    navigate(routerLocation.pathname, { replace: true, state: cancelledCheckout.reviewState });
+  }, []);
   const [editMode, setEditMode] = useState(true); // Start in edit mode for new bookings
   // Collapsible passenger cards: null → first card open by default; '' → all
   // collapsed; otherwise the id of the one open card. Keeps a long multi-pax
@@ -82,12 +109,18 @@ function FlightBookingConfirmation() {
   // not exist. They stay off the page until each is a real, fulfilled product.
   const { data: priceConfig, error: priceConfigError, refetch: refetchPriceConfig } = usePriceConfig('all');
   const [appliedCoupon, setAppliedCoupon] = useState(null); // { couponId, code, discountAmount, finalTotal }
+  // Why a coupon was not applied here, and a count that remounts the coupon
+  // box so it stops showing a coupon this page refused as applied.
+  const [couponProblem, setCouponProblem] = useState(null);
+  const [couponInputRound, setCouponInputRound] = useState(0);
   // The total a coupon's discount was computed on, so a changed total drops it.
   const couponBase = React.useRef(null);
   // The airline's price for this offer, checked on arrival and again by the
   // server at checkout. Null until the check answers; the search price stands.
   const [pricedFare, setPricedFare] = useState(null);
   const [fareNotice, setFareNotice] = useState(null);
+  // The airline refused to price this fare: the way on is a new search.
+  const [fareGone, setFareGone] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   // One payment page per trip. React state alone let a quick second click in
   // before Pay re-rendered disabled, and `checkingOut` was cleared as soon as
@@ -98,6 +131,18 @@ function FlightBookingConfirmation() {
   // open for the same trip (checkout.handlers.js), which covers a second tab.
   const paymentStarting = React.useRef(false);
   const [openingPayment, setOpeningPayment] = useState(false);
+  // Checkout can take up to a minute: the airline prices the fare, then the
+  // payment page is opened. Past a few seconds the page says it is still
+  // working, so the wait does not read as a page that has hung.
+  const [slowCheckout, setSlowCheckout] = useState(false);
+  useEffect(() => {
+    if (!checkingOut) {
+      setSlowCheckout(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setSlowCheckout(true), 8000);
+    return () => clearTimeout(timer);
+  }, [checkingOut]);
 
   // Back from the payment page, a page restored from the browser's cache still
   // holds "opening payment". The customer may try again: checkout gives them
@@ -131,67 +176,23 @@ function FlightBookingConfirmation() {
     visaRequirements: true
   });
 
-  // Country code state
-  const [selectedCountryCode, setSelectedCountryCode] = useState(callingCode || '+91');
-  const [availableCountryCodes] = useState([
-    { code: '+91', country: 'India' },
-    { code: '+1', country: 'USA/Canada' },
-    { code: '+44', country: 'UK' },
-    { code: '+61', country: 'Australia' },
-    { code: '+81', country: 'Japan' },
-    { code: '+49', country: 'Germany' },
-    { code: '+33', country: 'France' },
-    { code: '+971', country: 'UAE' },
-    { code: '+65', country: 'Singapore' },
-    { code: '+60', country: 'Malaysia' },
-    { code: '+66', country: 'Thailand' },
-    { code: '+84', country: 'Vietnam' },
-    { code: '+62', country: 'Indonesia' },
-    // Add more as needed
-  ]);
-
-  // Nationality countries list
-  const countries = [
-    { code: 'IN', name: 'India', dial: '+91' }, { code: 'US', name: 'United States', dial: '+1' },
-    { code: 'GB', name: 'United Kingdom', dial: '+44' }, { code: 'CA', name: 'Canada', dial: '+1' },
-    { code: 'AU', name: 'Australia', dial: '+61' }, { code: 'DE', name: 'Germany', dial: '+49' },
-    { code: 'FR', name: 'France', dial: '+33' }, { code: 'JP', name: 'Japan', dial: '+81' },
-    { code: 'AE', name: 'UAE', dial: '+971' }, { code: 'SG', name: 'Singapore', dial: '+65' },
-    { code: 'MY', name: 'Malaysia', dial: '+60' }, { code: 'TH', name: 'Thailand', dial: '+66' },
-    { code: 'VN', name: 'Vietnam', dial: '+84' }, { code: 'ID', name: 'Indonesia', dial: '+62' },
-    { code: 'CN', name: 'China', dial: '+86' }, { code: 'KR', name: 'South Korea', dial: '+82' },
-    { code: 'IT', name: 'Italy', dial: '+39' }, { code: 'ES', name: 'Spain', dial: '+34' },
-    { code: 'BR', name: 'Brazil', dial: '+55' }, { code: 'MX', name: 'Mexico', dial: '+52' },
-    { code: 'RU', name: 'Russia', dial: '+7' }, { code: 'ZA', name: 'South Africa', dial: '+27' },
-    { code: 'NZ', name: 'New Zealand', dial: '+64' }, { code: 'PH', name: 'Philippines', dial: '+63' },
-    { code: 'PK', name: 'Pakistan', dial: '+92' }, { code: 'BD', name: 'Bangladesh', dial: '+880' },
-    { code: 'LK', name: 'Sri Lanka', dial: '+94' }, { code: 'NP', name: 'Nepal', dial: '+977' },
-    { code: 'SA', name: 'Saudi Arabia', dial: '+966' }, { code: 'QA', name: 'Qatar', dial: '+974' },
-    { code: 'KW', name: 'Kuwait', dial: '+965' }, { code: 'BH', name: 'Bahrain', dial: '+973' },
-    { code: 'OM', name: 'Oman', dial: '+968' }, { code: 'EG', name: 'Egypt', dial: '+20' },
-    { code: 'KE', name: 'Kenya', dial: '+254' }, { code: 'NG', name: 'Nigeria', dial: '+234' },
-    { code: 'TR', name: 'Turkey', dial: '+90' }, { code: 'PT', name: 'Portugal', dial: '+351' },
-    { code: 'NL', name: 'Netherlands', dial: '+31' }, { code: 'SE', name: 'Sweden', dial: '+46' },
-    { code: 'CH', name: 'Switzerland', dial: '+41' }, { code: 'AT', name: 'Austria', dial: '+43' },
-    { code: 'BE', name: 'Belgium', dial: '+32' }, { code: 'IE', name: 'Ireland', dial: '+353' },
-    { code: 'FI', name: 'Finland', dial: '+358' }, { code: 'NO', name: 'Norway', dial: '+47' },
-    { code: 'DK', name: 'Denmark', dial: '+45' }, { code: 'PL', name: 'Poland', dial: '+48' },
-    { code: 'HK', name: 'Hong Kong', dial: '+852' }, { code: 'TW', name: 'Taiwan', dial: '+886' },
-  ];
-
-  const [nationalityDropdown, setNationalityDropdown] = useState({ open: false, passengerId: null });
-  const [nationalitySearch, setNationalitySearch] = useState({});
+  // The visitor's own calling code, when their location is known: "+91". Never
+  // a made-up one. The country code was never sent at all, so every phone went
+  // onto the booking as +1, and the page's own default was India's.
+  const locatedCallingCode = callingCodeDigits(callingCode) ? `+${callingCodeDigits(callingCode)}` : '';
 
   // Date restrictions for DOB
   const today = new Date().toISOString().split('T')[0];
   const minDOB = '1920-01-01';
 
-  // Update selected country code when context changes
+  // The location often answers after the forms exist. Fill its calling code
+  // into any form still without one; a code someone chose is left alone.
   useEffect(() => {
-    if (callingCode) {
-      setSelectedCountryCode(callingCode);
-    }
-  }, [callingCode]);
+    if (!locatedCallingCode) return;
+    setPassengerData((current) => (current.some((t) => !t.countryCode)
+      ? current.map((t) => (t.countryCode ? t : { ...t, countryCode: locatedCallingCode }))
+      : current));
+  }, [locatedCallingCode]);
 
   // Helper to get city name from airport code
   const getCityName = (code) => {
@@ -222,16 +223,22 @@ function FlightBookingConfirmation() {
     nationality: "",
     passportNumber: "",
     passportExpiry: "",
-    countryCode: callingCode || '+91'
+    countryCode: locatedCallingCode
   });
 
   // What each traveller form still needs - one list for the payment check and
   // for the progress on the page (utils/travellerChecks.js).
+  //
+  // The trip's days come from every itinerary on the offer. The last day was
+  // read from the outbound segments, so on a round trip an infant turning 2,
+  // or a passport running out, before the flight home passed the checks.
+  const trip = tripDates(reviewState?.flightData?.originalOffer);
   const problemsOf = (traveller, index) => travellerProblems(traveller, {
     index,
     international: Boolean(bookingDetails?.isInternational),
-    travelDate: bookingDetails?.flight?.departureDate,
-    lastDate: bookingDetails?.flight?.segments?.at?.(-1)?.arrival?.at
+    travelDate: trip.firstDate || bookingDetails?.flight?.departureDate,
+    lastDate: trip.lastDate
+      || bookingDetails?.flight?.segments?.at?.(-1)?.arrival?.at
       || bookingDetails?.flight?.arrivalDate
       || bookingDetails?.flight?.departureDate,
     bookingAsGuest,
@@ -360,6 +367,17 @@ function FlightBookingConfirmation() {
     navigate(`/flights/search?${searchToQuery(search)}`, { state: { searchData: search, editTravellers: true } });
   };
 
+  // Back to the results for this same search, for the fares on sale now - the
+  // way on from a fare the airline no longer sells.
+  const searchAgain = () => {
+    const search = reviewState?.searchData;
+    if (!search?.from || !search?.to || !search?.departDate) {
+      navigate('/flights');
+      return;
+    }
+    navigate(`/flights/search?${searchToQuery(search)}`, { state: { searchData: search } });
+  };
+
   // To the login page and back here, with the flight they picked kept.
   const sendToLogin = ({ replace = false } = {}) => {
     saveFlightReview(reviewState);
@@ -424,6 +442,38 @@ function FlightBookingConfirmation() {
     const percentageFee = fee.percentageFee;
     const serviceFee = fee.serviceFee;
 
+    // One segment as the page draws it, for the flights out and the flights home.
+    const toReviewSegment = (segment) => ({
+      departure: {
+        airport: segment.departure.airport,
+        terminal: segment.departure.terminal,
+        time: segment.departure.time,
+        at: segment.departure.at || null,
+        cityName: segment.departure.cityName || getCityName(segment.departure.airport) || segment.departure.airport
+      },
+      arrival: {
+        airport: segment.arrival.airport,
+        terminal: segment.arrival.terminal,
+        time: segment.arrival.time,
+        at: segment.arrival.at || null,
+        cityName: segment.arrival.cityName || getCityName(segment.arrival.airport) || segment.arrival.airport
+      },
+      duration: segment.duration,
+      aircraft: segment.aircraft || 'Unknown',
+      carrier: segment.airline?.code || flightData.airline.code,
+      carrierName: segment.airline?.name || flightData.airline.name,
+      carrierLogo: segment.airline?.logo || flightData.airline.logo,
+      operatingCarrier: segment.operatingCarrier || null,
+      operatingAirlineName: segment.operatingAirlineName || null,
+      number: segment.flightNumber
+    });
+
+    // A round trip's flights home. The page only ever read `segments`, the
+    // outbound, so the flight a customer was paying to come back on was never
+    // on the page they confirmed.
+    const returnLeg = returnLegOf(flightData);
+    const returnSegments = returnLeg ? returnLeg.segments.map(toReviewSegment) : [];
+
     return {
       bookingId: bookingId || null,
       flight: {
@@ -471,30 +521,14 @@ function FlightBookingConfirmation() {
           : flightData.arrival.airport,
         departureTerminal: flightData.departure.terminal || '',
         arrivalTerminal: flightData.arrival.terminal || '',
-        segments: flightData.segments.map(segment => ({
-          departure: {
-            airport: segment.departure.airport,
-            terminal: segment.departure.terminal,
-            time: segment.departure.time,
-            at: segment.departure.at || null,
-            cityName: segment.departure.cityName || getCityName(segment.departure.airport) || segment.departure.airport
-          },
-          arrival: {
-            airport: segment.arrival.airport,
-            terminal: segment.arrival.terminal,
-            time: segment.arrival.time,
-            at: segment.arrival.at || null,
-            cityName: segment.arrival.cityName || getCityName(segment.arrival.airport) || segment.arrival.airport
-          },
-          duration: segment.duration,
-          aircraft: segment.aircraft || 'Unknown',
-          carrier: segment.airline?.code || flightData.airline.code,
-          carrierName: segment.airline?.name || flightData.airline.name,
-          carrierLogo: segment.airline?.logo || flightData.airline.logo,
-          operatingCarrier: segment.operatingCarrier || null,
-          operatingAirlineName: segment.operatingAirlineName || null,
-          number: segment.flightNumber
-        })),
+        segments: flightData.segments.map(toReviewSegment),
+        returnLeg: returnSegments.length > 0 ? {
+          segments: returnSegments,
+          duration: returnLeg.duration,
+          stops: returnSegments.length - 1,
+          departureCity: returnSegments[0].departure.cityName,
+          arrivalCity: returnSegments[returnSegments.length - 1].arrival.cityName,
+        } : null,
         price: {
           base: baseFareReal,           // real Amadeus base fare
           airlineTaxes: airlineTaxes,   // real airline taxes & surcharges (total - base)
@@ -574,7 +608,9 @@ function FlightBookingConfirmation() {
 
         // Keep the contact details already typed when the flight is re-read: a
         // change of travellers swaps the offer, not the customer.
-        setBookingDetails((previous) => (previous?.contact ? { ...bookingData, contact: previous.contact } : bookingData));
+        // Back from a cancelled payment, the contact details come back too.
+        setBookingDetails((previous) => (previous?.contact ? { ...bookingData, contact: previous.contact }
+          : cancelledCheckout?.contact ? { ...bookingData, contact: cancelledCheckout.contact } : bookingData));
         updateFareSummary(bookingData);
       } catch (error) {
         if (cancelled) return;
@@ -601,6 +637,13 @@ function FlightBookingConfirmation() {
     const offer = reviewState?.flightData?.originalOffer;
     if (!bookingDetails || !offer) return undefined;
     let cancelled = false;
+    setFareGone(false);
+    // A check that fails is said, not swallowed: the page used to go on
+    // quoting the search price as if the airline had confirmed it.
+    const couldNotCheck = () => {
+      if (cancelled) return;
+      setFareNotice((notice) => notice || "We couldn't check this fare with the airline just now. The total below is from your search. It is checked again before you pay, and nothing is charged if it has changed.");
+    };
     (async () => {
       try {
         const res = await fetch(apiConfig.endpoints.flights.price, {
@@ -608,10 +651,19 @@ function FlightBookingConfirmation() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ flightOffer: offer }),
         });
-        const body = await res.json();
+        const body = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (body?.code === 'FARE_UNAVAILABLE') {
+          setFareGone(true);
+          setFareNotice('The airline can no longer sell this fare. Please search again to see the fares available now.');
+          return;
+        }
         const price = body?.data?.flightOffers?.[0]?.price;
         const total = Number(price?.grandTotal ?? price?.total);
-        if (cancelled || !body?.success || !Number.isFinite(total) || total <= 0) return;
+        if (!res.ok || !body?.success || !Number.isFinite(total) || total <= 0) {
+          couldNotCheck();
+          return;
+        }
         // This offer's own search price. bookingDetails can still hold the
         // previous offer here - after travellers are added this check runs
         // before the page re-reads the flight - and it compared a 3-adult price
@@ -627,7 +679,9 @@ function FlightBookingConfirmation() {
           setFareNotice(`The airline's current fare for this flight is ${fareCurrency} ${total.toFixed(2)}, not the ${fareCurrency} ${searched.toFixed(2)} it was when you searched. The total below uses the current fare.`);
         }
       } catch {
-        // Not fatal: checkout verifies the fare with the airline regardless.
+        // Not fatal - checkout verifies the fare with the airline regardless -
+        // but not silent either.
+        couldNotCheck();
       }
     })();
     return () => { cancelled = true; };
@@ -655,6 +709,13 @@ function FlightBookingConfirmation() {
       const types = Array.isArray(pricings) && pricings.length
         ? pricings.map((p) => p.travelerType || 'ADULT')
         : ['ADULT'];
+      // Back from a cancelled payment: the travellers as they were typed, when
+      // they are still the travellers this fare was priced for.
+      const restored = cancelledCheckout?.travellers ?? [];
+      if (restored.length === types.length && restored.every((t, index) => t?.type === types[index])) {
+        setPassengerData(restored);
+        return;
+      }
       setPassengerData(types.map((type, index) => blankTraveller(type, index)));
     }
   }, [bookingDetails, passengerData.length]);
@@ -891,19 +952,25 @@ function FlightBookingConfirmation() {
           arrival: { iataCode: seg.arrival?.airport || arrivalAirport, at: seg.arrival?.at || seg.arrival?.time || '' }
         })),
         originalOffer: rawFlightData?.originalOffer || rawFlightData,
-        itineraries: rawFlightData?.itineraries || [{
+        // Every leg, the flights home included, from the offer the airline
+        // priced. This carried the outbound segments only, so the card network
+        // was told a round trip was one way.
+        itineraries: arcItineraries(rawFlightData?.originalOffer, [{
           segments: segments.map(seg => ({
             carrierCode: segmentCarrier(seg),
             number: segmentNumber(seg),
             departure: { iataCode: seg.departure?.airport || departureAirport, at: seg.departure?.at || seg.departure?.time || departureDate },
             arrival: { iataCode: seg.arrival?.airport || arrivalAirport, at: seg.arrival?.at || seg.arrival?.time || '' }
           }))
-        }]
+        }])
       };
 
+      // The lead traveller's calling code, as digits, goes with their number:
+      // without it the booking wrote every phone as +1.
       const finalContact = {
         email: bookingDetails?.contact?.email || passengerData?.[0]?.email || "",
-        phone: bookingDetails?.contact?.phone || passengerData?.[0]?.mobile || ""
+        phone: bookingDetails?.contact?.phone || passengerData?.[0]?.mobile || "",
+        countryCode: callingCodeDigits(passengerData?.[0]?.countryCode)
       };
 
       const bookingDataForStorage = {
@@ -914,7 +981,9 @@ function FlightBookingConfirmation() {
         calculatedFare,
         amount,
         couponCode: appliedCoupon?.code || null,
-        flightData: flightDataForArcPay
+        flightData: flightDataForArcPay,
+        // So a cancelled payment can come back to this search's results too.
+        searchData: reviewState?.searchData ?? null
       };
 
       // Not logged: it carries names, dates of birth and passport numbers.
@@ -940,7 +1009,8 @@ function FlightBookingConfirmation() {
         customerPhone: passengerData?.[0]?.mobile,
         description,
         returnUrl: `${window.location.origin}/payment/callback?orderId=${orderId}&bookingType=flight`,
-        cancelUrl: `${window.location.origin}/flights?cancelled=true`,
+        // Back to this page, which restores the booking (utils/cancelledCheckout.js).
+        cancelUrl: cancelUrlFor(window.location.origin),
         flightData: flightDataForArcPay,
         bookingData: bookingDataForStorage,
       });
@@ -989,6 +1059,21 @@ function FlightBookingConfirmation() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
+      // The airline will not price this fare any more. Trying again cannot
+      // help, and "try again in a moment" is what this said, every time.
+      if (refusal.code === 'FARE_UNAVAILABLE') {
+        setFareGone(true);
+        setFareNotice('The airline can no longer sell this fare. Please search again to see the fares available now.');
+        setNotice({
+          tone: 'error',
+          title: 'This fare is no longer available',
+          message: String(refusal.error || 'The airline can no longer sell this fare. Please search again.').replace(/\s*Nothing has been charged\.?/i, ''),
+          reassure: true,
+          actionLabel: 'Search again',
+          onAction: searchAgain,
+        });
+        return;
+      }
       if (refusal.code === 'LOGIN_REQUIRED') {
         // A guest: guest booking was switched off while this page was open.
         if (!user) {
@@ -1017,7 +1102,10 @@ function FlightBookingConfirmation() {
         tone: 'error',
         title: 'We could not start the payment',
         // The dialog says nothing was charged itself; some server messages do too.
-        message: String(refusal.error || 'Please try again in a moment.').replace(/\s*Nothing has been charged\.?/i, ''),
+        // Checkout's words only when the refusal carries a code - those are
+        // written for customers. Anything else is its own business, and read
+        // "Missing required fields: amount and orderId are required".
+        message: String((refusal.code && refusal.error) || 'Please try again in a moment.').replace(/\s*Nothing has been charged\.?/i, ''),
         reassure: true,
       });
     } catch (error) {
@@ -1064,6 +1152,9 @@ function FlightBookingConfirmation() {
         <Navbar forceScrolled={true} />
         <div className="booking-confirmation-container flex justify-center items-center min-h-[60vh] pt-24">
           <div className="max-w-md text-center">
+            {paymentCancelled && (
+              <p className="font-medium text-[#0d3d56] mb-2" role="status">Payment was cancelled - nothing was charged.</p>
+            )}
             <h2 className="text-xl font-semibold text-[#0d3d56] mb-2">We can't show this booking</h2>
             <p className="text-[#626363] mb-6">
               {error || "No flight data available. Please return to the search page and try again."}
@@ -1095,6 +1186,108 @@ function FlightBookingConfirmation() {
   // buttons and the mobile bar all show this one figure.
   const amountDue = appliedCoupon ? appliedCoupon.finalTotal : calculatedFare.totalAmount;
 
+  // A leg's flights one after another, with the change of planes between them.
+  // Drawn the same way for the flights out and, on a round trip, the flights
+  // home.
+  const renderSegmentList = (segments) => (
+    <div className="space-y-0">
+      {segments.map((seg, idx) => {
+        const depDate = seg.departure.at ? formatFullDate(seg.departure.at) : formatShortDate(bookingDetails?.flight?.departureDate);
+        const arrDate = seg.arrival.at ? formatFullDate(seg.arrival.at) : '';
+        const depTime = seg.departure.at ? formatTimeFromISO(seg.departure.at) : seg.departure.time;
+        const arrTime = seg.arrival.at ? formatTimeFromISO(seg.arrival.at) : seg.arrival.time;
+        const nextSeg = segments[idx + 1];
+        const layover = nextSeg ? calcLayover(seg.arrival.at, nextSeg.departure.at) : '';
+
+        return (
+          <React.Fragment key={idx}>
+            {/* Segment Card */}
+            <div className="itinerary-segment flex gap-4 py-4 px-2 border-b border-gray-100 last:border-b-0">
+              {/* Left - Airline Info */}
+              <div className="segment-airline flex flex-col items-center min-w-[90px] text-center">
+                <img loading="lazy" decoding="async"
+                  src={seg.carrierLogo || `https://pics.avs.io/200/200/${(seg.carrier || 'XX').toUpperCase()}.png`}
+                  alt={seg.carrierName || seg.carrier}
+                  className="w-10 h-10 rounded-full object-contain border border-gray-200 mb-1"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+                <div className="text-xs font-semibold text-gray-700">{seg.carrierName || seg.carrier}</div>
+                <div className="text-[10px] text-gray-500">{seg.number}</div>
+                <div className="text-[10px] text-gray-400">{seg.aircraft !== 'Unknown' ? seg.aircraft : ''}</div>
+              </div>
+
+              {/* Center - Route */}
+              <div className="segment-route flex-1 flex items-stretch gap-3">
+                {/* Departure */}
+                <div className="route-endpoint departure flex flex-col items-start min-w-[100px] md:min-w-[120px]">
+                  <div className="text-xs text-gray-500">{seg.departure.cityName || getCityName(seg.departure.airport)}</div>
+                  <div className="text-2xl font-bold text-[#055B75]">{depTime}</div>
+                  <div className="text-xs text-gray-500">{depDate}</div>
+                  <div className="text-[11px] text-gray-400 mt-0.5">
+                    {getCityName(seg.departure.airport)} Airport{seg.departure.terminal ? `, T${seg.departure.terminal}` : ''}
+                  </div>
+                </div>
+
+                {/* Duration Arrow */}
+                <div className="route-connector flex flex-col items-center justify-center flex-1 min-w-[60px] md:min-w-[80px]">
+                  {/* Per-segment elapsed time is deliberately not
+                      carried on the offer: MasterPricer gives
+                      LOCAL airport times with no timezone, so
+                      subtracting them is wrong for any flight
+                      crossing zones. Rendering it anyway printed
+                      "Unknown Duration" on every leg of every
+                      connection. Show nothing rather than a
+                      placeholder or, worse, a computed wrong
+                      number — the itinerary total above is
+                      Amadeus's own elapsed time and is correct. */}
+                  {seg.duration ? (
+                    <div className="text-xs text-gray-500 font-medium">{formatDuration(seg.duration)}</div>
+                  ) : null}
+                  <div className="relative w-full flex items-center my-1">
+                    <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
+                    <div className="mx-1 text-gray-400 text-sm">&#9992;</div>
+                    <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
+                  </div>
+                  {bookingDetails?.flight?.cabin && (
+                    <div className="text-[10px] font-medium px-2 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1]">
+                      {bookingDetails.flight.cabin}
+                    </div>
+                  )}
+                </div>
+
+                {/* Arrival */}
+                <div className="route-endpoint arrival flex flex-col items-end min-w-[100px] md:min-w-[120px] text-right">
+                  <div className="text-xs text-gray-500">{seg.arrival.cityName || getCityName(seg.arrival.airport)}</div>
+                  <div className="text-2xl font-bold text-[#055B75]">{arrTime}</div>
+                  <div className="text-xs text-gray-500">{arrDate}</div>
+                  <div className="text-[11px] text-gray-400 mt-0.5">
+                    {getCityName(seg.arrival.airport)} Airport{seg.arrival.terminal ? `, T${seg.arrival.terminal}` : ''}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Layover Banner between segments */}
+            {nextSeg && (
+              <div className="flex items-center justify-center gap-2 py-2.5 px-4 mx-2 my-1 bg-amber-50 border border-amber-200 rounded-lg">
+                <span className="text-amber-600 text-sm">&#9201;</span>
+                <span className="text-sm font-medium text-amber-800">
+                  Change planes at <strong>{getCityName(seg.arrival.airport)} ({seg.arrival.airport})</strong>
+                </span>
+                {layover && (
+                  <>
+                    <span className="text-amber-400 mx-1">|</span>
+                    <span className="text-sm text-amber-700">Connecting Time: <strong>{layover}</strong></span>
+                  </>
+                )}
+              </div>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="booking-confirmation-page">
       <div className="booking-background-decor"></div>
@@ -1114,6 +1307,15 @@ function FlightBookingConfirmation() {
             <span className="step"><span className="step-num">4</span> Confirmation</span>
           </div>
         </div>
+
+        {cancelNotice && (
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+            <span className="min-w-0 flex-1">{cancelNotice}</span>
+            <button type="button" onClick={() => setCancelNotice(null)} className="text-xs font-semibold underline whitespace-nowrap">
+              Dismiss
+            </button>
+          </div>
+        )}
 
         <div className="booking-layout grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Left Column - Flight & Passenger Details */}
@@ -1149,6 +1351,9 @@ function FlightBookingConfirmation() {
                 {/* Route Summary Header */}
                 <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between mb-4 px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-200">
                   <span className="font-semibold text-[#055B75]">
+                    {bookingDetails?.flight?.returnLeg && (
+                      <span className="mr-2 text-[10px] font-bold uppercase tracking-wide text-gray-500">Onward</span>
+                    )}
                     {bookingDetails?.flight?.departureCity} &rarr; {bookingDetails?.flight?.arrivalCity}
                   </span>
                   <div className="flex items-center gap-3 text-sm text-gray-600 whitespace-nowrap flex-shrink-0">
@@ -1160,102 +1365,7 @@ function FlightBookingConfirmation() {
 
                 {/* Segment-by-segment breakdown */}
                 {bookingDetails?.flight?.segments && bookingDetails.flight.segments.length > 1 ? (
-                  <div className="space-y-0">
-                    {bookingDetails.flight.segments.map((seg, idx) => {
-                      const depDate = seg.departure.at ? formatFullDate(seg.departure.at) : formatShortDate(bookingDetails?.flight?.departureDate);
-                      const arrDate = seg.arrival.at ? formatFullDate(seg.arrival.at) : '';
-                      const depTime = seg.departure.at ? formatTimeFromISO(seg.departure.at) : seg.departure.time;
-                      const arrTime = seg.arrival.at ? formatTimeFromISO(seg.arrival.at) : seg.arrival.time;
-                      const nextSeg = bookingDetails.flight.segments[idx + 1];
-                      const layover = nextSeg ? calcLayover(seg.arrival.at, nextSeg.departure.at) : '';
-
-                      return (
-                        <React.Fragment key={idx}>
-                          {/* Segment Card */}
-                          <div className="itinerary-segment flex gap-4 py-4 px-2 border-b border-gray-100 last:border-b-0">
-                            {/* Left - Airline Info */}
-                            <div className="segment-airline flex flex-col items-center min-w-[90px] text-center">
-                              <img loading="lazy" decoding="async"
-                                src={seg.carrierLogo || `https://pics.avs.io/200/200/${(seg.carrier || 'XX').toUpperCase()}.png`}
-                                alt={seg.carrierName || seg.carrier}
-                                className="w-10 h-10 rounded-full object-contain border border-gray-200 mb-1"
-                                onError={(e) => { e.target.style.display = 'none'; }}
-                              />
-                              <div className="text-xs font-semibold text-gray-700">{seg.carrierName || seg.carrier}</div>
-                              <div className="text-[10px] text-gray-500">{seg.number}</div>
-                              <div className="text-[10px] text-gray-400">{seg.aircraft !== 'Unknown' ? seg.aircraft : ''}</div>
-                            </div>
-
-                            {/* Center - Route */}
-                            <div className="segment-route flex-1 flex items-stretch gap-3">
-                              {/* Departure */}
-                              <div className="route-endpoint departure flex flex-col items-start min-w-[100px] md:min-w-[120px]">
-                                <div className="text-xs text-gray-500">{seg.departure.cityName || getCityName(seg.departure.airport)}</div>
-                                <div className="text-2xl font-bold text-[#055B75]">{depTime}</div>
-                                <div className="text-xs text-gray-500">{depDate}</div>
-                                <div className="text-[11px] text-gray-400 mt-0.5">
-                                  {getCityName(seg.departure.airport)} Airport{seg.departure.terminal ? `, T${seg.departure.terminal}` : ''}
-                                </div>
-                              </div>
-
-                              {/* Duration Arrow */}
-                              <div className="route-connector flex flex-col items-center justify-center flex-1 min-w-[60px] md:min-w-[80px]">
-                                {/* Per-segment elapsed time is deliberately not
-                                    carried on the offer: MasterPricer gives
-                                    LOCAL airport times with no timezone, so
-                                    subtracting them is wrong for any flight
-                                    crossing zones. Rendering it anyway printed
-                                    "Unknown Duration" on every leg of every
-                                    connection. Show nothing rather than a
-                                    placeholder or, worse, a computed wrong
-                                    number — the itinerary total above is
-                                    Amadeus's own elapsed time and is correct. */}
-                                {seg.duration ? (
-                                  <div className="text-xs text-gray-500 font-medium">{formatDuration(seg.duration)}</div>
-                                ) : null}
-                                <div className="relative w-full flex items-center my-1">
-                                  <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
-                                  <div className="mx-1 text-gray-400 text-sm">&#9992;</div>
-                                  <div className="flex-1 border-t-2 border-dashed border-gray-300"></div>
-                                </div>
-                                {bookingDetails?.flight?.cabin && (
-                                  <div className="text-[10px] font-medium px-2 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1]">
-                                    {bookingDetails.flight.cabin}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Arrival */}
-                              <div className="route-endpoint arrival flex flex-col items-end min-w-[100px] md:min-w-[120px] text-right">
-                                <div className="text-xs text-gray-500">{seg.arrival.cityName || getCityName(seg.arrival.airport)}</div>
-                                <div className="text-2xl font-bold text-[#055B75]">{arrTime}</div>
-                                <div className="text-xs text-gray-500">{arrDate}</div>
-                                <div className="text-[11px] text-gray-400 mt-0.5">
-                                  {getCityName(seg.arrival.airport)} Airport{seg.arrival.terminal ? `, T${seg.arrival.terminal}` : ''}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Layover Banner between segments */}
-                          {nextSeg && (
-                            <div className="flex items-center justify-center gap-2 py-2.5 px-4 mx-2 my-1 bg-amber-50 border border-amber-200 rounded-lg">
-                              <span className="text-amber-600 text-sm">&#9201;</span>
-                              <span className="text-sm font-medium text-amber-800">
-                                Change planes at <strong>{getCityName(seg.arrival.airport)} ({seg.arrival.airport})</strong>
-                              </span>
-                              {layover && (
-                                <>
-                                  <span className="text-amber-400 mx-1">|</span>
-                                  <span className="text-sm text-amber-700">Connecting Time: <strong>{layover}</strong></span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
+                  renderSegmentList(bookingDetails.flight.segments)
                 ) : (
                   /* Single segment / direct flight - original layout with dates */
                   <div className="flight-route">
@@ -1293,6 +1403,29 @@ function FlightBookingConfirmation() {
                   </div>
                 )}
 
+                {/* The flights home, on the page the customer confirms and pays
+                    on. A round trip showed its outbound only. */}
+                {bookingDetails?.flight?.returnLeg && (
+                  <div className="mt-5" data-return-leg="">
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between mb-2 px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-200">
+                      <span className="font-semibold text-[#055B75]">
+                        <span className="mr-2 text-[10px] font-bold uppercase tracking-wide text-gray-500">Return</span>
+                        {bookingDetails.flight.returnLeg.departureCity} &rarr; {bookingDetails.flight.returnLeg.arrivalCity}
+                      </span>
+                      <div className="flex items-center gap-3 text-sm text-gray-600 whitespace-nowrap flex-shrink-0">
+                        <span>{bookingDetails.flight.returnLeg.stops === 0 ? 'Direct' : `${bookingDetails.flight.returnLeg.stops} Stop${bookingDetails.flight.returnLeg.stops > 1 ? 's' : ''}`}</span>
+                        {bookingDetails.flight.returnLeg.duration && (
+                          <>
+                            <span className="text-gray-300">|</span>
+                            <span className="whitespace-nowrap">Total: {formatDuration(bookingDetails.flight.returnLeg.duration)}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {renderSegmentList(bookingDetails.flight.returnLeg.segments)}
+                  </div>
+                )}
+
                 {/* One-line summary strip — the grey DATE/FLIGHT NO/BAGGAGE grid is
                     folded in here (density pass); values are unchanged bindings. */}
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-4 px-4 py-3 rounded-lg bg-[#F0FAFC] border border-[#B9D0DC]/60 text-sm">
@@ -1316,8 +1449,11 @@ function FlightBookingConfirmation() {
                   </div>
                   <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-semibold text-[#055B75]">
                     <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" />{bookingDetails?.flight?.refundable === true ? 'Refundable (fees may apply)' : bookingDetails?.flight?.refundable === false ? 'Non-refundable' : 'Refunds: see fare rules'}</span>
-                    {bookingDetails?.flight?.numberOfBookableSeats && bookingDetails.flight.numberOfBookableSeats <= 9 && (
-                      <span className="text-red-600">· {bookingDetails.flight.numberOfBookableSeats} seats left</span>
+                    {/* Amadeus reports at most 9 seats, so 9 is "9+" (searchResults.js). */}
+                    {seatsLeftLabel(bookingDetails?.flight?.numberOfBookableSeats) && (
+                      <span className={seatsLeftLabel(bookingDetails.flight.numberOfBookableSeats).urgent ? 'text-red-600' : 'text-gray-500 font-normal'}>
+                        · {seatsLeftLabel(bookingDetails.flight.numberOfBookableSeats).text}
+                      </span>
                     )}
                     {bookingDetails?.flight?.lastTicketingDate && (
                       <span className="text-gray-500 font-normal">· Book by {formatShortDate(bookingDetails.flight.lastTicketingDate)}</span>
@@ -1471,8 +1607,11 @@ function FlightBookingConfirmation() {
 
                     <div className="form-grid" style={{ display: isExpanded ? undefined : 'none' }}>
                       <div className="form-group">
-                        <label>First Name <span className="required">*</span></label>
+                        {/* Every label names its field: none was tied to its input,
+                            and the date fields had no accessible name at all. */}
+                        <label htmlFor={`traveller-${passenger.id}-firstName`}>First Name <span className="required">*</span></label>
                         <input
+                          id={`traveller-${passenger.id}-firstName`}
                           type="text"
                           className="form-input"
                           placeholder="Given Name"
@@ -1483,8 +1622,9 @@ function FlightBookingConfirmation() {
                         />
                       </div>
                       <div className="form-group">
-                        <label>Last Name <span className="required">*</span></label>
+                        <label htmlFor={`traveller-${passenger.id}-lastName`}>Last Name <span className="required">*</span></label>
                         <input
+                          id={`traveller-${passenger.id}-lastName`}
                           type="text"
                           className="form-input"
                           placeholder="Surname"
@@ -1498,9 +1638,10 @@ function FlightBookingConfirmation() {
                         {/* Needed for a child or infant, and for anyone crossing a border
                             (shared/travellerDetails.js); a domestic adult may leave it out. */}
                         {needsDateOfBirth({ type: passenger.type, international: Boolean(bookingDetails?.isInternational) })
-                          ? <label>Date of Birth <span className="required">*</span></label>
-                          : <label>Date of Birth <span className="text-xs font-normal text-gray-400">(optional)</span></label>}
+                          ? <label htmlFor={`traveller-${passenger.id}-dateOfBirth`}>Date of Birth <span className="required">*</span></label>
+                          : <label htmlFor={`traveller-${passenger.id}-dateOfBirth`}>Date of Birth <span className="text-xs font-normal text-gray-400">(optional)</span></label>}
                         <input
+                          id={`traveller-${passenger.id}-dateOfBirth`}
                           type="date"
                           className="form-input"
                           value={passenger.dateOfBirth}
@@ -1512,9 +1653,13 @@ function FlightBookingConfirmation() {
                         />
                       </div>
                       <div className="form-group">
-                        <label>Gender <span className="required">*</span></label>
-                        <div className="gender-toggle">
+                        {/* Two toggle buttons that say which is chosen, as a
+                            group named by its label. Only their colour said so. */}
+                        <label id={`traveller-${passenger.id}-gender`}>Gender <span className="required">*</span></label>
+                        <div className="gender-toggle" role="group" aria-labelledby={`traveller-${passenger.id}-gender`}>
                           <button
+                            type="button"
+                            aria-pressed={passenger.gender === 'male'}
                             onClick={() => handlePassengerChange(passenger.id, 'gender', 'male')}
                             className={`gender-btn ${passenger.gender === 'male' ? 'active' : ''}`}
                             disabled={!editMode}
@@ -1522,6 +1667,8 @@ function FlightBookingConfirmation() {
                             Male
                           </button>
                           <button
+                            type="button"
+                            aria-pressed={passenger.gender === 'female'}
                             onClick={() => handlePassengerChange(passenger.id, 'gender', 'female')}
                             className={`gender-btn ${passenger.gender === 'female' ? 'active' : ''}`}
                             disabled={!editMode}
@@ -1533,20 +1680,23 @@ function FlightBookingConfirmation() {
 
                       {/* New Row */}
                       <div className="form-group">
-                        <label>Mobile No {index === 0 ? <span className="required">*</span> : <span className="text-xs font-normal text-gray-400">(optional)</span>}</label>
+                        <label htmlFor={`traveller-${passenger.id}-mobile`}>Mobile No {index === 0 ? <span className="required">*</span> : <span className="text-xs font-normal text-gray-400">(optional)</span>}</label>
                         <div style={{ display: 'flex', gap: '0' }}>
                           <select
                             className="form-input"
                             style={{ width: '90px', minWidth: '90px', borderRadius: '6px 0 0 6px', borderRight: 'none', padding: '10px 4px', fontSize: '14px', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 2px center', backgroundSize: '16px' }}
-                            value={passenger.countryCode || selectedCountryCode}
+                            value={passenger.countryCode || ''}
                             onChange={(e) => handlePassengerChange(passenger.id, 'countryCode', e.target.value)}
                             disabled={!editMode}
+                            aria-label="Country code for the mobile number"
                           >
-                            {countries.map(c => (
-                              <option key={c.code + c.dial} value={c.dial}>{c.dial} {c.code}</option>
+                            <option value="">Code</option>
+                            {CALLING_CODES.map((code) => (
+                              <option key={code} value={code}>{code}</option>
                             ))}
                           </select>
                           <input
+                            id={`traveller-${passenger.id}-mobile`}
                             type="tel"
                             className="form-input"
                             style={{ borderRadius: '0 6px 6px 0', flex: 1 }}
@@ -1561,9 +1711,10 @@ function FlightBookingConfirmation() {
                       <div className="form-group">
                         {/* A guest's lead traveller email is where the ticket goes, and how they find the booking again. */}
                         {index === 0 && bookingAsGuest
-                          ? <label>Email <span className="required">*</span></label>
-                          : <label>Email (Optional)</label>}
+                          ? <label htmlFor={`traveller-${passenger.id}-email`}>Email <span className="required">*</span></label>
+                          : <label htmlFor={`traveller-${passenger.id}-email`}>Email (Optional)</label>}
                         <input
+                          id={`traveller-${passenger.id}-email`}
                           type="email"
                           className="form-input"
                           placeholder="email@example.com"
@@ -1575,58 +1726,30 @@ function FlightBookingConfirmation() {
                       </div>
                       {/* Passport / Travel Document Fields — required on international itineraries */}
                       {bookingDetails?.isInternational && (<>
-                      <div className="form-group" style={{ position: 'relative' }}>
-                        <label>Nationality <span className="required">*</span></label>
-                        <input
-                          type="text"
+                      <div className="form-group">
+                        {/* Every country, in a native select: typed letters jump
+                            to a country and the arrow keys choose one, on every
+                            device. The list it replaces held 50 countries and
+                            chose only on a mouse press, so a traveller from
+                            anywhere else - or on a keyboard - could not pay. */}
+                        <label htmlFor={`traveller-${passenger.id}-nationality`}>Nationality <span className="required">*</span></label>
+                        <select
+                          id={`traveller-${passenger.id}-nationality`}
                           className="form-input"
-                          placeholder="Search country..."
-                          value={nationalitySearch[passenger.id] !== undefined ? nationalitySearch[passenger.id] : (
-                            countries.find(c => c.code === passenger.nationality)?.name || passenger.nationality || ''
-                          )}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setNationalitySearch(prev => ({ ...prev, [passenger.id]: val }));
-                            setNationalityDropdown({ open: true, passengerId: passenger.id });
-                            if (!val) handlePassengerChange(passenger.id, 'nationality', '');
-                          }}
-                          onFocus={() => setNationalityDropdown({ open: true, passengerId: passenger.id })}
-                          onBlur={() => setTimeout(() => setNationalityDropdown({ open: false, passengerId: null }), 200)}
-                          readOnly={!editMode}
-                        />
-                        {nationalityDropdown.open && nationalityDropdown.passengerId === passenger.id && (
-                          <div style={{
-                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-                            background: '#fff', border: '1px solid #ddd', borderRadius: '6px',
-                            maxHeight: '180px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                          }}>
-                            {countries
-                              .filter(c => {
-                                const search = (nationalitySearch[passenger.id] || '').toLowerCase();
-                                return !search || c.name.toLowerCase().includes(search) || c.code.toLowerCase().includes(search);
-                              })
-                              .map(c => (
-                                <div
-                                  key={c.code}
-                                  style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '14px', borderBottom: '1px solid #f0f0f0' }}
-                                  onMouseDown={() => {
-                                    handlePassengerChange(passenger.id, 'nationality', c.code);
-                                    setNationalitySearch(prev => ({ ...prev, [passenger.id]: c.name }));
-                                    setNationalityDropdown({ open: false, passengerId: null });
-                                  }}
-                                  onMouseEnter={(e) => e.target.style.background = '#f0f9ff'}
-                                  onMouseLeave={(e) => e.target.style.background = '#fff'}
-                                >
-                                  <span style={{ fontWeight: 500 }}>{c.name}</span>{' '}
-                                  <span style={{ color: '#888', fontSize: '12px' }}>({c.code})</span>
-                                </div>
-                              ))}
-                          </div>
-                        )}
+                          value={passenger.nationality || ''}
+                          onChange={(e) => handlePassengerChange(passenger.id, 'nationality', e.target.value)}
+                          disabled={!editMode}
+                        >
+                          <option value="">Select nationality</option>
+                          {COUNTRIES.map((c) => (
+                            <option key={c.code} value={c.code}>{c.name}</option>
+                          ))}
+                        </select>
                       </div>
                       <div className="form-group">
-                        <label>Passport Number <span className="required">*</span></label>
+                        <label htmlFor={`traveller-${passenger.id}-passportNumber`}>Passport Number <span className="required">*</span></label>
                         <input
+                          id={`traveller-${passenger.id}-passportNumber`}
                           type="text"
                           className="form-input"
                           placeholder="e.g. P12345678"
@@ -1636,8 +1759,9 @@ function FlightBookingConfirmation() {
                         />
                       </div>
                       <div className="form-group">
-                        <label>Passport Expiry Date <span className="required">*</span></label>
+                        <label htmlFor={`traveller-${passenger.id}-passportExpiry`}>Passport Expiry Date <span className="required">*</span></label>
                         <input
+                          id={`traveller-${passenger.id}-passportExpiry`}
                           type="date"
                           className="form-input"
                           value={passenger.passportExpiry || ''}
@@ -1717,30 +1841,16 @@ function FlightBookingConfirmation() {
                   <span className="bg-[#65B3CF] text-white text-xs px-2 py-0.5 rounded mr-2">INFO</span>
                   Your booking reference is sent to these contact details after payment, and your e-ticket once it is issued.
                 </p>
+                {/* The first traveller's number and code, filled in above. A
+                    second country-code selector sat here, changed nothing
+                    that was sent, and could disagree with the one above. */}
                 <div className="form-grid">
-                  <div className="form-group">
-                    <label>Country Code</label>
-                    <div className="relative">
-                      <select
-                        className="form-input appearance-none bg-white pr-8"
-                        value={selectedCountryCode}
-                        onChange={(e) => setSelectedCountryCode(e.target.value)}
-                      >
-                        {availableCountryCodes.map((cc) => (
-                          <option key={cc.code} value={cc.code}>
-                            {cc.country} ({cc.code})
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-3.5 h-4 w-4 text-gray-500 pointer-events-none" />
-                    </div>
-                  </div>
                   <div className="form-group">
                     <label>Mobile Number</label>
                     <input
                       type="text"
                       className="form-input bg-gray-50"
-                      value={bookingDetails?.contact?.phone || ""}
+                      value={bookingDetails?.contact?.phone ? `${passengerData?.[0]?.countryCode || ''} ${bookingDetails.contact.phone}`.trim() : ""}
                       readOnly
                     />
                   </div>
@@ -1761,7 +1871,7 @@ function FlightBookingConfirmation() {
                       <Check className="h-4 w-4 text-white" />
                     </div>
                     <span className="text-sm font-medium text-[#166534]">
-                      Booking alerts will be sent to {selectedCountryCode} {bookingDetails.contact.phone}
+                      Booking alerts will be sent to {`${passengerData?.[0]?.countryCode || ''} ${bookingDetails.contact.phone}`.trim()}
                     </span>
                   </div>
                 )}
@@ -1840,6 +1950,11 @@ function FlightBookingConfirmation() {
                 {fareNotice && (
                   <div className="mb-3 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800" role="status">
                     {fareNotice}
+                    {fareGone && (
+                      <button type="button" onClick={searchAgain} className="mt-2 block font-semibold text-[#055B75] underline">
+                        Search again
+                      </button>
+                    )}
                   </div>
                 )}
                 {/* Base Fare */}
@@ -1904,13 +2019,29 @@ function FlightBookingConfirmation() {
                   {/* Keyed on the total, so a changed total also resets the
                       input's own "applied" display along with the coupon. */}
                   <CouponInput
-                    key={calculatedFare.totalAmount}
+                    key={`${calculatedFare.totalAmount}-${couponInputRound}`}
                     orderTotal={calculatedFare.totalAmount}
                     bookingType="flights"
                     formatAmount={formatUsd}
-                    onApply={(coupon) => { couponBase.current = calculatedFare.totalAmount; setAppliedCoupon(coupon); }}
+                    onApply={(coupon) => {
+                      // A coupon worth the whole booking leaves nothing to pay,
+                      // and no payment page opens for $0.00: Pay then ended in
+                      // "Missing required fields: amount and orderId are
+                      // required". Refused here, when it is applied.
+                      if (!(Number(coupon?.finalTotal) > 0)) {
+                        setCouponProblem('This coupon covers the whole fare, and a booking cannot be paid for at $0.00 online. Please call (877) 538-7380 to use it.');
+                        setCouponInputRound((round) => round + 1);
+                        return;
+                      }
+                      setCouponProblem(null);
+                      couponBase.current = calculatedFare.totalAmount;
+                      setAppliedCoupon(coupon);
+                    }}
                     onRemove={() => { couponBase.current = null; setAppliedCoupon(null); }}
                   />
+                  {couponProblem && (
+                    <p className="mt-1.5 text-xs text-red-600" role="alert">{couponProblem}</p>
+                  )}
                 </div>
 
                 <div className="fare-row total">
@@ -1932,8 +2063,13 @@ function FlightBookingConfirmation() {
                   disabled={checkingOut || openingPayment}
                   className="btn-primary mt-4"
                 >
-                  {openingPayment ? 'Opening secure payment…' : checkingOut ? 'Checking the fare…' : `Pay ${formatUsd(amountDue)}`} <CheckCircle className="h-5 w-5" />
+                  {openingPayment ? 'Opening secure payment…' : checkingOut ? (slowCheckout ? 'Still checking the fare…' : 'Checking the fare…') : `Pay ${formatUsd(amountDue)}`} <CheckCircle className="h-5 w-5" />
                 </button>
+                {slowCheckout && (
+                  <p className="mt-2 text-xs text-gray-600" role="status">
+                    The airline is taking longer than usual to confirm the fare. Please keep this page open.
+                  </p>
+                )}
 
                 {/* Renders into a portal, so it covers both this button and the mobile bar's. */}
                 <NoticeDialog
@@ -1985,7 +2121,7 @@ function FlightBookingConfirmation() {
               cursor: 'pointer', boxShadow: '0 6px 16px rgba(5,91,117,0.3)', whiteSpace: 'nowrap',
             }}
           >
-            {openingPayment ? 'Opening secure payment…' : checkingOut ? 'Checking the fare…' : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
+            {openingPayment ? 'Opening secure payment…' : checkingOut ? (slowCheckout ? 'Still checking…' : 'Checking the fare…') : 'Proceed to Payment'} <CheckCircle className="h-5 w-5" />
           </button>
         </div>
       </div>

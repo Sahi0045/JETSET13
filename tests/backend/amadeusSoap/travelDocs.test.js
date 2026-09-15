@@ -35,6 +35,15 @@ describe('toAlpha3', () => {
     expect(toAlpha3('')).toBeNull();
     expect(toAlpha3(undefined)).toBeNull();
   });
+
+  // The table knew the 50 countries the review page used to offer. The page now
+  // offers every country, and a traveller from outside the 50 would have had no
+  // passport element, so no ticket.
+  it('knows every country the review page offers', () => {
+    expect(toAlpha3('CO')).toBe('COL');
+    expect(toAlpha3('IS')).toBe('ISL');
+    expect(toAlpha3('uz')).toBe('UZB');
+  });
 });
 
 describe('toDDMMMYY', () => {

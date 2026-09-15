@@ -1,7 +1,7 @@
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CustomFlightCalendar from '../../frontend/src/Pages/Common/flights/CustomFlightCalendar.jsx';
 import { stripDates } from '../../frontend/src/Pages/Common/flights/searchResults.js';
@@ -94,6 +94,48 @@ describe('CustomFlightCalendar', () => {
     renderCalendar({ showPrices: false });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(datePriceCalls()).toHaveLength(0);
+  });
+
+  // The days were clickable divs: no keyboard could choose one.
+  it('draws days as buttons the keyboard can move between and choose', () => {
+    const onSelect = vi.fn();
+    const { container } = renderCalendar({ onSelect });
+    const day = (iso) => container.querySelector(`[data-date="${iso}"]`);
+
+    const chosen = day(inDays(10));
+    expect(chosen.tagName).toBe('BUTTON');
+    expect(chosen.getAttribute('aria-pressed')).toBe('true');
+    expect(chosen.tabIndex).toBe(0);
+    expect(day(inDays(11)).tabIndex).toBe(-1);
+    expect(chosen.textContent).toMatch(new RegExp(String(new Date(`${inDays(10)}T12:00:00`).getFullYear())));
+
+    chosen.focus();
+    fireEvent.keyDown(chosen, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(day(inDays(11)));
+    fireEvent.keyDown(document.activeElement, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(day(inDays(18)));
+
+    fireEvent.click(document.activeElement);
+    expect(onSelect).toHaveBeenCalledWith(inDays(18));
+  });
+
+  // `new Date("2026-10-04")` is midnight UTC - the evening before, west of
+  // UTC - so the calendar highlighted the day before the one chosen there.
+  it('highlights the chosen day by its date, in any time zone', () => {
+    const { container } = renderCalendar({ selectedDate: inDays(12) });
+
+    const pressed = container.querySelectorAll('[aria-pressed="true"]');
+    expect(pressed).toHaveLength(1);
+    expect(pressed[0].getAttribute('data-date')).toBe(inDays(12));
+
+    const source = readFileSync(path.resolve(process.cwd(), 'frontend/src/Pages/Common/flights/CustomFlightCalendar.jsx'), 'utf8');
+    expect(source).not.toMatch(/new Date\(selectedDate\)/);
+  });
+
+  it('names its month buttons', () => {
+    renderCalendar();
+    expect(screen.getByRole('button', { name: 'Previous month' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Next month' })).toBeTruthy();
   });
 
   it('has no invented or interpolated prices left in the source', () => {

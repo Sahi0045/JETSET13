@@ -1,22 +1,23 @@
-import { passengerAgeProblem } from '../../../shared/flightCharge';
 import { isUsableEmail } from '../../../shared/email';
-import { needsDateOfBirth } from '../../../shared/travellerDetails';
+import { bookingTravellerProblems } from '../../../shared/travellerDetails';
 
 /**
  * What a traveller form still needs before payment, in words the customer can
  * act on.
  *
  * One list for the payment check and for the "1/2 added" progress, so the page
- * never marks a traveller done that payment then refuses. The rules for a date
- * of birth are shared with the order route (shared/travellerDetails.js).
+ * never marks a traveller done that payment then refuses. What the airline needs
+ * of every traveller - name, date of birth and age, gender, passport - is the
+ * rule checkout refuses by too (shared/travellerDetails.js); this adds what the
+ * page asks of the lead traveller for the booking's contact details.
  *
  * @param {object} traveller a form: { type, firstName, lastName, dateOfBirth,
- *   gender, mobile, email, nationality, passportNumber, passportExpiry }
+ *   gender, mobile, countryCode, email, nationality, passportNumber, passportExpiry }
  * @param {object} ctx
  * @param {number}  ctx.index          position on the page; the first traveller is the lead
  * @param {boolean} ctx.international  whether the trip crosses a border
  * @param {string}  ctx.travelDate     YYYY-MM-DD, for the age a fare depends on
- * @param {string}  [ctx.lastDate]     the trip's last day, for passport expiry
+ * @param {string}  [ctx.lastDate]     the trip's last day, for later ages and passport expiry
  * @param {boolean} [ctx.bookingAsGuest]
  * @param {string}  [ctx.contactEmail] the booking's contact email, if any
  * @returns {string[]}
@@ -25,41 +26,20 @@ export function travellerProblems(traveller, {
   index = 0, international = true, travelDate, lastDate, bookingAsGuest = false, contactEmail = '',
 } = {}) {
   const t = traveller || {};
-  const problems = [];
+  const problems = bookingTravellerProblems(t, { international, travelDate, lastDate });
   const add = (text) => problems.push(text);
 
-  if (!t.firstName?.trim() || !t.lastName?.trim()) add('Enter the first and last name exactly as on the ID.');
-  if (!t.dateOfBirth) {
-    if (needsDateOfBirth({ type: t.type, international })) add('Enter the date of birth.');
-  } else {
-    const ageProblem = passengerAgeProblem(t.type, t.dateOfBirth, travelDate);
-    if (ageProblem) {
-      add(ageProblem);
-    } else if (t.type !== 'ADULT' && lastDate) {
-      // An infant who turns 2, or a child who turns 12, before the last flight
-      // is on the wrong fare for the rest of the trip - many airlines then
-      // require a paid seat on the way back.
-      const laterProblem = passengerAgeProblem(t.type, t.dateOfBirth, String(lastDate).slice(0, 10));
-      if (laterProblem) add(laterProblem.replace('on the day of travel', 'on every flight of the trip'));
-    }
-  }
-  if (!t.gender) add('Select a gender.');
   if (index === 0 && !t.mobile) add('Enter a mobile number for booking updates.');
+  // The number goes onto the booking with this code. There is no default to
+  // fall back on: the old one wrote every number as +1.
+  if (index === 0 && t.mobile && !String(t.countryCode ?? '').replace(/\D/g, '')) {
+    add('Select the country code for the mobile number.');
+  }
   // A guest's ticket goes to this address, and it is their only way back to the
   // booking - there is no account for it to appear under. Checkout refuses a
   // guest without one.
   if (index === 0 && bookingAsGuest && !isUsableEmail(contactEmail || t.email)) {
     add('Enter an email address. Your ticket is sent there, and it is how you find this booking without an account.');
-  }
-  // An international ticket cannot be issued without the passport.
-  if (international) {
-    if (!t.nationality) add('Select a nationality.');
-    if (!t.passportNumber?.trim()) add('Enter the passport number.');
-    if (!t.passportExpiry) {
-      add('Enter the passport expiry date.');
-    } else if (lastDate && new Date(t.passportExpiry) <= new Date(String(lastDate).slice(0, 10))) {
-      add('The passport expires before the trip ends.');
-    }
   }
   return problems;
 }

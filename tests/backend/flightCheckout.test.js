@@ -88,6 +88,29 @@ describe('verifyFlightCharge', () => {
     expect(result.code).toBe('PASSENGER_COUNT_MISMATCH');
   });
 
+  // The PNR prints A-Z only: a name in another script was refused by the chain
+  // after payment and refunded. Refused here before the fare is priced.
+  it('refuses a name the airline cannot print, before pricing', async () => {
+    const booking = bookingFor(2);
+    booking.passengerData[1] = { ...booking.passengerData[1], firstName: 'Иван' };
+    const priceOffer = pricedAt(400);
+
+    const result = await verify({ amount: 402, bookingData: booking, priceOffer });
+
+    expect(result.code).toBe('PASSENGER_NAME_UNUSABLE');
+    expect(result.message).toMatch(/^Traveller 2: .*Latin letters/);
+    expect(priceOffer).not.toHaveBeenCalled();
+  });
+
+  it('accepts a name it can spell in Latin letters', async () => {
+    const booking = bookingFor(1);
+    booking.passengerData[0] = { ...booking.passengerData[0], firstName: 'Łukasz', lastName: 'Øberg' };
+
+    const result = await verify({ amount: 401, bookingData: booking, priceOffer: pricedAt(400) });
+
+    expect(result.ok).toBe(true);
+  });
+
   it('refuses without an offer to price', async () => {
     const result = await verify({ amount: 401, bookingData: {}, priceOffer: pricedAt(400) });
     expect(result.code).toBe('OFFER_MISSING');
@@ -100,6 +123,17 @@ describe('verifyFlightCharge', () => {
 
     expect(result.status).toBe(503);
     expect(result.code).toBe('PRICE_UNAVAILABLE');
+  });
+
+  // Every pricing failure read "try again in a moment", so a fare the airline
+  // would no longer sell was retried for ever.
+  it('says a fare the airline refuses to price is gone, and to search again', async () => {
+    const refused = Object.assign(new Error('the airline refused to price the fare'), { fareUnavailable: true });
+    const result = await verify({ amount: 401, bookingData: bookingFor(1), priceOffer: vi.fn().mockRejectedValue(refused) });
+
+    expect(result.status).toBe(409);
+    expect(result.code).toBe('FARE_UNAVAILABLE');
+    expect(result.message).toMatch(/search again/i);
   });
 
   it('refuses a fare the merchant cannot settle', async () => {
@@ -121,6 +155,18 @@ describe('verifyFlightCharge', () => {
     expect(result.ok).toBe(true);
     expect(result.charge.discount).toBe(40.2);
     expect(result.coupon.code).toBe('FLY10');
+  });
+
+  // A payment page cannot be opened for $0.00. The page sent 0 and was answered
+  // "Missing required fields: amount and orderId are required".
+  it('refuses a coupon that leaves nothing to charge, and says why', async () => {
+    rows.coupons = { id: 'c1', code: 'FREE', discount_type: 'percentage', discount_value: 100, min_order_value: 0, max_uses: null, applicable_to: 'all', is_active: true };
+
+    const result = await verify({ amount: 0, bookingData: bookingFor(1), couponCode: 'FREE', priceOffer: pricedAt(400) });
+
+    expect(result.code).toBe('COUPON_INVALID');
+    expect(result.message).toMatch(/covers the whole fare/);
+    expect(result.message).toMatch(/\$0\.00/);
   });
 
   it('refuses a coupon that does not exist', async () => {
@@ -204,6 +250,94 @@ describe('verifyFlightCharge', () => {
     });
   });
 
+  // Checkout checked only that names, a gender and a needed date of birth were
+  // there. The order route then refused - after payment - a child on an adult's
+  // fare, and the airline would not ticket a trip abroad without a passport.
+  describe('travellers, checked as the review page checks them', () => {
+    const roundTrip = (passengerData, travelerPricings) => ({
+      originalOffer: {
+        id: '1',
+        price: { total: '400.00', currency: 'USD' },
+        itineraries: [
+          { segments: [{ departure: { iataCode: 'JFK', at: '2026-10-04T18:00:00' }, arrival: { iataCode: 'LHR', at: '2026-10-05T06:00:00' } }] },
+          { segments: [{ departure: { iataCode: 'LHR', at: '2026-10-25T10:00:00' }, arrival: { iataCode: 'JFK', at: '2026-10-25T13:00:00' } }] },
+        ],
+        travelerPricings,
+      },
+      passengerData,
+    });
+    const adult = { firstName: 'Jane', lastName: 'Doe', gender: 'female', dateOfBirth: '1990-01-01', type: 'ADULT', nationality: 'US', passportNumber: 'X1234567', passportExpiry: '2030-01-01' };
+    const abroad = () => vi.fn().mockResolvedValue({ price: { total: '400.00', base: '300.00', currency: 'USD' }, _ama: { international: true } });
+
+    it("refuses a child booked on an adult's fare, before pricing", async () => {
+      const priceOffer = abroad();
+      const booking = roundTrip(
+        [adult, { ...adult, firstName: 'Tom', dateOfBirth: '2018-05-05', type: 'CHILD' }],
+        [{ travelerType: 'ADULT' }, { travelerType: 'ADULT' }],
+      );
+
+      const result = await verify({ amount: 402, bookingData: booking, priceOffer });
+
+      expect(result.code).toBe('PASSENGER_COUNT_MISMATCH');
+      expect(result.message).toMatch(/for 2 adults/);
+      expect(priceOffer).not.toHaveBeenCalled();
+    });
+
+    it('refuses an infant who turns 2 before the flight home', async () => {
+      const infant = { ...adult, firstName: 'Mia', dateOfBirth: '2024-10-20', type: 'HELD_INFANT' };
+      const booking = roundTrip([adult, infant], [{ travelerType: 'ADULT' }, { travelerType: 'HELD_INFANT' }]);
+
+      const result = await verify({ amount: 401, bookingData: booking, priceOffer: abroad() });
+
+      expect(result.code).toBe('PASSENGERS_INCOMPLETE');
+      expect(result.message).toMatch(/^Traveller 2: Infant fares are for travellers under 2 on every flight of the trip\./);
+    });
+
+    it('refuses a trip abroad without a passport', async () => {
+      const booking = roundTrip([{ ...adult, passportNumber: '' }], [{ travelerType: 'ADULT' }]);
+
+      const result = await verify({ amount: 401, bookingData: booking, priceOffer: abroad() });
+
+      expect(result.code).toBe('PASSENGERS_INCOMPLETE');
+      expect(result.message).toMatch(/Enter the passport number\./);
+    });
+
+    it('refuses a passport that expires before the flight home', async () => {
+      const booking = roundTrip([{ ...adult, passportExpiry: '2026-10-15' }], [{ travelerType: 'ADULT' }]);
+
+      const result = await verify({ amount: 401, bookingData: booking, priceOffer: abroad() });
+
+      expect(result.message).toMatch(/The passport expires before the trip ends\./);
+    });
+
+    it('asks for no passport when the airport index does not know the trip crosses a border', async () => {
+      const booking = roundTrip([{ ...adult, passportNumber: '' }], [{ travelerType: 'ADULT' }]);
+
+      const result = await verify({ amount: 401, bookingData: booking, priceOffer: pricedAt(400) });
+
+      expect(result.ok).toBe(true);
+    });
+
+    it('says what the review page says a traveller still needs', async () => {
+      const { travellerProblems } = await import('../../frontend/src/utils/travellerChecks.js');
+      const { tripDates } = await import('../../shared/travellerDetails.js');
+      const traveller = { ...adult, passportExpiry: '2026-10-15' };
+      const booking = roundTrip([traveller], [{ travelerType: 'ADULT' }]);
+      const { firstDate, lastDate } = tripDates(booking.originalOffer);
+      const page = travellerProblems(traveller, { index: 1, international: true, travelDate: firstDate, lastDate });
+
+      const result = await verify({ amount: 401, bookingData: booking, priceOffer: abroad() });
+
+      expect(page).toHaveLength(1);
+      expect(result.message).toBe(`Traveller 1: ${page[0]} Nothing has been charged.`);
+    });
+
+    it('passes a complete traveller', async () => {
+      const result = await verify({ amount: 401, bookingData: roundTrip([adult], [{ travelerType: 'ADULT' }]), priceOffer: abroad() });
+      expect(result.ok).toBe(true);
+    });
+  });
+
   it('lets domestic adults pay without a date of birth', async () => {
     const booking = bookingFor(2);
     booking.passengerData = booking.passengerData.map(({ dateOfBirth, ...rest }) => rest);
@@ -212,6 +346,57 @@ describe('verifyFlightCharge', () => {
     const result = await verify({ amount: 402, bookingData: booking, priceOffer });
 
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('priceOfferForCheckout tells a refused fare from an outage', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.doUnmock('../../backend/services/flightProvider.js');
+  });
+
+  const price = async () => {
+    const { priceOfferForCheckout } = await import('../../backend/services/flightCheckout.service.js');
+    return priceOfferForCheckout({ id: '1' }).then(() => null, (error) => error);
+  };
+
+  describe('through the pricing route (Vercel)', () => {
+    beforeEach(() => {
+      vi.stubEnv('FLIGHTS_API_BASE', 'https://api.test');
+      axios.post.mockReset();
+    });
+
+    it("flags the route's FARE_UNAVAILABLE", async () => {
+      axios.post.mockResolvedValue({ status: 409, data: { success: false, code: 'FARE_UNAVAILABLE', error: 'This flight can no longer be priced - please search again' } });
+      expect((await price()).fareUnavailable).toBe(true);
+    });
+
+    it('does not flag a failure to price', async () => {
+      axios.post.mockResolvedValue({ status: 500, data: { success: false, error: 'Flight service is not responding' } });
+      const error = await price();
+      expect(error).toBeInstanceOf(Error);
+      expect(error.fareUnavailable).toBeUndefined();
+    });
+  });
+
+  describe('directly (Lightsail)', () => {
+    const withProvider = (priceFlightOffer) => {
+      vi.stubEnv('FLIGHTS_API_BASE', '');
+      vi.stubEnv('VERCEL', '');
+      vi.doMock('../../backend/services/flightProvider.js', () => ({ default: { priceFlightOffer } }));
+    };
+
+    it("flags the airline's refusal", async () => {
+      const { AmadeusSoapError } = await import('../../backend/services/amadeusSoap/errors.js');
+      withProvider(vi.fn().mockRejectedValue(new AmadeusSoapError({ error: 'That flight is no longer available at this price', code: 409 })));
+      expect((await price()).fareUnavailable).toBe(true);
+    });
+
+    it('does not flag an airline that did not answer', async () => {
+      const { AmadeusSoapError } = await import('../../backend/services/amadeusSoap/errors.js');
+      withProvider(vi.fn().mockRejectedValue(new AmadeusSoapError({ error: 'Flight service is not responding', code: 504 })));
+      expect((await price()).fareUnavailable).toBeUndefined();
+    });
   });
 });
 
@@ -251,6 +436,16 @@ describe('hosted checkout for a flight', () => {
     const { res } = await run({ ok: false, status: 409, code: 'PRICE_CHANGED', message: 'The total is 402.00 USD.', charge: { total: 402 } });
 
     expect(res.statusCode).toBe(409);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('answers a request with nothing to charge in words for the customer, not its field names', async () => {
+    const { res, verifyFlightCharge } = await run({ ok: true, charge: { total: 402 } }, { body: { amount: 0 } });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.code).toBe('CHECKOUT_INCOMPLETE');
+    expect(res.body.error).not.toMatch(/Missing required fields|orderId/);
+    expect(verifyFlightCharge).not.toHaveBeenCalled();
     expect(axios.post).not.toHaveBeenCalled();
   });
 
@@ -381,6 +576,25 @@ describe('hosted checkout for a flight', () => {
       await run(verified, { body: withLegs });
 
       expect(initiated().airline.ticket.issue.travelAgentCode).toBe('12345678');
+    });
+
+    // Only the first itinerary was read, so a round trip went to the card
+    // network as one way.
+    it('sends the legs home of a round trip, and names the outbound destination', async () => {
+      vi.stubEnv('ARC_TRAVEL_AGENT_CODE', '12345678');
+      const roundTrip = {
+        flightData: {
+          itineraries: [
+            withLegs.flightData.itineraries[0],
+            { segments: [{ carrierCode: 'LH', number: '400', departure: { iataCode: 'FRA', at: '2026-10-20T10:00:00' }, arrival: { iataCode: 'JFK' } }] },
+          ],
+        },
+      };
+      await run(verified, { body: roundTrip });
+
+      const legs = initiated().airline.itinerary.leg;
+      expect(legs.map((leg) => `${leg.departureAirport}-${leg.destinationAirport}`)).toEqual(['JFK-FRA', 'FRA-JFK']);
+      expect(legs[1]).toMatchObject({ flightNumber: 'LH400', departureDate: '2026-10-20' });
     });
 
     // Unset, it was derived from the merchant id: the live merchant sent part of

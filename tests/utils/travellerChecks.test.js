@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { travellerProblems, travellerProgress } from '../../frontend/src/utils/travellerChecks.js';
-import { needsDateOfBirth } from '../../shared/travellerDetails.js';
+import { needsDateOfBirth, tripDates } from '../../shared/travellerDetails.js';
 
 /**
  * What a traveller form needs before payment. A date of birth is for a child
@@ -9,7 +9,7 @@ import { needsDateOfBirth } from '../../shared/travellerDetails.js';
  */
 
 const domestic = { index: 1, international: false, travelDate: '2026-10-06' };
-const complete = { type: 'ADULT', firstName: 'Asha', lastName: 'Rao', gender: 'female', mobile: '9876543210' };
+const complete = { type: 'ADULT', firstName: 'Asha', lastName: 'Rao', gender: 'female', mobile: '9876543210', countryCode: '+91' };
 
 describe('needsDateOfBirth', () => {
   it('asks a domestic adult for none, and everyone else for one', () => {
@@ -42,11 +42,55 @@ describe('travellerProblems', () => {
     expect(travellerProblems(infant, { ...domestic, lastDate: '2026-10-25' })[0]).toMatch(/on every flight of the trip/);
   });
 
+  // The review page took the last day from the outbound flights, so a round
+  // trip's return was never checked. It now reads every itinerary on the offer.
+  describe('on a round trip, up to the flight home', () => {
+    const roundTrip = {
+      itineraries: [
+        { segments: [{ departure: { iataCode: 'JFK', at: '2026-10-04T18:00:00' }, arrival: { iataCode: 'LHR', at: '2026-10-05T06:00:00' } }] },
+        { segments: [{ departure: { iataCode: 'LHR', at: '2026-10-25T10:00:00' }, arrival: { iataCode: 'JFK', at: '2026-10-25T13:00:00' } }] },
+      ],
+    };
+    const outboundOnly = { itineraries: [roundTrip.itineraries[0]] };
+    const checksFor = (offer) => {
+      const { firstDate, lastDate } = tripDates(offer);
+      return { index: 1, international: true, travelDate: firstDate, lastDate };
+    };
+    const passport = { nationality: 'US', passportNumber: 'X1234567', dateOfBirth: '1990-01-01' };
+
+    it('refuses an infant who turns 2 before the return', () => {
+      const infant = { ...complete, ...passport, passportExpiry: '2030-01-01', type: 'HELD_INFANT', dateOfBirth: '2024-10-20' };
+
+      expect(travellerProblems(infant, checksFor(outboundOnly))).toEqual([]);
+      expect(travellerProblems(infant, checksFor(roundTrip))).toContain('Infant fares are for travellers under 2 on every flight of the trip.');
+    });
+
+    it('refuses a passport that expires before the return', () => {
+      const traveller = { ...complete, ...passport, passportExpiry: '2026-10-15' };
+
+      expect(travellerProblems(traveller, checksFor(outboundOnly))).toEqual([]);
+      expect(travellerProblems(traveller, checksFor(roundTrip))).toContain('The passport expires before the trip ends.');
+    });
+  });
+
   it('asks everyone crossing a border for a date of birth and a passport', () => {
     const problems = travellerProblems(complete, { ...domestic, international: true, lastDate: '2026-10-12' });
     expect(problems).toEqual(expect.arrayContaining([
       'Enter the date of birth.', 'Select a nationality.', 'Enter the passport number.', 'Enter the passport expiry date.',
     ]));
+  });
+
+  // The PNR prints A-Z only. A name it would lose letters from is refused here,
+  // before payment, rather than booked short or refunded afterwards.
+  it('refuses a name the airline cannot print, and accepts one it can spell in Latin', () => {
+    expect(travellerProblems({ ...complete, firstName: 'Иван' }, domestic)[0]).toMatch(/in Latin letters/);
+    expect(travellerProblems({ ...complete, firstName: 'Łukasz', lastName: 'Øberg' }, domestic)).toEqual([]);
+  });
+
+  // Every phone went onto the booking as +1; the code is now asked for.
+  it("needs a country code with the lead traveller's mobile", () => {
+    expect(travellerProblems({ ...complete, countryCode: '' }, { ...domestic, index: 0 })).toContain('Select the country code for the mobile number.');
+    expect(travellerProblems({ ...complete, countryCode: '+91' }, { ...domestic, index: 0 })).toEqual([]);
   });
 
   it("needs the lead traveller's mobile, and a guest's email", () => {

@@ -168,7 +168,9 @@ function FlightFareOptions({ flight, onClose, onSelect }) {
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-bold text-gray-900">{prettyFare(opt)}</span>
-                      {i === 0 && <span className="text-[10px] font-bold text-white bg-[#055B75] px-2 py-0.5 rounded-full">CHEAPEST</span>}
+                      {/* Cheapest of several. On the one fare there was, the
+                          badge compared it with nothing. */}
+                      {i === 0 && options.length > 1 && <span className="text-[10px] font-bold text-white bg-[#055B75] px-2 py-0.5 rounded-full">CHEAPEST</span>}
                     </div>
                     <div className="text-xl font-bold text-[#055B75] mb-3">
                       <Price amount={opt.price} />

@@ -79,7 +79,7 @@ describe('searchForGroup', () => {
       { adults: 2, children: 1, infants: 1 },
     );
     expect(search).toMatchObject({
-      from: 'New Delhi (DEL)', to: 'BOM', departDate: '2026-10-06', returnDate: '', tripType: 'one-way',
+      from: 'New Delhi (DEL)', to: 'BOM', departDate: '2026-10-06', returnDate: '', tripType: 'oneWay',
       travelClass: 'BUSINESS', adults: 2, children: 1, infants: 1, travelers: 4,
     });
   });
@@ -92,7 +92,7 @@ describe('searchForGroup', () => {
       ],
     };
     expect(searchForGroup(null, roundTrip, { adults: 1, children: 0, infants: 0 })).toMatchObject({
-      from: 'DEL', to: 'BOM', departDate: '2026-10-06', returnDate: '2026-10-12', tripType: 'round-trip',
+      from: 'DEL', to: 'BOM', departDate: '2026-10-06', returnDate: '2026-10-12', tripType: 'roundTrip',
     });
   });
 });

@@ -3,13 +3,13 @@
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { Calendar, Users, MapPin, Search, ChevronDown, Plane, Ship, Package, Hotel, ArrowLeftRight } from "lucide-react"
-import { defaultSearchData, specialFares, sourceCities, allDestinations } from "./data.js"
+import { defaultSearchData, sourceCities, allDestinations } from "./data.js"
 import { allAirports } from "./airports.js";
 import AirportService from "../../../Services/AirportService";
 import { getTodayDate, getNextDay, getSafeDate } from "../../../utils/dateUtils";
 import { useLocationContext } from '../../../Context/LocationContext';
 import CustomFlightCalendar from "./CustomFlightCalendar";
-import { fieldCode } from './searchQuery';
+import { fieldCode, normalizeTripType } from './searchQuery';
 import { format, parseISO, isValid } from 'date-fns';
 
 // The date picker prices a route only for a real airport code: a half-typed
@@ -22,16 +22,20 @@ const calendarCode = (label, code) => {
 // Get this from a config or parent component
 const USE_AMADEUS_API = true;
 
+// A search handed in - from the URL after a refresh, or router state - in the
+// form's own spelling of the trip type. The URL's 'round-trip' matched none of
+// the form's checks, so Modify lost the round trip (searchQuery.js).
+const withTripType = (data) => (data ? { ...data, tripType: normalizeTripType(data.tripType, data.returnDate) } : data);
+
 export default function FlightSearchForm({ initialData, onSearch, openTravellers = false }) {
   const { city, loaded, country: userCountry } = useLocationContext();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState(initialData || defaultSearchData)
+  const [formData, setFormData] = useState(withTripType(initialData) || defaultSearchData)
   const [formErrors, setFormErrors] = useState({})
   const [showFromSuggestions, setShowFromSuggestions] = useState(false);
   const [showToSuggestions, setShowToSuggestions] = useState(false);
   const [fromSuggestions, setFromSuggestions] = useState([]);
   const [toSuggestions, setToSuggestions] = useState([]);
-  const [selectedFare, setSelectedFare] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [showDepartCalendar, setShowDepartCalendar] = useState(false);
   const [showReturnCalendar, setShowReturnCalendar] = useState(false);
@@ -66,7 +70,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
 
   useEffect(() => {
     if (initialData) {
-      setFormData(initialData);
+      setFormData(withTripType(initialData));
     }
   }, [initialData]);
 
@@ -351,7 +355,6 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
   const returnParts = getDateParts(formData.returnDate);
   const fromSubtitle = formData.fromCode ? `${formData.fromCode}${formData.fromCountry ? ', ' + formData.fromCountry : ''}` : '';
   const toSubtitle = formData.toCode ? `${formData.toCode}${formData.toCountry ? ', ' + formData.toCountry : ''}` : '';
-  const activeFare = selectedFare || 'regular';
   const anyCalendarOpen = showDepartCalendar || showReturnCalendar || showTravellers;
   // Make custom (non-native) controls operable via keyboard (Enter / Space)
   const onKeyActivate = (fn) => (e) => {
@@ -412,15 +415,6 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
     { key: 'flight', label: 'Flight', Icon: Plane, to: '/flights', active: true },
     { key: 'packages', label: 'Packages', Icon: Package, to: '/packages' },
     { key: 'hotels', label: 'Hotels', Icon: Hotel, to: '/hotels' },
-  ];
-
-  const fareOptions = [
-    { key: 'regular', title: 'Regular', sub: 'Regular fares' },
-    { key: 'student', title: 'Student', sub: 'Extra discounts / baggage' },
-    { key: 'armed', title: 'Armed Forces', sub: 'Up to ₹600 off' },
-    { key: 'gst', title: 'Have a GST number?', sub: 'Up to 10% extra savings' },
-    { key: 'senior', title: 'Senior Citizen', sub: 'Up to ₹600 off' },
-    { key: 'doctor', title: 'Doctor & Nurses', sub: 'Up to ₹600 off' },
   ];
 
   return (
@@ -550,9 +544,14 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                 </>
               ) : <p className="text-sm text-gray-400 mt-2">Select date</p>}
               {showDepartCalendar && (
-                <div onClick={(e) => e.stopPropagation()}>
+                // Keys stop here too: Enter on a day would otherwise reach the
+                // field's own Enter handler and close the calendar unchosen.
+                <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                  {/* One-way fares, so none on a round trip: they are not what
+                      the trip being searched costs. */}
                   <CustomFlightCalendar
                     selectedDate={formData.departDate} minDate={new Date()}
+                    showPrices={formData.tripType !== 'roundTrip'}
                     originCode={calendarCode(formData.from, formData.fromCode)}
                     destinationCode={calendarCode(formData.to, formData.toCode)}
                     adults={adults} children={children} infants={infants} travelClass={formData.travelClass}
@@ -583,7 +582,7 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
                 </>
               ) : <p className="text-xs text-gray-400 mt-1 leading-snug max-w-[150px]">Tap to add a return date for bigger discounts</p>}
               {showReturnCalendar && (
-                <div onClick={(e) => e.stopPropagation()}>
+                <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                   <CustomFlightCalendar
                     selectedDate={formData.returnDate} minDate={formData.departDate ? parseISO(formData.departDate) : new Date()}
                     showPrices={false}
@@ -610,7 +609,10 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
               {showTravellers && (
                 <div onClick={(e) => e.stopPropagation()}
                   className="absolute right-0 top-full mt-2 w-[560px] max-w-[88vw] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 z-[100] text-left cursor-default">
-                  {renderCounter('ADULTS (12y +)', 'on the day of travel', adults, setAdults, adultOptions, (opt) => opt.over || (opt.val + children > MAX_SEATED))}
+                  {/* Fewer adults take infants down with them: each infant
+                      travels on an adult's lap, and lowering adults used to
+                      leave more infants than laps - a search that fails. */}
+                  {renderCounter('ADULTS (12y +)', 'on the day of travel', adults, (n) => { setAdults(n); setInfants((current) => Math.min(current, n)); }, adultOptions, (opt) => opt.over || (opt.val + children > MAX_SEATED))}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 mt-4">
                     {renderCounter('CHILDREN (2y - 12y)', 'on the day of travel', children, setChildren, childOptions, (opt) => opt.over || (adults + opt.val > MAX_SEATED))}
                     {renderCounter('INFANTS (below 2y)', 'on the day of travel', infants, setInfants, childOptions, (opt) => opt.over || (opt.val > adults))}
@@ -642,24 +644,10 @@ export default function FlightSearchForm({ initialData, onSearch, openTravellers
             </div>
           </div>
 
-          {/* Special fares */}
-          <div className="mt-5 flex flex-col sm:flex-row sm:items-stretch gap-x-4 gap-y-3">
-            <div className="flex items-center shrink-0">
-              <span className="text-xs font-extrabold tracking-wide text-gray-800 uppercase leading-tight">Special Fares</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {fareOptions.map(({ key, title, sub }) => {
-                const on = activeFare === key;
-                return (
-                  <button key={key} type="button" onClick={() => setSelectedFare(key)}
-                    className={`text-left rounded-md border px-3 py-1.5 min-w-[118px] transition-colors ${on ? 'border-[#055B75] bg-[#055B75]/[0.06]' : 'border-gray-200 hover:border-gray-300 bg-white'}`}>
-                    <div className={`text-[13px] font-bold ${on ? 'text-[#055B75]' : 'text-gray-700'}`}>{title}</div>
-                    <div className="text-[11px] text-gray-400">{sub}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* A selector of discounted fares for students, the military, seniors,
+              medical staff and tax-registered businesses sat here, most
+              promising up to 600 rupees off. The choice was never sent with the
+              search or the booking, so the discounts it promised never applied. */}
         </div>
 
         {/* Search button */}

@@ -1,6 +1,9 @@
 import axios from 'axios';
 import { computeFlightCharge, roundMoney, travellerTypesOf } from '../../shared/flightCharge.js';
-import { needsDateOfBirth } from '../../shared/travellerDetails.js';
+import { bookingTravellerProblems, tripDates } from '../../shared/travellerDetails.js';
+import { TRAVELLER_TYPES } from '../../shared/flightOrderBody.js';
+import { describeGroup, groupFromOffer } from '../../shared/travellerGroup.js';
+import { NAME_MISSING, travellerNameProblem } from '../../shared/passengerName.js';
 import { DEFAULT_PRICE_SETTINGS } from '../config/priceDefaults.js';
 import { evaluateCoupon } from './coupon.service.js';
 
@@ -18,6 +21,20 @@ import { evaluateCoupon } from './coupon.service.js';
  * service fee and any coupon itself, and refuses unless the requested amount is
  * that figure to the cent.
  */
+
+/**
+ * Whether a pricing failure is the airline refusing this fare - gone, changed,
+ * or not sellable as described - rather than a failure to reach the airline.
+ *
+ * The SOAP client answers a refusal with a 409 (or a 400 for a request it
+ * cannot sell at all) and an outage with a 5xx. Checkout used to turn both into
+ * "try again in a moment", and dropped the provider's "please search again":
+ * a customer on a fare that could no longer be sold retried for ever.
+ */
+export const isFareRefusal = (error) => error?.name === 'AmadeusSoapError' && [400, 409].includes(Number(error?.code));
+
+/** A pricing failure checkout answers with "search again", not "try again". */
+const fareRefused = (reason) => Object.assign(new Error(`the airline refused to price the fare: ${reason}`), { fareUnavailable: true });
 
 /** Where pricing runs. Vercel cannot reach Amadeus (it allow-lists Lightsail's IP). */
 const pricingBase = () => process.env.FLIGHTS_API_BASE
@@ -43,6 +60,9 @@ export async function priceOfferForCheckout(offer) {
       { timeout: 25000, validateStatus: () => true },
     );
     const priced = resp?.data?.data?.flightOffers?.[0];
+    if (resp?.data?.code === 'FARE_UNAVAILABLE') {
+      throw fareRefused(resp?.data?.error || `pricing answered ${resp?.status}`);
+    }
     if (resp?.status !== 200 || !resp?.data?.success || !priced?.price) {
       throw new Error(`pricing answered ${resp?.status}: ${resp?.data?.error || 'no priced offer'}`);
     }
@@ -51,7 +71,13 @@ export async function priceOfferForCheckout(offer) {
   }
 
   const { default: FlightProvider } = await import('./flightProvider.js');
-  const result = await FlightProvider.priceFlightOffer(offer);
+  let result;
+  try {
+    result = await FlightProvider.priceFlightOffer(offer);
+  } catch (error) {
+    if (isFareRefusal(error)) throw fareRefused(error.technicalError || error.message);
+    throw error;
+  }
   const priced = result?.data?.flightOffers?.[0];
   if (!result?.success || !priced?.price) throw new Error(result?.error || 'pricing returned no offer');
   const { crossesBorder } = await import('../utils/itinerary.js');
@@ -67,14 +93,6 @@ export async function readPriceSettings(client) {
 }
 
 const refuse = (status, code, message, extra = {}) => ({ ok: false, status, code, message, ...extra });
-
-/** The first traveller whose details the airline needs and does not have, or -1. */
-const firstIncompleteTraveller = (passengers, types, international) => passengers.findIndex((p, index) => (
-  !String(p?.firstName ?? '').trim()
-  || !String(p?.lastName ?? '').trim()
-  || !p?.gender
-  || (!p?.dateOfBirth && needsDateOfBirth({ type: p?.type || types[index], international }))
-));
 
 /**
  * @returns {Promise<
@@ -106,25 +124,75 @@ export async function verifyFlightCharge({
       `This fare is for ${pricedFor} traveller${pricedFor === 1 ? '' : 's'}. Please search again for the number travelling.`);
   }
 
+  // A name the airline cannot print, refused before the fare is even priced.
+  // The PNR keeps only A-Z, spaces and hyphens: a name in another script was
+  // refused by the booking chain after payment and refunded, and one with a
+  // letter like Ł was booked short. Same rule as the page and the PNR
+  // (shared/passengerName.js); a missing name is left to the check below.
+  const unprintable = passengers.findIndex((p) => {
+    const problem = travellerNameProblem(p);
+    return Boolean(problem) && problem !== NAME_MISSING;
+  });
+  if (unprintable !== -1) {
+    return refuse(400, 'PASSENGER_NAME_UNUSABLE',
+      `Traveller ${unprintable + 1}: ${travellerNameProblem(passengers[unprintable])} Nothing has been charged.`);
+  }
+
+  // The same mix of passenger types as the fare, compared as the order route
+  // compares them - but before payment. A child booked on an adult's fare was
+  // charged, then refused by the order route and refunded. A client that sends
+  // no types is held to the offer's order, as the order route holds it.
+  const pricedTypes = offer.travelerPricings.map((pricing) => pricing?.travelerType);
+  const sentTypes = passengers.map((p) => (TRAVELLER_TYPES.includes(p?.type) ? p.type : '')).filter(Boolean);
+  if (sentTypes.length > 0 && (sentTypes.length !== passengers.length
+    || [...sentTypes].sort().join() !== [...pricedTypes].sort().join())) {
+    return refuse(400, 'PASSENGER_COUNT_MISMATCH',
+      `The travellers do not match this fare, which is for ${describeGroup(groupFromOffer(offer))}. Please search again for the people travelling.`);
+  }
+
   let priced;
   try {
     priced = await priceOffer(offer);
   } catch (error) {
     console.warn('⚠️ Checkout pricing failed:', error?.message || error);
+    // The airline will not sell this fare any more: say so, and that a new
+    // search is the way on. A retry of the same fare cannot succeed.
+    if (error?.fareUnavailable) {
+      return refuse(409, 'FARE_UNAVAILABLE',
+        'The airline can no longer sell this fare. Please search again to see the fares available now. Nothing has been charged.');
+    }
     return refuse(503, 'PRICE_UNAVAILABLE', 'We could not confirm the current fare with the airline. Please try again in a moment.');
   }
 
-  // Every traveller complete before the card is charged. The order route
-  // refuses an incomplete traveller too - but only after payment, and then has
-  // to reverse the charge. The date-of-birth rule is the route's own, decided
-  // from the same airport index, so the review page's shorter airport list can
-  // no longer let a customer pay for a booking the route then refunds. An
-  // unknown answer counts as crossing a border.
+  // Every traveller as the airline needs them before the card is charged, by
+  // the rule the review page checks (shared/travellerDetails.js): a printable
+  // name, a gender, a date of birth where one is needed and an age that fits
+  // the fare on every flight of the trip, and a passport valid to the last
+  // flight on a trip abroad. This checked only that names, a gender and a date
+  // of birth were there. The order route refuses an incomplete traveller too -
+  // but only after payment - and the airline will not ticket a trip abroad
+  // without the passport.
+  //
+  // Whether the trip crosses a border is decided from the airport index the
+  // order route uses, so the review page's shorter airport list cannot let a
+  // customer pay for a booking the route then refunds. An unknown answer
+  // counts as crossing for the date of birth, as before. The passport is asked
+  // for only when the index knows the trip crosses a border: the review page
+  // shows passport fields from its own list, and must not be refused for a
+  // document it gave the customer nowhere to enter.
   const international = typeof priced?._ama?.international === 'boolean' ? priced._ama.international : true;
-  const incomplete = firstIncompleteTraveller(passengers, offer.travelerPricings.map((t) => t.travelerType), international);
-  if (incomplete !== -1) {
-    return refuse(400, 'PASSENGERS_INCOMPLETE',
-      `Traveller ${incomplete + 1} needs a first and last name, a gender${international ? ' and a date of birth' : ''} before you pay. Nothing has been charged.`);
+  const { firstDate, lastDate } = tripDates(offer);
+  for (const [index, traveller] of passengers.entries()) {
+    const problems = bookingTravellerProblems(traveller, {
+      type: TRAVELLER_TYPES.includes(traveller?.type) ? traveller.type : pricedTypes[index],
+      international,
+      passportRequired: priced?._ama?.international === true,
+      travelDate: firstDate,
+      lastDate,
+    });
+    if (problems.length > 0) {
+      return refuse(400, 'PASSENGERS_INCOMPLETE', `Traveller ${index + 1}: ${problems[0]} Nothing has been charged.`);
+    }
   }
 
   const pricedCurrency = priced?.price?.currency;
@@ -178,6 +246,16 @@ export async function verifyFlightCharge({
   }
 
   const charge = computeFlightCharge({ fareTotal, travellerTypes, config, discount });
+
+  // A coupon worth the whole booking leaves nothing to charge, and a payment
+  // page cannot be opened for $0.00. The page sent 0, and checkout answered
+  // with its own internal "Missing required fields" message.
+  if (coupon && charge.total <= 0) {
+    return refuse(409, 'COUPON_INVALID',
+      'This coupon covers the whole fare, and a booking cannot be paid for at $0.00 online. Please call (877) 538-7380 to use it.',
+      { pricedFare });
+  }
+
   const requested = roundMoney(amount);
 
   if (Math.abs(requested - charge.total) > 0.01) {

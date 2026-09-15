@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import Price from '../../../Components/Price';
 import { formatCheckedBag } from '../../../utils/baggage';
+import { seatsLeftLabel } from './searchResults';
 
 const AIRLINE_LOGO_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iOCIgZmlsbD0iIzM3NzNmNCIvPgo8dGV4dCB4PSIyMCIgeT0iMjgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuKciO+4jzwvdGV4dD4KPHN2Zz4K';
 
@@ -187,11 +188,14 @@ function SegmentList({ segments = [], stopDetails = [], cityMap = {} }) {
 // What the price on the card covers. The airline's total is for every traveller
 // the search priced; a two-adult total was labelled "per adult", so the
 // customer read half the real price per person.
+//
+// And the price is the airline's fare: the service fee is added on the review
+// page, so the card says so rather than sit under "No hidden fees".
 const pricedForLabel = (offer) => {
   const travellers = offer?.travelerPricings?.length || 0;
-  if (travellers > 1) return `for ${travellers} travellers`;
-  if (travellers === 1) return 'for 1 traveller';
-  return 'total fare';
+  if (travellers > 1) return `for ${travellers} travellers + service fee`;
+  if (travellers === 1) return 'for 1 traveller + service fee';
+  return 'fare + service fee';
 };
 
 function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) {
@@ -220,7 +224,7 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
     ? flight.cabin.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
     : null;
   const refundLabel = flight.refundable === true ? 'Refundable' : flight.refundable === false ? 'Non-refundable' : 'Refunds: see fare rules';
-  const seatsLeft = flight.numberOfBookableSeats;
+  const seatsLeft = seatsLeftLabel(flight.numberOfBookableSeats);
 
   const amenities = Array.isArray(flight.amenities) ? flight.amenities : [];
   const freeAmenities = amenities.filter(a => a && a.isChargeable === false);
@@ -386,8 +390,8 @@ function FlightCard({ flight, onBook, onViewPrices, priceStats, cityMap = {} }) 
               {cabinClass}
             </span>
           )}
-          {seatsLeft && seatsLeft <= 9 && (
-            <span className="text-red-600 font-medium">{seatsLeft} seat{seatsLeft > 1 ? 's' : ''} left</span>
+          {seatsLeft && (
+            <span className={seatsLeft.urgent ? 'text-red-600 font-medium' : 'text-gray-500'}>{seatsLeft.text}</span>
           )}
         </div>
         <button

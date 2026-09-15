@@ -56,6 +56,21 @@ export const shiftDateStrip = (strip, days, { selectedIso, today = getTodayDate(
   strip.map((day) => stripDay(addDays(day.isoDate, days), selectedIso, today));
 
 /**
+ * A search moved to a new departure date, with its return moved by the same
+ * number of days.
+ *
+ * A date picked on the strip or the fare calendar changed only the departure,
+ * so a day after the return searched a trip that came home before it left.
+ * The trip keeps its length instead.
+ */
+export const withDepartureDate = (search, isoDate) => {
+  if (!search?.returnDate || !search?.departDate) return { ...search, departDate: isoDate };
+  // Both at local noon, so a daylight-saving change still rounds to whole days.
+  const days = Math.round((getSafeDate(isoDate) - getSafeDate(search.departDate)) / 86400000);
+  return { ...search, departDate: isoDate, returnDate: addDays(search.returnDate, days) };
+};
+
+/**
  * What to tell the customer when a search fails.
  *
  * A refused request (4xx) says why in words the customer can act on - "Each
@@ -70,6 +85,49 @@ export const searchFailureMessage = (status, body) => {
   if (status === 504) return 'The airlines took too long to answer. Please try again.';
   if (!status) return "We couldn't reach flight search. Please check your connection and try again.";
   return "We couldn't load flights just now. Please try again.";
+};
+
+/**
+ * The sidebar filters with nothing narrowed: every price from the lowest to
+ * the highest of these results, in the currency they are shown in.
+ *
+ * Both reset buttons set the price to a fixed 0-50,000, in whatever currency
+ * the visitor was browsing in. In rupees a USD 700 fare is past 50,000, so
+ * "Reset all filters" hid the very flights it was meant to bring back.
+ *
+ * @param {{ min: number, max: number }} bounds the results' price range
+ */
+export const filtersWithin = (bounds) => ({
+  price: [bounds.min, bounds.max],
+  stops: 'any',
+  airlines: [],
+  departureTime: 'any',
+  baggage: 'any',
+  refundable: 'any',
+  originAirports: [],
+  destAirports: [],
+});
+
+/**
+ * The price slider's step for a range: about fifty steps across it, on a round
+ * number. It moved in 500s whatever the fares, so under $500 the slider had
+ * two positions - nothing and everything.
+ */
+export const priceStep = (max) => [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+  .find((step) => step >= (Number(max) || 0) / 50) ?? 5000;
+
+/**
+ * What to say about the seats left on a fare, or null. Amadeus reports at most
+ * 9 bookable seats, so 9 means "9 or more" - it read "9 seats left", in red, on
+ * flights with plenty of room.
+ *
+ * @returns {{ text: string, urgent: boolean }|null}
+ */
+export const seatsLeftLabel = (seats) => {
+  const n = Number(seats);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  if (n >= 9) return { text: '9+ seats', urgent: false };
+  return { text: `${n} seat${n === 1 ? '' : 's'} left`, urgent: true };
 };
 
 const DEPARTURE_WINDOWS = {

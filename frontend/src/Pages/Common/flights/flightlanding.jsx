@@ -5,14 +5,10 @@ import PopularDestinations from "./popular-destination"
 import CheapestFlights from "./cheapest-flight"
 import Navbar from "../Navbar"
 import Footer from "../Footer"
-import LoadingSpinner from "../../../Components/LoadingSpinner"
 import ScrollFlightProgress from "../../../Components/ScrollFlightProgress"
 import withPageElements from "../PageWrapper"
-import axios from 'axios';
-import { useState, useEffect } from "react";
+import { searchToQuery } from "./searchQuery"
 import { Mail, Phone, ExternalLink, Calendar, MessageSquare, Clock, ArrowLeft, User, CheckCircle2, Ticket, Sparkles, ArrowRight, ArrowUpRight, ShieldCheck, Headphones, BadgePercent, Check, Plane, Compass, Star, Lock } from 'lucide-react';
-// Import centralized API configuration
-import apiConfig from '@/config/api';
 // Importing data from the data file
 import { heroImage } from "./data.js"
 // Import airports database for dynamic city-to-IATA mapping
@@ -33,86 +29,19 @@ const cityToIATACode = allAirports.reduce((acc, airport) => {
 function FlightLanding() {
   const navigate = useNavigate();
   const { city, cityCode } = useLocationContext();
-  const [isSearching, setIsSearching] = useState(false);
 
-  const handleSearch = async (formData) => {
-    setIsSearching(true);
-    try {
-      // Use IATA codes from formData (set when user selects from suggestions)
-      // Fall back to cityToIATACode map, then raw input as last resort
-      const fromCode = formData.fromCode || cityToIATACode[formData.from] || formData.from;
-      const toCode = formData.toCode || cityToIATACode[formData.to] || formData.to;
-
-      console.log('Converting cities to IATA codes:', {
-        from: `${formData.from} -> ${fromCode} (formData.fromCode: ${formData.fromCode})`,
-        to: `${formData.to} -> ${toCode} (formData.toCode: ${formData.toCode})`
-      });
-
-      const searchData = {
-        ...formData,
-        from: fromCode,
-        to: toCode
-      };
-
-      console.log('Sending search request with data:', searchData);
-
-      // Save search data before making API request
-      // This ensures we can navigate even if the API fails
-      const requestData = {
-        searchData: searchData
-      };
-
-      try {
-        // Use API endpoint from centralized config
-        const apiUrl = apiConfig.endpoints.flights.search;
-        console.log('Using API URL:', apiUrl);
-
-        const response = await axios.post(apiUrl, searchData, {
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-          },
-          withCredentials: false,
-          timeout: 10000 // 10 second timeout
-        });
-
-        console.log('Got response:', response);
-
-        const data = response.data;
-        if (data && data.success !== false) {
-          console.log('Search successful, navigating to results with API response');
-          navigate('/flights/search', {
-            state: {
-              searchData: searchData, // Original search parameters
-              apiResponse: data // API response
-            }
-          });
-        } else {
-          console.log("No flight results found or API error:", data?.error || 'Unknown error');
-          // Navigate anyway, and let the search page handle it
-          navigate('/flights/search', { state: requestData });
-        }
-      } catch (error) {
-        console.error('Search API error:', error.message);
-        // Navigate to search page even if API fails
-        // The search page will retry the search
-        navigate('/flights/search', { state: requestData });
-      }
-    } catch (error) {
-      console.error('Search function error:', error.message);
-      // If any other error occurs, still try to navigate
-      navigate('/flights/search', {
-        state: {
-          searchData: {
-            ...formData,
-            from: formData.fromCode || cityToIATACode[formData.from] || formData.from,
-            to: formData.toCode || cityToIATACode[formData.to] || formData.to
-          }
-        }
-      });
-    } finally {
-      setIsSearching(false);
-    }
+  // Straight to the results, which run the search. This page ran it first, up
+  // to 10 seconds with a spinner, and handed an answer to a results page that
+  // ignores it and searches again: every search from here ran twice.
+  const handleSearch = (formData) => {
+    // Use IATA codes from formData (set when user selects from suggestions)
+    // Fall back to cityToIATACode map, then raw input as last resort
+    const searchData = {
+      ...formData,
+      from: formData.fromCode || cityToIATACode[formData.from] || formData.from,
+      to: formData.toCode || cityToIATACode[formData.to] || formData.to,
+    };
+    navigate(`/flights/search?${searchToQuery(searchData)}`, { state: { searchData } });
   };
 
   // Handle navigation to destination search
@@ -175,13 +104,6 @@ function FlightLanding() {
 
   return (
     <div className="min-h-screen bg-ivory">
-      {/* Loading Overlay */}
-      {isSearching && (
-        <div className="fixed inset-0 z-[999] bg-white/80 backdrop-blur-sm">
-          <LoadingSpinner fullScreen={true} text="Searching for the best flights..." />
-        </div>
-      )}
-
       <Navbar />
       <ScrollFlightProgress />
 
@@ -195,9 +117,9 @@ function FlightLanding() {
           <span className="hidden sm:inline">Call <span className="font-semibold text-white">(877) 538-7380</span></span>
           <span className="hidden md:inline text-white/25">·</span>
           <a href="mailto:support@jetsetterss.com" className="hidden md:inline text-white underline decoration-white/30 underline-offset-2 hover:decoration-white">support@jetsetterss.com</a>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-300/40 bg-yellow-300/10 px-2.5 py-0.5 text-yellow-200">
-            <Ticket className="h-3.5 w-3.5" /> <span className="font-semibold tracking-wider">$50 OFF</span> · today only
-          </span>
+          {/* A pill promising a fifty-dollar discount for one day sat here every
+              day. No coupon or price rule stood behind it, so nobody who booked
+              ever got it. */}
         </div>
       </div>
 
@@ -318,7 +240,9 @@ function FlightLanding() {
                 for your travel budget — the most affordable flights, without compromising on quality.
               </p>
               <ul className="space-y-3.5">
-                {['Price match guarantee', 'No hidden fees or charges', '24/7 customer support'].map((item) => (
+                {/* This promised there were no fees to find, over search results
+                    whose prices leave out the service fee added before payment. */}
+                {['Price match guarantee', 'Service fee shown before you pay', '24/7 customer support'].map((item) => (
                   <li key={item} className="flex items-center text-ink/80">
                     <span className="flex-shrink-0 mr-3 flex h-6 w-6 items-center justify-center rounded-full bg-brand-teal/10 text-brand-teal">
                       <Check className="h-3.5 w-3.5" strokeWidth={3} />

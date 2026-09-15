@@ -6,6 +6,7 @@ import { isGuestFlightBookingEnabled, isUsableEmail } from '../../services/guest
 import { getCaller } from './agents.handlers.js';
 import { safeReturnUrl } from '../../utils/returnUrl.js';
 import { checkoutKey } from '../../utils/tripMatch.js';
+import { toPnrName } from '../../../shared/passengerName.js';
 
 const sanitizeRef = (v) => String(v ?? '').replace(/[^A-Za-z0-9_-]/g, '') || '__none__';
 
@@ -378,11 +379,14 @@ export async function handleHostedCheckout(req, res) {
             flightData
         } = req.body;
 
-        // Validate required fields
+        // Validate required fields. Said in words for the customer: the page
+        // shows this text, and "Missing required fields: amount and orderId are
+        // required" is what it showed when a coupon took the total to $0.
         if (!amount || !orderId) {
             return res.status(400).json({
                 success: false,
-                error: 'Missing required fields: amount and orderId are required'
+                code: 'CHECKOUT_INCOMPLETE',
+                error: 'We could not start the payment for this booking. Please go back to the flight and try again. Nothing has been charged.'
             });
         }
 
@@ -430,6 +434,31 @@ export async function handleHostedCheckout(req, res) {
             }
         }
 
+        const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
+        // Where ARC sends the payer afterwards: the caller's URL only when it is
+        // one of ours (utils/returnUrl.js), otherwise the site's default.
+        const finalReturnUrl = safeReturnUrl(returnUrl, `${frontendBaseUrl}/payment/callback?orderId=${orderId}&bookingType=${bookingType}`);
+        const finalCancelUrl = safeReturnUrl(cancelUrl, `${frontendBaseUrl}/${bookingType}-payment?cancelled=true`);
+
+        // A payment page this customer already opened for exactly this trip,
+        // handed back under its own reference. Never with its success
+        // indicator: whoever opens a checkout is never given the secret that
+        // proves who paid (see the response at the end).
+        const handBack = (reusable) => {
+            console.log('♻️ Handing back the payment page already open for this trip', { orderId: reusable.orderId, requested: orderId });
+            return res.status(200).json({
+                success: true,
+                sessionId: reusable.sessionId,
+                merchantId: ARC_PAY_CONFIG.MERCHANT_ID,
+                orderId: reusable.orderId,
+                paymentPageUrl: reusable.checkoutUrl,
+                checkoutUrl: reusable.checkoutUrl,
+                redirectMethod: 'GET',
+                reused: true,
+                message: 'This trip already has a payment page open, so that one is used.'
+            });
+        };
+
         let chargeAmount = amount;
         let verifiedCharge = null;
         if (bookingType === 'flight') {
@@ -456,6 +485,23 @@ export async function handleHostedCheckout(req, res) {
                     });
                 }
             }
+            // The page this customer opened moments ago for exactly this trip,
+            // looked for before the fare is priced again. A retry priced the
+            // fare again - up to 25 seconds - before it found the payment page
+            // it had already opened, and the review page had given up after 10.
+            // The open page was made for a total the airline's price verified;
+            // it is handed back only when this request asks for that same total
+            // with the same coupon, as well as the same flights, travellers and
+            // contact details (utils/tripMatch.js). Anything else is priced.
+            const openPage = await findReusableCheckout({
+                userId: signedInUserId,
+                customerEmail,
+                key: checkoutKey({ bookingData, customerEmail, total: amount, couponCode: req.body.couponCode }),
+                returnOrigin: urlOrigin(finalReturnUrl),
+                frontendBaseUrl,
+            });
+            if (openPage) return handBack(openPage);
+
             const verdict = await verifyFlightCharge({
                 client: supabase,
                 amount,
@@ -504,13 +550,7 @@ export async function handleHostedCheckout(req, res) {
         }
         arcBaseUrl = arcBaseUrl || 'https://api.arcpay.travel/api/rest/version/77';
 
-        const frontendBaseUrl = process.env.FRONTEND_URL || 'https://www.jetsetterss.com';
         const authHeader = 'Basic ' + Buffer.from(`merchant.${arcMerchantId}:${arcApiPassword}`).toString('base64');
-
-        // Where ARC sends the payer afterwards: the caller's URL only when it is
-        // one of ours (utils/returnUrl.js), otherwise the site's default.
-        const finalReturnUrl = safeReturnUrl(returnUrl, `${frontendBaseUrl}/payment/callback?orderId=${orderId}&bookingType=${bookingType}`);
-        const finalCancelUrl = safeReturnUrl(cancelUrl, `${frontendBaseUrl}/${bookingType}-payment?cancelled=true`);
 
         // One trip, one open payment page. Every Pay click on the review page
         // opened a new session under a new reference, so a double click, the
@@ -520,6 +560,10 @@ export async function handleHostedCheckout(req, res) {
         // for exactly this trip is handed back instead, under its own reference.
         // Its success indicator is not: whoever opens a checkout is never given
         // the secret that proves who paid (see the response at the end).
+        //
+        // Looked for again at the verified total: the page may have asked for a
+        // figure the open page was not made for, or another request may have
+        // opened one while this one was pricing.
         if (bookingType === 'flight') {
             const reusable = await findReusableCheckout({
                 userId: resolveBookingUserId(req),
@@ -528,20 +572,7 @@ export async function handleHostedCheckout(req, res) {
                 returnOrigin: urlOrigin(finalReturnUrl),
                 frontendBaseUrl,
             });
-            if (reusable) {
-                console.log('♻️ Handing back the payment page already open for this trip', { orderId: reusable.orderId, requested: orderId });
-                return res.status(200).json({
-                    success: true,
-                    sessionId: reusable.sessionId,
-                    merchantId: arcMerchantId,
-                    orderId: reusable.orderId,
-                    paymentPageUrl: reusable.checkoutUrl,
-                    checkoutUrl: reusable.checkoutUrl,
-                    redirectMethod: 'GET',
-                    reused: true,
-                    message: 'This trip already has a payment page open, so that one is used.'
-                });
-            }
+            if (reusable) return handBack(reusable);
         }
 
         const cleanBaseUrl = arcBaseUrl.replace(/\/$/, '');
@@ -584,12 +615,21 @@ export async function handleHostedCheckout(req, res) {
                 console.log('🔍 Processing airline data for ARC Pay...');
 
                 const flight = flightData || bookingData?.selectedFlight || bookingData?.flightData || {};
-                const itinerary = flight?.itineraries?.[0] || flight?.itinerary || {};
-                const segments = Array.isArray(itinerary?.segments) ? itinerary.segments :
+                // Every itinerary: a round trip's return is the second one.
+                // Only the first was read, so the legs home were never sent and
+                // the card network was told the trip was one way.
+                const itineraries = Array.isArray(flight?.itineraries) ? flight.itineraries
+                    : flight?.itinerary ? [flight.itinerary] : [];
+                const itinerarySegments = itineraries.flatMap((itinerary) => (Array.isArray(itinerary?.segments) ? itinerary.segments : []));
+                const segments = itinerarySegments.length > 0 ? itinerarySegments :
                     Array.isArray(flight?.segments) ? flight.segments : [];
+                // Where the trip goes is the end of the outbound, not the last
+                // leg, which on a round trip lands back where it started.
+                const outbound = Array.isArray(itineraries[0]?.segments) && itineraries[0].segments.length > 0
+                    ? itineraries[0].segments : segments;
 
                 const origin = flight?.origin || flight?.departureAirport || segments?.[0]?.departure?.iataCode || 'XXX';
-                const destination = flight?.destination || flight?.arrivalAirport || segments?.[segments.length - 1]?.arrival?.iataCode || 'XXX';
+                const destination = flight?.destination || flight?.arrivalAirport || outbound?.[outbound.length - 1]?.arrival?.iataCode || 'XXX';
 
                 const actualCarrierCode = (flight?.carrierCode || segments?.[0]?.carrierCode || segments?.[0]?.carrier || 'XX').substring(0, 2).toUpperCase();
                 // Acquirer may reject if carrierName doesn't match a real airline when airline data is present
@@ -615,7 +655,9 @@ export async function handleHostedCheckout(req, res) {
 
                 // Real names only. A traveller with no usable name is left out
                 // rather than sent to the card network as "TEST TRAVELER".
-                const cleanName = (v) => String(v || '').toUpperCase().replace(/[^A-Z\s]/g, '').trim().substring(0, 20);
+                // Spelled as the PNR spells it (shared/passengerName.js), so
+                // "Łukasz" reaches the card network as LUKASZ, not UKASZ.
+                const cleanName = (v) => toPnrName(v).replace(/[^A-Z\s]/g, '').trim().substring(0, 20);
                 const passengers = bookingData?.passengerData || bookingData?.travelers || [];
                 const passengerList = passengers
                     .map(p => ({

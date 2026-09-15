@@ -3,6 +3,7 @@ import {
   buildSearchPayload,
   extractIata,
   fieldCode,
+  normalizeTripType,
   searchFromQuery,
   searchKeyOf,
   searchToQuery,
@@ -19,6 +20,20 @@ import {
  * the address bar the user was looking at.
  */
 
+describe('normalizeTripType', () => {
+  it("writes the form's spelling and reads the old one", () => {
+    expect(normalizeTripType('roundTrip')).toBe('roundTrip');
+    expect(normalizeTripType('round-trip')).toBe('roundTrip');
+    expect(normalizeTripType('one-way', '2026-10-20')).toBe('oneWay');
+    expect(normalizeTripType('oneWay')).toBe('oneWay');
+  });
+
+  it('takes a return date to mean a round trip when no type is given', () => {
+    expect(normalizeTripType(undefined, '2026-10-20')).toBe('roundTrip');
+    expect(normalizeTripType('', '')).toBe('oneWay');
+  });
+});
+
 describe('searchFromQuery', () => {
   it('reads the URL the page itself writes', () => {
     // This is verbatim what the date strip put in the address bar.
@@ -27,7 +42,7 @@ describe('searchFromQuery', () => {
       to: 'BOM',
       departDate: '2026-09-27',
       returnDate: '',
-      tripType: 'one-way',
+      tripType: 'oneWay',
       adults: 1,
       travelers: 1,
       children: 0,
@@ -48,7 +63,9 @@ describe('searchFromQuery', () => {
     const parsed = searchFromQuery('?from=JFK&to=LHR&date=2026-10-01&returnDate=2026-10-08');
 
     expect(parsed.returnDate).toBe('2026-10-08');
-    expect(parsed.tripType).toBe('round-trip');
+    // The search form's spelling: 'round-trip' matched none of its checks, so
+    // after a refresh Modify showed the trip as one way.
+    expect(parsed.tripType).toBe('roundTrip');
   });
 
   it('refuses a partial URL rather than searching for something else', () => {
@@ -123,7 +140,7 @@ describe('round trip through the URL', () => {
       to: 'BOM',
       departDate: '2026-09-27',
       returnDate: '2026-10-04',
-      tripType: 'round-trip',
+      tripType: 'roundTrip',
       adults: 2,
       children: 1,
       infants: 0,

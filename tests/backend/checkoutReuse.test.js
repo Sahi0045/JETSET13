@@ -67,7 +67,8 @@ const arcSession = { status: 201, data: { result: 'SUCCESS', session: { id: 'SES
 
 const checkout = async ({ rows = [], tables, user = CUSTOMER, body = {}, verdict = verified, fail } = {}) => {
   const table = fakeBookingsTable(rows, { tables, fail });
-  vi.doMock('../../backend/services/flightCheckout.service.js', () => ({ verifyFlightCharge: vi.fn().mockResolvedValue(verdict) }));
+  const verifyFlightCharge = vi.fn().mockResolvedValue(verdict);
+  vi.doMock('../../backend/services/flightCheckout.service.js', () => ({ verifyFlightCharge }));
   vi.doMock('../../backend/routes/payment/arcpay.config.js', async () => {
     const actual = await vi.importActual('../../backend/routes/payment/arcpay.config.js');
     return {
@@ -92,7 +93,7 @@ const checkout = async ({ rows = [], tables, user = CUSTOMER, body = {}, verdict
   });
   const res = createResponse();
   await handleHostedCheckout(req, res);
-  return { res, table };
+  return { res, table, verifyFlightCharge };
 };
 
 const openedANewPage = () => axios.post.mock.calls.some(([, sent]) => sent?.apiOperation === 'INITIATE_CHECKOUT');
@@ -121,6 +122,28 @@ describe('a second checkout for a trip that already has a payment page open', ()
       checkoutUrl: 'https://api.arcpay.travel/checkout/pay/SESSION-FIRST',
     });
     expect(openedANewPage()).toBe(false);
+  });
+
+  // A retry priced the fare again - up to 25 seconds - before finding the page
+  // it had opened, and the review page gave up after 10.
+  it('hands it back before pricing the fare again, when the page asks for the total it was made for', async () => {
+    const { res, verifyFlightCharge } = await checkout({ rows: [openCheckout()] });
+
+    expect(res.body.orderId).toBe('FLTFIRST1');
+    expect(verifyFlightCharge).not.toHaveBeenCalled();
+    expect(openedANewPage()).toBe(false);
+  });
+
+  it('prices the fare first when the page asks for a different total', async () => {
+    const { res, verifyFlightCharge } = await checkout({
+      rows: [openCheckout()],
+      body: { amount: '452.00' },
+      verdict: { ...verified, charge: { total: 452 } },
+    });
+
+    expect(verifyFlightCharge).toHaveBeenCalledTimes(1);
+    expect(res.body.orderId).toBe('FLTSECOND2');
+    expect(openedANewPage()).toBe(true);
   });
 
   it('never hands over the payment secret of the page it gives back', async () => {
@@ -159,8 +182,10 @@ describe('a new payment page is opened, as before, when the open one is not this
     await opensItsOwn({ rows: [openCheckout()], body: { bookingData: bookingData({ passengerData: corrected }) } });
   });
 
+  // The page is refused PRICE_CHANGED and asks again with the new total, so
+  // the request carries it too - and it is not the open page's.
   it('the fare, and so the total, moved', async () => {
-    await opensItsOwn({ rows: [openCheckout()], verdict: { ...verified, charge: { total: 452 } } });
+    await opensItsOwn({ rows: [openCheckout()], body: { amount: '452.00' }, verdict: { ...verified, charge: { total: 452 } } });
   });
 
   it('the open page is older than the reuse window', async () => {

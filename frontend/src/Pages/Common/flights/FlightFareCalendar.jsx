@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import Price from '../../../Components/Price';
 import apiConfig from '@/config/api';
+import { getSafeDate } from '../../../utils/dateUtils';
+import { moveDayFocus } from './calendarKeys';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -100,6 +102,10 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSe
 
   const canGoPrev = iso(viewYear, viewMonth, new Date(viewYear, viewMonth + 1, 0).getDate()) > today;
 
+  // One day is reached with Tab - the chosen day in this month, else its first
+  // day still to come - and the arrow keys move from there (calendarKeys.js).
+  const tabbableDate = monthDates.includes(selectedDate) ? selectedDate : monthDates[0];
+
   return (
     <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -111,7 +117,7 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSe
             <h3 className="font-bold text-gray-900 text-sm">Fare Calendar</h3>
             <p className="text-xs text-gray-500">Lowest one-way fares per day</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500">
+          <button type="button" aria-label="Close fare calendar" onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -119,6 +125,8 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSe
         {/* Month nav */}
         <div className="flex items-center justify-between px-5 py-3">
           <button
+            type="button"
+            aria-label="Previous month"
             onClick={() => goMonth(-1)}
             disabled={!canGoPrev}
             className="p-1.5 rounded-full hover:bg-gray-100 text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
@@ -126,7 +134,7 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSe
             <ChevronLeft className="h-5 w-5" />
           </button>
           <span className="font-bold text-gray-800">{MONTHS[viewMonth]} {viewYear}</span>
-          <button onClick={() => goMonth(1)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-600">
+          <button type="button" aria-label="Next month" onClick={() => goMonth(1)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-600">
             <ChevronRight className="h-5 w-5" />
           </button>
         </div>
@@ -143,7 +151,7 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSe
               <div key={w} className="text-center text-[11px] font-semibold text-gray-400 py-1">{w}</div>
             ))}
           </div>
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-1" data-calendar-grid="">
             {weeks.flat().map((cell, i) => {
               if (!cell) return <div key={i} />;
               const price = prices[cell.isoDate];
@@ -151,8 +159,13 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSe
               const isLowest = price != null && lowestPrice != null && price === lowestPrice;
               return (
                 <button
+                  type="button"
                   key={i}
+                  data-date={cell.isoDate}
                   disabled={cell.isPast}
+                  aria-pressed={isSelected}
+                  tabIndex={cell.isoDate === tabbableDate ? 0 : -1}
+                  onKeyDown={moveDayFocus}
                   onClick={() => { onSelectDate(cell.isoDate); onClose(); }}
                   className={`flex flex-col items-center justify-center h-14 rounded-lg border text-center transition-colors ${
                     isSelected
@@ -164,7 +177,8 @@ function FlightFareCalendar({ searchParams = {}, initialDate, selectedDate, onSe
                           : 'border-gray-200 hover:border-[#65B3CF]'
                   }`}
                 >
-                  <span className={`text-sm font-semibold ${isSelected ? 'text-white' : 'text-gray-700'}`}>{cell.day}</span>
+                  <span className="sr-only">{getSafeDate(cell.isoDate).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                  <span aria-hidden="true" className={`text-sm font-semibold ${isSelected ? 'text-white' : 'text-gray-700'}`}>{cell.day}</span>
                   {price != null ? (
                     <span className={`text-[10px] font-medium ${isSelected ? 'text-blue-100' : isLowest ? 'text-emerald-600' : 'text-gray-500'}`}>
                       <Price amount={price} />

@@ -142,8 +142,11 @@ const GeoService = {
             city: 'New Delhi',
             cityCode: 'DEL',
             rawCity: 'New Delhi',
-            currency: 'INR',
-            callingCode: '+91',
+            // Prices in dollars, the currency every fare is charged in, and no
+            // phone code: when every lookup failed the visitor was shown rupees
+            // and handed India's +91, wherever they were.
+            currency: 'USD',
+            callingCode: '',
             region: 'Delhi'
         };
     }
