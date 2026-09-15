@@ -34,6 +34,15 @@ const TERMINAL_ERROR_CODES = new Set([
 ]);
 
 /**
+ * BOOKING_IN_PROGRESS means another request - an earlier tab, a double click,
+ * the booking queue - holds this booking and is confirming it now. It showed a
+ * red "Booking Failed". The page asks again this many times, this far apart,
+ * then says the booking is still being confirmed.
+ */
+const IN_PROGRESS_RETRIES = 4;
+const IN_PROGRESS_RETRY_MS = 8000;
+
+/**
  * What the server actually did with the order. Drives every word on this
  * screen and on /booking-confirmation. Before this existed the page said
  * "Booking Confirmed!" for a 202 that meant "we have not even tried yet".
@@ -71,6 +80,14 @@ function FlightCreateOrders() {
   // The payment reference this page is booking, for any screen that has to
   // name it before the server has answered with one.
   const [orderReference, setOrderReference] = useState('');
+  // Set while another request confirms this booking (BOOKING_IN_PROGRESS):
+  // { gaveUp, cancelling }. The same order is sent again, which the server
+  // answers once whichever request gets there first.
+  const [stillConfirming, setStillConfirming] = useState(null);
+  const orderDataRef = useRef(null);
+  const inProgressAttempts = useRef(0);
+  const retryTimer = useRef(null);
+  useEffect(() => () => clearTimeout(retryTimer.current), []);
   const [bookingReference, setBookingReference] = useState('');
   const [pnr, setPnr] = useState('');
   // Held for staff: the airline took the booking, then a later step failed.
@@ -171,6 +188,7 @@ function FlightCreateOrders() {
     setErrorCode(null);
     setRefundAttempt(null);
     setOrderReference(orderData?.orderId || '');
+    orderDataRef.current = orderData;
 
     try {
       // The same builder the abandoned-checkout job uses to finish a booking
@@ -237,6 +255,8 @@ function FlightCreateOrders() {
         setBookingReference(reference);
         setPnr(pnrValue);
         setHeldForReview(needsReview);
+        setStillConfirming(null);
+        inProgressAttempts.current = 0;
 
         const orderDetails = {
           reference,
@@ -370,6 +390,23 @@ function FlightCreateOrders() {
       console.error('Error response data:', error.response?.data);
       console.error('Error status:', error.response?.status);
 
+      if (error.response?.data?.code === 'BOOKING_IN_PROGRESS') {
+        // Not a failure: the request holding this booking is confirming it.
+        // Ask again shortly, a few times. A booking being cancelled will not
+        // become confirmed, so that one is said once and not asked again.
+        const cancelling = /cancel/i.test(error.response.data.error || '');
+        inProgressAttempts.current += 1;
+        const gaveUp = cancelling || inProgressAttempts.current > IN_PROGRESS_RETRIES;
+        setErrorCode('BOOKING_IN_PROGRESS');
+        setError(error.response.data.error || null);
+        setStillConfirming({ gaveUp, cancelling });
+        if (!gaveUp) {
+          retryTimer.current = setTimeout(() => processFlightOrder(orderDataRef.current), IN_PROGRESS_RETRY_MS);
+        }
+        return;
+      }
+      setStillConfirming(null);
+
       // Extract more detailed error message with priority order
       let errorMessage = 'Failed to process order';
 
@@ -502,7 +539,7 @@ function FlightCreateOrders() {
           <div className="max-w-2xl mx-auto">
             <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 sm:p-8">
               <div className="text-center">
-                {processingOrder ? (
+                {processingOrder && !stillConfirming ? (
                   <div className="space-y-4">
                     <div className="mx-auto w-16 h-16 rounded-full border-4 border-blue-50 flex items-center justify-center">
                       <Loader className="w-8 h-8 text-blue-600 animate-spin" />
@@ -579,6 +616,44 @@ function FlightCreateOrders() {
                         Redirecting to your booking confirmation...
                       </p>
                     </div>
+                  </div>
+                ) : stillConfirming ? (
+                  // BOOKING_IN_PROGRESS: another request is confirming this
+                  // booking now. This was a red "Booking Failed".
+                  <div className="space-y-4" role="status">
+                    <div className="mx-auto w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center">
+                      {stillConfirming.gaveUp
+                        ? <Clock className="w-8 h-8 text-blue-600" />
+                        : <Loader className="w-8 h-8 text-blue-600 animate-spin" />}
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">
+                      {stillConfirming.cancelling ? 'This booking is being cancelled'
+                        : stillConfirming.gaveUp ? 'Your booking is still being confirmed'
+                          : 'Still confirming your booking'}
+                    </h2>
+                    <p className="text-gray-600">
+                      {stillConfirming.cancelling
+                        ? (error || 'This booking is being cancelled, so it cannot be confirmed.')
+                        : stillConfirming.gaveUp
+                          ? "It is taking longer than usual. You don't need to pay or try again: we will email you as soon as the airline confirms it, and it will show in My Trips."
+                          : 'Your booking is already being confirmed with the airline, perhaps from an earlier attempt. We will check on it again in a few seconds.'}
+                    </p>
+                    {orderReference && (
+                      <p className="text-sm text-gray-500">
+                        Booking reference: <span className="font-semibold text-gray-800">{orderReference}</span>
+                      </p>
+                    )}
+                    {stillConfirming.gaveUp && (
+                      <div className="pt-2">
+                        <button
+                          onClick={() => navigate(authUser ? '/my-trips' : '/')}
+                          className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                        >
+                          {authUser ? 'Go to My Trips' : 'Back to home'}
+                        </button>
+                        <p className="text-sm text-gray-500 mt-3">Questions? Call (877) 538-7380.</p>
+                      </div>
+                    )}
                   </div>
                 ) : errorCode === 'DUPLICATE_PAYMENT' ? (
                   // A second payment for a trip already booked, or being booked,

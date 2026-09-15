@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -99,5 +99,71 @@ describe('a failed booking whose payment the server tried to reverse', () => {
     renderOrderPage();
 
     await waitFor(() => expect(screen.getByRole('button', { name: /Try again/ })).toBeTruthy());
+  });
+});
+
+/**
+ * BOOKING_IN_PROGRESS: another request holds this booking and is confirming it.
+ * The page showed a red "Booking Failed".
+ */
+describe('a booking another request is already confirming', () => {
+  const inProgress = (error = 'This booking is already being confirmed. Please wait a moment before trying again.') =>
+    reply(409, { success: false, code: 'BOOKING_IN_PROGRESS', error });
+  const flush = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+  it('says it is still confirming, asks again, and shows the booking once it is made', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(inProgress())
+      .mockResolvedValueOnce(inProgress())
+      .mockResolvedValueOnce(reply(200, { success: true, pnr: 'ABC123', bookingReference: 'FLT1', ticketed: false, mode: 'ALREADY_BOOKED' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = renderOrderPage();
+
+    await flush();
+    await flush();
+    expect(container.textContent).toMatch(/Still confirming your booking/);
+    expect(container.textContent).not.toMatch(/Booking Failed/);
+    expect(screen.queryByRole('button', { name: /Try again/ })).toBeNull();
+
+    await flush(8000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toMatch(/Still confirming your booking/);
+
+    await flush(8000);
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(container.textContent).toMatch(/Reservation Held/);
+  });
+
+  it('stops after a few tries and says the customer will be emailed', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const fetchMock = vi.fn(async () => inProgress());
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = renderOrderPage();
+
+    await flush();
+    for (let i = 0; i < 5; i += 1) await flush(8000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(container.textContent).toMatch(/Your booking is still being confirmed/);
+    expect(container.textContent).toMatch(/we will email you as soon as the airline confirms it/);
+    expect(container.textContent).not.toMatch(/Booking Failed/);
+
+    await flush(60000);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it('does not keep asking about a booking that is being cancelled', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const fetchMock = vi.fn(async () => inProgress('This booking is being cancelled, so it cannot be confirmed.'));
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = renderOrderPage();
+
+    await flush();
+    await flush(60000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toMatch(/This booking is being cancelled/);
   });
 });
