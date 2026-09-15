@@ -1224,3 +1224,30 @@ describe('the fare the customer paid for', () => {
     expect(recordCouponUse).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Which payment a failed order reverses.
+ *
+ * The payer proof covers `bookingReference` only, and every refund path reversed
+ * `req.body.orderId`. A customer who paid for one booking could post another
+ * booking's order id - with booking switched off, any body at all - and have
+ * that payment voided or refunded while its PNR stood.
+ */
+describe('the payment a failed order reverses', () => {
+  beforeEach(() => {
+    vi.stubEnv('AMADEUS_WS_BOOKING_ENABLED', 'false');
+    vi.resetModules();
+  });
+
+  it("is the booking's own order, never an order id the request names", async () => {
+    axios.get.mockReset();
+    const app = await makeApp(paidRow());
+
+    const res = await request(app).post('/api/flights/order').send({ ...orderBody, orderId: 'FLTVICTIM1' });
+
+    expect(res.body.code).toBe('BOOKING_DISABLED');
+    const urls = axios.get.mock.calls.map(([url]) => String(url));
+    expect(urls.some((url) => url.includes('FLTVICTIM1'))).toBe(false);
+    expect(urls.some((url) => url.includes('/order/FLTTEST1'))).toBe(true);
+  });
+});

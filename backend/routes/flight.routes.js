@@ -1896,6 +1896,14 @@ router.post('/order', optionalProtect, async (req, res) => {
       });
     }
 
+    // The payment to reverse, if anything below has to: this booking's own ARC
+    // order, read from its row. It was `req.body.orderId`, which nothing checked
+    // - the payer proof covers `bookingReference` only - so a customer who paid
+    // for one booking could post another booking's order id and have that
+    // payment voided or refunded while its PNR stood. The same id is what the
+    // booking records as its order, for every later cancel and refund.
+    const arcOrderId = existing.booking_details?.order_id || existing.booking_reference;
+
     if (existing.status === 'cancelled') {
       return res.status(409).json({
         success: false,
@@ -1997,7 +2005,7 @@ router.post('/order', optionalProtect, async (req, res) => {
     if (!providerStatus().bookingEnabled) {
       console.warn('Booking attempted while AMADEUS_WS_BOOKING_ENABLED is false');
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId || req.body.bookingReference,
+        orderId: arcOrderId,
         bookingReference: req.body.bookingReference,
         amount: req.body.totalAmount || req.body.amount,
         currency: req.body.flightOffer?.price?.currency
@@ -2049,7 +2057,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       // Payment already happened - hosted checkout runs before this route - so
       // refusing is a charge with nothing behind it. Reverse it.
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId || req.body.bookingReference,
+        orderId: arcOrderId,
         bookingReference: req.body.bookingReference,
         amount: totalAmount || amount,
         currency,
@@ -2095,7 +2103,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       // out of pocket with no booking. This was the surviving twin of the
       // booking-disabled gate - one gate was fixed, these two were not.
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId || req.body.bookingReference,
+        orderId: arcOrderId,
         bookingReference: req.body.bookingReference,
         amount: req.body.totalAmount || req.body.amount,
         currency: firstOffer?.price?.currency || req.body.currency || 'USD',
@@ -2148,7 +2156,7 @@ router.post('/order', optionalProtect, async (req, res) => {
     const countMismatch = (pricedTravellers > 0 && travelersList.length !== pricedTravellers) || typeMismatch;
     if (travellerIncomplete || countMismatch) {
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId || req.body.bookingReference,
+        orderId: arcOrderId,
         bookingReference: req.body.bookingReference,
         currency: firstOffer?.price?.currency || 'USD',
         errorMsg: travellerIncomplete
@@ -2338,7 +2346,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       && Math.round(repricedFare * 100) - Math.round(paidFare * 100) > Math.round(getWsConfig().priceTolerance * 100)) {
       await releaseBookingChain(req.body.bookingReference, 'priceCheck');
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId || req.body.bookingReference,
+        orderId: arcOrderId,
         bookingReference: req.body.bookingReference,
         amount: totalAmount || amount,
         currency,
@@ -2540,7 +2548,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       ].filter(Boolean).join(' | ');
 
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId || req.body.bookingReference,
+        orderId: arcOrderId,
         bookingReference: req.body.bookingReference,
         amount: totalAmount || amount,
         currency: firstOffer?.price?.currency || 'USD',
@@ -2555,7 +2563,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       console.error('❌ Flight order creation failed:', errorMsg);
       {
         return await refundOnFulfillmentFailure(res, {
-          orderId: req.body.orderId || req.body.bookingReference,
+          orderId: arcOrderId,
           bookingReference: req.body.bookingReference,
           amount: totalAmount || amount,
           currency: firstOffer?.price?.currency || 'USD',
@@ -2571,7 +2579,7 @@ router.post('/order', optionalProtect, async (req, res) => {
     if (process.env.NODE_ENV === 'production' && typeof orderResponse.mode === 'string' && orderResponse.mode.toUpperCase().includes('MOCK')) {
       console.error('❌ Amadeus returned a MOCK booking in production (no real ticket):', orderResponse.mode);
       return await refundOnFulfillmentFailure(res, {
-        orderId: req.body.orderId || req.body.bookingReference,
+        orderId: arcOrderId,
         bookingReference: req.body.bookingReference,
         amount: totalAmount || amount,
         currency: firstOffer?.price?.currency || 'USD',
@@ -2612,7 +2620,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       userId: userId || null,
       bookingReference: req.body.bookingReference || orderIdValue,
       pnr: pnrValue,
-      orderId: req.body.orderId || orderIdValue,
+      orderId: arcOrderId,
       amadeusOrderId: orderIdValue, // the real Amadeus order id (for cancellation)
       // The gateway's transaction id, from the reconcile above. The body's
       // `transactionId` is ARC's success indicator - the secret that proves
@@ -2819,7 +2827,7 @@ router.post('/order', optionalProtect, async (req, res) => {
       if (chainClaimed) await releaseBookingChain(ref, 'unexpected-error');
       if (payment?.paid) {
         return await refundOnFulfillmentFailure(res, {
-          orderId: req.body?.orderId || ref,
+          orderId: row?.booking_details?.order_id || row?.booking_reference || ref,
           bookingReference: ref,
           errorMsg: `order route error: ${String(error.message || error).slice(0, 200)}`,
           status: 500,
