@@ -14,6 +14,7 @@ import { attributeTickets } from './mappers/flightOrder.js';
 import { cancelBooking, confirmSeats, retrieveBooking, runBookingChain } from './bookingChain.js';
 import { unwrapEnvelope } from './parseXml.js';
 import { callStateless, withSession } from './session.js';
+import { cannotTicket, ticketingCarrierOf } from './ticketingCarriers.js';
 import { travellerGroupProblem } from '../../../shared/travellerGroup.js';
 
 const log = logger.child({ svc: 'amadeus-ws' });
@@ -129,10 +130,21 @@ const searchFlights = async (params) => {
     throw status.error;
   }
 
-  const { offers, dictionaries, currency } = mapMasterPricerReply(reply, {
+  const { offers: mapped, dictionaries, currency } = mapMasterPricerReply(reply, {
     config,
     searchSignature: signatureOf(request),
   });
+
+  // A fare plated on a carrier this office cannot ticket is not offered: the
+  // customer would pay, we would book, and issuance would refuse the ticket.
+  // See ticketingCarriers.js.
+  const offers = mapped.filter((offer) => !cannotTicket(offer, config.unticketableCarriers));
+  if (offers.length < mapped.length) {
+    const carriers = [...new Set(mapped
+      .filter((offer) => cannotTicket(offer, config.unticketableCarriers))
+      .map(ticketingCarrierOf))];
+    log.info({ hidden: mapped.length - offers.length, carriers }, 'search: left out fares on carriers the office cannot ticket');
+  }
 
   return {
     success: true,
@@ -141,6 +153,7 @@ const searchFlights = async (params) => {
       count: offers.length,
       resultCount: offers.length,
       totalResults: offers.length,
+      unticketableHidden: mapped.length - offers.length,
       currency,
       source: 'GDS',
       searchParams: request,
@@ -254,6 +267,16 @@ const priceFlightOffer = async (flightOffer) => {
       error: 'This flight can no longer be priced - please search again',
       code: 409,
       technicalError: 'offer is missing _ama; it did not come from this provider',
+      operation: 'Fare_InformativePricingWithoutPNR',
+    });
+  }
+
+  // An offer found before its carrier was listed, or from a cached search.
+  if (cannotTicket(offer, config.unticketableCarriers)) {
+    throw new AmadeusSoapError({
+      error: 'This airline cannot be booked with us online - please choose another flight',
+      code: 409,
+      technicalError: `validating carrier ${ticketingCarrierOf(offer)} is one this office cannot ticket (AMADEUS_WS_UNTICKETABLE_CARRIERS)`,
       operation: 'Fare_InformativePricingWithoutPNR',
     });
   }

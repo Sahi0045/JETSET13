@@ -19,13 +19,16 @@ import {
   readPricePnrReply,
 } from './operations/ticketing.js';
 import { callStateless, withSession } from './session.js';
+import { cannotTicket, ticketingCarrierOf } from './ticketingCarriers.js';
 
 const log = logger.child({ svc: 'amadeus-ws', flow: 'booking' });
 
 const sleep = (ms) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
 
 /**
- * The booking chain: one HTTP request, one Amadeus session, ten calls.
+ * The booking chain: one HTTP request, one Amadeus session, ten calls - and new
+ * sessions for issuance when the airline's record locator arrives after commit
+ * (issueInFreshSessions).
  *
  * The customer has already paid by the time this runs - ARC Pay's hosted
  * checkout completes before POST /order - so every failure mode here is a
@@ -72,10 +75,10 @@ const replyOf = (result) => {
 };
 
 /**
- * The airline record locator on each air segment of a PNR reply, '' where the
- * airline has not sent one yet (itineraryInfo/itineraryReservationInfo).
+ * One value from each air segment of a PNR reply (an itineraryInfo whose
+ * segmentName is AIR), '' where the segment does not carry it.
  */
-const airSegmentLocators = (pnrReply) => {
+const airSegmentValues = (pnrReply, path) => {
   const found = [];
   const visit = (node, depth = 0) => {
     if (!node || typeof node !== 'object' || depth > 8) return;
@@ -83,7 +86,7 @@ const airSegmentLocators = (pnrReply) => {
       if (key === 'itineraryInfo') {
         for (const item of arr(value)) {
           if (atTxt(item, 'elementManagementItinerary.segmentName') === 'AIR') {
-            found.push(atTxt(item, 'itineraryReservationInfo.reservation.controlNumber'));
+            found.push(atTxt(item, path));
           }
         }
       } else if (typeof value === 'object') {
@@ -94,6 +97,15 @@ const airSegmentLocators = (pnrReply) => {
   visit(pnrReply);
   return found;
 };
+
+/** The airline's own record locator on each air segment, '' until it sends one. */
+const airSegmentLocators = (pnrReply) => airSegmentValues(pnrReply, 'itineraryReservationInfo.reservation.controlNumber');
+
+/** Each air segment's status: HK, or TK when the airline has changed it. */
+const airSegmentStatuses = (pnrReply) => airSegmentValues(pnrReply, 'relatedProduct.status');
+
+/** A segment the airline changed: confirmed (TK), waitlisted (TL) or requested (TN). */
+const SCHEDULE_CHANGE_STATUSES = new Set(['TK', 'TL', 'TN']);
 
 /**
  * Issuance the airline refused only because its side is not ready yet. Seen on
@@ -159,6 +171,120 @@ const callStep = async (ctx, { step, operation, bodyXml, pnr, committed, tickete
 };
 
 /**
+ * Read the ticket numbers back after issuance, with retries.
+ *
+ * Issuance replies with a status only, and the ticket numbers take a moment
+ * to land in the PNR. Amadeus's reference flow waits, retrieves, and if the
+ * numbers are not there yet waits again and retries a few times before
+ * leaving the PNR for manual follow-up. Non-fatal throughout: the tickets
+ * exist whether or not we capture their numbers on this request.
+ */
+const readTicketNumbers = async (ctx, { pnr, order, offer, bookingReference, config }) => {
+  let tickets = order.tickets;
+  let current = order;
+  const attempts = Math.max(1, config.ticketRetrieveRetries + 1);
+  await sleep(config.ticketRetrieveInitialMs);
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const retrieved = await callStep(ctx, {
+        step: 'retrieve',
+        operation: 'PNR_Retrieve',
+        bodyXml: buildRetrieveBody(pnr),
+        pnr,
+        committed: true,
+        ticketed: true,
+      });
+      const found = readTickets(retrieved);
+      if (found.length) {
+        tickets = found;
+        current = buildFlightOrder(retrieved, { flightOffers: [offer], bookingReference });
+        current.tickets = tickets;
+        break;
+      }
+    } catch (cause) {
+      log.warn({ pnr, attempt, reason: cause?.technicalError ?? cause?.message }, 'reading ticket numbers failed');
+    }
+    if (attempt < attempts) await sleep(config.ticketRetrieveDelayMs);
+  }
+  if (!tickets?.length) {
+    // Ticket issued but its number has not surfaced yet — flag for manual
+    // follow-up rather than silently confirm a booking with no ticket number.
+    current.needsReview = { reason: 'ticket_numbers_not_retrieved', at: new Date().toISOString() };
+    log.warn({ pnr, attempts }, 'ticket numbers not in PNR after retries; flagged for manual follow-up');
+  }
+  return { tickets, order: current };
+};
+
+/**
+ * Issue in a new session, once the airline's record locator is on the PNR.
+ *
+ * An airline Amadeus does not host confirms the booking in its own system after
+ * commit, and refuses the ticket until its record locator is on the PNR (9125
+ * NEED AIRLINE R/LOC). Retrieving again in the session that committed did not
+ * show it: Royal Brunei BI423 and BI421 on PDT went 90 and 117 seconds without
+ * it. Amadeus (15 Sep 2026): close the session and open a new one with a PNR
+ * retrieve. Done that way, BI421's locator was on the PNR 12 seconds after
+ * commit, and the ticket issued at once.
+ *
+ * Each look is its own session: retrieve, then issue when every air segment
+ * carries the airline's locator - or when the wait is over, since issuance is
+ * tried regardless. A ticket already on the PNR is read, never issued again.
+ * Refusals because the airline is not ready are retried the same way, up to
+ * the configured number, counting one already met in the booking session.
+ */
+const issueInFreshSessions = async (booked, { offer, bookingReference, config, notReadyRefusals = 0 }) => {
+  const { pnr } = booked;
+  const waitStarted = Date.now();
+  let refusals = notReadyRefusals;
+
+  for (;;) {
+    const outcome = await withSession(async (ctx) => {
+      const current = await callStep(ctx, {
+        step: 'retrieve', operation: 'PNR_Retrieve', bodyXml: buildRetrieveBody(pnr), pnr, committed: true,
+      });
+
+      const existing = readTickets(current);
+      if (existing.length > 0) {
+        const order = buildFlightOrder(current, { flightOffers: [offer], bookingReference });
+        order.tickets = existing;
+        return { ticketed: true, tickets: existing, order };
+      }
+
+      const locators = airSegmentLocators(current);
+      const waitedMs = Date.now() - waitStarted;
+      if (locators.some((locator) => !locator)) {
+        if (waitedMs < config.airlineLocatorWaitMs) return { waiting: true };
+        log.warn({ pnr, locators, waitedMs }, 'airline record locator not on every segment yet; issuing anyway');
+      }
+
+      let issueReply;
+      try {
+        issueReply = await callStep(ctx, {
+          step: 'issueTicket', operation: 'DocIssuance_IssueTicket', bodyXml: buildIssueTicketBody(), pnr, committed: true,
+        });
+      } catch (cause) {
+        if (!issuanceNotReady(cause) || refusals >= config.issueRetries) throw cause;
+        refusals += 1;
+        log.warn({ pnr, attempt: refusals, reason: cause?.technicalError }, 'the airline is not ready to ticket yet; retrying in a new session');
+        return { waiting: true, notReady: true };
+      }
+      if (!readIssueTicketReply(issueReply).issued) return { ticketed: false };
+      return { ticketed: true, ...(await readTicketNumbers(ctx, { pnr, order: booked.order, offer, bookingReference, config })) };
+    }, { config });
+
+    if (!outcome.waiting) {
+      log.info({ pnr, ticketed: outcome.ticketed, waitedMs: Date.now() - waitStarted }, 'flight.booking.chain ticketing in a new session finished');
+      return {
+        ...booked,
+        ticketed: outcome.ticketed,
+        ...(outcome.ticketed ? { tickets: outcome.tickets, order: outcome.order } : {}),
+      };
+    }
+    await sleep(outcome.notReady ? config.issueRetryDelayMs : config.airlineLocatorPollMs);
+  }
+};
+
+/**
  * @param {object} p
  * @param {object} p.offer            the priced offer, carrying `_ama`
  * @param {Array}  p.travelers        {firstName, lastName, gender, dateOfBirth}
@@ -191,6 +317,17 @@ export const runBookingChain = async (p) => {
       error: 'This fare has expired - please search again',
       code: 409,
       technicalError: `offer was found on WSAP ${ama.wsap}, this server is ${config.wsap}`,
+    });
+  }
+
+  // Before any seat is sold: issuance would refuse this carrier's ticket, and a
+  // PNR we cannot ticket only has to be cancelled again (ticketingCarriers.js).
+  if (cannotTicket(offer, config.unticketableCarriers)) {
+    throw new BookingChainError({
+      step: 'validate',
+      error: 'This airline cannot be booked with us online - please choose another flight',
+      code: 409,
+      technicalError: `validating carrier ${ticketingCarrierOf(offer)} is one this office cannot ticket (AMADEUS_WS_UNTICKETABLE_CARRIERS)`,
     });
   }
 
@@ -232,7 +369,7 @@ export const runBookingChain = async (p) => {
   const validatingCarrier = offer.validatingAirlineCodes?.[0] ?? ama.segments[0]?.marketingCarrier;
   const started = Date.now();
 
-  return withSession(async (ctx) => {
+  const booked = await withSession(async (ctx) => {
     let pnr = null;
     let committed = false;
     let ticketed = false;
@@ -455,6 +592,26 @@ export const runBookingChain = async (p) => {
       }
     }
 
+    // ---- 6b. A segment the airline changed ---------------------------------
+    // IB4001 MAD-JFK, operated by AA, came back from commit with status TK -
+    // confirmed, but changed by the airline - and issuance answered 1969 VERIFY
+    // ITINERARY. Amadeus (15 Sep 2026): end the transaction with change advice,
+    // PNR_AddMultiElements optionCode 13, which accepts the change. PDT stopped
+    // returning TK for that flight before it could be proved end to end, so this
+    // runs only when a segment carries a changed status.
+    let bookedReply = commitReply;
+    const changed = airSegmentStatuses(commitReply).filter((status) => SCHEDULE_CHANGE_STATUSES.has(status));
+    if (changed.length > 0) {
+      log.warn({ pnr, changed }, 'a segment was changed by the airline; accepting it with change advice');
+      bookedReply = await callStep(ctx, {
+        step: 'acceptScheduleChange',
+        operation: 'PNR_AddMultiElements',
+        bodyXml: buildCommitBody({ changeAdvice: true }),
+        pnr,
+        committed,
+      });
+    }
+
     // ---- 7. Queue (bookkeeping; never fatal) -------------------------------
     let queued = false;
     try {
@@ -478,95 +635,43 @@ export const runBookingChain = async (p) => {
     }
 
     // ---- 8. Issue ----------------------------------------------------------
+    // Airlines Amadeus hosts (LH, QR, AF) carry their record locator at commit
+    // and are ticketed here, in this session. An airline that confirms in its
+    // own system after commit - B6, VS, AA, DL and BI on PDT - refuses the
+    // ticket until its locator is on the PNR, and that is looked for in new
+    // sessions once this one has ended (issueInFreshSessions).
+    let issueInNewSession = false;
+    let notReadyRefusals = 0;
     if (config.autoTicket) {
-      // An airline Amadeus does not host confirms the booking in its own
-      // system a moment after commit, and refuses the ticket until then: B6,
-      // VS, AA and DL were all refused when issued at once, and all issued once
-      // their record locator was on the PNR (DL after about 12 s). Hosted
-      // airlines carry it at commit, so for them this costs nothing. A
-      // timeout does not stop the booking: issuance is tried regardless.
-      const waitStarted = Date.now();
-      let pnrReply = commitReply;
-      for (;;) {
-        const locators = airSegmentLocators(pnrReply);
-        if (locators.length > 0 && locators.every(Boolean)) break;
-        if (Date.now() - waitStarted >= config.airlineLocatorWaitMs) {
-          log.warn({ pnr, locators, waitedMs: Date.now() - waitStarted }, 'airline record locator not on every segment yet; issuing anyway');
-          break;
-        }
-        await sleep(config.airlineLocatorPollMs);
-        pnrReply = await callStep(ctx, { step: 'retrieve', operation: 'PNR_Retrieve', bodyXml: buildRetrieveBody(pnr), pnr, committed });
-      }
-
-      let issueReply;
-      for (let attempt = 1; ; attempt += 1) {
+      if (airSegmentLocators(bookedReply).some((locator) => !locator)) {
+        issueInNewSession = true;
+      } else {
         try {
-          issueReply = await callStep(ctx, {
+          const issueReply = await callStep(ctx, {
             step: 'issueTicket',
             operation: 'DocIssuance_IssueTicket',
             bodyXml: buildIssueTicketBody(),
             pnr,
             committed,
           });
-          break;
+          ticketed = readIssueTicketReply(issueReply).issued;
         } catch (cause) {
-          if (!issuanceNotReady(cause) || attempt > config.issueRetries) throw cause;
-          log.warn({ pnr, attempt, reason: cause?.technicalError }, 'the airline is not ready to ticket yet; retrying issuance');
-          await sleep(config.issueRetryDelayMs);
-          // Never issue twice: a refusal means no ticket, but look first.
-          const current = await callStep(ctx, { step: 'retrieve', operation: 'PNR_Retrieve', bodyXml: buildRetrieveBody(pnr), pnr, committed });
-          if (readTickets(current).length > 0) {
-            issueReply = null;
-            ticketed = true;
-            break;
-          }
+          if (!issuanceNotReady(cause)) throw cause;
+          log.warn({ pnr, reason: cause?.technicalError }, 'the airline is not ready to ticket yet; retrying in a new session');
+          issueInNewSession = true;
+          notReadyRefusals = 1;
         }
       }
-      if (issueReply) ticketed = readIssueTicketReply(issueReply).issued;
     }
 
     // ---- 9. Read the ticket numbers back (with retries) --------------------
-    // Issuance replies with a status only, and the ticket numbers take a moment
-    // to land in the PNR. Amadeus's reference flow waits, retrieves, and if the
-    // numbers are not there yet waits again and retries a few times before
-    // leaving the PNR for manual follow-up. Non-fatal throughout: the tickets
-    // exist whether or not we capture their numbers on this request.
     let tickets = order.tickets;
     if (config.autoTicket && ticketed) {
-      const attempts = Math.max(1, config.ticketRetrieveRetries + 1);
-      await sleep(config.ticketRetrieveInitialMs);
-      for (let attempt = 1; attempt <= attempts; attempt++) {
-        try {
-          const retrieved = await callStep(ctx, {
-            step: 'retrieve',
-            operation: 'PNR_Retrieve',
-            bodyXml: buildRetrieveBody(pnr),
-            pnr,
-            committed,
-            ticketed,
-          });
-          const found = readTickets(retrieved);
-          if (found.length) {
-            tickets = found;
-            order = buildFlightOrder(retrieved, { flightOffers: [offer], bookingReference });
-            order.tickets = tickets;
-            break;
-          }
-        } catch (cause) {
-          log.warn({ pnr, attempt, reason: cause?.technicalError ?? cause?.message }, 'reading ticket numbers failed');
-        }
-        if (attempt < attempts) await sleep(config.ticketRetrieveDelayMs);
-      }
-      if (!tickets?.length) {
-        // Ticket issued but its number has not surfaced yet — flag for manual
-        // follow-up rather than silently confirm a booking with no ticket number.
-        order.needsReview = { reason: 'ticket_numbers_not_retrieved', at: new Date().toISOString() };
-        log.warn({ pnr, attempts }, 'ticket numbers not in PNR after retries; flagged for manual follow-up');
-      }
+      ({ tickets, order } = await readTicketNumbers(ctx, { pnr, order, offer, bookingReference, config }));
     }
 
     log.info({
-      pnr, ticketed, queued, tstRefs: tstRefs.length, totalMs: Date.now() - started,
+      pnr, ticketed, queued, issueInNewSession, tstRefs: tstRefs.length, totalMs: Date.now() - started,
     }, 'flight.booking.chain complete');
 
     return {
@@ -579,8 +684,14 @@ export const runBookingChain = async (p) => {
       priced: { total: priced.total, currency: priced.currency },
       lastTicketingDate: priced.fares[0]?.lastTicketingDate ?? offer.lastTicketingDate ?? null,
       sessionId: ctx.sessionId,
+      issueInNewSession,
+      notReadyRefusals,
     };
   }, { config });
+
+  const { issueInNewSession, notReadyRefusals, ...result } = booked;
+  if (!issueInNewSession) return result;
+  return issueInFreshSessions(result, { offer, bookingReference, config, notReadyRefusals });
 };
 
 /**

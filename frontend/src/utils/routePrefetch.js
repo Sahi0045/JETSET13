@@ -8,7 +8,6 @@ const importers = {
   '/flights': () => import('../Pages/Common/flights/flightlanding'),
   '/flights/search': () => import('../Pages/Common/flights/flightsearchpage'),
   '/flights/booking-confirmation': () => import('../Pages/Common/flights/FlightBookingConfirmation'),
-  '/flights/payment': () => import('../Pages/Common/flights/FlightPayment'),
   '/flights/create-orders': () => import('../Pages/Common/flights/FlightCreateOrders'),
   '/flights/manage-booking': () => import('../Pages/Common/flights/ManageBooking'),
 

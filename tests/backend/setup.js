@@ -177,6 +177,12 @@ process.env.ARC_PAY_MERCHANT_ID ??= 'TESTMERCHANT';
 process.env.ARC_PAY_API_PASSWORD ??= 'test-api-password';
 process.env.ARC_PAY_BASE_URL ??= 'https://api.test.arcpay.invalid/api/rest/version/77';
 
+// The recorded Amadeus fixtures are mostly Air India bookings from PDT, and AI
+// is on the default list of carriers the office cannot ticket, so every one of
+// them would be refused before reaching the code under test. The list is off
+// for the suite; tests/backend/amadeusSoap/unticketableCarriers.test.js sets it.
+process.env.AMADEUS_WS_UNTICKETABLE_CARRIERS ??= '';
+
 // ─── Reset between tests ──────────────────────────────────────
 beforeEach(() => {
   vi.clearAllMocks();
